@@ -214,8 +214,13 @@ void test_shift(boost_coro* coro, coro_handle pauseCoro)
 	}
 }
 
-void test_producer(boost_coro* coro, msg_pipe<int, int>::writer_type writer)
+void test_producer(boost_coro* coro, msg_pipe<int, int>::get_writer getWriter)
 {//生产者
+	auto writer = getWriter(coro, 1500);
+	if (!writer)
+	{//1500ms后没得到writer退出
+		return;
+	}
 	for (int i = 0; true; i++)
 	{
 		writer(i, (int)coro->this_id());
@@ -390,11 +395,10 @@ void coro_test(boost_coro* coro)
 	child_coro_handle coroConsumer;
 	//创建生产者/消费者模型测试
 	{
-		msg_pipe<int, int>::writer_type writer;
-		auto reader = msg_pipe<int, int>::make(writer);
-		coroConsumer = coro->create_child_coro(boost::bind(&test_consumer, _1, reader));
-		coroProducer1 = coro->create_child_coro(boost::bind(&test_producer, _1, writer));
-		coroProducer2 = coro->create_child_coro(boost::bind(&test_producer, _1, writer));
+		msg_pipe<int, int>::get_writer getWriter;
+		coroConsumer = coro->create_child_coro(boost::bind(&test_consumer, _1, msg_pipe<int, int>::make(coro, getWriter)));
+		coroProducer1 = coro->create_child_coro(boost::bind(&test_producer, _1, getWriter));
+		coroProducer2 = coro->create_child_coro(boost::bind(&test_producer, _1, getWriter));
 	}
 
 	list<coro_handle> chs;//需要被挂起的协程对象，可以从下方注释几个测试

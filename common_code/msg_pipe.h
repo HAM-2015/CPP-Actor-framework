@@ -338,13 +338,13 @@ private:
 	struct pipe_param
 	{
 		pipe_param()
-			:_hasWriter(false) {DEBUG_OPERATION(_regCount = 0);}
+			:_hasWriter(false) {_regCount = 0;}
 		bool _hasWriter;
 		writer_type _writer;
+		list<boost::function<void ()> > _getList;
 		boost::mutex _mutex;
 		boost::function<void (writer_type)> _registWriter;
-		list<boost::shared_ptr<boost::function<void ()> > > _getList;
-		DEBUG_OPERATION(boost::atomic<size_t> _regCount);
+		boost::atomic<size_t> _regCount;
 	};
 
 	struct pipe_lock 
@@ -455,9 +455,11 @@ private:
 	*/
 	static size_t registReader1(boost::shared_ptr<pipe_lock>& pipeLock, boost::shared_ptr<pipe_param>& pipeParam, boost_coro* hostCoro, reader_type& cmh)
 	{
-		assert(0 == pipeParam->_regCount++);
+		pipeParam->_mutex.lock();
+		size_t rc = pipeParam->_regCount++;
 		pipeParam->_registWriter(hostCoro->make_msg_notify(cmh));
-		return 0;
+		pipeParam->_mutex.unlock();
+		return rc;
 	}
 
 	/*!
@@ -465,74 +467,24 @@ private:
 	*/
 	__yield_interrupt static writer_type getWriter(boost::shared_ptr<pipe_param>& pipeParam, boost_coro* hostCoro, int timeout)
 	{
+		async_trig_handle<> ath;
+		pipeParam->_mutex.lock();
 		if (!pipeParam->_hasWriter)
 		{
-			if (timeout <= 0)
+			pipeParam->_getList.push_back(hostCoro->begin_trig(ath));
+			pipeParam->_mutex.unlock();
+			if (timeout >= 0)
 			{
-				async_trig_handle<> ath;
-				boost::shared_ptr<boost::function<void ()> > nt(new boost::function<void ()>(hostCoro->begin_trig(ath)));
-
-				pipeParam->_mutex.lock();
-				if (!pipeParam->_hasWriter)
-				{
-					pipeParam->_getList.push_back(nt);
-					pipeParam->_mutex.unlock();
-					hostCoro->wait_trig(ath);
-				}
-				else
-				{
-					pipeParam->_mutex.unlock();
-					hostCoro->close_trig(ath);
-				}
-			} 
-			else
-			{
-				async_trig_handle<bool> ath;
-				auto h = hostCoro->begin_trig(ath);
-				boost::shared_ptr<boost::function<void ()> > nt(new boost::function<void ()>(boost::bind(h, true)));
-
-				pipeParam->_mutex.lock();
-				if (!pipeParam->_hasWriter)
-				{
-					pipeParam->_getList.push_back(nt);
-					pipeParam->_mutex.unlock();
-
-					if (hostCoro->this_timer())
-					{
-						hostCoro->delay_trig(timeout, ath, false);
-						bool ok = hostCoro->wait_trig(ath);
-						hostCoro->cancel_delay_trig();
-						if (!ok)
-						{
-							return writer_type();
-						}
-					}
-					else
-					{
-						boost::function<void (boost_coro*, int, boost::function<void ()>)> checkTimeout
-							([](boost_coro* coro, int timeout, boost::function<void ()> cb)
-						{
-							coro->open_timer();
-							coro->sleep(timeout);
-							cb();
-						});
-						child_coro_handle checkTm = hostCoro->create_child_coro(boost::bind(checkTimeout, _1, timeout, 
-							(boost::function<void ()>)boost::bind(h, false)));
-						hostCoro->child_coro_run(checkTm);
-						bool ok = hostCoro->wait_trig(ath);
-						hostCoro->child_coro_quit(checkTm);
-						if (!ok)
-						{
-							return writer_type();
-						}
-					}
-				}
-				else
-				{
-					pipeParam->_mutex.unlock();
-					hostCoro->close_trig(ath);
-				}
+				hostCoro->open_timer();
 			}
+			if (!hostCoro->wait_trig(ath, timeout))
+			{
+				return writer_type();
+			}
+		}
+		else
+		{
+			pipeParam->_mutex.unlock();
 		}
 		return pipeParam->_writer;
 	}
@@ -549,7 +501,7 @@ private:
 		pipeParam->_hasWriter = true;
 		while (!pipeParam->_getList.empty())
 		{
-			(*pipeParam->_getList.front())();
+			pipeParam->_getList.front()();
 			pipeParam->_getList.pop_front();
 		}
 		pipeParam->_mutex.unlock();
@@ -569,7 +521,7 @@ private:
 		pipeParam->_hasWriter = true;
 		while (!pipeParam->_getList.empty())
 		{
-			(*pipeParam->_getList.front())();
+			pipeParam->_getList.front()();
 			pipeParam->_getList.pop_front();
 		}
 		pipeParam->_mutex.unlock();
