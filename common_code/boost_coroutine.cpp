@@ -751,7 +751,8 @@ boost::function<void ()> boost_coro::begin_trig(async_trig_handle<>& th)
 	assert_enter();
 	th.begin(_coroID);
 	auto isClosed = th._ptrClosed;
-	return [&, isClosed]()
+	auto shared_this = shared_from_this();
+	return [&, shared_this, isClosed]()
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -762,7 +763,7 @@ boost::function<void ()> boost_coro::begin_trig(async_trig_handle<>& th)
 		}
 		else
 		{
-			_strand->post(boost::bind(&boost_coro::_async_trig_handler, shared_from_this(), isClosed, boost::ref(th)));
+			_strand->post(boost::bind(&boost_coro::_async_trig_handler, shared_this, isClosed, boost::ref(th)));
 		}
 	};
 }
@@ -772,7 +773,8 @@ boost::function<void ()> boost_coro::begin_trig(boost::shared_ptr<async_trig_han
 	assert_enter();
 	th->begin(_coroID);
 	auto isClosed = th->_ptrClosed;
-	return [&, isClosed, th]()
+	auto shared_this = shared_from_this();
+	return [&, shared_this, isClosed, th]()
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -783,7 +785,7 @@ boost::function<void ()> boost_coro::begin_trig(boost::shared_ptr<async_trig_han
 		}
 		else
 		{
-			_strand->post(boost::bind(&boost_coro::_async_trig_handler_ptr, shared_from_this(), isClosed, th));
+			_strand->post(boost::bind(&boost_coro::_async_trig_handler_ptr, shared_this, isClosed, th));
 		}
 	};
 }
