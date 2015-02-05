@@ -128,6 +128,7 @@ async_trig_base::async_trig_base()
 	_notify = true;
 	_timeout = false;
 	_hasTm = false;
+	_dstRefPt = NULL;
 	DEBUG_OPERATION(_coroID = 0);
 }
 
@@ -143,7 +144,13 @@ void async_trig_base::begin(long long coroID)
 	_notify = false;
 	_timeout = false;
 	_hasTm = false;
+	_dstRefPt = NULL;
 	DEBUG_OPERATION(_coroID = coroID);
+}
+
+void async_trig_base::get_param(void* pref)
+{
+	assert(!pref);
 }
 
 void async_trig_base::close()
@@ -794,7 +801,7 @@ bool boost_coro::wait_trig(async_trig_handle<>& th, int tm /* = -1 */)
 {
 	assert(th._coroID == _coroID);
 	assert_enter();
-	if (!async_trig_push(th, tm))
+	if (!async_trig_push(th, tm, NULL))
 	{
 		return false;
 	}
@@ -928,12 +935,13 @@ void boost_coro::trig_handler()
 	_strand->post(boost::bind(&boost_coro::run_one, shared_from_this()));
 }
 
-bool boost_coro::async_trig_push(async_trig_base& th, int tm)
+bool boost_coro::async_trig_push(async_trig_base& th, int tm, void* pref)
 {
 	assert(th._ptrClosed);
 	if (!th._notify)
 	{
 		th._waiting = true;
+		th._dstRefPt = pref;
 		if (tm >= 0)
 		{
 			th._hasTm = true;
@@ -947,7 +955,10 @@ bool boost_coro::async_trig_push(async_trig_base& th, int tm)
 			return false;
 		}
 	}
-	assert(th._notify);
+	else
+	{
+		th.get_param(pref);
+	}
 	return true;
 }
 

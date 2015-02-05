@@ -94,12 +94,20 @@ struct msg_param: public msg_param_base
 		nfy(p._res0, p._res1, p._res2, p._res3);
 	}
 
-	void set_param(ref_type& rp) const
+	void get_param(ref_type& rp) const
 	{
 		rp._p0 = _res0;
 		rp._p1 = _res1;
 		rp._p2 = _res2;
 		rp._p3 = _res3;
+	}
+
+	void operator =(const const_ref_type& rp)
+	{
+		_res0 = rp._p0;
+		_res1 = rp._p1;
+		_res2 = rp._p2;
+		_res3 = rp._p3;
 	}
 
 	T0 _res0;
@@ -137,11 +145,18 @@ struct msg_param<T0, T1, T2, void>: public msg_param_base
 		nfy(p._res0, p._res1, p._res2);
 	}
 
-	void set_param(ref_type& rp) const
+	void get_param(ref_type& rp) const
 	{
 		rp._p0 = _res0;
 		rp._p1 = _res1;
 		rp._p2 = _res2;
+	}
+
+	void operator =(const const_ref_type& rp)
+	{
+		_res0 = rp._p0;
+		_res1 = rp._p1;
+		_res2 = rp._p2;
 	}
 
 	T0 _res0;
@@ -178,10 +193,16 @@ struct msg_param<T0, T1, void, void>: public msg_param_base
 		nfy(p._res0, p._res1);
 	}
 
-	void set_param(ref_type& rp) const
+	void get_param(ref_type& rp) const
 	{
 		rp._p0 = _res0;
 		rp._p1 = _res1;
+	}
+
+	void operator =(const const_ref_type& rp)
+	{
+		_res0 = rp._p0;
+		_res1 = rp._p1;
 	}
 
 	T0 _res0;
@@ -217,9 +238,14 @@ struct msg_param<T0, void, void, void>: public msg_param_base
 		nfy(p._res0);
 	}
 
-	void set_param(ref_type& rp) const
+	void get_param(ref_type& rp) const
 	{
 		rp._p0 = _res0;
+	}
+
+	void operator =(const const_ref_type& rp)
+	{
+		_res0 = rp._p0;
 	}
 
 	T0 _res0;
@@ -266,14 +292,14 @@ protected:
 	virtual T* front() = 0;
 	virtual size_t pop_front() = 0;
 
-	void set_param(const T& p)
+	void get_param(const T& p)
 	{
 		assert(!(*_ptrClosed) && _dstRefPt);
-		p.set_param(*_dstRefPt);
+		p.get_param(*_dstRefPt);
 		DEBUG_OPERATION(_dstRefPt = NULL);
 	}
 
-	void set_param(const const_ref_type& p)
+	void get_param(const const_ref_type& p)
 	{
 		assert(!(*_ptrClosed) && _dstRefPt);
 		*_dstRefPt = p;
@@ -592,14 +618,16 @@ public:
 private:
 	void begin(long long coroID);
 	void close();
+	virtual void get_param(void* pref);
 	async_trig_base(const async_trig_base&);
 	async_trig_base& operator=(const async_trig_base&);
-private:
+protected:
 	boost::shared_ptr<bool> _ptrClosed;
 	bool _notify;
 	bool _waiting;
 	bool _timeout;
 	bool _hasTm;
+	void* _dstRefPt;
 	DEBUG_OPERATION(long long _coroID);
 };
 
@@ -607,12 +635,31 @@ template <typename T0 = void, typename T1 = void, typename T2 = void, typename T
 class async_trig_handle: public async_trig_base
 {
 	friend boost_coro;
+	typedef ref_ex<T0, T1, T2, T3> ref_type;
+	typedef const_ref_ex<T0, T1, T2, T3> const_ref_ex;
 public:
 	typedef boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> > ptr;
 
 	static boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> > make_ptr()
 	{
 		return boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> >(new async_trig_handle<T0, T1, T2, T3>);
+	}
+
+	void get_param(void* pref)
+	{
+		_temp.get_param(*(ref_type*)pref);
+	}
+
+	void set_param(const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+	{
+		if (_waiting)
+		{
+			*(ref_type*)_dstRefPt = const_ref_ex(p0, p1, p2, p3);
+		}
+		else
+		{
+			_temp = const_ref_ex(p0, p1, p2, p3);
+		}
 	}
 private:
 	msg_param<T0, T1, T2, T3> _temp;
@@ -622,12 +669,31 @@ template <typename T0, typename T1, typename T2>
 class async_trig_handle<T0, T1, T2, void>: public async_trig_base
 {
 	friend boost_coro;
+	typedef ref_ex<T0, T1, T2> ref_type;
+	typedef const_ref_ex<T0, T1, T2> const_ref_ex;
 public:
 	typedef boost::shared_ptr<async_trig_handle<T0, T1, T2> > ptr;
 
 	static boost::shared_ptr<async_trig_handle<T0, T1, T2> > make_ptr()
 	{
 		return boost::shared_ptr<async_trig_handle<T0, T1, T2> >(new async_trig_handle<T0, T1, T2>);
+	}
+
+	void get_param(void* pref)
+	{
+		_temp.get_param(*(ref_type*)pref);
+	}
+
+	void set_param(const T0& p0, const T1& p1, const T2& p2)
+	{
+		if (_waiting)
+		{
+			*(ref_type*)_dstRefPt = const_ref_ex(p0, p1, p2);
+		}
+		else
+		{
+			_temp = const_ref_ex(p0, p1, p2);
+		}
 	}
 private:
 	msg_param<T0, T1, T2> _temp;
@@ -637,12 +703,31 @@ template <typename T0, typename T1>
 class async_trig_handle<T0, T1, void, void>: public async_trig_base
 {
 	friend boost_coro;
+	typedef ref_ex<T0, T1> ref_type;
+	typedef const_ref_ex<T0, T1> const_ref_ex;
 public:
 	typedef boost::shared_ptr<async_trig_handle<T0, T1> > ptr;
 
 	static boost::shared_ptr<async_trig_handle<T0, T1> > make_ptr()
 	{
 		return boost::shared_ptr<async_trig_handle<T0, T1> >(new async_trig_handle<T0, T1>);
+	}
+
+	void get_param(void* pref)
+	{
+		_temp.get_param(*(ref_type*)pref);
+	}
+
+	void set_param(const T0& p0, const T1& p1)
+	{
+		if (_waiting)
+		{
+			*(ref_type*)_dstRefPt = const_ref_ex(p0, p1);
+		}
+		else
+		{
+			_temp = const_ref_ex(p0, p1);
+		}
 	}
 private:
 	msg_param<T0, T1> _temp;
@@ -652,12 +737,31 @@ template <typename T0>
 class async_trig_handle<T0, void, void, void>: public async_trig_base
 {
 	friend boost_coro;
+	typedef ref_ex<T0> ref_type;
+	typedef const_ref_ex<T0> const_ref_ex;
 public:
 	typedef boost::shared_ptr<async_trig_handle<T0> > ptr;
 
 	static boost::shared_ptr<async_trig_handle<T0> > make_ptr()
 	{
 		return boost::shared_ptr<async_trig_handle<T0> >(new async_trig_handle<T0>);
+	}
+
+	void get_param(void* pref)
+	{
+		_temp.get_param(*(ref_type*)pref);
+	}
+
+	void set_param(const T0& p0)
+	{
+		if (_waiting)
+		{
+			*(ref_type*)_dstRefPt = const_ref_ex(p0);
+		}
+		else
+		{
+			_temp = const_ref_ex(p0);
+		}
 	}
 private:
 	msg_param<T0> _temp;
@@ -985,11 +1089,11 @@ public:
 	{
 		assert(th._coroID == _coroID);
 		assert_enter();
-		if (!async_trig_push(th, tm))
+		async_trig_handle<T0>::ref_type ref(r0);
+		if (!async_trig_push(th, tm, &ref))
 		{
 			return false;
 		}
-		r0 = th._temp._res0;
 		close_trig(th);
 		return true;
 	}
@@ -997,11 +1101,9 @@ public:
 	template <typename T0>
 	__yield_interrupt T0 wait_trig(async_trig_handle<T0>& th)
 	{
-		assert(th._coroID == _coroID);
-		assert_enter();
-		async_trig_push(th, -1);
-		close_trig(th);
-		return th._temp._res0;
+		T0 r;
+		wait_trig(th, r, -1);
+		return r;
 	}
 
 	template <typename T0, typename T1>
@@ -1009,12 +1111,11 @@ public:
 	{
 		assert(th._coroID == _coroID);
 		assert_enter();
-		if (!async_trig_push(th, tm))
+		async_trig_handle<T0, T1>::ref_type ref(r0, r1);
+		if (!async_trig_push(th, tm, &ref))
 		{
 			return false;
 		}
-		r0 = th._temp._res0;
-		r1 = th._temp._res1;
 		close_trig(th);
 		return true;
 	}
@@ -1024,13 +1125,11 @@ public:
 	{
 		assert(th._coroID == _coroID);
 		assert_enter();
-		if (!async_trig_push(th, tm))
+		async_trig_handle<T0, T1, T2>::ref_type ref(r0, r1, r2);
+		if (!async_trig_push(th, tm, &ref))
 		{
 			return false;
 		}
-		r0 = th._temp._res0;
-		r1 = th._temp._res1;
-		r2 = th._temp._res2;
 		close_trig(th);
 		return true;
 	}
@@ -1040,14 +1139,11 @@ public:
 	{
 		assert(th._coroID == _coroID);
 		assert_enter();
-		if (!async_trig_push(th, tm))
+		async_trig_handle<T0, T1, T2, T3>::ref_type ref(r0, r1, r2, r3);
+		if (!async_trig_push(th, tm, &ref))
 		{
 			return false;
 		}
-		r0 = th._temp._res0;
-		r1 = th._temp._res1;
-		r2 = th._temp._res2;
-		r3 = th._temp._res3;
 		close_trig(th);
 		return true;
 	}
@@ -1351,15 +1447,15 @@ public:
 		assert(cmh._coroID == _coroID);
 		assert_enter();
 		assert(cmh._ptrClosed);
+		param_type::ref_type ref(r0);
 		param_type* param = cmh.front();
 		if (param)
 		{
-			r0 = param->_res0;
+			param->get_param(ref);
 			cmh.pop_front();
 			return true;
 		}
 		cmh._waiting = true;
-		param_type::ref_type ref(r0);
 		cmh.set_ref(ref);
 		if (!pump_msg_push(cmh, tm))
 		{
@@ -1383,16 +1479,15 @@ public:
 		assert(cmh._coroID == _coroID);
 		assert_enter();
 		assert(cmh._ptrClosed);
+		param_type::ref_type ref(r0, r1);
 		param_type* param = cmh.front();
 		if (param)
 		{
-			r0 = param->_res0;
-			r1 = param->_res1;
+			param->get_param(ref);
 			cmh.pop_front();
 			return true;
 		}
 		cmh._waiting = true;
-		param_type::ref_type ref(r0, r1);
 		cmh.set_ref(ref);
 		if (!pump_msg_push(cmh, tm))
 		{
@@ -1408,17 +1503,15 @@ public:
 		assert(cmh._coroID == _coroID);
 		assert_enter();
 		assert(cmh._ptrClosed);
+		param_type::ref_type ref(r0, r1, r2);
 		param_type* param = cmh.front();
 		if (param)
 		{
-			r0 = param->_res0;
-			r1 = param->_res1;
-			r2 = param->_res2;
+			param->get_param(ref);
 			cmh.pop_front();
 			return true;
 		}
 		cmh._waiting = true;
-		param_type::ref_type ref(r0, r1, r2);
 		cmh.set_ref(ref);
 		if (!pump_msg_push(cmh, tm))
 		{
@@ -1434,18 +1527,15 @@ public:
 		assert(cmh._coroID == _coroID);
 		assert_enter();
 		assert(cmh._ptrClosed);
+		param_type::ref_type ref(r0, r1, r2, r3);
 		param_type* param = cmh.front();
 		if (param)
 		{
-			r0 = param->_res0;
-			r1 = param->_res1;
-			r2 = param->_res2;
-			r3 = param->_res3;
+			param->get_param(ref);
 			cmh.pop_front();
 			return true;
 		}
 		cmh._waiting = true;
-		param_type::ref_type ref(r0, r1, r2, r3);
 		cmh.set_ref(ref);
 		if (!pump_msg_push(cmh, tm))
 		{
@@ -1494,8 +1584,7 @@ private:
 		{
 			if (!_quited)
 			{
-				r._p0 = p0;
-				r._p1 = p1;
+				r = const_ref_ex<T0, T1>(p0, p1);
 				_strand->post(boost::bind(&boost_coro::run_one, shared_from_this()));
 			}
 		} 
@@ -1510,8 +1599,7 @@ private:
 	{
 		if (!_quited)
 		{
-			r._p0 = p0;
-			r._p1 = p1;
+			r = const_ref_ex<T0, T1>(p0, p1);
 			pull_yield();
 		}
 	}
@@ -1523,9 +1611,7 @@ private:
 		{
 			if (!_quited)
 			{
-				r._p0 = p0;
-				r._p1 = p1;
-				r._p2 = p2;
+				r = const_ref_ex<T0, T1, T2>(p0, p1, p2);
 				_strand->post(boost::bind(&boost_coro::run_one, shared_from_this()));
 			}
 		} 
@@ -1540,9 +1626,7 @@ private:
 	{
 		if (!_quited)
 		{
-			r._p0 = p0;
-			r._p1 = p1;
-			r._p2 = p2;
+			r = const_ref_ex<T0, T1, T2>(p0, p1, p2);
 			pull_yield();
 		}
 	}
@@ -1554,10 +1638,7 @@ private:
 		{
 			if (!_quited)
 			{
-				r._p0 = p0;
-				r._p1 = p1;
-				r._p2 = p2;
-				r._p3 = p3;
+				r = const_ref_ex<T0, T1, T2, T3>(p0, p1, p2, p3);
 				_strand->post(boost::bind(&boost_coro::run_one, shared_from_this()));
 			}
 		} 
@@ -1572,15 +1653,12 @@ private:
 	{
 		if (!_quited)
 		{
-			r._p0 = p0;
-			r._p1 = p1;
-			r._p2 = p2;
-			r._p3 = p3;
+			r = const_ref_ex<T0, T1, T2, T3>(p0, p1, p2, p3);
 			pull_yield();
 		}
 	}
 
-	bool async_trig_push(async_trig_base& th, int tm);
+	bool async_trig_push(async_trig_base& th, int tm, void* pref);
 
 	void async_trig_timeout(async_trig_base& th);
 
@@ -1598,7 +1676,7 @@ private:
 		{
 			if (!_quited && !(*isClosed) && !th._notify)
 			{
-				th._temp._res0 = p0;
+				th.set_param(p0);
 				async_trig_post_yield(th);
 			}
 		}
@@ -1615,7 +1693,7 @@ private:
 		{
 			if (!_quited && !(*isClosed) && !th->_notify)
 			{
-				th->_temp._res0 = p0;
+				th->set_param(p0);
 				async_trig_post_yield(*th);
 			}
 		}
@@ -1631,7 +1709,7 @@ private:
 		assert(_strand->running_in_this_thread());
 		if (!_quited && !(*isClosed) && !th._notify)
 		{
-			th._temp._res0 = p0;
+			th.set_param(p0);
 			async_trig_pull_yield(th);
 		}
 	}
@@ -1649,8 +1727,7 @@ private:
 		{
 			if (!_quited && !(*isClosed) && !th._notify)
 			{
-				th._temp._res0 = p0;
-				th._temp._res1 = p1;
+				th.set_param(p0, p1);
 				async_trig_post_yield(th);
 			}
 		}
@@ -1667,8 +1744,7 @@ private:
 		{
 			if (!_quited && !(*isClosed) && !th->_notify)
 			{
-				th->_temp._res0 = p0;
-				th->_temp._res1 = p1;
+				th->set_param(p0, p1);
 				async_trig_post_yield(*th);
 			}
 		}
@@ -1684,8 +1760,7 @@ private:
 		assert(_strand->running_in_this_thread());
 		if (!_quited && !(*isClosed) && !th._notify)
 		{
-			th._temp._res0 = p0;
-			th._temp._res1 = p1;
+			th.set_param(p0, p1);
 			async_trig_pull_yield(th);
 		}
 	}
@@ -1703,9 +1778,7 @@ private:
 		{
 			if (!_quited && !(*isClosed) && !th._notify)
 			{
-				th._temp._res0 = p0;
-				th._temp._res1 = p1;
-				th._temp._res2 = p2;
+				th.set_param(p0, p1, p2);
 				async_trig_post_yield(th);
 			}
 		}
@@ -1723,9 +1796,7 @@ private:
 		{
 			if (!_quited && !(*isClosed) && !th->_notify)
 			{
-				th->_temp._res0 = p0;
-				th->_temp._res1 = p1;
-				th->_temp._res2 = p2;
+				th->set_param(p0, p1, p2);
 				async_trig_post_yield(*th);
 			}
 		}
@@ -1742,9 +1813,7 @@ private:
 		assert(_strand->running_in_this_thread());
 		if (!_quited && !(*isClosed) && !th._notify)
 		{
-			th._temp._res0 = p0;
-			th._temp._res1 = p1;
-			th._temp._res2 = p2;
+			th.set_param(p0, p1, p2);
 			async_trig_pull_yield(th);
 		}
 	}
@@ -1762,10 +1831,7 @@ private:
 		{
 			if (!_quited && !(*isClosed) && !th._notify)
 			{
-				th._temp._res0 = p0;
-				th._temp._res1 = p1;
-				th._temp._res2 = p2;
-				th._temp._res3 = p3;
+				th.set_param(p0, p1, p2, p3);
 				async_trig_post_yield(th);
 			}
 		}
@@ -1783,10 +1849,7 @@ private:
 		{
 			if (!_quited && !(*isClosed) && !th->_notify)
 			{
-				th->_temp._res0 = p0;
-				th->_temp._res1 = p1;
-				th->_temp._res2 = p2;
-				th->_temp._res3 = p3;
+				th->set_param(p0, p1, p2, p3);
 				async_trig_post_yield(*th);
 			}
 		}
@@ -1803,10 +1866,7 @@ private:
 		assert(_strand->running_in_this_thread());
 		if (!_quited && !(*isClosed) && !th._notify)
 		{
-			th._temp._res0 = p0;
-			th._temp._res1 = p1;
-			th._temp._res2 = p2;
-			th._temp._res3 = p3;
+			th.set_param(p0, p1, p2, p3);
 			async_trig_pull_yield(th);
 		}
 	}
@@ -1988,7 +2048,7 @@ private:
 					_timerSleep->cancel();
 				}
 				assert(cmh.get_size() == 0);
-				cmh.set_param(src);
+				cmh.get_param(src);
 				pull_yield();//与check_run3区别
 			} 
 			else
@@ -2016,7 +2076,7 @@ private:
 				_timerSleep->cancel();
 			}
 			assert(cmh.get_size() == 0);
-			cmh.set_param(srcRef);
+			cmh.get_param(srcRef);
 			_strand->post(boost::bind(&boost_coro::run_one, shared_from_this()));//与check_run2区别
 		} 
 		else
