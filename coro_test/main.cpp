@@ -130,6 +130,7 @@ void check_two_down(boost_coro* coro, int dt, int id1, int id2)
 				printf("退出 check_two_down\n");
 				coro->child_coro_quit(up1);
 				coro->child_coro_quit(up2);
+				coro->close_trig(ath);
 				break;
 			}
 		}
@@ -214,13 +215,8 @@ void test_shift(boost_coro* coro, coro_handle pauseCoro)
 	}
 }
 
-void test_producer(boost_coro* coro, msg_pipe<int, int>::get_writer getWriter)
+void test_producer(boost_coro* coro, boost::function<void (int, int)> writer)
 {//生产者
-	auto writer = getWriter(coro, 1500);
-	if (!writer)
-	{//1500ms后没得到writer退出
-		return;
-	}
 	for (int i = 0; true; i++)
 	{
 		writer(i, (int)coro->this_id());
@@ -228,12 +224,8 @@ void test_producer(boost_coro* coro, msg_pipe<int, int>::get_writer getWriter)
 	}
 }
 
-void test_consumer(boost_coro* coro, msg_pipe<int, int>::regist_reader pipe)
+void test_consumer(boost_coro* coro, coro_msg_handle<int, int>& cmh)
 {//消费者
-	coro->sleep(1000);
-	coro_msg_handle<int, int> cmh;
-	size_t ec = pipe(coro, cmh);
-	assert(!ec);
 	while (true)
 	{
 		int p0;
@@ -394,11 +386,12 @@ void coro_test(boost_coro* coro)
 	child_coro_handle coroProducer2;
 	child_coro_handle coroConsumer;
 	//创建生产者/消费者模型测试
+	coro_msg_handle<int, int> conCmh;
 	{
-		msg_pipe<int, int>::get_writer getWriter;
-		coroConsumer = coro->create_child_coro(boost::bind(&test_consumer, _1, msg_pipe<int, int>::make(coro, getWriter)));
-		coroProducer1 = coro->create_child_coro(boost::bind(&test_producer, _1, getWriter));
-		coroProducer2 = coro->create_child_coro(boost::bind(&test_producer, _1, getWriter));
+		coroConsumer = coro->create_child_coro(boost::bind(&test_consumer, _1, boost::ref(conCmh)));
+		auto h = coroConsumer.get_coro()->make_msg_notify(conCmh);
+		coroProducer1 = coro->create_child_coro(boost::bind(&test_producer, _1, h));
+		coroProducer2 = coro->create_child_coro(boost::bind(&test_producer, _1, h));
 	}
 
 	list<coro_handle> chs;//需要被挂起的协程对象，可以从下方注释几个测试
@@ -423,7 +416,7 @@ void coro_test(boost_coro* coro)
 	coro->child_coro_run(coroPrint);
 	coro->child_coro_run(coroShift);
 	coro->child_coro_run(coroTwo);
- 	coro->child_coro_run(coroPerfor);
+	coro->child_coro_run(coroPerfor);
 // 	coro->child_coro_run(coroConsumer);
 // 	coro->child_coro_run(coroProducer1);
 // 	coro->child_coro_run(coroProducer2);
@@ -440,8 +433,8 @@ void coro_test(boost_coro* coro)
 	coro->child_coro_quit(coroPrint);
 	coro->child_coro_quit(coroShift);
 	coro->child_coro_quit(coroTwo);
-	coro->child_coro_quit(coroConsumer);
 	coro->child_coro_quit(coroPerfor);
+	coro->child_coro_quit(coroConsumer);
 	coro->child_coro_quit(coroProducer1);
 	coro->child_coro_quit(coroProducer2);
 	coro->child_coro_quit(coroCreate);

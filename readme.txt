@@ -5,6 +5,9 @@
 github url:
 https://github.com/HAM-2015/CPP-Actor-framework
 
+2015-02-05
+增加外部可以直接拿另一个协程句柄创建一个消息管道或通知句柄.
+
 2015-02-01
 添加socket测试示例.
 

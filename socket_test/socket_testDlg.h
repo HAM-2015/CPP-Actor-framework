@@ -71,8 +71,6 @@ protected:
 	DECLARE_MESSAGE_MAP()
 	BIND_MODAL_RUN()
 private:
-	void readCoro(boost_coro* coro, const msg_pipe<shared_data>::regist_reader& pipe);
-	void writerCoro(boost_coro* coro, boost::shared_ptr<text_stream_io> streamio, msg_pipe<shared_data>::regist_reader msgPump);
 	void connectCoro(boost_coro* coro, boost::shared_ptr<client_param> param);
 
 	void sessionMng(boost_coro* coro, 

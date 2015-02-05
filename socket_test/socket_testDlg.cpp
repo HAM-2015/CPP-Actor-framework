@@ -210,36 +210,6 @@ void Csocket_testDlg::OnDestroy()
 	CDialogEx::OnDestroy();
 }
 
-void Csocket_testDlg::readCoro(boost_coro* coro, const msg_pipe<shared_data>::regist_reader& pipe)
-{
-	coro_msg_handle<shared_data> cmh;
-	pipe(coro, cmh);
-	while (true)
-	{
-		//接收对方的消息，然后发送给对话框
-		shared_data msg = coro->pump_msg(cmh);
-		if (!msg)
-		{
-			break;
-		}
-		post(boost::bind(&Csocket_testDlg::showClientMsg, this, msg));
-	}
-	coro->close_msg_notify(cmh);
-}
-
-void Csocket_testDlg::writerCoro(boost_coro* coro, boost::shared_ptr<text_stream_io> streamio, msg_pipe<shared_data>::regist_reader msgPump)
-{
-	coro_msg_handle<shared_data> cmh;
-	msgPump(coro, cmh);
-	while (true)
-	{
-		//接收对话框给的消息，然后发送给对方
-		shared_data msg = coro->pump_msg(cmh);
-		streamio->write(msg);
-	}
-	coro->close_msg_notify(cmh);
-}
-
 void Csocket_testDlg::connectCoro(boost_coro* coro, boost::shared_ptr<client_param> param)
 {
 	async_trig_handle<boost::system::error_code> ath;
@@ -250,10 +220,33 @@ void Csocket_testDlg::connectCoro(boost_coro* coro, boost::shared_ptr<client_par
 	if (coro->wait_trig(ath, err, param->_tm) && !err && param->_clientSocket->no_delay())
 	{
 		post(boost::bind(&Csocket_testDlg::showClientMsg, this, msg_data::create("连接成功")));
-		msg_pipe<shared_data>::writer_type pw;
-		child_coro_handle readCoro = coro->create_child_coro(boost::bind(&Csocket_testDlg::readCoro, this, _1, msg_pipe<shared_data>::make(pw)));
-		auto textio = text_stream_io::create(coro->this_strand(), param->_clientSocket, pw);
-		child_coro_handle writerCoro = coro->create_child_coro(boost::bind(&Csocket_testDlg::writerCoro, this, _1, textio, param->_msgPump));
+		coro_msg_handle<shared_data> cmh;
+		child_coro_handle readCoro = coro->create_child_coro([this, &cmh](boost_coro* coro)
+		{
+			while (true)
+			{
+				//接收服务器的消息，然后发送给对话框
+				shared_data msg = coro->pump_msg(cmh);
+				if (!msg)
+				{
+					break;
+				}
+				post(boost::bind(&Csocket_testDlg::showClientMsg, this, msg));
+			}
+			coro->close_msg_notify(cmh);
+		});
+		auto textio = text_stream_io::create(coro->this_strand(), param->_clientSocket, readCoro.get_coro()->make_msg_notify(cmh));
+		child_coro_handle writerCoro = coro->create_child_coro([&textio, &param](boost_coro* coro)
+		{
+			coro_msg_handle<shared_data> cmh;
+			param->_msgPump(coro, cmh);
+			while (true)
+			{
+				//接收对话框给的消息，然后发送给服务器
+				textio->write(coro->pump_msg(cmh));
+			}
+			coro->close_msg_notify(cmh);
+		});
 		coro->child_coro_run(readCoro);
 		coro->child_coro_run(writerCoro);
 		coro->child_coro_wait_quit(readCoro);

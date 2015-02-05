@@ -15,9 +15,11 @@ boost::shared_ptr<text_stream_io> text_stream_io::create( shared_strand strand, 
 	boost::shared_ptr<text_stream_io> res(new text_stream_io);
 	res->_ioObj = ioObj;
 	res->_msgNotify = h;
-	res->_writerPipeRegOut = msg_pipe<shared_data>::make(res->_writerPipeIn);
-	boost_coro::create(strand, boost::bind(&text_stream_io::writeCoro, res, _1))->notify_start_run();
-	boost_coro::create(strand, boost::bind(&text_stream_io::readCoro, res, _1))->notify_start_run();
+	auto wc = boost_coro::create(strand, boost::bind(&text_stream_io::writeCoro, res, _1));
+	res->_writerPipeIn = wc->make_msg_notify(res->_writerPipeOut);
+	auto rc = boost_coro::create(strand, boost::bind(&text_stream_io::readCoro, res, _1));
+	wc->notify_start_run();
+	rc->notify_start_run();
 	return res;
 }
 
@@ -84,11 +86,9 @@ void text_stream_io::readCoro( boost_coro* coro )
 void text_stream_io::writeCoro( boost_coro* coro )
 {
 	string textTail = "\r\n";
-	coro_msg_handle<shared_data> cmh;
-	_writerPipeRegOut(coro, cmh);
 	while (true)
 	{
-		shared_data msg = coro->pump_msg(cmh);
+		shared_data msg = coro->pump_msg(_writerPipeOut);
 		if (!msg)
 		{
 			break;
@@ -116,6 +116,6 @@ void text_stream_io::writeCoro( boost_coro* coro )
 			}
 		}
 	}
-	coro->close_msg_notify(cmh);
+	coro->close_msg_notify(_writerPipeOut);
 	_closed = true;
 }

@@ -16,45 +16,42 @@ private:
 	struct pipe_type
 	{
 		typedef typename boost::function<void (T0, T1, T2, T3)> writer_type;
-		typedef typename param_list<msg_param<T0, T1, T2, T3> > reader_type;
-		typedef typename coro_msg_handle<T0, T1, T2, T3> reader_handle;
+		typedef typename param_list<msg_param<T0, T1, T2, T3> > reader_handle;
 	};
 
 	template <typename T0, typename T1, typename T2>
 	struct pipe_type<T0, T1, T2, void>
 	{
 		typedef typename boost::function<void (T0, T1, T2)> writer_type;
-		typedef typename param_list<msg_param<T0, T1, T2> > reader_type;
-		typedef typename coro_msg_handle<T0, T1, T2> reader_handle;
+		typedef typename param_list<msg_param<T0, T1, T2> > reader_handle;
 	};
 
 	template <typename T0, typename T1>
 	struct pipe_type<T0, T1, void, void>
 	{
 		typedef typename boost::function<void (T0, T1)> writer_type;
-		typedef typename param_list<msg_param<T0, T1> > reader_type;
-		typedef typename coro_msg_handle<T0, T1> reader_handle;
+		typedef typename param_list<msg_param<T0, T1> > reader_handle;
 	};
 
 	template <typename T0>
 	struct pipe_type<T0, void, void, void>
 	{
 		typedef typename boost::function<void (T0)> writer_type;
-		typedef typename param_list<msg_param<T0> > reader_type;
-		typedef typename coro_msg_handle<T0> reader_handle;
+		typedef typename param_list<msg_param<T0> > reader_handle;
 	};
 
 	template <>
 	struct pipe_type<void, void, void, void>
 	{
 		typedef typename boost::function<void ()> writer_type;
-		typedef typename coro_msg_handle<> reader_type;
 		typedef typename coro_msg_handle<> reader_handle;
 	};
+
+	typedef typename pipe_type<T0, T1, T2, T3>::reader_handle reader_handle;
 public:
 	typedef typename pipe_type<T0, T1, T2, T3>::writer_type writer_type;
-	typedef typename pipe_type<T0, T1, T2, T3>::reader_type reader_type;
-	typedef typename boost::function<size_t (boost_coro*, reader_type&)> regist_reader;
+	typedef typename boost::function<size_t (boost_coro*, reader_handle&)> regist_reader;
+	typedef typename boost::function<writer_type (int timeout)> get_writer_outside;
 	__yield_interrupt typedef typename boost::function<writer_type (boost_coro*, int timeout)> get_writer;
 private:
 	template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
@@ -332,33 +329,36 @@ private:
 	public:
 		boost::shared_ptr<wrapped_param> _param;
 	};
-
-	typedef typename pipe_type<T0, T1, T2, T3>::reader_handle reader_handle;
 private:
 	struct pipe_param
 	{
 		pipe_param()
-			:_hasWriter(false) {_regCount = 0;}
+			:_hasWriter(false) {DEBUG_OPERATION(_regCount = 0);}
+		~pipe_param()
+		{
+
+		}
 		bool _hasWriter;
 		writer_type _writer;
-		list<boost::function<void ()> > _getList;
 		boost::mutex _mutex;
-		boost::function<void (writer_type)> _registWriter;
-		boost::atomic<size_t> _regCount;
+		list<boost::function<void ()> > _getList;
+		DEBUG_OPERATION(boost::atomic<size_t> _regCount);
 	};
 
-	struct pipe_lock 
+	struct outsite_pipe_param
 	{
-		~pipe_lock()
+		outsite_pipe_param()
+			:_hasWriter(false), _waitCount(0) {DEBUG_OPERATION(_regCount = 0);}
+		~outsite_pipe_param()
 		{
-			auto tc = _proxyCoro.lock();
-			if (tc)
-			{
-				tc->notify_force_quit();//没有去获取reader，协程没必要等待了，可以强制退出
-			}
-		}
 
-		boost::weak_ptr<boost_coro> _proxyCoro;
+		}
+		bool _hasWriter;
+		writer_type _writer;
+		size_t _waitCount;
+		boost::mutex _mutex;
+		boost::condition_variable _conVar;
+		DEBUG_OPERATION(boost::atomic<size_t> _regCount);
 	};
 private:
 	msg_pipe()
@@ -369,163 +369,136 @@ public:
 	/*!
 	@brief 创建一个协程消息管道
 	@param writer 返回写管道函数
-	@return 返回注册读取数据的函数，只能注册一个
+	@return 返回注册读取数据的函数
 	*/
 	static regist_reader make(__out writer_type& writer)
 	{
 		boost::shared_ptr<temp_buffer<T0, T1, T2, T3> > tempBuff(new temp_buffer<T0, T1, T2, T3>());
 		wrapped_invoke<writer_type> wrapWriter(tempBuff->temp_writer(tempBuff));
 		writer = wrapWriter;
-		return boost::bind(&msg_pipe::registReader, wrapWriter._param, (boost::weak_ptr<temp_buffer<T0, T1, T2, T3> >)tempBuff, _1, _2);
+
+		boost::weak_ptr<temp_buffer<T0, T1, T2, T3> > weakBuff = tempBuff;
+		boost::shared_ptr<wrapped_param> wrappedParam = wrapWriter._param;
+		return [wrappedParam, weakBuff](boost_coro* hostCoro, reader_handle& rh)->size_t
+		{
+			SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+			size_t regCount = 0;
+			{
+				auto tb = weakBuff.lock();
+				boost::unique_lock<boost::shared_mutex> ul(wrappedParam->_mutex);
+				wrappedParam->_handler = hostCoro->make_msg_notify(rh);
+				regCount = wrappedParam->_count++;
+				if (tb)
+				{
+					tb->pop(wrappedParam->_handler);
+				}
+			}
+			SetThreadPriority(GetCurrentThread(), hostCoro->this_strand()->get_ios_proxy().getPriority());
+			return regCount;
+		};
 	}
 	
 	/*!
 	@brief 协程内创建一个消息管道
-	@param coro 调用该函数的协程
-	@param strand 管道依赖的strand
 	@param getWriterFunc 返回获取写管道的函数，只有在调用regist_reader返回后才能从该函数中得到结果
-	@return 返回注册读取数据的函数，只能调用一次
+	@return 返回注册读取数据的函数，只能注册一次
 	*/
-	__yield_interrupt static regist_reader make(boost_coro* coro, shared_strand strand, __out get_writer& getWriterFunc)
+	static regist_reader make(__out get_writer& getWriterFunc)
 	{
 		boost::shared_ptr<pipe_param> pipeParam(new pipe_param);
-		async_trig_handle<> ath;
-		child_coro_handle tempCoro = coro->create_child_coro(strand, boost::bind(&msg_pipe::pipeCoro1, _1, pipeParam, 
-			coro->begin_trig(ath)));
-		coro->child_coro_run(tempCoro);
-		coro->wait_trig(ath);
-		boost::shared_ptr<pipe_lock> pipeLock(new pipe_lock);
-		pipeLock->_proxyCoro = coro->child_coro_peel(tempCoro);
-		getWriterFunc = boost::bind(&msg_pipe::getWriter, pipeParam, _1, _2);
-		return boost::bind(&msg_pipe::registReader1, pipeLock, pipeParam, _1, _2);
-	}
+		getWriterFunc = [pipeParam](boost_coro* hostCoro, int timeout)->writer_type
+		{
+			async_trig_handle<> ath;
+			pipeParam->_mutex.lock();
+			if (!pipeParam->_hasWriter)
+			{
+				pipeParam->_getList.push_back(hostCoro->begin_trig(ath));
+				pipeParam->_mutex.unlock();
+				if (timeout >= 0)
+				{
+					hostCoro->open_timer();
+				}
+				if (!hostCoro->wait_trig(ath, timeout))
+				{
+					return msg_pipe<T0, T1, T2, T3>::writer_type();
+				}
+			}
+			else
+			{
+				pipeParam->_mutex.unlock();
+			}
+			return pipeParam->_writer;
+		};
 
-	__yield_interrupt static regist_reader make(boost_coro* coro, __out get_writer& getWriterFunc)
-	{
-		return make(coro, coro->this_strand(), getWriterFunc);
+		boost::weak_ptr<pipe_param> weakParam = pipeParam;
+		return [weakParam](boost_coro* hostCoro, reader_handle& rh)->size_t
+		{
+			boost::shared_ptr<pipe_param> pipeParam = weakParam.lock();
+			if (pipeParam)
+			{
+				assert(0 == pipeParam->_regCount++);
+				pipeParam->_writer = hostCoro->make_msg_notify(rh);
+				pipeParam->_mutex.lock();
+				pipeParam->_hasWriter = true;
+				while (!pipeParam->_getList.empty())
+				{
+					pipeParam->_getList.front()();
+					pipeParam->_getList.pop_front();
+				}
+				pipeParam->_mutex.unlock();
+				return 0;
+			}
+			return -1;
+		};
 	}
 	
 	/*!
-	@brief 同上，协程依赖的ios无关线程中创建一个消息管道
+	@brief 同上，get_writer_outside 只能在与调用 regist_reader 不同的调度器内获取 writer_type
 	*/
-	static regist_reader outside_make(shared_strand strand, __out get_writer& getWriterFunc)
+	static regist_reader make(__out get_writer_outside& getWriterFunc)
 	{
-		assert(!strand->in_this_ios());
-		boost::shared_ptr<pipe_param> pipeParam(new pipe_param);
-		boost::mutex mutex;
-		boost::condition_variable conVar;
-		coro_handle tempCoro = boost_coro::outside_create(strand, boost::bind(&msg_pipe::pipeCoro2, _1, pipeParam, 
-			&mutex, &conVar));
+		boost::shared_ptr<outsite_pipe_param> pipeParam(new outsite_pipe_param);
+		getWriterFunc = [pipeParam](int timeout)->writer_type
 		{
-			boost::unique_lock<boost::mutex> ul(mutex);
-			tempCoro->notify_start_run();
-			conVar.wait(ul);
-		}
-		boost::shared_ptr<pipe_lock> pipeLock(new pipe_lock);
-		pipeLock->_proxyCoro = tempCoro;
-		getWriterFunc = boost::bind(&msg_pipe::getWriter, pipeParam, _1, _2);
-		return boost::bind(&msg_pipe::registReader1, pipeLock, pipeParam, _1, _2);
+			{
+				boost::unique_lock<boost::mutex> ul(pipeParam->_mutex);
+				if (!pipeParam->_hasWriter)
+				{
+					pipeParam->_waitCount++;
+					if (timeout < 0)
+					{
+						pipeParam->_conVar.wait(ul);
+					}
+					else if (!pipeParam->_conVar.timed_wait(ul, boost::posix_time::milliseconds(timeout)))
+					{
+						return msg_pipe<T0, T1, T2, T3>::writer_type();
+					}
+				}
+			}
+			return pipeParam->_writer;
+		};
+
+		boost::weak_ptr<outsite_pipe_param> weakParam = pipeParam;
+		return [weakParam](boost_coro* hostCoro, reader_handle& rh)->size_t
+		{
+			boost::shared_ptr<outsite_pipe_param> pipeParam = weakParam.lock();
+			if (pipeParam)
+			{
+				assert(0 == pipeParam->_regCount++);
+				pipeParam->_writer = hostCoro->make_msg_notify(rh);
+				boost::unique_lock<boost::mutex> ul(pipeParam->_mutex);
+				pipeParam->_hasWriter = true;
+				if (pipeParam->_waitCount)
+				{
+					pipeParam->_waitCount = 0;
+					pipeParam->_conVar.notify_all();
+				}
+				return 0;
+			}
+			return -1;
+		};
 	}
 private:
-	/*!
-	@brief 注册消费者，不要多个线程同时注册
-	@return 返回第几次注册
-	*/
-	static size_t registReader(boost::shared_ptr<wrapped_param>& wrappedParam, boost::weak_ptr<temp_buffer<T0, T1, T2, T3> >& tempBuff, 
-		boost_coro* hostCoro, reader_type& cmh)
-	{
-		SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
-		size_t regCount = 0;
-		{
-			auto tb = tempBuff.lock();
-			boost::unique_lock<boost::shared_mutex> ul(wrappedParam->_mutex);
-			wrappedParam->_handler = hostCoro->make_msg_notify(cmh);
-			regCount = wrappedParam->_count++;
-			if (tb)
-			{
-				tb->pop(wrappedParam->_handler);
-			}
-		}
-		SetThreadPriority(GetCurrentThread(), hostCoro->this_strand()->get_ios_proxy().getPriority());
-		return regCount;
-	}
-	
-	/*!
-	@brief 注册消费者，只能注册一次
-	*/
-	static size_t registReader1(boost::shared_ptr<pipe_lock>& pipeLock, boost::shared_ptr<pipe_param>& pipeParam, boost_coro* hostCoro, reader_type& cmh)
-	{
-		pipeParam->_mutex.lock();
-		size_t rc = pipeParam->_regCount++;
-		pipeParam->_registWriter(hostCoro->make_msg_notify(cmh));
-		pipeParam->_mutex.unlock();
-		return rc;
-	}
-
-	/*!
-	@brief 获取生产者，在另一端调用registReader完成或超时后返回
-	*/
-	__yield_interrupt static writer_type getWriter(boost::shared_ptr<pipe_param>& pipeParam, boost_coro* hostCoro, int timeout)
-	{
-		async_trig_handle<> ath;
-		pipeParam->_mutex.lock();
-		if (!pipeParam->_hasWriter)
-		{
-			pipeParam->_getList.push_back(hostCoro->begin_trig(ath));
-			pipeParam->_mutex.unlock();
-			if (timeout >= 0)
-			{
-				hostCoro->open_timer();
-			}
-			if (!hostCoro->wait_trig(ath, timeout))
-			{
-				return writer_type();
-			}
-		}
-		else
-		{
-			pipeParam->_mutex.unlock();
-		}
-		return pipeParam->_writer;
-	}
-	//////////////////////////////////////////////////////////////////////////
-
-	static void pipeCoro1(boost_coro* coro, boost::shared_ptr<pipe_param>& pipeParam, boost::function<void ()>& makeOkTrig)
-	{
-		async_trig_handle<writer_type> waitReaderAth;
-		pipeParam->_registWriter = coro->begin_trig(waitReaderAth);
-		makeOkTrig();
-
-		pipeParam->_writer = coro->wait_trig(waitReaderAth);
-		pipeParam->_mutex.lock();
-		pipeParam->_hasWriter = true;
-		while (!pipeParam->_getList.empty())
-		{
-			pipeParam->_getList.front()();
-			pipeParam->_getList.pop_front();
-		}
-		pipeParam->_mutex.unlock();
-	}
-
-	static void pipeCoro2(boost_coro* coro, boost::shared_ptr<pipe_param>& pipeParam, boost::mutex* mutex, boost::condition_variable* conVar)
-	{
-		async_trig_handle<writer_type> waitReaderAth;
-		pipeParam->_registWriter = coro->begin_trig(waitReaderAth);
-		{
-			boost::lock_guard<boost::mutex> lg(*mutex);
-			conVar->notify_one();
-		}
-
-		pipeParam->_writer = coro->wait_trig(waitReaderAth);
-		pipeParam->_mutex.lock();
-		pipeParam->_hasWriter = true;
-		while (!pipeParam->_getList.empty())
-		{
-			pipeParam->_getList.front()();
-			pipeParam->_getList.pop_front();
-		}
-		pipeParam->_mutex.unlock();
-	}
 };
 
 #endif

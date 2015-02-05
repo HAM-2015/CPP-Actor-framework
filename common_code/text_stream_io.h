@@ -3,7 +3,6 @@
 
 #include "stream_io_base.h"
 #include "shared_data.h"
-#include "msg_pipe.h"
 #include "boost_coroutine.h"
 
 /*!
@@ -26,8 +25,8 @@ private:
 	bool _closed;
 	boost::shared_ptr<stream_io_base> _ioObj;
 	boost::function<void (shared_data)> _msgNotify;
-	msg_pipe<shared_data>::writer_type _writerPipeIn;
-	msg_pipe<shared_data>::regist_reader _writerPipeRegOut;
+	boost::function<void (shared_data)> _writerPipeIn;
+	coro_msg_handle<shared_data> _writerPipeOut;
 };
 
 #endif
