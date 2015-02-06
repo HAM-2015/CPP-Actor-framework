@@ -148,11 +148,6 @@ void async_trig_base::begin(long long coroID)
 	DEBUG_OPERATION(_coroID = coroID);
 }
 
-void async_trig_base::get_param(void* pref)
-{
-	assert(!pref);
-}
-
 void async_trig_base::close()
 {
 	if (_ptrClosed)
@@ -758,14 +753,14 @@ boost::function<void ()> boost_coro::begin_trig(async_trig_handle<>& th)
 	assert_enter();
 	th.begin(_coroID);
 	auto isClosed = th._ptrClosed;
-	auto shared_this = shared_from_this();
+	coro_handle shared_this = shared_from_this();
 	return [&, shared_this, isClosed]()
 	{
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*isClosed) && !th._notify)
 			{
-				async_trig_post_yield(th);
+				async_trig_post_yield(th, NULL);
 			}
 		}
 		else
@@ -780,14 +775,14 @@ boost::function<void ()> boost_coro::begin_trig(boost::shared_ptr<async_trig_han
 	assert_enter();
 	th->begin(_coroID);
 	auto isClosed = th->_ptrClosed;
-	auto shared_this = shared_from_this();
+	coro_handle shared_this = shared_from_this();
 	return [&, shared_this, isClosed, th]()
 	{
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*isClosed) && !th->_notify)
 			{
-				async_trig_post_yield(*th);
+				async_trig_post_yield(*th, NULL);
 			}
 		}
 		else
@@ -973,7 +968,7 @@ void boost_coro::async_trig_timeout(async_trig_base& th)
 	}
 }
 
-void boost_coro::async_trig_post_yield(async_trig_base& th)
+void boost_coro::async_trig_post_yield(async_trig_base& th, void* cref)
 {
 	th._notify = true;
 	if (th._waiting)
@@ -984,11 +979,16 @@ void boost_coro::async_trig_post_yield(async_trig_base& th)
 			th._hasTm = false;
 			_timerSleep->cancel();
 		}
+		th.set_ref(cref);
 		_strand->post(boost::bind(&boost_coro::run_one, shared_from_this()));
 	} 
+	else
+	{
+		th.set_temp(cref);
+	}
 }
 
-void boost_coro::async_trig_pull_yield(async_trig_base& th)
+void boost_coro::async_trig_pull_yield(async_trig_base& th, void* cref)
 {
 	th._notify = true;
 	if (th._waiting)
@@ -999,20 +999,25 @@ void boost_coro::async_trig_pull_yield(async_trig_base& th)
 			th._hasTm = false;
 			_timerSleep->cancel();
 		}
+		th.set_ref(cref);
 		pull_yield();
 	} 
+	else
+	{
+		th.set_temp(cref);
+	}
 }
 
-void boost_coro::_async_trig_handler(boost::shared_ptr<bool> isClosed, async_trig_handle<>& th)
+void boost_coro::_async_trig_handler(boost::shared_ptr<bool>& isClosed, async_trig_handle<>& th)
 {
 	assert(_strand->running_in_this_thread());
 	if (!_quited && !(*isClosed) && !th._notify)
 	{
-		async_trig_pull_yield(th);
+		async_trig_pull_yield(th, NULL);
 	}
 }
 
-void boost_coro::_async_trig_handler_ptr(boost::shared_ptr<bool> isClosed, boost::shared_ptr<async_trig_handle<> >& th)
+void boost_coro::_async_trig_handler_ptr(boost::shared_ptr<bool>& isClosed, boost::shared_ptr<async_trig_handle<> >& th)
 {
 	_async_trig_handler(isClosed, *th);
 }
@@ -1034,7 +1039,7 @@ void boost_coro::create_coro_handler( coro_handle coro, coro_handle& retCoro, li
 	pull_yield();
 }
 
-void boost_coro::check_run1( boost::shared_ptr<bool> isClosed, coro_msg_handle<>& cmh )
+void boost_coro::check_run1( boost::shared_ptr<bool>& isClosed, coro_msg_handle<>& cmh )
 {
 	if (_quited || (*isClosed)) return;
 
@@ -1055,7 +1060,7 @@ void boost_coro::check_run1( boost::shared_ptr<bool> isClosed, coro_msg_handle<>
 	}
 }
 
-void boost_coro::check_run1_ptr(boost::shared_ptr<bool> isClosed, boost::shared_ptr<coro_msg_handle<> >& cmh)
+void boost_coro::check_run1_ptr(boost::shared_ptr<bool>& isClosed, boost::shared_ptr<coro_msg_handle<> >& cmh)
 {
 	check_run1(isClosed, *cmh);
 }
@@ -1308,32 +1313,32 @@ void boost_coro::switch_pause_play()
 
 void boost_coro::switch_pause_play(const boost::function<void (bool isPaused)>& h)
 {
-	coro_handle _this = shared_from_this();
-	_strand->post(([_this, h]()
+	coro_handle shared_this = shared_from_this();
+	_strand->post([&, shared_this, h]()
 	{
-		assert(_this->_strand->running_in_this_thread());
-		if (!_this->_quited)
+		assert(_strand->running_in_this_thread());
+		if (!_quited)
 		{
-			if (_this->_suspended)
+			if (_suspended)
 			{
 				if (h)
 				{
-					_this->resume(boost::bind(h, false));
+					resume(boost::bind(h, false));
 				} 
 				else
 				{
-					_this->resume(boost::function<void ()>());
+					resume(boost::function<void ()>());
 				}
 			} 
 			else
 			{
 				if (h)
 				{
-					_this->suspend(boost::bind(h, true));
+					suspend(boost::bind(h, true));
 				} 
 				else
 				{
-					_this->suspend(boost::function<void ()>());
+					suspend(boost::function<void ()>());
 				}
 			}
 		}
@@ -1341,7 +1346,7 @@ void boost_coro::switch_pause_play(const boost::function<void (bool isPaused)>& 
 		{
 			CHECK_EXCEPTION1(h, true);
 		}
-	}));
+	});
 }
 
 bool boost_coro::outside_wait_quit()

@@ -291,7 +291,7 @@ void create_null_coro(boost_coro* coro, int* count)
 		{
 			(*count)++;
 			auto newCoro = child_coro_handle::make_ptr();
-			*newCoro = coro->create_child_coro(([](boost_coro*){}));
+			*newCoro = coro->create_child_coro([](boost_coro*){});
 			childList.push_back(newCoro);
 		}
 		coro->child_coros_quit(childList);
