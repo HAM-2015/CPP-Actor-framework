@@ -31,7 +31,6 @@ protected:
 	DECLARE_MESSAGE_MAP()
 	BIND_MODAL_RUN()
 private:
-	void writeCoro(boost_coro* coro, boost::shared_ptr<text_stream_io> textio);
 	void sessionCoro(boost_coro* coro);
 	void lstClose(boost_coro* coro);
 public:

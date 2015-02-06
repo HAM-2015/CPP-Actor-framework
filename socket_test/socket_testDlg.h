@@ -72,11 +72,7 @@ protected:
 	BIND_MODAL_RUN()
 private:
 	void connectCoro(boost_coro* coro, boost::shared_ptr<client_param> param);
-
-	void sessionMng(boost_coro* coro, 
-		const msg_pipe<list<boost::shared_ptr<session_pck> >::iterator>::regist_reader& sessClose);
 	void newSession(boost::shared_ptr<socket_io> socket, msg_pipe<>::regist_reader closePump, boost::function<void ()> cb);
-	void lstClose(boost_coro* coro, boost::shared_ptr<acceptor_socket> accept, const msg_pipe<>::regist_reader& lst);
 	void serverCoro(boost_coro* coro, boost::shared_ptr<server_param> param);
 private:
 	ios_proxy _ios;

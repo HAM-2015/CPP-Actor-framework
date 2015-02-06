@@ -318,33 +318,6 @@ void Csocket_testDlg::newSession(boost::shared_ptr<socket_io> socket, msg_pipe<>
 	cb();
 }
 
-void Csocket_testDlg::sessionMng(boost_coro* coro, 
-	const msg_pipe<list<boost::shared_ptr<session_pck> >::iterator>::regist_reader& sessClose)
-{
-	coro_msg_handle<list<boost::shared_ptr<session_pck> >::iterator> cmh;
-	sessClose(coro, cmh);
-	while (true)
-	{
-		auto it = coro->pump_msg(cmh);
-		//得到一个会话关闭消息，先等待对话框线程关闭，再从列表中删除
-		(*it)->_thread.join();
-		(*it)->_socket->close();
-		_sessList.erase(it);
-		post(boost::bind(&Csocket_testDlg::showSessionNum, this, _sessList.size()));
-	}
-	coro->close_msg_notify(cmh);
-}
-
-void Csocket_testDlg::lstClose(boost_coro* coro, boost::shared_ptr<acceptor_socket> accept, const msg_pipe<>::regist_reader& lst)
-{
-	coro_msg_handle<> cmh;
-	lst(coro, cmh);
-	coro->pump_msg(cmh);
-	//得到服务器关闭消息，关闭连接侦听器
-	accept->close();
-	coro->close_msg_notify(cmh);
-}
-
 void Csocket_testDlg::serverCoro(boost_coro* coro, boost::shared_ptr<server_param> param)
 {
 	coro_msg_handle<boost::shared_ptr<socket_io> > cmh;
@@ -355,12 +328,32 @@ void Csocket_testDlg::serverCoro(boost_coro* coro, boost::shared_ptr<server_para
 		post(boost::bind(&Csocket_testDlg::OnBnClickedStopLst, this));
 		return;
 	}
-	msg_pipe<list<boost::shared_ptr<session_pck> >::iterator>::writer_type sessDisconnNotify;
 	//创建侦听服务器关闭
-	child_coro_handle lstCloseProxyCoro = coro->create_child_coro(boost::bind(&Csocket_testDlg::lstClose, this, _1, accept, boost::ref(param->_closePump)));//侦听服务器关闭
+	child_coro_handle lstCloseProxyCoro = coro->create_child_coro([&param, &accept](boost_coro* coro)//侦听服务器关闭
+	{
+		coro_msg_handle<> cmh;
+		param->_closePump(coro, cmh);
+		coro->pump_msg(cmh);
+		//得到服务器关闭消息，关闭连接侦听器
+		accept->close();
+		coro->close_msg_notify(cmh);
+	});
 	//创建会话关闭响应器
-	child_coro_handle sessMngCoro = coro->create_child_coro(boost::bind(&Csocket_testDlg::sessionMng, this, _1,
-		msg_pipe<list<boost::shared_ptr<session_pck> >::iterator>::make(sessDisconnNotify)));
+	coro_msg_handle<list<boost::shared_ptr<session_pck> >::iterator> sessDissonnLst;
+	child_coro_handle sessMngCoro = coro->create_child_coro([this, &sessDissonnLst](boost_coro* coro)
+	{
+		while (true)
+		{
+			auto it = coro->pump_msg(sessDissonnLst);
+			//得到一个会话关闭消息，先等待对话框线程关闭，再从列表中删除
+			(*it)->_thread.join();
+			(*it)->_socket->close();
+			_sessList.erase(it);
+			post(boost::bind(&Csocket_testDlg::showSessionNum, this, _sessList.size()));
+		}
+		coro->close_msg_notify(sessDissonnLst);
+	});
+	auto sessDissonnNtf = sessMngCoro.get_coro()->make_msg_notify(sessDissonnLst);
 	coro->child_coro_run(lstCloseProxyCoro);
 	coro->child_coro_run(sessMngCoro);
 	while (true)
@@ -379,7 +372,7 @@ void Csocket_testDlg::serverCoro(boost_coro* coro, boost::shared_ptr<server_para
 			//创建一个单独线程运行对话框
 			newSess->_thread.swap(boost::thread(boost::bind(&Csocket_testDlg::newSession, this, newSocket,
 				msg_pipe<>::make(newSess->_closeNtf),//外部通知对话框关闭
-				(boost::function<void ()>)boost::bind(sessDisconnNotify, _sessList.begin()))));
+				(boost::function<void ()>)boost::bind(sessDissonnNtf, _sessList.begin()))));
 		}
 		else
 		{

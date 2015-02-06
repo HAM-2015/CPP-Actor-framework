@@ -97,28 +97,26 @@ void dlg_session::lstClose(boost_coro* coro)
 	coro->close_msg_notify(cmh);
 }
 
-void dlg_session::writeCoro(boost_coro* coro, boost::shared_ptr<text_stream_io> textio)
-{
-	coro_msg_handle<shared_data> cmh;
-	_sendPump(coro, cmh);
-	while (true)
-	{
-		auto msg = coro->pump_msg(cmh);
-		if (!msg)
-		{
-			break;
-		}
-		textio->write(msg);
-	}
-	coro->close_msg_notify(cmh);
-}
-
 void dlg_session::sessionCoro(boost_coro* coro)
 {
 	post(boost::bind(&dlg_session::showClientMsg, this, msg_data::create(_socket->ip())));
 	coro_msg_handle<shared_data> cmh;
 	boost::shared_ptr<text_stream_io> textio = text_stream_io::create(_strand, _socket, coro->make_msg_notify(cmh));
-	child_coro_handle wd = coro->create_child_coro(boost::bind(&dlg_session::writeCoro, this, _1, textio));
+	child_coro_handle wd = coro->create_child_coro([this, &textio](boost_coro* coro)
+	{
+		coro_msg_handle<shared_data> cmh;
+		_sendPump(coro, cmh);
+		while (true)
+		{
+			auto msg = coro->pump_msg(cmh);
+			if (!msg)
+			{
+				break;
+			}
+			textio->write(msg);
+		}
+		coro->close_msg_notify(cmh);
+	});
 	coro->child_coro_run(wd);
 	while (true)
 	{
