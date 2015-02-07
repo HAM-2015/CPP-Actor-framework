@@ -132,7 +132,6 @@ BOOL Csocket_testDlg::OnInitDialog()
 	_maxSessionEdit.SetWindowText("3");
 
 	boost_coro::enable_stack_pool();
-	timeout_trig::enable_high_resolution();
 	boost_coro::disable_auto_make_timer();
 	_ios.run();
 	_strand = boost_strand::create(_ios);
@@ -217,7 +216,7 @@ void Csocket_testDlg::connectCoro(boost_coro* coro, boost::shared_ptr<client_par
 	param->_clientSocket->async_connect(param->_ip.c_str(), param->_port, coro->begin_trig(ath));
 	coro->open_timer();
 	boost::system::error_code err;
-	if (coro->wait_trig(ath, err, param->_tm) && !err && param->_clientSocket->no_delay())
+	if (coro->timed_wait_trig(ath, err, param->_tm) && !err && param->_clientSocket->no_delay())
 	{
 		post(boost::bind(&Csocket_testDlg::showClientMsg, this, msg_data::create("连接成功")));
 		coro_msg_handle<shared_data> cmh;

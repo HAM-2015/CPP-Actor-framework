@@ -78,13 +78,7 @@
     <ClInclude Include="..\common_code\stream_io_base.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
-    <ClInclude Include="..\common_code\super_timer.h">
-      <Filter>头文件\common_code</Filter>
-    </ClInclude>
     <ClInclude Include="..\common_code\text_stream_io.h">
-      <Filter>头文件\common_code</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common_code\time_out.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
   </ItemGroup>
@@ -119,13 +113,7 @@
     <ClCompile Include="..\common_code\socket_io.cpp">
       <Filter>源文件\common_code</Filter>
     </ClCompile>
-    <ClCompile Include="..\common_code\super_timer.cpp">
-      <Filter>源文件\common_code</Filter>
-    </ClCompile>
     <ClCompile Include="..\common_code\text_stream_io.cpp">
-      <Filter>源文件\common_code</Filter>
-    </ClCompile>
-    <ClCompile Include="..\common_code\time_out.cpp">
       <Filter>源文件\common_code</Filter>
     </ClCompile>
   </ItemGroup>
