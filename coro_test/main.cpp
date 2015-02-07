@@ -4,8 +4,8 @@
 #include "ios_proxy.h"
 #include "boost_coroutine.h"
 #include "msg_pipe.h"
-#include "super_timer.h"
 #include "async_buffer.h"
+#include "time_info.h"
 #include <list>
 #include <Windows.h>
 
@@ -120,7 +120,7 @@ void check_two_down(boost_coro* coro, int dt, int id1, int id2)
 			up2.get_coro()->append_quit_callback(nh);
 			coro->child_coro_run(up1);
 			coro->child_coro_run(up2);
-			if (coro->wait_trig(ath, st1, 3000))
+			if (coro->timed_wait_trig(ath, st1, 3000))
 			{
 				coro->child_coro_quit(up1);
 				coro->child_coro_quit(up2);
@@ -259,7 +259,7 @@ void perfor_test(boost_coro* coro, ios_proxy& ios, int coroNum)
 
 	for (int num = 1; true; num = num % coroNum + 1)
 	{
-		long long tk = timeout_trig::get_tick();
+		long long tk = get_tick();
 		list<child_coro_handle::ptr> childList;
 		for (int i = 0; i < num; i++)
 		{
@@ -276,7 +276,7 @@ void perfor_test(boost_coro* coro, ios_proxy& ios, int coroNum)
 		{
 			ct += count[i];
 		}
-		double f = (double)ct * 1000000 / (timeout_trig::get_tick()-tk);
+		double f = (double)ct * 1000000 / (get_tick()-tk);
 		printf("协程数=%d, 切换频率=%d\n", num, (int)f);
 	}
 }
@@ -457,8 +457,7 @@ void coro_test(boost_coro* coro)
 	*/
 int main(int argc, char* argv[])
 {
-	//timeout_trig::enable_realtime_priority();
-	timeout_trig::enable_high_resolution();
+	enable_high_resolution();
 	boost_coro::enable_stack_pool();
 	ios_proxy ios;
 	ios.run();

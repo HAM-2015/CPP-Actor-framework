@@ -27,13 +27,10 @@
     <ClCompile Include="..\common_code\shared_data.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="..\common_code\super_timer.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="..\common_code\time_out.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="main.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common_code\time_info.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
@@ -62,12 +59,6 @@
     <ClInclude Include="..\common_code\strand_ex.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="..\common_code\super_timer.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common_code\time_out.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="..\common_code\wrapped_dispatch_handler.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -81,6 +72,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="..\common_code\async_buffer.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common_code\time_info.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
