@@ -418,7 +418,7 @@ public:
 				{
 					hostCoro->open_timer();
 				}
-				if (!hostCoro->wait_trig(ath, timeout))
+				if (!hostCoro->timed_wait_trig(ath, timeout))
 				{
 					return msg_pipe<T0, T1, T2, T3>::writer_type();
 				}
