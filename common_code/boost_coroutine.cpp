@@ -1793,7 +1793,7 @@ void boost_coro::expires_timer()
 	}));
 }
 
-void boost_coro::time_out(int ms, const boost::function<void ()> h)
+void boost_coro::time_out(int ms, const boost::function<void ()>& h)
 {
 	assert_enter();
 	assert(_timerSleep);

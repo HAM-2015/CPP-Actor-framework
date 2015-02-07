@@ -2268,7 +2268,7 @@ public:
 	__yield_interrupt bool another_coros_switch(const list<coro_handle>& anotherCoros);
 private:
 	void assert_enter();
-	void time_out(int ms, const boost::function<void ()> h);
+	void time_out(int ms, const boost::function<void ()>& h);
 	void expires_timer();
 	void cancel_timer();
 	void suspend_timer();
