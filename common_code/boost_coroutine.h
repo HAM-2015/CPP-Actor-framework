@@ -11,7 +11,7 @@
 #include "ref_ex.h"
 
 /*
-*		工业逻辑控制编程基础框架，使用"协程(coroutine)"技术，依赖boost_1.55或更新;
+*		并发逻辑控制编程基础框架，使用"协程(coroutine)"技术，依赖boost_1.55或更新;
 *		如果性能允许，所有轻量级逻辑（包括并行逻辑）可以在单线程io_service中执行（亦可多线程io_service）;
 *		一个协程对象(coro_handle)依赖一个shared_strand，多个协程可以共同依赖同一个shared_strand;
 *		支持强制结束、挂起/恢复、延时、多子任务（并发控制）;

@@ -1774,13 +1774,13 @@ void boost_coro::enable_stack_pool()
 void boost_coro::expires_timer()
 {
 	size_t tid = ++_timerSleep->_timerCount;
-	//coro_handle shared_this = shared_from_this();
+	coro_handle shared_this = shared_from_this();
 	boost::system::error_code ec;
 	_timerSleep->_timer.expires_from_now(boost::chrono::microseconds(_timerSleep->_timerTime.total_microseconds()), ec);
 	_timerSleep->_timer.async_wait(_strand->wrap_post((boost::function<void (const boost::system::error_code&)>)
-		[this, /*shared_this, */tid](const boost::system::error_code& e)
+		[this, shared_this, tid](const boost::system::error_code& err)
 	{
-		if (_timerSleep && tid == _timerSleep->_timerCount && !e)
+		if (!err && _timerSleep && tid == _timerSleep->_timerCount)
 		{
 			if (!_timerSleep->_timerSuspend && !_timerSleep->_timerCompleted)
 			{
