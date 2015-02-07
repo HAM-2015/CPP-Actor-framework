@@ -1,12 +1,14 @@
 #define WIN32_LEAN_AND_MEAN
 
 #include <boost/coroutine/all.hpp>
+#include <boost/asio/high_resolution_timer.hpp>
 #include "boost_coroutine.h"
 #include "coro_stack.h"
 #include "asm_ex.h"
 
 typedef boost::coroutines::coroutine<void>::pull_type coro_pull_type;
 typedef boost::coroutines::coroutine<void>::push_type coro_push_type;
+typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> timer_type;
 
 #ifdef _DEBUG
 
@@ -24,6 +26,80 @@ typedef boost::coroutines::coroutine<void>::push_type coro_push_type;
 
 #endif //end _DEBUG
 
+//∂—’ªµ◊‘§¡Ùø’º‰£¨∑¿÷π±¨’ª
+#define STACK_RESERVED_SPACE_SIZE		64
+
+/*!
+@brief –≠≥Ã’ª∑÷≈‰∆˜
+*/
+struct coro_stack_pool_allocate
+{
+	coro_stack_pool_allocate() {}
+
+	coro_stack_pool_allocate(void* sp, size_t size)
+	{
+		_stack.sp = sp;
+		_stack.size = size;
+	}
+
+	void allocate( boost::coroutines::stack_context & stackCon, size_t size)
+	{
+		stackCon = _stack;
+	}
+
+	void deallocate( boost::coroutines::stack_context & stackCon)
+	{
+
+	}
+
+	boost::coroutines::stack_context _stack;
+};
+
+struct coro_stack_allocate 
+{
+	coro_stack_allocate() {}
+
+	coro_stack_allocate(void** sp, size_t* size)
+	{
+		_sp = sp;
+		_size = size;
+	}
+
+	void allocate( boost::coroutines::stack_context & stackCon, size_t size)
+	{
+		boost::coroutines::stack_allocator all;
+		all.allocate(stackCon, size);
+		*_sp = stackCon.sp;
+		*_size = stackCon.size;
+	}
+
+	void deallocate( boost::coroutines::stack_context & stackCon)
+	{
+		boost::coroutines::stack_allocator all;
+		all.deallocate(stackCon);
+	}
+
+	void** _sp;
+	size_t* _size;
+};
+
+struct coro_free 
+{
+	coro_free() {}
+
+	coro_free(stack_pck& stack)
+	{
+		_stack = stack;
+	}
+
+	void operator ()(boost_coro* coro)
+	{
+		coro->~boost_coro();
+		coro_stack_pool::recovery(_stack);
+	}
+
+	stack_pck _stack;
+};
 
 void check_force_quit::reset()
 {
@@ -264,6 +340,21 @@ void child_coro_handle::operator delete(void* p)
 
 //////////////////////////////////////////////////////////////////////////
 
+struct boost_coro::timer_pck
+{
+	timer_pck(boost::asio::io_service& ios)
+		:_timer(ios), _timerTime(0), _timerSuspend(false), _timerCompleted(true), _timerCount(0) {}
+
+	timer_type _timer;
+	bool _timerSuspend;
+	bool _timerCompleted;
+	size_t _timerCount;
+	boost::posix_time::microsec _timerTime;
+	boost::posix_time::ptime _timerStampBegin;
+	boost::posix_time::ptime _timerStampEnd;
+	boost::function<void ()> _h;
+};
+
 boost::atomic<long long> _coroIDCount(0);//IDº∆ ˝
 bool _autoMakeTimer = true;
 
@@ -313,8 +404,16 @@ public:
 		}
 		if (_coro._timerSleep)
 		{
-			_coro._timerSleep->cancel();
-			_coro._timerSleep.reset();
+			_coro.cancel_timer();
+			if (coro_stack_pool::isEnable())
+			{
+				_coro._timerSleep->~timer_pck();
+			}
+			else
+			{
+				delete _coro._timerSleep;
+			}
+			_coro._timerSleep = NULL;
 		}
 	}
 private:
@@ -325,6 +424,7 @@ boost_coro::boost_coro()
 {
 	_coroPull = NULL;
 	_coroPush = NULL;
+	_timerSleep = NULL;
 	_quited = false;
 	_started = false;
 	_inCoro = false;
@@ -357,6 +457,23 @@ boost_coro::~boost_coro()
 	assert(_exitCallback.empty());
 	assert(_childCoroList.empty());
 	delete (coro_pull_type*)_coroPull;
+#if (CHECK_CORO_STACK) || (_DEBUG)
+	{
+		size_t* pRs = (size_t*)((BYTE*)_stackTop-_stackSize);
+		size_t checkSum = 0;
+		for (size_t i = 0; i < STACK_RESERVED_SPACE_SIZE/sizeof(size_t)-1; i++, pRs++)
+		{
+			checkSum += *pRs;
+		}
+		assert(*pRs == checkSum);
+		if (*pRs != checkSum)
+		{
+			char buf[48];
+			sprintf_s(buf, "%llu –≠≥Ã∂—’ª“Á≥ˆ", _coroID);
+			throw boost::shared_ptr<string>(new string(buf));
+		}
+	}
+#endif
 }
 
 boost_coro& boost_coro::operator =(const boost_coro&)
@@ -395,42 +512,51 @@ coro_handle boost_coro::local_create( shared_strand coroStrand, const main_func&
 	coro_handle newCoro;
 	if (coro_stack_pool::isEnable())
 	{
-		size_t objSize = sizeof(boost_coro)+timeout_trig::object_size(timeout_trig::high_resolution_timer);
-		void* objPtr = buffer_alloc<>::obj_allocate_size(objSize);
-		auto sharedPoolMem = boost::shared_ptr<void>(objPtr, boost::bind(&buffer_alloc<>::obj_deallocate_size, objSize, _1));
-		newCoro = coro_handle(new(objPtr) boost_coro, boost::bind(&buffer_alloc<boost_coro>::shared_obj_destroy, sharedPoolMem, _1));
+		size_t coroSize = (sizeof(boost_coro)+(sizeof(void*)-1)) & ((sizeof(void*)-1) ^ -1);
+		size_t timerSize = (sizeof(timer_pck)+(sizeof(void*)-1)) & ((sizeof(void*)-1) ^ -1);
+		size_t totalSize = (coroSize+timerSize+stackSize + (4 kB-1)) & ((4 kB-1) ^ -1);
+		stack_pck stackMem = coro_stack_pool::getStack(totalSize);
+		totalSize = stackMem._stack.size;
+		BYTE* stackTop = (BYTE*)stackMem._stack.sp;
+		newCoro = coro_handle(new(stackTop-coroSize) boost_coro, coro_free(stackMem));
 		if (_autoMakeTimer)
 		{
-			newCoro->_timerSleep = timeout_trig::create_in_pool(sharedPoolMem, (BYTE*)objPtr+sizeof(boost_coro),
-				coroStrand, timeout_trig::high_resolution_timer);
+			newCoro->_timerSleep = new(stackTop-coroSize-timerSize) timer_pck(coroStrand->get_io_service());
 		}
-		newCoro->_sharedPoolMem = sharedPoolMem;
 		newCoro->_strand = coroStrand;
 		newCoro->_mainFunc = mainFunc;
+		newCoro->_stackTop = stackTop-coroSize-timerSize;
+		newCoro->_stackSize = totalSize-coroSize-timerSize;
 		if (cb) newCoro->_exitCallback.push_back(cb);
-#if 105500 == BOOST_VERSION
 		newCoro->_coroPull = new coro_pull_type(boost_coro_run(*newCoro),
-			boost::coroutines::attributes(stackSize), coro_stack(&newCoro->_stackTop, &newCoro->_stackSize), buffer_alloc<>());
-#elif 105600 <= BOOST_VERSION
-		newCoro->_coroPull = new coro_pull_type(boost_coro_run(*newCoro),
-			boost::coroutines::attributes(stackSize), coro_stack(&newCoro->_stackTop, &newCoro->_stackSize));
-#else
-		assert(false);
-#endif
+			boost::coroutines::attributes(stackSize), coro_stack_pool_allocate(newCoro->_stackTop, newCoro->_stackSize));
 	} 
 	else
 	{
 		newCoro = coro_handle(new boost_coro);
 		if (_autoMakeTimer)
 		{
-			newCoro->_timerSleep = timeout_trig::create_high_resolution(coroStrand);
+			newCoro->_timerSleep = new timer_pck(coroStrand->get_io_service());
 		}
 		newCoro->_strand = coroStrand;
 		newCoro->_mainFunc = mainFunc;
 		if (cb) newCoro->_exitCallback.push_back(cb);
 		newCoro->_coroPull = new coro_pull_type(boost_coro_run(*newCoro),
-			boost::coroutines::attributes(stackSize), coro_stack(&newCoro->_stackTop, &newCoro->_stackSize));
+			boost::coroutines::attributes(stackSize), coro_stack_allocate(&newCoro->_stackTop, &newCoro->_stackSize));
 	}
+#if (CHECK_CORO_STACK) || (_DEBUG)
+	{
+		assert(STACK_RESERVED_SPACE_SIZE > sizeof(size_t) && 0 == STACK_RESERVED_SPACE_SIZE % sizeof(size_t));
+		size_t* pRs = (size_t*)((BYTE*)newCoro->_stackTop-newCoro->_stackSize);
+		size_t checkSum = 0;
+		for (size_t i = 0; i < STACK_RESERVED_SPACE_SIZE/sizeof(size_t)-1; i++, pRs++)
+		{
+			*pRs = (size_t)cpu_tick();
+			checkSum += *pRs;
+		}
+		*pRs = checkSum;
+	}
+#endif
 	newCoro->_weakThis = newCoro;
 	return newCoro;
 }
@@ -697,14 +823,14 @@ void boost_coro::open_timer()
 	assert_enter();
 	if (!_timerSleep)
 	{
-		if (_sharedPoolMem)
+		if (coro_stack_pool::isEnable())
 		{
-			_timerSleep = timeout_trig::create_in_pool(_sharedPoolMem, (BYTE*)_sharedPoolMem.get()+sizeof(boost_coro),
-				_strand, timeout_trig::high_resolution_timer);
+			size_t timerSize = (sizeof(timer_pck)+(sizeof(void*)-1)) & ((sizeof(void*)-1) ^ -1);
+			_timerSleep = new((BYTE*)this-timerSize) timer_pck(_strand->get_io_service());
 		}
 		else
 		{
-			_timerSleep = timeout_trig::create_high_resolution(_strand);
+			_timerSleep = new timer_pck(_strand->get_io_service());
 		}
 	}
 }
@@ -716,7 +842,7 @@ void boost_coro::sleep( int ms )
 	if (ms)
 	{
 		assert(_timerSleep);
-		_timerSleep->timeOut(ms, boost::bind(&boost_coro::run_one, shared_from_this()));
+		time_out(ms, boost::bind(&boost_coro::run_one, shared_from_this()));
 	}
 	else
 	{
@@ -792,7 +918,7 @@ boost::function<void ()> boost_coro::begin_trig(boost::shared_ptr<async_trig_han
 	};
 }
 
-bool boost_coro::wait_trig(async_trig_handle<>& th, int tm /* = -1 */)
+bool boost_coro::timed_wait_trig(async_trig_handle<>& th, int tm)
 {
 	assert(th._coroID == _coroID);
 	assert_enter();
@@ -804,6 +930,11 @@ bool boost_coro::wait_trig(async_trig_handle<>& th, int tm /* = -1 */)
 	return true;
 }
 
+void boost_coro::wait_trig(async_trig_handle<>& th)
+{
+	timed_wait_trig(th, -1);
+}
+
 void boost_coro::close_trig(async_trig_base& th)
 {
 	DEBUG_OPERATION(if (th._coroID) {assert(th._coroID == _coroID); th._coroID = 0;})
@@ -813,16 +944,14 @@ void boost_coro::close_trig(async_trig_base& th)
 void boost_coro::delay_trig(int ms, const boost::function<void ()>& h)
 {
 	assert_enter();
-	assert(_timerSleep);
-	_timerSleep->timeOutAgain(ms, h);
+	time_out(ms, h);
 }
 
 void boost_coro::delay_trig(int ms, async_trig_handle<>& th)
 {
 	assert_enter();
 	assert(th._ptrClosed);
-	assert(_timerSleep);
-	_timerSleep->timeOut(ms, boost::bind(&boost_coro::_async_trig_handler, shared_from_this(), 
+	time_out(ms, boost::bind(&boost_coro::_async_trig_handler, shared_from_this(), 
 		th._ptrClosed, boost::ref(th)));
 }
 
@@ -830,16 +959,14 @@ void boost_coro::delay_trig(int ms, boost::shared_ptr<async_trig_handle<> > th)
 {
 	assert_enter();
 	assert(th->_ptrClosed);
-	assert(_timerSleep);
-	_timerSleep->timeOut(ms, boost::bind(&boost_coro::_async_trig_handler_ptr, shared_from_this(), 
+	time_out(ms, boost::bind(&boost_coro::_async_trig_handler_ptr, shared_from_this(), 
 		th->_ptrClosed, th));
 }
 
 void boost_coro::cancel_delay_trig()
 {
 	assert_enter();
-	assert(_timerSleep);
-	_timerSleep->cancel();
+	cancel_timer();
 }
 
 void boost_coro::trig( const boost::function<void (boost::function<void ()>)>& h )
@@ -876,7 +1003,7 @@ void boost_coro::close_msg_notify( param_list_base& cmh )
 	cmh.close();
 }
 
-bool boost_coro::pump_msg(coro_msg_handle<>& cmh, int tm /* = -1 */)
+bool boost_coro::timed_pump_msg(coro_msg_handle<>& cmh, int tm)
 {
 	assert(cmh._coroID == _coroID);
 	assert_enter();
@@ -894,6 +1021,11 @@ bool boost_coro::pump_msg(coro_msg_handle<>& cmh, int tm /* = -1 */)
 		cmh.count--;
 	}
 	return true;
+}
+
+void boost_coro::pump_msg(coro_msg_handle<>& cmh)
+{
+	timed_pump_msg(cmh, -1);
 }
 
 bool boost_coro::pump_msg_push(param_list_base& pm, int tm)
@@ -977,7 +1109,7 @@ void boost_coro::async_trig_post_yield(async_trig_base& th, void* cref)
 		if (th._hasTm)
 		{
 			th._hasTm = false;
-			_timerSleep->cancel();
+			cancel_timer();
 		}
 		th.set_ref(cref);
 		_strand->post(boost::bind(&boost_coro::run_one, shared_from_this()));
@@ -997,7 +1129,7 @@ void boost_coro::async_trig_pull_yield(async_trig_base& th, void* cref)
 		if (th._hasTm)
 		{
 			th._hasTm = false;
-			_timerSleep->cancel();
+			cancel_timer();
 		}
 		th.set_ref(cref);
 		pull_yield();
@@ -1049,7 +1181,7 @@ void boost_coro::check_run1( boost::shared_ptr<bool>& isClosed, coro_msg_handle<
 		if (cmh._hasTm)
 		{
 			cmh._hasTm = false;
-			_timerSleep->cancel();
+			cancel_timer();
 		}
 		assert(0 == cmh.count);
 		pull_yield();
@@ -1078,11 +1210,6 @@ coro_handle boost_coro::shared_from_this()
 long long boost_coro::this_id()
 {
 	return _coroID;
-}
-
-boost::shared_ptr<timeout_trig> boost_coro::this_timer()
-{
-	return _timerSleep;
 }
 
 size_t boost_coro::yield_count()
@@ -1220,7 +1347,7 @@ void boost_coro::suspend()
 			_suspended = true;
 			if (_timerSleep)
 			{
-				_timerSleep->suspend();
+				suspend_timer();
 			}
 			if (!_childCoroList.empty())
 			{
@@ -1282,7 +1409,7 @@ void boost_coro::resume()
 			_suspended = false;
 			if (_timerSleep)
 			{
-				_timerSleep->resume();
+				resume_timer();
 			}
 			if (!_childCoroList.empty())
 			{
@@ -1291,7 +1418,7 @@ void boost_coro::resume()
 				{
 					if ((*it)->_strand == _strand)
 					{
-						(*it)->resume(boost::bind(&boost_coro::child_resume_cb_handler, shared_from_this()));
+						(*it)->resume(_strand->wrap_post(boost::bind(&boost_coro::child_resume_cb_handler, shared_from_this())));
 					} 
 					else
 					{
@@ -1660,7 +1787,104 @@ void boost_coro::enable_stack_pool()
 {
 	assert(0 == _coroIDCount);
 	coro_stack_pool::enable();
-	coro_buff_pool::enable();
+}
+
+void boost_coro::expires_timer()
+{
+	size_t tid = ++_timerSleep->_timerCount;
+	//coro_handle shared_this = shared_from_this();
+	boost::system::error_code ec;
+	_timerSleep->_timer.expires_from_now(boost::chrono::microseconds(_timerSleep->_timerTime.total_microseconds()), ec);
+	_timerSleep->_timer.async_wait(_strand->wrap_post((boost::function<void (const boost::system::error_code&)>)
+		[this, /*shared_this, */tid](const boost::system::error_code& e)
+	{
+		if (_timerSleep && tid == _timerSleep->_timerCount && !e)
+		{
+			if (!_timerSleep->_timerSuspend && !_timerSleep->_timerCompleted)
+			{
+				_timerSleep->_timerCompleted = true;
+				auto h = _timerSleep->_h;
+				_timerSleep->_h.clear();
+				h();
+			}
+		}
+	}));
+}
+
+void boost_coro::time_out(int ms, const boost::function<void ()> h)
+{
+	assert_enter();
+	assert(_timerSleep);
+	assert(_timerSleep->_timerCompleted);
+	_timerSleep->_timerCompleted = false;
+	unsigned long long tms;
+	if (ms >= 0)
+	{
+		tms = (unsigned int)ms;
+	} 
+	else
+	{
+		tms = 0xFFFFFFFFFFFF;
+	}
+	_timerSleep->_h = h;
+	_timerSleep->_timerTime = boost::posix_time::microsec(tms*1000);
+	_timerSleep->_timerStampBegin = boost::posix_time::microsec_clock::universal_time();
+	if (!_timerSleep->_timerSuspend)
+	{
+		expires_timer();
+	}
+	else
+	{
+		_timerSleep->_timerStampEnd = _timerSleep->_timerStampBegin;
+	}
+}
+
+void boost_coro::cancel_timer()
+{
+	assert(_timerSleep);
+	if (!_timerSleep->_timerCompleted)
+	{
+		_timerSleep->_timerCompleted = true;
+		_timerSleep->_h.clear();
+		boost::system::error_code ec;
+		_timerSleep->_timer.cancel(ec);
+	}
+}
+
+void boost_coro::suspend_timer()
+{
+	assert(_timerSleep);
+	if (!_timerSleep->_timerSuspend)
+	{
+		_timerSleep->_timerSuspend = true;
+		if (!_timerSleep->_timerCompleted)
+		{
+			boost::system::error_code ec;
+			_timerSleep->_timer.cancel(ec);
+			_timerSleep->_timerStampEnd = boost::posix_time::microsec_clock::universal_time();
+			auto tt = _timerSleep->_timerStampBegin+_timerSleep->_timerTime;
+			if (_timerSleep->_timerStampEnd > tt)
+			{
+				_timerSleep->_timerStampEnd = tt;
+			}
+		}
+	}
+}
+
+void boost_coro::resume_timer()
+{
+	assert(_timerSleep);
+	if (_timerSleep->_timerSuspend)
+	{
+		_timerSleep->_timerSuspend = false;
+		if (!_timerSleep->_timerCompleted)
+		{
+			assert(_timerSleep->_timerTime >= _timerSleep->_timerStampEnd-_timerSleep->_timerStampBegin);
+			_timerSleep->_timerTime -= _timerSleep->_timerStampEnd-_timerSleep->_timerStampBegin;
+			_timerSleep->_timerStampBegin = boost::posix_time::microsec_clock::universal_time();
+			expires_timer();
+		}
+	}
 }
 
 void boost_coro::disable_auto_make_timer()
@@ -1671,8 +1895,8 @@ void boost_coro::disable_auto_make_timer()
 
 void boost_coro::check_stack()
 {
-#ifdef CHECK_CORO_STACK
-	if ((size_t)get_sp() < (size_t)_stackTop-_stackSize+1024)
+#if (CHECK_CORO_STACK) || (_DEBUG)
+	if ((size_t)get_sp() < (size_t)_stackTop-_stackSize+STACK_RESERVED_SPACE_SIZE)
 	{
 		assert(false);
 		throw boost::shared_ptr<string>(new string("–≠≥Ã∂—’ª“Ï≥£"));
@@ -1682,7 +1906,7 @@ void boost_coro::check_stack()
 
 size_t boost_coro::stack_free_space()
 {
-	int s = (int)((size_t)get_sp() - ((size_t)_stackTop-_stackSize+1024));
+	int s = (int)((size_t)get_sp() - ((size_t)_stackTop-_stackSize+STACK_RESERVED_SPACE_SIZE));
 	if (s < 0)
 	{
 		return 0;

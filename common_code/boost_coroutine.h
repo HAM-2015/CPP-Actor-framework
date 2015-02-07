@@ -7,7 +7,6 @@
 #include <list>
 #include "ios_proxy.h"
 #include "shared_strand.h"
-#include "time_out.h"
 #include "wrapped_trig_handler.h"
 #include "ref_ex.h"
 
@@ -865,6 +864,7 @@ class boost_coro
 		boost::function<void ()> _h;
 	};
 
+	struct timer_pck;
 	class boost_coro_run;
 	friend boost_coro_run;
 public:
@@ -1031,9 +1031,9 @@ public:
 	void cancel_quit_handler(quit_handle rh);
 public:
 	/*!
-	@brief 创建一个异步触发函数，使用wait_trig()等待
+	@brief 创建一个异步触发函数，使用timed_wait_trig()等待
 	@param th 触发句柄
-	@return 触发函数对象，可以多次调用(线程安全)，但只能wait_trig()到第一次调用的值
+	@return 触发函数对象，可以多次调用(线程安全)，但只能timed_wait_trig()到第一次调用的值
 	*/
 	boost::function<void ()> begin_trig(async_trig_handle<>& th);
 	boost::function<void ()> begin_trig(boost::shared_ptr<async_trig_handle<> > th);
@@ -1100,10 +1100,17 @@ public:
 	@param tm 异步等待超时ms，超时后返回false
 	@return 超时后返回false
 	*/
-	__yield_interrupt bool wait_trig(async_trig_handle<>& th, int tm = -1);
+	__yield_interrupt bool timed_wait_trig(async_trig_handle<>& th, int tm);
+	__yield_interrupt void wait_trig(async_trig_handle<>& th);
 
 	template <typename T0>
-	__yield_interrupt bool wait_trig(async_trig_handle<T0>& th, T0& r0, int tm = -1)
+	__yield_interrupt void wait_trig(async_trig_handle<T0>& th, T0& r0)
+	{
+		timed_wait_trig(th, r0, -1);
+	}
+
+	template <typename T0>
+	__yield_interrupt bool timed_wait_trig(async_trig_handle<T0>& th, T0& r0, int tm)
 	{
 		assert(th._coroID == _coroID);
 		assert_enter();
@@ -1120,12 +1127,18 @@ public:
 	__yield_interrupt T0 wait_trig(async_trig_handle<T0>& th)
 	{
 		T0 r;
-		wait_trig(th, r, -1);
+		timed_wait_trig(th, r, -1);
 		return r;
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt bool wait_trig(async_trig_handle<T0, T1>& th, T0& r0, T1& r1, int tm = -1)
+	__yield_interrupt void wait_trig(async_trig_handle<T0, T1>& th, T0& r0, T1& r1)
+	{
+		timed_wait_trig(th, r0, r1, -1);
+	}
+
+	template <typename T0, typename T1>
+	__yield_interrupt bool timed_wait_trig(async_trig_handle<T0, T1>& th, T0& r0, T1& r1, int tm)
 	{
 		assert(th._coroID == _coroID);
 		assert_enter();
@@ -1139,7 +1152,13 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt bool wait_trig(async_trig_handle<T0, T1, T2>& th, T0& r0, T1& r1, T2& r2, int tm = -1)
+	__yield_interrupt void wait_trig(async_trig_handle<T0, T1, T2>& th, T0& r0, T1& r1, T2& r2)
+	{
+		timed_wait_trig(th, r0, r1, r2, -1);
+	}
+
+	template <typename T0, typename T1, typename T2>
+	__yield_interrupt bool timed_wait_trig(async_trig_handle<T0, T1, T2>& th, T0& r0, T1& r1, T2& r2, int tm)
 	{
 		assert(th._coroID == _coroID);
 		assert_enter();
@@ -1153,7 +1172,13 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt bool wait_trig(async_trig_handle<T0, T1, T2, T3>& th, T0& r0, T1& r1, T2& r2, T3& r3, int tm = -1)
+	__yield_interrupt void wait_trig(async_trig_handle<T0, T1, T2, T3>& th, T0& r0, T1& r1, T2& r2, T3& r3)
+	{
+		timed_wait_trig(th, r0, r1, r2, r3, -1);
+	}
+
+	template <typename T0, typename T1, typename T2, typename T3>
+	__yield_interrupt bool timed_wait_trig(async_trig_handle<T0, T1, T2, T3>& th, T0& r0, T1& r1, T2& r2, T3& r3, int tm)
 	{
 		assert(th._coroID == _coroID);
 		assert_enter();
@@ -1192,7 +1217,7 @@ public:
 		assert_enter();
 		assert(th._ptrClosed);
 		assert(_timerSleep);
-		_timerSleep->timeOutAgain(ms, boost::bind(&boost_coro::_async_trig_handler<T0>, shared_from_this(), 
+		time_out(ms, boost::bind(&boost_coro::_async_trig_handler<T0>, shared_from_this(), 
 			th._ptrClosed, boost::ref(th), p0));
 	}
 
@@ -1202,7 +1227,7 @@ public:
 		assert_enter();
 		assert(th->_ptrClosed);
 		assert(_timerSleep);
-		_timerSleep->timeOutAgain(ms, boost::bind(&boost_coro::_async_trig_handler_ptr<T0>, shared_from_this(), 
+		time_out(ms, boost::bind(&boost_coro::_async_trig_handler_ptr<T0>, shared_from_this(), 
 			th->_ptrClosed, th, p0));
 	}
 
@@ -1212,7 +1237,7 @@ public:
 		assert_enter();
 		assert(th._ptrClosed);
 		assert(_timerSleep);
-		_timerSleep->timeOutAgain(ms, boost::bind(&boost_coro::_async_trig_handler<T0, T1>, shared_from_this(), 
+		time_out(ms, boost::bind(&boost_coro::_async_trig_handler<T0, T1>, shared_from_this(), 
 			th._ptrClosed, boost::ref(th), p0, p1));
 	}
 
@@ -1222,7 +1247,7 @@ public:
 		assert_enter();
 		assert(th->_ptrClosed);
 		assert(_timerSleep);
-		_timerSleep->timeOutAgain(ms, boost::bind(&boost_coro::_async_trig_handler_ptr<T0, T1>, shared_from_this(), 
+		time_out(ms, boost::bind(&boost_coro::_async_trig_handler_ptr<T0, T1>, shared_from_this(), 
 			th->_ptrClosed, th, p0, p1));
 	}
 
@@ -1232,7 +1257,7 @@ public:
 		assert_enter();
 		assert(th._ptrClosed);
 		assert(_timerSleep);
-		_timerSleep->timeOutAgain(ms, boost::bind(&boost_coro::_async_trig_handler<T0, T1, T2>, shared_from_this(), 
+		time_out(ms, boost::bind(&boost_coro::_async_trig_handler<T0, T1, T2>, shared_from_this(), 
 			th._ptrClosed, boost::ref(th), p0, p1, p2));
 	}
 
@@ -1242,7 +1267,7 @@ public:
 		assert_enter();
 		assert(th->_ptrClosed);
 		assert(_timerSleep);
-		_timerSleep->timeOutAgain(ms, boost::bind(&boost_coro::_async_trig_handler_ptr<T0, T1, T2>, shared_from_this(), 
+		time_out(ms, boost::bind(&boost_coro::_async_trig_handler_ptr<T0, T1, T2>, shared_from_this(), 
 			th->_ptrClosed, th, p0, p1, p2));
 	}
 
@@ -1252,7 +1277,7 @@ public:
 		assert_enter();
 		assert(th._ptrClosed);
 		assert(_timerSleep);
-		_timerSleep->timeOutAgain(ms, boost::bind(&boost_coro::_async_trig_handler<T0, T1, T2, T3>, shared_from_this(), 
+		time_out(ms, boost::bind(&boost_coro::_async_trig_handler<T0, T1, T2, T3>, shared_from_this(), 
 			th._ptrClosed, boost::ref(th), p0, p1, p2, p3));
 	}
 
@@ -1262,7 +1287,7 @@ public:
 		assert_enter();
 		assert(th->_ptrClosed);
 		assert(_timerSleep);
-		_timerSleep->timeOutAgain(ms, boost::bind(&boost_coro::_async_trig_handler_ptr<T0, T1, T2, T3>, shared_from_this(), 
+		time_out(ms, boost::bind(&boost_coro::_async_trig_handler_ptr<T0, T1, T2, T3>, shared_from_this(), 
 			th->_ptrClosed, th, p0, p1, p2, p3));
 	}
 
@@ -1456,10 +1481,17 @@ public:
 	@param tm 消息等待超时ms，超时后返回false
 	@return 超时后返回false
 	*/
-	__yield_interrupt bool pump_msg(coro_msg_handle<>& cmh, int tm = -1);
+	__yield_interrupt bool timed_pump_msg(coro_msg_handle<>& cmh, int tm);
+	__yield_interrupt void pump_msg(coro_msg_handle<>& cmh);
 
 	template <typename T0>
-	__yield_interrupt bool pump_msg(param_list<msg_param<T0> >& cmh, __out T0& r0, int tm = -1)
+	__yield_interrupt void pump_msg(param_list<msg_param<T0> >& cmh, __out T0& r0)
+	{
+		timed_pump_msg(cmh, r0, -1);
+	}
+
+	template <typename T0>
+	__yield_interrupt bool timed_pump_msg(param_list<msg_param<T0> >& cmh, __out T0& r0, int tm)
 	{
 		typedef typename msg_param<T0> param_type;
 		assert(cmh._coroID == _coroID);
@@ -1486,12 +1518,18 @@ public:
 	__yield_interrupt T0 pump_msg(param_list<msg_param<T0> >& cmh)
 	{
 		T0 r0;
-		pump_msg(cmh, r0);
+		timed_pump_msg(cmh, r0, -1);
 		return r0;
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt bool pump_msg(param_list<msg_param<T0, T1> >& cmh, __out T0& r0, __out T1& r1, int tm = -1)
+	__yield_interrupt void pump_msg(param_list<msg_param<T0, T1> >& cmh, __out T0& r0, __out T1& r1)
+	{
+		timed_pump_msg(cmh, r0, r1, -1);
+	}
+
+	template <typename T0, typename T1>
+	__yield_interrupt bool timed_pump_msg(param_list<msg_param<T0, T1> >& cmh, __out T0& r0, __out T1& r1, int tm)
 	{
 		typedef typename msg_param<T0, T1> param_type;
 		assert(cmh._coroID == _coroID);
@@ -1515,7 +1553,13 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt bool pump_msg(param_list<msg_param<T0, T1, T2> >& cmh, __out T0& r0, __out T1& r1, __out T2& r2, int tm = -1)
+	__yield_interrupt void pump_msg(param_list<msg_param<T0, T1, T2> >& cmh, __out T0& r0, __out T1& r1, __out T2& r2)
+	{
+		timed_pump_msg(cmh, r0, r1, r2, -1);
+	}
+
+	template <typename T0, typename T1, typename T2>
+	__yield_interrupt bool timed_pump_msg(param_list<msg_param<T0, T1, T2> >& cmh, __out T0& r0, __out T1& r1, __out T2& r2, int tm)
 	{
 		typedef typename msg_param<T0, T1, T2> param_type;
 		assert(cmh._coroID == _coroID);
@@ -1539,7 +1583,13 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt bool pump_msg(param_list<msg_param<T0, T1, T2, T3> >& cmh, __out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3, int tm = -1)
+	__yield_interrupt void pump_msg(param_list<msg_param<T0, T1, T2, T3> >& cmh, __out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3)
+	{
+		timed_pump_msg(cmh, r0, r1, r2, r3, -1);
+	}
+
+	template <typename T0, typename T1, typename T2, typename T3>
+	__yield_interrupt bool timed_pump_msg(param_list<msg_param<T0, T1, T2, T3> >& cmh, __out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3, int tm)
 	{
 		typedef typename msg_param<T0, T1, T2, T3> param_type;
 		assert(cmh._coroID == _coroID);
@@ -2063,7 +2113,7 @@ private:
 				if (cmh._hasTm)
 				{
 					cmh._hasTm = false;
-					_timerSleep->cancel();
+					cancel_timer();
 				}
 				assert(cmh.get_size() == 0);
 				cmh.get_param(src);
@@ -2091,7 +2141,7 @@ private:
 			if (cmh._hasTm)
 			{
 				cmh._hasTm = false;
-				_timerSleep->cancel();
+				cancel_timer();
 			}
 			assert(cmh.get_size() == 0);
 			cmh.get_param(srcRef);
@@ -2127,11 +2177,6 @@ public:
 	@brief 获取当前协程ID号
 	*/
 	long long this_id();
-
-	/*!
-	@brief 获取当前协程定时器
-	*/
-	boost::shared_ptr<timeout_trig> this_timer();
 
 	/*!
 	@brief 获取协程切换计数
@@ -2223,6 +2268,11 @@ public:
 	__yield_interrupt bool another_coros_switch(const list<coro_handle>& anotherCoros);
 private:
 	void assert_enter();
+	void time_out(int ms, const boost::function<void ()> h);
+	void expires_timer();
+	void cancel_timer();
+	void suspend_timer();
+	void resume_timer();
 	void start_run();
 	void force_quit(const boost::function<void (bool)>& h);
 	void suspend(const boost::function<void ()>& h);
@@ -2255,13 +2305,12 @@ private:
 	size_t _childOverCount;///<子协程退出时计数
 	size_t _childSuspendResumeCount;///<子协程挂起/恢复计数
 	boost::weak_ptr<boost_coro> _parentCoro;///<父协程
-	boost::shared_ptr<timeout_trig> _timerSleep;///<提供延时功能
 	main_func _mainFunc;///<协程入口
 	list<suspend_resume_option> _suspendResumeQueue;///<挂起/恢复操作队列
 	list<coro_handle> _childCoroList;///<子协程集合
 	list<boost::function<void (bool)> > _exitCallback;///<协程结束后的回调函数，强制退出返回false，正常退出返回true
 	list<boost::function<void ()> > _quitHandlerList;///<协程退出时强制调用的函数，后注册的先执行
-	boost::shared_ptr<void> _sharedPoolMem;
+	timer_pck* _timerSleep;///<提供延时功能
 	boost::weak_ptr<boost_coro> _weakThis;
 };
 
