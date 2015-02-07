@@ -458,20 +458,12 @@ boost_coro::~boost_coro()
 	assert(_childCoroList.empty());
 	delete (coro_pull_type*)_coroPull;
 #if (CHECK_CORO_STACK) || (_DEBUG)
+	if (*(long long*)((BYTE*)_stackTop-_stackSize+STACK_RESERVED_SPACE_SIZE-sizeof(long long)) != 0xFEFEFEFEFEFEFEFE)
 	{
-		size_t* pRs = (size_t*)((BYTE*)_stackTop-_stackSize);
-		size_t checkSum = 0;
-		for (size_t i = 0; i < STACK_RESERVED_SPACE_SIZE/sizeof(size_t)-1; i++, pRs++)
-		{
-			checkSum += *pRs;
-		}
-		assert(*pRs == checkSum);
-		if (*pRs != checkSum)
-		{
-			char buf[48];
-			sprintf_s(buf, "%llu 协程堆栈溢出", _coroID);
-			throw boost::shared_ptr<string>(new string(buf));
-		}
+		assert(false);
+		char buf[48];
+		sprintf_s(buf, "%llu 协程堆栈溢出", _coroID);
+		throw boost::shared_ptr<string>(new string(buf));
 	}
 #endif
 }
@@ -544,20 +536,10 @@ coro_handle boost_coro::local_create( shared_strand coroStrand, const main_func&
 		newCoro->_coroPull = new coro_pull_type(boost_coro_run(*newCoro),
 			boost::coroutines::attributes(stackSize), coro_stack_allocate(&newCoro->_stackTop, &newCoro->_stackSize));
 	}
-#if (CHECK_CORO_STACK) || (_DEBUG)
-	{
-		assert(STACK_RESERVED_SPACE_SIZE > sizeof(size_t) && 0 == STACK_RESERVED_SPACE_SIZE % sizeof(size_t));
-		size_t* pRs = (size_t*)((BYTE*)newCoro->_stackTop-newCoro->_stackSize);
-		size_t checkSum = 0;
-		for (size_t i = 0; i < STACK_RESERVED_SPACE_SIZE/sizeof(size_t)-1; i++, pRs++)
-		{
-			*pRs = (size_t)cpu_tick();
-			checkSum += *pRs;
-		}
-		*pRs = checkSum;
-	}
-#endif
 	newCoro->_weakThis = newCoro;
+#if (CHECK_CORO_STACK) || (_DEBUG)
+	*(long long*)((BYTE*)newCoro->_stackTop-newCoro->_stackSize+STACK_RESERVED_SPACE_SIZE-sizeof(long long)) = 0xFEFEFEFEFEFEFEFE;
+#endif
 	return newCoro;
 }
 
