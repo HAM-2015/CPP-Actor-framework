@@ -11,9 +11,8 @@
 #include "ref_ex.h"
 
 /*
-*		并发逻辑控制编程基础框架，使用"协程(coroutine)"技术，依赖boost_1.55或更新;
-*		如果性能允许，所有轻量级逻辑（包括并行逻辑）可以在单线程io_service中执行（亦可多线程io_service）;
-*		一个协程对象(coro_handle)依赖一个shared_strand，多个协程可以共同依赖同一个shared_strand;
+*		并发逻辑控制框架(Actor Model)，使用"协程(coroutine)"技术，依赖boost_1.55或更新;
+*		一个协程对象(coro_handle)依赖一个shared_strand(二级调度器，本身依赖于io_service)，多个协程可以共同依赖同一个shared_strand;
 *		支持强制结束、挂起/恢复、延时、多子任务（并发控制）;
 *		在协程中或所依赖的io_service中进行长时间阻塞的操作或重量级运算，会严重影响依赖同一个io_service的协程响应速度;
 *		默认协程栈空间64k字节，远比线程栈小，注意局部变量占用的空间以及调用层次（注意递归）;

@@ -862,7 +862,7 @@ boost::function<void ()> boost_coro::begin_trig(async_trig_handle<>& th)
 	th.begin(_coroID);
 	auto isClosed = th._ptrClosed;
 	coro_handle shared_this = shared_from_this();
-	return [&, shared_this, isClosed]()
+	return [this, shared_this, isClosed, &th]()
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -884,7 +884,7 @@ boost::function<void ()> boost_coro::begin_trig(boost::shared_ptr<async_trig_han
 	th->begin(_coroID);
 	auto isClosed = th->_ptrClosed;
 	coro_handle shared_this = shared_from_this();
-	return [&, shared_this, isClosed, th]()
+	return [this, shared_this, isClosed, th]()
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -1423,7 +1423,7 @@ void boost_coro::switch_pause_play()
 void boost_coro::switch_pause_play(const boost::function<void (bool isPaused)>& h)
 {
 	coro_handle shared_this = shared_from_this();
-	_strand->post([&, shared_this, h]()
+	_strand->post([this, shared_this, h]()
 	{
 		assert(_strand->running_in_this_thread());
 		if (!_quited)
