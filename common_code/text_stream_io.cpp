@@ -81,6 +81,7 @@ void text_stream_io::readCoro( boost_coro* coro )
 		}
 	}
 	_writerPipeIn(shared_data());
+	_msgNotify.clear();
 }
 
 void text_stream_io::writeCoro( boost_coro* coro )

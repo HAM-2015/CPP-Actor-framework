@@ -47,4 +47,5 @@ void acceptor_socket::acceptorCoro(boost_coro* coro)
 		newSocket->ip();
 		_socketNotify(newSocket);
 	}
+	_socketNotify.clear();
 }
