@@ -12,7 +12,7 @@ https://github.com/HAM-2015/CPP-Actor-framework
 添加socket测试示例.
 
 2015-01-26
-修改了time_out.cpp在高版本VS下因与STL库冲突导致的编译错误问题;
+修改了定时器在高版本VS下因与STL库冲突导致的编译错误问题;
 增加异步触发和消息等待的超时处理功能.
 
 2015-01-08
