@@ -21,7 +21,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="ReadMe.txt" />
     <None Include="res\socket_test.rc2">
       <Filter>资源文件</Filter>
     </None>
