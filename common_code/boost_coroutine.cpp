@@ -119,7 +119,7 @@ check_force_quit::check_force_quit()
 
 bool param_list_base::closed()
 {
-	return (*_ptrClosed);
+	return (*_pIsClosed);
 }
 
 void param_list_base::begin(long long coroID)
@@ -128,7 +128,7 @@ void param_list_base::begin(long long coroID)
 	_timeout = false;
 	_hasTm = false;
 	DEBUG_OPERATION(_coroID = coroID);
-	_ptrClosed = boost::shared_ptr<bool>(new bool(false));
+	_pIsClosed = boost::shared_ptr<bool>(new bool(false));
 }
 
 param_list_base& param_list_base::operator=( const param_list_base& )
@@ -152,9 +152,9 @@ param_list_base::param_list_base()
 
 param_list_base::~param_list_base()
 {
-	if (_ptrClosed)
+	if (_pIsClosed)
 	{
-		(*_ptrClosed) = true;
+		(*_pIsClosed) = true;
 	}
 }
 //////////////////////////////////////////////////////////////////////////
@@ -162,12 +162,12 @@ param_list_base::~param_list_base()
 void null_param_list::close()
 {
 	count = 0;
-	if (_ptrClosed)
+	if (_pIsClosed)
 	{
-		assert(!(*_ptrClosed));
-		(*_ptrClosed) = true;
+		assert(!(*_pIsClosed));
+		(*_pIsClosed) = true;
 		_waiting = false;
-		_ptrClosed.reset();
+		_pIsClosed.reset();
 	}
 }
 
@@ -216,7 +216,7 @@ async_trig_base::~async_trig_base()
 void async_trig_base::begin(long long coroID)
 {
 	close();
-	_ptrClosed = boost::shared_ptr<bool>(new bool(false));
+	_pIsClosed = boost::shared_ptr<bool>(new bool(false));
 	_notify = false;
 	_timeout = false;
 	_hasTm = false;
@@ -226,12 +226,12 @@ void async_trig_base::begin(long long coroID)
 
 void async_trig_base::close()
 {
-	if (_ptrClosed)
+	if (_pIsClosed)
 	{
-		assert(!(*_ptrClosed));
-		(*_ptrClosed) = true;
+		assert(!(*_pIsClosed));
+		(*_pIsClosed) = true;
 		_waiting = false;
-		_ptrClosed.reset();
+		_pIsClosed.reset();
 	}
 }
 //////////////////////////////////////////////////////////////////////////
@@ -860,20 +860,20 @@ boost::function<void ()> boost_coro::begin_trig(async_trig_handle<>& th)
 {
 	assert_enter();
 	th.begin(_coroID);
-	auto isClosed = th._ptrClosed;
+	auto pIsClosed = th._pIsClosed;
 	coro_handle shared_this = shared_from_this();
-	return [this, shared_this, isClosed, &th]()
+	return [this, shared_this, pIsClosed, &th]()
 	{
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !(*isClosed) && !th._notify)
+			if (!_quited && !(*pIsClosed) && !th._notify)
 			{
 				async_trig_post_yield(th, NULL);
 			}
 		}
 		else
 		{
-			_strand->post(boost::bind(&boost_coro::_async_trig_handler, shared_this, isClosed, boost::ref(th)));
+			_strand->post(boost::bind(&boost_coro::_async_trig_handler, shared_this, pIsClosed, boost::ref(th)));
 		}
 	};
 }
@@ -882,20 +882,20 @@ boost::function<void ()> boost_coro::begin_trig(boost::shared_ptr<async_trig_han
 {
 	assert_enter();
 	th->begin(_coroID);
-	auto isClosed = th->_ptrClosed;
+	auto pIsClosed = th->_pIsClosed;
 	coro_handle shared_this = shared_from_this();
-	return [this, shared_this, isClosed, th]()
+	return [this, shared_this, pIsClosed, th]()
 	{
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !(*isClosed) && !th->_notify)
+			if (!_quited && !(*pIsClosed) && !th->_notify)
 			{
 				async_trig_post_yield(*th, NULL);
 			}
 		}
 		else
 		{
-			_strand->post(boost::bind(&boost_coro::_async_trig_handler_ptr, shared_this, isClosed, th));
+			_strand->post(boost::bind(&boost_coro::_async_trig_handler_ptr, shared_this, pIsClosed, th));
 		}
 	};
 }
@@ -932,17 +932,17 @@ void boost_coro::delay_trig(int ms, const boost::function<void ()>& h)
 void boost_coro::delay_trig(int ms, async_trig_handle<>& th)
 {
 	assert_enter();
-	assert(th._ptrClosed);
+	assert(th._pIsClosed);
 	time_out(ms, boost::bind(&boost_coro::_async_trig_handler, shared_from_this(), 
-		th._ptrClosed, boost::ref(th)));
+		th._pIsClosed, boost::ref(th)));
 }
 
 void boost_coro::delay_trig(int ms, boost::shared_ptr<async_trig_handle<> > th)
 {
 	assert_enter();
-	assert(th->_ptrClosed);
+	assert(th->_pIsClosed);
 	time_out(ms, boost::bind(&boost_coro::_async_trig_handler_ptr, shared_from_this(), 
-		th->_ptrClosed, th));
+		th->_pIsClosed, th));
 }
 
 void boost_coro::cancel_delay_trig()
@@ -970,13 +970,13 @@ void boost_coro::trig_ret( shared_strand extStrand, const boost::function<void (
 boost::function<void()> boost_coro::make_msg_notify(coro_msg_handle<>& cmh)
 {
 	cmh.begin(_coroID);
-	return _strand->wrap_post(boost::bind(&boost_coro::check_run1, shared_from_this(), cmh._ptrClosed, boost::ref(cmh)));
+	return _strand->wrap_post(boost::bind(&boost_coro::check_run1, shared_from_this(), cmh._pIsClosed, boost::ref(cmh)));
 }
 
 boost::function<void()> boost_coro::make_msg_notify(boost::shared_ptr<coro_msg_handle<> > cmh)
 {
 	cmh->begin(_coroID);
-	return _strand->wrap_post(boost::bind(&boost_coro::check_run1_ptr, shared_from_this(), cmh->_ptrClosed, cmh));
+	return _strand->wrap_post(boost::bind(&boost_coro::check_run1_ptr, shared_from_this(), cmh->_pIsClosed, cmh));
 }
 
 void boost_coro::close_msg_notify( param_list_base& cmh )
@@ -989,7 +989,7 @@ bool boost_coro::timed_pump_msg(coro_msg_handle<>& cmh, int tm)
 {
 	assert(cmh._coroID == _coroID);
 	assert_enter();
-	assert(cmh._ptrClosed);
+	assert(cmh._pIsClosed);
 	if (0 == cmh.count)
 	{
 		cmh._waiting = true;
@@ -1046,7 +1046,7 @@ void boost_coro::trig_handler()
 
 bool boost_coro::async_trig_push(async_trig_base& th, int tm, void* pref)
 {
-	assert(th._ptrClosed);
+	assert(th._pIsClosed);
 	if (!th._notify)
 	{
 		th._waiting = true;
@@ -1122,18 +1122,18 @@ void boost_coro::async_trig_pull_yield(async_trig_base& th, void* cref)
 	}
 }
 
-void boost_coro::_async_trig_handler(boost::shared_ptr<bool>& isClosed, async_trig_handle<>& th)
+void boost_coro::_async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<>& th)
 {
 	assert(_strand->running_in_this_thread());
-	if (!_quited && !(*isClosed) && !th._notify)
+	if (!_quited && !(*pIsClosed) && !th._notify)
 	{
 		async_trig_pull_yield(th, NULL);
 	}
 }
 
-void boost_coro::_async_trig_handler_ptr(boost::shared_ptr<bool>& isClosed, boost::shared_ptr<async_trig_handle<> >& th)
+void boost_coro::_async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<> >& th)
 {
-	_async_trig_handler(isClosed, *th);
+	_async_trig_handler(pIsClosed, *th);
 }
 
 void boost_coro::create_coro_handler( coro_handle coro, coro_handle& retCoro, list<coro_handle>::iterator& ch )
@@ -1153,9 +1153,9 @@ void boost_coro::create_coro_handler( coro_handle coro, coro_handle& retCoro, li
 	pull_yield();
 }
 
-void boost_coro::check_run1( boost::shared_ptr<bool>& isClosed, coro_msg_handle<>& cmh )
+void boost_coro::check_run1( boost::shared_ptr<bool>& pIsClosed, coro_msg_handle<>& cmh )
 {
-	if (_quited || (*isClosed)) return;
+	if (_quited || (*pIsClosed)) return;
 
 	if (cmh._waiting)
 	{
@@ -1174,9 +1174,9 @@ void boost_coro::check_run1( boost::shared_ptr<bool>& isClosed, coro_msg_handle<
 	}
 }
 
-void boost_coro::check_run1_ptr(boost::shared_ptr<bool>& isClosed, boost::shared_ptr<coro_msg_handle<> >& cmh)
+void boost_coro::check_run1_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<coro_msg_handle<> >& cmh)
 {
-	check_run1(isClosed, *cmh);
+	check_run1(pIsClosed, *cmh);
 }
 
 shared_strand boost_coro::this_strand()

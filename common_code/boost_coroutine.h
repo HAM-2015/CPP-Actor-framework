@@ -1,3 +1,13 @@
+/*!
+ @header     boost_coroutine.h
+ @abstract   并发逻辑控制框架(Actor Model)，使用"协程(coroutine)"技术，依赖boost_1.55或更新;
+ @discussion 一个协程对象(coro_handle)依赖一个shared_strand(二级调度器，本身依赖于io_service)，多个协程可以共同依赖同一个shared_strand;
+             支持强制结束、挂起/恢复、延时、多子任务(并发控制);
+             在协程中或所依赖的io_service中进行长时间阻塞的操作或重量级运算，会严重影响依赖同一个io_service的协程响应速度;
+             默认协程栈空间64k字节，远比线程栈小，注意局部变量占用的空间以及调用层次(注意递归).
+ @copyright  Copyright (c) 2015 HAM, E-Mail:591170887@qq.com
+ */
+
 #ifndef __BOOST_COROUTINE_H
 #define __BOOST_COROUTINE_H
 
@@ -10,14 +20,6 @@
 #include "wrapped_trig_handler.h"
 #include "ref_ex.h"
 
-/*
-*		并发逻辑控制框架(Actor Model)，使用"协程(coroutine)"技术，依赖boost_1.55或更新;
-*		一个协程对象(coro_handle)依赖一个shared_strand(二级调度器，本身依赖于io_service)，多个协程可以共同依赖同一个shared_strand;
-*		支持强制结束、挂起/恢复、延时、多子任务（并发控制）;
-*		在协程中或所依赖的io_service中进行长时间阻塞的操作或重量级运算，会严重影响依赖同一个io_service的协程响应速度;
-*		默认协程栈空间64k字节，远比线程栈小，注意局部变量占用的空间以及调用层次（注意递归）;
-*		QQ 591170887.
-*/
 class boost_coro;
 typedef boost::shared_ptr<boost_coro> coro_handle;//协程句柄
 
@@ -264,7 +266,7 @@ protected:
 	virtual void close() = 0;
 	virtual void clear() = 0;
 protected:
-	boost::shared_ptr<bool> _ptrClosed;
+	boost::shared_ptr<bool> _pIsClosed;
 	bool _waiting;
 	bool _timeout;
 	bool _hasTm;
@@ -292,14 +294,14 @@ protected:
 
 	void get_param(const T& p)
 	{
-		assert(!(*_ptrClosed) && _dstRefPt);
+		assert(!(*_pIsClosed) && _dstRefPt);
 		p.get_param(*_dstRefPt);
 		DEBUG_OPERATION(_dstRefPt = NULL);
 	}
 
 	void get_param(const const_ref_type& p)
 	{
-		assert(!(*_ptrClosed) && _dstRefPt);
+		assert(!(*_pIsClosed) && _dstRefPt);
 		*_dstRefPt = p;
 		DEBUG_OPERATION(_dstRefPt = NULL);
 	}
@@ -330,25 +332,25 @@ protected:
 	void close()
 	{
 		_params.clear();
-		if (_ptrClosed)
+		if (_pIsClosed)
 		{
-			assert(!(*_ptrClosed));
-			(*_ptrClosed) = true;
+			assert(!(*_pIsClosed));
+			(*_pIsClosed) = true;
 			_waiting = false;
-			_ptrClosed.reset();
+			_pIsClosed.reset();
 		}
 	}
 
 	size_t push_back(const T& p)
 	{
-		assert(!(*_ptrClosed));
+		assert(!(*_pIsClosed));
 		_params.push_back(p);
 		return _params.size();
 	}
 
 	T* front()
 	{
-		assert(!(*_ptrClosed));
+		assert(!(*_pIsClosed));
 		if (!_params.empty())
 		{
 			return &_params.front();
@@ -358,7 +360,7 @@ protected:
 
 	size_t pop_front()
 	{
-		assert(!(*_ptrClosed));
+		assert(!(*_pIsClosed));
 		assert(!_params.empty());
 		_params.pop_front();
 		return _params.size();
@@ -393,19 +395,19 @@ protected:
 	void close()
 	{
 		_params.clear();
-		if (_ptrClosed)
+		if (_pIsClosed)
 		{
-			assert(!(*_ptrClosed));
-			(*_ptrClosed) = true;
+			assert(!(*_pIsClosed));
+			(*_pIsClosed) = true;
 			_waiting = false;
-			_ptrClosed.reset();
+			_pIsClosed.reset();
 			_ofh.clear();
 		}
 	}
 
 	size_t push_back(const T& p)
 	{
-		assert(!(*_ptrClosed));
+		assert(!(*_pIsClosed));
 		if (_params.size() < _params.capacity())
 		{
 			_params.push_back(p);
@@ -423,7 +425,7 @@ protected:
 
 	T* front()
 	{
-		assert(!(*_ptrClosed));
+		assert(!(*_pIsClosed));
 		if (!_params.empty())
 		{
 			return &_params.front();
@@ -433,7 +435,7 @@ protected:
 
 	size_t pop_front()
 	{
-		assert(!(*_ptrClosed));
+		assert(!(*_pIsClosed));
 		assert(!_params.empty());
 		_params.pop_front();
 		return _params.size();
@@ -622,7 +624,7 @@ private:
 	async_trig_base(const async_trig_base&);
 	async_trig_base& operator=(const async_trig_base&);
 protected:
-	boost::shared_ptr<bool> _ptrClosed;
+	boost::shared_ptr<bool> _pIsClosed;
 	bool _notify;
 	bool _waiting;
 	bool _timeout;
@@ -1041,56 +1043,56 @@ public:
 	boost::function<void (T0)> begin_trig(async_trig_handle<T0>& th)
 	{
 		th.begin(_coroID);
-		return boost::bind(&boost_coro::async_trig_handler<T0>, shared_from_this(), th._ptrClosed, boost::ref(th), _1);
+		return boost::bind(&boost_coro::async_trig_handler<T0>, shared_from_this(), th._pIsClosed, boost::ref(th), _1);
 	}
 
 	template <typename T0>
 	boost::function<void (T0)> begin_trig(boost::shared_ptr<async_trig_handle<T0> > th)
 	{
 		th->begin(_coroID);
-		return boost::bind(&boost_coro::async_trig_handler_ptr<T0>, shared_from_this(), th->_ptrClosed, th, _1);
+		return boost::bind(&boost_coro::async_trig_handler_ptr<T0>, shared_from_this(), th->_pIsClosed, th, _1);
 	}
 
 	template <typename T0, typename T1>
 	boost::function<void (T0, T1)> begin_trig(async_trig_handle<T0, T1>& th)
 	{
 		th.begin(_coroID);
-		return boost::bind(&boost_coro::async_trig_handler<T0, T1>, shared_from_this(), th._ptrClosed, boost::ref(th), _1, _2);
+		return boost::bind(&boost_coro::async_trig_handler<T0, T1>, shared_from_this(), th._pIsClosed, boost::ref(th), _1, _2);
 	}
 
 	template <typename T0, typename T1>
 	boost::function<void (T0, T1)> begin_trig(boost::shared_ptr<async_trig_handle<T0, T1> > th)
 	{
 		th->begin(_coroID);
-		return boost::bind(&boost_coro::async_trig_handler_ptr<T0, T1>, shared_from_this(), th->_ptrClosed, th, _1, _2);
+		return boost::bind(&boost_coro::async_trig_handler_ptr<T0, T1>, shared_from_this(), th->_pIsClosed, th, _1, _2);
 	}
 
 	template <typename T0, typename T1, typename T2>
 	boost::function<void (T0, T1, T2)> begin_trig(async_trig_handle<T0, T1, T2>& th)
 	{
 		th.begin(_coroID);
-		return boost::bind(&boost_coro::async_trig_handler<T0, T1, T2>, shared_from_this(), th._ptrClosed, boost::ref(th), _1, _2, _3);
+		return boost::bind(&boost_coro::async_trig_handler<T0, T1, T2>, shared_from_this(), th._pIsClosed, boost::ref(th), _1, _2, _3);
 	}
 
 	template <typename T0, typename T1, typename T2>
 	boost::function<void (T0, T1, T2)> begin_trig(boost::shared_ptr<async_trig_handle<T0, T1, T2> > th)
 	{
 		th->begin(_coroID);
-		return boost::bind(&boost_coro::async_trig_handler_ptr<T0, T1, T2>, shared_from_this(), th->_ptrClosed, th, _1, _2, _3);
+		return boost::bind(&boost_coro::async_trig_handler_ptr<T0, T1, T2>, shared_from_this(), th->_pIsClosed, th, _1, _2, _3);
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
 	boost::function<void (T0, T1, T2, T3)> begin_trig(async_trig_handle<T0, T1, T2, T3>& th)
 	{
 		th.begin(_coroID);
-		return boost::bind(&boost_coro::async_trig_handler<T0, T1, T2, T3>, shared_from_this(), th._ptrClosed, boost::ref(th), _1, _2, _3, _4);
+		return boost::bind(&boost_coro::async_trig_handler<T0, T1, T2, T3>, shared_from_this(), th._pIsClosed, boost::ref(th), _1, _2, _3, _4);
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
 	boost::function<void (T0, T1, T2, T3)> begin_trig(boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> > th)
 	{
 		th->begin(_coroID);
-		return boost::bind(&boost_coro::async_trig_handler_ptr<T0, T1, T2, T3>, shared_from_this(), th->_ptrClosed, th, _1, _2, _3, _4);
+		return boost::bind(&boost_coro::async_trig_handler_ptr<T0, T1, T2, T3>, shared_from_this(), th->_pIsClosed, th, _1, _2, _3, _4);
 	}
 
 	/*!
@@ -1214,80 +1216,80 @@ public:
 	void delay_trig(int ms, async_trig_handle<T0>& th, const T0& p0)
 	{
 		assert_enter();
-		assert(th._ptrClosed);
+		assert(th._pIsClosed);
 		assert(_timerSleep);
 		time_out(ms, boost::bind(&boost_coro::_async_trig_handler<T0>, shared_from_this(), 
-			th._ptrClosed, boost::ref(th), p0));
+			th._pIsClosed, boost::ref(th), p0));
 	}
 
 	template <typename T0>
 	void delay_trig(int ms, boost::shared_ptr<async_trig_handle<T0> > th, const T0& p0)
 	{
 		assert_enter();
-		assert(th->_ptrClosed);
+		assert(th->_pIsClosed);
 		assert(_timerSleep);
 		time_out(ms, boost::bind(&boost_coro::_async_trig_handler_ptr<T0>, shared_from_this(), 
-			th->_ptrClosed, th, p0));
+			th->_pIsClosed, th, p0));
 	}
 
 	template <typename T0, typename T1>
 	void delay_trig(int ms, async_trig_handle<T0, T1>& th, const T0& p0, const T1& p1)
 	{
 		assert_enter();
-		assert(th._ptrClosed);
+		assert(th._pIsClosed);
 		assert(_timerSleep);
 		time_out(ms, boost::bind(&boost_coro::_async_trig_handler<T0, T1>, shared_from_this(), 
-			th._ptrClosed, boost::ref(th), p0, p1));
+			th._pIsClosed, boost::ref(th), p0, p1));
 	}
 
 	template <typename T0, typename T1>
 	void delay_trig(int ms, boost::shared_ptr<async_trig_handle<T0, T1> > th, const T0& p0, const T1& p1)
 	{
 		assert_enter();
-		assert(th->_ptrClosed);
+		assert(th->_pIsClosed);
 		assert(_timerSleep);
 		time_out(ms, boost::bind(&boost_coro::_async_trig_handler_ptr<T0, T1>, shared_from_this(), 
-			th->_ptrClosed, th, p0, p1));
+			th->_pIsClosed, th, p0, p1));
 	}
 
 	template <typename T0, typename T1, typename T2>
 	void delay_trig(int ms, async_trig_handle<T0, T1, T2>& th, const T0& p0, const T1& p1, const T2& p2)
 	{
 		assert_enter();
-		assert(th._ptrClosed);
+		assert(th._pIsClosed);
 		assert(_timerSleep);
 		time_out(ms, boost::bind(&boost_coro::_async_trig_handler<T0, T1, T2>, shared_from_this(), 
-			th._ptrClosed, boost::ref(th), p0, p1, p2));
+			th._pIsClosed, boost::ref(th), p0, p1, p2));
 	}
 
 	template <typename T0, typename T1, typename T2>
 	void delay_trig(int ms, boost::shared_ptr<async_trig_handle<T0, T1, T2> > th, const T0& p0, const T1& p1, const T2& p2)
 	{
 		assert_enter();
-		assert(th->_ptrClosed);
+		assert(th->_pIsClosed);
 		assert(_timerSleep);
 		time_out(ms, boost::bind(&boost_coro::_async_trig_handler_ptr<T0, T1, T2>, shared_from_this(), 
-			th->_ptrClosed, th, p0, p1, p2));
+			th->_pIsClosed, th, p0, p1, p2));
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
 	void delay_trig(int ms, async_trig_handle<T0, T1, T2, T3>& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
 		assert_enter();
-		assert(th._ptrClosed);
+		assert(th._pIsClosed);
 		assert(_timerSleep);
 		time_out(ms, boost::bind(&boost_coro::_async_trig_handler<T0, T1, T2, T3>, shared_from_this(), 
-			th._ptrClosed, boost::ref(th), p0, p1, p2, p3));
+			th._pIsClosed, boost::ref(th), p0, p1, p2, p3));
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
 	void delay_trig(int ms, boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> > th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
 		assert_enter();
-		assert(th->_ptrClosed);
+		assert(th->_pIsClosed);
 		assert(_timerSleep);
 		time_out(ms, boost::bind(&boost_coro::_async_trig_handler_ptr<T0, T1, T2, T3>, shared_from_this(), 
-			th->_ptrClosed, th, p0, p1, p2, p3));
+			th->_pIsClosed, th, p0, p1, p2, p3));
 	}
 
 	/*!
@@ -1381,14 +1383,14 @@ public:
 	boost::function<void(T0)> make_msg_notify(param_list<msg_param<T0> >& cmh)
 	{
 		cmh.begin(_coroID);
-		return boost::bind(&boost_coro::notify_handler<T0>, shared_from_this(), cmh._ptrClosed, boost::ref(cmh), _1);
+		return boost::bind(&boost_coro::notify_handler<T0>, shared_from_this(), cmh._pIsClosed, boost::ref(cmh), _1);
 	}
 
 	template <typename T0>
 	boost::function<void(T0)> make_msg_notify(boost::shared_ptr<coro_msg_handle<T0> > cmh)
 	{
 		cmh->begin(_coroID);
-		return boost::bind(&boost_coro::notify_handler_ptr<T0>, shared_from_this(), cmh->_ptrClosed, 
+		return boost::bind(&boost_coro::notify_handler_ptr<T0>, shared_from_this(), cmh->_pIsClosed, 
 			boost::static_pointer_cast<param_list<msg_param<T0> > >(cmh), _1);
 	}
 
@@ -1396,7 +1398,7 @@ public:
 	boost::function<void(T0)> make_msg_notify(boost::shared_ptr<coro_msg_limit_handle<T0> > cmh)
 	{
 		cmh->begin(_coroID);
-		return boost::bind(&boost_coro::notify_handler_ptr<T0>, shared_from_this(), cmh->_ptrClosed, 
+		return boost::bind(&boost_coro::notify_handler_ptr<T0>, shared_from_this(), cmh->_pIsClosed, 
 			boost::static_pointer_cast<param_list<msg_param<T0> > >(cmh), _1);
 	}
 
@@ -1404,14 +1406,14 @@ public:
 	boost::function<void(T0, T1)> make_msg_notify(param_list<msg_param<T0, T1> >& cmh)
 	{
 		cmh.begin(_coroID);
-		return boost::bind(&boost_coro::notify_handler<T0, T1>, shared_from_this(), cmh._ptrClosed, boost::ref(cmh), _1, _2);
+		return boost::bind(&boost_coro::notify_handler<T0, T1>, shared_from_this(), cmh._pIsClosed, boost::ref(cmh), _1, _2);
 	}
 
 	template <typename T0, typename T1>
 	boost::function<void(T0, T1)> make_msg_notify(boost::shared_ptr<coro_msg_handle<T0, T1> > cmh)
 	{
 		cmh->begin(_coroID);
-		return boost::bind(&boost_coro::notify_handler_ptr<T0, T1>, shared_from_this(), cmh->_ptrClosed, 
+		return boost::bind(&boost_coro::notify_handler_ptr<T0, T1>, shared_from_this(), cmh->_pIsClosed, 
 			boost::static_pointer_cast<param_list<msg_param<T0, T1> > >(cmh), _1, _2);
 	}
 
@@ -1419,7 +1421,7 @@ public:
 	boost::function<void(T0, T1)> make_msg_notify(boost::shared_ptr<coro_msg_limit_handle<T0, T1> > cmh)
 	{
 		cmh->begin(_coroID);
-		return boost::bind(&boost_coro::notify_handler_ptr<T0, T1>, shared_from_this(), cmh->_ptrClosed, 
+		return boost::bind(&boost_coro::notify_handler_ptr<T0, T1>, shared_from_this(), cmh->_pIsClosed, 
 			boost::static_pointer_cast<param_list<msg_param<T0, T1> > >(cmh), _1, _2);
 	}
 
@@ -1427,14 +1429,14 @@ public:
 	boost::function<void(T0, T1, T2)> make_msg_notify(param_list<msg_param<T0, T1, T2> >& cmh)
 	{
 		cmh.begin(_coroID);
-		return boost::bind(&boost_coro::notify_handler<T0, T1, T2>, shared_from_this(), cmh._ptrClosed, boost::ref(cmh), _1, _2, _3);
+		return boost::bind(&boost_coro::notify_handler<T0, T1, T2>, shared_from_this(), cmh._pIsClosed, boost::ref(cmh), _1, _2, _3);
 	}
 
 	template <typename T0, typename T1, typename T2>
 	boost::function<void(T0, T1, T2)> make_msg_notify(boost::shared_ptr<coro_msg_handle<T0, T1, T2> > cmh)
 	{
 		cmh->begin(_coroID);
-		return boost::bind(&boost_coro::notify_handler_ptr<T0, T1, T2>, shared_from_this(), cmh->_ptrClosed, 
+		return boost::bind(&boost_coro::notify_handler_ptr<T0, T1, T2>, shared_from_this(), cmh->_pIsClosed, 
 			boost::static_pointer_cast<param_list<msg_param<T0, T1, T2> > >(cmh), _1, _2, _3);
 	}
 
@@ -1442,7 +1444,7 @@ public:
 	boost::function<void(T0, T1, T2)> make_msg_notify(boost::shared_ptr<coro_msg_limit_handle<T0, T1, T2> > cmh)
 	{
 		cmh->begin(_coroID);
-		return boost::bind(&boost_coro::notify_handler_ptr<T0, T1, T2>, shared_from_this(), cmh->_ptrClosed, 
+		return boost::bind(&boost_coro::notify_handler_ptr<T0, T1, T2>, shared_from_this(), cmh->_pIsClosed, 
 			boost::static_pointer_cast<param_list<msg_param<T0, T1, T2> > >(cmh), _1, _2, _3);
 	}
 
@@ -1450,14 +1452,14 @@ public:
 	boost::function<void(T0, T1, T2, T3)> make_msg_notify(param_list<msg_param<T0, T1, T2, T3> >& cmh)
 	{
 		cmh.begin(_coroID);
-		return boost::bind(&boost_coro::notify_handler<T0, T1, T2, T3>, shared_from_this(), cmh._ptrClosed, boost::ref(cmh), _1, _2, _3, _4);
+		return boost::bind(&boost_coro::notify_handler<T0, T1, T2, T3>, shared_from_this(), cmh._pIsClosed, boost::ref(cmh), _1, _2, _3, _4);
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
 	boost::function<void(T0, T1, T2, T3)> make_msg_notify(boost::shared_ptr<coro_msg_handle<T0, T1, T2, T3> > cmh)
 	{
 		cmh->begin(_coroID);
-		return boost::bind(&boost_coro::notify_handler_ptr<T0, T1, T2, T3>, shared_from_this(), cmh->_ptrClosed, 
+		return boost::bind(&boost_coro::notify_handler_ptr<T0, T1, T2, T3>, shared_from_this(), cmh->_pIsClosed, 
 			boost::static_pointer_cast<param_list<msg_param<T0, T1, T2, T3> > >(cmh), _1, _2, _3, _4);
 	}
 
@@ -1465,7 +1467,7 @@ public:
 	boost::function<void(T0, T1, T2, T3)> make_msg_notify(boost::shared_ptr<coro_msg_limit_handle<T0, T1, T2, T3> > cmh)
 	{
 		cmh->begin(_coroID);
-		return boost::bind(&boost_coro::notify_handler_ptr<T0, T1, T2, T3>, shared_from_this(), cmh->_ptrClosed, 
+		return boost::bind(&boost_coro::notify_handler_ptr<T0, T1, T2, T3>, shared_from_this(), cmh->_pIsClosed, 
 			boost::static_pointer_cast<param_list<msg_param<T0, T1, T2, T3> > >(cmh), _1, _2, _3, _4);
 	}
 
@@ -1495,7 +1497,7 @@ public:
 		typedef typename msg_param<T0> param_type;
 		assert(cmh._coroID == _coroID);
 		assert_enter();
-		assert(cmh._ptrClosed);
+		assert(cmh._pIsClosed);
 		param_type::ref_type ref(r0);
 		param_type* param = cmh.front();
 		if (param)
@@ -1533,7 +1535,7 @@ public:
 		typedef typename msg_param<T0, T1> param_type;
 		assert(cmh._coroID == _coroID);
 		assert_enter();
-		assert(cmh._ptrClosed);
+		assert(cmh._pIsClosed);
 		param_type::ref_type ref(r0, r1);
 		param_type* param = cmh.front();
 		if (param)
@@ -1563,7 +1565,7 @@ public:
 		typedef typename msg_param<T0, T1, T2> param_type;
 		assert(cmh._coroID == _coroID);
 		assert_enter();
-		assert(cmh._ptrClosed);
+		assert(cmh._pIsClosed);
 		param_type::ref_type ref(r0, r1, r2);
 		param_type* param = cmh.front();
 		if (param)
@@ -1593,7 +1595,7 @@ public:
 		typedef typename msg_param<T0, T1, T2, T3> param_type;
 		assert(cmh._coroID == _coroID);
 		assert_enter();
-		assert(cmh._ptrClosed);
+		assert(cmh._pIsClosed);
 		param_type::ref_type ref(r0, r1, r2, r3);
 		param_type* param = cmh.front();
 		if (param)
@@ -1733,15 +1735,15 @@ private:
 
 	void async_trig_pull_yield(async_trig_base& th, void* cref);
 
-	void _async_trig_handler(boost::shared_ptr<bool>& isClosed, async_trig_handle<>& th);
-	void _async_trig_handler_ptr(boost::shared_ptr<bool>& isClosed, boost::shared_ptr<async_trig_handle<> >& th);
+	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<>& th);
+	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<> >& th);
 
 	template <typename T0>
-	void async_trig_handler(boost::shared_ptr<bool>& isClosed, async_trig_handle<T0>& th, const T0& p0)
+	void async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0>& th, const T0& p0)
 	{
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !(*isClosed) && !th._notify)
+			if (!_quited && !(*pIsClosed) && !th._notify)
 			{
 				async_trig_handle<T0>::const_ref_ex cref(p0);
 				async_trig_post_yield(th, &cref);
@@ -1749,16 +1751,16 @@ private:
 		}
 		else
 		{
-			_strand->post(boost::bind(&boost_coro::_async_trig_handler<T0>, shared_from_this(), isClosed, boost::ref(th), p0));
+			_strand->post(boost::bind(&boost_coro::_async_trig_handler<T0>, shared_from_this(), pIsClosed, boost::ref(th), p0));
 		}
 	}
 
 	template <typename T0>
-	void async_trig_handler_ptr(boost::shared_ptr<bool>& isClosed, boost::shared_ptr<async_trig_handle<T0> >& th, const T0& p0)
+	void async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0> >& th, const T0& p0)
 	{
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !(*isClosed) && !th->_notify)
+			if (!_quited && !(*pIsClosed) && !th->_notify)
 			{
 				async_trig_handle<T0>::const_ref_ex cref(p0);
 				async_trig_post_yield(*th, &cref);
@@ -1766,15 +1768,15 @@ private:
 		}
 		else
 		{
-			_strand->post(boost::bind(&boost_coro::_async_trig_handler_ptr<T0>, shared_from_this(), isClosed, th, p0));
+			_strand->post(boost::bind(&boost_coro::_async_trig_handler_ptr<T0>, shared_from_this(), pIsClosed, th, p0));
 		}
 	}
 
 	template <typename T0>
-	void _async_trig_handler(boost::shared_ptr<bool>& isClosed, async_trig_handle<T0>& th, const T0& p0)
+	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0>& th, const T0& p0)
 	{
 		assert(_strand->running_in_this_thread());
-		if (!_quited && !(*isClosed) && !th._notify)
+		if (!_quited && !(*pIsClosed) && !th._notify)
 		{
 			async_trig_handle<T0>::const_ref_ex cref(p0);
 			async_trig_pull_yield(th, &cref);
@@ -1782,17 +1784,17 @@ private:
 	}
 
 	template <typename T0>
-	void _async_trig_handler_ptr(boost::shared_ptr<bool>& isClosed, boost::shared_ptr<async_trig_handle<T0> >& th, const T0& p0)
+	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0> >& th, const T0& p0)
 	{
-		return _async_trig_handler(isClosed, *th, p0);
+		return _async_trig_handler(pIsClosed, *th, p0);
 	}
 
 	template <typename T0, typename T1>
-	void async_trig_handler(boost::shared_ptr<bool>& isClosed, async_trig_handle<T0, T1>& th, const T0& p0, const T1& p1)
+	void async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1>& th, const T0& p0, const T1& p1)
 	{
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !(*isClosed) && !th._notify)
+			if (!_quited && !(*pIsClosed) && !th._notify)
 			{
 				async_trig_handle<T0, T1>::const_ref_ex cref(p0, p1);
 				async_trig_post_yield(th, &cref);
@@ -1800,16 +1802,16 @@ private:
 		}
 		else
 		{
-			_strand->post(boost::bind(&boost_coro::_async_trig_handler<T0, T1>, shared_from_this(), isClosed, boost::ref(th), p0, p1));
+			_strand->post(boost::bind(&boost_coro::_async_trig_handler<T0, T1>, shared_from_this(), pIsClosed, boost::ref(th), p0, p1));
 		}
 	}
 
 	template <typename T0, typename T1>
-	void async_trig_handler_ptr(boost::shared_ptr<bool>& isClosed, boost::shared_ptr<async_trig_handle<T0, T1> >& th, const T0& p0, const T1& p1)
+	void async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0, T1> >& th, const T0& p0, const T1& p1)
 	{
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !(*isClosed) && !th->_notify)
+			if (!_quited && !(*pIsClosed) && !th->_notify)
 			{
 				async_trig_handle<T0, T1>::const_ref_ex cref(p0, p1);
 				async_trig_post_yield(*th, &cref);
@@ -1817,15 +1819,15 @@ private:
 		}
 		else
 		{
-			_strand->post(boost::bind(&boost_coro::_async_trig_handler_ptr<T0, T1>, shared_from_this(), isClosed, th, p0, p1));
+			_strand->post(boost::bind(&boost_coro::_async_trig_handler_ptr<T0, T1>, shared_from_this(), pIsClosed, th, p0, p1));
 		}
 	}
 
 	template <typename T0, typename T1>
-	void _async_trig_handler(boost::shared_ptr<bool>& isClosed, async_trig_handle<T0, T1>& th, const T0& p0, const T1& p1)
+	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1>& th, const T0& p0, const T1& p1)
 	{
 		assert(_strand->running_in_this_thread());
-		if (!_quited && !(*isClosed) && !th._notify)
+		if (!_quited && !(*pIsClosed) && !th._notify)
 		{
 			async_trig_handle<T0, T1>::const_ref_ex cref(p0, p1);
 			async_trig_pull_yield(th, &cref);
@@ -1833,17 +1835,17 @@ private:
 	}
 
 	template <typename T0, typename T1>
-	void _async_trig_handler_ptr(boost::shared_ptr<bool>& isClosed, boost::shared_ptr<async_trig_handle<T0, T1> >& th, const T0& p0, const T1& p1)
+	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0, T1> >& th, const T0& p0, const T1& p1)
 	{
-		return _async_trig_handler(isClosed, *th, p0, p1);
+		return _async_trig_handler(pIsClosed, *th, p0, p1);
 	}
 
 	template <typename T0, typename T1, typename T2>
-	void async_trig_handler(boost::shared_ptr<bool>& isClosed, async_trig_handle<T0, T1, T2>& th, const T0& p0, const T1& p1, const T2& p2)
+	void async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1, T2>& th, const T0& p0, const T1& p1, const T2& p2)
 	{
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !(*isClosed) && !th._notify)
+			if (!_quited && !(*pIsClosed) && !th._notify)
 			{
 				async_trig_handle<T0, T1, T2>::const_ref_ex cref(p0, p1, p2);
 				async_trig_post_yield(th, &cref);
@@ -1851,17 +1853,17 @@ private:
 		}
 		else
 		{
-			_strand->post(boost::bind(&boost_coro::_async_trig_handler<T0, T1, T2>, shared_from_this(), isClosed, boost::ref(th), 
+			_strand->post(boost::bind(&boost_coro::_async_trig_handler<T0, T1, T2>, shared_from_this(), pIsClosed, boost::ref(th), 
 				p0, p1, p2));
 		}
 	}
 
 	template <typename T0, typename T1, typename T2>
-	void async_trig_handler_ptr(boost::shared_ptr<bool>& isClosed, boost::shared_ptr<async_trig_handle<T0, T1, T2> >& th, const T0& p0, const T1& p1, const T2& p2)
+	void async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0, T1, T2> >& th, const T0& p0, const T1& p1, const T2& p2)
 	{
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !(*isClosed) && !th->_notify)
+			if (!_quited && !(*pIsClosed) && !th->_notify)
 			{
 				async_trig_handle<T0, T1, T2>::const_ref_ex cref(p0, p1, p2);
 				async_trig_post_yield(*th, &cref);
@@ -1869,16 +1871,16 @@ private:
 		}
 		else
 		{
-			_strand->post(boost::bind(&boost_coro::_async_trig_handler_ptr<T0, T1, T2>, shared_from_this(), isClosed, th, 
+			_strand->post(boost::bind(&boost_coro::_async_trig_handler_ptr<T0, T1, T2>, shared_from_this(), pIsClosed, th, 
 				p0, p1, p2));
 		}
 	}
 
 	template <typename T0, typename T1, typename T2>
-	void _async_trig_handler(boost::shared_ptr<bool>& isClosed, async_trig_handle<T0, T1, T2>& th, const T0& p0, const T1& p1, const T2& p2)
+	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1, T2>& th, const T0& p0, const T1& p1, const T2& p2)
 	{
 		assert(_strand->running_in_this_thread());
-		if (!_quited && !(*isClosed) && !th._notify)
+		if (!_quited && !(*pIsClosed) && !th._notify)
 		{
 			async_trig_handle<T0, T1, T2>::const_ref_ex cref(p0, p1, p2);
 			async_trig_pull_yield(th, &cref);
@@ -1886,17 +1888,17 @@ private:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	void _async_trig_handler_ptr(boost::shared_ptr<bool>& isClosed, boost::shared_ptr<async_trig_handle<T0, T1, T2> >& th, const T0& p0, const T1& p1, const T2& p2)
+	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0, T1, T2> >& th, const T0& p0, const T1& p1, const T2& p2)
 	{
-		return _async_trig_handler(isClosed, *th, p0, p1, p2);
+		return _async_trig_handler(pIsClosed, *th, p0, p1, p2);
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	void async_trig_handler(boost::shared_ptr<bool>& isClosed, async_trig_handle<T0, T1, T2, T3>& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+	void async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1, T2, T3>& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !(*isClosed) && !th._notify)
+			if (!_quited && !(*pIsClosed) && !th._notify)
 			{
 				async_trig_handle<T0, T1, T2, T3>::const_ref_ex cref(p0, p1, p2, p3);
 				async_trig_post_yield(th, &cref);
@@ -1904,17 +1906,17 @@ private:
 		}
 		else
 		{
-			_strand->post(boost::bind(&boost_coro::_async_trig_handler<T0, T1, T2, T3>, shared_from_this(), isClosed, boost::ref(th), 
+			_strand->post(boost::bind(&boost_coro::_async_trig_handler<T0, T1, T2, T3>, shared_from_this(), pIsClosed, boost::ref(th), 
 				p0, p1, p2, p3));
 		}
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	void async_trig_handler_ptr(boost::shared_ptr<bool>& isClosed, boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> >& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+	void async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> >& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !(*isClosed) && !th->_notify)
+			if (!_quited && !(*pIsClosed) && !th->_notify)
 			{
 				async_trig_handle<T0, T1, T2, T3>::const_ref_ex cref(p0, p1, p2, p3);
 				async_trig_post_yield(*th, &cref);
@@ -1922,16 +1924,16 @@ private:
 		}
 		else
 		{
-			_strand->post(boost::bind(&boost_coro::_async_trig_handler_ptr<T0, T1, T2, T3>, shared_from_this(), isClosed, th, 
+			_strand->post(boost::bind(&boost_coro::_async_trig_handler_ptr<T0, T1, T2, T3>, shared_from_this(), pIsClosed, th, 
 				p0, p1, p2, p3));
 		}
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	void _async_trig_handler(boost::shared_ptr<bool>& isClosed, async_trig_handle<T0, T1, T2, T3>& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1, T2, T3>& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
 		assert(_strand->running_in_this_thread());
-		if (!_quited && !(*isClosed) && !th._notify)
+		if (!_quited && !(*pIsClosed) && !th._notify)
 		{
 			async_trig_handle<T0, T1, T2, T3>::const_ref_ex cref(p0, p1, p2, p3);
 			async_trig_pull_yield(th, &cref);
@@ -1939,24 +1941,24 @@ private:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	void _async_trig_handler_ptr(boost::shared_ptr<bool>& isClosed, boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> >& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> >& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
-		_async_trig_handler(isClosed, *th, p0, p1, p2, p3);
+		_async_trig_handler(pIsClosed, *th, p0, p1, p2, p3);
 	}
 
 	void create_coro_handler(coro_handle coro, coro_handle& retCoro, list<coro_handle>::iterator& ch);
 private:
-	void check_run1(boost::shared_ptr<bool>& isClosed, coro_msg_handle<>& cmh);
-	void check_run1_ptr(boost::shared_ptr<bool>& isClosed, boost::shared_ptr<coro_msg_handle<> >& cmh);
+	void check_run1(boost::shared_ptr<bool>& pIsClosed, coro_msg_handle<>& cmh);
+	void check_run1_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<coro_msg_handle<> >& cmh);
 
 	template <typename T0>
-	void notify_handler(boost::shared_ptr<bool>& isClosed, param_list<msg_param<T0> >& cmh, const T0& p0)
+	void notify_handler(boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0> >& cmh, const T0& p0)
 	{
 		typedef msg_param<T0> msg_type;
 
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !(*isClosed))
+			if (!_quited && !(*pIsClosed))
 			{
 				check_run3<msg_type, msg_type::const_ref_type>(cmh, msg_type::const_ref_type(p0));
 			}
@@ -1964,18 +1966,18 @@ private:
 		else
 		{
 			_strand->post(boost::bind(&boost_coro::check_run2<msg_type>, 
-				shared_from_this(), isClosed, boost::ref(cmh), msg_type(p0)));
+				shared_from_this(), pIsClosed, boost::ref(cmh), msg_type(p0)));
 		}
 	}
 
 	template <typename T0>
-	void notify_handler_ptr(boost::shared_ptr<bool>& isClosed, boost::shared_ptr<param_list<msg_param<T0> > >& cmh, const T0& p0)
+	void notify_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<msg_param<T0> > >& cmh, const T0& p0)
 	{
 		typedef msg_param<T0> msg_type;
 
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !(*isClosed))
+			if (!_quited && !(*pIsClosed))
 			{
 				check_run3<msg_type, msg_type::const_ref_type>(*cmh, msg_type::const_ref_type(p0));
 			}
@@ -1983,18 +1985,18 @@ private:
 		else
 		{
 			_strand->post(boost::bind(&boost_coro::check_run2_ptr<msg_type>, 
-				shared_from_this(), isClosed, cmh, msg_type(p0)));
+				shared_from_this(), pIsClosed, cmh, msg_type(p0)));
 		}
 	}
 
 	template <typename T0, typename T1>
-	void notify_handler(boost::shared_ptr<bool>& isClosed, param_list<msg_param<T0, T1> >& cmh, const T0& p0, const T1& p1)
+	void notify_handler(boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0, T1> >& cmh, const T0& p0, const T1& p1)
 	{
 		typedef msg_param<T0, T1> msg_type;
 
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !(*isClosed))
+			if (!_quited && !(*pIsClosed))
 			{
 				check_run3<msg_type, msg_type::const_ref_type>(cmh, msg_type::const_ref_type(p0, p1));
 			}
@@ -2002,18 +2004,18 @@ private:
 		else
 		{
 			_strand->post(boost::bind(&boost_coro::check_run2<msg_type>, 
-				shared_from_this(), isClosed, boost::ref(cmh), msg_type(p0, p1)));
+				shared_from_this(), pIsClosed, boost::ref(cmh), msg_type(p0, p1)));
 		}
 	}
 
 	template <typename T0, typename T1>
-	void notify_handler_ptr(boost::shared_ptr<bool>& isClosed, boost::shared_ptr<param_list<msg_param<T0, T1> > >& cmh, const T0& p0, const T1& p1)
+	void notify_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<msg_param<T0, T1> > >& cmh, const T0& p0, const T1& p1)
 	{
 		typedef msg_param<T0, T1> msg_type;
 
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !(*isClosed))
+			if (!_quited && !(*pIsClosed))
 			{
 				check_run3<msg_type, msg_type::const_ref_type>(*cmh, msg_type::const_ref_type(p0, p1));
 			}
@@ -2021,18 +2023,18 @@ private:
 		else
 		{
 			_strand->post(boost::bind(&boost_coro::check_run2_ptr<msg_type>, 
-				shared_from_this(), isClosed, cmh, msg_type(p0, p1)));
+				shared_from_this(), pIsClosed, cmh, msg_type(p0, p1)));
 		}
 	}
 
 	template <typename T0, typename T1, typename T2>
-	void notify_handler(boost::shared_ptr<bool>& isClosed, param_list<msg_param<T0, T1, T2> >& cmh, const T0& p0, const T1& p1, const T2& p2)
+	void notify_handler(boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0, T1, T2> >& cmh, const T0& p0, const T1& p1, const T2& p2)
 	{
 		typedef msg_param<T0, T1, T2> msg_type;
 
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !(*isClosed))
+			if (!_quited && !(*pIsClosed))
 			{
 				check_run3<msg_type, msg_type::const_ref_type>(cmh, msg_type::const_ref_type(p0, p1, p2));
 			}
@@ -2040,18 +2042,18 @@ private:
 		else
 		{
 			_strand->post(boost::bind(&boost_coro::check_run2<msg_type>, 
-				shared_from_this(), isClosed, boost::ref(cmh), msg_type(p0, p1, p2)));
+				shared_from_this(), pIsClosed, boost::ref(cmh), msg_type(p0, p1, p2)));
 		}
 	}
 
 	template <typename T0, typename T1, typename T2>
-	void notify_handler_ptr(boost::shared_ptr<bool>& isClosed, boost::shared_ptr<param_list<msg_param<T0, T1, T2> > >& cmh, const T0& p0, const T1& p1, const T2& p2)
+	void notify_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<msg_param<T0, T1, T2> > >& cmh, const T0& p0, const T1& p1, const T2& p2)
 	{
 		typedef msg_param<T0, T1, T2> msg_type;
 
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !(*isClosed))
+			if (!_quited && !(*pIsClosed))
 			{
 				check_run3<msg_type, msg_type::const_ref_type>(*cmh, msg_type::const_ref_type(p0, p1, p2));
 			}
@@ -2059,18 +2061,18 @@ private:
 		else
 		{
 			_strand->post(boost::bind(&boost_coro::check_run2_ptr<msg_type>, 
-				shared_from_this(), isClosed, cmh, msg_type(p0, p1, p2)));
+				shared_from_this(), pIsClosed, cmh, msg_type(p0, p1, p2)));
 		}
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	void notify_handler(boost::shared_ptr<bool>& isClosed, param_list<msg_param<T0, T1, T2, T3> >& cmh, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+	void notify_handler(boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0, T1, T2, T3> >& cmh, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
 		typedef msg_param<T0, T1, T2, T3> msg_type;
 
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !(*isClosed))
+			if (!_quited && !(*pIsClosed))
 			{
 				check_run3<msg_type, msg_type::const_ref_type>(cmh, msg_type::const_ref_type(p0, p1, p2, p3));
 			}
@@ -2078,18 +2080,18 @@ private:
 		else
 		{
 			_strand->post(boost::bind(&boost_coro::check_run2<msg_type>, 
-				shared_from_this(), isClosed, boost::ref(cmh), msg_type(p0, p1, p2, p3)));
+				shared_from_this(), pIsClosed, boost::ref(cmh), msg_type(p0, p1, p2, p3)));
 		}
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	void notify_handler_ptr(boost::shared_ptr<bool>& isClosed, boost::shared_ptr<param_list<msg_param<T0, T1, T2, T3> > >& cmh, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+	void notify_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<msg_param<T0, T1, T2, T3> > >& cmh, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
 		typedef msg_param<T0, T1, T2, T3> msg_type;
 
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !(*isClosed))
+			if (!_quited && !(*pIsClosed))
 			{
 				check_run3<msg_type, msg_type::const_ref_type>(*cmh, msg_type::const_ref_type(p0, p1, p2, p3));
 			}
@@ -2097,14 +2099,14 @@ private:
 		else
 		{
 			_strand->post(boost::bind(&boost_coro::check_run2_ptr<msg_type>, 
-				shared_from_this(), isClosed, cmh, msg_type(p0, p1, p2, p3)));
+				shared_from_this(), pIsClosed, cmh, msg_type(p0, p1, p2, p3)));
 		}
 	}
 
 	template <typename T /*msg_param*/>
-	void check_run2(boost::shared_ptr<bool>& isClosed, param_list<T>& cmh, const T& src)
+	void check_run2(boost::shared_ptr<bool>& pIsClosed, param_list<T>& cmh, const T& src)
 	{
-		if (!_quited && !(*isClosed))
+		if (!_quited && !(*pIsClosed))
 		{
 			if (cmh._waiting)
 			{
@@ -2126,9 +2128,9 @@ private:
 	}
 
 	template <typename T /*msg_param*/>
-	void check_run2_ptr(boost::shared_ptr<bool>& isClosed, boost::shared_ptr<param_list<T> >& cmh, const T& src)
+	void check_run2_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<T> >& cmh, const T& src)
 	{
-		check_run2(isClosed, *cmh, src);
+		check_run2(pIsClosed, *cmh, src);
 	}
 
 	template <typename T /*msg_param*/, typename RT /*msg_param::const_ref_type*/>
