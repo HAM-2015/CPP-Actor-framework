@@ -456,7 +456,6 @@ boost_coro::~boost_coro()
 	assert(_suspendResumeQueue.empty());
 	assert(_exitCallback.empty());
 	assert(_childCoroList.empty());
-	delete (coro_pull_type*)_coroPull;
 #if (CHECK_CORO_STACK) || (_DEBUG)
 	if (*(long long*)((BYTE*)_stackTop-_stackSize+STACK_RESERVED_SPACE_SIZE-sizeof(long long)) != 0xFEFEFEFEFEFEFEFE)
 	{
@@ -466,6 +465,7 @@ boost_coro::~boost_coro()
 		throw boost::shared_ptr<string>(new string(buf));
 	}
 #endif
+	delete (coro_pull_type*)_coroPull;
 }
 
 boost_coro& boost_coro::operator =(const boost_coro&)
@@ -521,7 +521,7 @@ coro_handle boost_coro::local_create( shared_strand coroStrand, const main_func&
 		newCoro->_stackSize = totalSize-coroSize-timerSize;
 		if (cb) newCoro->_exitCallback.push_back(cb);
 		newCoro->_coroPull = new coro_pull_type(boost_coro_run(*newCoro),
-			boost::coroutines::attributes(stackSize), coro_stack_pool_allocate(newCoro->_stackTop, newCoro->_stackSize));
+			boost::coroutines::attributes(newCoro->_stackSize), coro_stack_pool_allocate(newCoro->_stackTop, newCoro->_stackSize));
 	} 
 	else
 	{

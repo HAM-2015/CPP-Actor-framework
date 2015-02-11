@@ -121,6 +121,7 @@
     <ClInclude Include="..\common_code\strand_ex.h" />
     <ClInclude Include="..\common_code\stream_io_base.h" />
     <ClInclude Include="..\common_code\text_stream_io.h" />
+    <ClInclude Include="..\common_code\time_info.h" />
     <ClInclude Include="dlg_session.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="socket_test.h" />
@@ -136,6 +137,7 @@
     <ClCompile Include="..\common_code\shared_data.cpp" />
     <ClCompile Include="..\common_code\socket_io.cpp" />
     <ClCompile Include="..\common_code\text_stream_io.cpp" />
+    <ClCompile Include="..\common_code\time_info.cpp" />
     <ClCompile Include="dlg_session.cpp" />
     <ClCompile Include="socket_test.cpp" />
     <ClCompile Include="socket_testDlg.cpp" />
