@@ -1,7 +1,6 @@
 #ifndef __CORO_STACK_H
 #define __CORO_STACK_H
 
-#include <boost/coroutine/stack_allocator.hpp>
 #include <boost/coroutine/stack_context.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/thread.hpp>
@@ -16,7 +15,6 @@ using namespace std;
 struct stack_pck 
 {
 	boost::coroutines::stack_context _stack;
-	size_t _size;
 	int _tick;
 };
 
@@ -48,7 +46,6 @@ private:
 	boost::mutex _clearMutex;
 	boost::thread _clearThread;
 	boost::condition_variable _clearVar;
-	boost::coroutines::stack_allocator _all;
 	boost::atomic<int> _stackCount;
 	vector<stack_pool_pck*> _stackPool;
 	static boost::shared_ptr<coro_stack_pool> _coroStackPool;

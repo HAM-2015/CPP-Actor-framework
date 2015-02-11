@@ -1,6 +1,7 @@
 #include "coro_stack.h"
 #include "shared_data.h"
 #include "time_info.h"
+#include <malloc.h>
 #include <boost/thread/lock_guard.hpp>
 
 //堆栈清理最小周期(秒)
@@ -39,7 +40,7 @@ coro_stack_pool::~coro_stack_pool()
 				boost::lock_guard<boost::mutex> lg1(_stackPool[mit]->_mutex);
 				for (auto it = _stackPool[mit]->_pool.begin(); it != _stackPool[mit]->_pool.end(); it++)
 				{
-					_all.deallocate(it->_stack);
+					free(((char*)it->_stack.sp)-it->_stack.size);
 					_stackCount--;
 				}
 			}
@@ -81,15 +82,12 @@ stack_pck coro_stack_pool::getStack( size_t size )
 			return r;
 		}
 	}
+	_coroStackPool->_stackCount++;
 	stack_pck r;
-	r._size = size;
 	r._tick = 0;
-	try
-	{
-		_coroStackPool->_all.allocate(r._stack, size);
-		_coroStackPool->_stackCount++;
-	}
-	catch (...)
+	r._stack.size = size;
+	r._stack.sp = ((char*)malloc(size))+size;
+	if (!r._stack.sp)
 	{
 		throw boost::shared_ptr<string>(new string("协程栈内存不足"));
 	}
@@ -101,8 +99,7 @@ void coro_stack_pool::recovery( stack_pck& stack )
 	stack._tick = (int)(get_tick()/1000000);
 	stack_pool_pck** pool = NULL;
 	{
-		//boost::lock_guard<boost::mutex> lg(_coroStackPool->_mutex);
-		pool = &_coroStackPool->_stackPool[stack._size/4096-1];
+		pool = &_coroStackPool->_stackPool[stack._stack.size/4096-1];
 		assert(*pool);
 	}
 	boost::lock_guard<boost::mutex> lg((*pool)->_mutex);
@@ -144,7 +141,7 @@ void coro_stack_pool::clearThread()
 								_stackPool[mit]->_pool.erase(it++);
 								_stackPool[mit]->_mutex.unlock();
 
-								_all.deallocate(pck._stack);
+								free(((char*)pck._stack.sp)-pck._stack.size);
 								_stackCount--;
 
 								_stackPool[mit]->_mutex.lock();
