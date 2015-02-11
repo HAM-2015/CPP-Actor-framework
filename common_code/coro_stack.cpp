@@ -98,7 +98,7 @@ stack_pck coro_stack_pool::getStack( size_t size )
 
 void coro_stack_pool::recovery( stack_pck& stack )
 {
-	stack._tick = (unsigned)(get_tick()/1000000);
+	stack._tick = (int)(get_tick()/1000000);
 	stack_pool_pck** pool = NULL;
 	{
 		//boost::lock_guard<boost::mutex> lg(_coroStackPool->_mutex);
@@ -127,7 +127,7 @@ void coro_stack_pool::clearThread()
 			_clearWait = false;
 		}
 		{
-			unsigned extTick = (unsigned)(get_tick()/1000000);
+			int extTick = (int)(get_tick()/1000000);
 			_mutex.lock();
 			for (size_t mit = 0; mit < _stackPool.size(); mit++)
 			{

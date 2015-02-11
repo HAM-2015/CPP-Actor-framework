@@ -17,7 +17,7 @@ struct stack_pck
 {
 	boost::coroutines::stack_context _stack;
 	size_t _size;
-	unsigned _tick;
+	int _tick;
 };
 
 /*!
