@@ -42,7 +42,6 @@ private:
 private:
 	bool _exit;
 	bool _clearWait;
-	boost::mutex _mutex;
 	boost::mutex _clearMutex;
 	boost::thread _clearThread;
 	boost::condition_variable _clearVar;
