@@ -17,20 +17,27 @@ typedef LONG (__stdcall * NT_QUERY_TIMER_RESOLUTION)
 	OUT PULONG CurrentTime
 	);
 
-long long _frequency = 0;
-
-struct set_frequency 
+struct pc_cycle
 {
-	set_frequency()
+	pc_cycle()
 	{
 		LARGE_INTEGER frep;
 		if (!QueryPerformanceFrequency(&frep))
 		{
+			_sCycle = 0;
+			_msCycle = 0;
+			_usCycle = 0;
 			return;
 		}
-		_frequency = frep.QuadPart;
+		_sCycle = 1.0/(double)frep.QuadPart;
+		_msCycle = 1000.0/(double)frep.QuadPart;
+		_usCycle = 1000000.0/(double)frep.QuadPart;
 	}
-} _set;
+
+	double _sCycle;
+	double _msCycle;
+	double _usCycle;
+} _pcCycle;
 
 void enable_high_resolution()
 {
@@ -64,9 +71,23 @@ void enable_realtime_priority()
 	SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS);
 }
 
-long long get_tick()
+long long get_tick_us()
 {
 	LARGE_INTEGER quadPart;
 	QueryPerformanceCounter(&quadPart);
-	return (long long)((double)quadPart.QuadPart*(1000000./(double)_frequency));
+	return (long long)((double)quadPart.QuadPart*_pcCycle._usCycle);
+}
+
+long long get_tick_ms()
+{
+	LARGE_INTEGER quadPart;
+	QueryPerformanceCounter(&quadPart);
+	return (long long)((double)quadPart.QuadPart*_pcCycle._msCycle);
+}
+
+int get_tick_s()
+{
+	LARGE_INTEGER quadPart;
+	QueryPerformanceCounter(&quadPart);
+	return (int)((double)quadPart.QuadPart*_pcCycle._sCycle);
 }

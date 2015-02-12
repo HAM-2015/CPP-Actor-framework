@@ -259,7 +259,7 @@ void perfor_test(boost_coro* coro, ios_proxy& ios, int coroNum)
 
 	for (int num = 1; true; num = num % coroNum + 1)
 	{
-		long long tk = get_tick();
+		long long tk = get_tick_us();
 		list<child_coro_handle::ptr> childList;
 		for (int i = 0; i < num; i++)
 		{
@@ -276,7 +276,7 @@ void perfor_test(boost_coro* coro, ios_proxy& ios, int coroNum)
 		{
 			ct += count[i];
 		}
-		double f = (double)ct * 1000000 / (get_tick()-tk);
+		double f = (double)ct * 1000000 / (get_tick_us()-tk);
 		printf("协程数=%d, 切换频率=%d\n", num, (int)f);
 	}
 }

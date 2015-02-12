@@ -12,8 +12,10 @@ void enable_high_resolution();
 void enable_realtime_priority();
 
 /*!
-@brief 获取硬件时间戳(us)
+@brief 获取硬件时间戳
 */
-long long get_tick();
+long long get_tick_us();
+long long get_tick_ms();
+int get_tick_s();
 
 #endif
