@@ -1653,11 +1653,12 @@ void boost_coro::push_yield()
 	_yieldCount++;
 	_inCoro = false;
 	(*(coro_push_type*)_coroPush)();
-	if (_quited)
+	if (!_quited)
 	{
-		throw coro_force_quit();
+		_inCoro = true;
+		return;
 	}
-	_inCoro = true;
+	throw coro_force_quit();
 }
 
 void boost_coro::force_quit_cb_handler()
