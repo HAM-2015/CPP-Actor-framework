@@ -1,4 +1,5 @@
 #include "time_info.h"
+#include <assert.h>
 #include <Windows.h>
 
 #pragma comment( lib, "Winmm.lib" )
@@ -27,6 +28,7 @@ struct pc_cycle
 			_sCycle = 0;
 			_msCycle = 0;
 			_usCycle = 0;
+			assert(false);
 			return;
 		}
 		_sCycle = 1.0/(double)frep.QuadPart;

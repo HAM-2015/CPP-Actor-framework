@@ -15,6 +15,7 @@ coro_stack_pool::coro_stack_pool()
 	_clearWait = false;
 	_isBack = false;
 	_stackCount = 0;
+	_stackTotalSize = 0;
 	_nextPck._stack.sp = NULL;
 	_stackPool.resize(256);
 	for (size_t i = 0; i < _stackPool.size(); i++)
@@ -81,15 +82,16 @@ stack_pck coro_stack_pool::getStack( size_t size )
 		}
 	}
 	_coroStackPool->_stackCount++;
+	_coroStackPool->_stackTotalSize += size;
 	stack_pck r;
 	r._tick = 0;
 	r._stack.size = size;
 	r._stack.sp = ((char*)malloc(size))+size;
-	if (!r._stack.sp)
+	if (r._stack.sp)
 	{
-		throw boost::shared_ptr<string>(new string("协程栈内存不足"));
+		return r;
 	}
-	return r;
+	throw boost::shared_ptr<string>(new string("协程栈内存不足"));
 }
 
 void coro_stack_pool::recovery( stack_pck& stack )
@@ -134,12 +136,13 @@ void coro_stack_pool::clearThread()
 						_isBack = _stackPool[mit]->_pool.end() == it;
 						if (!_isBack)
 						{
-							_nextPck = pck;
+							_nextPck = *it;
 						}
 						_stackPool[mit]->_mutex.unlock();
 
 						free(((char*)pck._stack.sp)-pck._stack.size);
 						_stackCount--;
+						_stackTotalSize -= pck._stack.size;
 
 						_stackPool[mit]->_mutex.lock();
 					}

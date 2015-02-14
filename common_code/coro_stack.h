@@ -48,6 +48,7 @@ private:
 	boost::thread _clearThread;
 	boost::condition_variable _clearVar;
 	boost::atomic<int> _stackCount;
+	boost::atomic<size_t> _stackTotalSize;
 	vector<stack_pool_pck*> _stackPool;
 	static boost::shared_ptr<coro_stack_pool> _coroStackPool;
 };
