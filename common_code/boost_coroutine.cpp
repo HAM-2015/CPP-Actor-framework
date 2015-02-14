@@ -1655,11 +1655,7 @@ void boost_coro::push_yield()
 	(*(coro_push_type*)_coroPush)();
 	if (!_quited)
 	{
-<<<<<<< .merge_file_a01772
-		_inCoro = true;
-=======
 		DEBUG_OPERATION(_inCoro = true);
->>>>>>> .merge_file_a02084
 		return;
 	}
 	throw coro_force_quit();
