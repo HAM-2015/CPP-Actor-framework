@@ -2296,7 +2296,7 @@ private:
 	long long _coroID;///<协程ID
 	size_t _stackSize;///<协程栈大小
 	shared_strand _strand;///<协程调度器
-	bool _inCoro;///<当前正在协程内部执行标记
+	DEBUG_OPERATION(bool _inCoro);///<当前正在协程内部执行标记
 	bool _started;///<已经开始运行的标记
 	bool _quited;///<已经准备退出标记
 	bool _suspended;///<协程挂起标记

@@ -375,10 +375,10 @@ public:
 		_coro._coroPush = &coroPush;
 		try
 		{
-			_coro._inCoro = true;
+			DEBUG_OPERATION(_coro._inCoro = true);
 			_coro.push_yield();
 			_coro._mainFunc(&_coro);
-			_coro._inCoro = false;
+			DEBUG_OPERATION(_coro._inCoro = false);
 			_coro._quited = true;
 			_coro._mainFunc.clear();
 			assert(_coro._childCoroList.empty());
@@ -427,7 +427,7 @@ boost_coro::boost_coro()
 	_timerSleep = NULL;
 	_quited = false;
 	_started = false;
-	_inCoro = false;
+	DEBUG_OPERATION(_inCoro = false);
 	_suspended = false;
 	_hasNotify = false;
 	_isForce = false;
@@ -1651,11 +1651,15 @@ void boost_coro::push_yield()
 {
 	assert_enter();
 	_yieldCount++;
-	_inCoro = false;
+	DEBUG_OPERATION(_inCoro = false);
 	(*(coro_push_type*)_coroPush)();
 	if (!_quited)
 	{
+<<<<<<< .merge_file_a01772
 		_inCoro = true;
+=======
+		DEBUG_OPERATION(_inCoro = true);
+>>>>>>> .merge_file_a02084
 		return;
 	}
 	throw coro_force_quit();

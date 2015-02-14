@@ -13,7 +13,9 @@ coro_stack_pool::coro_stack_pool()
 {
 	_exit = false;
 	_clearWait = false;
+	_isBack = false;
 	_stackCount = 0;
+	_nextPck._stack.sp = NULL;
 	_stackPool.resize(256);
 	for (size_t i = 0; i < _stackPool.size(); i++)
 	{
@@ -71,6 +73,10 @@ stack_pck coro_stack_pool::getStack( size_t size )
 			stack_pck r = pool->_pool.back();
 			pool->_pool.pop_back();
 			r._tick = 0;
+			if (!_coroStackPool->_isBack)
+			{
+				_coroStackPool->_isBack = (r._stack.sp == _coroStackPool->_nextPck._stack.sp);
+			}
 			return r;
 		}
 	}
@@ -116,12 +122,20 @@ void coro_stack_pool::clearThread()
 			for (size_t mit = 0; mit < _stackPool.size(); mit++)
 			{
 				_stackPool[mit]->_mutex.lock();
-				for (auto it = _stackPool[mit]->_pool.begin(); it != _stackPool[mit]->_pool.end();)
+				_nextPck._stack.sp = NULL;
+				auto it = _stackPool[mit]->_pool.begin();
+				_isBack = _stackPool[mit]->_pool.end() == it;
+				while (!_isBack)
 				{
 					if (extTick - it->_tick >= STACK_MIN_CLEAR_CYCLE)
 					{
 						stack_pck pck = *it;
 						_stackPool[mit]->_pool.erase(it++);
+						_isBack = _stackPool[mit]->_pool.end() == it;
+						if (!_isBack)
+						{
+							_nextPck = pck;
+						}
 						_stackPool[mit]->_mutex.unlock();
 
 						free(((char*)pck._stack.sp)-pck._stack.size);
