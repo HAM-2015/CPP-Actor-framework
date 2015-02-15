@@ -32,7 +32,7 @@ coro_stack_pool::~coro_stack_pool()
 		_exit = true;
 		if (_clearWait)
 		{
-			_clearWait = true;
+			_clearWait = false;
 			_clearVar.notify_one();
 		}
 	}
