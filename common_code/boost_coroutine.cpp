@@ -506,9 +506,8 @@ coro_handle boost_coro::local_create( shared_strand coroStrand, const main_func&
 	{
 		size_t coroSize = (sizeof(boost_coro)+(sizeof(void*)-1)) & ((sizeof(void*)-1) ^ -1);
 		size_t timerSize = (sizeof(timer_pck)+(sizeof(void*)-1)) & ((sizeof(void*)-1) ^ -1);
-		size_t totalSize = (coroSize+timerSize+stackSize + (4 kB-1)) & ((4 kB-1) ^ -1);
-		stack_pck stackMem = coro_stack_pool::getStack(totalSize);
-		totalSize = stackMem._stack.size;
+		stack_pck stackMem = coro_stack_pool::getStack((coroSize+timerSize+stackSize + (4 kB-1)) & ((4 kB-1) ^ -1));
+		size_t totalSize = stackMem._stack.size;
 		BYTE* stackTop = (BYTE*)stackMem._stack.sp;
 		newCoro = coro_handle(new(stackTop-coroSize) boost_coro, coro_free(stackMem));
 		if (_autoMakeTimer)
