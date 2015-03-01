@@ -39,8 +39,8 @@ void ios_proxy::run(size_t threadNum)
 		boost::unique_lock<boost::mutex> ul(*blockMutex);
 		for (size_t i = 0; i < threadNum; i++)
 		{
-			auto newThread = new boost::thread(boost::bind(&ios_proxy::runThread, this, &rc, (int)i, 
-				(boost::weak_ptr<boost::mutex>)blockMutex, (boost::weak_ptr<boost::condition_variable>)blockConVar));
+			auto newThread = new boost::thread(&ios_proxy::runThread, this, &rc, (int)i, 
+				(boost::weak_ptr<boost::mutex>)blockMutex, (boost::weak_ptr<boost::condition_variable>)blockConVar);
 			_threadIDs.insert(newThread->get_id());
 			_runThreads.add_thread(newThread);
 		}
@@ -159,10 +159,7 @@ void ios_proxy::runThread(size_t* rc, int id, boost::weak_ptr<boost::mutex> mute
 				blockConVar->wait(ul);
 			}
 		}
-		size_t r = _ios.run();
-		_ctrlMutex.lock();
-		_runCount += r;
-		_ctrlMutex.unlock();
+		_runCount += _ios.run();
 	}
 	catch (msg_data::pool_memory_exception&)
 	{

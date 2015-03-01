@@ -903,12 +903,12 @@ bool boost_coro::timed_wait_trig(async_trig_handle<>& th, int tm)
 {
 	assert(th._coroID == _coroID);
 	assert_enter();
-	if (!async_trig_push(th, tm, NULL))
+	if (async_trig_push(th, tm, NULL))
 	{
-		return false;
+		close_trig(th);
+		return true;
 	}
-	close_trig(th);
-	return true;
+	return false;
 }
 
 void boost_coro::wait_trig(async_trig_handle<>& th)
@@ -989,19 +989,13 @@ bool boost_coro::timed_pump_msg(coro_msg_handle<>& cmh, int tm)
 	assert(cmh._coroID == _coroID);
 	assert_enter();
 	assert(cmh._pIsClosed);
-	if (0 == cmh.count)
-	{
-		cmh._waiting = true;
-		if (!pump_msg_push(cmh, tm))
-		{
-			return false;
-		}
-	}
-	else
+	if (cmh.count)
 	{
 		cmh.count--;
+		return true;
 	}
-	return true;
+	cmh._waiting = true;
+	return pump_msg_push(cmh, tm);
 }
 
 void boost_coro::pump_msg(coro_msg_handle<>& cmh)
@@ -1014,7 +1008,17 @@ bool boost_coro::pump_msg_push(param_list_base& pm, int tm)
 	if (tm >= 0)
 	{
 		pm._hasTm = true;
-		delay_trig(tm, boost::bind(&boost_coro::pump_msg_timeout, shared_from_this(), boost::ref(pm)));
+		coro_handle shared_this = shared_from_this();
+		delay_trig(tm, [this, shared_this, &pm]()
+		{
+			if (!_quited)
+			{
+				assert(pm._waiting);
+				pm._waiting = false;
+				pm._timeout = true;
+				pull_yield();
+			}
+		});
 	}
 	push_yield();
 	assert(!_quited);
@@ -1025,17 +1029,6 @@ bool boost_coro::pump_msg_push(param_list_base& pm, int tm)
 		return false;
 	} 
 	return true;
-}
-
-void boost_coro::pump_msg_timeout(param_list_base& pm)
-{
-	if (!_quited)
-	{
-		assert(pm._waiting);
-		pm._waiting = false;
-		pm._timeout = true;
-		pull_yield();
-	}
 }
 
 void boost_coro::trig_handler()
@@ -1053,7 +1046,17 @@ bool boost_coro::async_trig_push(async_trig_base& th, int tm, void* pref)
 		if (tm >= 0)
 		{
 			th._hasTm = true;
-			delay_trig(tm, boost::bind(&boost_coro::async_trig_timeout, shared_from_this(), boost::ref(th)));
+			coro_handle shared_this = shared_from_this();
+			delay_trig(tm, [this, shared_this, &th]()
+			{
+				if (!_quited)
+				{
+					assert(th._waiting);
+					th._waiting = false;
+					th._timeout = true;
+					pull_yield();
+				}
+			});
 		}
 		push_yield();
 		if (th._timeout)
@@ -1068,17 +1071,6 @@ bool boost_coro::async_trig_push(async_trig_base& th, int tm, void* pref)
 		th.get_param(pref);
 	}
 	return true;
-}
-
-void boost_coro::async_trig_timeout(async_trig_base& th)
-{
-	if (!_quited)
-	{
-		assert(th._waiting);
-		th._waiting = false;
-		th._timeout = true;
-		pull_yield();
-	}
 }
 
 void boost_coro::async_trig_post_yield(async_trig_base& th, void* cref)
@@ -1777,8 +1769,8 @@ void boost_coro::expires_timer()
 	coro_handle shared_this = shared_from_this();
 	boost::system::error_code ec;
 	_timerSleep->_timer.expires_from_now(boost::chrono::microseconds(_timerSleep->_timerTime.total_microseconds()), ec);
-	_timerSleep->_timer.async_wait(_strand->wrap_post((boost::function<void (const boost::system::error_code&)>)
-		[this, shared_this, tid](const boost::system::error_code& err)
+	_timerSleep->_timer.async_wait(_strand->wrap_post<boost::function<void (const boost::system::error_code&)> >
+		([this, shared_this, tid](const boost::system::error_code& err)
 	{
 		if (!err && _timerSleep && tid == _timerSleep->_timerCount)
 		{
