@@ -2,6 +2,7 @@
 #define __IOS_PROXY_H
 
 #include <boost/asio/io_service.hpp>
+#include <boost/atomic/atomic.hpp>
 #include <boost/thread.hpp>
 #include <set>
 #include <list>
@@ -103,11 +104,11 @@ private:
 private:
 	bool _opend;
 	size_t _implCount;
-	long long _runCount;
 	priority _priority;
 	std::set<boost::thread::id> _threadIDs;
 	std::list<void*> _implPool;
 	std::vector<HANDLE> _handleList;
+	boost::atomic<long long> _runCount;
 	boost::mutex _ctrlMutex;
 	boost::mutex _runMutex;
 	boost::mutex _implMutex;

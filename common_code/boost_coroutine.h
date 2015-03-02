@@ -68,9 +68,9 @@ struct msg_param_base
 template <typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
 struct msg_param: public msg_param_base
 {
-	typedef typename boost::function<void (T0, T1, T2, T3)> overflow_notify;
-	typedef typename ref_ex<T0, T1, T2, T3> ref_type;
-	typedef typename const_ref_ex<T0, T1, T2, T3> const_ref_type;
+	typedef boost::function<void (T0, T1, T2, T3)> overflow_notify;
+	typedef ref_ex<T0, T1, T2, T3> ref_type;
+	typedef const_ref_ex<T0, T1, T2, T3> const_ref_type;
 
 	msg_param()
 	{
@@ -119,9 +119,9 @@ struct msg_param: public msg_param_base
 template <typename T0, typename T1, typename T2>
 struct msg_param<T0, T1, T2, void>: public msg_param_base
 {
-	typedef typename boost::function<void (T0, T1, T2)> overflow_notify;
-	typedef typename ref_ex<T0, T1, T2> ref_type;
-	typedef typename const_ref_ex<T0, T1, T2> const_ref_type;
+	typedef boost::function<void (T0, T1, T2)> overflow_notify;
+	typedef ref_ex<T0, T1, T2> ref_type;
+	typedef const_ref_ex<T0, T1, T2> const_ref_type;
 
 	msg_param()
 	{
@@ -167,9 +167,9 @@ struct msg_param<T0, T1, T2, void>: public msg_param_base
 template <typename T0, typename T1>
 struct msg_param<T0, T1, void, void>: public msg_param_base
 {
-	typedef typename boost::function<void (T0, T1)> overflow_notify;
-	typedef typename ref_ex<T0, T1> ref_type;
-	typedef typename const_ref_ex<T0, T1> const_ref_type;
+	typedef boost::function<void (T0, T1)> overflow_notify;
+	typedef ref_ex<T0, T1> ref_type;
+	typedef const_ref_ex<T0, T1> const_ref_type;
 
 	msg_param()
 	{
@@ -212,9 +212,9 @@ struct msg_param<T0, T1, void, void>: public msg_param_base
 template <typename T0>
 struct msg_param<T0, void, void, void>: public msg_param_base
 {
-	typedef typename boost::function<void (T0)> overflow_notify;
-	typedef typename ref_ex<T0> ref_type;
-	typedef typename const_ref_ex<T0> const_ref_type;
+	typedef boost::function<void (T0)> overflow_notify;
+	typedef ref_ex<T0> ref_type;
+	typedef const_ref_ex<T0> const_ref_type;
 
 	msg_param()
 	{
@@ -530,7 +530,7 @@ class coro_msg_limit_handle: public param_list_limit<msg_param<T0, T1, T2, T3> >
 {
 	friend boost_coro;
 public:
-	typedef typename param_list_limit<msg_param<T0, T1, T2, T3> >::overflow_notify overflow_notify;
+	typedef typename msg_param<T0, T1, T2, T3>::overflow_notify overflow_notify;
 	typedef boost::shared_ptr<coro_msg_limit_handle<T0, T1, T2, T3> > ptr;
 
 	/*!
@@ -554,7 +554,7 @@ class coro_msg_limit_handle<T0, T1, T2, void>: public param_list_limit<msg_param
 {
 	friend boost_coro;
 public:
-	typedef typename param_list_limit<msg_param<T0, T1, T2> >::overflow_notify overflow_notify;
+	typedef typename msg_param<T0, T1, T2>::overflow_notify overflow_notify;
 	typedef boost::shared_ptr<coro_msg_limit_handle<T0, T1, T2> > ptr;
 
 	coro_msg_limit_handle(int maxBuff,  const overflow_notify& ofh)
@@ -574,7 +574,7 @@ class coro_msg_limit_handle<T0, T1, void, void>: public param_list_limit<msg_par
 {
 	friend boost_coro;
 public:
-	typedef typename param_list_limit<msg_param<T0, T1> >::overflow_notify overflow_notify;
+	typedef typename msg_param<T0, T1>::overflow_notify overflow_notify;
 	typedef boost::shared_ptr<coro_msg_limit_handle<T0, T1> > ptr;
 
 	coro_msg_limit_handle(int maxBuff,  const overflow_notify& ofh)
@@ -594,7 +594,7 @@ class coro_msg_limit_handle<T0, void, void, void>: public param_list_limit<msg_p
 {
 	friend boost_coro;
 public:
-	typedef typename param_list_limit<msg_param<T0> >::overflow_notify overflow_notify;
+	typedef typename msg_param<T0>::overflow_notify overflow_notify;
 	typedef boost::shared_ptr<coro_msg_limit_handle<T0> > ptr;
 
 	coro_msg_limit_handle(int maxBuff,  const overflow_notify& ofh)
@@ -638,7 +638,7 @@ class async_trig_handle: public async_trig_base
 {
 	friend boost_coro;
 	typedef ref_ex<T0, T1, T2, T3> ref_type;
-	typedef const_ref_ex<T0, T1, T2, T3> const_ref_ex;
+	typedef const_ref_ex<T0, T1, T2, T3> const_ref_type;
 public:
 	typedef boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> > ptr;
 
@@ -655,13 +655,13 @@ public:
 	void set_ref(void* cref)
 	{
 		assert(_dstRefPt);
-		*(ref_type*)_dstRefPt = *(const_ref_ex*)cref;
+		*(ref_type*)_dstRefPt = *(const_ref_type*)cref;
 	}
 
 	void set_temp(void* cref)
 	{
 		assert(!_waiting);
-		_temp = *(const_ref_ex*)cref;
+		_temp = *(const_ref_type*)cref;
 	}
 private:
 	msg_param<T0, T1, T2, T3> _temp;
@@ -672,7 +672,7 @@ class async_trig_handle<T0, T1, T2, void>: public async_trig_base
 {
 	friend boost_coro;
 	typedef ref_ex<T0, T1, T2> ref_type;
-	typedef const_ref_ex<T0, T1, T2> const_ref_ex;
+	typedef const_ref_ex<T0, T1, T2> const_ref_type;
 public:
 	typedef boost::shared_ptr<async_trig_handle<T0, T1, T2> > ptr;
 
@@ -689,13 +689,13 @@ public:
 	void set_ref(void* cref)
 	{
 		assert(_dstRefPt);
-		*(ref_type*)_dstRefPt = *(const_ref_ex*)cref;
+		*(ref_type*)_dstRefPt = *(const_ref_type*)cref;
 	}
 
 	void set_temp(void* cref)
 	{
 		assert(!_waiting);
-		_temp = *(const_ref_ex*)cref;
+		_temp = *(const_ref_type*)cref;
 	}
 private:
 	msg_param<T0, T1, T2> _temp;
@@ -706,7 +706,7 @@ class async_trig_handle<T0, T1, void, void>: public async_trig_base
 {
 	friend boost_coro;
 	typedef ref_ex<T0, T1> ref_type;
-	typedef const_ref_ex<T0, T1> const_ref_ex;
+	typedef const_ref_ex<T0, T1> const_ref_type;
 public:
 	typedef boost::shared_ptr<async_trig_handle<T0, T1> > ptr;
 
@@ -723,13 +723,13 @@ public:
 	void set_ref(void* cref)
 	{
 		assert(_dstRefPt);
-		*(ref_type*)_dstRefPt = *(const_ref_ex*)cref;
+		*(ref_type*)_dstRefPt = *(const_ref_type*)cref;
 	}
 
 	void set_temp(void* cref)
 	{
 		assert(!_waiting);
-		_temp = *(const_ref_ex*)cref;
+		_temp = *(const_ref_type*)cref;
 	}
 private:
 	msg_param<T0, T1> _temp;
@@ -740,7 +740,7 @@ class async_trig_handle<T0, void, void, void>: public async_trig_base
 {
 	friend boost_coro;
 	typedef ref_ex<T0> ref_type;
-	typedef const_ref_ex<T0> const_ref_ex;
+	typedef const_ref_ex<T0> const_ref_type;
 public:
 	typedef boost::shared_ptr<async_trig_handle<T0> > ptr;
 
@@ -757,13 +757,13 @@ public:
 	void set_ref(void* cref)
 	{
 		assert(_dstRefPt);
-		*(ref_type*)_dstRefPt = *(const_ref_ex*)cref;
+		*(ref_type*)_dstRefPt = *(const_ref_type*)cref;
 	}
 
 	void set_temp(void* cref)
 	{
 		assert(!_waiting);
-		_temp = *(const_ref_ex*)cref;
+		_temp = *(const_ref_type*)cref;
 	}
 private:
 	msg_param<T0> _temp;
@@ -1115,13 +1115,13 @@ public:
 	{
 		assert(th._coroID == _coroID);
 		assert_enter();
-		async_trig_handle<T0>::ref_type ref(r0);
-		if (!async_trig_push(th, tm, &ref))
+		ref_ex<T0> ref(r0);
+		if (async_trig_push(th, tm, &ref))
 		{
-			return false;
+			close_trig(th);
+			return true;
 		}
-		close_trig(th);
-		return true;
+		return false;
 	}
 
 	template <typename T0>
@@ -1143,13 +1143,13 @@ public:
 	{
 		assert(th._coroID == _coroID);
 		assert_enter();
-		async_trig_handle<T0, T1>::ref_type ref(r0, r1);
-		if (!async_trig_push(th, tm, &ref))
+		ref_ex<T0, T1> ref(r0, r1);
+		if (async_trig_push(th, tm, &ref))
 		{
-			return false;
+			close_trig(th);
+			return true;
 		}
-		close_trig(th);
-		return true;
+		return false;
 	}
 
 	template <typename T0, typename T1, typename T2>
@@ -1163,13 +1163,13 @@ public:
 	{
 		assert(th._coroID == _coroID);
 		assert_enter();
-		async_trig_handle<T0, T1, T2>::ref_type ref(r0, r1, r2);
-		if (!async_trig_push(th, tm, &ref))
+		ref_ex<T0, T1, T2> ref(r0, r1, r2);
+		if (async_trig_push(th, tm, &ref))
 		{
-			return false;
+			close_trig(th);
+			return true;
 		}
-		close_trig(th);
-		return true;
+		return false;
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
@@ -1183,13 +1183,13 @@ public:
 	{
 		assert(th._coroID == _coroID);
 		assert_enter();
-		async_trig_handle<T0, T1, T2, T3>::ref_type ref(r0, r1, r2, r3);
-		if (!async_trig_push(th, tm, &ref))
+		ref_ex<T0, T1, T2, T3> ref(r0, r1, r2, r3);
+		if (async_trig_push(th, tm, &ref))
 		{
-			return false;
+			close_trig(th);
+			return true;
 		}
-		close_trig(th);
-		return true;
+		return false;
 	}
 
 	/*!
@@ -1494,12 +1494,11 @@ public:
 	template <typename T0>
 	__yield_interrupt bool timed_pump_msg(param_list<msg_param<T0> >& cmh, __out T0& r0, int tm)
 	{
-		typedef typename msg_param<T0> param_type;
 		assert(cmh._coroID == _coroID);
 		assert_enter();
 		assert(cmh._pIsClosed);
-		param_type::ref_type ref(r0);
-		param_type* param = cmh.front();
+		ref_ex<T0> ref(r0);
+		msg_param<T0>* param = cmh.front();
 		if (param)
 		{
 			param->get_param(ref);
@@ -1508,11 +1507,7 @@ public:
 		}
 		cmh._waiting = true;
 		cmh.set_ref(ref);
-		if (!pump_msg_push(cmh, tm))
-		{
-			return false;
-		}
-		return true;
+		return pump_msg_push(cmh, tm);
 	}
 
 	template <typename T0>
@@ -1532,12 +1527,11 @@ public:
 	template <typename T0, typename T1>
 	__yield_interrupt bool timed_pump_msg(param_list<msg_param<T0, T1> >& cmh, __out T0& r0, __out T1& r1, int tm)
 	{
-		typedef typename msg_param<T0, T1> param_type;
 		assert(cmh._coroID == _coroID);
 		assert_enter();
 		assert(cmh._pIsClosed);
-		param_type::ref_type ref(r0, r1);
-		param_type* param = cmh.front();
+		ref_ex<T0, T1> ref(r0, r1);
+		msg_param<T0, T1>* param = cmh.front();
 		if (param)
 		{
 			param->get_param(ref);
@@ -1546,11 +1540,7 @@ public:
 		}
 		cmh._waiting = true;
 		cmh.set_ref(ref);
-		if (!pump_msg_push(cmh, tm))
-		{
-			return false;
-		}
-		return true;
+		return pump_msg_push(cmh, tm);
 	}
 
 	template <typename T0, typename T1, typename T2>
@@ -1562,12 +1552,11 @@ public:
 	template <typename T0, typename T1, typename T2>
 	__yield_interrupt bool timed_pump_msg(param_list<msg_param<T0, T1, T2> >& cmh, __out T0& r0, __out T1& r1, __out T2& r2, int tm)
 	{
-		typedef typename msg_param<T0, T1, T2> param_type;
 		assert(cmh._coroID == _coroID);
 		assert_enter();
 		assert(cmh._pIsClosed);
-		param_type::ref_type ref(r0, r1, r2);
-		param_type* param = cmh.front();
+		ref_ex<T0, T1, T2> ref(r0, r1, r2);
+		msg_param<T0, T1, T2>* param = cmh.front();
 		if (param)
 		{
 			param->get_param(ref);
@@ -1576,11 +1565,7 @@ public:
 		}
 		cmh._waiting = true;
 		cmh.set_ref(ref);
-		if (!pump_msg_push(cmh, tm))
-		{
-			return false;
-		}
-		return true;
+		return pump_msg_push(cmh, tm);
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
@@ -1592,12 +1577,11 @@ public:
 	template <typename T0, typename T1, typename T2, typename T3>
 	__yield_interrupt bool timed_pump_msg(param_list<msg_param<T0, T1, T2, T3> >& cmh, __out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3, int tm)
 	{
-		typedef typename msg_param<T0, T1, T2, T3> param_type;
 		assert(cmh._coroID == _coroID);
 		assert_enter();
 		assert(cmh._pIsClosed);
-		param_type::ref_type ref(r0, r1, r2, r3);
-		param_type* param = cmh.front();
+		ref_ex<T0, T1, T2, T3> ref(r0, r1, r2, r3);
+		msg_param<T0, T1, T2, T3>* param = cmh.front();
 		if (param)
 		{
 			param->get_param(ref);
@@ -1606,16 +1590,10 @@ public:
 		}
 		cmh._waiting = true;
 		cmh.set_ref(ref);
-		if (!pump_msg_push(cmh, tm))
-		{
-			return false;
-		}
-		return true;
+		return pump_msg_push(cmh, tm);
 	}
 private:
 	bool pump_msg_push(param_list_base& pm, int tm);
-
-	void pump_msg_timeout(param_list_base& pm);
 
 	void trig_handler();
 
@@ -1729,8 +1707,6 @@ private:
 
 	bool async_trig_push(async_trig_base& th, int tm, void* pref);
 
-	void async_trig_timeout(async_trig_base& th);
-
 	void async_trig_post_yield(async_trig_base& th, void* cref);
 
 	void async_trig_pull_yield(async_trig_base& th, void* cref);
@@ -1745,7 +1721,7 @@ private:
 		{
 			if (!_quited && !(*pIsClosed) && !th._notify)
 			{
-				async_trig_handle<T0>::const_ref_ex cref(p0);
+				const_ref_ex<T0> cref(p0);
 				async_trig_post_yield(th, &cref);
 			}
 		}
@@ -1762,7 +1738,7 @@ private:
 		{
 			if (!_quited && !(*pIsClosed) && !th->_notify)
 			{
-				async_trig_handle<T0>::const_ref_ex cref(p0);
+				const_ref_ex<T0> cref(p0);
 				async_trig_post_yield(*th, &cref);
 			}
 		}
@@ -1778,7 +1754,7 @@ private:
 		assert(_strand->running_in_this_thread());
 		if (!_quited && !(*pIsClosed) && !th._notify)
 		{
-			async_trig_handle<T0>::const_ref_ex cref(p0);
+			const_ref_ex<T0> cref(p0);
 			async_trig_pull_yield(th, &cref);
 		}
 	}
@@ -1796,7 +1772,7 @@ private:
 		{
 			if (!_quited && !(*pIsClosed) && !th._notify)
 			{
-				async_trig_handle<T0, T1>::const_ref_ex cref(p0, p1);
+				const_ref_ex<T0, T1> cref(p0, p1);
 				async_trig_post_yield(th, &cref);
 			}
 		}
@@ -1813,7 +1789,7 @@ private:
 		{
 			if (!_quited && !(*pIsClosed) && !th->_notify)
 			{
-				async_trig_handle<T0, T1>::const_ref_ex cref(p0, p1);
+				const_ref_ex<T0, T1> cref(p0, p1);
 				async_trig_post_yield(*th, &cref);
 			}
 		}
@@ -1829,7 +1805,7 @@ private:
 		assert(_strand->running_in_this_thread());
 		if (!_quited && !(*pIsClosed) && !th._notify)
 		{
-			async_trig_handle<T0, T1>::const_ref_ex cref(p0, p1);
+			const_ref_ex<T0, T1> cref(p0, p1);
 			async_trig_pull_yield(th, &cref);
 		}
 	}
@@ -1847,7 +1823,7 @@ private:
 		{
 			if (!_quited && !(*pIsClosed) && !th._notify)
 			{
-				async_trig_handle<T0, T1, T2>::const_ref_ex cref(p0, p1, p2);
+				const_ref_ex<T0, T1, T2> cref(p0, p1, p2);
 				async_trig_post_yield(th, &cref);
 			}
 		}
@@ -1865,7 +1841,7 @@ private:
 		{
 			if (!_quited && !(*pIsClosed) && !th->_notify)
 			{
-				async_trig_handle<T0, T1, T2>::const_ref_ex cref(p0, p1, p2);
+				const_ref_ex<T0, T1, T2> cref(p0, p1, p2);
 				async_trig_post_yield(*th, &cref);
 			}
 		}
@@ -1882,7 +1858,7 @@ private:
 		assert(_strand->running_in_this_thread());
 		if (!_quited && !(*pIsClosed) && !th._notify)
 		{
-			async_trig_handle<T0, T1, T2>::const_ref_ex cref(p0, p1, p2);
+			const_ref_ex<T0, T1, T2> cref(p0, p1, p2);
 			async_trig_pull_yield(th, &cref);
 		}
 	}
@@ -1900,7 +1876,7 @@ private:
 		{
 			if (!_quited && !(*pIsClosed) && !th._notify)
 			{
-				async_trig_handle<T0, T1, T2, T3>::const_ref_ex cref(p0, p1, p2, p3);
+				const_ref_ex<T0, T1, T2, T3> cref(p0, p1, p2, p3);
 				async_trig_post_yield(th, &cref);
 			}
 		}
@@ -1918,7 +1894,7 @@ private:
 		{
 			if (!_quited && !(*pIsClosed) && !th->_notify)
 			{
-				async_trig_handle<T0, T1, T2, T3>::const_ref_ex cref(p0, p1, p2, p3);
+				const_ref_ex<T0, T1, T2, T3> cref(p0, p1, p2, p3);
 				async_trig_post_yield(*th, &cref);
 			}
 		}
@@ -1935,7 +1911,7 @@ private:
 		assert(_strand->running_in_this_thread());
 		if (!_quited && !(*pIsClosed) && !th._notify)
 		{
-			async_trig_handle<T0, T1, T2, T3>::const_ref_ex cref(p0, p1, p2, p3);
+			const_ref_ex<T0, T1, T2, T3> cref(p0, p1, p2, p3);
 			async_trig_pull_yield(th, &cref);
 		}
 	}
@@ -1955,12 +1931,13 @@ private:
 	void notify_handler(boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0> >& cmh, const T0& p0)
 	{
 		typedef msg_param<T0> msg_type;
+		typedef const_ref_ex<T0> const_ref_type;
 
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*pIsClosed))
 			{
-				check_run3<msg_type, msg_type::const_ref_type>(cmh, msg_type::const_ref_type(p0));
+				check_run3<msg_type, const_ref_type>(cmh, const_ref_type(p0));
 			}
 		} 
 		else
@@ -1974,12 +1951,13 @@ private:
 	void notify_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<msg_param<T0> > >& cmh, const T0& p0)
 	{
 		typedef msg_param<T0> msg_type;
+		typedef const_ref_ex<T0> const_ref_type;
 
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*pIsClosed))
 			{
-				check_run3<msg_type, msg_type::const_ref_type>(*cmh, msg_type::const_ref_type(p0));
+				check_run3<msg_type, const_ref_type>(*cmh, const_ref_type(p0));
 			}
 		} 
 		else
@@ -1993,12 +1971,13 @@ private:
 	void notify_handler(boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0, T1> >& cmh, const T0& p0, const T1& p1)
 	{
 		typedef msg_param<T0, T1> msg_type;
+		typedef const_ref_ex<T0, T1> const_ref_type;
 
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*pIsClosed))
 			{
-				check_run3<msg_type, msg_type::const_ref_type>(cmh, msg_type::const_ref_type(p0, p1));
+				check_run3<msg_type, const_ref_type>(cmh, const_ref_type(p0, p1));
 			}
 		} 
 		else
@@ -2012,12 +1991,13 @@ private:
 	void notify_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<msg_param<T0, T1> > >& cmh, const T0& p0, const T1& p1)
 	{
 		typedef msg_param<T0, T1> msg_type;
+		typedef const_ref_ex<T0, T1> const_ref_type;
 
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*pIsClosed))
 			{
-				check_run3<msg_type, msg_type::const_ref_type>(*cmh, msg_type::const_ref_type(p0, p1));
+				check_run3<msg_type, const_ref_type>(*cmh, const_ref_type(p0, p1));
 			}
 		} 
 		else
@@ -2031,12 +2011,13 @@ private:
 	void notify_handler(boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0, T1, T2> >& cmh, const T0& p0, const T1& p1, const T2& p2)
 	{
 		typedef msg_param<T0, T1, T2> msg_type;
+		typedef const_ref_ex<T0, T1, T2> const_ref_type;
 
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*pIsClosed))
 			{
-				check_run3<msg_type, msg_type::const_ref_type>(cmh, msg_type::const_ref_type(p0, p1, p2));
+				check_run3<msg_type, const_ref_type>(cmh, const_ref_type(p0, p1, p2));
 			}
 		} 
 		else
@@ -2050,12 +2031,13 @@ private:
 	void notify_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<msg_param<T0, T1, T2> > >& cmh, const T0& p0, const T1& p1, const T2& p2)
 	{
 		typedef msg_param<T0, T1, T2> msg_type;
+		typedef const_ref_ex<T0, T1, T2> const_ref_type;
 
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*pIsClosed))
 			{
-				check_run3<msg_type, msg_type::const_ref_type>(*cmh, msg_type::const_ref_type(p0, p1, p2));
+				check_run3<msg_type, const_ref_type>(*cmh, const_ref_type(p0, p1, p2));
 			}
 		} 
 		else
@@ -2069,12 +2051,13 @@ private:
 	void notify_handler(boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0, T1, T2, T3> >& cmh, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
 		typedef msg_param<T0, T1, T2, T3> msg_type;
+		typedef const_ref_ex<T0, T1, T2, T3> const_ref_type;
 
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*pIsClosed))
 			{
-				check_run3<msg_type, msg_type::const_ref_type>(cmh, msg_type::const_ref_type(p0, p1, p2, p3));
+				check_run3<msg_type, const_ref_type>(cmh, const_ref_type(p0, p1, p2, p3));
 			}
 		} 
 		else
@@ -2088,12 +2071,13 @@ private:
 	void notify_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<msg_param<T0, T1, T2, T3> > >& cmh, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
 		typedef msg_param<T0, T1, T2, T3> msg_type;
+		typedef const_ref_ex<T0, T1, T2, T3> const_ref_type;
 
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*pIsClosed))
 			{
-				check_run3<msg_type, msg_type::const_ref_type>(*cmh, msg_type::const_ref_type(p0, p1, p2, p3));
+				check_run3<msg_type, const_ref_type>(*cmh, const_ref_type(p0, p1, p2, p3));
 			}
 		} 
 		else
