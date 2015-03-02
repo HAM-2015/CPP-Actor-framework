@@ -22,8 +22,7 @@ coro_stack_pool::coro_stack_pool()
 	{
 		_stackPool[i] = new stack_pool_pck();
 	}
-	boost::thread rh(&coro_stack_pool::clearThread, this);
-	_clearThread.swap(rh);
+	_clearThread.swap(boost::thread(&coro_stack_pool::clearThread, this));
 }
 
 coro_stack_pool::~coro_stack_pool()
@@ -61,7 +60,7 @@ void coro_stack_pool::enable()
 
 bool coro_stack_pool::isEnable()
 {
-	return (bool)_coroStackPool;
+	return _coroStackPool;
 }
 
 stack_pck coro_stack_pool::getStack( size_t size )
