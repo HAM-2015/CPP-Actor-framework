@@ -12,7 +12,7 @@ https://github.com/HAM-2015/CPP-Actor-framework
 添加定时清理Actor栈池.
 
 2015-02-05
-增加外部可以直接拿另一个Acotr句柄创建一个消息管道或通知句柄.
+增加外部可以直接拿另一个Actor句柄创建一个消息管道或通知句柄.
 
 2015-02-01
 添加socket测试示例.
