@@ -151,6 +151,7 @@
     <ClCompile Include="..\common_code\coro_stack.cpp" />
     <ClCompile Include="..\common_code\ios_proxy.cpp" />
     <ClCompile Include="..\common_code\shared_data.cpp" />
+    <ClCompile Include="..\common_code\shared_strand.cpp" />
     <ClCompile Include="..\common_code\time_info.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>

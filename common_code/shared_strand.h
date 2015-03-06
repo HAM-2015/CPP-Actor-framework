@@ -26,34 +26,21 @@ typedef boost::shared_ptr<boost_strand> shared_strand;
 /*!
 @brief 重新定义dispatch实现，所有不同strand中以消息方式进行函数调用
 */
+class boost_strand
+{
 #ifdef ENABLE_STRAND_IMPL_POOL
-class boost_strand: public strand_ex
-{
-private:
-	boost_strand(ios_proxy& iosProxy)
-		: strand_ex(iosProxy), _iosProxy(iosProxy)
-
-#else //defined ENABLE_SHARE_STRAND_IMPL
-
-class boost_strand: public boost::asio::strand
-{
-private:
-	boost_strand(ios_proxy& iosProxy)
-		: boost::asio::strand(iosProxy), _iosProxy(iosProxy)
-
-#endif //end ENABLE_SHARE_STRAND_IMPL
-
-	{
-
-	}
+	typedef strand_ex strand_type;
+#else
+	typedef boost::asio::strand strand_type;
+#endif
+protected:
+	boost_strand();
 public:
-	static shared_strand create(ios_proxy& iosProxy)
-	{
-		return shared_strand(new boost_strand(iosProxy));
-	}
+	virtual ~boost_strand();
+	static shared_strand create(ios_proxy& iosProxy);
 public:
 	/*!
-	@brief 重定义原dispatch实现，如果在本strand中调用则直接执行，否则添加到队列中等待执行
+	@brief 如果在本strand中调用则直接执行，否则添加到队列中等待执行
 	@param handler 被调用函数
 	*/
 	template <typename Handler>
@@ -67,6 +54,26 @@ public:
 		{
 			post(handler);
 		}
+	}
+
+	/*!
+	@brief 添加一个任务到strand队列
+	*/
+	template <typename Handler>
+	void post(const Handler& handler)
+	{
+#ifndef ENABLE_MFC_CORO
+		_strand->post(handler);
+#else
+		if (_strand)
+		{
+			_strand->post(handler);
+		}
+		else
+		{
+			_post(handler);
+		}
+#endif
 	}
 
 	/*!
@@ -90,51 +97,46 @@ public:
 	/*!
 	@brief 复制一个依赖同一个ios的strand
 	*/
-	shared_strand clone()
-	{
-		return create(_iosProxy);
-	}
+	virtual shared_strand clone();
 
 	/*!
 	@brief 检查是否在所依赖ios线程中执行
 	@return true 在, false 不在
 	*/
-	bool in_this_ios()
-	{
-		return _iosProxy.runningInThisIos();
-	}
+	virtual bool in_this_ios();
 
 	/*!
 	@brief 依赖的ios调度器运行线程数
 	*/
-	size_t ios_thread_number()
-	{
-		return _iosProxy.threadNumber();
-	}
+	size_t ios_thread_number();
+
+	/*!
+	@brief 判断是否在本strand中运行
+	*/
+	virtual bool running_in_this_thread();
 
 	/*!
 	@brief 获取当前调度器代理
 	*/
-	ios_proxy& get_ios_proxy()
-	{
-		return _iosProxy;
-	}
-private:
-	ios_proxy& _iosProxy;
+	ios_proxy& get_ios_proxy();
+
+	/*!
+	@brief 获取当前调度器
+	*/
+	boost::asio::io_service& get_io_service();
+
+#ifdef ENABLE_MFC_CORO
+	virtual void _post(const boost::function<void ()>& h);
+#endif
+protected:
+	ios_proxy* _iosProxy;
+	strand_type* _strand;
 public:
 	/*!
 	@brief 在一个strand中调用某个函数，直到这个函数被执行完成后才返回
 	@warning 此函数有可能使整个程序陷入死锁，只能在与strand所依赖的ios无关线程中调用
 	*/
-	static void syncInvoke(shared_strand strand, const boost::function<void ()>& h)
-	{
-		assert(!strand->in_this_ios());
-		boost::mutex mutex;
-		boost::condition_variable con;
-		boost::unique_lock<boost::mutex> ul(mutex);
-		strand->post(boost::bind(&syncInvoke_proxy, boost::ref(h), boost::ref(mutex), boost::ref(con)));
-		con.wait(ul);
-	}
+	static void syncInvoke(shared_strand strand, const boost::function<void ()>& h);
 
 	/*!
 	@brief 同上，带返回值
@@ -162,18 +164,9 @@ public:
 		strand->post(boost::bind(&asyncInvoke_proxy_ret<R>, h, cb));
 	}
 
-	static void asyncInvokeVoid(shared_strand strand, const boost::function<void ()>& h, const boost::function<void ()>& cb)
-	{
-		strand->post(boost::bind(&asyncInvoke_proxy_ret_void, h, cb));
-	}
+	static void asyncInvokeVoid(shared_strand strand, const boost::function<void ()>& h, const boost::function<void ()>& cb);
 private:
-	static void syncInvoke_proxy(const boost::function<void ()>& h, boost::mutex& mutex, boost::condition_variable& con)
-	{
-		h();
-		mutex.lock();
-		con.notify_one();
-		mutex.unlock();
-	}
+	static void syncInvoke_proxy(const boost::function<void ()>& h, boost::mutex& mutex, boost::condition_variable& con);
 
 	template <class R>
 	static void syncInvoke_proxy_ret(R& r, const boost::function<R ()>& h, boost::mutex& mutex, boost::condition_variable& con)
@@ -190,11 +183,7 @@ private:
 		cb(h());
 	}
 
-	static void asyncInvoke_proxy_ret_void(const boost::function<void ()>& h, const boost::function<void ()>& cb)
-	{
-		h();
-		cb();
-	}
+	static void asyncInvoke_proxy_ret_void(const boost::function<void ()>& h, const boost::function<void ()>& cb);
 };
 
 #endif

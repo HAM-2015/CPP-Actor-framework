@@ -71,9 +71,8 @@ void Csocket_testDlg::DoDataExchange(CDataExchange* pDX)
 BEGIN_MESSAGE_MAP(Csocket_testDlg, CDialogEx)
 	ON_WM_SYSCOMMAND()
 	ON_WM_PAINT()
-	ON_WM_DESTROY()
 	ON_WM_QUERYDRAGICON()
-	REGIEST_MODAL_RUN(Csocket_testDlg)
+	REGIEST_MFC_RUN(Csocket_testDlg)
 	ON_BN_CLICKED(IDC_BUTTON1, &Csocket_testDlg::OnBnClickedClientConnect)
 	ON_BN_CLICKED(IDC_BUTTON2, &Csocket_testDlg::OnBnClickedClientDisconnect)
 	ON_BN_CLICKED(IDC_BUTTON3, &Csocket_testDlg::OnBnClickedSendClientMsg)
@@ -200,13 +199,14 @@ void Csocket_testDlg::showSessionNum(int n)
 	_extSessNumEdit.SetWindowText(boost::lexical_cast<string>(n).c_str());
 }
 
-void Csocket_testDlg::OnDestroy()
+void Csocket_testDlg::OnCancel()
 {
 	OnBnClickedClientDisconnect();
 	OnBnClickedStopLst();
 	_ios.stop();
+	_isClosed = true;
 	CLEAR_MSG();
-	CDialogEx::OnDestroy();
+	CDialogEx::OnCancel();
 }
 
 void Csocket_testDlg::connectCoro(boost_coro* coro, boost::shared_ptr<client_param> param)

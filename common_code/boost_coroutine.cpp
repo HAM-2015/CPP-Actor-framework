@@ -12,22 +12,24 @@ typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> 
 
 #ifdef _DEBUG
 
-#define CHECK_EXCEPTION(h) try { (h)(); } catch (...) { assert(false); }
-#define CHECK_EXCEPTION1(h, p0) try { (h)(p0); } catch (...) { assert(false); }
-#define CHECK_EXCEPTION2(h, p0, p1) try { (h)(p0, p1); } catch (...) { assert(false); }
-#define CHECK_EXCEPTION3(h, p0, p1, p2) try { (h)(p0, p1, p2); } catch (...) { assert(false); }
+#define CHECK_EXCEPTION(__h) try { (__h)(); } catch (...) { assert(false); }
+#define CHECK_EXCEPTION1(__h, __p0) try { (__h)(__p0); } catch (...) { assert(false); }
+#define CHECK_EXCEPTION2(__h, __p0, __p1) try { (__h)(__p0, __p1); } catch (...) { assert(false); }
+#define CHECK_EXCEPTION3(__h, __p0, __p1, __p2) try { (__h)(__p0, __p1, __p2); } catch (...) { assert(false); }
 
 #else
 
-#define CHECK_EXCEPTION(h) (h)()
-#define CHECK_EXCEPTION1(h, p0) (h)(p0)
-#define CHECK_EXCEPTION2(h, p0, p1) (h)(p0, p1)
-#define CHECK_EXCEPTION3(h, p0, p1, p2) (h)(p0, p1, p2)
+#define CHECK_EXCEPTION(__h) (__h)()
+#define CHECK_EXCEPTION1(__h, __p0) (__h)(__p0)
+#define CHECK_EXCEPTION2(__h, __p0, __p1) (__h)(__p0, __p1)
+#define CHECK_EXCEPTION3(__h, __p0, __p1, __p2) (__h)(__p0, __p1, __p2)
 
 #endif //end _DEBUG
 
 //¶ÑÕ»µ×Ô¤Áô¿Õ¼ä£¬·ÀÖ¹±¬Õ»
 #define STACK_RESERVED_SPACE_SIZE		64
+//ÄÚ´æ±ß½ç¶ÔÆë
+#define MEM_ALIGN(__o, __a) (((__o) + ((__a)-1)) & (((__a)-1) ^ -1))
 
 /*!
 @brief Ð­³ÌÕ»·ÖÅäÆ÷
@@ -369,7 +371,6 @@ public:
 
 	void operator ()( coro_push_type& coroPush )
 	{
-		assert(_coro._strand->running_in_this_thread());
 		assert(!_coro._quited);
 		assert(_coro._mainFunc);
 		_coro._coroPush = &coroPush;
@@ -377,6 +378,7 @@ public:
 		{
 			DEBUG_OPERATION(_coro._inCoro = true);
 			_coro.push_yield();
+			assert(_coro._strand->running_in_this_thread());
 			_coro._mainFunc(&_coro);
 			DEBUG_OPERATION(_coro._inCoro = false);
 			_coro._quited = true;
@@ -473,40 +475,21 @@ boost_coro& boost_coro::operator =(const boost_coro&)
 	return *this;
 }
 
-coro_handle boost_coro::outside_create( shared_strand coroStrand, const main_func& mainFunc, size_t stackSize )
+coro_handle boost_coro::create( shared_strand coroStrand, const main_func& mainFunc, size_t stackSize )
 {
-	assert(!coroStrand->in_this_ios());
-	return boost_strand::syncInvoke<coro_handle>(coroStrand, boost::bind(&boost_coro::local_create, coroStrand, mainFunc, stackSize));
+	return create(coroStrand, mainFunc, boost::function<void (bool)>(), stackSize);
 }
 
-coro_handle boost_coro::local_create( shared_strand coroStrand, const main_func& mainFunc, size_t stackSize )
-{
-	return local_create(coroStrand, mainFunc, boost::function<void (bool)>(), stackSize);
-}
-
-coro_handle boost_coro::create(shared_strand coroStrand, const main_func& mainFunc, size_t stackSize)
-{
-	if (!coroStrand->in_this_ios())
-	{
-		return outside_create(coroStrand, mainFunc, stackSize);
-	} 
-	else
-	{
-		return local_create(coroStrand, mainFunc, stackSize);
-	}
-}
-
-coro_handle boost_coro::local_create( shared_strand coroStrand, const main_func& mainFunc,
+coro_handle boost_coro::create( shared_strand coroStrand, const main_func& mainFunc,
 	const boost::function<void (bool)>& cb, size_t stackSize )
 {
-	assert(coroStrand->running_in_this_thread());
 	assert(stackSize && stackSize <= 1024 kB && 0 == stackSize % (4 kB));
 	coro_handle newCoro;
 	if (coro_stack_pool::isEnable())
 	{
-		size_t coroSize = (sizeof(boost_coro)+(sizeof(void*)-1)) & ((sizeof(void*)-1) ^ -1);
-		size_t timerSize = (sizeof(timer_pck)+(sizeof(void*)-1)) & ((sizeof(void*)-1) ^ -1);
-		stack_pck stackMem = coro_stack_pool::getStack((coroSize+timerSize+stackSize + (4 kB-1)) & ((4 kB-1) ^ -1));
+		size_t coroSize = MEM_ALIGN(sizeof(boost_coro), sizeof(void*));
+		size_t timerSize = MEM_ALIGN(sizeof(timer_pck), sizeof(void*));
+		stack_pck stackMem = coro_stack_pool::getStack(MEM_ALIGN(coroSize+timerSize+stackSize, 4 kB));
 		size_t totalSize = stackMem._stack.size;
 		BYTE* stackTop = (BYTE*)stackMem._stack.sp;
 		newCoro = coro_handle(new(stackTop-coroSize) boost_coro, coro_free(stackMem));
@@ -545,13 +528,13 @@ coro_handle boost_coro::local_create( shared_strand coroStrand, const main_func&
 void boost_coro::async_create( shared_strand coroStrand, const main_func& mainFunc,
 	const boost::function<void (coro_handle)>& ch, size_t stackSize )
 {
-	boost_strand::asyncInvoke<coro_handle>(coroStrand, boost::bind(&local_create, coroStrand, mainFunc, stackSize), ch);
+	boost_strand::asyncInvoke<coro_handle>(coroStrand, boost::bind(&create, coroStrand, mainFunc, stackSize), ch);
 }
 
 void boost_coro::async_create( shared_strand coroStrand, const main_func& mainFunc,
 	const boost::function<void (coro_handle)>& ch, const boost::function<void (bool)>& cb, size_t stackSize )
 {
-	boost_strand::asyncInvoke<coro_handle>(coroStrand, boost::bind(&local_create, coroStrand, mainFunc, cb, stackSize), ch);
+	boost_strand::asyncInvoke<coro_handle>(coroStrand, boost::bind(&create, coroStrand, mainFunc, cb, stackSize), ch);
 }
 
 child_coro_handle::child_coro_param boost_coro::create_child_coro( shared_strand coroStrand, const main_func& mainFunc, size_t stackSize )
@@ -569,7 +552,7 @@ child_coro_handle::child_coro_param boost_coro::create_child_coro( shared_strand
 	}
 	else
 	{
-		coroHandle._coro = boost_coro::local_create(coroStrand, mainFunc, stackSize);
+		coroHandle._coro = boost_coro::create(coroStrand, mainFunc, stackSize);
 		_childCoroList.push_front(coroHandle._coro);
 		coroHandle._coroIt = _childCoroList.begin();
 		coroHandle._coro->_parentCoro = shared_from_this();
@@ -1640,7 +1623,8 @@ void boost_coro::pull_yield()
 
 void boost_coro::push_yield()
 {
-	assert_enter();
+	assert(!_quited);
+	assert(_inCoro);
 	_yieldCount++;
 	DEBUG_OPERATION(_inCoro = false);
 	(*(coro_push_type*)_coroPush)();

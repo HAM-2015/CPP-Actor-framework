@@ -33,6 +33,9 @@
     <ClCompile Include="..\common_code\time_info.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="..\common_code\shared_strand.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common_code\boost_coroutine.h">

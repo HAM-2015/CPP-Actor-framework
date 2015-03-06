@@ -7,8 +7,6 @@
 #include <boost/thread/condition_variable.hpp>
 #include <boost/atomic/atomic.hpp>
 #include <list>
-#include <vector>
-#include <map>
 
 using namespace std;
 
@@ -44,12 +42,12 @@ private:
 	bool _clearWait;
 	bool _isBack;
 	stack_pck _nextPck;
+	stack_pool_pck _stackPool[256];
 	boost::mutex _clearMutex;
 	boost::thread _clearThread;
 	boost::condition_variable _clearVar;
 	boost::atomic<int> _stackCount;
 	boost::atomic<size_t> _stackTotalSize;
-	vector<stack_pool_pck*> _stackPool;
 	static boost::shared_ptr<coro_stack_pool> _coroStackPool;
 };
 

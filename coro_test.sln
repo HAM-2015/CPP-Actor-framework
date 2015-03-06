@@ -5,6 +5,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "coro_test", "coro_test\coro
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "socket_test", "socket_test\socket_test.vcxproj", "{DFD5B3D4-3998-4ADB-8B95-8AD227E6AA63}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mfc_coro", "mfc_coro\mfc_coro.vcxproj", "{D90E6B6A-C592-4D83-8450-E38F847418D8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -27,6 +29,12 @@ Global
 		{DFD5B3D4-3998-4ADB-8B95-8AD227E6AA63}.Release|Win32.ActiveCfg = Release|Win32
 		{DFD5B3D4-3998-4ADB-8B95-8AD227E6AA63}.Release|Win32.Build.0 = Release|Win32
 		{DFD5B3D4-3998-4ADB-8B95-8AD227E6AA63}.Release|x64.ActiveCfg = Release|Win32
+		{D90E6B6A-C592-4D83-8450-E38F847418D8}.Debug|Win32.ActiveCfg = Debug|Win32
+		{D90E6B6A-C592-4D83-8450-E38F847418D8}.Debug|Win32.Build.0 = Debug|Win32
+		{D90E6B6A-C592-4D83-8450-E38F847418D8}.Debug|x64.ActiveCfg = Debug|Win32
+		{D90E6B6A-C592-4D83-8450-E38F847418D8}.Release|Win32.ActiveCfg = Release|Win32
+		{D90E6B6A-C592-4D83-8450-E38F847418D8}.Release|Win32.Build.0 = Release|Win32
+		{D90E6B6A-C592-4D83-8450-E38F847418D8}.Release|x64.ActiveCfg = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

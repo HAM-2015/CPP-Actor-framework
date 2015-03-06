@@ -5,7 +5,7 @@
 #pragma once
 #include "afxwin.h"
 #include "afxcmn.h"
-#include "bind_modal_run.h"
+#include "bind_mfc_run.h"
 #include "boost_coroutine.h"
 #include "msg_pipe.h"
 #include "shared_data.h"
@@ -16,7 +16,7 @@
 
 
 // Csocket_testDlg 对话框
-class Csocket_testDlg : public CDialogEx, bind_modal_run
+class Csocket_testDlg : public CDialogEx, bind_mfc_run
 {
 // 构造
 public:
@@ -58,7 +58,6 @@ protected:
 	virtual BOOL OnInitDialog();
 	afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
 	afx_msg void OnPaint();
-	afx_msg void OnDestroy();
 	afx_msg HCURSOR OnQueryDragIcon();
 	afx_msg void OnBnClickedClientConnect();
 	afx_msg void OnBnClickedClientDisconnect();
@@ -69,7 +68,7 @@ protected:
 	void showClientMsg(shared_data msg);
 	void showSessionNum(int n);
 	DECLARE_MESSAGE_MAP()
-	BIND_MODAL_RUN()
+	BIND_MFC_RUN()
 private:
 	void connectCoro(boost_coro* coro, boost::shared_ptr<client_param> param);
 	void newSession(boost::shared_ptr<socket_io> socket, msg_pipe<>::regist_reader closePump, boost::function<void ()> cb);

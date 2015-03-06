@@ -1,6 +1,6 @@
 #pragma once
 #include "afxwin.h"
-#include "bind_modal_run.h"
+#include "bind_mfc_run.h"
 #include "boost_coroutine.h"
 #include "msg_pipe.h"
 #include "socket_io.h"
@@ -9,7 +9,7 @@
 
 // dlg_session 对话框
 
-class dlg_session : public CDialogEx, bind_modal_run
+class dlg_session : public CDialogEx, bind_mfc_run
 {
 	DECLARE_DYNAMIC(dlg_session)
 
@@ -24,12 +24,11 @@ protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 支持
 	virtual BOOL OnInitDialog();
 
-	afx_msg void OnDestroy();
 	afx_msg void OnBnClickedSendMsg();
 	afx_msg void OnBnClickedClear();
 	void showClientMsg(shared_data msg);
 	DECLARE_MESSAGE_MAP()
-	BIND_MODAL_RUN()
+	BIND_MFC_RUN()
 private:
 	void sessionCoro(boost_coro* coro);
 	void lstClose(boost_coro* coro);

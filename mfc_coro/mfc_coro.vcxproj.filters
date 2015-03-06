@@ -14,25 +14,26 @@
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
     <Filter Include="头文件\common_code">
-      <UniqueIdentifier>{9c7e1184-c240-4c90-805f-865305b2bf8e}</UniqueIdentifier>
+      <UniqueIdentifier>{7d49dc78-03e1-4775-b842-a472cd8238d2}</UniqueIdentifier>
     </Filter>
     <Filter Include="源文件\common_code">
-      <UniqueIdentifier>{7f7e0463-1c7a-4ad3-8275-547d3cf7f8ff}</UniqueIdentifier>
+      <UniqueIdentifier>{813b4293-082a-4b16-8711-e6ed2b1533e1}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="res\socket_test.rc2">
+    <None Include="ReadMe.txt" />
+    <None Include="res\mfc_coro.rc2">
       <Filter>资源文件</Filter>
     </None>
-    <None Include="res\socket_test.ico">
+    <None Include="res\mfc_coro.ico">
       <Filter>资源文件</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="socket_test.h">
+    <ClInclude Include="mfc_coro.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="socket_testDlg.h">
+    <ClInclude Include="mfc_coroDlg.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="stdafx.h">
@@ -44,12 +45,6 @@
     <ClInclude Include="Resource.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="dlg_session.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common_code\acceptor_socket.h">
-      <Filter>头文件\common_code</Filter>
-    </ClInclude>
     <ClInclude Include="..\common_code\boost_coroutine.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
@@ -59,25 +54,13 @@
     <ClInclude Include="..\common_code\ios_proxy.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
-    <ClInclude Include="..\common_code\msg_pipe.h">
-      <Filter>头文件\common_code</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common_code\shared_data.h">
+    <ClInclude Include="..\common_code\mfc_strand.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
     <ClInclude Include="..\common_code\shared_strand.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
-    <ClInclude Include="..\common_code\socket_io.h">
-      <Filter>头文件\common_code</Filter>
-    </ClInclude>
     <ClInclude Include="..\common_code\strand_ex.h">
-      <Filter>头文件\common_code</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common_code\stream_io_base.h">
-      <Filter>头文件\common_code</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common_code\text_stream_io.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
     <ClInclude Include="..\common_code\time_info.h">
@@ -85,20 +68,14 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="socket_test.cpp">
+    <ClCompile Include="mfc_coro.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="socket_testDlg.cpp">
+    <ClCompile Include="mfc_coroDlg.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="stdafx.cpp">
       <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="dlg_session.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="..\common_code\acceptor_socket.cpp">
-      <Filter>源文件\common_code</Filter>
     </ClCompile>
     <ClCompile Include="..\common_code\boost_coroutine.cpp">
       <Filter>源文件\common_code</Filter>
@@ -109,24 +86,18 @@
     <ClCompile Include="..\common_code\ios_proxy.cpp">
       <Filter>源文件\common_code</Filter>
     </ClCompile>
-    <ClCompile Include="..\common_code\shared_data.cpp">
-      <Filter>源文件\common_code</Filter>
-    </ClCompile>
-    <ClCompile Include="..\common_code\socket_io.cpp">
-      <Filter>源文件\common_code</Filter>
-    </ClCompile>
-    <ClCompile Include="..\common_code\text_stream_io.cpp">
-      <Filter>源文件\common_code</Filter>
-    </ClCompile>
-    <ClCompile Include="..\common_code\time_info.cpp">
+    <ClCompile Include="..\common_code\mfc_strand.cpp">
       <Filter>源文件\common_code</Filter>
     </ClCompile>
     <ClCompile Include="..\common_code\shared_strand.cpp">
       <Filter>源文件\common_code</Filter>
     </ClCompile>
+    <ClCompile Include="..\common_code\time_info.cpp">
+      <Filter>源文件\common_code</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="socket_test.rc">
+    <ResourceCompile Include="mfc_coro.rc">
       <Filter>资源文件</Filter>
     </ResourceCompile>
   </ItemGroup>

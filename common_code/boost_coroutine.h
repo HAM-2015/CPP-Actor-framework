@@ -894,20 +894,10 @@ public:
 	static coro_handle create(shared_strand coroStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 
 	/*!
-	@brief 创建一个协程，在coroStrand所依赖的ios无关线程中使用
-	*/
-	static coro_handle outside_create(shared_strand coroStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-
-	/*!
-	@brief 创建一个协程，在本coroStrand调度器执行体中使用
-	*/
-	static coro_handle local_create(shared_strand coroStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-
-	/*!
 	@brief 同上，带完成协程后的回调通知
 	@param cb 协程完成后的触发函数，false强制结束的，true正常结束
 	*/
-	static coro_handle local_create(shared_strand coroStrand, const main_func& mainFunc, 
+	static coro_handle create(shared_strand coroStrand, const main_func& mainFunc, 
 		const boost::function<void (bool)>& cb, size_t stackSize = DEFAULT_STACKSIZE);
 
 	/*!

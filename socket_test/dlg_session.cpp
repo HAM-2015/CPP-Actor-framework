@@ -30,8 +30,7 @@ void dlg_session::DoDataExchange(CDataExchange* pDX)
 
 
 BEGIN_MESSAGE_MAP(dlg_session, CDialogEx)
-	ON_WM_DESTROY()
-	REGIEST_MODAL_RUN(dlg_session)
+	REGIEST_MFC_RUN(dlg_session)
 	ON_BN_CLICKED(IDC_BUTTON3, &dlg_session::OnBnClickedSendMsg)
 	ON_BN_CLICKED(IDC_BUTTON1, &dlg_session::OnBnClickedClear)
 END_MESSAGE_MAP()
@@ -54,7 +53,7 @@ BOOL dlg_session::OnInitDialog()
 
 // dlg_session 消息处理程序
 
-void dlg_session::OnDestroy()
+void dlg_session::OnCancel()
 {
 	if (_lstCloseCoro)
 	{
@@ -65,9 +64,10 @@ void dlg_session::OnDestroy()
 		_lstCloseCoro.reset();
 		_socket.reset();
 		_sessionCoro.reset();
+		_isClosed = true;
 		CLEAR_MSG();
 	}
-	CDialogEx::OnDestroy();
+	CDialogEx::OnCancel();
 }
 
 void dlg_session::showClientMsg(shared_data msg)
