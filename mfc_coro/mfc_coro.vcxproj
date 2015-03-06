@@ -98,7 +98,6 @@
     </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <None Include="ReadMe.txt" />
     <None Include="res\mfc_coro.ico" />
     <None Include="res\mfc_coro.rc2" />
   </ItemGroup>
