@@ -9,10 +9,10 @@
 
 using namespace std;
 
-#define 	WM_USER_BEGIN		WM_USER+100
-#define 	WM_USER_POST		WM_USER+101
-#define 	WM_USER_SEND		WM_USER+102
-#define		WM_USER_END			WM_USER+103
+#define 	WM_USER_BEGIN		(WM_USER+0x8000)
+#define 	WM_USER_POST		(WM_USER+0x8001)
+#define 	WM_USER_SEND		(WM_USER+0x8002)
+#define		WM_USER_END			(WM_USER+0x8003)
 
 #define		BIND_MFC_RUN() \
 public:\
