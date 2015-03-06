@@ -1288,11 +1288,27 @@ public:
 	void cancel_delay_trig();
 public:
 	/*!
+	@brief 发送一个异步函数到shared_strand中执行，完成后返回
+	*/
+	__yield_interrupt void send(shared_strand exeStrand, const boost::function<void ()>& h);
+
+	template <typename T0>
+	__yield_interrupt T0 send(shared_strand exeStrand, const boost::function<T0 ()>& h)
+	{
+		assert_enter();
+		if (exeStrand != _strand)
+		{
+			T0 r0;
+			trig<T0>(boost::bind(&boost_strand::asyncInvoke<T0>, exeStrand, h, _1), r0);
+			return r0;
+		} 
+		return h();
+	}
+
+	/*!
 	@brief 调用一个异步函数，异步回调完成后返回
 	*/
 	__yield_interrupt void trig(const boost::function<void (boost::function<void ()>)>& h);
-
-	__yield_interrupt void trig_ret(shared_strand extStrand, const boost::function<void ()>& h);
 
 	template <typename T0>
 	__yield_interrupt void trig(const boost::function<void (boost::function<void (T0)>)>& h, __out T0& r0)
@@ -1305,14 +1321,6 @@ public:
 		h(boost::bind(&boost_coro::trig_handler<T0>, shared_from_this(), boost::ref(r0), _1));
 #endif
 		push_yield();
-	}
-
-	template <typename T0>
-	__yield_interrupt T0 trig_ret(shared_strand extStrand, const boost::function<T0 ()>& h)
-	{
-		T0 r0;
-		trig<T0>(boost::bind(&boost_strand::asyncInvoke<T0>, extStrand, h, _1), r0);
-		return r0;
 	}
 
 	template <typename T0, typename T1>

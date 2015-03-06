@@ -944,9 +944,17 @@ void boost_coro::trig( const boost::function<void (boost::function<void ()>)>& h
 	push_yield();
 }
 
-void boost_coro::trig_ret( shared_strand extStrand, const boost::function<void ()>& h )
+void boost_coro::send( shared_strand exeStrand, const boost::function<void ()>& h )
 {
-	trig(boost::bind(&boost_strand::asyncInvokeVoid, extStrand, h, _1));
+	assert_enter();
+	if (exeStrand != _strand)
+	{
+		trig(boost::bind(&boost_strand::asyncInvokeVoid, exeStrand, h, _1));
+	} 
+	else
+	{
+		h();
+	}
 }
 
 boost::function<void()> boost_coro::make_msg_notify(coro_msg_handle<>& cmh)
