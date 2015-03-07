@@ -50,10 +50,10 @@ void ios_proxy::run(size_t threadNum)
 
 void ios_proxy::stop()
 {
-	assert(!runningInThisIos());
 	boost::lock_guard<boost::mutex> lg(_runMutex);
 	if (_opend)
 	{
+		assert(!runningInThisIos());
 		delete _runLock;
 		_runLock = NULL;
 		_runThreads.join_all();
