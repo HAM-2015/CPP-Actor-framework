@@ -68,6 +68,7 @@ void dlg_session::OnCancel()
 		CLEAR_MSG();
 	}
 	CDialogEx::OnCancel();
+	_closeNtf();
 }
 
 void dlg_session::showClientMsg(shared_data msg)
@@ -127,7 +128,7 @@ void dlg_session::sessionActor(boost_actor* actor)
 		}
 		post(boost::bind(&dlg_session::showClientMsg, this, msg));
 	}
-	actor->child_actor_quit(wd);
+	actor->child_actor_force_quit(wd);
 	actor->close_msg_notify(cmh);
 	post(boost::bind(&dlg_session::showClientMsg, this, msg_data::create("Á¬½Ó¶Ï¿ª")));
 }

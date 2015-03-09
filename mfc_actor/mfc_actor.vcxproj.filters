@@ -65,6 +65,9 @@
     <ClInclude Include="..\common_code\actor_stack.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
+    <ClInclude Include="dlg_add.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="mfc_actor.cpp">
@@ -93,6 +96,9 @@
     </ClCompile>
     <ClCompile Include="..\common_code\actor_stack.cpp">
       <Filter>源文件\common_code</Filter>
+    </ClCompile>
+    <ClCompile Include="dlg_add.cpp">
+      <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

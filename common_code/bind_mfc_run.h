@@ -101,6 +101,12 @@ void _mfcClose(bool ok)\
 		CLEAR_MSG()\
 		__base__::OnCancel();\
 	}\
+}\
+\
+public:\
+void baseCancel()\
+{\
+	__base__::OnCancel();\
 }
 #endif
 

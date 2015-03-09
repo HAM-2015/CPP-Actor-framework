@@ -36,6 +36,7 @@ public:
 	shared_strand _strand;
 	boost::shared_ptr<socket_io> _socket;
 	msg_pipe<>::regist_reader _lstClose;
+	boost::function<void ()> _closeNtf;
 private:
 	bool _exit;
 	msg_pipe<shared_data>::writer_type _sendPipe;

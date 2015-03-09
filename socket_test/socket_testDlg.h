@@ -13,6 +13,7 @@
 #include "text_stream_io.h"
 #include "acceptor_socket.h"
 #include "dlg_session.h"
+#include "mfc_strand.h"
 
 
 // Csocket_testDlg 对话框
@@ -21,9 +22,20 @@ class Csocket_testDlg : public CDialogEx, bind_mfc_run
 // 构造
 public:
 	Csocket_testDlg(CWnd* pParent = NULL);	// 标准构造函数
+	~Csocket_testDlg();
 
 // 对话框数据
 	enum { IDD = IDD_SOCKET_TEST_DIALOG };
+
+	enum ui_cmd
+	{
+		ui_connect,
+		ui_disconnect,
+		ui_listen,
+		ui_stopListen,
+		ui_close,
+		ui_postMsg
+	};
 
 	protected:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 支持
@@ -46,9 +58,9 @@ public:
 
 	struct session_pck 
 	{
-		boost::thread _thread;
 		boost::shared_ptr<socket_io> _socket;
 		msg_pipe<>::writer_type _closeNtf;
+		actor_handle _sessionDlg;
 	};
 // 实现
 protected:
@@ -69,21 +81,18 @@ protected:
 	void showSessionNum(int n);
 	DECLARE_MESSAGE_MAP()
 	BIND_MFC_RUN()
+	BIND_ACTOR_SEND()
+	BIND_MFC_ACTOR(Csocket_testDlg, CDialogEx)
 private:
 	void connectActor(boost_actor* actor, boost::shared_ptr<client_param> param);
-	void newSession(boost::shared_ptr<socket_io> socket, msg_pipe<>::regist_reader closePump, boost::function<void ()> cb);
+	void newSession(boost_actor* actor, boost::shared_ptr<socket_io> socket, msg_pipe<>::regist_reader closePump);
 	void serverActor(boost_actor* actor, boost::shared_ptr<server_param> param);
+	void mainActor(boost_actor* actor, actor_msg_handle<ui_cmd>::ptr lstCMD);
 private:
 	ios_proxy _ios;
 	shared_strand _strand;
-	boost::shared_ptr<socket_io> _clientSocket;
-	boost::shared_ptr<client_param> _extClient;
-	list<boost::shared_ptr<session_pck> > _sessList;
-	msg_pipe<shared_data>::writer_type _clientPostPipe;
-	msg_pipe<>::writer_type _serverNtfClose;
-	actor_handle _clientActor;
-	actor_handle _serverActor;
 	CFont _editFont;
+	boost::function<void (ui_cmd)> _uiCMD;
 public:
 	CEdit _outputEdit;
 	CEdit _msgEdit;

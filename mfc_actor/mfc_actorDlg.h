@@ -33,6 +33,7 @@ protected:
 	afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
 	afx_msg void OnPaint();
 	afx_msg HCURSOR OnQueryDragIcon();
+	afx_msg void OnBnClickedAdd();
 	DECLARE_MESSAGE_MAP()
 	BIND_MFC_RUN()
 	BIND_ACTOR_SEND()
@@ -42,12 +43,16 @@ private:
 	void mfc_actor2(boost_actor* actor);
 	void boost_actor1(boost_actor* actor);
 	void boost_actor2(boost_actor* actor);
+	void calc_add(boost_actor* actor, actor_msg_handle<>::ptr lstTask);
 private:
 	ios_proxy _ios;
+	shared_strand _strand;
 	actor_handle _mfcActor1;
 	actor_handle _mfcActor2;
 	actor_handle _boostActor1;
 	actor_handle _boostActor2;
+	actor_handle _calcActor;
+	boost::function<void ()> _calcNotify;
 public:
 	CEdit _dataEdit1;
 	CEdit _dataEdit2;

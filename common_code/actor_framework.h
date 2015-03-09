@@ -841,12 +841,10 @@ public:
 
 	actor_handle get_actor();
 
+	actor_handle peel();
+
 	static ptr make_ptr();
 private:
-	void quited_set();
-
-	void cancel_quit_it();
-
 	void* operator new(size_t s);
 public:
 	void operator delete(void* p);
@@ -868,6 +866,7 @@ class boost_actor
 	struct timer_pck;
 	class boost_actor_run;
 	friend boost_actor_run;
+	friend child_actor_handle;
 public:
 	/*!
 	@brief Actor被强制退出的异常类型
@@ -929,8 +928,8 @@ public:
 	@param stackSize Actor栈大小，4k的整数倍（最大1MB）
 	@return 子Actor句柄，使用 child_actor_handle 接收返回值
 	*/
-	__yield_interrupt child_actor_handle::child_actor_param create_child_actor(shared_strand actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	__yield_interrupt child_actor_handle::child_actor_param create_child_actor(const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_actor_handle::child_actor_param create_child_actor(shared_strand actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_actor_handle::child_actor_param create_child_actor(const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 
 	/*!
 	@brief 开始运行子Actor，只能调用一次
@@ -942,8 +941,8 @@ public:
 	@brief 强制终止一个子Actor
 	@return 已经被正常退出返回true，被强制退出返回false
 	*/
-	__yield_interrupt bool child_actor_quit(child_actor_handle& actorHandle);
-	__yield_interrupt bool child_actor_quit(const list<child_actor_handle::ptr>& actorHandles);
+	__yield_interrupt bool child_actor_force_quit(child_actor_handle& actorHandle);
+	__yield_interrupt bool child_actors_force_quit(const list<child_actor_handle::ptr>& actorHandles);
 
 	/*!
 	@brief 等待一个子Actor完成后返回
@@ -1009,17 +1008,17 @@ public:
 	*/
 	const list<actor_handle>& child_actors();
 public:
-	typedef list<boost::function<void ()> >::iterator quit_handle;
+	typedef list<boost::function<void ()> >::iterator quit_iterator;
 
 	/*!
 	@brief 注册一个资源释放函数，在强制退出Actor时调用
 	*/
-	quit_handle regist_quit_handler(const boost::function<void ()>& quitHandler);
+	quit_iterator regist_quit_handler(const boost::function<void ()>& quitHandler);
 
 	/*!
 	@brief 注销资源释放函数
 	*/
-	void cancel_quit_handler(quit_handle rh);
+	void cancel_quit_handler(quit_iterator qh);
 public:
 	/*!
 	@brief 创建一个异步触发函数，使用timed_wait_trig()等待
@@ -1298,9 +1297,7 @@ public:
 		assert_enter();
 		if (exeStrand != _strand)
 		{
-			T0 r0;
-			trig<T0>(boost::bind(&boost_strand::asyncInvoke<T0>, exeStrand, h, _1), r0);
-			return r0;
+			return trig<T0>(boost::bind(&boost_strand::asyncInvoke<T0>, exeStrand, h, _1));
 		} 
 		return h();
 	}
@@ -1321,6 +1318,14 @@ public:
 		h(boost::bind(&boost_actor::trig_handler<T0>, shared_from_this(), boost::ref(r0), _1));
 #endif
 		push_yield();
+	}
+
+	template <typename T0>
+	__yield_interrupt T0 trig(const boost::function<void (boost::function<void (T0)>)>& h)
+	{
+		T0 r0;
+		trig(h, r0);
+		return r0;
 	}
 
 	template <typename T0, typename T1>
@@ -1919,8 +1924,6 @@ private:
 	{
 		_async_trig_handler(pIsClosed, *th, p0, p1, p2, p3);
 	}
-
-	void create_actor_handler(actor_handle actor, actor_handle& retActor, list<actor_handle>::iterator& ch);
 private:
 	void check_run1(boost::shared_ptr<bool>& pIsClosed, actor_msg_handle<>& cmh);
 	void check_run1_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<actor_msg_handle<> >& cmh);

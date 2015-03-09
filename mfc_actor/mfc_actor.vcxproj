@@ -109,6 +109,7 @@
     <ClInclude Include="..\common_code\shared_strand.h" />
     <ClInclude Include="..\common_code\strand_ex.h" />
     <ClInclude Include="..\common_code\time_info.h" />
+    <ClInclude Include="dlg_add.h" />
     <ClInclude Include="mfc_actor.h" />
     <ClInclude Include="mfc_actorDlg.h" />
     <ClInclude Include="Resource.h" />
@@ -122,6 +123,7 @@
     <ClCompile Include="..\common_code\mfc_strand.cpp" />
     <ClCompile Include="..\common_code\shared_strand.cpp" />
     <ClCompile Include="..\common_code\time_info.cpp" />
+    <ClCompile Include="dlg_add.cpp" />
     <ClCompile Include="mfc_actor.cpp" />
     <ClCompile Include="mfc_actorDlg.cpp" />
     <ClCompile Include="stdafx.cpp">
@@ -135,4 +137,9 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <ProjectExtensions>
+    <VisualStudio>
+      <UserProperties RESOURCE_FILE="mfc_actor.rc" />
+    </VisualStudio>
+  </ProjectExtensions>
 </Project>

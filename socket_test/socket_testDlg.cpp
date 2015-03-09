@@ -1,4 +1,3 @@
-
 // socket_testDlg.cpp : 实现文件
 //
 
@@ -53,6 +52,11 @@ Csocket_testDlg::Csocket_testDlg(CWnd* pParent /*=NULL*/)
 	: CDialogEx(Csocket_testDlg::IDD, pParent)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
+}
+
+Csocket_testDlg::~Csocket_testDlg()
+{
+	_ios.stop();
 }
 
 void Csocket_testDlg::DoDataExchange(CDataExchange* pDX)
@@ -134,6 +138,10 @@ BOOL Csocket_testDlg::OnInitDialog()
 	boost_actor::disable_auto_make_timer();
 	_ios.run();
 	_strand = boost_strand::create(_ios);
+	actor_msg_handle<ui_cmd>::ptr lstCmd = actor_msg_handle<ui_cmd>::make_ptr();
+	actor_handle mainActor = boost_actor::create(_strand, boost::bind(&Csocket_testDlg::mainActor, this, _1, lstCmd));
+	_uiCMD = mainActor->make_msg_notify(*lstCmd);
+	mainActor->notify_start_run();
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -201,12 +209,37 @@ void Csocket_testDlg::showSessionNum(int n)
 
 void Csocket_testDlg::OnCancel()
 {
-	OnBnClickedClientDisconnect();
-	OnBnClickedStopLst();
-	_ios.stop();
-	_isClosed = true;
-	CLEAR_MSG();
-	CDialogEx::OnCancel();
+	_uiCMD(ui_close);
+}
+
+void Csocket_testDlg::OnBnClickedClientConnect()
+{
+	_uiCMD(ui_connect);
+}
+
+void Csocket_testDlg::OnBnClickedClientDisconnect()
+{
+	_uiCMD(ui_disconnect);
+}
+
+void Csocket_testDlg::OnBnClickedListen()
+{
+	_uiCMD(ui_listen);
+}
+
+void Csocket_testDlg::OnBnClickedStopLst()
+{
+	_uiCMD(ui_stopListen);
+}
+
+void Csocket_testDlg::OnBnClickedSendClientMsg()
+{
+	_uiCMD(ui_postMsg);
+}
+
+void Csocket_testDlg::OnBnClickedClear()
+{
+	_outputEdit.SetWindowText("");
 }
 
 void Csocket_testDlg::connectActor(boost_actor* actor, boost::shared_ptr<client_param> param)
@@ -249,7 +282,7 @@ void Csocket_testDlg::connectActor(boost_actor* actor, boost::shared_ptr<client_
 		actor->child_actor_run(readActor);
 		actor->child_actor_run(writerActor);
 		actor->child_actor_wait_quit(readActor);
-		actor->child_actor_quit(writerActor);
+		actor->child_actor_force_quit(writerActor);
 		textio->close();
 		post(boost::bind(&Csocket_testDlg::showClientMsg, this, msg_data::create("断开连接")));
 	} 
@@ -258,63 +291,21 @@ void Csocket_testDlg::connectActor(boost_actor* actor, boost::shared_ptr<client_
 		post(boost::bind(&Csocket_testDlg::showClientMsg, this, msg_data::create("连接失败")));
 		param->_clientSocket->close();
 	}
-	post(boost::bind(&Csocket_testDlg::OnBnClickedClientDisconnect, this));
+	_uiCMD(ui_disconnect);
 }
 
-void Csocket_testDlg::OnBnClickedClientConnect()
-{
-	OnBnClickedClientDisconnect();
-	BYTE bip[4];
-	_clientIpEdit.GetAddress(bip[0], bip[1], bip[2], bip[3]);
-	char sip[32];
-	sprintf_s(sip, "%d.%d.%d.%d", bip[0], bip[1], bip[2], bip[3]);
-	CString sport;
-	_clientPortEdit.GetWindowText(sport);
-	CString stm;
-	_clientTimeoutEdit.GetWindowText(stm);
-	try
-	{
-		_extClient = boost::shared_ptr<client_param>(new client_param);
-		_extClient->_ip = sip;
-		_extClient->_port = boost::lexical_cast<int>(sport.GetBuffer());
-		_extClient->_tm = boost::lexical_cast<int>(stm.GetBuffer());
-		_extClient->_clientSocket = socket_io::create(_ios);
-		_extClient->_msgPump = msg_pipe<shared_data>::make(_clientPostPipe);
-		_clientActor = boost_actor::create(_strand, 
-			boost::bind(&Csocket_testDlg::connectActor, this, _1, _extClient));
-		_clientActor->notify_start_run();
-		GetDlgItem(IDC_BUTTON1)->EnableWindow(FALSE);
-		GetDlgItem(IDC_BUTTON2)->EnableWindow(TRUE);
-	}
-	catch (...)
-	{
-		_extClient.reset();
-		_clientActor.reset();
-	}
-}
-
-
-void Csocket_testDlg::OnBnClickedClientDisconnect()
-{
-	if (_clientActor)
-	{
-		_extClient->_clientSocket->close();
-		_clientActor->outside_wait_quit();
-		_extClient.reset();
-		_clientActor.reset();
-		GetDlgItem(IDC_BUTTON1)->EnableWindow(TRUE);
-		GetDlgItem(IDC_BUTTON2)->EnableWindow(FALSE);
-	}
-}
-
-void Csocket_testDlg::newSession(boost::shared_ptr<socket_io> socket, msg_pipe<>::regist_reader closePump, boost::function<void ()> cb)
-{
+void Csocket_testDlg::newSession(boost_actor* actor, boost::shared_ptr<socket_io> socket, msg_pipe<>::regist_reader closePump)
+{//这个Actor运行在对话框线程中
+	async_trig_handle<> lstClose;
 	dlg_session dlg;
 	dlg._strand = _strand;
 	dlg._socket = socket;
 	dlg._lstClose = closePump;
-	dlg.DoModal();
-	cb();
+	dlg._closeNtf = actor->begin_trig(lstClose);
+	dlg.Create(IDD_SESSION, GetDesktopWindow());
+	dlg.ShowWindow(SW_SHOW);
+	actor->wait_trig(lstClose);
+	dlg.DestroyWindow();
 }
 
 void Csocket_testDlg::serverActor(boost_actor* actor, boost::shared_ptr<server_param> param)
@@ -338,17 +329,17 @@ void Csocket_testDlg::serverActor(boost_actor* actor, boost::shared_ptr<server_p
 		actor->close_msg_notify(cmh);
 	});
 	//创建会话关闭响应器
+	list<boost::shared_ptr<session_pck> > sessList;
 	actor_msg_handle<list<boost::shared_ptr<session_pck> >::iterator> sessDissonnLst;
-	child_actor_handle sessMngActor = actor->create_child_actor([this, &sessDissonnLst](boost_actor* actor)
+	child_actor_handle sessMngActor = actor->create_child_actor([&](boost_actor* actor)
 	{
 		while (true)
 		{
 			auto it = actor->pump_msg(sessDissonnLst);
 			//得到一个会话关闭消息，先等待对话框线程关闭，再从列表中删除
-			(*it)->_thread.join();
-			(*it)->_socket->close();
-			_sessList.erase(it);
-			post(boost::bind(&Csocket_testDlg::showSessionNum, this, _sessList.size()));
+			actor->another_actor_wait_quit((*it)->_sessionDlg);
+			sessList.erase(it);
+			post(boost::bind(&Csocket_testDlg::showSessionNum, this, sessList.size()));
 		}
 		actor->close_msg_notify(sessDissonnLst);
 	});
@@ -362,95 +353,187 @@ void Csocket_testDlg::serverActor(boost_actor* actor, boost::shared_ptr<server_p
 		{
 			break;
 		}
-		if (_sessList.size() < (size_t)param->_maxSessionNum && newSocket->no_delay())
+		if (sessList.size() < (size_t)param->_maxSessionNum && newSocket->no_delay())
 		{
 			boost::shared_ptr<session_pck> newSess(new session_pck);
-			_sessList.push_front(newSess);
-			post(boost::bind(&Csocket_testDlg::showSessionNum, this, _sessList.size()));
+			post(boost::bind(&Csocket_testDlg::showSessionNum, this, sessList.size()));
 			newSess->_socket = newSocket;
-			//创建一个单独线程运行对话框
-			newSess->_thread.swap(boost::thread(boost::bind(&Csocket_testDlg::newSession, this, newSocket,
-				msg_pipe<>::make(newSess->_closeNtf),//外部通知对话框关闭
-				(boost::function<void ()>)boost::bind(sessDissonnNtf, _sessList.begin()))));
+			sessList.push_front(newSess);
+			newSess->_sessionDlg = create_mfc_actor(boost::bind(&Csocket_testDlg::newSession, this, _1, newSocket,
+				msg_pipe<>::make(newSess->_closeNtf)));
+			newSess->_sessionDlg->notify_start_run();
 		}
 		else
 		{
 			newSocket->close();
 		}
 	}
-	actor->child_actor_quit(lstCloseProxyActor);
-	actor->child_actor_quit(sessMngActor);
+	actor->child_actor_force_quit(lstCloseProxyActor);
+	actor->child_actor_force_quit(sessMngActor);
 	actor->close_msg_notify(cmh);
 	//通知所有存在的对话框关闭
-	for (auto it = _sessList.begin(); it != _sessList.end(); it++)
+	for (auto it = sessList.begin(); it != sessList.end(); it++)
 	{
 		(*it)->_closeNtf();
+		actor->another_actor_wait_quit((*it)->_sessionDlg);
 	}
 }
 
-void Csocket_testDlg::OnBnClickedSendClientMsg()
+void Csocket_testDlg::mainActor(boost_actor* actor, actor_msg_handle<ui_cmd>::ptr lstCMD)
 {
-	if (_clientActor)
+	boost::shared_ptr<client_param> extClient;
+	boost::function<void ()> serverNtfClose;
+	boost::function<void (shared_data)> clientPostPipe;
+	actor_handle clientActorHandle;
+	actor_handle serverActorHandle;
+	auto disconnectHandler = [&, this]()
 	{
-		CString cs;
-		_msgEdit.GetWindowText(cs);
-		if (cs.GetLength())
+		if (clientActorHandle)
 		{
-			_msgEdit.SetWindowText("");
-			_clientPostPipe(msg_data::create(cs.GetBuffer()));
+			extClient->_clientSocket->close();
+			actor->another_actor_wait_quit(clientActorHandle);
+			extClient.reset();
+			clientActorHandle.reset();
+			clientPostPipe.clear();
+			auto _this = this;
+			this->send(actor, [&, _this]()
+			{
+				_this->GetDlgItem(IDC_BUTTON1)->EnableWindow(TRUE);
+				_this->GetDlgItem(IDC_BUTTON2)->EnableWindow(FALSE);
+			});
 		}
-	}
-	_msgEdit.SetFocus();
-}
-
-
-void Csocket_testDlg::OnBnClickedClear()
-{
-	_outputEdit.SetWindowText("");
-}
-
-
-void Csocket_testDlg::OnBnClickedListen()
-{
-	OnBnClickedStopLst();
-	CString sport;
-	CString snum;
-	_serverPortEdit.GetWindowText(sport);
-	_maxSessionEdit.GetWindowText(snum);
-	try
+	};
+	auto stopListenHandler = [&, this]()
 	{
-		boost::shared_ptr<server_param> param(new server_param);
-		param->_port = boost::lexical_cast<int>(sport.GetBuffer());
-		param->_maxSessionNum = boost::lexical_cast<int>(snum.GetBuffer());
-		param->_closePump = msg_pipe<>::make(_serverNtfClose);
-		_serverActor = boost_actor::create(_strand, boost::bind(&Csocket_testDlg::serverActor, this, _1, param));
-		_serverActor->notify_start_run();
-		_extSessNumEdit.SetWindowText("");
-		GetDlgItem(IDC_BUTTON4)->EnableWindow(FALSE);
-		GetDlgItem(IDC_BUTTON5)->EnableWindow(TRUE);
-	}
-	catch (...)
-	{
-		_serverActor.reset();
-	}
-}
-
-
-void Csocket_testDlg::OnBnClickedStopLst()
-{
-	if (_serverActor)
-	{
-		_serverNtfClose();
-		_serverActor->outside_wait_quit();
-		_serverActor.reset();
-		//等待对话框关闭完毕
-		while (!_sessList.empty())
+		if (serverActorHandle)
 		{
-			_sessList.front()->_thread.join();
-			_sessList.pop_front();
+			serverNtfClose();
+			actor->another_actor_wait_quit(serverActorHandle);
+			serverActorHandle.reset();
+			auto _this = this;
+			this->send(actor, [&, _this]()
+			{
+				_extSessNumEdit.SetWindowText("");
+				_this->GetDlgItem(IDC_BUTTON4)->EnableWindow(TRUE);
+				_this->GetDlgItem(IDC_BUTTON5)->EnableWindow(FALSE);
+			});
 		}
-		_extSessNumEdit.SetWindowText("");
-		GetDlgItem(IDC_BUTTON4)->EnableWindow(TRUE);
-		GetDlgItem(IDC_BUTTON5)->EnableWindow(FALSE);
+	};
+
+	while (true)
+	{
+		switch (actor->pump_msg(*lstCMD))
+		{
+		case ui_connect:
+			{
+				if (!clientActorHandle)
+				{
+					send(actor, [&, this]()
+					{
+						try
+						{
+							BYTE bip[4];
+							char sip[32];
+							CString sport;
+							CString stm;
+							_clientIpEdit.GetAddress(bip[0], bip[1], bip[2], bip[3]);
+							sprintf_s(sip, "%d.%d.%d.%d", bip[0], bip[1], bip[2], bip[3]);
+							_clientPortEdit.GetWindowText(sport);
+							_clientTimeoutEdit.GetWindowText(stm);
+							extClient = boost::shared_ptr<client_param>(new client_param);
+							extClient->_ip = sip;
+							extClient->_port = boost::lexical_cast<int>(sport.GetBuffer());
+							extClient->_tm = boost::lexical_cast<int>(stm.GetBuffer());
+							extClient->_clientSocket = socket_io::create(_ios);
+							extClient->_msgPump = msg_pipe<shared_data>::make(clientPostPipe);
+							clientActorHandle = boost_actor::create(_strand, 
+								boost::bind(&Csocket_testDlg::connectActor, this, _1, extClient));
+							clientActorHandle->notify_start_run();
+							this->GetDlgItem(IDC_BUTTON1)->EnableWindow(FALSE);
+							this->GetDlgItem(IDC_BUTTON2)->EnableWindow(TRUE);
+						}
+						catch (...)
+						{
+							extClient.reset();
+							clientActorHandle.reset();
+						}
+					});
+				}
+			}
+			break;
+		case ui_listen:
+			{
+				if (!serverActorHandle)
+				{
+					send(actor, [&, this]()
+					{
+						CString sport;
+						CString snum;
+						_serverPortEdit.GetWindowText(sport);
+						_maxSessionEdit.GetWindowText(snum);
+						try
+						{
+							boost::shared_ptr<server_param> param(new server_param);
+							param->_port = boost::lexical_cast<int>(sport.GetBuffer());
+							param->_maxSessionNum = boost::lexical_cast<int>(snum.GetBuffer());
+							param->_closePump = msg_pipe<>::make(serverNtfClose);
+							serverActorHandle = boost_actor::create(_strand, boost::bind(&Csocket_testDlg::serverActor, this, _1, param));
+							serverActorHandle->notify_start_run();
+							_extSessNumEdit.SetWindowText("");
+							this->GetDlgItem(IDC_BUTTON4)->EnableWindow(FALSE);
+							this->GetDlgItem(IDC_BUTTON5)->EnableWindow(TRUE);
+						}
+						catch (...)
+						{
+							serverActorHandle.reset();
+						}
+					});
+				}
+			}
+			break;
+		case ui_postMsg:
+			{
+				if (clientPostPipe)
+				{
+					send(actor, [&]()
+					{
+						CString cs;
+						_msgEdit.GetWindowText(cs);
+						if (cs.GetLength())
+						{
+							_msgEdit.SetWindowText("");
+							clientPostPipe(msg_data::create(cs.GetBuffer()));
+						}
+						_msgEdit.SetFocus();
+					});
+				}
+			}
+			break;
+		case ui_disconnect:
+			{
+				disconnectHandler();
+			}
+			break;
+		case ui_stopListen:
+			{
+				stopListenHandler();
+			}
+			break;
+		case ui_close:
+			{
+				disconnectHandler();
+				stopListenHandler();
+				actor->append_quit_callback(wrap<boost::function<void (bool)> >([this](bool)
+				{
+					_isClosed = true;
+					this->baseCancel();
+				}));
+				actor->close_msg_notify(*lstCMD);
+				return;
+			}
+			break;
+		default:
+			break;
+		}
 	}
 }

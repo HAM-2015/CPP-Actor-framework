@@ -68,7 +68,7 @@ void actor_test_print(boost_actor* actor, int id)
 		child_actor_handle ch = actor->create_child_actor(boost::bind(&actor_print, _1, id));
 		actor->child_actor_run(ch);
 		check_key_up(actor, id);//检测弹起
-		actor->child_actor_quit(ch);
+		actor->child_actor_force_quit(ch);
 	}
 }
 
@@ -122,14 +122,14 @@ void check_two_down(boost_actor* actor, int dt, int id1, int id2)
 			actor->child_actor_run(up2);
 			if (actor->timed_wait_trig(ath, st1, 3000))
 			{
-				actor->child_actor_quit(up1);
-				actor->child_actor_quit(up2);
+				actor->child_actor_force_quit(up1);
+				actor->child_actor_force_quit(up2);
 			}
 			else
 			{
 				printf("退出 check_two_down\n");
-				actor->child_actor_quit(up1);
-				actor->child_actor_quit(up2);
+				actor->child_actor_force_quit(up1);
+				actor->child_actor_force_quit(up2);
 				actor->close_trig(ath);
 				break;
 			}
@@ -156,8 +156,8 @@ void check_two_down(boost_actor* actor, int dt, int id1, int id2)
 				printf("*failure*\n");
 			}
 			actor->cancel_delay_trig();
-			actor->child_actor_quit(check1);
-			actor->child_actor_quit(check2);
+			actor->child_actor_force_quit(check1);
+			actor->child_actor_force_quit(check2);
 		}
 	}
 }
@@ -199,7 +199,7 @@ void shift_key(boost_actor* actor, actor_handle pauseactor)
 		}
 	}
 	actor->close_msg_notify(cmh);
-	actor->child_actor_quit(childs);
+	actor->child_actors_force_quit(childs);
 }
 
 void test_shift(boost_actor* actor, actor_handle pauseactor)
@@ -211,7 +211,7 @@ void test_shift(boost_actor* actor, actor_handle pauseactor)
 		ch = actor->create_child_actor(boost::bind(&shift_key, _1, pauseactor));
 		actor->child_actor_run(ch);
 		check_key_up(actor, VK_SHIFT);
-		actor->child_actor_quit(ch);
+		actor->child_actor_force_quit(ch);
 	}
 }
 
@@ -270,7 +270,7 @@ void perfor_test(boost_actor* actor, ios_proxy& ios, int actorNum)
 			actor->child_actor_run(*childList.front());
 		}
 		actor->sleep(1000);
-		actor->child_actor_quit(childList);
+		actor->child_actors_force_quit(childList);
 		int ct = 0;
 		for (int i = 0; i < num; i++)
 		{
@@ -294,7 +294,7 @@ void create_null_actor(boost_actor* actor, int* count)
 			*newactor = actor->create_child_actor([](boost_actor*){});
 			childList.push_back(newactor);
 		}
-		actor->child_actor_quit(childList);
+		actor->child_actors_force_quit(childList);
 		if (actor->yield_count() == yieldTick)
 		{
 			actor->sleep(0);
@@ -310,7 +310,7 @@ void create_actor_test(boost_actor* actor)
 		child_actor_handle createactor = actor->create_child_actor(boost::bind(&create_null_actor, _1, &count));
 		actor->child_actor_run(createactor);
 		actor->sleep(1000);
-		actor->child_actor_quit(createactor);
+		actor->child_actor_force_quit(createactor);
 		printf("1秒创建Actor数=%d\n", count);
 	}
 }
@@ -426,21 +426,21 @@ void actor_test(boost_actor* actor)
 	actor->child_actor_run(actorBuffer);
 	actor->child_actor_suspend(actorPerfor);
 	check_key_down(actor, VK_ESCAPE);//ESC键退出
-	actor->child_actor_quit(actorLeft);
-	actor->child_actor_quit(actorRight);
-	actor->child_actor_quit(actorUp);
-	actor->child_actor_quit(actorDown);
-	actor->child_actor_quit(actorPrint);
-	actor->child_actor_quit(actorShift);
-	actor->child_actor_quit(actorTwo);
-	actor->child_actor_quit(actorPerfor);
-	actor->child_actor_quit(actorConsumer);
-	actor->child_actor_quit(actorProducer1);
-	actor->child_actor_quit(actorProducer2);
-	actor->child_actor_quit(actorCreate);
-	actor->child_actor_quit(actorSuspend);
-	actor->child_actor_quit(actorResume);
-	actor->child_actor_quit(actorBuffer);
+	actor->child_actor_force_quit(actorLeft);
+	actor->child_actor_force_quit(actorRight);
+	actor->child_actor_force_quit(actorUp);
+	actor->child_actor_force_quit(actorDown);
+	actor->child_actor_force_quit(actorPrint);
+	actor->child_actor_force_quit(actorShift);
+	actor->child_actor_force_quit(actorTwo);
+	actor->child_actor_force_quit(actorPerfor);
+	actor->child_actor_force_quit(actorConsumer);
+	actor->child_actor_force_quit(actorProducer1);
+	actor->child_actor_force_quit(actorProducer2);
+	actor->child_actor_force_quit(actorCreate);
+	actor->child_actor_force_quit(actorSuspend);
+	actor->child_actor_force_quit(actorResume);
+	actor->child_actor_force_quit(actorBuffer);
 	perforIos.stop();
 }
 

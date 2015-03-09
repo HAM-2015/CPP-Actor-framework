@@ -73,6 +73,11 @@ void enable_realtime_priority()
 	SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS);
 }
 
+void set_priority(int p)
+{
+	SetPriorityClass(GetCurrentProcess(), p);
+}
+
 long long get_tick_us()
 {
 	LARGE_INTEGER quadPart;
