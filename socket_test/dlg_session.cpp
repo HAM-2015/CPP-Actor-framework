@@ -23,6 +23,7 @@ dlg_session::~dlg_session()
 
 void dlg_session::DoDataExchange(CDataExchange* pDX)
 {
+	SET_THREAD_ID();
 	CDialogEx::DoDataExchange(pDX);
 	DDX_Control(pDX, IDC_EDIT5, _msgEdit);
 	DDX_Control(pDX, IDC_EDIT4, _outputEdit);
@@ -44,10 +45,8 @@ BOOL dlg_session::OnInitDialog()
 	_outputEdit.SetFont(&_editFont);
 
 	_sendPump = msg_pipe<shared_data>::make(_sendPipe);
-	_sessionActor = boost_actor::create(_strand, boost::bind(&dlg_session::sessionActor, this, _1));
-	_sessionActor->notify_start_run();
-	_lstCloseActor = boost_actor::create(_strand, boost::bind(&dlg_session::lstClose, this, _1));
-	_lstCloseActor->notify_start_run();
+	actor_handle sessionActor = boost_actor::create(_strand, boost::bind(&dlg_session::sessionActor, this, _1));
+	sessionActor->notify_start_run();
 	return TRUE;
 }
 
@@ -55,19 +54,6 @@ BOOL dlg_session::OnInitDialog()
 
 void dlg_session::OnCancel()
 {
-	if (_lstCloseActor)
-	{
-		_lstCloseActor->notify_force_quit();
-		_lstCloseActor->outside_wait_quit();
-		_socket->close();
-		_sessionActor->outside_wait_quit();
-		_lstCloseActor.reset();
-		_socket.reset();
-		_sessionActor.reset();
-		_isClosed = true;
-		CLEAR_MSG();
-	}
-	CDialogEx::OnCancel();
 	_closeNtf();
 }
 
@@ -80,27 +66,22 @@ void dlg_session::showClientMsg(shared_data msg)
 		_outputEdit.ReplaceSel(msg->c_str());
 		_outputEdit.ReplaceSel("\n");
 	}
-	else
-	{
-		CLEAR_MSG();
-		PostMessage(WM_CLOSE);
-	}
-}
-
-void dlg_session::lstClose(boost_actor* actor)
-{
-	actor_msg_handle<> cmh;
-	_lstClose(actor, cmh);
-	//侦听请求对话框关闭消息，然后通知对话框关闭
-	actor->pump_msg(cmh);
-	_exit = true;
-	PostMessage(WM_CLOSE);
-	actor->close_msg_notify(cmh);
 }
 
 void dlg_session::sessionActor(boost_actor* actor)
 {
 	post(boost::bind(&dlg_session::showClientMsg, this, msg_data::create(_socket->ip())));
+	child_actor_handle lstClose = actor->create_child_actor([&, this](boost_actor* actor)
+	{
+		actor_msg_handle<> cmh;
+		_lstClose(actor, cmh);
+		//侦听请求对话框关闭消息，然后通知对话框关闭
+		actor->pump_msg(cmh);
+		this->_exit = true;
+		_socket->close();
+		actor->close_msg_notify(cmh);
+	});
+	actor->child_actor_run(lstClose);
 	actor_msg_handle<shared_data> cmh;
 	boost::shared_ptr<text_stream_io> textio = text_stream_io::create(_strand, _socket, actor->make_msg_notify(cmh));
 	child_actor_handle wd = actor->create_child_actor([this, &textio](boost_actor* actor)
@@ -131,6 +112,18 @@ void dlg_session::sessionActor(boost_actor* actor)
 	actor->child_actor_force_quit(wd);
 	actor->close_msg_notify(cmh);
 	post(boost::bind(&dlg_session::showClientMsg, this, msg_data::create("连接断开")));
+	send(actor, [this]()
+	{
+		this->GetDlgItem(IDC_BUTTON3)->EnableWindow(FALSE);
+	});
+	actor->child_actor_wait_quit(lstClose);
+	send(actor, wrap([this]()
+	{
+		_isClosed = true;
+		this->clear_message();
+		this->baseCancel();
+		_closeCallback();
+	}));
 }
 
 void dlg_session::OnBnClickedSendMsg()

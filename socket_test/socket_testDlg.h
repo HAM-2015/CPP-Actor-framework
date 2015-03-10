@@ -60,6 +60,7 @@ public:
 	{
 		boost::shared_ptr<socket_io> _socket;
 		msg_pipe<>::writer_type _closeNtf;
+		msg_pipe<>::regist_reader _lstClose;
 		actor_handle _sessionDlg;
 	};
 // й╣ож
@@ -85,7 +86,7 @@ protected:
 	BIND_MFC_ACTOR(Csocket_testDlg, CDialogEx)
 private:
 	void connectActor(boost_actor* actor, boost::shared_ptr<client_param> param);
-	void newSession(boost_actor* actor, boost::shared_ptr<socket_io> socket, msg_pipe<>::regist_reader closePump);
+	void newSession(boost_actor* actor, boost::shared_ptr<session_pck> sess);
 	void serverActor(boost_actor* actor, boost::shared_ptr<server_param> param);
 	void mainActor(boost_actor* actor, actor_msg_handle<ui_cmd>::ptr lstCMD);
 private:

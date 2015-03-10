@@ -90,6 +90,7 @@ END_MESSAGE_MAP()
 
 BOOL Csocket_testDlg::OnInitDialog()
 {
+	SET_THREAD_ID();
 	CDialogEx::OnInitDialog();
 
 	// 将“关于...”菜单项添加到系统菜单中。
@@ -116,6 +117,9 @@ BOOL Csocket_testDlg::OnInitDialog()
 	//  执行此操作
 	SetIcon(m_hIcon, TRUE);			// 设置大图标
 	SetIcon(m_hIcon, FALSE);		// 设置小图标
+	GetDlgItem(IDC_BUTTON2)->EnableWindow(FALSE);
+	GetDlgItem(IDC_BUTTON3)->EnableWindow(FALSE);
+	GetDlgItem(IDC_BUTTON5)->EnableWindow(FALSE);
 
 	// TODO: 在此添加额外的初始化代码
 	_editFont.CreatePointFont(90, "宋体");
@@ -281,6 +285,10 @@ void Csocket_testDlg::connectActor(boost_actor* actor, boost::shared_ptr<client_
 		});
 		actor->child_actor_run(readActor);
 		actor->child_actor_run(writerActor);
+		send(actor, [this]()
+		{
+			this->GetDlgItem(IDC_BUTTON3)->EnableWindow(TRUE);
+		});
 		actor->child_actor_wait_quit(readActor);
 		actor->child_actor_force_quit(writerActor);
 		textio->close();
@@ -294,14 +302,15 @@ void Csocket_testDlg::connectActor(boost_actor* actor, boost::shared_ptr<client_
 	_uiCMD(ui_disconnect);
 }
 
-void Csocket_testDlg::newSession(boost_actor* actor, boost::shared_ptr<socket_io> socket, msg_pipe<>::regist_reader closePump)
+void Csocket_testDlg::newSession(boost_actor* actor, boost::shared_ptr<session_pck> sess)
 {//这个Actor运行在对话框线程中
 	async_trig_handle<> lstClose;
 	dlg_session dlg;
 	dlg._strand = _strand;
-	dlg._socket = socket;
-	dlg._lstClose = closePump;
-	dlg._closeNtf = actor->begin_trig(lstClose);
+	dlg._socket = sess->_socket;
+	dlg._lstClose = sess->_lstClose;
+	dlg._closeNtf = sess->_closeNtf;
+	dlg._closeCallback = actor->begin_trig(lstClose);
 	dlg.Create(IDD_SESSION, GetDesktopWindow());
 	dlg.ShowWindow(SW_SHOW);
 	actor->wait_trig(lstClose);
@@ -356,11 +365,12 @@ void Csocket_testDlg::serverActor(boost_actor* actor, boost::shared_ptr<server_p
 		if (sessList.size() < (size_t)param->_maxSessionNum && newSocket->no_delay())
 		{
 			boost::shared_ptr<session_pck> newSess(new session_pck);
-			post(boost::bind(&Csocket_testDlg::showSessionNum, this, sessList.size()));
 			newSess->_socket = newSocket;
+			newSess->_lstClose = msg_pipe<>::make(newSess->_closeNtf);
 			sessList.push_front(newSess);
-			newSess->_sessionDlg = create_mfc_actor(boost::bind(&Csocket_testDlg::newSession, this, _1, newSocket,
-				msg_pipe<>::make(newSess->_closeNtf)));
+			post(boost::bind(&Csocket_testDlg::showSessionNum, this, sessList.size()));
+			newSess->_sessionDlg = create_mfc_actor(boost::bind(&Csocket_testDlg::newSession, this, _1, newSess));
+			newSess->_sessionDlg->append_quit_callback(boost::bind(sessDissonnNtf, sessList.begin()));
 			newSess->_sessionDlg->notify_start_run();
 		}
 		else
@@ -400,6 +410,7 @@ void Csocket_testDlg::mainActor(boost_actor* actor, actor_msg_handle<ui_cmd>::pt
 			{
 				_this->GetDlgItem(IDC_BUTTON1)->EnableWindow(TRUE);
 				_this->GetDlgItem(IDC_BUTTON2)->EnableWindow(FALSE);
+				_this->GetDlgItem(IDC_BUTTON3)->EnableWindow(FALSE);
 			});
 		}
 	};
@@ -411,9 +422,9 @@ void Csocket_testDlg::mainActor(boost_actor* actor, actor_msg_handle<ui_cmd>::pt
 			actor->another_actor_wait_quit(serverActorHandle);
 			serverActorHandle.reset();
 			auto _this = this;
-			this->send(actor, [&, _this]()
+			this->send(actor, [_this]()
 			{
-				_extSessNumEdit.SetWindowText("");
+				_this->_extSessNumEdit.SetWindowText("");
 				_this->GetDlgItem(IDC_BUTTON4)->EnableWindow(TRUE);
 				_this->GetDlgItem(IDC_BUTTON5)->EnableWindow(FALSE);
 			});
@@ -428,36 +439,38 @@ void Csocket_testDlg::mainActor(boost_actor* actor, actor_msg_handle<ui_cmd>::pt
 			{
 				if (!clientActorHandle)
 				{
+					char sip[32];
+					CString sport;
+					CString stm;
 					send(actor, [&, this]()
 					{
-						try
+						BYTE bip[4];
+						_clientIpEdit.GetAddress(bip[0], bip[1], bip[2], bip[3]);
+						sprintf_s(sip, "%d.%d.%d.%d", bip[0], bip[1], bip[2], bip[3]);
+						_clientPortEdit.GetWindowText(sport);
+						_clientTimeoutEdit.GetWindowText(stm);
+					});
+					try
+					{
+						extClient = boost::shared_ptr<client_param>(new client_param);
+						extClient->_ip = sip;
+						extClient->_port = boost::lexical_cast<int>(sport.GetBuffer());
+						extClient->_tm = boost::lexical_cast<int>(stm.GetBuffer());
+						extClient->_clientSocket = socket_io::create(_ios);
+						extClient->_msgPump = msg_pipe<shared_data>::make(clientPostPipe);
+						clientActorHandle = boost_actor::create(_strand, 
+							boost::bind(&Csocket_testDlg::connectActor, this, _1, extClient));
+						clientActorHandle->notify_start_run();
+						send(actor, [this]()
 						{
-							BYTE bip[4];
-							char sip[32];
-							CString sport;
-							CString stm;
-							_clientIpEdit.GetAddress(bip[0], bip[1], bip[2], bip[3]);
-							sprintf_s(sip, "%d.%d.%d.%d", bip[0], bip[1], bip[2], bip[3]);
-							_clientPortEdit.GetWindowText(sport);
-							_clientTimeoutEdit.GetWindowText(stm);
-							extClient = boost::shared_ptr<client_param>(new client_param);
-							extClient->_ip = sip;
-							extClient->_port = boost::lexical_cast<int>(sport.GetBuffer());
-							extClient->_tm = boost::lexical_cast<int>(stm.GetBuffer());
-							extClient->_clientSocket = socket_io::create(_ios);
-							extClient->_msgPump = msg_pipe<shared_data>::make(clientPostPipe);
-							clientActorHandle = boost_actor::create(_strand, 
-								boost::bind(&Csocket_testDlg::connectActor, this, _1, extClient));
-							clientActorHandle->notify_start_run();
 							this->GetDlgItem(IDC_BUTTON1)->EnableWindow(FALSE);
 							this->GetDlgItem(IDC_BUTTON2)->EnableWindow(TRUE);
-						}
-						catch (...)
-						{
-							extClient.reset();
-							clientActorHandle.reset();
-						}
-					});
+						});
+					}
+					catch (...)
+					{
+						extClient.reset();
+					}
 				}
 			}
 			break;
@@ -465,29 +478,32 @@ void Csocket_testDlg::mainActor(boost_actor* actor, actor_msg_handle<ui_cmd>::pt
 			{
 				if (!serverActorHandle)
 				{
+					CString sport;
+					CString snum;
 					send(actor, [&, this]()
 					{
-						CString sport;
-						CString snum;
 						_serverPortEdit.GetWindowText(sport);
 						_maxSessionEdit.GetWindowText(snum);
-						try
+						_extSessNumEdit.SetWindowText("");
+					});
+					try
+					{
+						boost::shared_ptr<server_param> param(new server_param);
+						param->_port = boost::lexical_cast<int>(sport.GetBuffer());
+						param->_maxSessionNum = boost::lexical_cast<int>(snum.GetBuffer());
+						param->_closePump = msg_pipe<>::make(serverNtfClose);
+						serverActorHandle = boost_actor::create(_strand, boost::bind(&Csocket_testDlg::serverActor, this, _1, param));
+						serverActorHandle->notify_start_run();
+						send(actor, [this]()
 						{
-							boost::shared_ptr<server_param> param(new server_param);
-							param->_port = boost::lexical_cast<int>(sport.GetBuffer());
-							param->_maxSessionNum = boost::lexical_cast<int>(snum.GetBuffer());
-							param->_closePump = msg_pipe<>::make(serverNtfClose);
-							serverActorHandle = boost_actor::create(_strand, boost::bind(&Csocket_testDlg::serverActor, this, _1, param));
-							serverActorHandle->notify_start_run();
-							_extSessNumEdit.SetWindowText("");
 							this->GetDlgItem(IDC_BUTTON4)->EnableWindow(FALSE);
 							this->GetDlgItem(IDC_BUTTON5)->EnableWindow(TRUE);
-						}
-						catch (...)
-						{
-							serverActorHandle.reset();
-						}
-					});
+						});
+					}
+					catch (...)
+					{
+						
+					}
 				}
 			}
 			break;

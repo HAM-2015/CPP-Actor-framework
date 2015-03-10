@@ -91,6 +91,7 @@ END_MESSAGE_MAP()
 
 BOOL Cmfc_actorDlg::OnInitDialog()
 {
+	SET_THREAD_ID();
 	CDialogEx::OnInitDialog();
 
 	// 将“关于...”菜单项添加到系统菜单中。

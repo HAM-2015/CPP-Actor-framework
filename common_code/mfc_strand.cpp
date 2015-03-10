@@ -16,7 +16,7 @@ shared_strand mfc_strand::create( ios_proxy& iosProxy, bind_mfc_run* mfc )
 	boost::shared_ptr<mfc_strand> res(new mfc_strand);
 	res->_iosProxy = &iosProxy;
 	res->_mfc = mfc;
-	mfc->post([res](){res->_mfcThreadID = boost::this_thread::get_id();});
+	res->_mfcThreadID = mfc->thread_id();
 	return res;
 }
 
@@ -24,7 +24,7 @@ shared_strand mfc_strand::create( bind_mfc_run* mfc )
 {
 	boost::shared_ptr<mfc_strand> res(new mfc_strand);
 	res->_mfc = mfc;
-	mfc->post([res](){res->_mfcThreadID = boost::this_thread::get_id();});
+	res->_mfcThreadID = mfc->thread_id();
 	return res;
 }
 

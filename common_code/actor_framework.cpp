@@ -315,6 +315,7 @@ actor_handle child_actor_handle::peel()
 	if (_param._actor)
 	{
 		assert(_param._actor->parent_actor()->_strand->running_in_this_thread());
+		assert(!_param._actor->parent_actor()->_quited);
 		_quited = true;
 		DEBUG_OPERATION(_param._actor->parent_actor()->_quitHandlerList.erase(_qh));
 		_param._actor->parent_actor()->_childActorList.erase(_param._actorIt);
