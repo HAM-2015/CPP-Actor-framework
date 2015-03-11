@@ -814,13 +814,9 @@ private:
 	{
 #ifdef _DEBUG
 		child_actor_param();
-
 		child_actor_param(child_actor_param& s);
-
 		~child_actor_param();
-
 		child_actor_param& operator =(child_actor_param& s);
-
 		bool _isCopy;
 #endif
 		actor_handle _actor;///<±¾Actor
@@ -828,23 +824,16 @@ private:
 	};
 private:
 	child_actor_handle(child_actor_handle&);
-
 	child_actor_handle& operator =(child_actor_handle&);
 public:
 	child_actor_handle();
-
 	child_actor_handle(child_actor_param& s);
-
 	~child_actor_handle();
-
 	child_actor_handle& operator =(child_actor_param& s);
-
 	actor_handle get_actor();
-
-	actor_handle peel();
-
 	static ptr make_ptr();
 private:
+	actor_handle peel();
 	void* operator new(size_t s);
 public:
 	void operator delete(void* p);

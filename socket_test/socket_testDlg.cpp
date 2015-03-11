@@ -539,12 +539,12 @@ void Csocket_testDlg::mainActor(boost_actor* actor, actor_msg_handle<ui_cmd>::pt
 			{
 				disconnectHandler();
 				stopListenHandler();
-				actor->append_quit_callback(wrap<boost::function<void (bool)> >([this](bool)
+				actor->close_msg_notify(*lstCMD);
+				send(actor, [this]()
 				{
 					_isClosed = true;
 					this->baseCancel();
-				}));
-				actor->close_msg_notify(*lstCMD);
+				});
 				return;
 			}
 			break;

@@ -360,6 +360,12 @@ private:
 		boost::condition_variable _conVar;
 		DEBUG_OPERATION(boost::atomic<size_t> _regCount);
 	};
+public:
+	struct io 
+	{
+		regist_reader reader;
+		writer_type writer;
+	};
 private:
 	msg_pipe()
 	{
@@ -396,6 +402,16 @@ public:
 			SetThreadPriority(GetCurrentThread(), hostActor->this_strand()->get_ios_proxy().getPriority());
 			return regCount;
 		};
+	}
+
+	/*!
+	@brief 创建一个io
+	*/
+	static io make_io()
+	{
+		io res;
+		res.reader = make(res.writer);
+		return res;
 	}
 	
 	/*!
