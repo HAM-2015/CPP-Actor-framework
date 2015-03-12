@@ -77,7 +77,7 @@ void actor_suspend(boost_actor* actor, const list<actor_handle>& chs)
 	while (true)
 	{
 		check_key_down(actor, VK_RBUTTON);
-		actor->another_actors_suspend(chs);
+		actor->actors_suspend(chs);
 		check_key_up(actor, VK_RBUTTON);
 	}
 }
@@ -87,7 +87,7 @@ void actor_resume(boost_actor* actor, const list<actor_handle>& chs)
 	while (true)
 	{
 		check_key_down(actor, VK_LBUTTON);
-		actor->another_actors_resume(chs);
+		actor->actors_resume(chs);
 		check_key_up(actor, VK_LBUTTON);
 	}
 }
@@ -147,7 +147,7 @@ void check_two_down(boost_actor* actor, int dt, int id1, int id2)
 			bool ok = false;
 			actor->wait_trig(ath, ah, ok);
 			actor->delay_trig(dt, boost::bind(&boost_actor::notify_force_quit, ah));
-			if (actor->another_actor_wait_quit(ah))
+			if (actor->actor_wait_quit(ah))
 			{
 				printf("*success*\n");
 			} 
@@ -176,8 +176,8 @@ void wait_key(boost_actor* actor, int id, boost::function<void (int)> cb)
 void shift_key(boost_actor* actor, actor_handle pauseactor)
 {
 	list<child_actor_handle::ptr> childs;
-	actor_msg_handle<int> cmh;
-	auto h = actor->make_msg_notify(cmh);
+	actor_msg_handle<int> amh;
+	auto h = actor->make_msg_notify(amh);
 	for (int i = 'A'; i <= 'Z'; i++)
 	{
 		auto tp = child_actor_handle::make_ptr();
@@ -187,10 +187,10 @@ void shift_key(boost_actor* actor, actor_handle pauseactor)
 	}
 	while (true)
 	{
-		int id = actor->pump_msg(cmh);
+		int id = actor->pump_msg(amh);
 		if ('P' == id)
 		{
-			bool isPause = actor->another_actor_switch(pauseactor);
+			bool isPause = actor->actor_switch(pauseactor);
 			printf("%s–‘ƒ‹≤‚ ‘\n", isPause? "‘›Õ£": "ª÷∏¥");
 		}
 		else
@@ -198,7 +198,7 @@ void shift_key(boost_actor* actor, actor_handle pauseactor)
 			printf("shift+%c\n", id);
 		}
 	}
-	actor->close_msg_notify(cmh);
+	actor->close_msg_notify(amh);
 	actor->child_actors_force_quit(childs);
 }
 
@@ -224,17 +224,17 @@ void test_producer(boost_actor* actor, boost::function<void (int, int)> writer)
 	}
 }
 
-void test_consumer(boost_actor* actor, actor_msg_handle<int, int>& cmh)
+void test_consumer(boost_actor* actor, actor_msg_handle<int, int>& amh)
 {//œ˚∑—’ﬂ
 	while (true)
 	{
 		int p0;
 		int id;
-		actor->pump_msg(cmh, p0, id);
-		printf("%d-%d id=%d\n", p0, (int)cmh.get_size(), id);
+		actor->pump_msg(amh, p0, id);
+		printf("%d-%d id=%d\n", p0, (int)amh.get_size(), id);
 		actor->sleep(1000);
 	}
-	actor->close_msg_notify(cmh);
+	actor->close_msg_notify(amh);
 }
 
 void count_test(boost_actor* actor, int& ct)
@@ -317,8 +317,8 @@ void create_actor_test(boost_actor* actor)
 
 void async_buffer_read(boost_actor* actor, boost::shared_ptr<async_buffer<int> > buffer, msg_pipe<>::regist_reader regWaitFull, int max)
 {
-	actor_msg_handle<> cmh;
-	regWaitFull(actor, cmh);
+	actor_msg_handle<> amh;
+	regWaitFull(actor, amh);
 	goto __start;
 	while (true)
 	{
@@ -334,11 +334,11 @@ void async_buffer_read(boost_actor* actor, boost::shared_ptr<async_buffer<int> >
 		{
 			printf("read ª∫¥Êø’\n");
 			__start:
-			actor->pump_msg(cmh);
+			actor->pump_msg(amh);
 			printf("read ª∫¥Ê¿¥ ˝æ›\n");
 		}
 	}
-	actor->close_msg_notify(cmh);
+	actor->close_msg_notify(amh);
 }
 
 void async_buffer_test(boost_actor* actor)
@@ -346,9 +346,9 @@ void async_buffer_test(boost_actor* actor)
 	msg_pipe<>::writer_type fullNotify;
 	msg_pipe<>::regist_reader regWaitFull = msg_pipe<>::make(fullNotify);
 	boost::shared_ptr<async_buffer<int> > buffer = async_buffer<int>::create(10);
-	actor_msg_handle<> cmh;
+	actor_msg_handle<> amh;
 	int testCyc = 30;
-	buffer->setNotify(fullNotify, actor->make_msg_notify(cmh));
+	buffer->setNotify(fullNotify, actor->make_msg_notify(amh));
 	child_actor_handle readactor = actor->create_child_actor(boost::bind(&async_buffer_read, _1, buffer, regWaitFull, testCyc-1));
 	actor->child_actor_run(readactor);
 	for (int i = 0; i < testCyc; i++)
@@ -358,12 +358,12 @@ void async_buffer_test(boost_actor* actor)
 		if (buffer->push(i))
 		{
 			printf("writer ª∫¥Ê¬˙\n");
-			actor->pump_msg(cmh);
+			actor->pump_msg(amh);
 			printf("writer ª∫¥Ê∞Îø’\n");
 		}
 	}
 	actor->child_actor_wait_quit(readactor);
-	actor->close_msg_notify(cmh);
+	actor->close_msg_notify(amh);
 	printf("ª∫¥Ê≤‚ ‘Ω· ¯\n");
 }
 

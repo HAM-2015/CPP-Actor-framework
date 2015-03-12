@@ -44,7 +44,7 @@ private:
 
 // Actor内使用，在使用了Actor函数的异常捕捉 catch (...) 之前用于过滤Actor退出异常并继续抛出，不然可能导致程序崩溃
 #define CATCH_ACTOR_QUIT()\
-catch (boost_actor::actor_force_quit& e)\
+catch (boost_actor::force_quit_exception& e)\
 {\
 	throw e;\
 }
@@ -860,7 +860,7 @@ public:
 	/*!
 	@brief Actor被强制退出的异常类型
 	*/
-	struct actor_force_quit { };
+	struct force_quit_exception { };
 
 	/*!
 	@brief Actor入口函数体
@@ -1365,224 +1365,224 @@ public:
 	//////////////////////////////////////////////////////////////////////////
 	/*!
 	@brief 创建一个"生产者"对象，用pump_msg"消费者"取出回调内容，T0-T3是回调参数类型
-	@param cmh 异步通知对象
+	@param amh 异步通知对象
 	@return 异步触发函数
 	*/
-	boost::function<void()> make_msg_notify(actor_msg_handle<>& cmh);
-	boost::function<void()> make_msg_notify(boost::shared_ptr<actor_msg_handle<> > cmh);
+	boost::function<void()> make_msg_notify(actor_msg_handle<>& amh);
+	boost::function<void()> make_msg_notify(boost::shared_ptr<actor_msg_handle<> > amh);
 
 	template <typename T0>
-	boost::function<void(T0)> make_msg_notify(param_list<msg_param<T0> >& cmh)
+	boost::function<void(T0)> make_msg_notify(param_list<msg_param<T0> >& amh)
 	{
-		cmh.begin(_actorID);
-		return boost::bind(&boost_actor::notify_handler<T0>, shared_from_this(), cmh._pIsClosed, boost::ref(cmh), _1);
-	}
-
-	template <typename T0>
-	boost::function<void(T0)> make_msg_notify(boost::shared_ptr<actor_msg_handle<T0> > cmh)
-	{
-		cmh->begin(_actorID);
-		return boost::bind(&boost_actor::notify_handler_ptr<T0>, shared_from_this(), cmh->_pIsClosed, 
-			boost::static_pointer_cast<param_list<msg_param<T0> > >(cmh), _1);
+		amh.begin(_actorID);
+		return boost::bind(&boost_actor::notify_handler<T0>, shared_from_this(), amh._pIsClosed, boost::ref(amh), _1);
 	}
 
 	template <typename T0>
-	boost::function<void(T0)> make_msg_notify(boost::shared_ptr<actor_msg_limit_handle<T0> > cmh)
+	boost::function<void(T0)> make_msg_notify(boost::shared_ptr<actor_msg_handle<T0> > amh)
 	{
-		cmh->begin(_actorID);
-		return boost::bind(&boost_actor::notify_handler_ptr<T0>, shared_from_this(), cmh->_pIsClosed, 
-			boost::static_pointer_cast<param_list<msg_param<T0> > >(cmh), _1);
+		amh->begin(_actorID);
+		return boost::bind(&boost_actor::notify_handler_ptr<T0>, shared_from_this(), amh->_pIsClosed, 
+			boost::static_pointer_cast<param_list<msg_param<T0> > >(amh), _1);
+	}
+
+	template <typename T0>
+	boost::function<void(T0)> make_msg_notify(boost::shared_ptr<actor_msg_limit_handle<T0> > amh)
+	{
+		amh->begin(_actorID);
+		return boost::bind(&boost_actor::notify_handler_ptr<T0>, shared_from_this(), amh->_pIsClosed, 
+			boost::static_pointer_cast<param_list<msg_param<T0> > >(amh), _1);
 	}
 
 	template <typename T0, typename T1>
-	boost::function<void(T0, T1)> make_msg_notify(param_list<msg_param<T0, T1> >& cmh)
+	boost::function<void(T0, T1)> make_msg_notify(param_list<msg_param<T0, T1> >& amh)
 	{
-		cmh.begin(_actorID);
-		return boost::bind(&boost_actor::notify_handler<T0, T1>, shared_from_this(), cmh._pIsClosed, boost::ref(cmh), _1, _2);
+		amh.begin(_actorID);
+		return boost::bind(&boost_actor::notify_handler<T0, T1>, shared_from_this(), amh._pIsClosed, boost::ref(amh), _1, _2);
 	}
 
 	template <typename T0, typename T1>
-	boost::function<void(T0, T1)> make_msg_notify(boost::shared_ptr<actor_msg_handle<T0, T1> > cmh)
+	boost::function<void(T0, T1)> make_msg_notify(boost::shared_ptr<actor_msg_handle<T0, T1> > amh)
 	{
-		cmh->begin(_actorID);
-		return boost::bind(&boost_actor::notify_handler_ptr<T0, T1>, shared_from_this(), cmh->_pIsClosed, 
-			boost::static_pointer_cast<param_list<msg_param<T0, T1> > >(cmh), _1, _2);
+		amh->begin(_actorID);
+		return boost::bind(&boost_actor::notify_handler_ptr<T0, T1>, shared_from_this(), amh->_pIsClosed, 
+			boost::static_pointer_cast<param_list<msg_param<T0, T1> > >(amh), _1, _2);
 	}
 
 	template <typename T0, typename T1>
-	boost::function<void(T0, T1)> make_msg_notify(boost::shared_ptr<actor_msg_limit_handle<T0, T1> > cmh)
+	boost::function<void(T0, T1)> make_msg_notify(boost::shared_ptr<actor_msg_limit_handle<T0, T1> > amh)
 	{
-		cmh->begin(_actorID);
-		return boost::bind(&boost_actor::notify_handler_ptr<T0, T1>, shared_from_this(), cmh->_pIsClosed, 
-			boost::static_pointer_cast<param_list<msg_param<T0, T1> > >(cmh), _1, _2);
+		amh->begin(_actorID);
+		return boost::bind(&boost_actor::notify_handler_ptr<T0, T1>, shared_from_this(), amh->_pIsClosed, 
+			boost::static_pointer_cast<param_list<msg_param<T0, T1> > >(amh), _1, _2);
 	}
 
 	template <typename T0, typename T1, typename T2>
-	boost::function<void(T0, T1, T2)> make_msg_notify(param_list<msg_param<T0, T1, T2> >& cmh)
+	boost::function<void(T0, T1, T2)> make_msg_notify(param_list<msg_param<T0, T1, T2> >& amh)
 	{
-		cmh.begin(_actorID);
-		return boost::bind(&boost_actor::notify_handler<T0, T1, T2>, shared_from_this(), cmh._pIsClosed, boost::ref(cmh), _1, _2, _3);
+		amh.begin(_actorID);
+		return boost::bind(&boost_actor::notify_handler<T0, T1, T2>, shared_from_this(), amh._pIsClosed, boost::ref(amh), _1, _2, _3);
 	}
 
 	template <typename T0, typename T1, typename T2>
-	boost::function<void(T0, T1, T2)> make_msg_notify(boost::shared_ptr<actor_msg_handle<T0, T1, T2> > cmh)
+	boost::function<void(T0, T1, T2)> make_msg_notify(boost::shared_ptr<actor_msg_handle<T0, T1, T2> > amh)
 	{
-		cmh->begin(_actorID);
-		return boost::bind(&boost_actor::notify_handler_ptr<T0, T1, T2>, shared_from_this(), cmh->_pIsClosed, 
-			boost::static_pointer_cast<param_list<msg_param<T0, T1, T2> > >(cmh), _1, _2, _3);
+		amh->begin(_actorID);
+		return boost::bind(&boost_actor::notify_handler_ptr<T0, T1, T2>, shared_from_this(), amh->_pIsClosed, 
+			boost::static_pointer_cast<param_list<msg_param<T0, T1, T2> > >(amh), _1, _2, _3);
 	}
 
 	template <typename T0, typename T1, typename T2>
-	boost::function<void(T0, T1, T2)> make_msg_notify(boost::shared_ptr<actor_msg_limit_handle<T0, T1, T2> > cmh)
+	boost::function<void(T0, T1, T2)> make_msg_notify(boost::shared_ptr<actor_msg_limit_handle<T0, T1, T2> > amh)
 	{
-		cmh->begin(_actorID);
-		return boost::bind(&boost_actor::notify_handler_ptr<T0, T1, T2>, shared_from_this(), cmh->_pIsClosed, 
-			boost::static_pointer_cast<param_list<msg_param<T0, T1, T2> > >(cmh), _1, _2, _3);
+		amh->begin(_actorID);
+		return boost::bind(&boost_actor::notify_handler_ptr<T0, T1, T2>, shared_from_this(), amh->_pIsClosed, 
+			boost::static_pointer_cast<param_list<msg_param<T0, T1, T2> > >(amh), _1, _2, _3);
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	boost::function<void(T0, T1, T2, T3)> make_msg_notify(param_list<msg_param<T0, T1, T2, T3> >& cmh)
+	boost::function<void(T0, T1, T2, T3)> make_msg_notify(param_list<msg_param<T0, T1, T2, T3> >& amh)
 	{
-		cmh.begin(_actorID);
-		return boost::bind(&boost_actor::notify_handler<T0, T1, T2, T3>, shared_from_this(), cmh._pIsClosed, boost::ref(cmh), _1, _2, _3, _4);
+		amh.begin(_actorID);
+		return boost::bind(&boost_actor::notify_handler<T0, T1, T2, T3>, shared_from_this(), amh._pIsClosed, boost::ref(amh), _1, _2, _3, _4);
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	boost::function<void(T0, T1, T2, T3)> make_msg_notify(boost::shared_ptr<actor_msg_handle<T0, T1, T2, T3> > cmh)
+	boost::function<void(T0, T1, T2, T3)> make_msg_notify(boost::shared_ptr<actor_msg_handle<T0, T1, T2, T3> > amh)
 	{
-		cmh->begin(_actorID);
-		return boost::bind(&boost_actor::notify_handler_ptr<T0, T1, T2, T3>, shared_from_this(), cmh->_pIsClosed, 
-			boost::static_pointer_cast<param_list<msg_param<T0, T1, T2, T3> > >(cmh), _1, _2, _3, _4);
+		amh->begin(_actorID);
+		return boost::bind(&boost_actor::notify_handler_ptr<T0, T1, T2, T3>, shared_from_this(), amh->_pIsClosed, 
+			boost::static_pointer_cast<param_list<msg_param<T0, T1, T2, T3> > >(amh), _1, _2, _3, _4);
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	boost::function<void(T0, T1, T2, T3)> make_msg_notify(boost::shared_ptr<actor_msg_limit_handle<T0, T1, T2, T3> > cmh)
+	boost::function<void(T0, T1, T2, T3)> make_msg_notify(boost::shared_ptr<actor_msg_limit_handle<T0, T1, T2, T3> > amh)
 	{
-		cmh->begin(_actorID);
-		return boost::bind(&boost_actor::notify_handler_ptr<T0, T1, T2, T3>, shared_from_this(), cmh->_pIsClosed, 
-			boost::static_pointer_cast<param_list<msg_param<T0, T1, T2, T3> > >(cmh), _1, _2, _3, _4);
+		amh->begin(_actorID);
+		return boost::bind(&boost_actor::notify_handler_ptr<T0, T1, T2, T3>, shared_from_this(), amh->_pIsClosed, 
+			boost::static_pointer_cast<param_list<msg_param<T0, T1, T2, T3> > >(amh), _1, _2, _3, _4);
 	}
 
 	/*!
 	@brief 关闭make_msg_notify创建的句柄，之后将不再接收任何消息
 	*/
-	void close_msg_notify(param_list_base& cmh);
+	void close_msg_notify(param_list_base& amh);
 	//////////////////////////////////////////////////////////////////////////
 	/*!
 	@brief 取出make_msg_notify创建后的回调内容
-	@param cmh 消息句柄
+	@param amh 消息句柄
 	@param tm 消息等待超时ms，超时后返回false
 	@return 超时后返回false
 	*/
-	__yield_interrupt bool timed_pump_msg(actor_msg_handle<>& cmh, int tm);
-	__yield_interrupt void pump_msg(actor_msg_handle<>& cmh);
+	__yield_interrupt bool timed_pump_msg(actor_msg_handle<>& amh, int tm);
+	__yield_interrupt void pump_msg(actor_msg_handle<>& amh);
 
 	template <typename T0>
-	__yield_interrupt void pump_msg(param_list<msg_param<T0> >& cmh, __out T0& r0)
+	__yield_interrupt void pump_msg(param_list<msg_param<T0> >& amh, __out T0& r0)
 	{
-		timed_pump_msg(cmh, r0, -1);
+		timed_pump_msg(amh, r0, -1);
 	}
 
 	template <typename T0>
-	__yield_interrupt bool timed_pump_msg(param_list<msg_param<T0> >& cmh, __out T0& r0, int tm)
+	__yield_interrupt bool timed_pump_msg(param_list<msg_param<T0> >& amh, __out T0& r0, int tm)
 	{
-		assert(cmh._actorID == _actorID);
+		assert(amh._actorID == _actorID);
 		assert_enter();
-		assert(cmh._pIsClosed);
+		assert(amh._pIsClosed);
 		ref_ex<T0> ref(r0);
-		msg_param<T0>* param = cmh.front();
+		msg_param<T0>* param = amh.front();
 		if (param)
 		{
 			param->get_param(ref);
-			cmh.pop_front();
+			amh.pop_front();
 			return true;
 		}
-		cmh._waiting = true;
-		cmh.set_ref(ref);
-		return pump_msg_push(cmh, tm);
+		amh._waiting = true;
+		amh.set_ref(ref);
+		return pump_msg_push(amh, tm);
 	}
 
 	template <typename T0>
-	__yield_interrupt T0 pump_msg(param_list<msg_param<T0> >& cmh)
+	__yield_interrupt T0 pump_msg(param_list<msg_param<T0> >& amh)
 	{
 		T0 r0;
-		timed_pump_msg(cmh, r0, -1);
+		timed_pump_msg(amh, r0, -1);
 		return r0;
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt void pump_msg(param_list<msg_param<T0, T1> >& cmh, __out T0& r0, __out T1& r1)
+	__yield_interrupt void pump_msg(param_list<msg_param<T0, T1> >& amh, __out T0& r0, __out T1& r1)
 	{
-		timed_pump_msg(cmh, r0, r1, -1);
+		timed_pump_msg(amh, r0, r1, -1);
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt bool timed_pump_msg(param_list<msg_param<T0, T1> >& cmh, __out T0& r0, __out T1& r1, int tm)
+	__yield_interrupt bool timed_pump_msg(param_list<msg_param<T0, T1> >& amh, __out T0& r0, __out T1& r1, int tm)
 	{
-		assert(cmh._actorID == _actorID);
+		assert(amh._actorID == _actorID);
 		assert_enter();
-		assert(cmh._pIsClosed);
+		assert(amh._pIsClosed);
 		ref_ex<T0, T1> ref(r0, r1);
-		msg_param<T0, T1>* param = cmh.front();
+		msg_param<T0, T1>* param = amh.front();
 		if (param)
 		{
 			param->get_param(ref);
-			cmh.pop_front();
+			amh.pop_front();
 			return true;
 		}
-		cmh._waiting = true;
-		cmh.set_ref(ref);
-		return pump_msg_push(cmh, tm);
+		amh._waiting = true;
+		amh.set_ref(ref);
+		return pump_msg_push(amh, tm);
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt void pump_msg(param_list<msg_param<T0, T1, T2> >& cmh, __out T0& r0, __out T1& r1, __out T2& r2)
+	__yield_interrupt void pump_msg(param_list<msg_param<T0, T1, T2> >& amh, __out T0& r0, __out T1& r1, __out T2& r2)
 	{
-		timed_pump_msg(cmh, r0, r1, r2, -1);
+		timed_pump_msg(amh, r0, r1, r2, -1);
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt bool timed_pump_msg(param_list<msg_param<T0, T1, T2> >& cmh, __out T0& r0, __out T1& r1, __out T2& r2, int tm)
+	__yield_interrupt bool timed_pump_msg(param_list<msg_param<T0, T1, T2> >& amh, __out T0& r0, __out T1& r1, __out T2& r2, int tm)
 	{
-		assert(cmh._actorID == _actorID);
+		assert(amh._actorID == _actorID);
 		assert_enter();
-		assert(cmh._pIsClosed);
+		assert(amh._pIsClosed);
 		ref_ex<T0, T1, T2> ref(r0, r1, r2);
-		msg_param<T0, T1, T2>* param = cmh.front();
+		msg_param<T0, T1, T2>* param = amh.front();
 		if (param)
 		{
 			param->get_param(ref);
-			cmh.pop_front();
+			amh.pop_front();
 			return true;
 		}
-		cmh._waiting = true;
-		cmh.set_ref(ref);
-		return pump_msg_push(cmh, tm);
+		amh._waiting = true;
+		amh.set_ref(ref);
+		return pump_msg_push(amh, tm);
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt void pump_msg(param_list<msg_param<T0, T1, T2, T3> >& cmh, __out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3)
+	__yield_interrupt void pump_msg(param_list<msg_param<T0, T1, T2, T3> >& amh, __out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3)
 	{
-		timed_pump_msg(cmh, r0, r1, r2, r3, -1);
+		timed_pump_msg(amh, r0, r1, r2, r3, -1);
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt bool timed_pump_msg(param_list<msg_param<T0, T1, T2, T3> >& cmh, __out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3, int tm)
+	__yield_interrupt bool timed_pump_msg(param_list<msg_param<T0, T1, T2, T3> >& amh, __out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3, int tm)
 	{
-		assert(cmh._actorID == _actorID);
+		assert(amh._actorID == _actorID);
 		assert_enter();
-		assert(cmh._pIsClosed);
+		assert(amh._pIsClosed);
 		ref_ex<T0, T1, T2, T3> ref(r0, r1, r2, r3);
-		msg_param<T0, T1, T2, T3>* param = cmh.front();
+		msg_param<T0, T1, T2, T3>* param = amh.front();
 		if (param)
 		{
 			param->get_param(ref);
-			cmh.pop_front();
+			amh.pop_front();
 			return true;
 		}
-		cmh._waiting = true;
-		cmh.set_ref(ref);
-		return pump_msg_push(cmh, tm);
+		amh._waiting = true;
+		amh.set_ref(ref);
+		return pump_msg_push(amh, tm);
 	}
 private:
 	bool pump_msg_push(param_list_base& pm, int tm);
@@ -1914,11 +1914,11 @@ private:
 		_async_trig_handler(pIsClosed, *th, p0, p1, p2, p3);
 	}
 private:
-	void check_run1(boost::shared_ptr<bool>& pIsClosed, actor_msg_handle<>& cmh);
-	void check_run1_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<actor_msg_handle<> >& cmh);
+	void check_run1(boost::shared_ptr<bool>& pIsClosed, actor_msg_handle<>& amh);
+	void check_run1_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<actor_msg_handle<> >& amh);
 
 	template <typename T0>
-	void notify_handler(boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0> >& cmh, const T0& p0)
+	void notify_handler(boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0> >& amh, const T0& p0)
 	{
 		typedef msg_param<T0> msg_type;
 		typedef const_ref_ex<T0> const_ref_type;
@@ -1927,18 +1927,18 @@ private:
 		{
 			if (!_quited && !(*pIsClosed))
 			{
-				check_run3<msg_type, const_ref_type>(cmh, const_ref_type(p0));
+				check_run3<msg_type, const_ref_type>(amh, const_ref_type(p0));
 			}
 		} 
 		else
 		{
 			_strand->post(boost::bind(&boost_actor::check_run2<msg_type>, 
-				shared_from_this(), pIsClosed, boost::ref(cmh), msg_type(p0)));
+				shared_from_this(), pIsClosed, boost::ref(amh), msg_type(p0)));
 		}
 	}
 
 	template <typename T0>
-	void notify_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<msg_param<T0> > >& cmh, const T0& p0)
+	void notify_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<msg_param<T0> > >& amh, const T0& p0)
 	{
 		typedef msg_param<T0> msg_type;
 		typedef const_ref_ex<T0> const_ref_type;
@@ -1947,18 +1947,18 @@ private:
 		{
 			if (!_quited && !(*pIsClosed))
 			{
-				check_run3<msg_type, const_ref_type>(*cmh, const_ref_type(p0));
+				check_run3<msg_type, const_ref_type>(*amh, const_ref_type(p0));
 			}
 		} 
 		else
 		{
 			_strand->post(boost::bind(&boost_actor::check_run2_ptr<msg_type>, 
-				shared_from_this(), pIsClosed, cmh, msg_type(p0)));
+				shared_from_this(), pIsClosed, amh, msg_type(p0)));
 		}
 	}
 
 	template <typename T0, typename T1>
-	void notify_handler(boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0, T1> >& cmh, const T0& p0, const T1& p1)
+	void notify_handler(boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0, T1> >& amh, const T0& p0, const T1& p1)
 	{
 		typedef msg_param<T0, T1> msg_type;
 		typedef const_ref_ex<T0, T1> const_ref_type;
@@ -1967,18 +1967,18 @@ private:
 		{
 			if (!_quited && !(*pIsClosed))
 			{
-				check_run3<msg_type, const_ref_type>(cmh, const_ref_type(p0, p1));
+				check_run3<msg_type, const_ref_type>(amh, const_ref_type(p0, p1));
 			}
 		} 
 		else
 		{
 			_strand->post(boost::bind(&boost_actor::check_run2<msg_type>, 
-				shared_from_this(), pIsClosed, boost::ref(cmh), msg_type(p0, p1)));
+				shared_from_this(), pIsClosed, boost::ref(amh), msg_type(p0, p1)));
 		}
 	}
 
 	template <typename T0, typename T1>
-	void notify_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<msg_param<T0, T1> > >& cmh, const T0& p0, const T1& p1)
+	void notify_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<msg_param<T0, T1> > >& amh, const T0& p0, const T1& p1)
 	{
 		typedef msg_param<T0, T1> msg_type;
 		typedef const_ref_ex<T0, T1> const_ref_type;
@@ -1987,18 +1987,18 @@ private:
 		{
 			if (!_quited && !(*pIsClosed))
 			{
-				check_run3<msg_type, const_ref_type>(*cmh, const_ref_type(p0, p1));
+				check_run3<msg_type, const_ref_type>(*amh, const_ref_type(p0, p1));
 			}
 		} 
 		else
 		{
 			_strand->post(boost::bind(&boost_actor::check_run2_ptr<msg_type>, 
-				shared_from_this(), pIsClosed, cmh, msg_type(p0, p1)));
+				shared_from_this(), pIsClosed, amh, msg_type(p0, p1)));
 		}
 	}
 
 	template <typename T0, typename T1, typename T2>
-	void notify_handler(boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0, T1, T2> >& cmh, const T0& p0, const T1& p1, const T2& p2)
+	void notify_handler(boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0, T1, T2> >& amh, const T0& p0, const T1& p1, const T2& p2)
 	{
 		typedef msg_param<T0, T1, T2> msg_type;
 		typedef const_ref_ex<T0, T1, T2> const_ref_type;
@@ -2007,18 +2007,18 @@ private:
 		{
 			if (!_quited && !(*pIsClosed))
 			{
-				check_run3<msg_type, const_ref_type>(cmh, const_ref_type(p0, p1, p2));
+				check_run3<msg_type, const_ref_type>(amh, const_ref_type(p0, p1, p2));
 			}
 		} 
 		else
 		{
 			_strand->post(boost::bind(&boost_actor::check_run2<msg_type>, 
-				shared_from_this(), pIsClosed, boost::ref(cmh), msg_type(p0, p1, p2)));
+				shared_from_this(), pIsClosed, boost::ref(amh), msg_type(p0, p1, p2)));
 		}
 	}
 
 	template <typename T0, typename T1, typename T2>
-	void notify_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<msg_param<T0, T1, T2> > >& cmh, const T0& p0, const T1& p1, const T2& p2)
+	void notify_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<msg_param<T0, T1, T2> > >& amh, const T0& p0, const T1& p1, const T2& p2)
 	{
 		typedef msg_param<T0, T1, T2> msg_type;
 		typedef const_ref_ex<T0, T1, T2> const_ref_type;
@@ -2027,18 +2027,18 @@ private:
 		{
 			if (!_quited && !(*pIsClosed))
 			{
-				check_run3<msg_type, const_ref_type>(*cmh, const_ref_type(p0, p1, p2));
+				check_run3<msg_type, const_ref_type>(*amh, const_ref_type(p0, p1, p2));
 			}
 		} 
 		else
 		{
 			_strand->post(boost::bind(&boost_actor::check_run2_ptr<msg_type>, 
-				shared_from_this(), pIsClosed, cmh, msg_type(p0, p1, p2)));
+				shared_from_this(), pIsClosed, amh, msg_type(p0, p1, p2)));
 		}
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	void notify_handler(boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0, T1, T2, T3> >& cmh, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+	void notify_handler(boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0, T1, T2, T3> >& amh, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
 		typedef msg_param<T0, T1, T2, T3> msg_type;
 		typedef const_ref_ex<T0, T1, T2, T3> const_ref_type;
@@ -2047,18 +2047,18 @@ private:
 		{
 			if (!_quited && !(*pIsClosed))
 			{
-				check_run3<msg_type, const_ref_type>(cmh, const_ref_type(p0, p1, p2, p3));
+				check_run3<msg_type, const_ref_type>(amh, const_ref_type(p0, p1, p2, p3));
 			}
 		} 
 		else
 		{
 			_strand->post(boost::bind(&boost_actor::check_run2<msg_type>, 
-				shared_from_this(), pIsClosed, boost::ref(cmh), msg_type(p0, p1, p2, p3)));
+				shared_from_this(), pIsClosed, boost::ref(amh), msg_type(p0, p1, p2, p3)));
 		}
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	void notify_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<msg_param<T0, T1, T2, T3> > >& cmh, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+	void notify_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<msg_param<T0, T1, T2, T3> > >& amh, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
 		typedef msg_param<T0, T1, T2, T3> msg_type;
 		typedef const_ref_ex<T0, T1, T2, T3> const_ref_type;
@@ -2067,64 +2067,64 @@ private:
 		{
 			if (!_quited && !(*pIsClosed))
 			{
-				check_run3<msg_type, const_ref_type>(*cmh, const_ref_type(p0, p1, p2, p3));
+				check_run3<msg_type, const_ref_type>(*amh, const_ref_type(p0, p1, p2, p3));
 			}
 		} 
 		else
 		{
 			_strand->post(boost::bind(&boost_actor::check_run2_ptr<msg_type>, 
-				shared_from_this(), pIsClosed, cmh, msg_type(p0, p1, p2, p3)));
+				shared_from_this(), pIsClosed, amh, msg_type(p0, p1, p2, p3)));
 		}
 	}
 
 	template <typename T /*msg_param*/>
-	void check_run2(boost::shared_ptr<bool>& pIsClosed, param_list<T>& cmh, const T& src)
+	void check_run2(boost::shared_ptr<bool>& pIsClosed, param_list<T>& amh, const T& src)
 	{
 		if (!_quited && !(*pIsClosed))
 		{
-			if (cmh._waiting)
+			if (amh._waiting)
 			{
-				cmh._waiting = false;
-				if (cmh._hasTm)
+				amh._waiting = false;
+				if (amh._hasTm)
 				{
-					cmh._hasTm = false;
+					amh._hasTm = false;
 					cancel_timer();
 				}
-				assert(cmh.get_size() == 0);
-				cmh.get_param(src);
+				assert(amh.get_size() == 0);
+				amh.get_param(src);
 				pull_yield();//与check_run3区别
 			} 
 			else
 			{
-				cmh.push_back(src);
+				amh.push_back(src);
 			}
 		}
 	}
 
 	template <typename T /*msg_param*/>
-	void check_run2_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<T> >& cmh, const T& src)
+	void check_run2_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<T> >& amh, const T& src)
 	{
-		check_run2(pIsClosed, *cmh, src);
+		check_run2(pIsClosed, *amh, src);
 	}
 
 	template <typename T /*msg_param*/, typename RT /*msg_param::const_ref_type*/>
-	void check_run3(param_list<T>& cmh, const RT& srcRef)
+	void check_run3(param_list<T>& amh, const RT& srcRef)
 	{
-		if (cmh._waiting)
+		if (amh._waiting)
 		{
-			cmh._waiting = false;
-			if (cmh._hasTm)
+			amh._waiting = false;
+			if (amh._hasTm)
 			{
-				cmh._hasTm = false;
+				amh._hasTm = false;
 				cancel_timer();
 			}
-			assert(cmh.get_size() == 0);
-			cmh.get_param(srcRef);
+			assert(amh.get_size() == 0);
+			amh.get_param(srcRef);
 			_strand->post(boost::bind(&boost_actor::run_one, shared_from_this()));//与check_run2区别
 		} 
 		else
 		{
-			cmh.push_back(srcRef);
+			amh.push_back(srcRef);
 		}
 	}
 public:
@@ -2209,38 +2209,38 @@ public:
 	/*!
 	@brief 启动一堆Actor
 	*/
-	void another_actors_start_run(const list<actor_handle>& anotherActors);
+	void actors_start_run(const list<actor_handle>& anotherActors);
 
 	/*!
 	@brief 强制退出另一个Actor，并且等待完成
 	*/
-	__yield_interrupt bool another_actor_force_quit(actor_handle anotherActor);
-	__yield_interrupt void another_actors_force_quit(const list<actor_handle>& anotherActors);
+	__yield_interrupt bool actor_force_quit(actor_handle anotherActor);
+	__yield_interrupt void actors_force_quit(const list<actor_handle>& anotherActors);
 
 	/*!
 	@brief 等待另一个Actor结束后返回
 	*/
-	__yield_interrupt bool another_actor_wait_quit(actor_handle anotherActor);
-	__yield_interrupt void another_actors_wait_quit(const list<actor_handle>& anotherActors);
+	__yield_interrupt bool actor_wait_quit(actor_handle anotherActor);
+	__yield_interrupt void actors_wait_quit(const list<actor_handle>& anotherActors);
 
 	/*!
 	@brief 挂起另一个Actor，等待其所有子Actor都调用后才返回
 	*/
-	__yield_interrupt void another_actor_suspend(actor_handle anotherActor);
-	__yield_interrupt void another_actors_suspend(const list<actor_handle>& anotherActors);
+	__yield_interrupt void actor_suspend(actor_handle anotherActor);
+	__yield_interrupt void actors_suspend(const list<actor_handle>& anotherActors);
 
 	/*!
 	@brief 恢复另一个Actor，等待其所有子Actor都调用后才返回
 	*/
-	__yield_interrupt void another_actor_resume(actor_handle anotherActor);
-	__yield_interrupt void another_actors_resume(const list<actor_handle>& anotherActors);
+	__yield_interrupt void actor_resume(actor_handle anotherActor);
+	__yield_interrupt void actors_resume(const list<actor_handle>& anotherActors);
 
 	/*!
 	@brief 对另一个Actor进行挂起/恢复状态切换
 	@return 都已挂起返回true，否则false
 	*/
-	__yield_interrupt bool another_actor_switch(actor_handle anotherActor);
-	__yield_interrupt bool another_actors_switch(const list<actor_handle>& anotherActors);
+	__yield_interrupt bool actor_switch(actor_handle anotherActor);
+	__yield_interrupt bool actors_switch(const list<actor_handle>& anotherActors);
 private:
 	void assert_enter();
 	void time_out(int ms, const boost::function<void ()>& h);

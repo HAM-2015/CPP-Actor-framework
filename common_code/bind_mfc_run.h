@@ -6,6 +6,8 @@
 #include <boost/thread/thread.hpp>
 #include <list>
 #include "wrapped_post_handler.h"
+#include "actor_framework.h"
+#include "mfc_strand.h"
 
 using namespace std;
 
@@ -14,7 +16,7 @@ using namespace std;
 #define 	WM_USER_SEND		(WM_USER+0x8002)
 #define		WM_USER_END			(WM_USER+0x8003)
 
-#define		BIND_MFC_RUN() \
+#define		BIND_MFC_RUN(__base__) \
 private:\
 void post_message(int id)\
 {\
@@ -54,9 +56,6 @@ LRESULT _sendRun(WPARAM wp, LPARAM lp)\
 	return 0;\
 }\
 \
-afx_msg void OnCancel();
-
-#define BIND_ACTOR_SEND()\
 public:\
 void send(boost_actor* actor, const boost::function<void ()>& h)\
 {\
@@ -69,43 +68,14 @@ T send(boost_actor* actor, const boost::function<T ()>& h)\
 {\
 	assert(boost::this_thread::get_id() != thread_id());\
 	return actor->trig<T>(boost::bind(&bind_mfc_run::send<T>, (bind_mfc_run*)this, _1, h));\
-}
-
-#ifdef ENABLE_MFC_ACTOR
-#define BIND_MFC_ACTOR(__dlg__, __base__)\
-public:\
-actor_handle create_mfc_actor(ios_proxy& ios, const boost_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE)\
-{\
-	return boost_actor::create(mfc_strand::create(ios, this), mainFunc, stackSize);\
 }\
 \
-actor_handle create_mfc_actor(const boost_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE)\
-{\
-	return boost_actor::create(mfc_strand::create(this), mainFunc, stackSize);\
-}\
-private:\
-boost::function<void (bool)> close_mfc_handler()\
-{\
-	_closeCount++;\
-	return wrap(boost::bind(&__dlg__::_mfcClose, this, _1));\
-}\
+afx_msg void OnCancel();\
 \
-void _mfcClose(bool ok)\
-{\
-	if (0 == --_closeCount)\
-	{\
-		_isClosed = true;\
-		clear_message();\
-		__base__::OnCancel();\
-	}\
-}\
-\
-public:\
 void baseCancel()\
 {\
 	__base__::OnCancel();\
 }
-#endif
 
 #define REGIEST_MFC_RUN(__dlg__) \
 ON_WM_CLOSE()\
@@ -157,7 +127,7 @@ protected:
 		boost::function<void ()> _h;
 	};
 public:
-	bind_mfc_run():_closeCount(0), _isClosed(false) {};
+	bind_mfc_run(): _isClosed(false) {};
 	~bind_mfc_run() {};
 public:
 	/*!
@@ -228,6 +198,22 @@ public:
 			post_message(WM_USER_SEND);
 		}
 	}
+
+#ifdef ENABLE_MFC_ACTOR
+	/*!
+	@brief 在MFC线程中创建一个Actor
+	@param ios Actor内部timer使用的调度器，没有就不能用timer
+	*/
+	actor_handle create_mfc_actor(ios_proxy& ios, const boost_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE)
+	{
+		return boost_actor::create(mfc_strand::create(ios, this), mainFunc, stackSize);
+	}
+
+	actor_handle create_mfc_actor(const boost_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE)
+	{
+		return boost_actor::create(mfc_strand::create(this), mainFunc, stackSize);
+	}
+#endif
 protected:
 	list<boost::function<void ()> > _postOptions;
 	list<boost::shared_ptr<bind_run> > _sendOptions;
@@ -236,7 +222,6 @@ protected:
 	boost::shared_mutex _postMutex;
 	boost::thread::id _threadID;
 	bool _isClosed;
-	size_t _closeCount;
 };
 
 #endif

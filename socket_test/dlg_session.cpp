@@ -73,36 +73,36 @@ void dlg_session::sessionActor(boost_actor* actor)
 	post(boost::bind(&dlg_session::showClientMsg, this, msg_data::create(_socket->ip())));
 	child_actor_handle lstClose = actor->create_child_actor([&, this](boost_actor* actor)
 	{
-		actor_msg_handle<> cmh;
-		_lstClose(actor, cmh);
+		actor_msg_handle<> amh;
+		_lstClose(actor, amh);
 		//侦听请求对话框关闭消息，然后通知对话框关闭
-		actor->pump_msg(cmh);
+		actor->pump_msg(amh);
 		this->_exit = true;
 		_socket->close();
-		actor->close_msg_notify(cmh);
+		actor->close_msg_notify(amh);
 	});
 	actor->child_actor_run(lstClose);
-	actor_msg_handle<shared_data> cmh;
-	boost::shared_ptr<text_stream_io> textio = text_stream_io::create(_strand, _socket, actor->make_msg_notify(cmh));
+	actor_msg_handle<shared_data> amh;
+	boost::shared_ptr<text_stream_io> textio = text_stream_io::create(_strand, _socket, actor->make_msg_notify(amh));
 	child_actor_handle wd = actor->create_child_actor([this, &textio](boost_actor* actor)
 	{
-		actor_msg_handle<shared_data> cmh;
-		_sendPump(actor, cmh);
+		actor_msg_handle<shared_data> amh;
+		_sendPump(actor, amh);
 		while (true)
 		{
-			auto msg = actor->pump_msg(cmh);
+			auto msg = actor->pump_msg(amh);
 			if (!msg)
 			{
 				break;
 			}
 			textio->write(msg);
 		}
-		actor->close_msg_notify(cmh);
+		actor->close_msg_notify(amh);
 	});
 	actor->child_actor_run(wd);
 	while (true)
 	{
-		auto msg = actor->pump_msg(cmh);
+		auto msg = actor->pump_msg(amh);
 		if (!msg)
 		{
 			break;
@@ -110,7 +110,7 @@ void dlg_session::sessionActor(boost_actor* actor)
 		post(boost::bind(&dlg_session::showClientMsg, this, msg));
 	}
 	actor->child_actor_force_quit(wd);
-	actor->close_msg_notify(cmh);
+	actor->close_msg_notify(amh);
 	post(boost::bind(&dlg_session::showClientMsg, this, msg_data::create("连接断开")));
 	send(actor, [this]()
 	{

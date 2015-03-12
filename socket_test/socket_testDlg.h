@@ -6,14 +6,12 @@
 #include "afxwin.h"
 #include "afxcmn.h"
 #include "bind_mfc_run.h"
-#include "actor_framework.h"
 #include "msg_pipe.h"
 #include "shared_data.h"
 #include "socket_io.h"
 #include "text_stream_io.h"
 #include "acceptor_socket.h"
 #include "dlg_session.h"
-#include "mfc_strand.h"
 
 
 // Csocket_testDlg ¶Ô»°¿ò
@@ -80,10 +78,8 @@ protected:
 	afx_msg void OnBnClickedClear();
 	void showClientMsg(shared_data msg);
 	void showSessionNum(int n);
+	BIND_MFC_RUN(CDialogEx);
 	DECLARE_MESSAGE_MAP()
-	BIND_MFC_RUN()
-	BIND_ACTOR_SEND()
-	BIND_MFC_ACTOR(Csocket_testDlg, CDialogEx)
 private:
 	void connectActor(boost_actor* actor, boost::shared_ptr<client_param> param);
 	void newSession(boost_actor* actor, boost::shared_ptr<session_pck> sess);

@@ -1,11 +1,9 @@
 #pragma once
 #include "afxwin.h"
 #include "bind_mfc_run.h"
-#include "actor_framework.h"
 #include "msg_pipe.h"
 #include "socket_io.h"
 #include "text_stream_io.h"
-#include "mfc_strand.h"
 
 
 // dlg_session ¶Ô»°¿ò
@@ -28,10 +26,8 @@ protected:
 	afx_msg void OnBnClickedSendMsg();
 	afx_msg void OnBnClickedClear();
 	void showClientMsg(shared_data msg);
+	BIND_MFC_RUN(CDialogEx)
 	DECLARE_MESSAGE_MAP()
-	BIND_MFC_RUN()
-	BIND_ACTOR_SEND()
-	BIND_MFC_ACTOR(dlg_session, CDialogEx)
 private:
 	void sessionActor(boost_actor* actor);
 public:

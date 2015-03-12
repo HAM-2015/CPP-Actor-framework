@@ -4,7 +4,8 @@
 #ifdef ENABLE_MFC_ACTOR
 #include <boost/thread/thread.hpp>
 #include "shared_strand.h"
-#include "bind_mfc_run.h"
+
+class bind_mfc_run;
 
 class mfc_strand: public boost_strand
 {

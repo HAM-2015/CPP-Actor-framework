@@ -1,4 +1,5 @@
 #include "mfc_strand.h"
+#include "bind_mfc_run.h"
 
 #ifdef ENABLE_MFC_ACTOR
 mfc_strand::mfc_strand()
