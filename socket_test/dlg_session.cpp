@@ -23,7 +23,7 @@ dlg_session::~dlg_session()
 
 void dlg_session::DoDataExchange(CDataExchange* pDX)
 {
-	SET_THREAD_ID();
+	set_thread_id();
 	CDialogEx::DoDataExchange(pDX);
 	DDX_Control(pDX, IDC_EDIT5, _msgEdit);
 	DDX_Control(pDX, IDC_EDIT4, _outputEdit);
@@ -119,9 +119,7 @@ void dlg_session::sessionActor(boost_actor* actor)
 	actor->child_actor_wait_quit(lstClose);
 	send(actor, wrap([this]()
 	{
-		_isClosed = true;
-		this->clear_message();
-		this->baseCancel();
+		this->mfc_close();
 		_closeCallback();
 	}));
 }

@@ -90,7 +90,7 @@ END_MESSAGE_MAP()
 
 BOOL Csocket_testDlg::OnInitDialog()
 {
-	SET_THREAD_ID();
+	set_thread_id();
 	CDialogEx::OnInitDialog();
 
 	// 将“关于...”菜单项添加到系统菜单中。
@@ -131,6 +131,12 @@ BOOL Csocket_testDlg::OnInitDialog()
 	_outputEdit.SetFont(&_editFont);
 	_maxSessionEdit.SetFont(&_editFont);
 	_extSessNumEdit.SetFont(&_editFont);
+	GetDlgItem(IDC_BUTTON1)->SetFont(&_editFont);
+	GetDlgItem(IDC_BUTTON2)->SetFont(&_editFont);
+	GetDlgItem(IDC_BUTTON3)->SetFont(&_editFont);
+	GetDlgItem(IDC_BUTTON4)->SetFont(&_editFont);
+	GetDlgItem(IDC_BUTTON5)->SetFont(&_editFont);
+	GetDlgItem(IDC_BUTTON6)->SetFont(&_editFont);
 
 	_clientIpEdit.SetAddress(127, 0, 0, 1);
 	_clientPortEdit.SetWindowText("1000");
@@ -251,10 +257,33 @@ void Csocket_testDlg::connectActor(boost_actor* actor, boost::shared_ptr<client_
 	async_trig_handle<boost::system::error_code> ath;
 	post(boost::bind(&Csocket_testDlg::showClientMsg, this, msg_data::create("连接中...")));
 	param->_clientSocket->async_connect(param->_ip.c_str(), param->_port, actor->begin_trig(ath));
+	actor_handle connecting = create_mfc_actor(_ios, [this](boost_actor* actor)
+	{//让“连接”按钮在连接中闪烁
+		actor->open_timer();
+		this->GetDlgItem(IDC_BUTTON1)->EnableWindow(TRUE);
+		while (true)
+		{
+			this->GetDlgItem(IDC_BUTTON1)->SetWindowText("连接中   ");
+			actor->sleep(250);
+			this->GetDlgItem(IDC_BUTTON1)->SetWindowText("连接中.  ");
+			actor->sleep(250);
+			this->GetDlgItem(IDC_BUTTON1)->SetWindowText("连接中.. ");
+			actor->sleep(250);
+			this->GetDlgItem(IDC_BUTTON1)->SetWindowText("连接中...");
+			actor->sleep(250);
+		}
+	});
+	connecting->notify_start_run();
 	actor->open_timer();
 	boost::system::error_code err;
 	if (actor->timed_wait_trig(ath, err, param->_tm) && !err && param->_clientSocket->no_delay())
 	{
+		actor->actor_force_quit(connecting);
+		send(actor, [this]()
+		{
+			this->GetDlgItem(IDC_BUTTON1)->EnableWindow(FALSE);
+			this->GetDlgItem(IDC_BUTTON1)->SetWindowText("连接");
+		});
 		post(boost::bind(&Csocket_testDlg::showClientMsg, this, msg_data::create("连接成功")));
 		actor_msg_handle<shared_data> amh;
 		child_actor_handle readActor = actor->create_child_actor([this, &amh](boost_actor* actor)
@@ -296,6 +325,12 @@ void Csocket_testDlg::connectActor(boost_actor* actor, boost::shared_ptr<client_
 	} 
 	else
 	{
+		actor->actor_force_quit(connecting);
+		send(actor, [this]()
+		{
+			this->GetDlgItem(IDC_BUTTON1)->EnableWindow(FALSE);
+			this->GetDlgItem(IDC_BUTTON1)->SetWindowText("连接");
+		});
 		post(boost::bind(&Csocket_testDlg::showClientMsg, this, msg_data::create("连接失败")));
 		param->_clientSocket->close();
 	}
@@ -549,11 +584,7 @@ void Csocket_testDlg::mainActor(boost_actor* actor, actor_msg_handle<ui_cmd>::pt
 				disconnectHandler();
 				stopListenHandler();
 				actor->close_msg_notify(*lstCMD);
-				send(actor, [this]()
-				{
-					_isClosed = true;
-					this->baseCancel();
-				});
+				send(actor, [this](){this->mfc_close();});
 				return;
 			}
 			break;

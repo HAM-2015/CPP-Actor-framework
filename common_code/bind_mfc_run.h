@@ -4,6 +4,7 @@
 #include <boost/function.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/thread.hpp>
+#include <boost/bind.hpp>
 #include <list>
 #include "wrapped_post_handler.h"
 #include "actor_framework.h"
@@ -23,66 +24,33 @@ void post_message(int id)\
 	PostMessage(id);\
 }\
 \
-void clear_message()\
+void peek_message()\
 {\
-	boost::unique_lock<boost::shared_mutex> ul(_postMutex);\
 	MSG msg;\
 	while (PeekMessage(&msg, m_hWnd, WM_USER_BEGIN, WM_USER_END, PM_REMOVE))\
 	{}\
-	_postOptions.clear();\
-	_sendOptions.clear();\
+}\
+void cancel()\
+{\
+	__base__::OnCancel();\
 }\
 \
 LRESULT _postRun(WPARAM wp, LPARAM lp)\
 {\
-	_mutex1.lock();\
-	assert(!_postOptions.empty());\
-	boost::function<void ()> h = _postOptions.front();\
-	_postOptions.pop_front();\
-	_mutex1.unlock();\
-	assert(h);\
-	h();\
-	return 0;\
+	return bind_mfc_run::_postRun(wp, lp);\
 }\
 \
 LRESULT _sendRun(WPARAM wp, LPARAM lp)\
 {\
-	_mutex2.lock();\
-	assert(!_sendOptions.empty());\
-	boost::shared_ptr<bind_run> pck = _sendOptions.front();\
-	_sendOptions.pop_front();\
-	_mutex2.unlock();\
-	pck->run();\
-	return 0;\
+	return bind_mfc_run::_sendRun(wp, lp);\
 }\
 \
-public:\
-void send(boost_actor* actor, const boost::function<void ()>& h)\
-{\
-	assert(boost::this_thread::get_id() != thread_id());\
-	actor->trig(boost::bind(&bind_mfc_run::send, (bind_mfc_run*)this, _1, h));\
-}\
-\
-template <typename T>\
-T send(boost_actor* actor, const boost::function<T ()>& h)\
-{\
-	assert(boost::this_thread::get_id() != thread_id());\
-	return actor->trig<T>(boost::bind(&bind_mfc_run::send<T>, (bind_mfc_run*)this, _1, h));\
-}\
-\
-afx_msg void OnCancel();\
-\
-void baseCancel()\
-{\
-	__base__::OnCancel();\
-}
+afx_msg void OnCancel();
 
 #define REGIEST_MFC_RUN(__dlg__) \
 ON_WM_CLOSE()\
 ON_MESSAGE(WM_USER_POST, &__dlg__::_postRun)\
 ON_MESSAGE(WM_USER_SEND, &__dlg__::_sendRun)
-
-#define SET_THREAD_ID() _threadID = boost::this_thread::get_id();
 
 class bind_mfc_run
 {
@@ -140,8 +108,32 @@ public:
 	}
 protected:
 	virtual void post_message(int id) = 0;
-	virtual void clear_message() = 0;
+	virtual void peek_message() = 0;
+	virtual void cancel() = 0;
+
+	void clear_message()
+	{
+		boost::unique_lock<boost::shared_mutex> ul(_postMutex);
+		peek_message();
+		_postOptions.clear();
+		_sendOptions.clear();
+	}
+
+	void mfc_close()
+	{
+		_isClosed = true;
+		clear_message();
+		cancel();
+	}
 public:
+	/*!
+	@brief 在MFC主线程初始化时调用
+	*/
+	void set_thread_id()
+	{
+		_threadID = boost::this_thread::get_id();
+	}
+
 	/*!
 	@brief 获取主线程ID
 	*/
@@ -165,38 +157,46 @@ public:
 			post_message(WM_USER_POST);
 		}
 	}
-
+	
 	/*!
-	@brief 发送一个执行函数到MFC消息队列中执行，完成后回调
+	@brief 发送一个执行函数到MFC消息队列中执行，完成后返回
 	*/
-	void send(const boost::function<void ()>& cb, const boost::function<void ()>& h)
+	void send(boost_actor* actor, const boost::function<void ()>& h)
 	{
-		boost::shared_lock<boost::shared_mutex> sl(_postMutex);
-		if (!_isClosed)
+		assert(boost::this_thread::get_id() != thread_id());
+		actor->trig([&, this](const boost::function<void ()>& cb)
 		{
-			boost::shared_ptr<bind_run_pck<> > pck(new bind_run_pck<>(cb, h));
-			_mutex2.lock();
-			_sendOptions.push_back(pck);
-			_mutex2.unlock();
-			post_message(WM_USER_SEND);
-		}
+			boost::shared_lock<boost::shared_mutex> sl(_postMutex);
+			if (!_isClosed)
+			{
+				boost::shared_ptr<bind_mfc_run::bind_run_pck<> > pck(new bind_mfc_run::bind_run_pck<>(cb, h));
+				_mutex2.lock();
+				_sendOptions.push_back(pck);
+				_mutex2.unlock();
+				this->post_message(WM_USER_SEND);
+			}
+		});
 	}
 
 	/*!
-	@brief 发送一个带返回值函数到MFC消息队列中执行，完成后回调
+	@brief 发送一个带返回值函数到MFC消息队列中执行，完成后返回
 	*/
 	template <typename T>
-	void send(const boost::function<void (T)>& cb, const boost::function<T ()>& h)
+	T send(boost_actor* actor, const boost::function<T ()>& h)
 	{
-		boost::shared_lock<boost::shared_mutex> sl(_postMutex);
-		if (!_isClosed)
+		assert(boost::this_thread::get_id() != thread_id());
+		return actor->trig<T>([&, this](const boost::function<void (T)>& cb)
 		{
-			boost::shared_ptr<bind_run_pck<T> > pck(new bind_run_pck<T>(cb, h));
-			_mutex2.lock();
-			_sendOptions.push_back(pck);
-			_mutex2.unlock();
-			post_message(WM_USER_SEND);
-		}
+			boost::shared_lock<boost::shared_mutex> sl(_postMutex);
+			if (!_isClosed)
+			{
+				boost::shared_ptr<bind_mfc_run::bind_run_pck<T> > pck(new bind_mfc_run::bind_run_pck<T>(cb, h));
+				_mutex2.lock();
+				_sendOptions.push_back(pck);
+				_mutex2.unlock();
+				this->post_message(WM_USER_SEND);
+			}
+		});
 	}
 
 #ifdef ENABLE_MFC_ACTOR
@@ -215,6 +215,29 @@ public:
 	}
 #endif
 protected:
+	LRESULT _postRun(WPARAM wp, LPARAM lp)
+	{
+		_mutex1.lock();
+		assert(!_postOptions.empty());
+		boost::function<void ()> h = _postOptions.front();
+		_postOptions.pop_front();
+		_mutex1.unlock();
+		assert(h);
+		h();
+		return 0;
+	}
+
+	LRESULT _sendRun(WPARAM wp, LPARAM lp)
+	{
+		_mutex2.lock();
+		assert(!_sendOptions.empty());
+		boost::shared_ptr<bind_run> pck = _sendOptions.front();
+		_sendOptions.pop_front();
+		_mutex2.unlock();
+		pck->run();
+		return 0;
+	}
+private:
 	list<boost::function<void ()> > _postOptions;
 	list<boost::shared_ptr<bind_run> > _sendOptions;
 	boost::mutex _mutex1;
