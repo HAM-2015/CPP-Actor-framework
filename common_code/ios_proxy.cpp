@@ -36,11 +36,58 @@ void ios_proxy::run(size_t threadNum)
 		size_t rc = 0;
 		boost::shared_ptr<boost::mutex> blockMutex(new boost::mutex);
 		boost::shared_ptr<boost::condition_variable> blockConVar(new boost::condition_variable);
+		boost::weak_ptr<boost::mutex> weakMutex = blockMutex;
+		boost::weak_ptr<boost::condition_variable> weakConVar = blockConVar;
 		boost::unique_lock<boost::mutex> ul(*blockMutex);
 		for (size_t i = 0; i < threadNum; i++)
 		{
-			auto newThread = new boost::thread(&ios_proxy::runThread, this, &rc, (int)i, 
-				(boost::weak_ptr<boost::mutex>)blockMutex, (boost::weak_ptr<boost::condition_variable>)blockConVar);
+			boost::thread* newThread = new boost::thread([&, i]()
+			{
+				try
+				{
+					{
+						SetThreadPriority(GetCurrentThread(), _priority);
+						DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &_handleList[i], 0, FALSE, DUPLICATE_SAME_ACCESS);
+						auto blockMutex = weakMutex.lock();
+						auto blockConVar = weakConVar.lock();
+						boost::unique_lock<boost::mutex> ul(*blockMutex);
+						if (threadNum == ++rc)
+						{
+							blockConVar->notify_all();
+						}
+						else
+						{
+							blockConVar->wait(ul);
+						}
+					}
+					_runCount += _ios.run();
+				}
+				catch (msg_data::pool_memory_exception&)
+				{
+					MessageBoxA(NULL, "内存不足", NULL, NULL);
+					ExitProcess(1);
+				}
+				catch (boost::exception&)
+				{
+					MessageBoxA(NULL, "未处理的BOOST异常", NULL, NULL);
+					ExitProcess(2);
+				}
+				catch (std::exception&)
+				{
+					MessageBoxA(NULL, "未处理的STD异常", NULL, NULL);
+					ExitProcess(3);
+				}
+				catch (boost::shared_ptr<std::string> msg)
+				{
+					MessageBoxA(NULL, msg->c_str(), NULL, NULL);
+					ExitProcess(4);
+				}
+				catch (...)
+				{
+					MessageBoxA(NULL, "未知异常", NULL, NULL);
+					ExitProcess(-1);
+				}
+			});
 			_threadIDs.insert(newThread->get_id());
 			_runThreads.add_thread(newThread);
 		}
@@ -138,54 +185,6 @@ void ios_proxy::cpuAffinity(unsigned mask)
 ios_proxy::operator boost::asio::io_service&() const
 {
 	return (boost::asio::io_service&)_ios;
-}
-
-void ios_proxy::runThread(size_t* rc, int id, boost::weak_ptr<boost::mutex> mutex, boost::weak_ptr<boost::condition_variable> conVar)
-{
-	try
-	{
-		{
-			SetThreadPriority(GetCurrentThread(), _priority);
-			DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &_handleList[id], 0, FALSE, DUPLICATE_SAME_ACCESS);
-			auto blockMutex = mutex.lock();
-			auto blockConVar = conVar.lock();
-			boost::unique_lock<boost::mutex> ul(*blockMutex);
-			if (_handleList.size() == ++(*rc))
-			{
-				blockConVar->notify_all();
-			} 
-			else
-			{
-				blockConVar->wait(ul);
-			}
-		}
-		_runCount += _ios.run();
-	}
-	catch (msg_data::pool_memory_exception&)
-	{
-		MessageBoxA(NULL, "内存不足", NULL, NULL);
-		ExitProcess(1);
-	}
-	catch (boost::exception&)
-	{
-		MessageBoxA(NULL, "未处理的BOOST异常", NULL, NULL);
-		ExitProcess(2);
-	}
-	catch (std::exception&)
-	{
-		MessageBoxA(NULL, "未处理的STD异常", NULL, NULL);
-		ExitProcess(3);
-	}
-	catch (boost::shared_ptr<std::string> msg)
-	{
-		MessageBoxA(NULL, msg->c_str(), NULL, NULL);
-		ExitProcess(4);
-	}
-	catch (...)
-	{
-		MessageBoxA(NULL, "未知异常", NULL, NULL);
-		ExitProcess(-1);
-	}
 }
 
 void* ios_proxy::getImpl()

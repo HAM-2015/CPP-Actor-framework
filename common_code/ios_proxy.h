@@ -97,8 +97,6 @@ public:
 	*/
 	operator boost::asio::io_service& () const;
 private:
-	void runThread(size_t* rc, int id, boost::weak_ptr<boost::mutex> mutex, boost::weak_ptr<boost::condition_variable> conVar);
-private:
 	void* getImpl();
 	void freeImpl(void* impl);
 private:
