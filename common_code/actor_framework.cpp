@@ -215,6 +215,11 @@ async_trig_base::~async_trig_base()
 	close();
 }
 
+bool async_trig_base::has_trig()
+{
+	return _notify;
+}
+
 void async_trig_base::begin(long long actorID)
 {
 	close();
@@ -492,10 +497,11 @@ actor_handle boost_actor::create( shared_strand actorStrand, const main_func& ma
 	actor_handle newActor;
 	if (actor_stack_pool::isEnable())
 	{
-		size_t actorSize = MEM_ALIGN(sizeof(boost_actor), sizeof(void*));
-		size_t timerSize = MEM_ALIGN(sizeof(timer_pck), sizeof(void*));
-		stack_pck stackMem = actor_stack_pool::getStack(MEM_ALIGN(actorSize+timerSize+stackSize, 4 kB));
-		size_t totalSize = stackMem._stack.size;
+		const size_t actorSize = MEM_ALIGN(sizeof(boost_actor), sizeof(void*));
+		const size_t timerSize = MEM_ALIGN(sizeof(timer_pck), sizeof(void*));
+		assert(actorSize+timerSize < stackSize - 2 kB);
+		stack_pck stackMem = actor_stack_pool::getStack(stackSize);
+		const size_t totalSize = stackMem._stack.size;
 		BYTE* stackTop = (BYTE*)stackMem._stack.sp;
 		newActor = actor_handle(new(stackTop-actorSize) boost_actor, actor_free(stackMem));
 		if (_autoMakeTimer)

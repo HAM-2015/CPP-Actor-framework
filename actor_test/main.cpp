@@ -35,10 +35,9 @@ void check_key_test(boost_actor* actor, int id)
 		child_actor_handle checkUp = actor->create_child_actor(boost::bind(&check_key_up, _1, id), 24 kB);//创建一个检测弹起的子Actor
 		actor->child_actor_run(checkUp);//开始运行子Actor
 		actor->delay_trig(1000, boost::bind(&boost_actor::notify_force_quit, checkUp.get_actor()));//启用弹起超时处理，超时后强制关闭checkUp
-		bool ok = actor->child_actor_wait_quit(checkUp);//等待，正常退出的返回true，被强制关闭的返回false
-		actor->cancel_delay_trig();
-		if (ok)
+		if (actor->child_actor_wait_quit(checkUp))//正常退出的返回true，被强制关闭的返回false
 		{
+			actor->cancel_delay_trig();
 			printf("ok %d\n", id);
 		} 
 		else

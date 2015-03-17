@@ -1,51 +1,50 @@
 #include "acceptor_socket.h"
 
-acceptor_socket::acceptor_socket(boost::asio::io_service& ios, size_t port, bool reuse)
-	: _acceptor(ios, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), (unsigned short)port), reuse)
+acceptor_socket::acceptor_socket()
 {
 
 }
 
 acceptor_socket::~acceptor_socket()
 {
-
+	delete _acceptor;
 }
 
-boost::shared_ptr<acceptor_socket> acceptor_socket::create( shared_strand strand, size_t port, const boost::function<void (boost::shared_ptr<socket_io>)>& h, bool reuse )
+accept_handle acceptor_socket::create(shared_strand strand, size_t port, const boost::function<void(socket_handle)>& h, bool reuse)
 {
 	try
 	{
-		boost::shared_ptr<acceptor_socket> res(new acceptor_socket(strand->get_io_service(), port, reuse));
-		res->_socketNotify = h;
-		boost_actor::create(strand, boost::bind(&acceptor_socket::acceptorActor, res, _1))->notify_start_run();
-		return res;
+		accept_handle shared_accept(new acceptor_socket());
+		shared_accept->_acceptor = new boost::asio::ip::tcp::acceptor(strand->get_io_service(),
+			boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), (unsigned short)port), reuse);
+		boost_actor::create(strand, [shared_accept, h](boost_actor* actor)
+		{
+			async_trig_handle<boost::system::error_code> ath;
+			while (true)
+			{
+				socket_handle newSocket = socket_io::create(shared_accept->_acceptor->get_io_service());
+				shared_accept->_acceptor->async_accept((boost::asio::ip::tcp::socket&)*newSocket, actor->begin_trig(ath));
+				if (boost::system::error_code() != actor->wait_trig(ath))
+				{
+					boost::system::error_code ec;
+					shared_accept->_acceptor->close(ec);
+					h(socket_handle());
+					break;
+				}
+				newSocket->ip();
+				h(newSocket);
+			}
+		})->notify_start_run();
+		return shared_accept;
 	}
 	catch (...)
-	{
-		return boost::shared_ptr<acceptor_socket>();
+	{//acceptorππ‘Ï“Ï≥£
+		return accept_handle();
 	}
 }
 
 void acceptor_socket::close()
 {
 	boost::system::error_code ec;
-	_acceptor.close(ec);
-}
-
-void acceptor_socket::acceptorActor(boost_actor* actor)
-{
-	while (true)
-	{
-		auto newSocket = socket_io::create(_acceptor.get_io_service());
-		async_trig_handle<boost::system::error_code> ath;
-		_acceptor.async_accept((boost::asio::ip::tcp::socket&)*newSocket, actor->begin_trig(ath));
-		if (actor->wait_trig(ath))
-		{
-			_socketNotify(boost::shared_ptr<socket_io>());
-			break;
-		}
-		newSocket->ip();
-		_socketNotify(newSocket);
-	}
-	_socketNotify.clear();
+	_acceptor->close(ec);
 }

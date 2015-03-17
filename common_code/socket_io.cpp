@@ -13,9 +13,9 @@ socket_io::~socket_io()
 	close();
 }
 
-boost::shared_ptr<socket_io> socket_io::create( boost::asio::io_service& ios )
+socket_handle socket_io::create(boost::asio::io_service& ios)
 {
-	return boost::shared_ptr<socket_io>(new socket_io(ios));
+	return socket_handle(new socket_io(ios));
 }
 
 void socket_io::close()

@@ -6,20 +6,20 @@
 #include "actor_framework.h"
 #include <boost/asio/ip/tcp.hpp>
 
+class acceptor_socket;
+typedef boost::shared_ptr<acceptor_socket> accept_handle;
+
 class acceptor_socket
 {
 private:
-	acceptor_socket(boost::asio::io_service& ios, size_t port, bool reuse);
+	acceptor_socket();
 public:
 	~acceptor_socket();
-	static boost::shared_ptr<acceptor_socket> create(shared_strand  strand, size_t port, const boost::function<void (boost::shared_ptr<socket_io>)>& h, bool reuse = true);
+	static accept_handle create(shared_strand  strand, size_t port, const boost::function<void(socket_handle)>& h, bool reuse = true);
 public:
 	void close();
 private:
-	void acceptorActor(boost_actor* actor);
-private:
-	boost::asio::ip::tcp::acceptor _acceptor;
-	boost::function<void (boost::shared_ptr<socket_io>)> _socketNotify;
+	boost::asio::ip::tcp::acceptor* _acceptor;
 };
 
 #endif

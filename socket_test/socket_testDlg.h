@@ -40,7 +40,7 @@ public:
 
 	struct client_param 
 	{
-		boost::shared_ptr<socket_io> _clientSocket;
+		socket_handle _clientSocket;
 		string _ip;
 		int _port;
 		int _tm;
@@ -56,7 +56,7 @@ public:
 
 	struct session_pck 
 	{
-		boost::shared_ptr<socket_io> _socket;
+		socket_handle _socket;
 		msg_pipe<>::writer_type _closeNtf;
 		msg_pipe<>::regist_reader _lstClose;
 		actor_handle _sessionDlg;
@@ -84,11 +84,12 @@ private:
 	void connectActor(boost_actor* actor, boost::shared_ptr<client_param> param);
 	void newSession(boost_actor* actor, boost::shared_ptr<session_pck> sess);
 	void serverActor(boost_actor* actor, boost::shared_ptr<server_param> param);
-	void mainActor(boost_actor* actor, actor_msg_handle<ui_cmd>::ptr lstCMD);
+	void mainActor(boost_actor* actor);
 private:
 	ios_proxy _ios;
 	shared_strand _strand;
 	CFont _editFont;
+	actor_msg_handle<ui_cmd> _lstCMD;
 	boost::function<void (ui_cmd)> _uiCMD;
 public:
 	CEdit _outputEdit;

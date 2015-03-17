@@ -32,7 +32,7 @@ private:
 	void sessionActor(boost_actor* actor);
 public:
 	shared_strand _strand;
-	boost::shared_ptr<socket_io> _socket;
+	socket_handle _socket;
 	boost::function<void ()> _closeCallback;
 	msg_pipe<>::writer_type _closeNtf;
 	msg_pipe<>::regist_reader _lstClose;

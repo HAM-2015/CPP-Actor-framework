@@ -615,6 +615,8 @@ class async_trig_base
 public:
 	async_trig_base();
 	virtual ~async_trig_base();
+public:
+	bool has_trig();
 private:
 	void begin(long long actorID);
 	void close();

@@ -119,6 +119,9 @@ protected:
 		_sendOptions.clear();
 	}
 
+	/*!
+	@brief 关闭基类，并且终止消息的投递
+	*/
 	void mfc_close()
 	{
 		_isClosed = true;

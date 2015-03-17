@@ -1,6 +1,6 @@
 并发逻辑控制框架(Actor Model)，适用于复杂逻辑控制场合，有问题或BUG反馈至 591170887@qq.com;
 依赖于boost 1.57;
-仅在VC2010编译器中测试，其它编译器不保证.
+仅在VC2010,2013编译器中测试，其它编译器不保证.
 
 github url:
 https://github.com/HAM-2015/CPP-Actor-framework

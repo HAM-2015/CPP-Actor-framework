@@ -148,9 +148,8 @@ BOOL Csocket_testDlg::OnInitDialog()
 	boost_actor::disable_auto_make_timer();
 	_ios.run();
 	_strand = boost_strand::create(_ios);
-	actor_msg_handle<ui_cmd>::ptr lstCmd = actor_msg_handle<ui_cmd>::make_ptr();
-	actor_handle mainActor = boost_actor::create(_strand, boost::bind(&Csocket_testDlg::mainActor, this, _1, lstCmd));
-	_uiCMD = mainActor->make_msg_notify(*lstCmd);
+	actor_handle mainActor = boost_actor::create(_strand, boost::bind(&Csocket_testDlg::mainActor, this, _1));
+	_uiCMD = mainActor->make_msg_notify(_lstCMD);
 	mainActor->notify_start_run();
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
@@ -346,7 +345,7 @@ void Csocket_testDlg::newSession(boost_actor* actor, boost::shared_ptr<session_p
 	dlg._lstClose = sess->_lstClose;
 	dlg._closeNtf = sess->_closeNtf;
 	dlg._closeCallback = actor->begin_trig(lstClose);
-	dlg.Create(IDD_SESSION, GetDesktopWindow());
+	dlg.Create(IDD_SESSION, this);
 	dlg.ShowWindow(SW_SHOW);
 	actor->wait_trig(lstClose);
 	dlg.DestroyWindow();
@@ -354,12 +353,12 @@ void Csocket_testDlg::newSession(boost_actor* actor, boost::shared_ptr<session_p
 
 void Csocket_testDlg::serverActor(boost_actor* actor, boost::shared_ptr<server_param> param)
 {
-	actor_msg_handle<boost::shared_ptr<socket_io> > amh;
-	auto accept = acceptor_socket::create(actor->this_strand(), param->_port, actor->make_msg_notify(amh), false);//创建连接侦听器
+	actor_msg_handle<socket_handle> amh;
+	accept_handle accept = acceptor_socket::create(actor->this_strand(), param->_port, actor->make_msg_notify(amh), false);//创建连接侦听器
 	if (!accept)
 	{
 		actor->close_msg_notify(amh);
-		post(boost::bind(&Csocket_testDlg::OnBnClickedStopLst, this));
+		_uiCMD(ui_stopListen);
 		return;
 	}
 	bool norClosed = false;
@@ -391,11 +390,12 @@ void Csocket_testDlg::serverActor(boost_actor* actor, boost::shared_ptr<server_p
 	actor->child_actor_run(sessMngActor);
 	while (true)
 	{
-		auto newSocket = actor->pump_msg(amh);
+		socket_handle newSocket = actor->pump_msg(amh);
 		if (!newSocket)
 		{
 			if (!norClosed)
 			{
+				actor->child_actor_force_quit(lstCloseProxyActor);
 				send(actor, [this]()
 				{
 					this->MessageBox("服务器意外关闭");
@@ -419,7 +419,7 @@ void Csocket_testDlg::serverActor(boost_actor* actor, boost::shared_ptr<server_p
 			newSocket->close();
 		}
 	}
-	actor->child_actor_force_quit(lstCloseProxyActor);
+	actor->child_actor_wait_quit(lstCloseProxyActor);
 	actor->child_actor_force_quit(sessMngActor);
 	actor->close_msg_notify(amh);
 	//通知所有存在的对话框关闭
@@ -430,7 +430,7 @@ void Csocket_testDlg::serverActor(boost_actor* actor, boost::shared_ptr<server_p
 	}
 }
 
-void Csocket_testDlg::mainActor(boost_actor* actor, actor_msg_handle<ui_cmd>::ptr lstCMD)
+void Csocket_testDlg::mainActor(boost_actor* actor)
 {
 	boost::shared_ptr<client_param> extClient;
 	boost::function<void ()> serverNtfClose;
@@ -475,7 +475,7 @@ void Csocket_testDlg::mainActor(boost_actor* actor, actor_msg_handle<ui_cmd>::pt
 	while (true)
 	{
 		send(actor, [this](){this->EnableWindow(TRUE);});
-		ui_cmd cmd = actor->pump_msg(*lstCMD);
+		ui_cmd cmd = actor->pump_msg(_lstCMD);
 		send(actor, [this](){this->EnableWindow(FALSE);});
 		switch (cmd)
 		{
@@ -583,7 +583,7 @@ void Csocket_testDlg::mainActor(boost_actor* actor, actor_msg_handle<ui_cmd>::pt
 			{
 				disconnectHandler();
 				stopListenHandler();
-				actor->close_msg_notify(*lstCMD);
+				actor->close_msg_notify(_lstCMD);
 				send(actor, [this](){this->mfc_close();});
 				return;
 			}

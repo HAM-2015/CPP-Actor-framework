@@ -5,6 +5,9 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <string>
 
+class socket_io;
+typedef boost::shared_ptr<socket_io> socket_handle;
+
 /*!
 @brief tcp socket¶ÁÐ´
 */
@@ -14,7 +17,7 @@ private:
 	socket_io(boost::asio::io_service& ios);
 public:
 	~socket_io();
-	static boost::shared_ptr<socket_io> create(boost::asio::io_service& ios);
+	static socket_handle create(boost::asio::io_service& ios);
 public:
 	void close();
 	const std::string ip();
