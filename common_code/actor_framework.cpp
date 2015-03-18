@@ -94,29 +94,14 @@ struct actor_free
 		_stack = stack;
 	}
 
-	void operator ()(boost_actor* actor)
+	void operator ()(my_actor* actor)
 	{
-		actor->~boost_actor();
+		actor->~my_actor();
 		actor_stack_pool::recovery(_stack);
 	}
 
 	stack_pck _stack;
 };
-
-void check_force_quit::reset()
-{
-	_force_quit = false;
-}
-
-check_force_quit::~check_force_quit()
-{
-	assert(!_force_quit);
-}
-
-check_force_quit::check_force_quit()
-{
-	_force_quit = true;
-}
 //////////////////////////////////////////////////////////////////////////
 
 bool param_list_base::closed()
@@ -352,7 +337,7 @@ void child_actor_handle::operator delete(void* p)
 
 //////////////////////////////////////////////////////////////////////////
 
-struct boost_actor::timer_pck
+struct my_actor::timer_pck
 {
 	timer_pck(boost::asio::io_service& ios)
 		:_timer(ios), _timerTime(0), _timerSuspend(false), _timerCompleted(true), _timerCount(0) {}
@@ -370,10 +355,10 @@ struct boost_actor::timer_pck
 boost::atomic<long long> _actorIDCount(0);//ID计数
 bool _autoMakeTimer = true;
 
-class boost_actor::boost_actor_run
+class my_actor::boost_actor_run
 {
 public:
-	boost_actor_run(boost_actor& actor)
+	boost_actor_run(my_actor& actor)
 		: _actor(actor)
 	{
 
@@ -397,7 +382,7 @@ public:
 			assert(_actor._quitHandlerList.empty());
 			assert(_actor._suspendResumeQueue.empty());
 		}
-		catch (boost_actor::force_quit_exception&)
+		catch (my_actor::force_quit_exception&)
 		{//捕获Actor被强制退出异常
 			assert(!_actor._inActor);
 			_actor._mainFunc.clear();
@@ -429,10 +414,10 @@ public:
 		}
 	}
 private:
-	boost_actor& _actor;
+	my_actor& _actor;
 };
 
-boost_actor::boost_actor()
+my_actor::my_actor()
 {
 	_actorPull = NULL;
 	_actorPush = NULL;
@@ -451,12 +436,12 @@ boost_actor::boost_actor()
 	_actorID = ++_actorIDCount;
 }
 
-boost_actor::boost_actor(const boost_actor&)
+my_actor::my_actor(const my_actor&)
 {
 
 }
 
-boost_actor::~boost_actor()
+my_actor::~my_actor()
 {
 	assert(_quited);
 	assert(!_mainFunc);
@@ -480,30 +465,30 @@ boost_actor::~boost_actor()
 	delete (actor_pull_type*)_actorPull;
 }
 
-boost_actor& boost_actor::operator =(const boost_actor&)
+my_actor& my_actor::operator =(const my_actor&)
 {
 	return *this;
 }
 
-actor_handle boost_actor::create( shared_strand actorStrand, const main_func& mainFunc, size_t stackSize )
+actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainFunc, size_t stackSize )
 {
 	return create(actorStrand, mainFunc, boost::function<void (bool)>(), stackSize);
 }
 
-actor_handle boost_actor::create( shared_strand actorStrand, const main_func& mainFunc,
+actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainFunc,
 	const boost::function<void (bool)>& cb, size_t stackSize )
 {
 	assert(stackSize && stackSize <= 1024 kB && 0 == stackSize % (4 kB));
 	actor_handle newActor;
 	if (actor_stack_pool::isEnable())
 	{
-		const size_t actorSize = MEM_ALIGN(sizeof(boost_actor), sizeof(void*));
+		const size_t actorSize = MEM_ALIGN(sizeof(my_actor), sizeof(void*));
 		const size_t timerSize = MEM_ALIGN(sizeof(timer_pck), sizeof(void*));
 		assert(actorSize+timerSize < stackSize - 2 kB);
 		stack_pck stackMem = actor_stack_pool::getStack(stackSize);
 		const size_t totalSize = stackMem._stack.size;
 		BYTE* stackTop = (BYTE*)stackMem._stack.sp;
-		newActor = actor_handle(new(stackTop-actorSize) boost_actor, actor_free(stackMem));
+		newActor = actor_handle(new(stackTop-actorSize) my_actor, actor_free(stackMem));
 		if (_autoMakeTimer)
 		{
 			newActor->_timerSleep = new(stackTop-actorSize-timerSize) timer_pck(actorStrand->get_io_service());
@@ -518,7 +503,7 @@ actor_handle boost_actor::create( shared_strand actorStrand, const main_func& ma
 	} 
 	else
 	{
-		newActor = actor_handle(new boost_actor);
+		newActor = actor_handle(new my_actor);
 		if (_autoMakeTimer)
 		{
 			newActor->_timerSleep = new timer_pck(actorStrand->get_io_service());
@@ -536,23 +521,23 @@ actor_handle boost_actor::create( shared_strand actorStrand, const main_func& ma
 	return newActor;
 }
 
-void boost_actor::async_create( shared_strand actorStrand, const main_func& mainFunc,
+void my_actor::async_create( shared_strand actorStrand, const main_func& mainFunc,
 	const boost::function<void (actor_handle)>& ch, size_t stackSize )
 {
 	boost_strand::asyncInvoke<actor_handle>(actorStrand, boost::bind(&create, actorStrand, mainFunc, stackSize), ch);
 }
 
-void boost_actor::async_create( shared_strand actorStrand, const main_func& mainFunc,
+void my_actor::async_create( shared_strand actorStrand, const main_func& mainFunc,
 	const boost::function<void (actor_handle)>& ch, const boost::function<void (bool)>& cb, size_t stackSize )
 {
 	boost_strand::asyncInvoke<actor_handle>(actorStrand, boost::bind(&create, actorStrand, mainFunc, cb, stackSize), ch);
 }
 
-child_actor_handle::child_actor_param boost_actor::create_child_actor( shared_strand actorStrand, const main_func& mainFunc, size_t stackSize )
+child_actor_handle::child_actor_param my_actor::create_child_actor( shared_strand actorStrand, const main_func& mainFunc, size_t stackSize )
 {
 	assert_enter();
 	child_actor_handle::child_actor_param actorHandle;
-	actorHandle._actor = boost_actor::create(actorStrand, mainFunc, stackSize);
+	actorHandle._actor = my_actor::create(actorStrand, mainFunc, stackSize);
 	actorHandle._actor->_parentActor = shared_from_this();
 	_childActorList.push_front(actorHandle._actor);
 	actorHandle._actorIt = _childActorList.begin();
@@ -560,12 +545,12 @@ child_actor_handle::child_actor_param boost_actor::create_child_actor( shared_st
 	return actorHandle;
 }
 
-child_actor_handle::child_actor_param boost_actor::create_child_actor(const main_func& mainFunc, size_t stackSize)
+child_actor_handle::child_actor_param my_actor::create_child_actor(const main_func& mainFunc, size_t stackSize)
 {
 	return create_child_actor(this_strand(), mainFunc, stackSize);
 }
 
-void boost_actor::child_actor_run( child_actor_handle& actorHandle )
+void my_actor::child_actor_run( child_actor_handle& actorHandle )
 {
 	assert_enter();
 	assert(!actorHandle._quited);
@@ -574,7 +559,7 @@ void boost_actor::child_actor_run( child_actor_handle& actorHandle )
 	actorHandle._param._actor->notify_start_run();
 }
 
-void boost_actor::child_actor_run(const list<boost::shared_ptr<child_actor_handle> >& actorHandles)
+void my_actor::child_actor_run(const list<boost::shared_ptr<child_actor_handle> >& actorHandles)
 {
 	assert_enter();
 	for (auto it = actorHandles.begin(); it != actorHandles.end(); it++)
@@ -583,7 +568,7 @@ void boost_actor::child_actor_run(const list<boost::shared_ptr<child_actor_handl
 	}
 }
 
-bool boost_actor::child_actor_force_quit( child_actor_handle& actorHandle )
+bool my_actor::child_actor_force_quit( child_actor_handle& actorHandle )
 {
 	assert_enter();
 	if (!actorHandle._quited)
@@ -594,17 +579,17 @@ bool boost_actor::child_actor_force_quit( child_actor_handle& actorHandle )
 		actor_handle actor = actorHandle.peel();
 		if (actor->this_strand() == _strand)
 		{
-			actorHandle._norQuit = trig<bool>(boost::bind(&boost_actor::force_quit, actor, _1));
+			actorHandle._norQuit = trig<bool>(boost::bind(&my_actor::force_quit, actor, _1));
 		} 
 		else
 		{
-			actorHandle._norQuit = trig<bool>(boost::bind(&boost_actor::notify_force_quit, actor, _1));
+			actorHandle._norQuit = trig<bool>(boost::bind(&my_actor::notify_force_quit, actor, _1));
 		}
 	}
 	return actorHandle._norQuit;
 }
 
-bool boost_actor::child_actors_force_quit(const list<child_actor_handle::ptr>& actorHandles)
+bool my_actor::child_actors_force_quit(const list<child_actor_handle::ptr>& actorHandles)
 {
 	assert_enter();
 	bool res = true;
@@ -615,7 +600,7 @@ bool boost_actor::child_actors_force_quit(const list<child_actor_handle::ptr>& a
 	return res;
 }
 
-bool boost_actor::child_actor_wait_quit( child_actor_handle& actorHandle )
+bool my_actor::child_actor_wait_quit( child_actor_handle& actorHandle )
 {
 	assert_enter();
 	if (!actorHandle._quited)
@@ -627,7 +612,7 @@ bool boost_actor::child_actor_wait_quit( child_actor_handle& actorHandle )
 	return actorHandle._norQuit;
 }
 
-bool boost_actor::child_actors_wait_quit(const list<child_actor_handle::ptr>& actorHandles)
+bool my_actor::child_actors_wait_quit(const list<child_actor_handle::ptr>& actorHandles)
 {
 	assert_enter();
 	bool res = true;
@@ -639,22 +624,22 @@ bool boost_actor::child_actors_wait_quit(const list<child_actor_handle::ptr>& ac
 	return res;
 }
 
-void boost_actor::child_actor_suspend(child_actor_handle& actorHandle)
+void my_actor::child_actor_suspend(child_actor_handle& actorHandle)
 {
 	assert_enter();
 	assert(actorHandle.get_actor());
 	assert(actorHandle.get_actor()->parent_actor().get() == this);
 	if (actorHandle.get_actor()->this_strand() == _strand)
 	{
-		trig(boost::bind(&boost_actor::suspend, actorHandle.get_actor(), _1));
+		trig(boost::bind(&my_actor::suspend, actorHandle.get_actor(), _1));
 	} 
 	else
 	{
-		trig(boost::bind(&boost_actor::notify_suspend, actorHandle.get_actor(), _1));
+		trig(boost::bind(&my_actor::notify_suspend, actorHandle.get_actor(), _1));
 	}
 }
 
-void boost_actor::child_actors_suspend(const list<child_actor_handle::ptr>& actorHandles)
+void my_actor::child_actors_suspend(const list<child_actor_handle::ptr>& actorHandles)
 {
 	assert_enter();
 	for (auto it = actorHandles.begin(); it != actorHandles.end(); it++)
@@ -663,22 +648,22 @@ void boost_actor::child_actors_suspend(const list<child_actor_handle::ptr>& acto
 	}
 }
 
-void boost_actor::child_actor_resume(child_actor_handle& actorHandle)
+void my_actor::child_actor_resume(child_actor_handle& actorHandle)
 {
 	assert_enter();
 	assert(actorHandle.get_actor());
 	assert(actorHandle.get_actor()->parent_actor().get() == this);
 	if (actorHandle.get_actor()->this_strand() == _strand)
 	{
-		trig(boost::bind(&boost_actor::resume, actorHandle.get_actor(), _1));
+		trig(boost::bind(&my_actor::resume, actorHandle.get_actor(), _1));
 	}
 	else
 	{
-		trig(boost::bind(&boost_actor::notify_resume, actorHandle.get_actor(), _1));
+		trig(boost::bind(&my_actor::notify_resume, actorHandle.get_actor(), _1));
 	}
 }
 
-void boost_actor::child_actors_resume(const list<child_actor_handle::ptr>& actorHandles)
+void my_actor::child_actors_resume(const list<child_actor_handle::ptr>& actorHandles)
 {
 	assert_enter();
 	for (auto it = actorHandles.begin(); it != actorHandles.end(); it++)
@@ -687,7 +672,7 @@ void boost_actor::child_actors_resume(const list<child_actor_handle::ptr>& actor
 	}
 }
 
-actor_handle boost_actor::child_actor_peel(child_actor_handle& actorHandle)
+actor_handle my_actor::child_actor_peel(child_actor_handle& actorHandle)
 {
 	assert_enter();
 	assert(!actorHandle._quited);
@@ -696,7 +681,7 @@ actor_handle boost_actor::child_actor_peel(child_actor_handle& actorHandle)
 	return actorHandle.peel();
 }
 
-bool boost_actor::run_child_actor_complete( shared_strand actorStrand, const main_func& h, size_t stackSize )
+bool my_actor::run_child_actor_complete( shared_strand actorStrand, const main_func& h, size_t stackSize )
 {
 	assert_enter();
 	child_actor_handle actorHandle = create_child_actor(actorStrand, h, stackSize);
@@ -704,12 +689,12 @@ bool boost_actor::run_child_actor_complete( shared_strand actorStrand, const mai
 	return child_actor_wait_quit(actorHandle);
 }
 
-bool boost_actor::run_child_actor_complete(const main_func& h, size_t stackSize)
+bool my_actor::run_child_actor_complete(const main_func& h, size_t stackSize)
 {
 	return run_child_actor_complete(this_strand(), h, stackSize);
 }
 
-void boost_actor::open_timer()
+void my_actor::open_timer()
 {
 	assert_enter();
 	if (!_timerSleep)
@@ -726,46 +711,46 @@ void boost_actor::open_timer()
 	}
 }
 
-void boost_actor::sleep( int ms )
+void my_actor::sleep( int ms )
 {
 	assert_enter();
 	assert(ms >= 0);
 	if (ms)
 	{
 		assert(_timerSleep);
-		time_out(ms, boost::bind(&boost_actor::run_one, shared_from_this()));
+		time_out(ms, boost::bind(&my_actor::run_one, shared_from_this()));
 	}
 	else
 	{
-		_strand->post(boost::bind(&boost_actor::run_one, shared_from_this()));
+		_strand->post(boost::bind(&my_actor::run_one, shared_from_this()));
 	}
 	push_yield();
 }
 
-actor_handle boost_actor::parent_actor()
+actor_handle my_actor::parent_actor()
 {
 	return _parentActor.lock();
 }
 
-const list<actor_handle>& boost_actor::child_actors()
+const list<actor_handle>& my_actor::child_actors()
 {
 	return _childActorList;
 }
 
-boost_actor::quit_iterator boost_actor::regist_quit_handler( const boost::function<void ()>& quitHandler )
+my_actor::quit_iterator my_actor::regist_quit_handler( const boost::function<void ()>& quitHandler )
 {
 	assert_enter();
 	_quitHandlerList.push_front(quitHandler);//后注册的先执行
 	return _quitHandlerList.begin();
 }
 
-void boost_actor::cancel_quit_handler( quit_iterator qh )
+void my_actor::cancel_quit_handler( quit_iterator qh )
 {
 	assert_enter();
 	_quitHandlerList.erase(qh);
 }
 
-boost::function<void ()> boost_actor::begin_trig(async_trig_handle<>& th)
+boost::function<void ()> my_actor::begin_trig(async_trig_handle<>& th)
 {
 	assert_enter();
 	th.begin(_actorID);
@@ -782,12 +767,12 @@ boost::function<void ()> boost_actor::begin_trig(async_trig_handle<>& th)
 		}
 		else
 		{
-			_strand->post(boost::bind(&boost_actor::_async_trig_handler, shared_this, pIsClosed, boost::ref(th)));
+			_strand->post(boost::bind(&my_actor::_async_trig_handler, shared_this, pIsClosed, boost::ref(th)));
 		}
 	};
 }
 
-boost::function<void ()> boost_actor::begin_trig(boost::shared_ptr<async_trig_handle<> > th)
+boost::function<void ()> my_actor::begin_trig(boost::shared_ptr<async_trig_handle<> > th)
 {
 	assert_enter();
 	th->begin(_actorID);
@@ -804,12 +789,12 @@ boost::function<void ()> boost_actor::begin_trig(boost::shared_ptr<async_trig_ha
 		}
 		else
 		{
-			_strand->post(boost::bind(&boost_actor::_async_trig_handler_ptr, shared_this, pIsClosed, th));
+			_strand->post(boost::bind(&my_actor::_async_trig_handler_ptr, shared_this, pIsClosed, th));
 		}
 	};
 }
 
-bool boost_actor::timed_wait_trig(async_trig_handle<>& th, int tm)
+bool my_actor::timed_wait_trig(async_trig_handle<>& th, int tm)
 {
 	assert(th._actorID == _actorID);
 	assert_enter();
@@ -821,57 +806,57 @@ bool boost_actor::timed_wait_trig(async_trig_handle<>& th, int tm)
 	return false;
 }
 
-void boost_actor::wait_trig(async_trig_handle<>& th)
+void my_actor::wait_trig(async_trig_handle<>& th)
 {
 	timed_wait_trig(th, -1);
 }
 
-void boost_actor::close_trig(async_trig_base& th)
+void my_actor::close_trig(async_trig_base& th)
 {
 	DEBUG_OPERATION(if (th._actorID) {assert(th._actorID == _actorID); th._actorID = 0;})
 	th.close();
 }
 
-void boost_actor::delay_trig(int ms, const boost::function<void ()>& h)
+void my_actor::delay_trig(int ms, const boost::function<void ()>& h)
 {
 	assert_enter();
 	time_out(ms, h);
 }
 
-void boost_actor::delay_trig(int ms, async_trig_handle<>& th)
+void my_actor::delay_trig(int ms, async_trig_handle<>& th)
 {
 	assert_enter();
 	assert(th._pIsClosed);
-	time_out(ms, boost::bind(&boost_actor::_async_trig_handler, shared_from_this(), 
+	time_out(ms, boost::bind(&my_actor::_async_trig_handler, shared_from_this(), 
 		th._pIsClosed, boost::ref(th)));
 }
 
-void boost_actor::delay_trig(int ms, boost::shared_ptr<async_trig_handle<> > th)
+void my_actor::delay_trig(int ms, boost::shared_ptr<async_trig_handle<> > th)
 {
 	assert_enter();
 	assert(th->_pIsClosed);
-	time_out(ms, boost::bind(&boost_actor::_async_trig_handler_ptr, shared_from_this(), 
+	time_out(ms, boost::bind(&my_actor::_async_trig_handler_ptr, shared_from_this(), 
 		th->_pIsClosed, th));
 }
 
-void boost_actor::cancel_delay_trig()
+void my_actor::cancel_delay_trig()
 {
 	assert_enter();
 	cancel_timer();
 }
 
-void boost_actor::trig( const boost::function<void (boost::function<void ()>)>& h )
+void my_actor::trig( const boost::function<void (boost::function<void ()>)>& h )
 {
 	assert_enter();
 #ifdef _DEBUG
-	h(wrapped_trig_handler<boost::function<void ()> >(boost::bind(&boost_actor::trig_handler, shared_from_this())));
+	h(wrapped_trig_handler<boost::function<void ()> >(boost::bind(&my_actor::trig_handler, shared_from_this())));
 #else
-	h(boost::bind(&boost_actor::trig_handler, shared_from_this()));
+	h(boost::bind(&my_actor::trig_handler, shared_from_this()));
 #endif
 	push_yield();
 }
 
-void boost_actor::send( shared_strand exeStrand, const boost::function<void ()>& h )
+void my_actor::send( shared_strand exeStrand, const boost::function<void ()>& h )
 {
 	assert_enter();
 	if (exeStrand != _strand)
@@ -884,25 +869,25 @@ void boost_actor::send( shared_strand exeStrand, const boost::function<void ()>&
 	}
 }
 
-boost::function<void()> boost_actor::make_msg_notify(actor_msg_handle<>& amh)
+boost::function<void()> my_actor::make_msg_notify(actor_msg_handle<>& amh)
 {
 	amh.begin(_actorID);
-	return _strand->wrap_post(boost::bind(&boost_actor::check_run1, shared_from_this(), amh._pIsClosed, boost::ref(amh)));
+	return _strand->wrap_post(boost::bind(&my_actor::check_run1, shared_from_this(), amh._pIsClosed, boost::ref(amh)));
 }
 
-boost::function<void()> boost_actor::make_msg_notify(boost::shared_ptr<actor_msg_handle<> > amh)
+boost::function<void()> my_actor::make_msg_notify(boost::shared_ptr<actor_msg_handle<> > amh)
 {
 	amh->begin(_actorID);
-	return _strand->wrap_post(boost::bind(&boost_actor::check_run1_ptr, shared_from_this(), amh->_pIsClosed, amh));
+	return _strand->wrap_post(boost::bind(&my_actor::check_run1_ptr, shared_from_this(), amh->_pIsClosed, amh));
 }
 
-void boost_actor::close_msg_notify( param_list_base& amh )
+void my_actor::close_msg_notify( param_list_base& amh )
 {
 	DEBUG_OPERATION(if (amh._actorID) {assert(amh._actorID == _actorID); amh._actorID = 0;})
 	amh.close();
 }
 
-bool boost_actor::timed_pump_msg(actor_msg_handle<>& amh, int tm)
+bool my_actor::timed_pump_msg(actor_msg_handle<>& amh, int tm)
 {
 	assert(amh._actorID == _actorID);
 	assert_enter();
@@ -916,12 +901,12 @@ bool boost_actor::timed_pump_msg(actor_msg_handle<>& amh, int tm)
 	return pump_msg_push(amh, tm);
 }
 
-void boost_actor::pump_msg(actor_msg_handle<>& amh)
+void my_actor::pump_msg(actor_msg_handle<>& amh)
 {
 	timed_pump_msg(amh, -1);
 }
 
-bool boost_actor::pump_msg_push(param_list_base& pm, int tm)
+bool my_actor::pump_msg_push(param_list_base& pm, int tm)
 {
 	if (tm >= 0)
 	{
@@ -949,12 +934,12 @@ bool boost_actor::pump_msg_push(param_list_base& pm, int tm)
 	return true;
 }
 
-void boost_actor::trig_handler()
+void my_actor::trig_handler()
 {
-	_strand->post(boost::bind(&boost_actor::run_one, shared_from_this()));
+	_strand->post(boost::bind(&my_actor::run_one, shared_from_this()));
 }
 
-bool boost_actor::async_trig_push(async_trig_base& th, int tm, void* pref)
+bool my_actor::async_trig_push(async_trig_base& th, int tm, void* pref)
 {
 	assert(th._pIsClosed);
 	if (!th._notify)
@@ -991,7 +976,7 @@ bool boost_actor::async_trig_push(async_trig_base& th, int tm, void* pref)
 	return true;
 }
 
-void boost_actor::async_trig_post_yield(async_trig_base& th, void* cref)
+void my_actor::async_trig_post_yield(async_trig_base& th, void* cref)
 {
 	th._notify = true;
 	if (th._waiting)
@@ -1003,7 +988,7 @@ void boost_actor::async_trig_post_yield(async_trig_base& th, void* cref)
 			cancel_timer();
 		}
 		th.set_ref(cref);
-		_strand->post(boost::bind(&boost_actor::run_one, shared_from_this()));
+		_strand->post(boost::bind(&my_actor::run_one, shared_from_this()));
 	} 
 	else
 	{
@@ -1011,7 +996,7 @@ void boost_actor::async_trig_post_yield(async_trig_base& th, void* cref)
 	}
 }
 
-void boost_actor::async_trig_pull_yield(async_trig_base& th, void* cref)
+void my_actor::async_trig_pull_yield(async_trig_base& th, void* cref)
 {
 	th._notify = true;
 	if (th._waiting)
@@ -1031,7 +1016,7 @@ void boost_actor::async_trig_pull_yield(async_trig_base& th, void* cref)
 	}
 }
 
-void boost_actor::_async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<>& th)
+void my_actor::_async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<>& th)
 {
 	assert(_strand->running_in_this_thread());
 	if (!_quited && !(*pIsClosed) && !th._notify)
@@ -1040,12 +1025,12 @@ void boost_actor::_async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_
 	}
 }
 
-void boost_actor::_async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<> >& th)
+void my_actor::_async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<> >& th)
 {
 	_async_trig_handler(pIsClosed, *th);
 }
 
-void boost_actor::check_run1( boost::shared_ptr<bool>& pIsClosed, actor_msg_handle<>& amh )
+void my_actor::check_run1( boost::shared_ptr<bool>& pIsClosed, actor_msg_handle<>& amh )
 {
 	if (_quited || (*pIsClosed)) return;
 
@@ -1066,44 +1051,44 @@ void boost_actor::check_run1( boost::shared_ptr<bool>& pIsClosed, actor_msg_hand
 	}
 }
 
-void boost_actor::check_run1_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<actor_msg_handle<> >& amh)
+void my_actor::check_run1_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<actor_msg_handle<> >& amh)
 {
 	check_run1(pIsClosed, *amh);
 }
 
-shared_strand boost_actor::this_strand()
+shared_strand my_actor::this_strand()
 {
 	return _strand;
 }
 
-actor_handle boost_actor::shared_from_this()
+actor_handle my_actor::shared_from_this()
 {
 	return _weakThis.lock();
 }
 
-long long boost_actor::this_id()
+long long my_actor::this_id()
 {
 	return _actorID;
 }
 
-size_t boost_actor::yield_count()
+size_t my_actor::yield_count()
 {
 	assert_enter();
 	return _yieldCount;
 }
 
-void boost_actor::reset_yield()
+void my_actor::reset_yield()
 {
 	assert_enter();
 	_yieldCount = 0;
 }
 
-void boost_actor::notify_start_run()
+void my_actor::notify_start_run()
 {
-	_strand->post(boost::bind(&boost_actor::start_run, shared_from_this()));
+	_strand->post(boost::bind(&my_actor::start_run, shared_from_this()));
 }
 
-void boost_actor::assert_enter()
+void my_actor::assert_enter()
 {
 	assert(_strand->running_in_this_thread());
 	assert(!_quited);
@@ -1111,7 +1096,7 @@ void boost_actor::assert_enter()
 	assert((size_t)get_sp() >= (size_t)_stackTop-_stackSize+1024);
 }
 
-void boost_actor::start_run()
+void my_actor::start_run()
 {
 	if (_strand->running_in_this_thread())
 	{
@@ -1125,21 +1110,21 @@ void boost_actor::start_run()
 	} 
 	else
 	{
-		_strand->post(boost::bind(&boost_actor::start_run, shared_from_this()));
+		_strand->post(boost::bind(&my_actor::start_run, shared_from_this()));
 	}
 }
 
-void boost_actor::notify_force_quit()
+void my_actor::notify_force_quit()
 {
-	_strand->post(boost::bind(&boost_actor::force_quit, shared_from_this(), boost::function<void (bool)>()));
+	_strand->post(boost::bind(&my_actor::force_quit, shared_from_this(), boost::function<void (bool)>()));
 }
 
-void boost_actor::notify_force_quit(const boost::function<void (bool)>& h)
+void my_actor::notify_force_quit(const boost::function<void (bool)>& h)
 {
-	_strand->post(boost::bind(&boost_actor::force_quit, shared_from_this(), h));
+	_strand->post(boost::bind(&my_actor::force_quit, shared_from_this(), h));
 }
 
-void boost_actor::force_quit( const boost::function<void (bool)>& h )
+void my_actor::force_quit( const boost::function<void (bool)>& h )
 {
 	assert(_strand->running_in_this_thread());
 	assert(!_inActor);
@@ -1157,11 +1142,11 @@ void boost_actor::force_quit( const boost::function<void (bool)>& h )
 				_childActorList.pop_front();
 				if (cc->_strand == _strand)
 				{
-					cc->force_quit(boost::bind(&boost_actor::force_quit_cb_handler, shared_from_this()));
+					cc->force_quit(boost::bind(&my_actor::force_quit_cb_handler, shared_from_this()));
 				} 
 				else
 				{
-					cc->notify_force_quit(_strand->wrap_post(boost::bind(&boost_actor::force_quit_cb_handler, shared_from_this())));
+					cc->notify_force_quit(_strand->wrap_post(boost::bind(&my_actor::force_quit_cb_handler, shared_from_this())));
 				}
 			}
 		} 
@@ -1183,17 +1168,17 @@ void boost_actor::force_quit( const boost::function<void (bool)>& h )
 	}
 }
 
-void boost_actor::notify_suspend()
+void my_actor::notify_suspend()
 {
 	notify_suspend(boost::function<void ()>());
 }
 
-void boost_actor::notify_suspend(const boost::function<void ()>& h)
+void my_actor::notify_suspend(const boost::function<void ()>& h)
 {
-	_strand->post(boost::bind(&boost_actor::suspend, shared_from_this(), h));
+	_strand->post(boost::bind(&my_actor::suspend, shared_from_this(), h));
 }
 
-void boost_actor::suspend(const boost::function<void ()>& h)
+void my_actor::suspend(const boost::function<void ()>& h)
 {
 	assert(_strand->running_in_this_thread());
 	assert(!_inActor);
@@ -1208,7 +1193,7 @@ void boost_actor::suspend(const boost::function<void ()>& h)
 	}
 }
 
-void boost_actor::suspend()
+void my_actor::suspend()
 {
 	assert(_strand->running_in_this_thread());
 	assert(!_inActor);
@@ -1230,11 +1215,11 @@ void boost_actor::suspend()
 				{
 					if ((*it)->_strand == _strand)
 					{
-						(*it)->suspend(boost::bind(&boost_actor::child_suspend_cb_handler, shared_from_this()));
+						(*it)->suspend(boost::bind(&my_actor::child_suspend_cb_handler, shared_from_this()));
 					}
 					else
 					{
-						(*it)->notify_suspend(_strand->wrap_post(boost::bind(&boost_actor::child_suspend_cb_handler, shared_from_this())));
+						(*it)->notify_suspend(_strand->wrap_post(boost::bind(&my_actor::child_suspend_cb_handler, shared_from_this())));
 					}
 				}
 				return;
@@ -1245,17 +1230,17 @@ void boost_actor::suspend()
 	child_suspend_cb_handler();
 }
 
-void boost_actor::notify_resume()
+void my_actor::notify_resume()
 {
 	notify_resume(boost::function<void ()>());
 }
 
-void boost_actor::notify_resume(const boost::function<void ()>& h)
+void my_actor::notify_resume(const boost::function<void ()>& h)
 {
-	_strand->post(boost::bind(&boost_actor::resume, shared_from_this(), h));
+	_strand->post(boost::bind(&my_actor::resume, shared_from_this(), h));
 }
 
-void boost_actor::resume(const boost::function<void ()>& h)
+void my_actor::resume(const boost::function<void ()>& h)
 {
 	assert(_strand->running_in_this_thread());
 	assert(!_inActor);
@@ -1270,7 +1255,7 @@ void boost_actor::resume(const boost::function<void ()>& h)
 	}
 }
 
-void boost_actor::resume()
+void my_actor::resume()
 {
 	assert(_strand->running_in_this_thread());
 	assert(!_inActor);
@@ -1292,11 +1277,11 @@ void boost_actor::resume()
 				{
 					if ((*it)->_strand == _strand)
 					{
-						(*it)->resume(_strand->wrap_post(boost::bind(&boost_actor::child_resume_cb_handler, shared_from_this())));
+						(*it)->resume(_strand->wrap_post(boost::bind(&my_actor::child_resume_cb_handler, shared_from_this())));
 					} 
 					else
 					{
-						(*it)->notify_resume(_strand->wrap_post(boost::bind(&boost_actor::child_resume_cb_handler, shared_from_this())));
+						(*it)->notify_resume(_strand->wrap_post(boost::bind(&my_actor::child_resume_cb_handler, shared_from_this())));
 					}
 				}
 				return;
@@ -1307,12 +1292,12 @@ void boost_actor::resume()
 	child_resume_cb_handler();
 }
 
-void boost_actor::switch_pause_play()
+void my_actor::switch_pause_play()
 {
 	switch_pause_play(boost::function<void (bool isPaused)>());
 }
 
-void boost_actor::switch_pause_play(const boost::function<void (bool isPaused)>& h)
+void my_actor::switch_pause_play(const boost::function<void (bool isPaused)>& h)
 {
 	actor_handle shared_this = shared_from_this();
 	_strand->post([this, shared_this, h]()
@@ -1350,19 +1335,19 @@ void boost_actor::switch_pause_play(const boost::function<void (bool isPaused)>&
 	});
 }
 
-bool boost_actor::outside_wait_quit()
+bool my_actor::outside_wait_quit()
 {
 	assert(!_strand->in_this_ios());
 	bool rt = false;
 	boost::condition_variable conVar;
 	boost::mutex mutex;
 	boost::unique_lock<boost::mutex> ul(mutex);
-	_strand->post(boost::bind(&boost_actor::outside_wait_quit_proxy, shared_from_this(), &conVar, &mutex, &rt));
+	_strand->post(boost::bind(&my_actor::outside_wait_quit_proxy, shared_from_this(), &conVar, &mutex, &rt));
 	conVar.wait(ul);
 	return rt;
 }
 
-void boost_actor::append_quit_callback(const boost::function<void (bool)>& h)
+void my_actor::append_quit_callback(const boost::function<void (bool)>& h)
 {
 	if (_strand->running_in_this_thread())
 	{
@@ -1377,11 +1362,11 @@ void boost_actor::append_quit_callback(const boost::function<void (bool)>& h)
 	} 
 	else
 	{
-		_strand->post(boost::bind(&boost_actor::append_quit_callback, shared_from_this(), h));
+		_strand->post(boost::bind(&my_actor::append_quit_callback, shared_from_this(), h));
 	}
 }
 
-void boost_actor::actors_start_run(const list<actor_handle>& anotherActors)
+void my_actor::actors_start_run(const list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
@@ -1390,14 +1375,14 @@ void boost_actor::actors_start_run(const list<actor_handle>& anotherActors)
 	}
 }
 
-bool boost_actor::actor_force_quit( actor_handle anotherActor )
+bool my_actor::actor_force_quit( actor_handle anotherActor )
 {
 	assert_enter();
 	assert(anotherActor);
-	return trig<bool>(boost::bind(&boost_actor::notify_force_quit, anotherActor, _1));
+	return trig<bool>(boost::bind(&my_actor::notify_force_quit, anotherActor, _1));
 }
 
-void boost_actor::actors_force_quit(const list<actor_handle>& anotherActors)
+void my_actor::actors_force_quit(const list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
@@ -1406,14 +1391,14 @@ void boost_actor::actors_force_quit(const list<actor_handle>& anotherActors)
 	}
 }
 
-bool boost_actor::actor_wait_quit( actor_handle anotherActor )
+bool my_actor::actor_wait_quit( actor_handle anotherActor )
 {
 	assert_enter();
 	assert(anotherActor);
-	return trig<bool>(boost::bind(&boost_actor::append_quit_callback, anotherActor, _1));
+	return trig<bool>(boost::bind(&my_actor::append_quit_callback, anotherActor, _1));
 }
 
-void boost_actor::actors_wait_quit(const list<actor_handle>& anotherActors)
+void my_actor::actors_wait_quit(const list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
@@ -1422,14 +1407,14 @@ void boost_actor::actors_wait_quit(const list<actor_handle>& anotherActors)
 	}
 }
 
-void boost_actor::actor_suspend(actor_handle anotherActor)
+void my_actor::actor_suspend(actor_handle anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
-	trig(boost::bind(&boost_actor::notify_suspend, anotherActor, _1));
+	trig(boost::bind(&my_actor::notify_suspend, anotherActor, _1));
 }
 
-void boost_actor::actors_suspend(const list<actor_handle>& anotherActors)
+void my_actor::actors_suspend(const list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
@@ -1438,14 +1423,14 @@ void boost_actor::actors_suspend(const list<actor_handle>& anotherActors)
 	}
 }
 
-void boost_actor::actor_resume(actor_handle anotherActor)
+void my_actor::actor_resume(actor_handle anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
-	trig(boost::bind(&boost_actor::notify_resume, anotherActor, _1));
+	trig(boost::bind(&my_actor::notify_resume, anotherActor, _1));
 }
 
-void boost_actor::actors_resume(const list<actor_handle>& anotherActors)
+void my_actor::actors_resume(const list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
@@ -1454,14 +1439,14 @@ void boost_actor::actors_resume(const list<actor_handle>& anotherActors)
 	}
 }
 
-bool boost_actor::actor_switch(actor_handle anotherActor)
+bool my_actor::actor_switch(actor_handle anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
-	return trig<bool>(boost::bind(&boost_actor::switch_pause_play, anotherActor, _1));
+	return trig<bool>(boost::bind(&my_actor::switch_pause_play, anotherActor, _1));
 }
 
-bool boost_actor::actors_switch(const list<actor_handle>& anotherActors)
+bool my_actor::actors_switch(const list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	bool isPause = true;
@@ -1472,7 +1457,7 @@ bool boost_actor::actors_switch(const list<actor_handle>& anotherActors)
 	return isPause;
 }
 
-void boost_actor::run_one()
+void my_actor::run_one()
 {
 	assert(_strand->running_in_this_thread());
 	assert(!_inActor);
@@ -1482,7 +1467,7 @@ void boost_actor::run_one()
 	}
 }
 
-void boost_actor::pull_yield()
+void my_actor::pull_yield()
 {
 	assert(!_quited);
 	if (!_suspended)
@@ -1496,7 +1481,7 @@ void boost_actor::pull_yield()
 	}
 }
 
-void boost_actor::push_yield()
+void my_actor::push_yield()
 {
 	assert(!_quited);
 	assert(_inActor);
@@ -1511,7 +1496,7 @@ void boost_actor::push_yield()
 	throw force_quit_exception();
 }
 
-void boost_actor::force_quit_cb_handler()
+void my_actor::force_quit_cb_handler()
 {
 	assert(_quited);
 	assert(_isForce);
@@ -1523,7 +1508,7 @@ void boost_actor::force_quit_cb_handler()
 	}
 }
 
-void boost_actor::child_suspend_cb_handler()
+void my_actor::child_suspend_cb_handler()
 {
 	assert(_strand->running_in_this_thread());
 	assert((int)_childSuspendResumeCount > 0);
@@ -1543,14 +1528,14 @@ void boost_actor::child_suspend_cb_handler()
 			} 
 			else
 			{
-				_strand->post(boost::bind(&boost_actor::resume, shared_from_this()));
+				_strand->post(boost::bind(&my_actor::resume, shared_from_this()));
 				return;
 			}
 		}
 	}
 }
 
-void boost_actor::child_resume_cb_handler()
+void my_actor::child_resume_cb_handler()
 {
 	assert(_strand->running_in_this_thread());
 	assert((int)_childSuspendResumeCount > 0);
@@ -1570,7 +1555,7 @@ void boost_actor::child_resume_cb_handler()
 			} 
 			else
 			{
-				_strand->post(boost::bind(&boost_actor::suspend, shared_from_this()));
+				_strand->post(boost::bind(&my_actor::suspend, shared_from_this()));
 				return;
 			}
 		}
@@ -1582,7 +1567,7 @@ void boost_actor::child_resume_cb_handler()
 	}
 }
 
-void boost_actor::exit_callback()
+void my_actor::exit_callback()
 {
 	assert(_quited);
 	assert(!_childOverCount);
@@ -1594,7 +1579,7 @@ void boost_actor::exit_callback()
 	(*(actor_pull_type*)_actorPull)();
 }
 
-void boost_actor::outside_wait_quit_proxy( boost::condition_variable* conVar, boost::mutex* mutex, bool* rt )
+void my_actor::outside_wait_quit_proxy( boost::condition_variable* conVar, boost::mutex* mutex, bool* rt )
 {
 	assert(_strand->running_in_this_thread());
 	if (_quited && !_childOverCount)
@@ -1605,24 +1590,24 @@ void boost_actor::outside_wait_quit_proxy( boost::condition_variable* conVar, bo
 	} 
 	else
 	{
-		_exitCallback.push_back(boost::bind(&boost_actor::outside_wait_quit_handler, shared_from_this(), conVar, mutex, rt, _1));
+		_exitCallback.push_back(boost::bind(&my_actor::outside_wait_quit_handler, shared_from_this(), conVar, mutex, rt, _1));
 	}
 }
 
-void boost_actor::outside_wait_quit_handler( boost::condition_variable* conVar, boost::mutex* mutex, bool* rt, bool ok )
+void my_actor::outside_wait_quit_handler( boost::condition_variable* conVar, boost::mutex* mutex, bool* rt, bool ok )
 {
 	*rt = ok;
 	boost::lock_guard<boost::mutex> lg(*mutex);
 	conVar->notify_one();
 }
 
-void boost_actor::enable_stack_pool()
+void my_actor::enable_stack_pool()
 {
 	assert(0 == _actorIDCount);
 	actor_stack_pool::enable();
 }
 
-void boost_actor::expires_timer()
+void my_actor::expires_timer()
 {
 	size_t tid = ++_timerSleep->_timerCount;
 	actor_handle shared_this = shared_from_this();
@@ -1644,7 +1629,7 @@ void boost_actor::expires_timer()
 	}));
 }
 
-void boost_actor::time_out(int ms, const boost::function<void ()>& h)
+void my_actor::time_out(int ms, const boost::function<void ()>& h)
 {
 	assert_enter();
 	assert(_timerSleep);
@@ -1672,7 +1657,7 @@ void boost_actor::time_out(int ms, const boost::function<void ()>& h)
 	}
 }
 
-void boost_actor::cancel_timer()
+void my_actor::cancel_timer()
 {
 	assert(_timerSleep);
 	if (!_timerSleep->_timerCompleted)
@@ -1684,7 +1669,7 @@ void boost_actor::cancel_timer()
 	}
 }
 
-void boost_actor::suspend_timer()
+void my_actor::suspend_timer()
 {
 	assert(_timerSleep);
 	if (!_timerSleep->_timerSuspend)
@@ -1704,7 +1689,7 @@ void boost_actor::suspend_timer()
 	}
 }
 
-void boost_actor::resume_timer()
+void my_actor::resume_timer()
 {
 	assert(_timerSleep);
 	if (_timerSleep->_timerSuspend)
@@ -1720,13 +1705,13 @@ void boost_actor::resume_timer()
 	}
 }
 
-void boost_actor::disable_auto_make_timer()
+void my_actor::disable_auto_make_timer()
 {
 	assert(0 == _actorIDCount);
 	_autoMakeTimer = false;
 }
 
-void boost_actor::check_stack()
+void my_actor::check_stack()
 {
 #if (CHECK_ACTOR_STACK) || (_DEBUG)
 	if ((size_t)get_sp() < (size_t)_stackTop-_stackSize+STACK_RESERVED_SPACE_SIZE)
@@ -1737,7 +1722,7 @@ void boost_actor::check_stack()
 #endif
 }
 
-size_t boost_actor::stack_free_space()
+size_t my_actor::stack_free_space()
 {
 	int s = (int)((size_t)get_sp() - ((size_t)_stackTop-_stackSize+STACK_RESERVED_SPACE_SIZE));
 	if (s < 0)

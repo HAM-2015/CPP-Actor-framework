@@ -19,8 +19,8 @@ public:
 	void close();
 	bool write(shared_data msg);
 private:
-	void readActor(boost_actor* actor);
-	void writeActor(boost_actor* actor);
+	void readActor(my_actor* self);
+	void writeActor(my_actor* self);
 private:
 	bool _closed;
 	boost::shared_ptr<stream_io_base> _ioObj;

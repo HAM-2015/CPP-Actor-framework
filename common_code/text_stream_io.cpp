@@ -15,9 +15,9 @@ boost::shared_ptr<text_stream_io> text_stream_io::create( shared_strand strand, 
 	boost::shared_ptr<text_stream_io> res(new text_stream_io);
 	res->_ioObj = ioObj;
 	res->_msgNotify = h;
-	auto wc = boost_actor::create(strand, boost::bind(&text_stream_io::writeActor, res, _1));
+	auto wc = my_actor::create(strand, boost::bind(&text_stream_io::writeActor, res, _1));
 	res->_writerPipeIn = wc->make_msg_notify(res->_writerPipeOut);
-	auto rc = boost_actor::create(strand, boost::bind(&text_stream_io::readActor, res, _1));
+	auto rc = my_actor::create(strand, boost::bind(&text_stream_io::readActor, res, _1));
 	wc->notify_start_run();
 	rc->notify_start_run();
 	return res;
@@ -38,17 +38,17 @@ bool text_stream_io::write( shared_data msg )
 	return false;
 }
 
-void text_stream_io::readActor( boost_actor* actor )
+void text_stream_io::readActor( my_actor* self )
 {
 	unsigned char buff[4096];
 	size_t msgLength = 0;
 	while (true)
 	{
 		async_trig_handle<boost::system::error_code, size_t> ath;
-		_ioObj->async_read_some(buff+msgLength, sizeof(buff)-msgLength, actor->begin_trig(ath));
+		_ioObj->async_read_some(buff+msgLength, sizeof(buff)-msgLength, self->begin_trig(ath));
 		boost::system::error_code ec;
 		size_t length;
-		actor->wait_trig(ath, ec, length);
+		self->wait_trig(ath, ec, length);
 		if (ec || 0 == length)
 		{
 			_msgNotify(shared_data());
@@ -84,22 +84,22 @@ void text_stream_io::readActor( boost_actor* actor )
 	_msgNotify.clear();
 }
 
-void text_stream_io::writeActor( boost_actor* actor )
+void text_stream_io::writeActor( my_actor* self )
 {
 	string textTail = "\r\n";
 	while (true)
 	{
-		shared_data msg = actor->pump_msg(_writerPipeOut);
+		shared_data msg = self->pump_msg(_writerPipeOut);
 		if (!msg)
 		{
 			break;
 		}
 		{
 			async_trig_handle<boost::system::error_code, size_t> ath;
-			_ioObj->async_write((unsigned char*)msg->data(), msg->size(), actor->begin_trig(ath));
+			_ioObj->async_write((unsigned char*)msg->data(), msg->size(), self->begin_trig(ath));
 			boost::system::error_code ec;
 			size_t length;
-			actor->wait_trig(ath, ec, length);
+			self->wait_trig(ath, ec, length);
 			if (ec)
 			{
 				break;
@@ -107,16 +107,16 @@ void text_stream_io::writeActor( boost_actor* actor )
 		}
 		{
 			async_trig_handle<boost::system::error_code, size_t> ath;
-			_ioObj->async_write((unsigned char*)textTail.c_str(), textTail.size(), actor->begin_trig(ath));
+			_ioObj->async_write((unsigned char*)textTail.c_str(), textTail.size(), self->begin_trig(ath));
 			boost::system::error_code ec;
 			size_t length;
-			actor->wait_trig(ath, ec, length);
+			self->wait_trig(ath, ec, length);
 			if (ec)
 			{
 				break;
 			}
 		}
 	}
-	actor->close_msg_notify(_writerPipeOut);
+	self->close_msg_notify(_writerPipeOut);
 	_closed = true;
 }

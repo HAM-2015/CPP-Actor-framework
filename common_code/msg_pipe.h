@@ -50,9 +50,9 @@ private:
 	typedef typename pipe_type<T0, T1, T2, T3>::reader_handle reader_handle;
 public:
 	typedef typename pipe_type<T0, T1, T2, T3>::writer_type writer_type;
-	typedef typename boost::function<size_t (boost_actor*, reader_handle&)> regist_reader;
+	typedef typename boost::function<size_t (my_actor*, reader_handle&)> regist_reader;
 	typedef typename boost::function<writer_type (int timeout)> get_writer_outside;
-	__yield_interrupt typedef typename boost::function<writer_type (boost_actor*, int timeout)> get_writer;
+	__yield_interrupt typedef typename boost::function<writer_type (my_actor*, int timeout)> get_writer;
 private:
 	template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
 	struct temp_buffer
@@ -385,7 +385,7 @@ public:
 
 		boost::weak_ptr<temp_buffer<T0, T1, T2, T3> > weakBuff = tempBuff;
 		boost::shared_ptr<wrapped_param> wrappedParam = wrapWriter._param;
-		return [wrappedParam, weakBuff](boost_actor* hostActor, reader_handle& rh)->size_t
+		return [wrappedParam, weakBuff](my_actor* hostActor, reader_handle& rh)->size_t
 		{
 			SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
 			size_t regCount = 0;
@@ -422,7 +422,7 @@ public:
 	static regist_reader make(__out get_writer& getWriterFunc)
 	{
 		boost::shared_ptr<pipe_param> pipeParam(new pipe_param);
-		getWriterFunc = [pipeParam](boost_actor* hostActor, int timeout)->writer_type
+		getWriterFunc = [pipeParam](my_actor* hostActor, int timeout)->writer_type
 		{
 			async_trig_handle<> ath;
 			pipeParam->_mutex.lock();
@@ -447,7 +447,7 @@ public:
 		};
 
 		boost::weak_ptr<pipe_param> weakParam = pipeParam;
-		return [weakParam](boost_actor* hostActor, reader_handle& rh)->size_t
+		return [weakParam](my_actor* hostActor, reader_handle& rh)->size_t
 		{
 			boost::shared_ptr<pipe_param> pipeParam = weakParam.lock();
 			if (pipeParam)
@@ -495,7 +495,7 @@ public:
 		};
 
 		boost::weak_ptr<outsite_pipe_param> weakParam = pipeParam;
-		return [weakParam](boost_actor* hostActor, reader_handle& rh)->size_t
+		return [weakParam](my_actor* hostActor, reader_handle& rh)->size_t
 		{
 			boost::shared_ptr<outsite_pipe_param> pipeParam = weakParam.lock();
 			if (pipeParam)

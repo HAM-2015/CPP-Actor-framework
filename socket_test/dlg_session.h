@@ -29,7 +29,7 @@ protected:
 	BIND_MFC_RUN(CDialogEx)
 	DECLARE_MESSAGE_MAP()
 private:
-	void sessionActor(boost_actor* actor);
+	void sessionActor(my_actor* self);
 public:
 	shared_strand _strand;
 	socket_handle _socket;

@@ -45,7 +45,7 @@ BOOL dlg_session::OnInitDialog()
 	_outputEdit.SetFont(&_editFont);
 
 	_sendPump = msg_pipe<shared_data>::make(_sendPipe);
-	actor_handle sessionActor = boost_actor::create(_strand, boost::bind(&dlg_session::sessionActor, this, _1));
+	actor_handle sessionActor = my_actor::create(_strand, boost::bind(&dlg_session::sessionActor, this, _1));
 	sessionActor->notify_start_run();
 	return TRUE;
 }
@@ -68,56 +68,56 @@ void dlg_session::showClientMsg(shared_data msg)
 	}
 }
 
-void dlg_session::sessionActor(boost_actor* actor)
+void dlg_session::sessionActor(my_actor* self)
 {
 	post(boost::bind(&dlg_session::showClientMsg, this, msg_data::create(_socket->ip())));
-	child_actor_handle lstClose = actor->create_child_actor([&, this](boost_actor* actor)
+	child_actor_handle lstClose = self->create_child_actor([&, this](my_actor* self)
 	{
 		actor_msg_handle<> amh;
-		_lstClose(actor, amh);
+		_lstClose(self, amh);
 		//侦听请求对话框关闭消息，然后通知对话框关闭
-		actor->pump_msg(amh);
+		self->pump_msg(amh);
 		this->_exit = true;
 		_socket->close();
-		actor->close_msg_notify(amh);
+		self->close_msg_notify(amh);
 	});
-	actor->child_actor_run(lstClose);
+	self->child_actor_run(lstClose);
 	actor_msg_handle<shared_data> amh;
-	boost::shared_ptr<text_stream_io> textio = text_stream_io::create(_strand, _socket, actor->make_msg_notify(amh));
-	child_actor_handle wd = actor->create_child_actor([this, &textio](boost_actor* actor)
+	boost::shared_ptr<text_stream_io> textio = text_stream_io::create(_strand, _socket, self->make_msg_notify(amh));
+	child_actor_handle wd = self->create_child_actor([this, &textio](my_actor* self)
 	{
 		actor_msg_handle<shared_data> amh;
-		_sendPump(actor, amh);
+		_sendPump(self, amh);
 		while (true)
 		{
-			auto msg = actor->pump_msg(amh);
+			auto msg = self->pump_msg(amh);
 			if (!msg)
 			{
 				break;
 			}
 			textio->write(msg);
 		}
-		actor->close_msg_notify(amh);
+		self->close_msg_notify(amh);
 	});
-	actor->child_actor_run(wd);
+	self->child_actor_run(wd);
 	while (true)
 	{
-		auto msg = actor->pump_msg(amh);
+		auto msg = self->pump_msg(amh);
 		if (!msg)
 		{
 			break;
 		}
 		post(boost::bind(&dlg_session::showClientMsg, this, msg));
 	}
-	actor->child_actor_force_quit(wd);
-	actor->close_msg_notify(amh);
+	self->child_actor_force_quit(wd);
+	self->close_msg_notify(amh);
 	post(boost::bind(&dlg_session::showClientMsg, this, msg_data::create("连接断开")));
-	send(actor, [this]()
+	send(self, [this]()
 	{
 		this->GetDlgItem(IDC_BUTTON3)->EnableWindow(FALSE);
 	});
-	actor->child_actor_wait_quit(lstClose);
-	send(actor, wrap([this]()
+	self->child_actor_wait_quit(lstClose);
+	send(self, wrap([this]()
 	{
 		this->mfc_close();
 		_closeCallback();

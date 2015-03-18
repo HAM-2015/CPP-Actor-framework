@@ -81,10 +81,10 @@ protected:
 	BIND_MFC_RUN(CDialogEx);
 	DECLARE_MESSAGE_MAP()
 private:
-	void connectActor(boost_actor* actor, boost::shared_ptr<client_param> param);
-	void newSession(boost_actor* actor, boost::shared_ptr<session_pck> sess);
-	void serverActor(boost_actor* actor, boost::shared_ptr<server_param> param);
-	void mainActor(boost_actor* actor);
+	void connectActor(my_actor* self, boost::shared_ptr<client_param> param);
+	void newSession(my_actor* self, boost::shared_ptr<session_pck> sess);
+	void serverActor(my_actor* self, boost::shared_ptr<server_param> param);
+	void mainActor(my_actor* self);
 private:
 	ios_proxy _ios;
 	shared_strand _strand;

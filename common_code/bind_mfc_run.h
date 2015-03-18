@@ -164,10 +164,10 @@ public:
 	/*!
 	@brief 发送一个执行函数到MFC消息队列中执行，完成后返回
 	*/
-	void send(boost_actor* actor, const boost::function<void ()>& h)
+	void send(my_actor* self, const boost::function<void ()>& h)
 	{
 		assert(boost::this_thread::get_id() != thread_id());
-		actor->trig([&, this](const boost::function<void ()>& cb)
+		self->trig([&, this](const boost::function<void ()>& cb)
 		{
 			boost::shared_lock<boost::shared_mutex> sl(_postMutex);
 			if (!_isClosed)
@@ -185,10 +185,10 @@ public:
 	@brief 发送一个带返回值函数到MFC消息队列中执行，完成后返回
 	*/
 	template <typename T>
-	T send(boost_actor* actor, const boost::function<T ()>& h)
+	T send(my_actor* self, const boost::function<T ()>& h)
 	{
 		assert(boost::this_thread::get_id() != thread_id());
-		return actor->trig<T>([&, this](const boost::function<void (T)>& cb)
+		return self->trig<T>([&, this](const boost::function<void (T)>& cb)
 		{
 			boost::shared_lock<boost::shared_mutex> sl(_postMutex);
 			if (!_isClosed)
@@ -207,14 +207,14 @@ public:
 	@brief 在MFC线程中创建一个Actor
 	@param ios Actor内部timer使用的调度器，没有就不能用timer
 	*/
-	actor_handle create_mfc_actor(ios_proxy& ios, const boost_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE)
+	actor_handle create_mfc_actor(ios_proxy& ios, const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE)
 	{
-		return boost_actor::create(mfc_strand::create(ios, this), mainFunc, stackSize);
+		return my_actor::create(mfc_strand::create(ios, this), mainFunc, stackSize);
 	}
 
-	actor_handle create_mfc_actor(const boost_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE)
+	actor_handle create_mfc_actor(const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE)
 	{
-		return boost_actor::create(mfc_strand::create(this), mainFunc, stackSize);
+		return my_actor::create(mfc_strand::create(this), mainFunc, stackSize);
 	}
 #endif
 protected:

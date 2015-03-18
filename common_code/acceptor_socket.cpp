@@ -17,14 +17,14 @@ accept_handle acceptor_socket::create(shared_strand strand, size_t port, const b
 		accept_handle shared_accept(new acceptor_socket());
 		shared_accept->_acceptor = new boost::asio::ip::tcp::acceptor(strand->get_io_service(),
 			boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), (unsigned short)port), reuse);
-		boost_actor::create(strand, [shared_accept, h](boost_actor* actor)
+		my_actor::create(strand, [shared_accept, h](my_actor* self)
 		{
 			async_trig_handle<boost::system::error_code> ath;
 			while (true)
 			{
 				socket_handle newSocket = socket_io::create(shared_accept->_acceptor->get_io_service());
-				shared_accept->_acceptor->async_accept((boost::asio::ip::tcp::socket&)*newSocket, actor->begin_trig(ath));
-				if (boost::system::error_code() != actor->wait_trig(ath))
+				shared_accept->_acceptor->async_accept((boost::asio::ip::tcp::socket&)*newSocket, self->begin_trig(ath));
+				if (boost::system::error_code() != self->wait_trig(ath))
 				{
 					boost::system::error_code ec;
 					shared_accept->_acceptor->close(ec);
