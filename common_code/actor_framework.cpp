@@ -109,6 +109,11 @@ bool param_list_base::closed()
 	return (*_pIsClosed);
 }
 
+bool param_list_base::empty()
+{
+	return 0 == length();
+}
+
 void param_list_base::begin(long long actorID)
 {
 	close();
@@ -168,7 +173,7 @@ void null_param_list::clear()
 	count = 0;
 }
 
-size_t null_param_list::get_size()
+size_t null_param_list::length()
 {
 	return count;
 }
@@ -971,7 +976,7 @@ bool my_actor::async_trig_push(async_trig_base& th, int tm, void* pref)
 	}
 	else
 	{
-		th.get_param(pref);
+		th.move_out(pref);
 	}
 	return true;
 }
@@ -987,16 +992,16 @@ void my_actor::async_trig_post_yield(async_trig_base& th, void* cref)
 			th._hasTm = false;
 			cancel_timer();
 		}
-		th.set_ref(cref);
+		th.save_to_dst(cref);
 		_strand->post(boost::bind(&my_actor::run_one, shared_from_this()));
 	} 
 	else
 	{
-		th.set_temp(cref);
+		th.save_to_temp(cref);
 	}
 }
 
-void my_actor::async_trig_pull_yield(async_trig_base& th, void* cref)
+void my_actor::async_trig_pull_yield(async_trig_base& th, void* ref)
 {
 	th._notify = true;
 	if (th._waiting)
@@ -1007,12 +1012,12 @@ void my_actor::async_trig_pull_yield(async_trig_base& th, void* cref)
 			th._hasTm = false;
 			cancel_timer();
 		}
-		th.set_ref(cref);
+		th.move_to_dst(ref);
 		pull_yield();
 	} 
 	else
 	{
-		th.set_temp(cref);
+		th.move_to_temp(ref);
 	}
 }
 

@@ -112,6 +112,14 @@ struct ref_ex
 		_p3 = s._p3;
 	}
 
+	void operator =(ref_ex&& s)
+	{
+		_p0 = std::move(s._p0);
+		_p1 = std::move(s._p1);
+		_p2 = std::move(s._p2);
+		_p3 = std::move(s._p3);
+	}
+
 	T0& _p0;
 	T1& _p1;
 	T2& _p2;
@@ -147,6 +155,13 @@ struct ref_ex<T0, T1, T2, void>
 		_p2 = s._p2;
 	}
 
+	void operator =(ref_ex&& s)
+	{
+		_p0 = std::move(s._p0);
+		_p1 = std::move(s._p1);
+		_p2 = std::move(s._p2);
+	}
+
 	T0& _p0;
 	T1& _p1;
 	T2& _p2;
@@ -179,6 +194,12 @@ struct ref_ex<T0, T1, void, void>
 		_p1 = s._p1;
 	}
 
+	void operator =(ref_ex&& s)
+	{
+		_p0 = std::move(s._p0);
+		_p1 = std::move(s._p1);
+	}
+
 	T0& _p0;
 	T1& _p1;
 };
@@ -206,6 +227,11 @@ struct ref_ex<T0, void, void, void>
 	void operator =(const const_ref_ex<T0>& s)
 	{
 		_p0 = s._p0;
+	}
+
+	void operator =(ref_ex&& s)
+	{
+		_p0 = std::move(s._p0);
 	}
 
 	T0& _p0;

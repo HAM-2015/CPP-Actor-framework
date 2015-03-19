@@ -5,6 +5,9 @@
 github url:
 https://github.com/HAM-2015/CPP-Actor-framework
 
+2015-03-19
+添加消息传递的右值优化.
+
 2015-03-05
 添加可以在MFC线程中运行Actor.
 

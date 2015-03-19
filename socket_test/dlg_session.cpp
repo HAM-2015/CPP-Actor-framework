@@ -23,7 +23,6 @@ dlg_session::~dlg_session()
 
 void dlg_session::DoDataExchange(CDataExchange* pDX)
 {
-	set_thread_id();
 	CDialogEx::DoDataExchange(pDX);
 	DDX_Control(pDX, IDC_EDIT5, _msgEdit);
 	DDX_Control(pDX, IDC_EDIT4, _outputEdit);
@@ -38,6 +37,7 @@ END_MESSAGE_MAP()
 
 BOOL dlg_session::OnInitDialog()
 {
+	set_thread_id();
 	CDialogEx::OnInitDialog();
 
 	_editFont.CreatePointFont(90, "ËÎÌו");

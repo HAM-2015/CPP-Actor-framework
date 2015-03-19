@@ -230,7 +230,7 @@ void test_consumer(my_actor* self, actor_msg_handle<int, int>& amh)
 		int p0;
 		int id;
 		self->pump_msg(amh, p0, id);
-		printf("%d-%d id=%d\n", p0, (int)amh.get_size(), id);
+		printf("%d-%d id=%d\n", p0, (int)amh.length(), id);
 		self->sleep(1000);
 	}
 	self->close_msg_notify(amh);

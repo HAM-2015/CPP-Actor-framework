@@ -15,6 +15,7 @@
 #include <boost/bind.hpp>
 #include <boost/circular_buffer.hpp>
 #include <list>
+#include <xutility>
 #include "ios_proxy.h"
 #include "shared_strand.h"
 #include "wrapped_trig_handler.h"
@@ -56,14 +57,8 @@ catch (my_actor::force_quit_exception& e)\
 #define kB	*1024
 #define DEFAULT_STACKSIZE	64 kB
 
-struct msg_param_base
-{
-	virtual ~msg_param_base() { }
-};
-
-
 template <typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
-struct msg_param: public msg_param_base
+struct msg_param
 {
 	typedef boost::function<void (T0, T1, T2, T3)> overflow_notify;
 	typedef ref_ex<T0, T1, T2, T3> ref_type;
@@ -86,17 +81,41 @@ struct msg_param: public msg_param_base
 
 	}
 
+	msg_param(msg_param&& s)
+	{
+		_res0 = std::move(s._res0);
+		_res1 = std::move(s._res1);
+		_res2 = std::move(s._res2);
+		_res3 = std::move(s._res3);
+	}
+
+	msg_param(ref_type&& src)
+	{
+		_res0 = std::move(src._p0);
+		_res1 = std::move(src._p1);
+		_res2 = std::move(src._p2);
+		_res3 = std::move(src._p3);
+	}
+
 	static void proxy_notify(const overflow_notify& nfy, const msg_param& p)
 	{
 		nfy(p._res0, p._res1, p._res2, p._res3);
 	}
 
-	void get_param(ref_type& rp) const
+	void save_to(ref_type& dst) const
 	{
-		rp._p0 = _res0;
-		rp._p1 = _res1;
-		rp._p2 = _res2;
-		rp._p3 = _res3;
+		dst._p0 = _res0;
+		dst._p1 = _res1;
+		dst._p2 = _res2;
+		dst._p3 = _res3;
+	}
+
+	void move_to(ref_type& dst)
+	{
+		dst._p0 = std::move(_res0);
+		dst._p1 = std::move(_res1);
+		dst._p2 = std::move(_res2);
+		dst._p3 = std::move(_res3);
 	}
 
 	void operator =(const const_ref_type& rp)
@@ -107,6 +126,22 @@ struct msg_param: public msg_param_base
 		_res3 = rp._p3;
 	}
 
+	void operator =(ref_type&& src)
+	{
+		_res0 = std::move(src._p0);
+		_res1 = std::move(src._p1);
+		_res2 = std::move(src._p2);
+		_res3 = std::move(src._p3);
+	}
+
+	void operator =(msg_param&& s)
+	{
+		_res0 = std::move(s._res0);
+		_res1 = std::move(s._res1);
+		_res2 = std::move(s._res2);
+		_res3 = std::move(s._res3);
+	}
+
 	T0 _res0;
 	T1 _res1;
 	T2 _res2;
@@ -114,7 +149,7 @@ struct msg_param: public msg_param_base
 };
 
 template <typename T0, typename T1, typename T2>
-struct msg_param<T0, T1, T2, void>: public msg_param_base
+struct msg_param<T0, T1, T2, void>
 {
 	typedef boost::function<void (T0, T1, T2)> overflow_notify;
 	typedef ref_ex<T0, T1, T2> ref_type;
@@ -137,16 +172,37 @@ struct msg_param<T0, T1, T2, void>: public msg_param_base
 
 	}
 
+	msg_param(msg_param&& s)
+	{
+		_res0 = std::move(s._res0);
+		_res1 = std::move(s._res1);
+		_res2 = std::move(s._res2);
+	}
+
+	msg_param(ref_type&& src)
+	{
+		_res0 = std::move(src._p0);
+		_res1 = std::move(src._p1);
+		_res2 = std::move(src._p2);
+	}
+
 	static void proxy_notify(const overflow_notify& nfy, const msg_param& p)
 	{
 		nfy(p._res0, p._res1, p._res2);
 	}
 
-	void get_param(ref_type& rp) const
+	void save_to(ref_type& dst) const
 	{
-		rp._p0 = _res0;
-		rp._p1 = _res1;
-		rp._p2 = _res2;
+		dst._p0 = _res0;
+		dst._p1 = _res1;
+		dst._p2 = _res2;
+	}
+
+	void move_to(ref_type& dst)
+	{
+		dst._p0 = std::move(_res0);
+		dst._p1 = std::move(_res1);
+		dst._p2 = std::move(_res2);
 	}
 
 	void operator =(const const_ref_type& rp)
@@ -156,13 +212,27 @@ struct msg_param<T0, T1, T2, void>: public msg_param_base
 		_res2 = rp._p2;
 	}
 
+	void operator =(ref_type&& src)
+	{
+		_res0 = std::move(src._p0);
+		_res1 = std::move(src._p1);
+		_res2 = std::move(src._p2);
+	}
+
+	void operator =(msg_param&& s)
+	{
+		_res0 = std::move(s._res0);
+		_res1 = std::move(s._res1);
+		_res2 = std::move(s._res2);
+	}
+
 	T0 _res0;
 	T1 _res1;
 	T2 _res2;
 };
 
 template <typename T0, typename T1>
-struct msg_param<T0, T1, void, void>: public msg_param_base
+struct msg_param<T0, T1, void, void>
 {
 	typedef boost::function<void (T0, T1)> overflow_notify;
 	typedef ref_ex<T0, T1> ref_type;
@@ -185,15 +255,33 @@ struct msg_param<T0, T1, void, void>: public msg_param_base
 
 	}
 
+	msg_param(msg_param&& s)
+	{
+		_res0 = std::move(s._res0);
+		_res1 = std::move(s._res1);
+	}
+
+	msg_param(ref_type&& src)
+	{
+		_res0 = std::move(src._p0);
+		_res1 = std::move(src._p1);
+	}
+
 	static void proxy_notify(const overflow_notify& nfy, const msg_param& p)
 	{
 		nfy(p._res0, p._res1);
 	}
 
-	void get_param(ref_type& rp) const
+	void save_to(ref_type& dst) const
 	{
-		rp._p0 = _res0;
-		rp._p1 = _res1;
+		dst._p0 = _res0;
+		dst._p1 = _res1;
+	}
+
+	void move_to(ref_type& dst)
+	{
+		dst._p0 = std::move(_res0);
+		dst._p1 = std::move(_res1);
 	}
 
 	void operator =(const const_ref_type& rp)
@@ -202,12 +290,24 @@ struct msg_param<T0, T1, void, void>: public msg_param_base
 		_res1 = rp._p1;
 	}
 
+	void operator =(ref_type&& src)
+	{
+		_res0 = std::move(src._p0);
+		_res1 = std::move(src._p1);
+	}
+
+	void operator =(msg_param&& s)
+	{
+		_res0 = std::move(s._res0);
+		_res1 = std::move(s._res1);
+	}
+
 	T0 _res0;
 	T1 _res1;
 };
 
 template <typename T0>
-struct msg_param<T0, void, void, void>: public msg_param_base
+struct msg_param<T0, void, void, void>
 {
 	typedef boost::function<void (T0)> overflow_notify;
 	typedef ref_ex<T0> ref_type;
@@ -230,19 +330,44 @@ struct msg_param<T0, void, void, void>: public msg_param_base
 
 	}
 
+	msg_param(msg_param&& s)
+	{
+		_res0 = std::move(s._res0);
+	}
+
+	msg_param(ref_type&& src)
+	{
+		_res0 = std::move(src._p0);
+	}
+
 	static void proxy_notify(const overflow_notify& nfy, const msg_param& p)
 	{
 		nfy(p._res0);
 	}
 
-	void get_param(ref_type& rp) const
+	void save_to(ref_type& dst) const
 	{
-		rp._p0 = _res0;
+		dst._p0 = _res0;
+	}
+
+	void move_to(ref_type& dst)
+	{
+		dst._p0 = std::move(_res0);
 	}
 
 	void operator =(const const_ref_type& rp)
 	{
 		_res0 = rp._p0;
+	}
+
+	void operator =(ref_type&& src)
+	{
+		_res0 = std::move(src._p0);
+	}
+
+	void operator =(msg_param&& s)
+	{
+		_res0 = std::move(s._res0);
 	}
 
 	T0 _res0;
@@ -258,8 +383,9 @@ protected:
 	param_list_base();
 	virtual ~param_list_base();
 	bool closed();
+	bool empty();
 	void begin(long long actorID);
-	virtual size_t get_size() = 0;
+	virtual size_t length() = 0;
 	virtual void close() = 0;
 	virtual void clear() = 0;
 protected:
@@ -270,7 +396,7 @@ protected:
 	DEBUG_OPERATION(long long _actorID);
 };
 
-template <typename T>
+template <typename T /*msg_param*/>
 class param_list: public param_list_base
 {
 	friend my_actor;
@@ -281,6 +407,7 @@ public:
 protected:
 	param_list(): _dstRefPt(NULL) {}
 	virtual size_t push_back(const T& p) = 0;
+	virtual size_t move_to_back(T&& p) = 0;
 	size_t push_back(const const_ref_type& p)
 	{
 		return push_back(T(p));
@@ -289,21 +416,21 @@ protected:
 	virtual T* front() = 0;
 	virtual size_t pop_front() = 0;
 
-	void get_param(const T& p)
+	void move_to_dst(T&& p)
 	{
 		assert(!(*_pIsClosed) && _dstRefPt);
-		p.get_param(*_dstRefPt);
+		p.move_to(*_dstRefPt);
 		DEBUG_OPERATION(_dstRefPt = NULL);
 	}
 
-	void get_param(const const_ref_type& p)
+	void save_to_dst(const const_ref_type& p)
 	{
 		assert(!(*_pIsClosed) && _dstRefPt);
 		*_dstRefPt = p;
 		DEBUG_OPERATION(_dstRefPt = NULL);
 	}
 
-	void set_ref(ref_type& p)
+	void set_dst_ref(ref_type& p)
 	{
 		_dstRefPt = &p;
 	}
@@ -316,7 +443,7 @@ class param_list_no_limit: public param_list<T>
 {
 	friend my_actor;
 public:
-	size_t get_size()
+	size_t length()
 	{
 		return _params.size();
 	}
@@ -342,6 +469,13 @@ protected:
 	{
 		assert(!(*_pIsClosed));
 		_params.push_back(p);
+		return _params.size();
+	}
+
+	size_t move_to_back(T&& p)
+	{
+		assert(!(*_pIsClosed));
+		_params.push_back(std::move(p));
 		return _params.size();
 	}
 
@@ -371,7 +505,7 @@ class param_list_limit: public param_list<T>
 {
 	friend my_actor;
 public:
-	size_t get_size()
+	size_t length()
 	{
 		return _params.size();
 	}
@@ -420,6 +554,24 @@ protected:
 		return 0;
 	}
 
+	size_t move_to_back(T&& p)
+	{
+		assert(!(*_pIsClosed));
+		if (_params.size() < _params.capacity())
+		{
+			_params.push_back(std::move(p));
+			return _params.size();
+		}
+		if (!_ofh)
+		{
+			_params.pop_front();
+			_params.push_back(std::move(p));
+			return _params.size();
+		}
+		T::proxy_notify(_ofh, p);
+		return 0;
+	}
+
 	T* front()
 	{
 		assert(!(*_pIsClosed));
@@ -446,7 +598,7 @@ class null_param_list: public param_list_base
 {
 	friend my_actor;
 public:
-	size_t get_size();
+	size_t length();
 
 	void clear();
 protected:
@@ -617,9 +769,11 @@ public:
 private:
 	void begin(long long actorID);
 	void close();
-	virtual void get_param(void* pref) = 0;
-	virtual void set_ref(void* cref) = 0;
-	virtual void set_temp(void* cref) = 0;
+	virtual void move_out(void* pref) = 0;
+	virtual void save_to_dst(void* cref) = 0;
+	virtual void move_to_dst(void* ref) = 0;
+	virtual void save_to_temp(void* cref) = 0;
+	virtual void move_to_temp(void* ref) = 0;
 	async_trig_base(const async_trig_base&);
 	async_trig_base& operator=(const async_trig_base&);
 protected:
@@ -646,21 +800,33 @@ public:
 		return boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> >(new async_trig_handle<T0, T1, T2, T3>);
 	}
 
-	void get_param(void* pref)
+	void move_out(void* pref)
 	{
-		_temp.get_param(*(ref_type*)pref);
+		_temp.move_to(*(ref_type*)pref);
 	}
 
-	void set_ref(void* cref)
+	void save_to_dst(void* cref)
 	{
 		assert(_dstRefPt);
 		*(ref_type*)_dstRefPt = *(const_ref_type*)cref;
 	}
 
-	void set_temp(void* cref)
+	void move_to_dst(void* ref)
+	{
+		assert(_dstRefPt);
+		*(ref_type*)_dstRefPt = std::move(*(ref_type*)ref);
+	}
+
+	void save_to_temp(void* cref)
 	{
 		assert(!_waiting);
 		_temp = *(const_ref_type*)cref;
+	}
+
+	void move_to_temp(void* ref)
+	{
+		assert(!_waiting);
+		_temp = std::move(*(ref_type*)ref);
 	}
 private:
 	msg_param<T0, T1, T2, T3> _temp;
@@ -680,21 +846,33 @@ public:
 		return boost::shared_ptr<async_trig_handle<T0, T1, T2> >(new async_trig_handle<T0, T1, T2>);
 	}
 
-	void get_param(void* pref)
+	void move_out(void* pref)
 	{
-		_temp.get_param(*(ref_type*)pref);
+		_temp.move_to(*(ref_type*)pref);
 	}
 
-	void set_ref(void* cref)
+	void save_to_dst(void* cref)
 	{
 		assert(_dstRefPt);
 		*(ref_type*)_dstRefPt = *(const_ref_type*)cref;
 	}
 
-	void set_temp(void* cref)
+	void move_to_dst(void* ref)
+	{
+		assert(_dstRefPt);
+		*(ref_type*)_dstRefPt = std::move(*(ref_type*)ref);
+	}
+
+	void save_to_temp(void* cref)
 	{
 		assert(!_waiting);
 		_temp = *(const_ref_type*)cref;
+	}
+
+	void move_to_temp(void* ref)
+	{
+		assert(!_waiting);
+		_temp = std::move(*(ref_type*)ref);
 	}
 private:
 	msg_param<T0, T1, T2> _temp;
@@ -714,21 +892,33 @@ public:
 		return boost::shared_ptr<async_trig_handle<T0, T1> >(new async_trig_handle<T0, T1>);
 	}
 
-	void get_param(void* pref)
+	void move_out(void* pref)
 	{
-		_temp.get_param(*(ref_type*)pref);
+		_temp.move_to(*(ref_type*)pref);
 	}
 
-	void set_ref(void* cref)
+	void save_to_dst(void* cref)
 	{
 		assert(_dstRefPt);
 		*(ref_type*)_dstRefPt = *(const_ref_type*)cref;
 	}
 
-	void set_temp(void* cref)
+	void move_to_dst(void* ref)
+	{
+		assert(_dstRefPt);
+		*(ref_type*)_dstRefPt = std::move(*(ref_type*)ref);
+	}
+
+	void save_to_temp(void* cref)
 	{
 		assert(!_waiting);
 		_temp = *(const_ref_type*)cref;
+	}
+
+	void move_to_temp(void* ref)
+	{
+		assert(!_waiting);
+		_temp = std::move(*(ref_type*)ref);
 	}
 private:
 	msg_param<T0, T1> _temp;
@@ -748,21 +938,33 @@ public:
 		return boost::shared_ptr<async_trig_handle<T0> >(new async_trig_handle<T0>);
 	}
 
-	void get_param(void* pref)
+	void move_out(void* pref)
 	{
-		_temp.get_param(*(ref_type*)pref);
+		_temp.move_to(*(ref_type*)pref);
 	}
 
-	void set_ref(void* cref)
+	void save_to_dst(void* cref)
 	{
 		assert(_dstRefPt);
 		*(ref_type*)_dstRefPt = *(const_ref_type*)cref;
 	}
 
-	void set_temp(void* cref)
+	void move_to_dst(void* ref)
+	{
+		assert(_dstRefPt);
+		*(ref_type*)_dstRefPt = std::move(*(ref_type*)ref);
+	}
+
+	void save_to_temp(void* cref)
 	{
 		assert(!_waiting);
 		_temp = *(const_ref_type*)cref;
+	}
+
+	void move_to_temp(void* ref)
+	{
+		assert(!_waiting);
+		_temp = std::move(*(ref_type*)ref);
 	}
 private:
 	msg_param<T0> _temp;
@@ -780,20 +982,31 @@ public:
 		return boost::shared_ptr<async_trig_handle<> >(new async_trig_handle<>);
 	}
 
-	void get_param(void* pref)
+	void move_out(void* pref)
 	{
 		assert(!pref);
 	}
 
-	void set_ref(void* cref)
+	void save_to_dst(void* cref)
 	{
 		assert(!cref);
 	}
 
-	void set_temp(void* cref)
+	void move_to_dst(void* ref)
+	{
+		assert(!ref);
+	}
+
+	void save_to_temp(void* cref)
 	{
 		assert(!_waiting);
 		assert(!cref);
+	}
+
+	void move_to_temp(void* ref)
+	{
+		assert(!_waiting);
+		assert(!ref);
 	}
 };
 //////////////////////////////////////////////////////////////////////////
@@ -1492,12 +1705,12 @@ public:
 		msg_param<T0>* param = amh.front();
 		if (param)
 		{
-			param->get_param(ref);
+			param->move_to(ref);
 			amh.pop_front();
 			return true;
 		}
 		amh._waiting = true;
-		amh.set_ref(ref);
+		amh.set_dst_ref(ref);
 		return pump_msg_push(amh, tm);
 	}
 
@@ -1525,12 +1738,12 @@ public:
 		msg_param<T0, T1>* param = amh.front();
 		if (param)
 		{
-			param->get_param(ref);
+			param->move_to(ref);
 			amh.pop_front();
 			return true;
 		}
 		amh._waiting = true;
-		amh.set_ref(ref);
+		amh.set_dst_ref(ref);
 		return pump_msg_push(amh, tm);
 	}
 
@@ -1550,12 +1763,12 @@ public:
 		msg_param<T0, T1, T2>* param = amh.front();
 		if (param)
 		{
-			param->get_param(ref);
+			param->move_to(ref);
 			amh.pop_front();
 			return true;
 		}
 		amh._waiting = true;
-		amh.set_ref(ref);
+		amh.set_dst_ref(ref);
 		return pump_msg_push(amh, tm);
 	}
 
@@ -1575,12 +1788,12 @@ public:
 		msg_param<T0, T1, T2, T3>* param = amh.front();
 		if (param)
 		{
-			param->get_param(ref);
+			param->move_to(ref);
 			amh.pop_front();
 			return true;
 		}
 		amh._waiting = true;
-		amh.set_ref(ref);
+		amh.set_dst_ref(ref);
 		return pump_msg_push(amh, tm);
 	}
 private:
@@ -1606,11 +1819,11 @@ private:
 	}
 
 	template <typename T0>
-	void _trig_handler(T0& r, const T0& p0)
+	void _trig_handler(T0& r, T0& p0)
 	{
 		if (!_quited)
 		{
-			r = p0;//必须在此(_strand内部)处理参数，如果Actor已退出(_quited == true)，将导致r失效
+			r = std::move(p0);//必须在此(_strand内部)处理参数，如果Actor已退出(_quited == true)，将导致r失效
 			pull_yield();
 		}
 	}
@@ -1633,11 +1846,11 @@ private:
 	}
 
 	template <typename T0, typename T1>
-	void _trig_handler(ref_ex<T0, T1>& r, const T0& p0, const T1& p1)
+	void _trig_handler(ref_ex<T0, T1>& r, T0& p0, T1& p1)
 	{
 		if (!_quited)
 		{
-			r = const_ref_ex<T0, T1>(p0, p1);
+			r = std::move(ref_ex<T0, T1>(p0, p1));
 			pull_yield();
 		}
 	}
@@ -1660,11 +1873,11 @@ private:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	void _trig_handler(ref_ex<T0, T1, T2>& r, const T0& p0, const T1& p1, const T2& p2)
+	void _trig_handler(ref_ex<T0, T1, T2>& r, T0& p0, T1& p1, T2& p2)
 	{
 		if (!_quited)
 		{
-			r = const_ref_ex<T0, T1, T2>(p0, p1, p2);
+			r = std::move(ref_ex<T0, T1, T2>(p0, p1, p2));
 			pull_yield();
 		}
 	}
@@ -1687,11 +1900,11 @@ private:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	void _trig_handler(ref_ex<T0, T1, T2, T3>& r, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+	void _trig_handler(ref_ex<T0, T1, T2, T3>& r, T0& p0, T1& p1, T2& p2, T3& p3)
 	{
 		if (!_quited)
 		{
-			r = const_ref_ex<T0, T1, T2, T3>(p0, p1, p2, p3);
+			r = std::move(ref_ex<T0, T1, T2, T3>(p0, p1, p2, p3));
 			pull_yield();
 		}
 	}
@@ -1700,7 +1913,7 @@ private:
 
 	void async_trig_post_yield(async_trig_base& th, void* cref);
 
-	void async_trig_pull_yield(async_trig_base& th, void* cref);
+	void async_trig_pull_yield(async_trig_base& th, void* ref);
 
 	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<>& th);
 	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<> >& th);
@@ -1740,18 +1953,18 @@ private:
 	}
 
 	template <typename T0>
-	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0>& th, const T0& p0)
+	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0>& th, T0& p0)
 	{
 		assert(_strand->running_in_this_thread());
 		if (!_quited && !(*pIsClosed) && !th._notify)
 		{
-			const_ref_ex<T0> cref(p0);
-			async_trig_pull_yield(th, &cref);
+			ref_ex<T0> ref(p0);
+			async_trig_pull_yield(th, &ref);
 		}
 	}
 
 	template <typename T0>
-	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0> >& th, const T0& p0)
+	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0> >& th, T0& p0)
 	{
 		return _async_trig_handler(pIsClosed, *th, p0);
 	}
@@ -1791,18 +2004,18 @@ private:
 	}
 
 	template <typename T0, typename T1>
-	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1>& th, const T0& p0, const T1& p1)
+	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1>& th, T0& p0, T1& p1)
 	{
 		assert(_strand->running_in_this_thread());
 		if (!_quited && !(*pIsClosed) && !th._notify)
 		{
-			const_ref_ex<T0, T1> cref(p0, p1);
-			async_trig_pull_yield(th, &cref);
+			ref_ex<T0, T1> ref(p0, p1);
+			async_trig_pull_yield(th, &ref);
 		}
 	}
 
 	template <typename T0, typename T1>
-	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0, T1> >& th, const T0& p0, const T1& p1)
+	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0, T1> >& th, T0& p0, T1& p1)
 	{
 		return _async_trig_handler(pIsClosed, *th, p0, p1);
 	}
@@ -1844,18 +2057,18 @@ private:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1, T2>& th, const T0& p0, const T1& p1, const T2& p2)
+	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1, T2>& th, T0& p0, T1& p1, T2& p2)
 	{
 		assert(_strand->running_in_this_thread());
 		if (!_quited && !(*pIsClosed) && !th._notify)
 		{
-			const_ref_ex<T0, T1, T2> cref(p0, p1, p2);
-			async_trig_pull_yield(th, &cref);
+			ref_ex<T0, T1, T2> ref(p0, p1, p2);
+			async_trig_pull_yield(th, &ref);
 		}
 	}
 
 	template <typename T0, typename T1, typename T2>
-	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0, T1, T2> >& th, const T0& p0, const T1& p1, const T2& p2)
+	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0, T1, T2> >& th, T0& p0, T1& p1, T2& p2)
 	{
 		return _async_trig_handler(pIsClosed, *th, p0, p1, p2);
 	}
@@ -1897,18 +2110,18 @@ private:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1, T2, T3>& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1, T2, T3>& th, T0& p0, T1& p1, T2& p2, T3& p3)
 	{
 		assert(_strand->running_in_this_thread());
 		if (!_quited && !(*pIsClosed) && !th._notify)
 		{
-			const_ref_ex<T0, T1, T2, T3> cref(p0, p1, p2, p3);
-			async_trig_pull_yield(th, &cref);
+			ref_ex<T0, T1, T2, T3> ref(p0, p1, p2, p3);
+			async_trig_pull_yield(th, &ref);
 		}
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> >& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> >& th, T0& p0, T1& p1, T2& p2, T3& p3)
 	{
 		_async_trig_handler(pIsClosed, *th, p0, p1, p2, p3);
 	}
@@ -2077,7 +2290,7 @@ private:
 	}
 
 	template <typename T /*msg_param*/>
-	void check_run2(boost::shared_ptr<bool>& pIsClosed, param_list<T>& amh, const T& src)
+	void check_run2(boost::shared_ptr<bool>& pIsClosed, param_list<T>& amh, T& src)
 	{
 		if (!_quited && !(*pIsClosed))
 		{
@@ -2089,19 +2302,19 @@ private:
 					amh._hasTm = false;
 					cancel_timer();
 				}
-				assert(amh.get_size() == 0);
-				amh.get_param(src);
+				assert(amh.empty());
+				amh.move_to_dst(std::move(src));
 				pull_yield();//与check_run3区别
 			} 
 			else
 			{
-				amh.push_back(src);
+				amh.move_to_back(std::move(src));
 			}
 		}
 	}
 
 	template <typename T /*msg_param*/>
-	void check_run2_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<T> >& amh, const T& src)
+	void check_run2_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<T> >& amh, T& src)
 	{
 		check_run2(pIsClosed, *amh, src);
 	}
@@ -2117,8 +2330,8 @@ private:
 				amh._hasTm = false;
 				cancel_timer();
 			}
-			assert(amh.get_size() == 0);
-			amh.get_param(srcRef);
+			assert(amh.empty());
+			amh.save_to_dst(srcRef);
 			_strand->post(boost::bind(&my_actor::run_one, shared_from_this()));//与check_run2区别
 		} 
 		else
