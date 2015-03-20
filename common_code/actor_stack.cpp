@@ -7,6 +7,20 @@
 //堆栈清理最小周期(秒)
 #define STACK_MIN_CLEAR_CYCLE		30
 
+#ifdef _DEBUG
+//测试堆栈释放后是否又被修改了
+#define CHECK_STACK(__st__)\
+{\
+	unsigned char* p = (unsigned char*)(__st__)._stack.sp - (__st__)._stack.size; \
+	for (size_t i = 0; i < (__st__)._stack.size; i++)\
+	{\
+		assert(0xCD == p[i]);\
+	}\
+}
+#else
+#define CHECK_STACK(__st__)
+#endif
+
 boost::shared_ptr<actor_stack_pool> actor_stack_pool::_actorStackPool;
 
 actor_stack_pool::actor_stack_pool()
@@ -39,6 +53,7 @@ actor_stack_pool::~actor_stack_pool()
 		boost::lock_guard<boost::mutex> lg1(_stackPool[i]._mutex);
 		for (auto it = _stackPool[i]._pool.begin(); it != _stackPool[i]._pool.end(); it++)
 		{
+			CHECK_STACK(*it);
 			free(((char*)it->_stack.sp)-it->_stack.size);
 			_stackCount--;
 		}
@@ -61,18 +76,21 @@ stack_pck actor_stack_pool::getStack( size_t size )
 	assert(size && size % 4096 == 0 && size <= 1024*1024);
 	{
 		stack_pool_pck& pool = _actorStackPool->_stackPool[size/4096-1];
-		boost::lock_guard<boost::mutex> lg(pool._mutex);
+		pool._mutex.lock();
 		if (!pool._pool.empty())
 		{
 			stack_pck r = pool._pool.back();
 			pool._pool.pop_back();
-			r._tick = 0;
 			if (!_actorStackPool->_isBack)
 			{
 				_actorStackPool->_isBack = (r._stack.sp == _actorStackPool->_nextPck._stack.sp);
 			}
+			pool._mutex.unlock();
+			r._tick = 0;
+			CHECK_STACK(r);
 			return r;
 		}
+		pool._mutex.unlock();
 	}
 	_actorStackPool->_stackCount++;
 	_actorStackPool->_stackTotalSize += size;
@@ -89,6 +107,9 @@ stack_pck actor_stack_pool::getStack( size_t size )
 
 void actor_stack_pool::recovery( stack_pck& stack )
 {
+#ifdef _DEBUG
+	memset((char*)stack._stack.sp-stack._stack.size, 0xCD, stack._stack.size);
+#endif
 	stack._tick = get_tick_s();
 	stack_pool_pck& pool = _actorStackPool->_stackPool[stack._stack.size/4096-1];
 	boost::lock_guard<boost::mutex> lg(pool._mutex);
@@ -132,7 +153,7 @@ void actor_stack_pool::clearThread()
 							_nextPck = *it;
 						}
 						_stackPool[i]._mutex.unlock();
-
+						CHECK_STACK(pck);
 						free(((char*)pck._stack.sp)-pck._stack.size);
 						_stackCount--;
 						_stackTotalSize -= pck._stack.size;
