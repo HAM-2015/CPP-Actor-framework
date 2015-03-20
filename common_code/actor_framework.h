@@ -1409,81 +1409,105 @@ public:
 	template <typename T0>
 	void delay_trig(int ms, async_trig_handle<T0>& th, const T0& p0)
 	{
+		typedef async_trig_handle<T0> trig_handle;
+		typedef msg_param<T0> msg_type;
+
 		assert_enter();
 		assert(th._pIsClosed);
 		assert(_timerSleep);
-		time_out(ms, boost::bind(&my_actor::_async_trig_handler<T0>, shared_from_this(), 
-			th._pIsClosed, boost::ref(th), p0));
+		time_out(ms, boost::bind(&my_actor::_async_trig_handler<trig_handle, msg_type>, shared_from_this(), 
+			th._pIsClosed, boost::ref(th), msg_type(p0)));
 	}
 
 	template <typename T0>
 	void delay_trig(int ms, boost::shared_ptr<async_trig_handle<T0> > th, const T0& p0)
 	{
+		typedef boost::shared_ptr<async_trig_handle<T0> > trig_handle;
+		typedef msg_param<T0> msg_type;
+
 		assert_enter();
 		assert(th->_pIsClosed);
 		assert(_timerSleep);
-		time_out(ms, boost::bind(&my_actor::_async_trig_handler_ptr<T0>, shared_from_this(), 
-			th->_pIsClosed, th, p0));
+		time_out(ms, boost::bind(&my_actor::_async_trig_handler_ptr<trig_handle, msg_type>, shared_from_this(),
+			th->_pIsClosed, th, msg_type(p0)));
 	}
 
 	template <typename T0, typename T1>
 	void delay_trig(int ms, async_trig_handle<T0, T1>& th, const T0& p0, const T1& p1)
 	{
+		typedef async_trig_handle<T0, T1> trig_handle;
+		typedef msg_param<T0, T1> msg_type;
+
 		assert_enter();
 		assert(th._pIsClosed);
 		assert(_timerSleep);
-		time_out(ms, boost::bind(&my_actor::_async_trig_handler<T0, T1>, shared_from_this(), 
-			th._pIsClosed, boost::ref(th), p0, p1));
+		time_out(ms, boost::bind(&my_actor::_async_trig_handler<trig_handle, msg_type>, shared_from_this(),
+			th._pIsClosed, boost::ref(th), msg_type(p0, p1)));
 	}
 
 	template <typename T0, typename T1>
 	void delay_trig(int ms, boost::shared_ptr<async_trig_handle<T0, T1> > th, const T0& p0, const T1& p1)
 	{
+		typedef boost::shared_ptr<async_trig_handle<T0, T1> > trig_handle;
+		typedef msg_param<T0, T1> msg_type;
+
 		assert_enter();
 		assert(th->_pIsClosed);
 		assert(_timerSleep);
-		time_out(ms, boost::bind(&my_actor::_async_trig_handler_ptr<T0, T1>, shared_from_this(), 
-			th->_pIsClosed, th, p0, p1));
+		time_out(ms, boost::bind(&my_actor::_async_trig_handler_ptr<trig_handle, msg_type>, shared_from_this(),
+			th->_pIsClosed, th, msg_type(p0, p1)));
 	}
 
 	template <typename T0, typename T1, typename T2>
 	void delay_trig(int ms, async_trig_handle<T0, T1, T2>& th, const T0& p0, const T1& p1, const T2& p2)
 	{
+		typedef async_trig_handle<T0, T1, T2> trig_handle;
+		typedef msg_param<T0, T1, T2> msg_type;
+
 		assert_enter();
 		assert(th._pIsClosed);
 		assert(_timerSleep);
-		time_out(ms, boost::bind(&my_actor::_async_trig_handler<T0, T1, T2>, shared_from_this(), 
-			th._pIsClosed, boost::ref(th), p0, p1, p2));
+		time_out(ms, boost::bind(&my_actor::_async_trig_handler<trig_handle, msg_type>, shared_from_this(),
+			th._pIsClosed, boost::ref(th), msg_type(p0, p1, p2)));
 	}
 
 	template <typename T0, typename T1, typename T2>
 	void delay_trig(int ms, boost::shared_ptr<async_trig_handle<T0, T1, T2> > th, const T0& p0, const T1& p1, const T2& p2)
 	{
+		typedef boost::shared_ptr<async_trig_handle<T0, T1, T2> > trig_handle;
+		typedef msg_param<T0, T1, T2> msg_type;
+
 		assert_enter();
 		assert(th->_pIsClosed);
 		assert(_timerSleep);
-		time_out(ms, boost::bind(&my_actor::_async_trig_handler_ptr<T0, T1, T2>, shared_from_this(), 
-			th->_pIsClosed, th, p0, p1, p2));
+		time_out(ms, boost::bind(&my_actor::_async_trig_handler_ptr<trig_handle, msg_type>, shared_from_this(),
+			th->_pIsClosed, th, msg_type(p0, p1, p2)));
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
 	void delay_trig(int ms, async_trig_handle<T0, T1, T2, T3>& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
+		typedef async_trig_handle<T0, T1, T2, T3> trig_handle;
+		typedef msg_param<T0, T1, T2, T3> msg_type;
+
 		assert_enter();
 		assert(th._pIsClosed);
 		assert(_timerSleep);
-		time_out(ms, boost::bind(&my_actor::_async_trig_handler<T0, T1, T2, T3>, shared_from_this(), 
-			th._pIsClosed, boost::ref(th), p0, p1, p2, p3));
+		time_out(ms, boost::bind(&my_actor::_async_trig_handler<trig_handle, msg_type>, shared_from_this(),
+			th._pIsClosed, boost::ref(th), msg_type(p0, p1, p2, p3)));
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
 	void delay_trig(int ms, boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> > th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
+		typedef boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> > trig_handle;
+		typedef msg_param<T0, T1, T2, T3> msg_type;
+
 		assert_enter();
 		assert(th->_pIsClosed);
 		assert(_timerSleep);
-		time_out(ms, boost::bind(&my_actor::_async_trig_handler_ptr<T0, T1, T2, T3>, shared_from_this(), 
-			th->_pIsClosed, th, p0, p1, p2, p3));
+		time_out(ms, boost::bind(&my_actor::_async_trig_handler_ptr<trig_handle, msg_type>, shared_from_this(),
+			th->_pIsClosed, th, msg_type(p0, p1, p2, p3)));
 	}
 
 	/*!
