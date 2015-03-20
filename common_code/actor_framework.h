@@ -769,11 +769,11 @@ public:
 private:
 	void begin(long long actorID);
 	void close();
-	virtual void move_out(void* pref) = 0;
-	virtual void save_to_dst(void* cref) = 0;
-	virtual void move_to_dst(void* ref) = 0;
-	virtual void save_to_temp(void* cref) = 0;
-	virtual void move_to_temp(void* ref) = 0;
+	virtual void move_out(void* dst) = 0;
+	virtual void save_to_dst(void* src) = 0;
+	virtual void move_to_dst(void* src) = 0;
+	virtual void save_to_temp(void* src) = 0;
+	virtual void move_to_temp(void* src) = 0;
 	async_trig_base(const async_trig_base&);
 	async_trig_base& operator=(const async_trig_base&);
 protected:
@@ -792,6 +792,7 @@ class async_trig_handle: public async_trig_base
 	friend my_actor;
 	typedef ref_ex<T0, T1, T2, T3> ref_type;
 	typedef const_ref_ex<T0, T1, T2, T3> const_ref_type;
+	typedef msg_param<T0, T1, T2, T3> msg_type;
 public:
 	typedef boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> > ptr;
 
@@ -800,21 +801,21 @@ public:
 		return boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> >(new async_trig_handle<T0, T1, T2, T3>);
 	}
 
-	void move_out(void* pref)
+	void move_out(void* dst)
 	{
-		_temp.move_to(*(ref_type*)pref);
+		_temp.move_to(*(ref_type*)dst);
 	}
 
-	void save_to_dst(void* cref)
+	void save_to_dst(void* src)
 	{
 		assert(_dstRefPt);
-		*(ref_type*)_dstRefPt = *(const_ref_type*)cref;
+		*(ref_type*)_dstRefPt = *(const_ref_type*)src;
 	}
 
-	void move_to_dst(void* ref)
+	void move_to_dst(void* src)
 	{
 		assert(_dstRefPt);
-		*(ref_type*)_dstRefPt = std::move(*(ref_type*)ref);
+		((msg_type*)src)->move_to(*(ref_type*)_dstRefPt);
 	}
 
 	void save_to_temp(void* cref)
@@ -823,13 +824,13 @@ public:
 		_temp = *(const_ref_type*)cref;
 	}
 
-	void move_to_temp(void* ref)
+	void move_to_temp(void* src)
 	{
 		assert(!_waiting);
-		_temp = std::move(*(ref_type*)ref);
+		_temp = std::move(*(msg_type*)src);
 	}
 private:
-	msg_param<T0, T1, T2, T3> _temp;
+	msg_type _temp;
 };
 
 template <typename T0, typename T1, typename T2>
@@ -838,6 +839,7 @@ class async_trig_handle<T0, T1, T2, void>: public async_trig_base
 	friend my_actor;
 	typedef ref_ex<T0, T1, T2> ref_type;
 	typedef const_ref_ex<T0, T1, T2> const_ref_type;
+	typedef msg_param<T0, T1, T2> msg_type;
 public:
 	typedef boost::shared_ptr<async_trig_handle<T0, T1, T2> > ptr;
 
@@ -846,36 +848,36 @@ public:
 		return boost::shared_ptr<async_trig_handle<T0, T1, T2> >(new async_trig_handle<T0, T1, T2>);
 	}
 
-	void move_out(void* pref)
+	void move_out(void* dst)
 	{
-		_temp.move_to(*(ref_type*)pref);
+		_temp.move_to(*(ref_type*)dst);
 	}
 
-	void save_to_dst(void* cref)
+	void save_to_dst(void* src)
 	{
 		assert(_dstRefPt);
-		*(ref_type*)_dstRefPt = *(const_ref_type*)cref;
+		*(ref_type*)_dstRefPt = *(const_ref_type*)src;
 	}
 
-	void move_to_dst(void* ref)
+	void move_to_dst(void* src)
 	{
 		assert(_dstRefPt);
-		*(ref_type*)_dstRefPt = std::move(*(ref_type*)ref);
+		((msg_type*)src)->move_to(*(ref_type*)_dstRefPt);
 	}
 
-	void save_to_temp(void* cref)
+	void save_to_temp(void* src)
 	{
 		assert(!_waiting);
-		_temp = *(const_ref_type*)cref;
+		_temp = *(const_ref_type*)src;
 	}
 
-	void move_to_temp(void* ref)
+	void move_to_temp(void* src)
 	{
 		assert(!_waiting);
-		_temp = std::move(*(ref_type*)ref);
+		_temp = std::move(*(msg_type*)src);
 	}
 private:
-	msg_param<T0, T1, T2> _temp;
+	msg_type _temp;
 };
 
 template <typename T0, typename T1>
@@ -884,6 +886,7 @@ class async_trig_handle<T0, T1, void, void>: public async_trig_base
 	friend my_actor;
 	typedef ref_ex<T0, T1> ref_type;
 	typedef const_ref_ex<T0, T1> const_ref_type;
+	typedef msg_param<T0, T1> msg_type;
 public:
 	typedef boost::shared_ptr<async_trig_handle<T0, T1> > ptr;
 
@@ -892,36 +895,36 @@ public:
 		return boost::shared_ptr<async_trig_handle<T0, T1> >(new async_trig_handle<T0, T1>);
 	}
 
-	void move_out(void* pref)
+	void move_out(void* dst)
 	{
-		_temp.move_to(*(ref_type*)pref);
+		_temp.move_to(*(ref_type*)dst);
 	}
 
-	void save_to_dst(void* cref)
+	void save_to_dst(void* src)
 	{
 		assert(_dstRefPt);
-		*(ref_type*)_dstRefPt = *(const_ref_type*)cref;
+		*(ref_type*)_dstRefPt = *(const_ref_type*)src;
 	}
 
-	void move_to_dst(void* ref)
+	void move_to_dst(void* src)
 	{
 		assert(_dstRefPt);
-		*(ref_type*)_dstRefPt = std::move(*(ref_type*)ref);
+		((msg_type*)src)->move_to(*(ref_type*)_dstRefPt);
 	}
 
-	void save_to_temp(void* cref)
+	void save_to_temp(void* src)
 	{
 		assert(!_waiting);
-		_temp = *(const_ref_type*)cref;
+		_temp = *(const_ref_type*)src;
 	}
 
-	void move_to_temp(void* ref)
+	void move_to_temp(void* src)
 	{
 		assert(!_waiting);
-		_temp = std::move(*(ref_type*)ref);
+		_temp = std::move(*(msg_type*)src);
 	}
 private:
-	msg_param<T0, T1> _temp;
+	msg_type _temp;
 };
 
 template <typename T0>
@@ -930,6 +933,7 @@ class async_trig_handle<T0, void, void, void>: public async_trig_base
 	friend my_actor;
 	typedef ref_ex<T0> ref_type;
 	typedef const_ref_ex<T0> const_ref_type;
+	typedef msg_param<T0> msg_type;
 public:
 	typedef boost::shared_ptr<async_trig_handle<T0> > ptr;
 
@@ -938,36 +942,36 @@ public:
 		return boost::shared_ptr<async_trig_handle<T0> >(new async_trig_handle<T0>);
 	}
 
-	void move_out(void* pref)
+	void move_out(void* dst)
 	{
-		_temp.move_to(*(ref_type*)pref);
+		_temp.move_to(*(ref_type*)dst);
 	}
 
-	void save_to_dst(void* cref)
+	void save_to_dst(void* src)
 	{
 		assert(_dstRefPt);
-		*(ref_type*)_dstRefPt = *(const_ref_type*)cref;
+		*(ref_type*)_dstRefPt = *(const_ref_type*)src;
 	}
 
-	void move_to_dst(void* ref)
+	void move_to_dst(void* src)
 	{
 		assert(_dstRefPt);
-		*(ref_type*)_dstRefPt = std::move(*(ref_type*)ref);
+		((msg_type*)src)->move_to(*(ref_type*)_dstRefPt);
 	}
 
-	void save_to_temp(void* cref)
+	void save_to_temp(void* src)
 	{
 		assert(!_waiting);
-		_temp = *(const_ref_type*)cref;
+		_temp = *(const_ref_type*)src;
 	}
 
-	void move_to_temp(void* ref)
+	void move_to_temp(void* src)
 	{
 		assert(!_waiting);
-		_temp = std::move(*(ref_type*)ref);
+		_temp = std::move(*(msg_type*)src);
 	}
 private:
-	msg_param<T0> _temp;
+	msg_type _temp;
 };
 
 template <>
@@ -982,31 +986,31 @@ public:
 		return boost::shared_ptr<async_trig_handle<> >(new async_trig_handle<>);
 	}
 
-	void move_out(void* pref)
+	void move_out(void* dst)
 	{
-		assert(!pref);
+		assert(!dst);
 	}
 
-	void save_to_dst(void* cref)
+	void save_to_dst(void* src)
 	{
-		assert(!cref);
+		assert(!src);
 	}
 
-	void move_to_dst(void* ref)
+	void move_to_dst(void* src)
 	{
-		assert(!ref);
+		assert(!src);
 	}
 
-	void save_to_temp(void* cref)
+	void save_to_temp(void* src)
 	{
 		assert(!_waiting);
-		assert(!cref);
+		assert(!src);
 	}
 
-	void move_to_temp(void* ref)
+	void move_to_temp(void* src)
 	{
 		assert(!_waiting);
-		assert(!ref);
+		assert(!src);
 	}
 };
 //////////////////////////////////////////////////////////////////////////
@@ -1305,8 +1309,8 @@ public:
 	{
 		assert(th._actorID == _actorID);
 		assert_enter();
-		ref_ex<T0> ref(r0);
-		if (async_trig_push(th, tm, &ref))
+		ref_ex<T0> dst(r0);
+		if (async_trig_push(th, tm, &dst))
 		{
 			close_trig(th);
 			return true;
@@ -1333,8 +1337,8 @@ public:
 	{
 		assert(th._actorID == _actorID);
 		assert_enter();
-		ref_ex<T0, T1> ref(r0, r1);
-		if (async_trig_push(th, tm, &ref))
+		ref_ex<T0, T1> dst(r0, r1);
+		if (async_trig_push(th, tm, &dst))
 		{
 			close_trig(th);
 			return true;
@@ -1353,8 +1357,8 @@ public:
 	{
 		assert(th._actorID == _actorID);
 		assert_enter();
-		ref_ex<T0, T1, T2> ref(r0, r1, r2);
-		if (async_trig_push(th, tm, &ref))
+		ref_ex<T0, T1, T2> dst(r0, r1, r2);
+		if (async_trig_push(th, tm, &dst))
 		{
 			close_trig(th);
 			return true;
@@ -1373,8 +1377,8 @@ public:
 	{
 		assert(th._actorID == _actorID);
 		assert_enter();
-		ref_ex<T0, T1, T2, T3> ref(r0, r1, r2, r3);
-		if (async_trig_push(th, tm, &ref))
+		ref_ex<T0, T1, T2, T3> dst(r0, r1, r2, r3);
+		if (async_trig_push(th, tm, &dst))
 		{
 			close_trig(th);
 			return true;
@@ -1512,11 +1516,12 @@ public:
 	__yield_interrupt void trig(const boost::function<void (boost::function<void (T0)>)>& h, __out T0& r0)
 	{
 		assert_enter();
+		ref_ex<T0> mulRef(r0);
 #ifdef _DEBUG
 		h(wrapped_trig_handler<boost::function<void (T0)> >(
-			boost::bind(&my_actor::trig_handler<T0>, shared_from_this(), boost::ref(r0), _1)));
+			boost::bind(&my_actor::trig_handler<T0>, shared_from_this(), boost::ref(mulRef), _1)));
 #else
-		h(boost::bind(&my_actor::trig_handler<T0>, shared_from_this(), boost::ref(r0), _1));
+		h(boost::bind(&my_actor::trig_handler<T0>, shared_from_this(), boost::ref(mulRef), _1));
 #endif
 		push_yield();
 	}
@@ -1801,36 +1806,42 @@ private:
 
 	void trig_handler();
 
-	template <typename T0>
-	void trig_handler(T0& r, const T0& p0)
+	template <typename RT /*ref_ex*/, typename MT /*msg_param*/>
+	void _trig_handler(RT& dst, MT& src)
 	{
+		if (!_quited)
+		{
+			src.move_to(dst);
+			pull_yield();
+		}
+	}
+
+	template <typename T0>
+	void trig_handler(ref_ex<T0>& r, const T0& p0)
+	{
+		typedef ref_ex<T0> ref_type;
+		typedef msg_param<T0> msg_type;
+
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited)
 			{
-				r = p0;//必须在此(_strand内部)处理参数，如果Actor已退出(_quited == true)，将导致r失效
+				r = const_ref_ex<T0>(p0);//必须在此(_strand内部)处理参数，如果Actor已退出(_quited == true)，将导致r失效
 				_strand->post(boost::bind(&my_actor::run_one, shared_from_this()));
 			}
 		} 
 		else
 		{//此时不能处理参数，因为 r 可能已失效
-			_strand->post(boost::bind(&my_actor::_trig_handler<T0>, shared_from_this(), boost::ref(r), p0));
-		}
-	}
-
-	template <typename T0>
-	void _trig_handler(T0& r, T0& p0)
-	{
-		if (!_quited)
-		{
-			r = std::move(p0);//必须在此(_strand内部)处理参数，如果Actor已退出(_quited == true)，将导致r失效
-			pull_yield();
+			_strand->post(boost::bind(&my_actor::_trig_handler<ref_type, msg_type>, shared_from_this(), boost::ref(r), msg_type(p0)));
 		}
 	}
 
 	template <typename T0, typename T1>
 	void trig_handler(ref_ex<T0, T1>& r, const T0& p0, const T1& p1)
 	{
+		typedef ref_ex<T0, T1> ref_type;
+		typedef msg_param<T0, T1> msg_type;
+
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited)
@@ -1841,23 +1852,16 @@ private:
 		} 
 		else
 		{
-			_strand->post(boost::bind(&my_actor::_trig_handler<T0, T1>, shared_from_this(), boost::ref(r), p0, p1));
-		}
-	}
-
-	template <typename T0, typename T1>
-	void _trig_handler(ref_ex<T0, T1>& r, T0& p0, T1& p1)
-	{
-		if (!_quited)
-		{
-			r = std::move(ref_ex<T0, T1>(p0, p1));
-			pull_yield();
+			_strand->post(boost::bind(&my_actor::_trig_handler<ref_type, msg_type>, shared_from_this(), boost::ref(r), msg_type(p0, p1)));
 		}
 	}
 
 	template <typename T0, typename T1, typename T2>
 	void trig_handler(ref_ex<T0, T1, T2>& r, const T0& p0, const T1& p1, const T2& p2)
 	{
+		typedef ref_ex<T0, T1, T2> ref_type;
+		typedef msg_param<T0, T1, T2> msg_type;
+
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited)
@@ -1868,23 +1872,16 @@ private:
 		} 
 		else
 		{
-			_strand->post(boost::bind(&my_actor::_trig_handler<T0, T1, T2>, shared_from_this(), boost::ref(r), p0, p1, p2));
-		}
-	}
-
-	template <typename T0, typename T1, typename T2>
-	void _trig_handler(ref_ex<T0, T1, T2>& r, T0& p0, T1& p1, T2& p2)
-	{
-		if (!_quited)
-		{
-			r = std::move(ref_ex<T0, T1, T2>(p0, p1, p2));
-			pull_yield();
+			_strand->post(boost::bind(&my_actor::_trig_handler<ref_type, msg_type>, shared_from_this(), boost::ref(r), msg_type(p0, p1, p2)));
 		}
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
 	void trig_handler(ref_ex<T0, T1, T2, T3>& r, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
+		typedef ref_ex<T0, T1, T2, T3> ref_type;
+		typedef msg_param<T0, T1, T2, T2> msg_type;
+
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited)
@@ -1895,32 +1892,42 @@ private:
 		} 
 		else
 		{
-			_strand->post(boost::bind(&my_actor::_trig_handler<T0, T1, T2, T3>, shared_from_this(), boost::ref(r), p0, p1, p2, p3));
+			_strand->post(boost::bind(&my_actor::_trig_handler<ref_type, msg_type>, shared_from_this(), boost::ref(r), msg_type(p0, p1, p2, p3)));
 		}
 	}
 
-	template <typename T0, typename T1, typename T2, typename T3>
-	void _trig_handler(ref_ex<T0, T1, T2, T3>& r, T0& p0, T1& p1, T2& p2, T3& p3)
-	{
-		if (!_quited)
-		{
-			r = std::move(ref_ex<T0, T1, T2, T3>(p0, p1, p2, p3));
-			pull_yield();
-		}
-	}
+	bool async_trig_push(async_trig_base& th, int tm, void* dst/*ref_ex*/);
 
-	bool async_trig_push(async_trig_base& th, int tm, void* pref);
+	void async_trig_post_yield(async_trig_base& th, void* src/*const_ref_ex*/);
 
-	void async_trig_post_yield(async_trig_base& th, void* cref);
-
-	void async_trig_pull_yield(async_trig_base& th, void* ref);
+	void async_trig_pull_yield(async_trig_base& th, void* src/*msg_param*/);
 
 	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<>& th);
+
 	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<> >& th);
+
+	template <typename TH /*async_trig_handle*/, typename MT /*msg_param*/>
+	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, TH& th, MT& src)
+	{
+		assert(_strand->running_in_this_thread());
+		if (!_quited && !(*pIsClosed) && !th._notify)
+		{
+			async_trig_pull_yield(th, &src);
+		}
+	}
+
+	template <typename TH /*async_trig_handle::ptr*/, typename MT /*msg_param*/>
+	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, TH& th, MT& src)
+	{
+		_async_trig_handler(pIsClosed, *th, src);
+	}
 
 	template <typename T0>
 	void async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0>& th, const T0& p0)
 	{
+		typedef async_trig_handle<T0> trig_handle;
+		typedef msg_param<T0> msg_type;
+
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*pIsClosed) && !th._notify)
@@ -1931,13 +1938,16 @@ private:
 		}
 		else
 		{
-			_strand->post(boost::bind(&my_actor::_async_trig_handler<T0>, shared_from_this(), pIsClosed, boost::ref(th), p0));
+			_strand->post(boost::bind(&my_actor::_async_trig_handler<trig_handle, msg_type>, shared_from_this(), pIsClosed, boost::ref(th), msg_type(p0)));
 		}
 	}
 
 	template <typename T0>
 	void async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0> >& th, const T0& p0)
 	{
+		typedef boost::shared_ptr<async_trig_handle<T0> > trig_handle;
+		typedef msg_param<T0> msg_type;
+
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*pIsClosed) && !th->_notify)
@@ -1948,30 +1958,16 @@ private:
 		}
 		else
 		{
-			_strand->post(boost::bind(&my_actor::_async_trig_handler_ptr<T0>, shared_from_this(), pIsClosed, th, p0));
+			_strand->post(boost::bind(&my_actor::_async_trig_handler_ptr<trig_handle, msg_type>, shared_from_this(), pIsClosed, th, msg_type(p0)));
 		}
-	}
-
-	template <typename T0>
-	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0>& th, T0& p0)
-	{
-		assert(_strand->running_in_this_thread());
-		if (!_quited && !(*pIsClosed) && !th._notify)
-		{
-			ref_ex<T0> ref(p0);
-			async_trig_pull_yield(th, &ref);
-		}
-	}
-
-	template <typename T0>
-	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0> >& th, T0& p0)
-	{
-		return _async_trig_handler(pIsClosed, *th, p0);
 	}
 
 	template <typename T0, typename T1>
 	void async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1>& th, const T0& p0, const T1& p1)
 	{
+		typedef async_trig_handle<T0, T1> trig_handle;
+		typedef msg_param<T0, T1> msg_type;
+
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*pIsClosed) && !th._notify)
@@ -1982,13 +1978,16 @@ private:
 		}
 		else
 		{
-			_strand->post(boost::bind(&my_actor::_async_trig_handler<T0, T1>, shared_from_this(), pIsClosed, boost::ref(th), p0, p1));
+			_strand->post(boost::bind(&my_actor::_async_trig_handler<trig_handle, msg_type>, shared_from_this(), pIsClosed, boost::ref(th), msg_type(p0, p1)));
 		}
 	}
 
 	template <typename T0, typename T1>
 	void async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0, T1> >& th, const T0& p0, const T1& p1)
 	{
+		typedef boost::shared_ptr<async_trig_handle<T0, T1> > trig_handle;
+		typedef msg_param<T0, T1> msg_type;
+
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*pIsClosed) && !th->_notify)
@@ -1999,30 +1998,16 @@ private:
 		}
 		else
 		{
-			_strand->post(boost::bind(&my_actor::_async_trig_handler_ptr<T0, T1>, shared_from_this(), pIsClosed, th, p0, p1));
+			_strand->post(boost::bind(&my_actor::_async_trig_handler_ptr<trig_handle, msg_type>, shared_from_this(), pIsClosed, th, msg_type(p0, p1)));
 		}
-	}
-
-	template <typename T0, typename T1>
-	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1>& th, T0& p0, T1& p1)
-	{
-		assert(_strand->running_in_this_thread());
-		if (!_quited && !(*pIsClosed) && !th._notify)
-		{
-			ref_ex<T0, T1> ref(p0, p1);
-			async_trig_pull_yield(th, &ref);
-		}
-	}
-
-	template <typename T0, typename T1>
-	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0, T1> >& th, T0& p0, T1& p1)
-	{
-		return _async_trig_handler(pIsClosed, *th, p0, p1);
 	}
 
 	template <typename T0, typename T1, typename T2>
 	void async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1, T2>& th, const T0& p0, const T1& p1, const T2& p2)
 	{
+		typedef async_trig_handle<T0, T1, T2> trig_handle;
+		typedef msg_param<T0, T1, T2> msg_type;
+
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*pIsClosed) && !th._notify)
@@ -2033,14 +2018,17 @@ private:
 		}
 		else
 		{
-			_strand->post(boost::bind(&my_actor::_async_trig_handler<T0, T1, T2>, shared_from_this(), pIsClosed, boost::ref(th), 
-				p0, p1, p2));
+			_strand->post(boost::bind(&my_actor::_async_trig_handler<trig_handle, msg_type>, shared_from_this(), pIsClosed, boost::ref(th),
+				msg_type(p0, p1, p2)));
 		}
 	}
 
 	template <typename T0, typename T1, typename T2>
 	void async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0, T1, T2> >& th, const T0& p0, const T1& p1, const T2& p2)
 	{
+		typedef boost::shared_ptr<async_trig_handle<T0, T1, T2> > trig_handle;
+		typedef msg_param<T0, T1, T2> msg_type;
+
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*pIsClosed) && !th->_notify)
@@ -2051,31 +2039,17 @@ private:
 		}
 		else
 		{
-			_strand->post(boost::bind(&my_actor::_async_trig_handler_ptr<T0, T1, T2>, shared_from_this(), pIsClosed, th, 
-				p0, p1, p2));
+			_strand->post(boost::bind(&my_actor::_async_trig_handler_ptr<trig_handle, msg_type>, shared_from_this(), pIsClosed, th,
+				msg_type(p0, p1, p2)));
 		}
-	}
-
-	template <typename T0, typename T1, typename T2>
-	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1, T2>& th, T0& p0, T1& p1, T2& p2)
-	{
-		assert(_strand->running_in_this_thread());
-		if (!_quited && !(*pIsClosed) && !th._notify)
-		{
-			ref_ex<T0, T1, T2> ref(p0, p1, p2);
-			async_trig_pull_yield(th, &ref);
-		}
-	}
-
-	template <typename T0, typename T1, typename T2>
-	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0, T1, T2> >& th, T0& p0, T1& p1, T2& p2)
-	{
-		return _async_trig_handler(pIsClosed, *th, p0, p1, p2);
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
 	void async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1, T2, T3>& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
+		typedef async_trig_handle<T0, T1, T2, T3> trig_handle;
+		typedef msg_param<T0, T1, T2, T3> msg_type;
+
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*pIsClosed) && !th._notify)
@@ -2086,14 +2060,17 @@ private:
 		}
 		else
 		{
-			_strand->post(boost::bind(&my_actor::_async_trig_handler<T0, T1, T2, T3>, shared_from_this(), pIsClosed, boost::ref(th), 
-				p0, p1, p2, p3));
+			_strand->post(boost::bind(&my_actor::_async_trig_handler<trig_handle, msg_type>, shared_from_this(), pIsClosed, boost::ref(th),
+				msg_type(p0, p1, p2, p3)));
 		}
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
 	void async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> >& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
+		typedef boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> > trig_handle;
+		typedef msg_param<T0, T1, T2, T3> msg_type;
+
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*pIsClosed) && !th->_notify)
@@ -2104,26 +2081,9 @@ private:
 		}
 		else
 		{
-			_strand->post(boost::bind(&my_actor::_async_trig_handler_ptr<T0, T1, T2, T3>, shared_from_this(), pIsClosed, th, 
-				p0, p1, p2, p3));
+			_strand->post(boost::bind(&my_actor::_async_trig_handler_ptr<trig_handle, msg_type>, shared_from_this(), pIsClosed, th, 
+				msg_type(p0, p1, p2, p3)));
 		}
-	}
-
-	template <typename T0, typename T1, typename T2, typename T3>
-	void _async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1, T2, T3>& th, T0& p0, T1& p1, T2& p2, T3& p3)
-	{
-		assert(_strand->running_in_this_thread());
-		if (!_quited && !(*pIsClosed) && !th._notify)
-		{
-			ref_ex<T0, T1, T2, T3> ref(p0, p1, p2, p3);
-			async_trig_pull_yield(th, &ref);
-		}
-	}
-
-	template <typename T0, typename T1, typename T2, typename T3>
-	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> >& th, T0& p0, T1& p1, T2& p2, T3& p3)
-	{
-		_async_trig_handler(pIsClosed, *th, p0, p1, p2, p3);
 	}
 private:
 	void check_run1(boost::shared_ptr<bool>& pIsClosed, actor_msg_handle<>& amh);
@@ -2289,8 +2249,8 @@ private:
 		}
 	}
 
-	template <typename T /*msg_param*/>
-	void check_run2(boost::shared_ptr<bool>& pIsClosed, param_list<T>& amh, T& src)
+	template <typename MT /*msg_param*/>
+	void check_run2(boost::shared_ptr<bool>& pIsClosed, param_list<MT>& amh, MT& src)
 	{
 		if (!_quited && !(*pIsClosed))
 		{
@@ -2313,14 +2273,14 @@ private:
 		}
 	}
 
-	template <typename T /*msg_param*/>
-	void check_run2_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<T> >& amh, T& src)
+	template <typename MT /*msg_param*/>
+	void check_run2_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<param_list<MT> >& amh, MT& src)
 	{
 		check_run2(pIsClosed, *amh, src);
 	}
 
-	template <typename T /*msg_param*/, typename RT /*msg_param::const_ref_type*/>
-	void check_run3(param_list<T>& amh, const RT& srcRef)
+	template <typename MT /*msg_param*/, typename RT /*msg_param::const_ref_type*/>
+	void check_run3(param_list<MT>& amh, const RT& srcRef)
 	{
 		if (amh._waiting)
 		{

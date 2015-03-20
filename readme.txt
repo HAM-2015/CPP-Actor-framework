@@ -5,6 +5,10 @@
 github url:
 https://github.com/HAM-2015/CPP-Actor-framework
 
+oschina url
+http://git.oschina.net/hamasm/cpp-actor-framework
+http://www.oschina.net/code/snippet_2274073_45577
+
 2015-03-19
 添加消息传递的右值优化.
 

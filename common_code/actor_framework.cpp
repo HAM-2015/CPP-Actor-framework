@@ -944,13 +944,13 @@ void my_actor::trig_handler()
 	_strand->post(boost::bind(&my_actor::run_one, shared_from_this()));
 }
 
-bool my_actor::async_trig_push(async_trig_base& th, int tm, void* pref)
+bool my_actor::async_trig_push(async_trig_base& th, int tm, void* dst)
 {
 	assert(th._pIsClosed);
 	if (!th._notify)
 	{
 		th._waiting = true;
-		th._dstRefPt = pref;
+		th._dstRefPt = dst;
 		if (tm >= 0)
 		{
 			th._hasTm = true;
@@ -976,12 +976,12 @@ bool my_actor::async_trig_push(async_trig_base& th, int tm, void* pref)
 	}
 	else
 	{
-		th.move_out(pref);
+		th.move_out(dst);
 	}
 	return true;
 }
 
-void my_actor::async_trig_post_yield(async_trig_base& th, void* cref)
+void my_actor::async_trig_post_yield(async_trig_base& th, void* src)
 {
 	th._notify = true;
 	if (th._waiting)
@@ -992,16 +992,16 @@ void my_actor::async_trig_post_yield(async_trig_base& th, void* cref)
 			th._hasTm = false;
 			cancel_timer();
 		}
-		th.save_to_dst(cref);
+		th.save_to_dst(src);
 		_strand->post(boost::bind(&my_actor::run_one, shared_from_this()));
 	} 
 	else
 	{
-		th.save_to_temp(cref);
+		th.save_to_temp(src);
 	}
 }
 
-void my_actor::async_trig_pull_yield(async_trig_base& th, void* ref)
+void my_actor::async_trig_pull_yield(async_trig_base& th, void* src)
 {
 	th._notify = true;
 	if (th._waiting)
@@ -1012,12 +1012,12 @@ void my_actor::async_trig_pull_yield(async_trig_base& th, void* ref)
 			th._hasTm = false;
 			cancel_timer();
 		}
-		th.move_to_dst(ref);
+		th.move_to_dst(src);
 		pull_yield();
 	} 
 	else
 	{
-		th.move_to_temp(ref);
+		th.move_to_temp(src);
 	}
 }
 
