@@ -561,7 +561,7 @@ void my_actor::child_actor_run( child_actor_handle& actorHandle )
 	assert(!actorHandle._quited);
 	assert(actorHandle.get_actor());
 	assert(actorHandle.get_actor()->parent_actor().get() == this);
-	actorHandle._param._actor->notify_start_run();
+	actorHandle._param._actor->notify_run();
 }
 
 void my_actor::child_actor_run(const list<boost::shared_ptr<child_actor_handle> >& actorHandles)
@@ -588,7 +588,7 @@ bool my_actor::child_actor_force_quit( child_actor_handle& actorHandle )
 		} 
 		else
 		{
-			actorHandle._norQuit = trig<bool>(boost::bind(&my_actor::notify_force_quit, actor, _1));
+			actorHandle._norQuit = trig<bool>(boost::bind(&my_actor::notify_quit, actor, _1));
 		}
 	}
 	return actorHandle._norQuit;
@@ -836,7 +836,7 @@ void my_actor::delay_trig(int ms, async_trig_handle<>& th)
 		th._pIsClosed, boost::ref(th)));
 }
 
-void my_actor::delay_trig(int ms, boost::shared_ptr<async_trig_handle<> > th)
+void my_actor::delay_trig(int ms, boost::shared_ptr<async_trig_handle<> >& th)
 {
 	assert_enter();
 	assert(th->_pIsClosed);
@@ -880,7 +880,7 @@ boost::function<void()> my_actor::make_msg_notify(actor_msg_handle<>& amh)
 	return _strand->wrap_post(boost::bind(&my_actor::check_run1, shared_from_this(), amh._pIsClosed, boost::ref(amh)));
 }
 
-boost::function<void()> my_actor::make_msg_notify(boost::shared_ptr<actor_msg_handle<> > amh)
+boost::function<void()> my_actor::make_msg_notify(boost::shared_ptr<actor_msg_handle<> >& amh)
 {
 	amh->begin(_actorID);
 	return _strand->wrap_post(boost::bind(&my_actor::check_run1_ptr, shared_from_this(), amh->_pIsClosed, amh));
@@ -1088,7 +1088,7 @@ void my_actor::reset_yield()
 	_yieldCount = 0;
 }
 
-void my_actor::notify_start_run()
+void my_actor::notify_run()
 {
 	_strand->post(boost::bind(&my_actor::start_run, shared_from_this()));
 }
@@ -1119,12 +1119,12 @@ void my_actor::start_run()
 	}
 }
 
-void my_actor::notify_force_quit()
+void my_actor::notify_quit()
 {
 	_strand->post(boost::bind(&my_actor::force_quit, shared_from_this(), boost::function<void (bool)>()));
 }
 
-void my_actor::notify_force_quit(const boost::function<void (bool)>& h)
+void my_actor::notify_quit(const boost::function<void (bool)>& h)
 {
 	_strand->post(boost::bind(&my_actor::force_quit, shared_from_this(), h));
 }
@@ -1151,7 +1151,7 @@ void my_actor::force_quit( const boost::function<void (bool)>& h )
 				} 
 				else
 				{
-					cc->notify_force_quit(_strand->wrap_post(boost::bind(&my_actor::force_quit_cb_handler, shared_from_this())));
+					cc->notify_quit(_strand->wrap_post(boost::bind(&my_actor::force_quit_cb_handler, shared_from_this())));
 				}
 			}
 		} 
@@ -1376,7 +1376,7 @@ void my_actor::actors_start_run(const list<actor_handle>& anotherActors)
 	assert_enter();
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
 	{
-		(*it)->notify_start_run();
+		(*it)->notify_run();
 	}
 }
 
@@ -1384,7 +1384,7 @@ bool my_actor::actor_force_quit( actor_handle anotherActor )
 {
 	assert_enter();
 	assert(anotherActor);
-	return trig<bool>(boost::bind(&my_actor::notify_force_quit, anotherActor, _1));
+	return trig<bool>(boost::bind(&my_actor::notify_quit, anotherActor, _1));
 }
 
 void my_actor::actors_force_quit(const list<actor_handle>& anotherActors)

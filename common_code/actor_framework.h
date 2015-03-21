@@ -439,7 +439,7 @@ protected:
 };
 
 template <typename T /*msg_param*/>
-class param_list_no_limit: public param_list<T>
+class param_list_no_limited: public param_list<T>
 {
 	friend my_actor;
 public:
@@ -501,7 +501,7 @@ private:
 };
 
 template <typename T /*msg_param*/>
-class param_list_limit: public param_list<T>
+class param_list_limited: public param_list<T>
 {
 	friend my_actor;
 public:
@@ -517,7 +517,7 @@ public:
 protected:
 	typedef typename T::overflow_notify overflow_notify;
 
-	param_list_limit(size_t maxBuff, const overflow_notify& ofh)
+	param_list_limited(size_t maxBuff, const overflow_notify& ofh)
 		:_params(maxBuff)
 	{
 		_ofh = ofh;
@@ -610,7 +610,7 @@ protected:
 };
 
 template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
-class actor_msg_handle: public param_list_no_limit<msg_param<T0, T1, T2, T3> >
+class actor_msg_handle: public param_list_no_limited<msg_param<T0, T1, T2, T3> >
 {
 	friend my_actor;
 public:
@@ -623,7 +623,7 @@ public:
 };
 
 template <typename T0, typename T1, typename T2>
-class actor_msg_handle<T0, T1, T2, void>: public param_list_no_limit<msg_param<T0, T1, T2> >
+class actor_msg_handle<T0, T1, T2, void>: public param_list_no_limited<msg_param<T0, T1, T2> >
 {
 	friend my_actor;
 public:
@@ -636,7 +636,7 @@ public:
 };
 
 template <typename T0, typename T1>
-class actor_msg_handle<T0, T1, void, void>: public param_list_no_limit<msg_param<T0, T1> >
+class actor_msg_handle<T0, T1, void, void>: public param_list_no_limited<msg_param<T0, T1> >
 {
 	friend my_actor;
 public:
@@ -649,7 +649,7 @@ public:
 };
 
 template <typename T0>
-class actor_msg_handle<T0, void, void, void>: public param_list_no_limit<msg_param<T0> >
+class actor_msg_handle<T0, void, void, void>: public param_list_no_limited<msg_param<T0> >
 {
 	friend my_actor;
 public:
@@ -675,86 +675,86 @@ public:
 };
 //////////////////////////////////////////////////////////////////////////
 template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
-class actor_msg_limit_handle: public param_list_limit<msg_param<T0, T1, T2, T3> >
+class actor_msg_limited_handle: public param_list_limited<msg_param<T0, T1, T2, T3> >
 {
 	friend my_actor;
 public:
 	typedef typename msg_param<T0, T1, T2, T3>::overflow_notify overflow_notify;
-	typedef boost::shared_ptr<actor_msg_limit_handle<T0, T1, T2, T3> > ptr;
+	typedef boost::shared_ptr<actor_msg_limited_handle<T0, T1, T2, T3> > ptr;
 
 	/*!
 	@param maxBuff 最大缓存个数
 	@param ofh 溢出触发函数
 	*/
-	actor_msg_limit_handle(int maxBuff,  const overflow_notify& ofh)
-		:param_list_limit<msg_param<T0, T1, T2, T3> >(maxBuff, ofh)
+	actor_msg_limited_handle(int maxBuff,  const overflow_notify& ofh)
+		:param_list_limited<msg_param<T0, T1, T2, T3> >(maxBuff, ofh)
 	{
 
 	}
 
-	static boost::shared_ptr<actor_msg_limit_handle<T0, T1, T2, T3> > make_ptr(int maxBuff,  const overflow_notify& ofh)
+	static boost::shared_ptr<actor_msg_limited_handle<T0, T1, T2, T3> > make_ptr(int maxBuff,  const overflow_notify& ofh)
 	{
-		return boost::shared_ptr<actor_msg_limit_handle<T0, T1, T2, T3> >(new actor_msg_limit_handle<T0, T1, T2, T3>(maxBuff, ofh));
+		return boost::shared_ptr<actor_msg_limited_handle<T0, T1, T2, T3> >(new actor_msg_limited_handle<T0, T1, T2, T3>(maxBuff, ofh));
 	}
 };
 
 template <typename T0, typename T1, typename T2>
-class actor_msg_limit_handle<T0, T1, T2, void>: public param_list_limit<msg_param<T0, T1, T2> >
+class actor_msg_limited_handle<T0, T1, T2, void>: public param_list_limited<msg_param<T0, T1, T2> >
 {
 	friend my_actor;
 public:
 	typedef typename msg_param<T0, T1, T2>::overflow_notify overflow_notify;
-	typedef boost::shared_ptr<actor_msg_limit_handle<T0, T1, T2> > ptr;
+	typedef boost::shared_ptr<actor_msg_limited_handle<T0, T1, T2> > ptr;
 
-	actor_msg_limit_handle(int maxBuff,  const overflow_notify& ofh)
-		:param_list_limit<msg_param<T0, T1, T2> >(maxBuff, ofh)
+	actor_msg_limited_handle(int maxBuff,  const overflow_notify& ofh)
+		:param_list_limited<msg_param<T0, T1, T2> >(maxBuff, ofh)
 	{
 
 	}
 
-	static boost::shared_ptr<actor_msg_limit_handle<T0, T1, T2> > make_ptr(int maxBuff,  const overflow_notify& ofh)
+	static boost::shared_ptr<actor_msg_limited_handle<T0, T1, T2> > make_ptr(int maxBuff,  const overflow_notify& ofh)
 	{
-		return boost::shared_ptr<actor_msg_limit_handle<T0, T1, T2> >(new actor_msg_limit_handle<T0, T1, T2>(maxBuff, ofh));
+		return boost::shared_ptr<actor_msg_limited_handle<T0, T1, T2> >(new actor_msg_limited_handle<T0, T1, T2>(maxBuff, ofh));
 	}
 };
 
 template <typename T0, typename T1>
-class actor_msg_limit_handle<T0, T1, void, void>: public param_list_limit<msg_param<T0, T1> >
+class actor_msg_limited_handle<T0, T1, void, void>: public param_list_limited<msg_param<T0, T1> >
 {
 	friend my_actor;
 public:
 	typedef typename msg_param<T0, T1>::overflow_notify overflow_notify;
-	typedef boost::shared_ptr<actor_msg_limit_handle<T0, T1> > ptr;
+	typedef boost::shared_ptr<actor_msg_limited_handle<T0, T1> > ptr;
 
-	actor_msg_limit_handle(int maxBuff,  const overflow_notify& ofh)
-		:param_list_limit<msg_param<T0, T1> >(maxBuff, ofh)
+	actor_msg_limited_handle(int maxBuff,  const overflow_notify& ofh)
+		:param_list_limited<msg_param<T0, T1> >(maxBuff, ofh)
 	{
 
 	}
 
-	static boost::shared_ptr<actor_msg_limit_handle<T0, T1> > make_ptr(int maxBuff,  const overflow_notify& ofh)
+	static boost::shared_ptr<actor_msg_limited_handle<T0, T1> > make_ptr(int maxBuff,  const overflow_notify& ofh)
 	{
-		return boost::shared_ptr<actor_msg_limit_handle<T0, T1> >(new actor_msg_limit_handle<T0, T1>(maxBuff, ofh));
+		return boost::shared_ptr<actor_msg_limited_handle<T0, T1> >(new actor_msg_limited_handle<T0, T1>(maxBuff, ofh));
 	}
 };
 
 template <typename T0>
-class actor_msg_limit_handle<T0, void, void, void>: public param_list_limit<msg_param<T0> >
+class actor_msg_limited_handle<T0, void, void, void>: public param_list_limited<msg_param<T0> >
 {
 	friend my_actor;
 public:
 	typedef typename msg_param<T0>::overflow_notify overflow_notify;
-	typedef boost::shared_ptr<actor_msg_limit_handle<T0> > ptr;
+	typedef boost::shared_ptr<actor_msg_limited_handle<T0> > ptr;
 
-	actor_msg_limit_handle(int maxBuff,  const overflow_notify& ofh)
-		:param_list_limit<msg_param<T0> >(maxBuff, ofh)
+	actor_msg_limited_handle(int maxBuff,  const overflow_notify& ofh)
+		:param_list_limited<msg_param<T0> >(maxBuff, ofh)
 	{
 
 	}
 
-	static boost::shared_ptr<actor_msg_limit_handle<T0> > make_ptr(int maxBuff,  const overflow_notify& ofh)
+	static boost::shared_ptr<actor_msg_limited_handle<T0> > make_ptr(int maxBuff,  const overflow_notify& ofh)
 	{
-		return boost::shared_ptr<actor_msg_limit_handle<T0> >(new actor_msg_limit_handle<T0>(maxBuff, ofh));
+		return boost::shared_ptr<actor_msg_limited_handle<T0> >(new actor_msg_limited_handle<T0>(maxBuff, ofh));
 	}
 };
 
@@ -1404,7 +1404,7 @@ public:
 	@param th 异步触发句柄
 	*/
 	void delay_trig(int ms, async_trig_handle<>& th);
-	void delay_trig(int ms, boost::shared_ptr<async_trig_handle<> > th);
+	void delay_trig(int ms, boost::shared_ptr<async_trig_handle<> >& th);
 
 	template <typename T0>
 	void delay_trig(int ms, async_trig_handle<T0>& th, const T0& p0)
@@ -1420,7 +1420,7 @@ public:
 	}
 
 	template <typename T0>
-	void delay_trig(int ms, boost::shared_ptr<async_trig_handle<T0> > th, const T0& p0)
+	void delay_trig(int ms, boost::shared_ptr<async_trig_handle<T0> >& th, const T0& p0)
 	{
 		typedef boost::shared_ptr<async_trig_handle<T0> > trig_handle;
 		typedef msg_param<T0> msg_type;
@@ -1446,7 +1446,7 @@ public:
 	}
 
 	template <typename T0, typename T1>
-	void delay_trig(int ms, boost::shared_ptr<async_trig_handle<T0, T1> > th, const T0& p0, const T1& p1)
+	void delay_trig(int ms, boost::shared_ptr<async_trig_handle<T0, T1> >& th, const T0& p0, const T1& p1)
 	{
 		typedef boost::shared_ptr<async_trig_handle<T0, T1> > trig_handle;
 		typedef msg_param<T0, T1> msg_type;
@@ -1472,7 +1472,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	void delay_trig(int ms, boost::shared_ptr<async_trig_handle<T0, T1, T2> > th, const T0& p0, const T1& p1, const T2& p2)
+	void delay_trig(int ms, boost::shared_ptr<async_trig_handle<T0, T1, T2> >& th, const T0& p0, const T1& p1, const T2& p2)
 	{
 		typedef boost::shared_ptr<async_trig_handle<T0, T1, T2> > trig_handle;
 		typedef msg_param<T0, T1, T2> msg_type;
@@ -1498,7 +1498,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	void delay_trig(int ms, boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> > th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+	void delay_trig(int ms, boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> >& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
 		typedef boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> > trig_handle;
 		typedef msg_param<T0, T1, T2, T3> msg_type;
@@ -1610,7 +1610,7 @@ public:
 	@return 异步触发函数
 	*/
 	boost::function<void()> make_msg_notify(actor_msg_handle<>& amh);
-	boost::function<void()> make_msg_notify(boost::shared_ptr<actor_msg_handle<> > amh);
+	boost::function<void()> make_msg_notify(boost::shared_ptr<actor_msg_handle<> >& amh);
 
 	template <typename T0>
 	boost::function<void(T0)> make_msg_notify(param_list<msg_param<T0> >& amh)
@@ -1620,7 +1620,7 @@ public:
 	}
 
 	template <typename T0>
-	boost::function<void(T0)> make_msg_notify(boost::shared_ptr<actor_msg_handle<T0> > amh)
+	boost::function<void(T0)> make_msg_notify(boost::shared_ptr<actor_msg_handle<T0> >& amh)
 	{
 		amh->begin(_actorID);
 		return boost::bind(&my_actor::notify_handler_ptr<T0>, shared_from_this(), amh->_pIsClosed, 
@@ -1628,7 +1628,7 @@ public:
 	}
 
 	template <typename T0>
-	boost::function<void(T0)> make_msg_notify(boost::shared_ptr<actor_msg_limit_handle<T0> > amh)
+	boost::function<void(T0)> make_msg_notify(boost::shared_ptr<actor_msg_limited_handle<T0> >& amh)
 	{
 		amh->begin(_actorID);
 		return boost::bind(&my_actor::notify_handler_ptr<T0>, shared_from_this(), amh->_pIsClosed, 
@@ -1643,7 +1643,7 @@ public:
 	}
 
 	template <typename T0, typename T1>
-	boost::function<void(T0, T1)> make_msg_notify(boost::shared_ptr<actor_msg_handle<T0, T1> > amh)
+	boost::function<void(T0, T1)> make_msg_notify(boost::shared_ptr<actor_msg_handle<T0, T1> >& amh)
 	{
 		amh->begin(_actorID);
 		return boost::bind(&my_actor::notify_handler_ptr<T0, T1>, shared_from_this(), amh->_pIsClosed, 
@@ -1651,7 +1651,7 @@ public:
 	}
 
 	template <typename T0, typename T1>
-	boost::function<void(T0, T1)> make_msg_notify(boost::shared_ptr<actor_msg_limit_handle<T0, T1> > amh)
+	boost::function<void(T0, T1)> make_msg_notify(boost::shared_ptr<actor_msg_limited_handle<T0, T1> >& amh)
 	{
 		amh->begin(_actorID);
 		return boost::bind(&my_actor::notify_handler_ptr<T0, T1>, shared_from_this(), amh->_pIsClosed, 
@@ -1666,7 +1666,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	boost::function<void(T0, T1, T2)> make_msg_notify(boost::shared_ptr<actor_msg_handle<T0, T1, T2> > amh)
+	boost::function<void(T0, T1, T2)> make_msg_notify(boost::shared_ptr<actor_msg_handle<T0, T1, T2> >& amh)
 	{
 		amh->begin(_actorID);
 		return boost::bind(&my_actor::notify_handler_ptr<T0, T1, T2>, shared_from_this(), amh->_pIsClosed, 
@@ -1674,7 +1674,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	boost::function<void(T0, T1, T2)> make_msg_notify(boost::shared_ptr<actor_msg_limit_handle<T0, T1, T2> > amh)
+	boost::function<void(T0, T1, T2)> make_msg_notify(boost::shared_ptr<actor_msg_limited_handle<T0, T1, T2> >& amh)
 	{
 		amh->begin(_actorID);
 		return boost::bind(&my_actor::notify_handler_ptr<T0, T1, T2>, shared_from_this(), amh->_pIsClosed, 
@@ -1689,7 +1689,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	boost::function<void(T0, T1, T2, T3)> make_msg_notify(boost::shared_ptr<actor_msg_handle<T0, T1, T2, T3> > amh)
+	boost::function<void(T0, T1, T2, T3)> make_msg_notify(boost::shared_ptr<actor_msg_handle<T0, T1, T2, T3> >& amh)
 	{
 		amh->begin(_actorID);
 		return boost::bind(&my_actor::notify_handler_ptr<T0, T1, T2, T3>, shared_from_this(), amh->_pIsClosed, 
@@ -1697,7 +1697,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	boost::function<void(T0, T1, T2, T3)> make_msg_notify(boost::shared_ptr<actor_msg_limit_handle<T0, T1, T2, T3> > amh)
+	boost::function<void(T0, T1, T2, T3)> make_msg_notify(boost::shared_ptr<actor_msg_limited_handle<T0, T1, T2, T3> >& amh)
 	{
 		amh->begin(_actorID);
 		return boost::bind(&my_actor::notify_handler_ptr<T0, T1, T2, T3>, shared_from_this(), amh->_pIsClosed, 
@@ -1940,7 +1940,7 @@ private:
 		}
 	}
 
-	template <typename TH /*async_trig_handle::ptr*/, typename MT /*msg_param*/>
+	template <typename TH /*boost::shared_ptr<async_trig_handle<> >*/, typename MT /*msg_param*/>
 	void _async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, TH& th, MT& src)
 	{
 		_async_trig_handler(pIsClosed, *th, src);
@@ -2362,17 +2362,17 @@ public:
 	/*!
 	@brief 开始运行建立好的Actor
 	*/
-	void notify_start_run();
+	void notify_run();
 
 	/*!
 	@brief 强制退出该Actor，不可滥用，有可能会造成资源泄漏
 	*/
-	void notify_force_quit();
+	void notify_quit();
 
 	/*!
 	@brief 强制退出该Actor，完成后回调
 	*/
-	void notify_force_quit(const boost::function<void (bool)>& h);
+	void notify_quit(const boost::function<void (bool)>& h);
 
 	/*!
 	@brief 暂停Actor

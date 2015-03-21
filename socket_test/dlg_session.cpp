@@ -46,7 +46,7 @@ BOOL dlg_session::OnInitDialog()
 
 	_sendPump = msg_pipe<shared_data>::make(_sendPipe);
 	actor_handle sessionActor = my_actor::create(_strand, boost::bind(&dlg_session::sessionActor, this, _1));
-	sessionActor->notify_start_run();
+	sessionActor->notify_run();
 	return TRUE;
 }
 

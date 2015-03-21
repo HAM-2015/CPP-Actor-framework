@@ -34,7 +34,7 @@ void check_key_test(my_actor* self, int id)
 		check_key_down(self, id);//检测按下
 		child_actor_handle checkUp = self->create_child_actor(boost::bind(&check_key_up, _1, id), 24 kB);//创建一个检测弹起的子Actor
 		self->child_actor_run(checkUp);//开始运行子Actor
-		self->delay_trig(1000, boost::bind(&my_actor::notify_force_quit, checkUp.get_actor()));//启用弹起超时处理，超时后强制关闭checkUp
+		self->delay_trig(1000, boost::bind(&my_actor::notify_quit, checkUp.get_actor()));//启用弹起超时处理，超时后强制关闭checkUp
 		if (self->child_actor_wait_quit(checkUp))//正常退出的返回true，被强制关闭的返回false
 		{
 			self->cancel_delay_trig();
@@ -145,7 +145,7 @@ void check_two_down(my_actor* self, int dt, int id1, int id2)
 			actor_handle ah;
 			bool ok = false;
 			self->wait_trig(ath, ah, ok);
-			self->delay_trig(dt, boost::bind(&my_actor::notify_force_quit, ah));
+			self->delay_trig(dt, boost::bind(&my_actor::notify_quit, ah));
 			if (self->actor_wait_quit(ah))
 			{
 				printf("*success*\n");
@@ -212,28 +212,6 @@ void test_shift(my_actor* self, actor_handle pauseactor)
 		check_key_up(self, VK_SHIFT);
 		self->child_actor_force_quit(ch);
 	}
-}
-
-void test_producer(my_actor* self, boost::function<void (int, int)> writer)
-{//生产者
-	for (int i = 0; true; i++)
-	{
-		writer(i, (int)self->this_id());
-		self->sleep(2100);
-	}
-}
-
-void test_consumer(my_actor* self, actor_msg_handle<int, int>& amh)
-{//消费者
-	while (true)
-	{
-		int p0;
-		int id;
-		self->pump_msg(amh, p0, id);
-		printf("%d-%d id=%d\n", p0, (int)amh.length(), id);
-		self->sleep(1000);
-	}
-	self->close_msg_notify(amh);
 }
 
 void count_test(my_actor* self, int& ct)
@@ -387,10 +365,29 @@ void actor_test(my_actor* self)
 	//创建生产者/消费者模型测试
 	actor_msg_handle<int, int> conCmh;
 	{
-		actorConsumer = self->create_child_actor(boost::bind(&test_consumer, _1, boost::ref(conCmh)));
-		auto h = actorConsumer.get_actor()->make_msg_notify(conCmh);
-		actorProducer1 = self->create_child_actor(boost::bind(&test_producer, _1, h));
-		actorProducer2 = self->create_child_actor(boost::bind(&test_producer, _1, h));
+		actorConsumer = self->create_child_actor([&conCmh](my_actor* self)
+		{//消费者
+			while (true)
+			{
+				int p0;
+				int id;
+				self->pump_msg(conCmh, p0, id);
+				printf("%d-%d id=%d\n", p0, (int)conCmh.length(), id);
+				self->sleep(1000);
+			}
+			self->close_msg_notify(conCmh);
+		});
+		auto writer = actorConsumer.get_actor()->make_msg_notify(conCmh);
+		auto test_producer = [writer](my_actor* self)
+		{//生产者
+			for (int i = 0; true; i++)
+			{
+				writer(i, (int)self->this_id());
+				self->sleep(2100);
+			}
+		};
+		actorProducer1 = self->create_child_actor(test_producer);
+		actorProducer2 = self->create_child_actor(test_producer);
 	}
 
 	list<actor_handle> chs;//需要被挂起的Actor对象，可以从下方注释几个测试
@@ -462,7 +459,7 @@ int main(int argc, char* argv[])
 	ios.run();
 	{
 		actor_handle actorTest = my_actor::create(boost_strand::create(ios), boost::bind(&actor_test, _1));
-		actorTest->notify_start_run();
+		actorTest->notify_run();
 		actorTest->outside_wait_quit();
 	}
  	ios.stop();

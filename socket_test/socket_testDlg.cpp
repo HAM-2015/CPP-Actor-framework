@@ -116,7 +116,7 @@ BOOL Csocket_testDlg::OnInitDialog()
 	_strand = boost_strand::create(_ios);
 	actor_handle mainActor = my_actor::create(_strand, boost::bind(&Csocket_testDlg::mainActor, this, _1));
 	_uiCMD = mainActor->make_msg_notify(_lstCMD);
-	mainActor->notify_start_run();
+	mainActor->notify_run();
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -189,7 +189,7 @@ void Csocket_testDlg::connectActor(my_actor* self, boost::shared_ptr<client_para
 			self->sleep(250);
 		}
 	});
-	connecting->notify_start_run();
+	connecting->notify_run();
 	self->open_timer();
 	boost::system::error_code err;
 	if (self->timed_wait_trig(ath, err, param->_tm) && !err && param->_clientSocket->no_delay())
@@ -329,7 +329,7 @@ void Csocket_testDlg::serverActor(my_actor* self, boost::shared_ptr<server_param
 			post(boost::bind(&Csocket_testDlg::showSessionNum, this, sessList.size()));
 			newSess->_sessionDlg = create_mfc_actor(boost::bind(&Csocket_testDlg::newSession, this, _1, newSess));
 			newSess->_sessionDlg->append_quit_callback(boost::bind(sessDissonnNtf, sessList.begin()));
-			newSess->_sessionDlg->notify_start_run();
+			newSess->_sessionDlg->notify_run();
 		}
 		else
 		{
@@ -422,7 +422,7 @@ void Csocket_testDlg::mainActor(my_actor* self)
 						extClient->_msgPump = msg_pipe<shared_data>::make(clientPostPipe);
 						clientActorHandle = my_actor::create(_strand, 
 							boost::bind(&Csocket_testDlg::connectActor, this, _1, extClient));
-						clientActorHandle->notify_start_run();
+						clientActorHandle->notify_run();
 						send(self, [this]()
 						{
 							this->GetDlgItem(IDC_BUTTON1)->EnableWindow(FALSE);
@@ -455,7 +455,7 @@ void Csocket_testDlg::mainActor(my_actor* self)
 						param->_maxSessionNum = boost::lexical_cast<int>(snum.GetBuffer());
 						param->_closePump = msg_pipe<>::make(serverNtfClose);
 						serverActorHandle = my_actor::create(_strand, boost::bind(&Csocket_testDlg::serverActor, this, _1, param));
-						serverActorHandle->notify_start_run();
+						serverActorHandle->notify_run();
 						send(self, [this]()
 						{
 							this->GetDlgItem(IDC_BUTTON4)->EnableWindow(FALSE);

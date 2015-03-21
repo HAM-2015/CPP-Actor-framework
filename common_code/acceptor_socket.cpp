@@ -34,7 +34,7 @@ accept_handle acceptor_socket::create(shared_strand strand, size_t port, const b
 				newSocket->ip();
 				h(newSocket);
 			}
-		})->notify_start_run();
+		})->notify_run();
 		return shared_accept;
 	}
 	catch (...)
