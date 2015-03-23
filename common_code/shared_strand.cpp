@@ -63,27 +63,23 @@ void boost_strand::syncInvoke( shared_strand strand, const boost::function<void 
 	boost::mutex mutex;
 	boost::condition_variable con;
 	boost::unique_lock<boost::mutex> ul(mutex);
-	strand->post(boost::bind(&syncInvoke_proxy, boost::ref(h), boost::ref(mutex), boost::ref(con)));
+	strand->post([&]()
+	{
+		h();
+		mutex.lock();
+		con.notify_one();
+		mutex.unlock();
+	});
 	con.wait(ul);
 }
 
 void boost_strand::asyncInvokeVoid( shared_strand strand, const boost::function<void ()>& h, const boost::function<void ()>& cb )
 {
-	strand->post(boost::bind(&asyncInvoke_proxy_ret_void, h, cb));
-}
-
-void boost_strand::syncInvoke_proxy( const boost::function<void ()>& h, boost::mutex& mutex, boost::condition_variable& con )
-{
-	h();
-	mutex.lock();
-	con.notify_one();
-	mutex.unlock();
-}
-
-void boost_strand::asyncInvoke_proxy_ret_void( const boost::function<void ()>& h, const boost::function<void ()>& cb )
-{
-	h();
-	cb();
+	strand->post([=]()
+	{
+		h();
+		cb();
+	});
 }
 
 #ifdef ENABLE_MFC_ACTOR

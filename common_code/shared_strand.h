@@ -149,7 +149,13 @@ public:
 		boost::mutex mutex;
 		boost::condition_variable con;
 		boost::unique_lock<boost::mutex> ul(mutex);
-		strand->post(boost::bind(&syncInvoke_proxy_ret<R>, boost::ref(r), boost::ref(h), boost::ref(mutex), boost::ref(con)));
+		strand->post([&]()
+		{
+			r = h();
+			mutex.lock();
+			con.notify_one();
+			mutex.unlock();
+		});
 		con.wait(ul);
 		return r;
 	}
@@ -161,29 +167,13 @@ public:
 	template <class R>
 	static void asyncInvoke(shared_strand strand, const boost::function<R ()>& h, const boost::function<void (R)>& cb)
 	{
-		strand->post(boost::bind(&asyncInvoke_proxy_ret<R>, h, cb));
+		strand->post([=]()
+		{
+			cb(h());
+		});
 	}
 
 	static void asyncInvokeVoid(shared_strand strand, const boost::function<void ()>& h, const boost::function<void ()>& cb);
-private:
-	static void syncInvoke_proxy(const boost::function<void ()>& h, boost::mutex& mutex, boost::condition_variable& con);
-
-	template <class R>
-	static void syncInvoke_proxy_ret(R& r, const boost::function<R ()>& h, boost::mutex& mutex, boost::condition_variable& con)
-	{
-		r = h();
-		mutex.lock();
-		con.notify_one();
-		mutex.unlock();
-	}
-
-	template <class R>
-	static void asyncInvoke_proxy_ret(const boost::function<R ()>& h, const boost::function<void (R)>& cb)
-	{
-		cb(h());
-	}
-
-	static void asyncInvoke_proxy_ret_void(const boost::function<void ()>& h, const boost::function<void ()>& cb);
 };
 
 #endif

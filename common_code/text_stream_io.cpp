@@ -15,9 +15,9 @@ boost::shared_ptr<text_stream_io> text_stream_io::create( shared_strand strand, 
 	boost::shared_ptr<text_stream_io> res(new text_stream_io);
 	res->_ioObj = ioObj;
 	res->_msgNotify = h;
-	auto wc = my_actor::create(strand, boost::bind(&text_stream_io::writeActor, res, _1));
+	auto wc = my_actor::create(strand, [res](my_actor* self){res->writeActor(self); });
 	res->_writerPipeIn = wc->make_msg_notify(res->_writerPipeOut);
-	auto rc = my_actor::create(strand, boost::bind(&text_stream_io::readActor, res, _1));
+	auto rc = my_actor::create(strand, [res](my_actor* self){res->readActor(self); });
 	wc->notify_run();
 	rc->notify_run();
 	return res;

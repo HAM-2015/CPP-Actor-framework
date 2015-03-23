@@ -68,13 +68,6 @@ private:
 			T3 _p3;
 		};
 
-		void push(const T0& p0, const T1& p1, const T2& p2, const T3& p3)
-		{
-			boost::shared_ptr<ps> t(new ps(p0, p1, p2, p3));
-			boost::lock_guard<boost::mutex> lg(_mutex);
-			_tempBuff.push_back(t);
-		}
-
 		void pop(const writer_type& wt)
 		{
 			while (!_tempBuff.empty())
@@ -87,7 +80,12 @@ private:
 
 		writer_type temp_writer(boost::shared_ptr<temp_buffer>& st)
 		{
-			return boost::bind(&temp_buffer::push, st, _1, _2, _3, _4);
+			return [st](const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+			{
+				boost::shared_ptr<ps> t(new ps(p0, p1, p2, p3));
+				boost::lock_guard<boost::mutex> lg(st->_mutex);
+				st->_tempBuff.push_back(t);
+			};
 		}
 
 		list<boost::shared_ptr<ps> > _tempBuff;
@@ -107,13 +105,6 @@ private:
 			T2 _p2;
 		};
 
-		void push(const T0& p0, const T1& p1, const T2& p2)
-		{
-			boost::shared_ptr<ps> t(new ps(p0, p1, p2));
-			boost::lock_guard<boost::mutex> lg(_mutex);
-			_tempBuff.push_back(t);
-		}
-
 		void pop(const writer_type& wt)
 		{
 			while (!_tempBuff.empty())
@@ -126,7 +117,12 @@ private:
 
 		writer_type temp_writer(boost::shared_ptr<temp_buffer>& st)
 		{
-			return boost::bind(&temp_buffer::push, st, _1, _2, _3);
+			return [st](const T0& p0, const T1& p1, const T2& p2)
+			{
+				boost::shared_ptr<ps> t(new ps(p0, p1, p2));
+				boost::lock_guard<boost::mutex> lg(st->_mutex);
+				st->_tempBuff.push_back(t);
+			};
 		}
 
 		list<boost::shared_ptr<ps> > _tempBuff;
@@ -145,13 +141,6 @@ private:
 			T1 _p1;
 		};
 
-		void push(const T0& p0, const T1& p1)
-		{
-			boost::shared_ptr<ps> t(new ps(p0, p1));
-			boost::lock_guard<boost::mutex> lg(_mutex);
-			_tempBuff.push_back(t);
-		}
-
 		void pop(const writer_type& wt)
 		{
 			while (!_tempBuff.empty())
@@ -164,7 +153,12 @@ private:
 
 		writer_type temp_writer(boost::shared_ptr<temp_buffer>& st)
 		{
-			return boost::bind(&temp_buffer::push, st, _1, _2);
+			return [st](const T0& p0, const T1& p1)
+			{
+				boost::shared_ptr<ps> t(new ps(p0, p1));
+				boost::lock_guard<boost::mutex> lg(st->_mutex);
+				st->_tempBuff.push_back(t);
+			};
 		}
 
 		list<boost::shared_ptr<ps> > _tempBuff;
@@ -182,13 +176,6 @@ private:
 			T0 _p0;
 		};
 
-		void push(const T0& p0)
-		{
-			boost::shared_ptr<ps> t(new ps(p0));
-			boost::lock_guard<boost::mutex> lg(_mutex);
-			_tempBuff.push_back(t);
-		}
-
 		void pop(const writer_type& wt)
 		{
 			while (!_tempBuff.empty())
@@ -201,7 +188,12 @@ private:
 
 		writer_type temp_writer(boost::shared_ptr<temp_buffer>& st)
 		{
-			return boost::bind(&temp_buffer::push, st, _1);
+			return [st](const T0& p0)
+			{
+				boost::shared_ptr<ps> t(new ps(p0));
+				boost::lock_guard<boost::mutex> lg(st->_mutex);
+				st->_tempBuff.push_back(t);
+			};
 		}
 
 		list<boost::shared_ptr<ps> > _tempBuff;
@@ -217,11 +209,6 @@ private:
 
 		}
 
-		void push()
-		{
-			_count++;
-		}
-
 		void pop(const writer_type& wt)
 		{
 			while (_count)
@@ -233,7 +220,10 @@ private:
 
 		writer_type temp_writer(boost::shared_ptr<temp_buffer>& st)
 		{
-			return boost::bind(&temp_buffer::push, st);
+			return [st]()
+			{
+				st->_count++;
+			};
 		}
 
 		boost::atomic<size_t> _count;

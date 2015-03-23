@@ -529,13 +529,19 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 void my_actor::async_create( shared_strand actorStrand, const main_func& mainFunc,
 	const boost::function<void (actor_handle)>& ch, size_t stackSize )
 {
-	boost_strand::asyncInvoke<actor_handle>(actorStrand, boost::bind(&create, actorStrand, mainFunc, stackSize), ch);
+	boost_strand::asyncInvoke<actor_handle>(actorStrand, [actorStrand, mainFunc, stackSize]()->actor_handle
+	{
+		return my_actor::create(actorStrand, mainFunc, stackSize);
+	}, ch);
 }
 
 void my_actor::async_create( shared_strand actorStrand, const main_func& mainFunc,
 	const boost::function<void (actor_handle)>& ch, const boost::function<void (bool)>& cb, size_t stackSize )
 {
-	boost_strand::asyncInvoke<actor_handle>(actorStrand, boost::bind(&create, actorStrand, mainFunc, cb, stackSize), ch);
+	boost_strand::asyncInvoke<actor_handle>(actorStrand, [actorStrand, mainFunc, cb, stackSize]()->actor_handle
+	{
+		return my_actor::create(actorStrand, mainFunc, cb, stackSize);
+	}, ch);
 }
 
 child_actor_handle::child_actor_param my_actor::create_child_actor( shared_strand actorStrand, const main_func& mainFunc, size_t stackSize )
@@ -584,11 +590,11 @@ bool my_actor::child_actor_force_quit( child_actor_handle& actorHandle )
 		actor_handle actor = actorHandle.peel();
 		if (actor->this_strand() == _strand)
 		{
-			actorHandle._norQuit = trig<bool>(boost::bind(&my_actor::force_quit, actor, _1));
+			actorHandle._norQuit = trig<bool>([actor](const boost::function<void(bool)>& h){actor->force_quit(h); });
 		} 
 		else
 		{
-			actorHandle._norQuit = trig<bool>(boost::bind(&my_actor::notify_quit, actor, _1));
+			actorHandle._norQuit = trig<bool>([actor](const boost::function<void(bool)>& h){actor->notify_quit(h); });
 		}
 	}
 	return actorHandle._norQuit;
@@ -634,13 +640,14 @@ void my_actor::child_actor_suspend(child_actor_handle& actorHandle)
 	assert_enter();
 	assert(actorHandle.get_actor());
 	assert(actorHandle.get_actor()->parent_actor().get() == this);
+	actor_handle actor = actorHandle.get_actor();
 	if (actorHandle.get_actor()->this_strand() == _strand)
 	{
-		trig(boost::bind(&my_actor::suspend, actorHandle.get_actor(), _1));
+		trig([actor](const boost::function<void()>& h){actor->suspend(h); });
 	} 
 	else
 	{
-		trig(boost::bind(&my_actor::notify_suspend, actorHandle.get_actor(), _1));
+		trig([actor](const boost::function<void()>& h){actor->notify_suspend(h); });
 	}
 }
 
@@ -658,13 +665,14 @@ void my_actor::child_actor_resume(child_actor_handle& actorHandle)
 	assert_enter();
 	assert(actorHandle.get_actor());
 	assert(actorHandle.get_actor()->parent_actor().get() == this);
+	actor_handle actor = actorHandle.get_actor();
 	if (actorHandle.get_actor()->this_strand() == _strand)
 	{
-		trig(boost::bind(&my_actor::resume, actorHandle.get_actor(), _1));
+		trig([actor](const boost::function<void()>& h){actor->resume(h); });
 	}
 	else
 	{
-		trig(boost::bind(&my_actor::notify_resume, actorHandle.get_actor(), _1));
+		trig([actor](const boost::function<void()>& h){actor->notify_resume(h); });
 	}
 }
 
@@ -720,14 +728,15 @@ void my_actor::sleep( int ms )
 {
 	assert_enter();
 	assert(ms >= 0);
+	actor_handle shared_this = shared_from_this();
 	if (ms)
 	{
 		assert(_timerSleep);
-		time_out(ms, boost::bind(&my_actor::run_one, shared_from_this()));
+		time_out(ms, [shared_this](){shared_this->run_one(); });
 	}
 	else
 	{
-		_strand->post(boost::bind(&my_actor::run_one, shared_from_this()));
+		_strand->post([shared_this](){shared_this->run_one(); });
 	}
 	push_yield();
 }
@@ -759,42 +768,54 @@ boost::function<void ()> my_actor::begin_trig(async_trig_handle<>& th)
 {
 	assert_enter();
 	th.begin(_actorID);
-	auto pIsClosed = th._pIsClosed;
+	boost::shared_ptr<bool>& pIsClosed = th._pIsClosed;
 	actor_handle shared_this = shared_from_this();
-	return [this, shared_this, pIsClosed, &th]()
+	return [=, &th]()
 	{
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*pIsClosed) && !th._notify)
 			{
-				async_trig_post_yield(th, NULL);
+				shared_this->async_trig_post_yield(th, NULL);
 			}
 		}
 		else
 		{
-			_strand->post(boost::bind(&my_actor::_async_trig_handler, shared_this, pIsClosed, boost::ref(th)));
+			auto& pIsClosed_ = pIsClosed;
+			auto& shared_this_ = shared_this;
+			auto& th_ = th;
+			_strand->post((boost::function<void(void)>)[=, &th_]()
+			{
+				shared_this_->_async_trig_handler(pIsClosed_, th_);
+			});
 		}
 	};
 }
 
-boost::function<void ()> my_actor::begin_trig(boost::shared_ptr<async_trig_handle<> > th)
+boost::function<void ()> my_actor::begin_trig(boost::shared_ptr<async_trig_handle<> >& th)
 {
 	assert_enter();
 	th->begin(_actorID);
-	auto pIsClosed = th->_pIsClosed;
+	boost::shared_ptr<bool>& pIsClosed = th->_pIsClosed;
 	actor_handle shared_this = shared_from_this();
-	return [this, shared_this, pIsClosed, th]()
+	return [=]()
 	{
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited && !(*pIsClosed) && !th->_notify)
 			{
-				async_trig_post_yield(*th, NULL);
+				shared_this->async_trig_post_yield(*th, NULL);
 			}
 		}
 		else
 		{
-			_strand->post(boost::bind(&my_actor::_async_trig_handler_ptr, shared_this, pIsClosed, th));
+			auto& pIsClosed_ = pIsClosed;
+			auto& shared_this_ = shared_this;
+			auto& th_ = th;
+			_strand->post((boost::function<void(void)>)[=]()
+			{
+				shared_this_->_async_trig_handler(pIsClosed_, *th_);
+			});
 		}
 	};
 }
@@ -832,16 +853,18 @@ void my_actor::delay_trig(int ms, async_trig_handle<>& th)
 {
 	assert_enter();
 	assert(th._pIsClosed);
-	time_out(ms, boost::bind(&my_actor::_async_trig_handler, shared_from_this(), 
-		th._pIsClosed, boost::ref(th)));
+	actor_handle shared_this = shared_from_this();
+	auto& pIsClosed = th._pIsClosed;
+	time_out(ms, [=, &th](){shared_this->_async_trig_handler(pIsClosed, th); });
 }
 
 void my_actor::delay_trig(int ms, boost::shared_ptr<async_trig_handle<> >& th)
 {
 	assert_enter();
 	assert(th->_pIsClosed);
-	time_out(ms, boost::bind(&my_actor::_async_trig_handler_ptr, shared_from_this(), 
-		th->_pIsClosed, th));
+	actor_handle shared_this = shared_from_this();
+	auto& pIsClosed = th->_pIsClosed;
+	time_out(ms, [=](){shared_this->_async_trig_handler(pIsClosed, *th); });
 }
 
 void my_actor::cancel_delay_trig()
@@ -853,10 +876,11 @@ void my_actor::cancel_delay_trig()
 void my_actor::trig( const boost::function<void (boost::function<void ()>)>& h )
 {
 	assert_enter();
+	actor_handle shared_this = shared_from_this();
 #ifdef _DEBUG
-	h(wrapped_trig_handler<boost::function<void ()> >(boost::bind(&my_actor::trig_handler, shared_from_this())));
+	h(wrapped_trig_handler<boost::function<void()> >([shared_this](){shared_this->trig_handler(); }));
 #else
-	h(boost::bind(&my_actor::trig_handler, shared_from_this()));
+	h([shared_this](){shared_this->trig_handler(); });
 #endif
 	push_yield();
 }
@@ -866,7 +890,7 @@ void my_actor::send( shared_strand exeStrand, const boost::function<void ()>& h 
 	assert_enter();
 	if (exeStrand != _strand)
 	{
-		trig(boost::bind(&boost_strand::asyncInvokeVoid, exeStrand, h, _1));
+		trig([=](const boost::function<void()>& cb){boost_strand::asyncInvokeVoid(exeStrand, h, cb); });
 	} 
 	else
 	{
@@ -877,13 +901,15 @@ void my_actor::send( shared_strand exeStrand, const boost::function<void ()>& h 
 boost::function<void()> my_actor::make_msg_notify(actor_msg_handle<>& amh)
 {
 	amh.begin(_actorID);
-	return _strand->wrap_post(boost::bind(&my_actor::check_run1, shared_from_this(), amh._pIsClosed, boost::ref(amh)));
+	actor_handle shared_this = shared_from_this();
+	return _strand->wrap_post([shared_this, &amh](){shared_this->check_run1(amh._pIsClosed, amh); });
 }
 
 boost::function<void()> my_actor::make_msg_notify(boost::shared_ptr<actor_msg_handle<> >& amh)
 {
 	amh->begin(_actorID);
-	return _strand->wrap_post(boost::bind(&my_actor::check_run1_ptr, shared_from_this(), amh->_pIsClosed, amh));
+	actor_handle shared_this = shared_from_this();
+	return _strand->wrap_post([shared_this, amh](){shared_this->check_run1(amh->_pIsClosed, *amh); });
 }
 
 void my_actor::close_msg_notify( param_list_base& amh )
@@ -941,7 +967,8 @@ bool my_actor::pump_msg_push(param_list_base& pm, int tm)
 
 void my_actor::trig_handler()
 {
-	_strand->post(boost::bind(&my_actor::run_one, shared_from_this()));
+	actor_handle shared_this = shared_from_this();
+	_strand->post([shared_this](){shared_this->run_one(); });
 }
 
 bool my_actor::async_trig_push(async_trig_base& th, int tm, void* dst)
@@ -993,7 +1020,8 @@ void my_actor::async_trig_post_yield(async_trig_base& th, void* src)
 			cancel_timer();
 		}
 		th.save_to_dst(src);
-		_strand->post(boost::bind(&my_actor::run_one, shared_from_this()));
+		actor_handle shared_this = shared_from_this();
+		_strand->post([shared_this](){shared_this->run_one(); });
 	} 
 	else
 	{
@@ -1021,18 +1049,13 @@ void my_actor::async_trig_pull_yield(async_trig_base& th, void* src)
 	}
 }
 
-void my_actor::_async_trig_handler(boost::shared_ptr<bool>& pIsClosed, async_trig_handle<>& th)
+void my_actor::_async_trig_handler(const boost::shared_ptr<bool>& pIsClosed, async_trig_handle<>& th)
 {
 	assert(_strand->running_in_this_thread());
 	if (!_quited && !(*pIsClosed) && !th._notify)
 	{
 		async_trig_pull_yield(th, NULL);
 	}
-}
-
-void my_actor::_async_trig_handler_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<async_trig_handle<> >& th)
-{
-	_async_trig_handler(pIsClosed, *th);
 }
 
 void my_actor::check_run1( boost::shared_ptr<bool>& pIsClosed, actor_msg_handle<>& amh )
@@ -1054,11 +1077,6 @@ void my_actor::check_run1( boost::shared_ptr<bool>& pIsClosed, actor_msg_handle<
 	{
 		amh.count++;
 	}
-}
-
-void my_actor::check_run1_ptr(boost::shared_ptr<bool>& pIsClosed, boost::shared_ptr<actor_msg_handle<> >& amh)
-{
-	check_run1(pIsClosed, *amh);
 }
 
 shared_strand my_actor::this_strand()
@@ -1090,7 +1108,8 @@ void my_actor::reset_yield()
 
 void my_actor::notify_run()
 {
-	_strand->post(boost::bind(&my_actor::start_run, shared_from_this()));
+	actor_handle shared_this = shared_from_this();
+	_strand->post([shared_this](){shared_this->start_run(); });
 }
 
 void my_actor::assert_enter()
@@ -1115,18 +1134,20 @@ void my_actor::start_run()
 	} 
 	else
 	{
-		_strand->post(boost::bind(&my_actor::start_run, shared_from_this()));
+		notify_run();
 	}
 }
 
 void my_actor::notify_quit()
 {
-	_strand->post(boost::bind(&my_actor::force_quit, shared_from_this(), boost::function<void (bool)>()));
+	actor_handle shared_this = shared_from_this();
+	_strand->post([shared_this](){shared_this->force_quit(boost::function<void(bool)>()); });
 }
 
 void my_actor::notify_quit(const boost::function<void (bool)>& h)
 {
-	_strand->post(boost::bind(&my_actor::force_quit, shared_from_this(), h));
+	actor_handle shared_this = shared_from_this();
+	_strand->post([=](){shared_this->force_quit(h); });
 }
 
 void my_actor::force_quit( const boost::function<void (bool)>& h )
@@ -1145,13 +1166,14 @@ void my_actor::force_quit( const boost::function<void (bool)>& h )
 			{
 				auto cc = _childActorList.front();
 				_childActorList.pop_front();
+				actor_handle shared_this = shared_from_this();
 				if (cc->_strand == _strand)
 				{
-					cc->force_quit(boost::bind(&my_actor::force_quit_cb_handler, shared_from_this()));
+					cc->force_quit([shared_this](bool){shared_this->force_quit_cb_handler(); });
 				} 
 				else
 				{
-					cc->notify_quit(_strand->wrap_post(boost::bind(&my_actor::force_quit_cb_handler, shared_from_this())));
+					cc->notify_quit(_strand->wrap_post((boost::function<void(bool)>)[shared_this](bool){shared_this->force_quit_cb_handler(); }));
 				}
 			}
 		} 
@@ -1180,7 +1202,8 @@ void my_actor::notify_suspend()
 
 void my_actor::notify_suspend(const boost::function<void ()>& h)
 {
-	_strand->post(boost::bind(&my_actor::suspend, shared_from_this(), h));
+	actor_handle shared_this = shared_from_this();
+	_strand->post([=](){shared_this->suspend(h); });
 }
 
 void my_actor::suspend(const boost::function<void ()>& h)
@@ -1218,13 +1241,14 @@ void my_actor::suspend()
 				_childSuspendResumeCount = _childActorList.size();
 				for (auto it = _childActorList.begin(); it != _childActorList.end(); it++)
 				{
+					actor_handle shared_this = shared_from_this();
 					if ((*it)->_strand == _strand)
 					{
-						(*it)->suspend(boost::bind(&my_actor::child_suspend_cb_handler, shared_from_this()));
+						(*it)->suspend([shared_this](){shared_this->child_suspend_cb_handler(); });
 					}
 					else
 					{
-						(*it)->notify_suspend(_strand->wrap_post(boost::bind(&my_actor::child_suspend_cb_handler, shared_from_this())));
+						(*it)->notify_suspend(_strand->wrap_post([shared_this](){shared_this->child_suspend_cb_handler(); }));
 					}
 				}
 				return;
@@ -1242,7 +1266,8 @@ void my_actor::notify_resume()
 
 void my_actor::notify_resume(const boost::function<void ()>& h)
 {
-	_strand->post(boost::bind(&my_actor::resume, shared_from_this(), h));
+	actor_handle shared_this = shared_from_this();
+	_strand->post([=](){shared_this->resume(h); });
 }
 
 void my_actor::resume(const boost::function<void ()>& h)
@@ -1280,13 +1305,14 @@ void my_actor::resume()
 				_childSuspendResumeCount = _childActorList.size();
 				for (auto it = _childActorList.begin(); it != _childActorList.end(); it++)
 				{
+					actor_handle shared_this = shared_from_this();
 					if ((*it)->_strand == _strand)
 					{
-						(*it)->resume(_strand->wrap_post(boost::bind(&my_actor::child_resume_cb_handler, shared_from_this())));
+						(*it)->resume(_strand->wrap_post([shared_this](){shared_this->child_resume_cb_handler(); }));
 					} 
 					else
 					{
-						(*it)->notify_resume(_strand->wrap_post(boost::bind(&my_actor::child_resume_cb_handler, shared_from_this())));
+						(*it)->notify_resume(_strand->wrap_post([shared_this](){shared_this->child_resume_cb_handler(); }));
 					}
 				}
 				return;
@@ -1314,7 +1340,8 @@ void my_actor::switch_pause_play(const boost::function<void (bool isPaused)>& h)
 			{
 				if (h)
 				{
-					resume(boost::bind(h, false));
+					auto& h_ = h;
+					resume([h_](){h_(false); });
 				} 
 				else
 				{
@@ -1325,7 +1352,8 @@ void my_actor::switch_pause_play(const boost::function<void (bool isPaused)>& h)
 			{
 				if (h)
 				{
-					suspend(boost::bind(h, true));
+					auto& h_ = h;
+					suspend([h_](){h_(true); });
 				} 
 				else
 				{
@@ -1347,7 +1375,28 @@ bool my_actor::outside_wait_quit()
 	boost::condition_variable conVar;
 	boost::mutex mutex;
 	boost::unique_lock<boost::mutex> ul(mutex);
-	_strand->post(boost::bind(&my_actor::outside_wait_quit_proxy, shared_from_this(), &conVar, &mutex, &rt));
+	_strand->post([&]()
+	{
+		assert(_strand->running_in_this_thread());
+		if (_quited && !_childOverCount)
+		{
+			rt = !_isForce;
+			boost::lock_guard<boost::mutex> lg(mutex);
+			conVar.notify_one();
+		}
+		else
+		{
+			bool& rt_ = rt;
+			auto& mutex_ = mutex;
+			auto& conVar_ = conVar;
+			_exitCallback.push_back([&](bool ok)
+			{
+				rt_ = ok;
+				boost::lock_guard<boost::mutex> lg(mutex_);
+				conVar_.notify_one();
+			});
+		}
+	});
 	conVar.wait(ul);
 	return rt;
 }
@@ -1367,7 +1416,8 @@ void my_actor::append_quit_callback(const boost::function<void (bool)>& h)
 	} 
 	else
 	{
-		_strand->post(boost::bind(&my_actor::append_quit_callback, shared_from_this(), h));
+		actor_handle shared_this = shared_from_this();
+		_strand->post([=](){shared_this->append_quit_callback(h); });
 	}
 }
 
@@ -1384,7 +1434,7 @@ bool my_actor::actor_force_quit( actor_handle anotherActor )
 {
 	assert_enter();
 	assert(anotherActor);
-	return trig<bool>(boost::bind(&my_actor::notify_quit, anotherActor, _1));
+	return trig<bool>([anotherActor](const boost::function<void (bool)>& h){anotherActor->notify_quit(h); });
 }
 
 void my_actor::actors_force_quit(const list<actor_handle>& anotherActors)
@@ -1400,7 +1450,7 @@ bool my_actor::actor_wait_quit( actor_handle anotherActor )
 {
 	assert_enter();
 	assert(anotherActor);
-	return trig<bool>(boost::bind(&my_actor::append_quit_callback, anotherActor, _1));
+	return trig<bool>([anotherActor](const boost::function<void(bool)>& h){anotherActor->append_quit_callback(h); });
 }
 
 void my_actor::actors_wait_quit(const list<actor_handle>& anotherActors)
@@ -1416,7 +1466,7 @@ void my_actor::actor_suspend(actor_handle anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
-	trig(boost::bind(&my_actor::notify_suspend, anotherActor, _1));
+	trig([anotherActor](const boost::function<void()>& h){anotherActor->notify_suspend(h); });
 }
 
 void my_actor::actors_suspend(const list<actor_handle>& anotherActors)
@@ -1432,7 +1482,7 @@ void my_actor::actor_resume(actor_handle anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
-	trig(boost::bind(&my_actor::notify_resume, anotherActor, _1));
+	trig([anotherActor](const boost::function<void()>& h){anotherActor->notify_resume(h); });
 }
 
 void my_actor::actors_resume(const list<actor_handle>& anotherActors)
@@ -1448,7 +1498,7 @@ bool my_actor::actor_switch(actor_handle anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
-	return trig<bool>(boost::bind(&my_actor::switch_pause_play, anotherActor, _1));
+	return trig<bool>([anotherActor](const boost::function<void(bool)>& h){anotherActor->switch_pause_play(h); });
 }
 
 bool my_actor::actors_switch(const list<actor_handle>& anotherActors)
@@ -1533,7 +1583,8 @@ void my_actor::child_suspend_cb_handler()
 			} 
 			else
 			{
-				_strand->post(boost::bind(&my_actor::resume, shared_from_this()));
+				actor_handle shared_this = shared_from_this();
+				_strand->post([shared_this](){shared_this->resume(); });
 				return;
 			}
 		}
@@ -1560,7 +1611,8 @@ void my_actor::child_resume_cb_handler()
 			} 
 			else
 			{
-				_strand->post(boost::bind(&my_actor::suspend, shared_from_this()));
+				actor_handle shared_this = shared_from_this();
+				_strand->post([shared_this](){shared_this->suspend(); });
 				return;
 			}
 		}
@@ -1582,28 +1634,6 @@ void my_actor::exit_callback()
 		_quitHandlerList.pop_front();
 	}
 	(*(actor_pull_type*)_actorPull)();
-}
-
-void my_actor::outside_wait_quit_proxy( boost::condition_variable* conVar, boost::mutex* mutex, bool* rt )
-{
-	assert(_strand->running_in_this_thread());
-	if (_quited && !_childOverCount)
-	{
-		*rt = !_isForce;
-		boost::lock_guard<boost::mutex> lg(*mutex);
-		conVar->notify_one();
-	} 
-	else
-	{
-		_exitCallback.push_back(boost::bind(&my_actor::outside_wait_quit_handler, shared_from_this(), conVar, mutex, rt, _1));
-	}
-}
-
-void my_actor::outside_wait_quit_handler( boost::condition_variable* conVar, boost::mutex* mutex, bool* rt, bool ok )
-{
-	*rt = ok;
-	boost::lock_guard<boost::mutex> lg(*mutex);
-	conVar->notify_one();
 }
 
 void my_actor::enable_stack_pool()
