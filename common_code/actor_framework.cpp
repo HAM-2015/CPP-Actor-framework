@@ -792,7 +792,7 @@ boost::function<void ()> my_actor::begin_trig(async_trig_handle<>& th)
 	};
 }
 
-boost::function<void ()> my_actor::begin_trig(boost::shared_ptr<async_trig_handle<> >& th)
+boost::function<void ()> my_actor::begin_trig(const boost::shared_ptr<async_trig_handle<> >& th)
 {
 	assert_enter();
 	th->begin(_actorID);
@@ -837,6 +837,20 @@ void my_actor::wait_trig(async_trig_handle<>& th)
 	timed_wait_trig(th, -1);
 }
 
+bool my_actor::timed_wait_trig(const boost::shared_ptr<async_trig_handle<> >& th, int tm)
+{
+	assert(th);
+	auto lockTh = th;
+	return timed_wait_trig(*th, tm);
+}
+
+void my_actor::wait_trig(const boost::shared_ptr<async_trig_handle<> >& th)
+{
+	assert(th);
+	auto lockTh = th;
+	timed_wait_trig(*th, -1);
+}
+
 void my_actor::close_trig(async_trig_base& th)
 {
 	DEBUG_OPERATION(if (th._actorID) {assert(th._actorID == _actorID); th._actorID = 0;})
@@ -854,8 +868,8 @@ void my_actor::delay_trig(int ms, async_trig_handle<>& th)
 	assert_enter();
 	assert(th._pIsClosed);
 	actor_handle shared_this = shared_from_this();
-	auto& pIsClosed = th._pIsClosed;
-	time_out(ms, [=, &th](){shared_this->_async_trig_handler(pIsClosed, th); });
+	auto& pIsClosed_ = th._pIsClosed;
+	time_out(ms, [=, &th](){shared_this->_async_trig_handler(pIsClosed_, th); });
 }
 
 void my_actor::delay_trig(int ms, boost::shared_ptr<async_trig_handle<> >& th)
@@ -863,8 +877,8 @@ void my_actor::delay_trig(int ms, boost::shared_ptr<async_trig_handle<> >& th)
 	assert_enter();
 	assert(th->_pIsClosed);
 	actor_handle shared_this = shared_from_this();
-	auto& pIsClosed = th->_pIsClosed;
-	time_out(ms, [=](){shared_this->_async_trig_handler(pIsClosed, *th); });
+	auto& pIsClosed_ = th->_pIsClosed;
+	time_out(ms, [=](){shared_this->_async_trig_handler(pIsClosed_, *th); });
 }
 
 void my_actor::cancel_delay_trig()
@@ -905,7 +919,7 @@ boost::function<void()> my_actor::make_msg_notify(actor_msg_handle<>& amh)
 	return _strand->wrap_post([shared_this, &amh](){shared_this->check_run1(amh._pIsClosed, amh); });
 }
 
-boost::function<void()> my_actor::make_msg_notify(boost::shared_ptr<actor_msg_handle<> >& amh)
+boost::function<void()> my_actor::make_msg_notify(const boost::shared_ptr<actor_msg_handle<> >& amh)
 {
 	amh->begin(_actorID);
 	actor_handle shared_this = shared_from_this();
@@ -935,6 +949,20 @@ bool my_actor::timed_pump_msg(actor_msg_handle<>& amh, int tm)
 void my_actor::pump_msg(actor_msg_handle<>& amh)
 {
 	timed_pump_msg(amh, -1);
+}
+
+bool my_actor::timed_pump_msg(const boost::shared_ptr<actor_msg_handle<> >& amh, int tm)
+{
+	assert(amh);
+	auto lockAmh = amh;
+	return timed_pump_msg(*amh, tm);
+}
+
+void my_actor::pump_msg(const boost::shared_ptr<actor_msg_handle<> >& amh)
+{
+	assert(amh);
+	auto lockAmh = amh;
+	timed_pump_msg(*amh, -1);
 }
 
 bool my_actor::pump_msg_push(param_list_base& pm, int tm)
@@ -1019,7 +1047,7 @@ void my_actor::async_trig_post_yield(async_trig_base& th, void* src)
 			th._hasTm = false;
 			cancel_timer();
 		}
-		th.save_to_dst(src);
+		th.save_from(src);
 		actor_handle shared_this = shared_from_this();
 		_strand->post([shared_this](){shared_this->run_one(); });
 	} 
@@ -1040,7 +1068,7 @@ void my_actor::async_trig_pull_yield(async_trig_base& th, void* src)
 			th._hasTm = false;
 			cancel_timer();
 		}
-		th.move_to_dst(src);
+		th.move_from(src);
 		pull_yield();
 	} 
 	else

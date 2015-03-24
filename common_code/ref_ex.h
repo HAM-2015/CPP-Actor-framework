@@ -96,7 +96,7 @@ struct ref_ex
 
 	}
 
-	void operator =(const ref_ex& s)
+	void save_from(const const_ref_ex<T0, T1, T2, T3>& s)
 	{
 		_p0 = s._p0;
 		_p1 = s._p1;
@@ -104,15 +104,7 @@ struct ref_ex
 		_p3 = s._p3;
 	}
 
-	void operator =(const const_ref_ex<T0, T1, T2, T3>& s)
-	{
-		_p0 = s._p0;
-		_p1 = s._p1;
-		_p2 = s._p2;
-		_p3 = s._p3;
-	}
-
-	void operator =(ref_ex&& s)
+	void move_from(ref_ex& s)
 	{
 		_p0 = std::move(s._p0);
 		_p1 = std::move(s._p1);
@@ -141,21 +133,14 @@ struct ref_ex<T0, T1, T2, void>
 
 	}
 
-	void operator =(const ref_ex& s)
+	void save_from(const const_ref_ex<T0, T1, T2>& s)
 	{
 		_p0 = s._p0;
 		_p1 = s._p1;
 		_p2 = s._p2;
 	}
 
-	void operator =(const const_ref_ex<T0, T1, T2>& s)
-	{
-		_p0 = s._p0;
-		_p1 = s._p1;
-		_p2 = s._p2;
-	}
-
-	void operator =(ref_ex&& s)
+	void move_from(ref_ex& s)
 	{
 		_p0 = std::move(s._p0);
 		_p1 = std::move(s._p1);
@@ -182,19 +167,13 @@ struct ref_ex<T0, T1, void, void>
 
 	}
 
-	void operator =(const ref_ex& s)
+	void save_from(const const_ref_ex<T0, T1>& s)
 	{
 		_p0 = s._p0;
 		_p1 = s._p1;
 	}
 
-	void operator =(const const_ref_ex<T0, T1>& s)
-	{
-		_p0 = s._p0;
-		_p1 = s._p1;
-	}
-
-	void operator =(ref_ex&& s)
+	void move_from(ref_ex& s)
 	{
 		_p0 = std::move(s._p0);
 		_p1 = std::move(s._p1);
@@ -219,17 +198,12 @@ struct ref_ex<T0, void, void, void>
 
 	}
 
-	void operator =(const ref_ex& s)
+	void save_from(const const_ref_ex<T0>& s)
 	{
 		_p0 = s._p0;
 	}
 
-	void operator =(const const_ref_ex<T0>& s)
-	{
-		_p0 = s._p0;
-	}
-
-	void operator =(ref_ex&& s)
+	void move_from(ref_ex& s)
 	{
 		_p0 = std::move(s._p0);
 	}
