@@ -604,10 +604,28 @@ bool my_actor::child_actors_force_quit(const list<child_actor_handle::ptr>& acto
 {
 	assert_enter();
 	bool res = true;
+	actor_msg_handle<bool> amh;
+	auto h = make_msg_notify(amh);
 	for (auto it = actorHandles.begin(); it != actorHandles.end(); it++)
 	{
-		res &= child_actor_force_quit(**it);
+		child_actor_handle::ptr actorHandle = *it;
+		assert(actorHandle->get_actor());
+		assert(actorHandle->get_actor()->parent_actor().get() == this);
+		actor_handle actor = actorHandle->peel();
+		if (actor->this_strand() == _strand)
+		{
+			actor->force_quit(h);
+		} 
+		else
+		{
+			actor->notify_quit(h);
+		}
 	}
+	for (size_t i = actorHandles.size(); i > 0; i--)
+	{
+		res &= pump_msg(amh);
+	}
+	close_msg_notify(amh);
 	return res;
 }
 
@@ -654,10 +672,28 @@ void my_actor::child_actor_suspend(child_actor_handle& actorHandle)
 void my_actor::child_actors_suspend(const list<child_actor_handle::ptr>& actorHandles)
 {
 	assert_enter();
+	actor_msg_handle<> amh;
+	auto h = make_msg_notify(amh);
 	for (auto it = actorHandles.begin(); it != actorHandles.end(); it++)
 	{
-		child_actor_suspend(**it);
+		child_actor_handle::ptr actorHandle = *it;
+		assert(actorHandle->get_actor());
+		assert(actorHandle->get_actor()->parent_actor().get() == this);
+		actor_handle actor = actorHandle->get_actor();
+		if (actor->this_strand() == _strand)
+		{
+			actor->suspend(h);
+		}
+		else
+		{
+			actor->notify_suspend(h);
+		}
 	}
+	for (size_t i = actorHandles.size(); i > 0; i--)
+	{
+		pump_msg(amh);
+	}
+	close_msg_notify(amh);
 }
 
 void my_actor::child_actor_resume(child_actor_handle& actorHandle)
@@ -679,10 +715,28 @@ void my_actor::child_actor_resume(child_actor_handle& actorHandle)
 void my_actor::child_actors_resume(const list<child_actor_handle::ptr>& actorHandles)
 {
 	assert_enter();
+	actor_msg_handle<> amh;
+	auto h = make_msg_notify(amh);
 	for (auto it = actorHandles.begin(); it != actorHandles.end(); it++)
 	{
-		child_actor_resume(**it);
+		child_actor_handle::ptr actorHandle = *it;
+		assert(actorHandle->get_actor());
+		assert(actorHandle->get_actor()->parent_actor().get() == this);
+		actor_handle actor = actorHandle->get_actor();
+		if (actor->this_strand() == _strand)
+		{
+			actor->resume(h);
+		}
+		else
+		{
+			actor->notify_resume(h);
+		}
 	}
+	for (size_t i = actorHandles.size(); i > 0; i--)
+	{
+		pump_msg(amh);
+	}
+	close_msg_notify(amh);
 }
 
 actor_handle my_actor::child_actor_peel(child_actor_handle& actorHandle)
@@ -1468,10 +1522,17 @@ bool my_actor::actor_force_quit( actor_handle anotherActor )
 void my_actor::actors_force_quit(const list<actor_handle>& anotherActors)
 {
 	assert_enter();
+	actor_msg_handle<bool> amh;
+	auto h = make_msg_notify(amh);
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
 	{
-		actor_force_quit(*it);
+		(*it)->notify_quit(h);
 	}
+	for (size_t i = anotherActors.size(); i > 0; i--)
+	{
+		pump_msg(amh);
+	}
+	close_msg_notify(amh);
 }
 
 bool my_actor::actor_wait_quit( actor_handle anotherActor )
@@ -1500,10 +1561,17 @@ void my_actor::actor_suspend(actor_handle anotherActor)
 void my_actor::actors_suspend(const list<actor_handle>& anotherActors)
 {
 	assert_enter();
+	actor_msg_handle<> amh;
+	auto h = make_msg_notify(amh);
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
 	{
-		actor_suspend(*it);
+		(*it)->notify_suspend(h);
 	}
+	for (size_t i = anotherActors.size(); i > 0; i--)
+	{
+		pump_msg(amh);
+	}
+	close_msg_notify(amh);
 }
 
 void my_actor::actor_resume(actor_handle anotherActor)
@@ -1516,10 +1584,17 @@ void my_actor::actor_resume(actor_handle anotherActor)
 void my_actor::actors_resume(const list<actor_handle>& anotherActors)
 {
 	assert_enter();
+	actor_msg_handle<> amh;
+	auto h = make_msg_notify(amh);
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
 	{
-		actor_resume(*it);
+		(*it)->notify_resume(h);
 	}
+	for (size_t i = anotherActors.size(); i > 0; i--)
+	{
+		pump_msg(amh);
+	}
+	close_msg_notify(amh);
 }
 
 bool my_actor::actor_switch(actor_handle anotherActor)
@@ -1533,10 +1608,17 @@ bool my_actor::actors_switch(const list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	bool isPause = true;
+	actor_msg_handle<bool> amh;
+	auto h = make_msg_notify(amh);
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
 	{
-		isPause &= actor_switch(*it);
+		(*it)->switch_pause_play(h);
 	}
+	for (size_t i = anotherActors.size(); i > 0; i--)
+	{
+		isPause &= pump_msg(amh);
+	}
+	close_msg_notify(amh);
 	return isPause;
 }
 

@@ -11,10 +11,11 @@
 //测试堆栈释放后是否又被修改了
 #define CHECK_STACK(__st__)\
 {\
-	unsigned char* p = (unsigned char*)(__st__)._stack.sp - (__st__)._stack.size; \
-	for (size_t i = 0; i < (__st__)._stack.size; i++)\
+	size_t* p = (size_t*)((char*)(__st__)._stack.sp - (__st__)._stack.size); \
+	size_t length = (__st__)._stack.size / sizeof(size_t); \
+	for (size_t i = 0; i < length; i++)\
 	{\
-		assert(0xCD == p[i]);\
+		assert((size_t)0xCDCDCDCDCDCDCDCD == p[i]);\
 	}\
 }
 #else

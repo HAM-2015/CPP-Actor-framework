@@ -192,7 +192,7 @@ void* ios_proxy::getImpl()
 	_implMutex.lock();
 	if (_implPool.empty())
 	{
-		assert(_implCount < 256);
+		assert(_implCount < 4096);
 		_implCount++;
 		_implMutex.unlock();
 		return new boost::asio::detail::strand_service::strand_impl;

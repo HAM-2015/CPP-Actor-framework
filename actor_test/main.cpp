@@ -214,18 +214,8 @@ void test_shift(my_actor* self, actor_handle pauseactor)
 	}
 }
 
-void count_test(my_actor* self, int& ct)
+void perfor_test(my_actor* self, ios_proxy& ios)
 {
-	while (true)
-	{
-		ct++;
-		self->sleep(0);
-	}
-}
-
-void perfor_test(my_actor* self, ios_proxy& ios, int actorNum)
-{
-	int* count = (int*)_alloca(actorNum*sizeof(int));
 	self->check_stack();
 	vector<shared_strand> strands;
 	strands.resize(ios.threadNumber());
@@ -234,15 +224,30 @@ void perfor_test(my_actor* self, ios_proxy& ios, int actorNum)
 		strands[i] = boost_strand::create(ios);
 	}
 
-	for (int num = 1; true; num = num % actorNum + 1)
+	for (int n = 1; n < 200; n++)
 	{
+		int num = (1 + n)*n / 2;
 		long long tk = get_tick_us();
 		list<child_actor_handle::ptr> childList;
+		vector<int> count;
+		count.resize(num);
+#ifdef _DEBUG
+		size_t stackSize = DEFAULT_STACKSIZE;
+#else
+		size_t stackSize = 12 kB;
+#endif
 		for (int i = 0; i < num; i++)
 		{
 			count[i] = 0;
 			auto newactor = child_actor_handle::make_ptr();
-			*newactor = self->create_child_actor(strands[i%strands.size()], boost::bind(&count_test, _1, boost::ref(count[i])));
+			*newactor = self->create_child_actor(strands[i%strands.size()], [&count, i](my_actor* self)
+			{
+				while (true)
+				{
+					count[i]++;
+					self->sleep(0);
+				}
+			}, stackSize);
 			childList.push_front(newactor);
 			self->child_actor_run(*childList.front());
 		}
@@ -256,6 +261,7 @@ void perfor_test(my_actor* self, ios_proxy& ios, int actorNum)
 		double f = (double)ct * 1000000 / (get_tick_us()-tk);
 		printf("Actor数=%d, 切换频率=%d\n", num, (int)f);
 	}
+	printf("性能测试结束\n");
 }
 
 void create_null_actor(my_actor* self, int* count)
@@ -355,7 +361,7 @@ void actor_test(my_actor* self)
 	child_actor_handle actorDown = self->create_child_actor(boost::bind(&check_key_test, _1, VK_DOWN));
 	child_actor_handle actorPrint = self->create_child_actor(boost::bind(&actor_test_print, _1, VK_SPACE));//检测空格键
 	child_actor_handle actorTwo = self->create_child_actor(boost::bind(&check_two_down, _1, 10, 'D', 'F'));//检测D,F键是否同时按下(设置间隔误差10ms)
-	child_actor_handle actorPerfor = self->create_child_actor(boost::bind(&perfor_test, _1, boost::ref(perforIos), 200));//Actor切换性能测试
+	child_actor_handle actorPerfor = self->create_child_actor(boost::bind(&perfor_test, _1, boost::ref(perforIos)));//Actor切换性能测试
 	child_actor_handle actorCreate = self->create_child_actor(boost::bind(&create_actor_test, _1));//Actor创建性能测试
 	child_actor_handle actorShift = self->create_child_actor(boost::bind(&test_shift, _1, actorPerfor.get_actor()));//shift+字母检测
 	child_actor_handle actorBuffer = self->create_child_actor(boost::bind(&async_buffer_test, _1));//异步缓冲队列测试
