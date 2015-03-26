@@ -1547,15 +1547,27 @@ public:
 	/*!
 	@brief 发送一个异步函数到shared_strand中执行，完成后返回
 	*/
-	__yield_interrupt void send(shared_strand exeStrand, const boost::function<void ()>& h);
-
-	template <typename T0>
-	__yield_interrupt T0 send(shared_strand exeStrand, const boost::function<T0 ()>& h)
+	template <typename H>
+	__yield_interrupt void send(shared_strand exeStrand, const H& h)
 	{
 		assert_enter();
 		if (exeStrand != _strand)
 		{
-			return trig<T0>([=](const boost::function<void(T0)>& cb){boost_strand::asyncInvoke<T0>(exeStrand, h, cb); });
+			trig([=](const boost::function<void()>& cb){boost_strand::asyncInvokeVoid(exeStrand, h, cb); });
+		}
+		else
+		{
+			h();
+		}
+	}
+
+	template <typename T0, typename H>
+	__yield_interrupt T0 send(shared_strand exeStrand, const H& h)
+	{
+		assert_enter();
+		if (exeStrand != _strand)
+		{
+			return trig<T0>([=](const boost::function<void(T0)>& cb){boost_strand::asyncInvoke(exeStrand, h, cb); });
 		} 
 		return h();
 	}
@@ -1563,54 +1575,63 @@ public:
 	/*!
 	@brief 调用一个异步函数，异步回调完成后返回
 	*/
-	__yield_interrupt void trig(const boost::function<void (boost::function<void ()>)>& h);
+	template <typename H>
+	__yield_interrupt void trig(const H& h)
+	{
+		assert_enter();
+		actor_handle shared_this = shared_from_this();
+#ifdef _DEBUG
+		h(wrapped_trig_handler<>::wrap([shared_this](){shared_this->trig_handler(); }));
+#else
+		h([shared_this](){shared_this->trig_handler(); });
+#endif
+		push_yield();
+	}
 
-	template <typename T0>
-	__yield_interrupt void trig(const boost::function<void (boost::function<void (T0)>)>& h, __out T0& r0)
+	template <typename T0, typename H>
+	__yield_interrupt void trig(const H& h, __out T0& r0)
 	{
 		assert_enter();
 		ref_ex<T0> mulRef(r0);
 		actor_handle shared_this = shared_from_this();
 #ifdef _DEBUG
-		h(wrapped_trig_handler<boost::function<void(T0)> >(
-			[shared_this, &mulRef](const T0& p0){shared_this->trig_handler(mulRef, p0); }));
+		h(wrapped_trig_handler<>::wrap([shared_this, &mulRef](const T0& p0){shared_this->trig_handler(mulRef, p0); }));
 #else
 		h([shared_this, &mulRef](const T0& p0){shared_this->trig_handler(mulRef, p0); });
 #endif
 		push_yield();
 	}
 
-	template <typename T0>
-	__yield_interrupt T0 trig(const boost::function<void (boost::function<void (T0)>)>& h)
+	template <typename T0, typename H>
+	__yield_interrupt T0 trig(const H& h)
 	{
 		T0 r0;
 		trig(h, r0);
 		return r0;
 	}
 
-	template <typename T0, typename T1>
-	__yield_interrupt void trig(const boost::function<void (boost::function<void (T0, T1)>)>& h, __out T0& r0, __out T1& r1)
+	template <typename T0, typename T1, typename H>
+	__yield_interrupt void trig(const H& h, __out T0& r0, __out T1& r1)
 	{
 		assert_enter();
 		ref_ex<T0, T1> mulRef(r0, r1);
 		actor_handle shared_this = shared_from_this();
 #ifdef _DEBUG
-		h(wrapped_trig_handler<boost::function<void (T0, T1)> >(
-			[shared_this, &mulRef](const T0& p0, const T1& p1){shared_this->trig_handler(mulRef, p0, p1); }));
+		h(wrapped_trig_handler<>::wrap([shared_this, &mulRef](const T0& p0, const T1& p1){shared_this->trig_handler(mulRef, p0, p1); }));
 #else
 		h([shared_this, &mulRef](const T0& p0, const T1& p1){shared_this->trig_handler(mulRef, p0, p1); });
 #endif
 		push_yield();
 	}
 
-	template <typename T0, typename T1, typename T2>
-	__yield_interrupt void trig(const boost::function<void (boost::function<void (T0, T1, T2)>)>& h, __out T0& r0, __out T1& r1, __out T2& r2)
+	template <typename T0, typename T1, typename T2, typename H>
+	__yield_interrupt void trig(const H& h, __out T0& r0, __out T1& r1, __out T2& r2)
 	{
 		assert_enter();
 		ref_ex<T0, T1, T2> mulRef(r0, r1, r2);
 		actor_handle shared_this = shared_from_this();
 #ifdef _DEBUG
-		h(wrapped_trig_handler<boost::function<void(T0, T1, T2)> >(
+		h(wrapped_trig_handler<>::wrap(
 			[shared_this, &mulRef](const T0& p0, const T1& p1, const T2& p2){shared_this->trig_handler(mulRef, p0, p1, p2); }));
 #else
 		h([shared_this, &mulRef](const T0& p0, const T1& p1, const T2& p2){shared_this->trig_handler(mulRef, p0, p1, p2); });
@@ -1618,14 +1639,14 @@ public:
 		push_yield();
 	}
 
-	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt void trig(const boost::function<void (boost::function<void (T0, T1, T2, T3)>)>& h, __out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3)
+	template <typename T0, typename T1, typename T2, typename T3, typename H>
+	__yield_interrupt void trig(const H& h, __out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3)
 	{
 		assert_enter();
 		ref_ex<T0, T1, T2, T3> mulRef(r0, r1, r2, r3);
 		actor_handle shared_this = shared_from_this();
 #ifdef _DEBUG
-		h(wrapped_trig_handler<boost::function<void(T0, T1, T2)> >(
+		h(wrapped_trig_handler<>::wrap(
 			[shared_this, &mulRef](const T0& p0, const T1& p1, const T2& p2, const T3& p3){shared_this->trig_handler(mulRef, p0, p1, p2, p3); }));
 #else
 		h([shared_this, &mulRef](const T0& p0, const T1& p1, const T2& p2, const T3& p3){shared_this->trig_handler(mulRef, p0, p1, p2, p3); });
@@ -2093,7 +2114,7 @@ private:
 		else
 		{
 			actor_handle shared_this = shared_from_this();
-			_strand->post([=, &r](){shared_this->_trig_handler(r, ref_ex<T0, T1, T2>((T0&)p0, (T1&)p1), (T2&)p2); });
+			_strand->post([=, &r](){shared_this->_trig_handler(r, ref_ex<T0, T1, T2>((T0&)p0, (T1&)p1, (T2&)p2)); });
 		}
 	}
 
@@ -2111,7 +2132,7 @@ private:
 		else
 		{
 			actor_handle shared_this = shared_from_this();
-			_strand->post([=, &r](){shared_this->_trig_handler(r, ref_ex<T0, T1, T2, T3>((T0&)p0, (T1&)p1), (T2&)p2, (T3&)p3); });
+			_strand->post([=, &r](){shared_this->_trig_handler(r, ref_ex<T0, T1, T2, T3>((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3)); });
 		}
 	}
 

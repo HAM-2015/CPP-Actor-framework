@@ -529,7 +529,7 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 void my_actor::async_create( shared_strand actorStrand, const main_func& mainFunc,
 	const boost::function<void (actor_handle)>& ch, size_t stackSize )
 {
-	boost_strand::asyncInvoke<actor_handle>(actorStrand, [actorStrand, mainFunc, stackSize]()->actor_handle
+	boost_strand::asyncInvoke(actorStrand, [actorStrand, mainFunc, stackSize]()->actor_handle
 	{
 		return my_actor::create(actorStrand, mainFunc, stackSize);
 	}, ch);
@@ -538,7 +538,7 @@ void my_actor::async_create( shared_strand actorStrand, const main_func& mainFun
 void my_actor::async_create( shared_strand actorStrand, const main_func& mainFunc,
 	const boost::function<void (actor_handle)>& ch, const boost::function<void (bool)>& cb, size_t stackSize )
 {
-	boost_strand::asyncInvoke<actor_handle>(actorStrand, [actorStrand, mainFunc, cb, stackSize]()->actor_handle
+	boost_strand::asyncInvoke(actorStrand, [actorStrand, mainFunc, cb, stackSize]()->actor_handle
 	{
 		return my_actor::create(actorStrand, mainFunc, cb, stackSize);
 	}, ch);
@@ -939,31 +939,6 @@ void my_actor::cancel_delay_trig()
 {
 	assert_enter();
 	cancel_timer();
-}
-
-void my_actor::trig( const boost::function<void (boost::function<void ()>)>& h )
-{
-	assert_enter();
-	actor_handle shared_this = shared_from_this();
-#ifdef _DEBUG
-	h(wrapped_trig_handler<boost::function<void()> >([shared_this](){shared_this->trig_handler(); }));
-#else
-	h([shared_this](){shared_this->trig_handler(); });
-#endif
-	push_yield();
-}
-
-void my_actor::send( shared_strand exeStrand, const boost::function<void ()>& h )
-{
-	assert_enter();
-	if (exeStrand != _strand)
-	{
-		trig([=](const boost::function<void()>& cb){boost_strand::asyncInvokeVoid(exeStrand, h, cb); });
-	} 
-	else
-	{
-		h();
-	}
 }
 
 boost::function<void()> my_actor::make_msg_notify(actor_msg_handle<>& amh)

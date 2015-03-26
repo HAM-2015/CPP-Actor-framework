@@ -57,31 +57,6 @@ boost::asio::io_service& boost_strand::get_io_service()
 	return *_iosProxy;
 }
 
-void boost_strand::syncInvoke( shared_strand strand, const boost::function<void ()>& h )
-{
-	assert(!strand->in_this_ios());
-	boost::mutex mutex;
-	boost::condition_variable con;
-	boost::unique_lock<boost::mutex> ul(mutex);
-	strand->post([&]()
-	{
-		h();
-		mutex.lock();
-		con.notify_one();
-		mutex.unlock();
-	});
-	con.wait(ul);
-}
-
-void boost_strand::asyncInvokeVoid( shared_strand strand, const boost::function<void ()>& h, const boost::function<void ()>& cb )
-{
-	strand->post([=]()
-	{
-		h();
-		cb();
-	});
-}
-
 #ifdef ENABLE_MFC_ACTOR
 void boost_strand::_post( const boost::function<void ()>& h )
 {

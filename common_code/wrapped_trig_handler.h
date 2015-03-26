@@ -5,7 +5,7 @@
 
 #include <boost/detail/interlocked.hpp>
 
-template <typename Handler>
+template <typename Handler = void>
 class wrapped_trig_handler
 {
 public:
@@ -146,6 +146,18 @@ public:
 	boost::shared_ptr<long> pIsTrig;
 	Handler handler_;
 };
+
+template <>
+class wrapped_trig_handler<void>
+{
+public:
+	template <typename H>
+	static wrapped_trig_handler<H> wrap(const H& h)
+	{
+		return wrapped_trig_handler<H>(h);
+	}
+};
+
 #endif
 
 #endif

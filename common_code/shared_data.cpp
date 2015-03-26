@@ -48,7 +48,7 @@ shared_data msg_data::create( const std::string& s )
 	return create(s.c_str(), s.size()+1);
 }
 
-shared_data msg_data::create(msg_data* s, boost::function<void (msg_data*)> deleter)
+shared_data msg_data::create(msg_data* s, const boost::function<void(msg_data*)>& deleter)
 {
 #ifdef _DEBUG
 	memset(s->data(), 0xCD, s->size());
@@ -56,7 +56,7 @@ shared_data msg_data::create(msg_data* s, boost::function<void (msg_data*)> dele
 	return shared_data(s, deleter);
 }
 
-shared_data msg_data::create(size_t s, boost::function<void (msg_data*)> deleter)
+shared_data msg_data::create(size_t s, const boost::function<void(msg_data*)>& deleter)
 {
 	return shared_data(new msg_data(s), deleter);
 }

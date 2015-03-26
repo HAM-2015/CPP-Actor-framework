@@ -136,13 +136,28 @@ public:
 	@brief 在一个strand中调用某个函数，直到这个函数被执行完成后才返回
 	@warning 此函数有可能使整个程序陷入死锁，只能在与strand所依赖的ios无关线程中调用
 	*/
-	static void syncInvoke(shared_strand strand, const boost::function<void ()>& h);
+	template <typename H>
+	static void syncInvoke(shared_strand strand, const H& h)
+	{
+		assert(!strand->in_this_ios());
+		boost::mutex mutex;
+		boost::condition_variable con;
+		boost::unique_lock<boost::mutex> ul(mutex);
+		strand->post([&]()
+		{
+			h();
+			mutex.lock();
+			con.notify_one();
+			mutex.unlock();
+		});
+		con.wait(ul);
+	}
 
 	/*!
 	@brief 同上，带返回值
 	*/
-	template <class R>
-	static R syncInvoke(shared_strand strand, const boost::function<R ()>& h)
+	template <typename R, typename H>
+	static R syncInvoke(shared_strand strand, const H& h)
 	{
 		assert(!strand->in_this_ios());
 		R r;
@@ -164,8 +179,8 @@ public:
 	@brief 在strand中调用某个带返回值函数，然后通过一个回调函数把返回值传出
 	@param cb 传出参数的函数
 	*/
-	template <class R>
-	static void asyncInvoke(shared_strand strand, const boost::function<R ()>& h, const boost::function<void (R)>& cb)
+	template <typename H, typename CB>
+	static void asyncInvoke(shared_strand strand, const H& h, const CB& cb)
 	{
 		strand->post([=]()
 		{
@@ -173,7 +188,15 @@ public:
 		});
 	}
 
-	static void asyncInvokeVoid(shared_strand strand, const boost::function<void ()>& h, const boost::function<void ()>& cb);
+	template <typename H, typename CB>
+	static void asyncInvokeVoid(shared_strand strand, const H& h, const CB& cb)
+	{
+		strand->post([=]()
+		{
+			h();
+			cb();
+		});
+	}
 };
 
 #endif
