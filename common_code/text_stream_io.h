@@ -14,7 +14,7 @@ private:
 	text_stream_io();
 public:
 	~text_stream_io();
-	static boost::shared_ptr<text_stream_io> create(shared_strand strand, boost::shared_ptr<stream_io_base> ioObj, const boost::function<void (shared_data)>& h);
+	static std::shared_ptr<text_stream_io> create(shared_strand strand, std::shared_ptr<stream_io_base> ioObj, const std::function<void (shared_data)>& h);
 public:
 	void close();
 	bool write(shared_data msg);
@@ -23,9 +23,9 @@ private:
 	void writeActor(my_actor* self);
 private:
 	bool _closed;
-	boost::shared_ptr<stream_io_base> _ioObj;
-	boost::function<void (shared_data)> _msgNotify;
-	boost::function<void (shared_data)> _writerPipeIn;
+	std::shared_ptr<stream_io_base> _ioObj;
+	std::function<void (shared_data)> _msgNotify;
+	std::function<void (shared_data)> _writerPipeIn;
 	actor_msg_handle<shared_data> _writerPipeOut;
 };
 

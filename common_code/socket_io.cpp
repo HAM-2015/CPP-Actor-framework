@@ -47,23 +47,23 @@ const std::string socket_io::ip()
 	return _ip;
 }
 
-void socket_io::async_connect( const char* ip, size_t port, const boost::function<void (const boost::system::error_code&)>& h )
+void socket_io::async_connect( const char* ip, size_t port, const std::function<void (const boost::system::error_code&)>& h )
 {
 	auto endPoint = boost::asio::ip::tcp::endpoint(boost::asio::ip::address_v4::from_string(ip), (unsigned short)port);
 	_socket.async_connect(endPoint, h);
 }
 
-void socket_io::async_write( const unsigned char* buff, size_t length, const boost::function<void (const boost::system::error_code&, size_t)>& h )
+void socket_io::async_write( const unsigned char* buff, size_t length, const std::function<void (const boost::system::error_code&, size_t)>& h )
 {
 	boost::asio::async_write(_socket, boost::asio::buffer(buff, length), h);
 }
 
-void socket_io::async_read_some( unsigned char* buff, size_t length, const boost::function<void (const boost::system::error_code&, size_t)>& h )
+void socket_io::async_read_some( unsigned char* buff, size_t length, const std::function<void (const boost::system::error_code&, size_t)>& h )
 {
 	_socket.async_read_some(boost::asio::buffer(buff, length), h);
 }
 
-void socket_io::async_read( unsigned char* buff, size_t length, const boost::function<void (const boost::system::error_code&, size_t)>& h )
+void socket_io::async_read( unsigned char* buff, size_t length, const std::function<void (const boost::system::error_code&, size_t)>& h )
 {
 	boost::asio::async_read(_socket, boost::asio::buffer(buff, length), h);
 }

@@ -1,6 +1,6 @@
 #include "actor_stack.h"
 #include "shared_data.h"
-#include "time_info.h"
+#include "scattered.h"
 #include <malloc.h>
 #include <boost/thread/lock_guard.hpp>
 
@@ -22,7 +22,7 @@
 #define CHECK_STACK(__st__)
 #endif
 
-boost::shared_ptr<actor_stack_pool> actor_stack_pool::_actorStackPool;
+std::shared_ptr<actor_stack_pool> actor_stack_pool::_actorStackPool;
 
 actor_stack_pool::actor_stack_pool()
 {
@@ -64,7 +64,7 @@ actor_stack_pool::~actor_stack_pool()
 
 void actor_stack_pool::enable()
 {
-	_actorStackPool = boost::shared_ptr<actor_stack_pool>(new actor_stack_pool());
+	_actorStackPool = std::shared_ptr<actor_stack_pool>(new actor_stack_pool());
 }
 
 bool actor_stack_pool::isEnable()
@@ -103,7 +103,7 @@ stack_pck actor_stack_pool::getStack( size_t size )
 	{
 		return r;
 	}
-	throw boost::shared_ptr<string>(new string("Actor栈内存不足"));
+	throw std::shared_ptr<string>(new string("Actor栈内存不足"));
 }
 
 void actor_stack_pool::recovery( stack_pck& stack )

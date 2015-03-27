@@ -1,4 +1,5 @@
 #include "text_stream_io.h"
+#include "scattered.h"
 
 text_stream_io::text_stream_io()
 {
@@ -10,9 +11,9 @@ text_stream_io::~text_stream_io()
 
 }
 
-boost::shared_ptr<text_stream_io> text_stream_io::create( shared_strand strand, boost::shared_ptr<stream_io_base> ioObj, const boost::function<void (shared_data)>& h )
+std::shared_ptr<text_stream_io> text_stream_io::create( shared_strand strand, std::shared_ptr<stream_io_base> ioObj, const std::function<void (shared_data)>& h )
 {
-	boost::shared_ptr<text_stream_io> res(new text_stream_io);
+	std::shared_ptr<text_stream_io> res(new text_stream_io);
 	res->_ioObj = ioObj;
 	res->_msgNotify = h;
 	auto wc = my_actor::create(strand, [res](my_actor* self){res->writeActor(self); });
@@ -81,7 +82,7 @@ void text_stream_io::readActor( my_actor* self )
 		}
 	}
 	_writerPipeIn(shared_data());
-	_msgNotify.clear();
+	clear_function(_msgNotify);
 }
 
 void text_stream_io::writeActor( my_actor* self )

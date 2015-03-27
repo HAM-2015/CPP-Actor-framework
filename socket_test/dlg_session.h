@@ -33,7 +33,7 @@ private:
 public:
 	shared_strand _strand;
 	socket_handle _socket;
-	boost::function<void ()> _closeCallback;
+	std::function<void ()> _closeCallback;
 	msg_pipe<>::writer_type _closeNtf;
 	msg_pipe<>::regist_reader _lstClose;
 private:

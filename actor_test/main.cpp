@@ -5,7 +5,7 @@
 #include "actor_framework.h"
 #include "msg_pipe.h"
 #include "async_buffer.h"
-#include "time_info.h"
+#include "scattered.h"
 #include <list>
 #include <Windows.h>
 
@@ -161,7 +161,7 @@ void check_two_down(my_actor* self, int dt, int id1, int id2)
 	}
 }
 
-void wait_key(my_actor* self, int id, boost::function<void (int)> cb)
+void wait_key(my_actor* self, int id, std::function<void (int)> cb)
 {
 	check_key_up(self, id);
 	while (true)
@@ -298,7 +298,7 @@ void create_actor_test(my_actor* self)
 	}
 }
 
-void async_buffer_read(my_actor* self, boost::shared_ptr<async_buffer<int> > buffer, msg_pipe<>::regist_reader regWaitFull, int max)
+void async_buffer_read(my_actor* self, std::shared_ptr<async_buffer<int> > buffer, msg_pipe<>::regist_reader regWaitFull, int max)
 {
 	actor_msg_handle<> amh;
 	regWaitFull(self, amh);
@@ -328,7 +328,7 @@ void async_buffer_test(my_actor* self)
 {
 	msg_pipe<>::writer_type fullNotify;
 	msg_pipe<>::regist_reader regWaitFull = msg_pipe<>::make(fullNotify);
-	boost::shared_ptr<async_buffer<int> > buffer = async_buffer<int>::create(10);
+	std::shared_ptr<async_buffer<int> > buffer = async_buffer<int>::create(10);
 	actor_msg_handle<> amh;
 	int testCyc = 30;
 	buffer->setNotify(fullNotify, self->make_msg_notify(amh));

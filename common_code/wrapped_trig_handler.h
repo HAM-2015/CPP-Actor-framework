@@ -143,7 +143,7 @@ public:
 		}
 	}
 
-	boost::shared_ptr<long> pIsTrig;
+	std::shared_ptr<long> pIsTrig;
 	Handler handler_;
 };
 

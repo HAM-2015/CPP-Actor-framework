@@ -6,7 +6,7 @@
 #include <string>
 
 class socket_io;
-typedef boost::shared_ptr<socket_io> socket_handle;
+typedef std::shared_ptr<socket_io> socket_handle;
 
 /*!
 @brief tcp socket¶ÁÐ´
@@ -22,10 +22,10 @@ public:
 	void close();
 	const std::string ip();
 	bool no_delay();
-	void async_connect(const char* ip, size_t port, const boost::function<void (const boost::system::error_code&)>& h);
-	void async_write(const unsigned char* buff, size_t length, const boost::function<void (const boost::system::error_code&, size_t)>& h);
-	void async_read_some(unsigned char* buff, size_t length, const boost::function<void (const boost::system::error_code&, size_t)>& h);
-	void async_read(unsigned char* buff, size_t length, const boost::function<void (const boost::system::error_code&, size_t)>& h);
+	void async_connect(const char* ip, size_t port, const std::function<void (const boost::system::error_code&)>& h);
+	void async_write(const unsigned char* buff, size_t length, const std::function<void (const boost::system::error_code&, size_t)>& h);
+	void async_read_some(unsigned char* buff, size_t length, const std::function<void (const boost::system::error_code&, size_t)>& h);
+	void async_read(unsigned char* buff, size_t length, const std::function<void (const boost::system::error_code&, size_t)>& h);
 	operator boost::asio::ip::tcp::socket& ();
 private:
 	std::string _ip;

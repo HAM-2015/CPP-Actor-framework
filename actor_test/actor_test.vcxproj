@@ -157,7 +157,7 @@
     <ClCompile Include="..\common_code\ios_proxy.cpp" />
     <ClCompile Include="..\common_code\shared_data.cpp" />
     <ClCompile Include="..\common_code\shared_strand.cpp" />
-    <ClCompile Include="..\common_code\time_info.cpp" />
+    <ClCompile Include="..\common_code\scattered.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -171,7 +171,7 @@
     <ClInclude Include="..\common_code\shared_data.h" />
     <ClInclude Include="..\common_code\shared_strand.h" />
     <ClInclude Include="..\common_code\strand_ex.h" />
-    <ClInclude Include="..\common_code\time_info.h" />
+    <ClInclude Include="..\common_code\scattered.h" />
     <ClInclude Include="..\common_code\wrapped_dispatch_handler.h" />
     <ClInclude Include="..\common_code\wrapped_post_handler.h" />
     <ClInclude Include="..\common_code\wrapped_trig_handler.h" />

@@ -2,9 +2,9 @@
 #define __STREAM_IO_BASE_H
 
 #include <boost/enable_shared_from_this.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/function.hpp>
 #include <boost/asio/io_service.hpp>
+#include <functional>
+#include <memory>
 
 /*!
 @brief 流数据接口类
@@ -19,9 +19,9 @@ public:
 	{}
 public:
 	virtual void close() = 0;
-	virtual void async_write(const unsigned char* buff, size_t length, const boost::function<void (const boost::system::error_code&, size_t)>& h) = 0;
-	virtual void async_read_some(unsigned char* buff, size_t length, const boost::function<void (const boost::system::error_code&, size_t)>& h) = 0;
-	virtual void async_read(unsigned char* buff, size_t length, const boost::function<void (const boost::system::error_code&, size_t)>& h) = 0;
+	virtual void async_write(const unsigned char* buff, size_t length, const std::function<void (const boost::system::error_code&, size_t)>& h) = 0;
+	virtual void async_read_some(unsigned char* buff, size_t length, const std::function<void (const boost::system::error_code&, size_t)>& h) = 0;
+	virtual void async_read(unsigned char* buff, size_t length, const std::function<void (const boost::system::error_code&, size_t)>& h) = 0;
 private:
 	boost::asio::io_service& _ios;
 };

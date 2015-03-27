@@ -83,7 +83,7 @@ void dlg_session::sessionActor(my_actor* self)
 	});
 	self->child_actor_run(lstClose);
 	actor_msg_handle<shared_data> amh;
-	boost::shared_ptr<text_stream_io> textio = text_stream_io::create(_strand, _socket, self->make_msg_notify(amh));
+	std::shared_ptr<text_stream_io> textio = text_stream_io::create(_strand, _socket, self->make_msg_notify(amh));
 	child_actor_handle wd = self->create_child_actor([this, &textio](my_actor* self)
 	{
 		actor_msg_handle<shared_data> amh;

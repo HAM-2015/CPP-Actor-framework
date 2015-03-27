@@ -11,18 +11,17 @@
 #ifndef __ACTOR_FRAMEWORK_H
 #define __ACTOR_FRAMEWORK_H
 
-#include <boost/function.hpp>
-#include <boost/bind.hpp>
 #include <boost/circular_buffer.hpp>
 #include <list>
 #include <xutility>
+#include <functional>
 #include "ios_proxy.h"
 #include "shared_strand.h"
 #include "wrapped_trig_handler.h"
 #include "ref_ex.h"
 
 class my_actor;
-typedef boost::shared_ptr<my_actor> actor_handle;//Actor句柄
+typedef std::shared_ptr<my_actor> actor_handle;//Actor句柄
 
 using namespace std;
 
@@ -60,7 +59,7 @@ catch (my_actor::force_quit_exception& e)\
 template <typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
 struct msg_param
 {
-	typedef boost::function<void (T0, T1, T2, T3)> overflow_notify;
+	typedef std::function<void (T0, T1, T2, T3)> overflow_notify;
 	typedef ref_ex<T0, T1, T2, T3> ref_type;
 	typedef const_ref_ex<T0, T1, T2, T3> const_ref_type;
 
@@ -140,7 +139,7 @@ struct msg_param
 template <typename T0, typename T1, typename T2>
 struct msg_param<T0, T1, T2, void>
 {
-	typedef boost::function<void (T0, T1, T2)> overflow_notify;
+	typedef std::function<void (T0, T1, T2)> overflow_notify;
 	typedef ref_ex<T0, T1, T2> ref_type;
 	typedef const_ref_ex<T0, T1, T2> const_ref_type;
 
@@ -214,7 +213,7 @@ struct msg_param<T0, T1, T2, void>
 template <typename T0, typename T1>
 struct msg_param<T0, T1, void, void>
 {
-	typedef boost::function<void (T0, T1)> overflow_notify;
+	typedef std::function<void (T0, T1)> overflow_notify;
 	typedef ref_ex<T0, T1> ref_type;
 	typedef const_ref_ex<T0, T1> const_ref_type;
 
@@ -282,7 +281,7 @@ struct msg_param<T0, T1, void, void>
 template <typename T0>
 struct msg_param<T0, void, void, void>
 {
-	typedef boost::function<void (T0)> overflow_notify;
+	typedef std::function<void (T0)> overflow_notify;
 	typedef ref_ex<T0> ref_type;
 	typedef const_ref_ex<T0> const_ref_type;
 
@@ -357,7 +356,7 @@ protected:
 	virtual void close() = 0;
 	virtual void clear() = 0;
 protected:
-	boost::shared_ptr<bool> _pIsClosed;
+	std::shared_ptr<bool> _pIsClosed;
 	bool _waiting;
 	bool _timeout;
 	bool _hasTm;
@@ -551,11 +550,11 @@ class actor_msg_handle: public param_list_no_bounded<msg_param<T0, T1, T2, T3> >
 {
 	friend my_actor;
 public:
-	typedef boost::shared_ptr<actor_msg_handle<T0, T1, T2, T3> > ptr;
+	typedef std::shared_ptr<actor_msg_handle<T0, T1, T2, T3> > ptr;
 
-	static boost::shared_ptr<actor_msg_handle<T0, T1, T2, T3> > make_ptr()
+	static std::shared_ptr<actor_msg_handle<T0, T1, T2, T3> > make_ptr()
 	{
-		return boost::shared_ptr<actor_msg_handle<T0, T1, T2, T3> >(new actor_msg_handle<T0, T1, T2, T3>);
+		return std::shared_ptr<actor_msg_handle<T0, T1, T2, T3> >(new actor_msg_handle<T0, T1, T2, T3>);
 	}
 };
 
@@ -564,11 +563,11 @@ class actor_msg_handle<T0, T1, T2, void>: public param_list_no_bounded<msg_param
 {
 	friend my_actor;
 public:
-	typedef boost::shared_ptr<actor_msg_handle<T0, T1, T2> > ptr;
+	typedef std::shared_ptr<actor_msg_handle<T0, T1, T2> > ptr;
 
-	static boost::shared_ptr<actor_msg_handle<T0, T1, T2> > make_ptr()
+	static std::shared_ptr<actor_msg_handle<T0, T1, T2> > make_ptr()
 	{
-		return boost::shared_ptr<actor_msg_handle<T0, T1, T2> >(new actor_msg_handle<T0, T1, T2>);
+		return std::shared_ptr<actor_msg_handle<T0, T1, T2> >(new actor_msg_handle<T0, T1, T2>);
 	}
 };
 
@@ -577,11 +576,11 @@ class actor_msg_handle<T0, T1, void, void>: public param_list_no_bounded<msg_par
 {
 	friend my_actor;
 public:
-	typedef boost::shared_ptr<actor_msg_handle<T0, T1> > ptr;
+	typedef std::shared_ptr<actor_msg_handle<T0, T1> > ptr;
 
-	static boost::shared_ptr<actor_msg_handle<T0, T1> > make_ptr()
+	static std::shared_ptr<actor_msg_handle<T0, T1> > make_ptr()
 	{
-		return boost::shared_ptr<actor_msg_handle<T0, T1> >(new actor_msg_handle<T0, T1>);
+		return std::shared_ptr<actor_msg_handle<T0, T1> >(new actor_msg_handle<T0, T1>);
 	}
 };
 
@@ -590,11 +589,11 @@ class actor_msg_handle<T0, void, void, void>: public param_list_no_bounded<msg_p
 {
 	friend my_actor;
 public:
-	typedef boost::shared_ptr<actor_msg_handle<T0> > ptr;
+	typedef std::shared_ptr<actor_msg_handle<T0> > ptr;
 
-	static boost::shared_ptr<actor_msg_handle<T0> > make_ptr()
+	static std::shared_ptr<actor_msg_handle<T0> > make_ptr()
 	{
-		return boost::shared_ptr<actor_msg_handle<T0> >(new actor_msg_handle<T0>);
+		return std::shared_ptr<actor_msg_handle<T0> >(new actor_msg_handle<T0>);
 	}
 };
 
@@ -603,11 +602,11 @@ class actor_msg_handle<void, void, void, void>: public null_param_list
 {
 	friend my_actor;
 public:
-	typedef boost::shared_ptr<actor_msg_handle<> > ptr;
+	typedef std::shared_ptr<actor_msg_handle<> > ptr;
 
-	static boost::shared_ptr<actor_msg_handle<> > make_ptr()
+	static std::shared_ptr<actor_msg_handle<> > make_ptr()
 	{
-		return boost::shared_ptr<actor_msg_handle<> >(new actor_msg_handle<>);
+		return std::shared_ptr<actor_msg_handle<> >(new actor_msg_handle<>);
 	}
 };
 //////////////////////////////////////////////////////////////////////////
@@ -617,7 +616,7 @@ class actor_msg_bounded_handle: public param_list_bounded<msg_param<T0, T1, T2, 
 	friend my_actor;
 public:
 	typedef typename msg_param<T0, T1, T2, T3>::overflow_notify overflow_notify;
-	typedef boost::shared_ptr<actor_msg_bounded_handle<T0, T1, T2, T3> > ptr;
+	typedef std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2, T3> > ptr;
 
 	/*!
 	@param maxBuff 最大缓存个数
@@ -629,9 +628,9 @@ public:
 
 	}
 
-	static boost::shared_ptr<actor_msg_bounded_handle<T0, T1, T2, T3> > make_ptr(int maxBuff,  const overflow_notify& ofh)
+	static std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2, T3> > make_ptr(int maxBuff,  const overflow_notify& ofh)
 	{
-		return boost::shared_ptr<actor_msg_bounded_handle<T0, T1, T2, T3> >(new actor_msg_bounded_handle<T0, T1, T2, T3>(maxBuff, ofh));
+		return std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2, T3> >(new actor_msg_bounded_handle<T0, T1, T2, T3>(maxBuff, ofh));
 	}
 };
 
@@ -641,7 +640,7 @@ class actor_msg_bounded_handle<T0, T1, T2, void>: public param_list_bounded<msg_
 	friend my_actor;
 public:
 	typedef typename msg_param<T0, T1, T2>::overflow_notify overflow_notify;
-	typedef boost::shared_ptr<actor_msg_bounded_handle<T0, T1, T2> > ptr;
+	typedef std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2> > ptr;
 
 	actor_msg_bounded_handle(int maxBuff,  const overflow_notify& ofh)
 		:param_list_bounded<msg_param<T0, T1, T2> >(maxBuff, ofh)
@@ -649,9 +648,9 @@ public:
 
 	}
 
-	static boost::shared_ptr<actor_msg_bounded_handle<T0, T1, T2> > make_ptr(int maxBuff,  const overflow_notify& ofh)
+	static std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2> > make_ptr(int maxBuff,  const overflow_notify& ofh)
 	{
-		return boost::shared_ptr<actor_msg_bounded_handle<T0, T1, T2> >(new actor_msg_bounded_handle<T0, T1, T2>(maxBuff, ofh));
+		return std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2> >(new actor_msg_bounded_handle<T0, T1, T2>(maxBuff, ofh));
 	}
 };
 
@@ -661,7 +660,7 @@ class actor_msg_bounded_handle<T0, T1, void, void>: public param_list_bounded<ms
 	friend my_actor;
 public:
 	typedef typename msg_param<T0, T1>::overflow_notify overflow_notify;
-	typedef boost::shared_ptr<actor_msg_bounded_handle<T0, T1> > ptr;
+	typedef std::shared_ptr<actor_msg_bounded_handle<T0, T1> > ptr;
 
 	actor_msg_bounded_handle(int maxBuff,  const overflow_notify& ofh)
 		:param_list_bounded<msg_param<T0, T1> >(maxBuff, ofh)
@@ -669,9 +668,9 @@ public:
 
 	}
 
-	static boost::shared_ptr<actor_msg_bounded_handle<T0, T1> > make_ptr(int maxBuff,  const overflow_notify& ofh)
+	static std::shared_ptr<actor_msg_bounded_handle<T0, T1> > make_ptr(int maxBuff,  const overflow_notify& ofh)
 	{
-		return boost::shared_ptr<actor_msg_bounded_handle<T0, T1> >(new actor_msg_bounded_handle<T0, T1>(maxBuff, ofh));
+		return std::shared_ptr<actor_msg_bounded_handle<T0, T1> >(new actor_msg_bounded_handle<T0, T1>(maxBuff, ofh));
 	}
 };
 
@@ -681,7 +680,7 @@ class actor_msg_bounded_handle<T0, void, void, void>: public param_list_bounded<
 	friend my_actor;
 public:
 	typedef typename msg_param<T0>::overflow_notify overflow_notify;
-	typedef boost::shared_ptr<actor_msg_bounded_handle<T0> > ptr;
+	typedef std::shared_ptr<actor_msg_bounded_handle<T0> > ptr;
 
 	actor_msg_bounded_handle(int maxBuff,  const overflow_notify& ofh)
 		:param_list_bounded<msg_param<T0> >(maxBuff, ofh)
@@ -689,9 +688,9 @@ public:
 
 	}
 
-	static boost::shared_ptr<actor_msg_bounded_handle<T0> > make_ptr(int maxBuff,  const overflow_notify& ofh)
+	static std::shared_ptr<actor_msg_bounded_handle<T0> > make_ptr(int maxBuff,  const overflow_notify& ofh)
 	{
-		return boost::shared_ptr<actor_msg_bounded_handle<T0> >(new actor_msg_bounded_handle<T0>(maxBuff, ofh));
+		return std::shared_ptr<actor_msg_bounded_handle<T0> >(new actor_msg_bounded_handle<T0>(maxBuff, ofh));
 	}
 };
 
@@ -714,7 +713,7 @@ private:
 	async_trig_base(const async_trig_base&);
 	async_trig_base& operator=(const async_trig_base&);
 protected:
-	boost::shared_ptr<bool> _pIsClosed;
+	std::shared_ptr<bool> _pIsClosed;
 	bool _notify;
 	bool _waiting;
 	bool _timeout;
@@ -731,11 +730,11 @@ class async_trig_handle: public async_trig_base
 	typedef const_ref_ex<T0, T1, T2, T3> const_ref_type;
 	typedef msg_param<T0, T1, T2, T3> msg_type;
 public:
-	typedef boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> > ptr;
+	typedef std::shared_ptr<async_trig_handle<T0, T1, T2, T3> > ptr;
 
-	static boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> > make_ptr()
+	static std::shared_ptr<async_trig_handle<T0, T1, T2, T3> > make_ptr()
 	{
-		return boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> >(new async_trig_handle<T0, T1, T2, T3>);
+		return std::shared_ptr<async_trig_handle<T0, T1, T2, T3> >(new async_trig_handle<T0, T1, T2, T3>);
 	}
 
 	void move_out(void* dst)
@@ -778,11 +777,11 @@ class async_trig_handle<T0, T1, T2, void>: public async_trig_base
 	typedef const_ref_ex<T0, T1, T2> const_ref_type;
 	typedef msg_param<T0, T1, T2> msg_type;
 public:
-	typedef boost::shared_ptr<async_trig_handle<T0, T1, T2> > ptr;
+	typedef std::shared_ptr<async_trig_handle<T0, T1, T2> > ptr;
 
-	static boost::shared_ptr<async_trig_handle<T0, T1, T2> > make_ptr()
+	static std::shared_ptr<async_trig_handle<T0, T1, T2> > make_ptr()
 	{
-		return boost::shared_ptr<async_trig_handle<T0, T1, T2> >(new async_trig_handle<T0, T1, T2>);
+		return std::shared_ptr<async_trig_handle<T0, T1, T2> >(new async_trig_handle<T0, T1, T2>);
 	}
 
 	void move_out(void* dst)
@@ -825,11 +824,11 @@ class async_trig_handle<T0, T1, void, void>: public async_trig_base
 	typedef const_ref_ex<T0, T1> const_ref_type;
 	typedef msg_param<T0, T1> msg_type;
 public:
-	typedef boost::shared_ptr<async_trig_handle<T0, T1> > ptr;
+	typedef std::shared_ptr<async_trig_handle<T0, T1> > ptr;
 
-	static boost::shared_ptr<async_trig_handle<T0, T1> > make_ptr()
+	static std::shared_ptr<async_trig_handle<T0, T1> > make_ptr()
 	{
-		return boost::shared_ptr<async_trig_handle<T0, T1> >(new async_trig_handle<T0, T1>);
+		return std::shared_ptr<async_trig_handle<T0, T1> >(new async_trig_handle<T0, T1>);
 	}
 
 	void move_out(void* dst)
@@ -872,11 +871,11 @@ class async_trig_handle<T0, void, void, void>: public async_trig_base
 	typedef const_ref_ex<T0> const_ref_type;
 	typedef msg_param<T0> msg_type;
 public:
-	typedef boost::shared_ptr<async_trig_handle<T0> > ptr;
+	typedef std::shared_ptr<async_trig_handle<T0> > ptr;
 
-	static boost::shared_ptr<async_trig_handle<T0> > make_ptr()
+	static std::shared_ptr<async_trig_handle<T0> > make_ptr()
 	{
-		return boost::shared_ptr<async_trig_handle<T0> >(new async_trig_handle<T0>);
+		return std::shared_ptr<async_trig_handle<T0> >(new async_trig_handle<T0>);
 	}
 
 	void move_out(void* dst)
@@ -916,11 +915,11 @@ class async_trig_handle<void, void, void, void>: public async_trig_base
 {
 	friend my_actor;
 public:
-	typedef boost::shared_ptr<async_trig_handle<> > ptr;
+	typedef std::shared_ptr<async_trig_handle<> > ptr;
 
-	static boost::shared_ptr<async_trig_handle<> > make_ptr()
+	static std::shared_ptr<async_trig_handle<> > make_ptr()
 	{
-		return boost::shared_ptr<async_trig_handle<> >(new async_trig_handle<>);
+		return std::shared_ptr<async_trig_handle<> >(new async_trig_handle<>);
 	}
 
 	void move_out(void* dst)
@@ -957,7 +956,7 @@ public:
 class child_actor_handle 
 {
 public:
-	typedef boost::shared_ptr<child_actor_handle> ptr;
+	typedef std::shared_ptr<child_actor_handle> ptr;
 private:
 	friend my_actor;
 	/*!
@@ -991,7 +990,7 @@ private:
 public:
 	void operator delete(void* p);
 private:
-	DEBUG_OPERATION(list<boost::function<void ()> >::iterator _qh);
+	DEBUG_OPERATION(list<std::function<void ()> >::iterator _qh);
 	bool _norQuit;///<是否正常退出
 	bool _quited;///<检测是否已经关闭
 	child_actor_param _param;
@@ -1003,7 +1002,7 @@ class my_actor
 	struct suspend_resume_option 
 	{
 		bool _isSuspend;
-		boost::function<void ()> _h;
+		std::function<void ()> _h;
 	};
 
 	struct timer_pck;
@@ -1019,7 +1018,7 @@ public:
 	/*!
 	@brief Actor入口函数体
 	*/
-	typedef boost::function<void (my_actor*)> main_func;
+	typedef std::function<void (my_actor*)> main_func;
 private:
 	my_actor();
 	my_actor(const my_actor&);
@@ -1040,19 +1039,19 @@ public:
 	@param cb Actor完成后的触发函数，false强制结束的，true正常结束
 	*/
 	static actor_handle create(shared_strand actorStrand, const main_func& mainFunc, 
-		const boost::function<void (bool)>& cb, size_t stackSize = DEFAULT_STACKSIZE);
+		const std::function<void (bool)>& cb, size_t stackSize = DEFAULT_STACKSIZE);
 
 	/*!
 	@brief 异步创建一个Actor，创建成功后通过回调函数通知
 	*/
 	static void async_create(shared_strand actorStrand, const main_func& mainFunc, 
-		const boost::function<void (actor_handle)>& ch, size_t stackSize = DEFAULT_STACKSIZE);
+		const std::function<void (actor_handle)>& ch, size_t stackSize = DEFAULT_STACKSIZE);
 
 	/*!
 	@brief 同上，带完成Actor后的回调通知
 	*/
 	static void async_create(shared_strand actorStrand, const main_func& mainFunc, 
-		const boost::function<void (actor_handle)>& ch, const boost::function<void (bool)>& cb, size_t stackSize = DEFAULT_STACKSIZE);
+		const std::function<void (actor_handle)>& ch, const std::function<void (bool)>& cb, size_t stackSize = DEFAULT_STACKSIZE);
 
 	/*!
 	@brief 启用堆栈内存池
@@ -1151,12 +1150,12 @@ public:
 	*/
 	const list<actor_handle>& child_actors();
 public:
-	typedef list<boost::function<void ()> >::iterator quit_iterator;
+	typedef list<std::function<void ()> >::iterator quit_iterator;
 
 	/*!
 	@brief 注册一个资源释放函数，在强制退出Actor时调用
 	*/
-	quit_iterator regist_quit_handler(const boost::function<void ()>& quitHandler);
+	quit_iterator regist_quit_handler(const std::function<void ()>& quitHandler);
 
 	/*!
 	@brief 注销资源释放函数
@@ -1168,11 +1167,11 @@ public:
 	@param th 触发句柄
 	@return 触发函数对象，可以多次调用(线程安全)，但只能timed_wait_trig()到第一次调用的值
 	*/
-	boost::function<void ()> begin_trig(async_trig_handle<>& th);
-	boost::function<void ()> begin_trig(const boost::shared_ptr<async_trig_handle<> >& th);
+	std::function<void ()> begin_trig(async_trig_handle<>& th);
+	std::function<void ()> begin_trig(const std::shared_ptr<async_trig_handle<> >& th);
 
 	template <typename T0>
-	boost::function<void (T0)> begin_trig(async_trig_handle<T0>& th)
+	std::function<void (T0)> begin_trig(async_trig_handle<T0>& th)
 	{
 		th.begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1182,7 +1181,7 @@ public:
 	}
 
 	template <typename T0>
-	boost::function<void (T0)> begin_trig(const boost::shared_ptr<async_trig_handle<T0> >& th)
+	std::function<void (T0)> begin_trig(const std::shared_ptr<async_trig_handle<T0> >& th)
 	{
 		th->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1192,7 +1191,7 @@ public:
 	}
 
 	template <typename T0, typename T1>
-	boost::function<void (T0, T1)> begin_trig(async_trig_handle<T0, T1>& th)
+	std::function<void (T0, T1)> begin_trig(async_trig_handle<T0, T1>& th)
 	{
 		th.begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1202,7 +1201,7 @@ public:
 	}
 
 	template <typename T0, typename T1>
-	boost::function<void (T0, T1)> begin_trig(const boost::shared_ptr<async_trig_handle<T0, T1> >& th)
+	std::function<void (T0, T1)> begin_trig(const std::shared_ptr<async_trig_handle<T0, T1> >& th)
 	{
 		th->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1212,7 +1211,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	boost::function<void (T0, T1, T2)> begin_trig(async_trig_handle<T0, T1, T2>& th)
+	std::function<void (T0, T1, T2)> begin_trig(async_trig_handle<T0, T1, T2>& th)
 	{
 		th.begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1222,7 +1221,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	boost::function<void (T0, T1, T2)> begin_trig(const boost::shared_ptr<async_trig_handle<T0, T1, T2> >& th)
+	std::function<void (T0, T1, T2)> begin_trig(const std::shared_ptr<async_trig_handle<T0, T1, T2> >& th)
 	{
 		th->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1232,7 +1231,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	boost::function<void (T0, T1, T2, T3)> begin_trig(async_trig_handle<T0, T1, T2, T3>& th)
+	std::function<void (T0, T1, T2, T3)> begin_trig(async_trig_handle<T0, T1, T2, T3>& th)
 	{
 		th.begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1242,7 +1241,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	boost::function<void (T0, T1, T2, T3)> begin_trig(const boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> >& th)
+	std::function<void (T0, T1, T2, T3)> begin_trig(const std::shared_ptr<async_trig_handle<T0, T1, T2, T3> >& th)
 	{
 		th->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1259,8 +1258,8 @@ public:
 	*/
 	__yield_interrupt bool timed_wait_trig(async_trig_handle<>& th, int tm);
 	__yield_interrupt void wait_trig(async_trig_handle<>& th);
-	__yield_interrupt bool timed_wait_trig(const boost::shared_ptr<async_trig_handle<> >& th, int tm);
-	__yield_interrupt void wait_trig(const boost::shared_ptr<async_trig_handle<> >& th);
+	__yield_interrupt bool timed_wait_trig(const std::shared_ptr<async_trig_handle<> >& th, int tm);
+	__yield_interrupt void wait_trig(const std::shared_ptr<async_trig_handle<> >& th);
 	//////////////////////////////////////////////////////////////////////////
 
 	template <typename T0>
@@ -1292,7 +1291,7 @@ public:
 	}
 
 	template <typename T0>
-	__yield_interrupt bool timed_wait_trig(const boost::shared_ptr<async_trig_handle<T0> >& th, T0& r0, int tm)
+	__yield_interrupt bool timed_wait_trig(const std::shared_ptr<async_trig_handle<T0> >& th, T0& r0, int tm)
 	{
 		assert(th);
 		auto lockTh = th;
@@ -1300,7 +1299,7 @@ public:
 	}
 
 	template <typename T0>
-	__yield_interrupt void wait_trig(const boost::shared_ptr<async_trig_handle<T0> >& th, T0& r0)
+	__yield_interrupt void wait_trig(const std::shared_ptr<async_trig_handle<T0> >& th, T0& r0)
 	{
 		assert(th);
 		auto lockTh = th;
@@ -1308,7 +1307,7 @@ public:
 	}
 
 	template <typename T0>
-	__yield_interrupt T0 wait_trig(const boost::shared_ptr<async_trig_handle<T0> >& th)
+	__yield_interrupt T0 wait_trig(const std::shared_ptr<async_trig_handle<T0> >& th)
 	{
 		assert(th);
 		auto lockTh = th;
@@ -1336,7 +1335,7 @@ public:
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt bool timed_wait_trig(const boost::shared_ptr<async_trig_handle<T0, T1> >& th, T0& r0, T1& r1, int tm)
+	__yield_interrupt bool timed_wait_trig(const std::shared_ptr<async_trig_handle<T0, T1> >& th, T0& r0, T1& r1, int tm)
 	{
 		assert(th);
 		auto lockTh = th;
@@ -1344,7 +1343,7 @@ public:
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt void wait_trig(const boost::shared_ptr<async_trig_handle<T0, T1> >& th, T0& r0, T1& r1)
+	__yield_interrupt void wait_trig(const std::shared_ptr<async_trig_handle<T0, T1> >& th, T0& r0, T1& r1)
 	{
 		assert(th);
 		auto lockTh = th;
@@ -1372,7 +1371,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt bool timed_wait_trig(const boost::shared_ptr<async_trig_handle<T0, T1, T2> >& th, T0& r0, T1& r1, T2& r2, int tm)
+	__yield_interrupt bool timed_wait_trig(const std::shared_ptr<async_trig_handle<T0, T1, T2> >& th, T0& r0, T1& r1, T2& r2, int tm)
 	{
 		assert(th);
 		auto lockTh = th;
@@ -1380,7 +1379,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt void wait_trig(const boost::shared_ptr<async_trig_handle<T0, T1, T2> >& th, T0& r0, T1& r1, T2& r2)
+	__yield_interrupt void wait_trig(const std::shared_ptr<async_trig_handle<T0, T1, T2> >& th, T0& r0, T1& r1, T2& r2)
 	{
 		assert(th);
 		auto lockTh = th;
@@ -1408,7 +1407,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt bool timed_wait_trig(const boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> >& th, T0& r0, T1& r1, T2& r2, T3& r3, int tm)
+	__yield_interrupt bool timed_wait_trig(const std::shared_ptr<async_trig_handle<T0, T1, T2, T3> >& th, T0& r0, T1& r1, T2& r2, T3& r3, int tm)
 	{
 		assert(th);
 		auto lockTh = th;
@@ -1416,7 +1415,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt void wait_trig(const boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> >& th, T0& r0, T1& r1, T2& r2, T3& r3)
+	__yield_interrupt void wait_trig(const std::shared_ptr<async_trig_handle<T0, T1, T2, T3> >& th, T0& r0, T1& r1, T2& r2, T3& r3)
 	{
 		assert(th);
 		auto lockTh = th;
@@ -1433,7 +1432,7 @@ public:
 	@param ms 触发延时(毫秒)
 	@param h 触发函数
 	*/
-	void delay_trig(int ms, const boost::function<void ()>& h);
+	void delay_trig(int ms, const std::function<void ()>& h);
 	
 	/*!
 	@brief 使用内部定时器延时触发异步句柄，使用之前必须已经调用了begin_trig(async_trig_handle)，在触发完成之前不能多次调用
@@ -1441,7 +1440,7 @@ public:
 	@param th 异步触发句柄
 	*/
 	void delay_trig(int ms, async_trig_handle<>& th);
-	void delay_trig(int ms, boost::shared_ptr<async_trig_handle<> >& th);
+	void delay_trig(int ms, std::shared_ptr<async_trig_handle<> >& th);
 
 	template <typename T0>
 	void delay_trig(int ms, async_trig_handle<T0>& th, const T0& p0)
@@ -1449,6 +1448,7 @@ public:
 		assert_enter();
 		assert(th._pIsClosed);
 		assert(_timerSleep);
+		assert(th._actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th._pIsClosed;
 		time_out(ms, [=, &th]()
@@ -1456,11 +1456,12 @@ public:
 	}
 
 	template <typename T0>
-	void delay_trig(int ms, const boost::shared_ptr<async_trig_handle<T0> >& th, const T0& p0)
+	void delay_trig(int ms, const std::shared_ptr<async_trig_handle<T0> >& th, const T0& p0)
 	{
 		assert_enter();
 		assert(th->_pIsClosed);
 		assert(_timerSleep);
+		assert(th->_actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th->_pIsClosed;
 		time_out(ms, [=]()
@@ -1473,6 +1474,7 @@ public:
 		assert_enter();
 		assert(th._pIsClosed);
 		assert(_timerSleep);
+		assert(th._actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th._pIsClosed;
 		time_out(ms, [=, &th]()
@@ -1480,11 +1482,12 @@ public:
 	}
 
 	template <typename T0, typename T1>
-	void delay_trig(int ms, const boost::shared_ptr<async_trig_handle<T0, T1> >& th, const T0& p0, const T1& p1)
+	void delay_trig(int ms, const std::shared_ptr<async_trig_handle<T0, T1> >& th, const T0& p0, const T1& p1)
 	{
 		assert_enter();
 		assert(th->_pIsClosed);
 		assert(_timerSleep);
+		assert(th->_actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th->_pIsClosed;
 		time_out(ms, [=]()
@@ -1497,6 +1500,7 @@ public:
 		assert_enter();
 		assert(th._pIsClosed);
 		assert(_timerSleep);
+		assert(th._actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th._pIsClosed;
 		time_out(ms, [=, &th]()
@@ -1504,11 +1508,12 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	void delay_trig(int ms, const boost::shared_ptr<async_trig_handle<T0, T1, T2> >& th, const T0& p0, const T1& p1, const T2& p2)
+	void delay_trig(int ms, const std::shared_ptr<async_trig_handle<T0, T1, T2> >& th, const T0& p0, const T1& p1, const T2& p2)
 	{
 		assert_enter();
 		assert(th->_pIsClosed);
 		assert(_timerSleep);
+		assert(th->_actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th->_pIsClosed;
 		time_out(ms, [=]()
@@ -1521,6 +1526,7 @@ public:
 		assert_enter();
 		assert(th._pIsClosed);
 		assert(_timerSleep);
+		assert(th._actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th._pIsClosed;
 		time_out(ms, [=, &th]()
@@ -1528,11 +1534,12 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	void delay_trig(int ms, const boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> >& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+	void delay_trig(int ms, const std::shared_ptr<async_trig_handle<T0, T1, T2, T3> >& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
 		assert_enter();
 		assert(th->_pIsClosed);
 		assert(_timerSleep);
+		assert(th->_actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th->_pIsClosed;
 		time_out(ms, [=]()
@@ -1553,7 +1560,7 @@ public:
 		assert_enter();
 		if (exeStrand != _strand)
 		{
-			trig([=](const boost::function<void()>& cb){boost_strand::asyncInvokeVoid(exeStrand, h, cb); });
+			trig([=](const std::function<void()>& cb){boost_strand::asyncInvokeVoid(exeStrand, h, cb); });
 		}
 		else
 		{
@@ -1567,7 +1574,7 @@ public:
 		assert_enter();
 		if (exeStrand != _strand)
 		{
-			return trig<T0>([=](const boost::function<void(T0)>& cb){boost_strand::asyncInvoke(exeStrand, h, cb); });
+			return trig<T0>([=](const std::function<void(T0)>& cb){boost_strand::asyncInvoke(exeStrand, h, cb); });
 		} 
 		return h();
 	}
@@ -1589,7 +1596,7 @@ public:
 	}
 
 	template <typename T0, typename H>
-	__yield_interrupt void trig(const H& h, __out T0& r0)
+	__yield_interrupt void trig(__out T0& r0, const H& h)
 	{
 		assert_enter();
 		ref_ex<T0> mulRef(r0);
@@ -1606,12 +1613,12 @@ public:
 	__yield_interrupt T0 trig(const H& h)
 	{
 		T0 r0;
-		trig(h, r0);
+		trig(r0, h);
 		return r0;
 	}
 
 	template <typename T0, typename T1, typename H>
-	__yield_interrupt void trig(const H& h, __out T0& r0, __out T1& r1)
+	__yield_interrupt void trig(__out T0& r0, __out T1& r1, const H& h)
 	{
 		assert_enter();
 		ref_ex<T0, T1> mulRef(r0, r1);
@@ -1625,7 +1632,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename H>
-	__yield_interrupt void trig(const H& h, __out T0& r0, __out T1& r1, __out T2& r2)
+	__yield_interrupt void trig(__out T0& r0, __out T1& r1, __out T2& r2, const H& h)
 	{
 		assert_enter();
 		ref_ex<T0, T1, T2> mulRef(r0, r1, r2);
@@ -1640,7 +1647,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3, typename H>
-	__yield_interrupt void trig(const H& h, __out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3)
+	__yield_interrupt void trig(__out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3, const H& h)
 	{
 		assert_enter();
 		ref_ex<T0, T1, T2, T3> mulRef(r0, r1, r2, r3);
@@ -1659,11 +1666,11 @@ public:
 	@param amh 异步通知对象
 	@return 异步触发函数
 	*/
-	boost::function<void()> make_msg_notify(actor_msg_handle<>& amh);
-	boost::function<void()> make_msg_notify(const boost::shared_ptr<actor_msg_handle<> >& amh);
+	std::function<void()> make_msg_notify(actor_msg_handle<>& amh);
+	std::function<void()> make_msg_notify(const std::shared_ptr<actor_msg_handle<> >& amh);
 
 	template <typename T0>
-	boost::function<void(T0)> make_msg_notify(param_list<msg_param<T0> >& amh)
+	std::function<void(T0)> make_msg_notify(param_list<msg_param<T0> >& amh)
 	{
 		amh.begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1673,27 +1680,27 @@ public:
 	}
 
 	template <typename T0>
-	boost::function<void(T0)> make_msg_notify(const boost::shared_ptr<actor_msg_handle<T0> >& amh)
+	std::function<void(T0)> make_msg_notify(const std::shared_ptr<actor_msg_handle<T0> >& amh)
 	{
 		amh->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = amh->_pIsClosed;
 		return [=](const T0& p0)
-		{shared_this->notify_handler_ptr(pIsClosed_, boost::static_pointer_cast<param_list<msg_param<T0> >>(amh), p0); };
+		{shared_this->notify_handler_ptr(pIsClosed_, std::static_pointer_cast<param_list<msg_param<T0> >>(amh), p0); };
 	}
 
 	template <typename T0>
-	boost::function<void(T0)> make_msg_notify(const boost::shared_ptr<actor_msg_bounded_handle<T0> >& amh)
+	std::function<void(T0)> make_msg_notify(const std::shared_ptr<actor_msg_bounded_handle<T0> >& amh)
 	{
 		amh->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = amh->_pIsClosed;
 		return [=](const T0& p0)
-		{shared_this->notify_handler_ptr(pIsClosed_, boost::static_pointer_cast<param_list<msg_param<T0> >>(amh), p0); };
+		{shared_this->notify_handler_ptr(pIsClosed_, std::static_pointer_cast<param_list<msg_param<T0> >>(amh), p0); };
 	}
 
 	template <typename T0, typename T1>
-	boost::function<void(T0, T1)> make_msg_notify(param_list<msg_param<T0, T1> >& amh)
+	std::function<void(T0, T1)> make_msg_notify(param_list<msg_param<T0, T1> >& amh)
 	{
 		amh.begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1703,27 +1710,27 @@ public:
 	}
 
 	template <typename T0, typename T1>
-	boost::function<void(T0, T1)> make_msg_notify(const boost::shared_ptr<actor_msg_handle<T0, T1> >& amh)
+	std::function<void(T0, T1)> make_msg_notify(const std::shared_ptr<actor_msg_handle<T0, T1> >& amh)
 	{
 		amh->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = amh->_pIsClosed;
 		return [=](const T0& p0, const T1& p1)
-		{shared_this->notify_handler_ptr(pIsClosed_, boost::static_pointer_cast<param_list<msg_param<T0, T1> >>(amh), p0, p1); };
+		{shared_this->notify_handler_ptr(pIsClosed_, std::static_pointer_cast<param_list<msg_param<T0, T1> >>(amh), p0, p1); };
 	}
 
 	template <typename T0, typename T1>
-	boost::function<void(T0, T1)> make_msg_notify(const boost::shared_ptr<actor_msg_bounded_handle<T0, T1> >& amh)
+	std::function<void(T0, T1)> make_msg_notify(const std::shared_ptr<actor_msg_bounded_handle<T0, T1> >& amh)
 	{
 		amh->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = amh->_pIsClosed;
 		return [=](const T0& p0, const T1& p1)
-		{shared_this->notify_handler_ptr(pIsClosed_, boost::static_pointer_cast<param_list<msg_param<T0, T1> >>(amh), p0, p1); };
+		{shared_this->notify_handler_ptr(pIsClosed_, std::static_pointer_cast<param_list<msg_param<T0, T1> >>(amh), p0, p1); };
 	}
 
 	template <typename T0, typename T1, typename T2>
-	boost::function<void(T0, T1, T2)> make_msg_notify(param_list<msg_param<T0, T1, T2> >& amh)
+	std::function<void(T0, T1, T2)> make_msg_notify(param_list<msg_param<T0, T1, T2> >& amh)
 	{
 		amh.begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1733,27 +1740,27 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	boost::function<void(T0, T1, T2)> make_msg_notify(const boost::shared_ptr<actor_msg_handle<T0, T1, T2> >& amh)
+	std::function<void(T0, T1, T2)> make_msg_notify(const std::shared_ptr<actor_msg_handle<T0, T1, T2> >& amh)
 	{
 		amh->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = amh->_pIsClosed;
 		return [=](const T0& p0, const T1& p1, const T2& p2)
-		{shared_this->notify_handler_ptr(pIsClosed_, boost::static_pointer_cast<param_list<msg_param<T0, T1, T2> >>(amh), p0, p1, p2); };
+		{shared_this->notify_handler_ptr(pIsClosed_, std::static_pointer_cast<param_list<msg_param<T0, T1, T2> >>(amh), p0, p1, p2); };
 	}
 
 	template <typename T0, typename T1, typename T2>
-	boost::function<void(T0, T1, T2)> make_msg_notify(const boost::shared_ptr<actor_msg_bounded_handle<T0, T1, T2> >& amh)
+	std::function<void(T0, T1, T2)> make_msg_notify(const std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2> >& amh)
 	{
 		amh->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = amh->_pIsClosed;
 		return [=](const T0& p0, const T1& p1, const T2& p2)
-		{shared_this->notify_handler_ptr(pIsClosed_, boost::static_pointer_cast<param_list<msg_param<T0, T1, T2> >>(amh), p0, p1, p2); };
+		{shared_this->notify_handler_ptr(pIsClosed_, std::static_pointer_cast<param_list<msg_param<T0, T1, T2> >>(amh), p0, p1, p2); };
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	boost::function<void(T0, T1, T2, T3)> make_msg_notify(param_list<msg_param<T0, T1, T2, T3> >& amh)
+	std::function<void(T0, T1, T2, T3)> make_msg_notify(param_list<msg_param<T0, T1, T2, T3> >& amh)
 	{
 		amh.begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1763,23 +1770,23 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	boost::function<void(T0, T1, T2, T3)> make_msg_notify(const boost::shared_ptr<actor_msg_handle<T0, T1, T2, T3> >& amh)
+	std::function<void(T0, T1, T2, T3)> make_msg_notify(const std::shared_ptr<actor_msg_handle<T0, T1, T2, T3> >& amh)
 	{
 		amh->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = amh->_pIsClosed;
 		return [=](const T0& p0, const T1& p1, const T2& p2, const T3& p3)
-		{shared_this->notify_handler_ptr(pIsClosed_, boost::static_pointer_cast<param_list<msg_param<T0, T1, T2, T3> >>(amh), p0, p1, p2, p3); };
+		{shared_this->notify_handler_ptr(pIsClosed_, std::static_pointer_cast<param_list<msg_param<T0, T1, T2, T3> >>(amh), p0, p1, p2, p3); };
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	boost::function<void(T0, T1, T2, T3)> make_msg_notify(const boost::shared_ptr<actor_msg_bounded_handle<T0, T1, T2, T3> >& amh)
+	std::function<void(T0, T1, T2, T3)> make_msg_notify(const std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2, T3> >& amh)
 	{
 		amh->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = amh->_pIsClosed;
 		return [=](const T0& p0, const T1& p1, const T2& p2, const T3& p3)
-		{shared_this->notify_handler_ptr(pIsClosed_, boost::static_pointer_cast<param_list<msg_param<T0, T1, T2, T3> >>(amh), p0, p1, p2, p3); };
+		{shared_this->notify_handler_ptr(pIsClosed_, std::static_pointer_cast<param_list<msg_param<T0, T1, T2, T3> >>(amh), p0, p1, p2, p3); };
 	}
 
 	/*!
@@ -1795,8 +1802,8 @@ public:
 	*/
 	__yield_interrupt bool timed_pump_msg(actor_msg_handle<>& amh, int tm);
 	__yield_interrupt void pump_msg(actor_msg_handle<>& amh);
-	__yield_interrupt bool timed_pump_msg(const boost::shared_ptr<actor_msg_handle<> >& amh, int tm);
-	__yield_interrupt void pump_msg(const boost::shared_ptr<actor_msg_handle<> >& amh);
+	__yield_interrupt bool timed_pump_msg(const std::shared_ptr<actor_msg_handle<> >& amh, int tm);
+	__yield_interrupt void pump_msg(const std::shared_ptr<actor_msg_handle<> >& amh);
 	//////////////////////////////////////////////////////////////////////////
 	template <typename T0>
 	__yield_interrupt bool timed_pump_msg(param_list<msg_param<T0> >& amh, __out T0& r0, int tm)
@@ -1832,7 +1839,7 @@ public:
 	}
 
 	template <typename T0>
-	__yield_interrupt bool timed_pump_msg(const boost::shared_ptr<actor_msg_handle<T0> >& amh, __out T0& r0, int tm)
+	__yield_interrupt bool timed_pump_msg(const std::shared_ptr<actor_msg_handle<T0> >& amh, __out T0& r0, int tm)
 	{
 		assert(amh);
 		auto lockAmh = amh;
@@ -1840,7 +1847,7 @@ public:
 	}
 
 	template <typename T0>
-	__yield_interrupt void pump_msg(const boost::shared_ptr<actor_msg_handle<T0> >& amh, __out T0& r0)
+	__yield_interrupt void pump_msg(const std::shared_ptr<actor_msg_handle<T0> >& amh, __out T0& r0)
 	{
 		assert(amh);
 		auto lockAmh = amh;
@@ -1848,7 +1855,7 @@ public:
 	}
 
 	template <typename T0>
-	__yield_interrupt T0 pump_msg(const boost::shared_ptr<actor_msg_handle<T0> >& amh)
+	__yield_interrupt T0 pump_msg(const std::shared_ptr<actor_msg_handle<T0> >& amh)
 	{
 		T0 r0;
 		timed_pump_msg(*amh, r0, -1);
@@ -1856,7 +1863,7 @@ public:
 	}
 
 	template <typename T0>
-	__yield_interrupt bool timed_pump_msg(const boost::shared_ptr<actor_msg_bounded_handle<T0> >& amh, __out T0& r0, int tm)
+	__yield_interrupt bool timed_pump_msg(const std::shared_ptr<actor_msg_bounded_handle<T0> >& amh, __out T0& r0, int tm)
 	{
 		assert(amh);
 		auto lockAmh = amh;
@@ -1864,7 +1871,7 @@ public:
 	}
 
 	template <typename T0>
-	__yield_interrupt void pump_msg(const boost::shared_ptr<actor_msg_bounded_handle<T0> >& amh, __out T0& r0)
+	__yield_interrupt void pump_msg(const std::shared_ptr<actor_msg_bounded_handle<T0> >& amh, __out T0& r0)
 	{
 		assert(amh);
 		auto lockAmh = amh;
@@ -1872,7 +1879,7 @@ public:
 	}
 
 	template <typename T0>
-	__yield_interrupt T0 pump_msg(const boost::shared_ptr<actor_msg_bounded_handle<T0> >& amh)
+	__yield_interrupt T0 pump_msg(const std::shared_ptr<actor_msg_bounded_handle<T0> >& amh)
 	{
 		T0 r0;
 		timed_pump_msg(*amh, r0, -1);
@@ -1905,7 +1912,7 @@ public:
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt bool timed_pump_msg(const boost::shared_ptr<actor_msg_handle<T0, T1> >& amh, __out T0& r0, __out T1& r1, int tm)
+	__yield_interrupt bool timed_pump_msg(const std::shared_ptr<actor_msg_handle<T0, T1> >& amh, __out T0& r0, __out T1& r1, int tm)
 	{
 		assert(amh);
 		auto lockAmh = amh;
@@ -1913,7 +1920,7 @@ public:
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt void pump_msg(const boost::shared_ptr<actor_msg_handle<T0, T1> >& amh, __out T0& r0, __out T1& r1)
+	__yield_interrupt void pump_msg(const std::shared_ptr<actor_msg_handle<T0, T1> >& amh, __out T0& r0, __out T1& r1)
 	{
 		assert(amh);
 		auto lockAmh = amh;
@@ -1921,7 +1928,7 @@ public:
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt bool timed_pump_msg(const boost::shared_ptr<actor_msg_bounded_handle<T0, T1> >& amh, __out T0& r0, __out T1& r1, int tm)
+	__yield_interrupt bool timed_pump_msg(const std::shared_ptr<actor_msg_bounded_handle<T0, T1> >& amh, __out T0& r0, __out T1& r1, int tm)
 	{
 		assert(amh);
 		auto lockAmh = amh;
@@ -1929,7 +1936,7 @@ public:
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt void pump_msg(const boost::shared_ptr<actor_msg_bounded_handle<T0, T1> >& amh, __out T0& r0, __out T1& r1)
+	__yield_interrupt void pump_msg(const std::shared_ptr<actor_msg_bounded_handle<T0, T1> >& amh, __out T0& r0, __out T1& r1)
 	{
 		assert(amh);
 		auto lockAmh = amh;
@@ -1962,7 +1969,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt bool timed_pump_msg(const boost::shared_ptr<actor_msg_handle<T0, T1, T2> >& amh, __out T0& r0, __out T1& r1, __out T2& r2, int tm)
+	__yield_interrupt bool timed_pump_msg(const std::shared_ptr<actor_msg_handle<T0, T1, T2> >& amh, __out T0& r0, __out T1& r1, __out T2& r2, int tm)
 	{
 		assert(amh);
 		auto lockAmh = amh;
@@ -1970,7 +1977,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt void pump_msg(const boost::shared_ptr<actor_msg_handle<T0, T1, T2> >& amh, __out T0& r0, __out T1& r1, __out T2& r2)
+	__yield_interrupt void pump_msg(const std::shared_ptr<actor_msg_handle<T0, T1, T2> >& amh, __out T0& r0, __out T1& r1, __out T2& r2)
 	{
 		assert(amh);
 		auto lockAmh = amh;
@@ -1978,7 +1985,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt bool timed_pump_msg(const boost::shared_ptr<actor_msg_bounded_handle<T0, T1, T2> >& amh, __out T0& r0, __out T1& r1, __out T2& r2, int tm)
+	__yield_interrupt bool timed_pump_msg(const std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2> >& amh, __out T0& r0, __out T1& r1, __out T2& r2, int tm)
 	{
 		assert(amh);
 		auto lockAmh = amh;
@@ -1986,7 +1993,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt void pump_msg(const boost::shared_ptr<actor_msg_bounded_handle<T0, T1, T2> >& amh, __out T0& r0, __out T1& r1, __out T2& r2)
+	__yield_interrupt void pump_msg(const std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2> >& amh, __out T0& r0, __out T1& r1, __out T2& r2)
 	{
 		assert(amh);
 		auto lockAmh = amh;
@@ -2019,7 +2026,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt bool timed_pump_msg(const boost::shared_ptr<actor_msg_handle<T0, T1, T2, T3> >& amh, __out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3, int tm)
+	__yield_interrupt bool timed_pump_msg(const std::shared_ptr<actor_msg_handle<T0, T1, T2, T3> >& amh, __out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3, int tm)
 	{
 		assert(amh);
 		auto lockAmh = amh;
@@ -2027,7 +2034,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt void pump_msg(const boost::shared_ptr<actor_msg_handle<T0, T1, T2, T3> >& amh, __out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3)
+	__yield_interrupt void pump_msg(const std::shared_ptr<actor_msg_handle<T0, T1, T2, T3> >& amh, __out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3)
 	{
 		assert(amh);
 		auto lockAmh = amh;
@@ -2035,7 +2042,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt bool timed_pump_msg(const boost::shared_ptr<actor_msg_bounded_handle<T0, T1, T2, T3> >& amh, __out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3, int tm)
+	__yield_interrupt bool timed_pump_msg(const std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2, T3> >& amh, __out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3, int tm)
 	{
 		assert(amh);
 		auto lockAmh = amh;
@@ -2043,7 +2050,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt void pump_msg(const boost::shared_ptr<actor_msg_bounded_handle<T0, T1, T2, T3> >& amh, __out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3)
+	__yield_interrupt void pump_msg(const std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2, T3> >& amh, __out T0& r0, __out T1& r1, __out T2& r2, __out T3& r3)
 	{
 		assert(amh);
 		auto lockAmh = amh;
@@ -2142,10 +2149,10 @@ private:
 
 	void async_trig_pull_yield(async_trig_base& th, void* src/*ref_ex*/);
 
-	void _async_trig_handler(const boost::shared_ptr<bool>& pIsClosed, async_trig_handle<>& th);
+	void _async_trig_handler(const std::shared_ptr<bool>& pIsClosed, async_trig_handle<>& th);
 
 	template <typename TH /*async_trig_handle*/, typename REF /*ref_ex*/>
-	void _async_trig_handler(const boost::shared_ptr<bool>& pIsClosed, TH& th, REF& src)
+	void _async_trig_handler(const std::shared_ptr<bool>& pIsClosed, TH& th, REF& src)
 	{
 		assert(_strand->running_in_this_thread());
 		if (!_quited && !(*pIsClosed) && !th._notify)
@@ -2155,7 +2162,7 @@ private:
 	}
 
 	template <typename T0>
-	void async_trig_handler(const boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0>& th, const T0& p0)
+	void async_trig_handler(const std::shared_ptr<bool>& pIsClosed, async_trig_handle<T0>& th, const T0& p0)
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -2173,7 +2180,7 @@ private:
 	}
 
 	template <typename T0>
-	void async_trig_handler_ptr(const boost::shared_ptr<bool>& pIsClosed, const boost::shared_ptr<async_trig_handle<T0> >& th, const T0& p0)
+	void async_trig_handler_ptr(const std::shared_ptr<bool>& pIsClosed, const std::shared_ptr<async_trig_handle<T0> >& th, const T0& p0)
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -2191,7 +2198,7 @@ private:
 	}
 
 	template <typename T0, typename T1>
-	void async_trig_handler(const boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1>& th, const T0& p0, const T1& p1)
+	void async_trig_handler(const std::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1>& th, const T0& p0, const T1& p1)
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -2209,7 +2216,7 @@ private:
 	}
 
 	template <typename T0, typename T1>
-	void async_trig_handler_ptr(const boost::shared_ptr<bool>& pIsClosed, const boost::shared_ptr<async_trig_handle<T0, T1> >& th, const T0& p0, const T1& p1)
+	void async_trig_handler_ptr(const std::shared_ptr<bool>& pIsClosed, const std::shared_ptr<async_trig_handle<T0, T1> >& th, const T0& p0, const T1& p1)
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -2227,7 +2234,7 @@ private:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	void async_trig_handler(const boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1, T2>& th, const T0& p0, const T1& p1, const T2& p2)
+	void async_trig_handler(const std::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1, T2>& th, const T0& p0, const T1& p1, const T2& p2)
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -2245,7 +2252,7 @@ private:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	void async_trig_handler_ptr(const boost::shared_ptr<bool>& pIsClosed, const boost::shared_ptr<async_trig_handle<T0, T1, T2> >& th, const T0& p0, const T1& p1, const T2& p2)
+	void async_trig_handler_ptr(const std::shared_ptr<bool>& pIsClosed, const std::shared_ptr<async_trig_handle<T0, T1, T2> >& th, const T0& p0, const T1& p1, const T2& p2)
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -2263,7 +2270,7 @@ private:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	void async_trig_handler(const boost::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1, T2, T3>& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+	void async_trig_handler(const std::shared_ptr<bool>& pIsClosed, async_trig_handle<T0, T1, T2, T3>& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -2281,7 +2288,7 @@ private:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	void async_trig_handler_ptr(const boost::shared_ptr<bool>& pIsClosed, const boost::shared_ptr<async_trig_handle<T0, T1, T2, T3> >& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+	void async_trig_handler_ptr(const std::shared_ptr<bool>& pIsClosed, const std::shared_ptr<async_trig_handle<T0, T1, T2, T3> >& th, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -2299,7 +2306,7 @@ private:
 	}
 private:
 	template <typename T0>
-	void notify_handler(const boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0> >& amh, const T0& p0)
+	void notify_handler(const std::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0> >& amh, const T0& p0)
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -2316,7 +2323,7 @@ private:
 	}
 
 	template <typename T0>
-	void notify_handler_ptr(const boost::shared_ptr<bool>& pIsClosed, const boost::shared_ptr<param_list<msg_param<T0> > >& amh, const T0& p0)
+	void notify_handler_ptr(const std::shared_ptr<bool>& pIsClosed, const std::shared_ptr<param_list<msg_param<T0> > >& amh, const T0& p0)
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -2333,7 +2340,7 @@ private:
 	}
 
 	template <typename T0, typename T1>
-	void notify_handler(const boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0, T1> >& amh, const T0& p0, const T1& p1)
+	void notify_handler(const std::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0, T1> >& amh, const T0& p0, const T1& p1)
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -2350,7 +2357,7 @@ private:
 	}
 
 	template <typename T0, typename T1>
-	void notify_handler_ptr(const boost::shared_ptr<bool>& pIsClosed, const boost::shared_ptr<param_list<msg_param<T0, T1> > >& amh, const T0& p0, const T1& p1)
+	void notify_handler_ptr(const std::shared_ptr<bool>& pIsClosed, const std::shared_ptr<param_list<msg_param<T0, T1> > >& amh, const T0& p0, const T1& p1)
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -2367,7 +2374,7 @@ private:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	void notify_handler(const boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0, T1, T2> >& amh, const T0& p0, const T1& p1, const T2& p2)
+	void notify_handler(const std::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0, T1, T2> >& amh, const T0& p0, const T1& p1, const T2& p2)
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -2384,7 +2391,7 @@ private:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	void notify_handler_ptr(const boost::shared_ptr<bool>& pIsClosed, const boost::shared_ptr<param_list<msg_param<T0, T1, T2> > >& amh, const T0& p0, const T1& p1, const T2& p2)
+	void notify_handler_ptr(const std::shared_ptr<bool>& pIsClosed, const std::shared_ptr<param_list<msg_param<T0, T1, T2> > >& amh, const T0& p0, const T1& p1, const T2& p2)
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -2401,7 +2408,7 @@ private:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	void notify_handler(const boost::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0, T1, T2, T3> >& amh, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+	void notify_handler(const std::shared_ptr<bool>& pIsClosed, param_list<msg_param<T0, T1, T2, T3> >& amh, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -2418,7 +2425,7 @@ private:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	void notify_handler_ptr(const boost::shared_ptr<bool>& pIsClosed, const boost::shared_ptr<param_list<msg_param<T0, T1, T2, T3> > >& amh, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+	void notify_handler_ptr(const std::shared_ptr<bool>& pIsClosed, const std::shared_ptr<param_list<msg_param<T0, T1, T2, T3> > >& amh, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -2435,10 +2442,10 @@ private:
 	}
 	//////////////////////////////////////////////////////////////////////////
 
-	void check_run1(boost::shared_ptr<bool>& pIsClosed, actor_msg_handle<>& amh);
+	void check_run1(std::shared_ptr<bool>& pIsClosed, actor_msg_handle<>& amh);
 
 	template <typename MT /*msg_param*/, typename REF /*ref_ex*/>
-	void check_run2(const boost::shared_ptr<bool>& pIsClosed, param_list<MT>& amh, REF& src)
+	void check_run2(const std::shared_ptr<bool>& pIsClosed, param_list<MT>& amh, REF& src)
 	{
 		if (!_quited && !(*pIsClosed))
 		{
@@ -2530,25 +2537,25 @@ public:
 	/*!
 	@brief 强制退出该Actor，完成后回调
 	*/
-	void notify_quit(const boost::function<void (bool)>& h);
+	void notify_quit(const std::function<void (bool)>& h);
 
 	/*!
 	@brief 暂停Actor
 	*/
 	void notify_suspend();
-	void notify_suspend(const boost::function<void ()>& h);
+	void notify_suspend(const std::function<void ()>& h);
 
 	/*!
 	@brief 恢复已暂停Actor
 	*/
 	void notify_resume();
-	void notify_resume(const boost::function<void ()>& h);
+	void notify_resume(const std::function<void ()>& h);
 
 	/*!
 	@brief 切换挂起/非挂起状态
 	*/
 	void switch_pause_play();
-	void switch_pause_play(const boost::function<void (bool isPaused)>& h);
+	void switch_pause_play(const std::function<void (bool isPaused)>& h);
 
 	/*!
 	@brief 等待Actor退出，在Actor所依赖的ios无关线程中使用
@@ -2558,7 +2565,7 @@ public:
 	/*!
 	@brief 添加一个Actor结束回调
 	*/
-	void append_quit_callback(const boost::function<void (bool)>& h);
+	void append_quit_callback(const std::function<void (bool)>& h);
 
 	/*!
 	@brief 启动一堆Actor
@@ -2597,15 +2604,15 @@ public:
 	__yield_interrupt bool actors_switch(const list<actor_handle>& anotherActors);
 private:
 	void assert_enter();
-	void time_out(int ms, const boost::function<void ()>& h);
+	void time_out(int ms, const std::function<void ()>& h);
 	void expires_timer();
 	void cancel_timer();
 	void suspend_timer();
 	void resume_timer();
 	void start_run();
-	void force_quit(const boost::function<void (bool)>& h);
-	void suspend(const boost::function<void ()>& h);
-	void resume(const boost::function<void ()>& h);
+	void force_quit(const std::function<void (bool)>& h);
+	void suspend(const std::function<void ()>& h);
+	void resume(const std::function<void ()>& h);
 	void suspend();
 	void resume();
 	void run_one();
@@ -2631,14 +2638,14 @@ private:
 	size_t _yieldCount;//yield计数
 	size_t _childOverCount;///<子Actor退出时计数
 	size_t _childSuspendResumeCount;///<子Actor挂起/恢复计数
-	boost::weak_ptr<my_actor> _parentActor;///<父Actor
+	std::weak_ptr<my_actor> _parentActor;///<父Actor
 	main_func _mainFunc;///<Actor入口
 	list<suspend_resume_option> _suspendResumeQueue;///<挂起/恢复操作队列
 	list<actor_handle> _childActorList;///<子Actor集合
-	list<boost::function<void (bool)> > _exitCallback;///<Actor结束后的回调函数，强制退出返回false，正常退出返回true
-	list<boost::function<void ()> > _quitHandlerList;///<Actor退出时强制调用的函数，后注册的先执行
+	list<std::function<void (bool)> > _exitCallback;///<Actor结束后的回调函数，强制退出返回false，正常退出返回true
+	list<std::function<void ()> > _quitHandlerList;///<Actor退出时强制调用的函数，后注册的先执行
 	timer_pck* _timerSleep;///<提供延时功能
-	boost::weak_ptr<my_actor> _weakThis;
+	std::weak_ptr<my_actor> _weakThis;
 };
 
 #endif

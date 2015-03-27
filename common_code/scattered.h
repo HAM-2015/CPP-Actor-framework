@@ -1,5 +1,5 @@
-#ifndef __TIME_INFO_H
-#define __TIME_INFO_H
+#ifndef __SCATTERED_H
+#define __SCATTERED_H
 
 /*!
 @brief 启用高精度时钟
@@ -28,5 +28,14 @@ void set_priority(int p);
 long long get_tick_us();
 long long get_tick_ms();
 int get_tick_s();
+
+/*!
+@brief 清空std::function
+*/
+template <typename F>
+inline void clear_function(F& f)
+{
+	f = F();
+}
 
 #endif

@@ -11,17 +11,16 @@
 #endif //end ENABLE_SHARE_STRAND_IMPL
 
 #include <boost/asio/io_service.hpp>
-#include <boost/shared_ptr.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/condition_variable.hpp>
-#include <boost/function.hpp>
-#include <boost/bind.hpp>
+#include <functional>
+#include <memory>
 #include "ios_proxy.h"
 #include "wrapped_post_handler.h"
 #include "wrapped_dispatch_handler.h"
 
 class boost_strand;
-typedef boost::shared_ptr<boost_strand> shared_strand;
+typedef std::shared_ptr<boost_strand> shared_strand;
 
 /*!
 @brief 重新定义dispatch实现，所有不同strand中以消息方式进行函数调用
@@ -126,7 +125,7 @@ public:
 	boost::asio::io_service& get_io_service();
 
 #ifdef ENABLE_MFC_ACTOR
-	virtual void _post(const boost::function<void ()>& h);
+	virtual void _post(const std::function<void ()>& h);
 #endif
 protected:
 	ios_proxy* _iosProxy;

@@ -1,9 +1,9 @@
 #ifndef __ASYNC_BUFFER_H
 #define __ASYNC_BUFFER_H
 
-#include <boost/function.hpp>
-#include <boost/shared_ptr.hpp>
 #include <boost/circular_buffer.hpp>
+#include <functional>
+#include <memory>
 
 /*!
 @brief 异步缓冲队列，在同一个shared_strand中使用
@@ -24,12 +24,12 @@ public:
 
 	}
 
-	static boost::shared_ptr<async_buffer> create(size_t maxLength)
+	static std::shared_ptr<async_buffer> create(size_t maxLength)
 	{
-		return boost::shared_ptr<async_buffer>(new async_buffer(maxLength));
+		return std::shared_ptr<async_buffer>(new async_buffer(maxLength));
 	}
 public:
-	void setNotify(const boost::function<void ()>& newDataNotify, const boost::function<void ()>& emptyNotify)
+	void setNotify(const std::function<void ()>& newDataNotify, const std::function<void ()>& emptyNotify)
 	{
 		_newDataNotify = newDataNotify;
 		_halfNotify = emptyNotify;
@@ -65,8 +65,8 @@ private:
 	bool _waitData;
 	bool _waitHalf;
 	boost::circular_buffer<T> _buffer;
-	boost::function<void ()> _newDataNotify;
-	boost::function<void ()> _halfNotify;
+	std::function<void ()> _newDataNotify;
+	std::function<void ()> _halfNotify;
 };
 
 #endif

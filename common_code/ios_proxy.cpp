@@ -1,7 +1,7 @@
 #include "ios_proxy.h"
 #include "shared_data.h"
 #include "strand_ex.h"
-#include <boost/bind.hpp>
+#include <memory>
 
 ios_proxy::ios_proxy()
 {
@@ -34,10 +34,10 @@ void ios_proxy::run(size_t threadNum)
 		_runLock = new boost::asio::io_service::work(_ios);
 		_handleList.resize(threadNum);
 		size_t rc = 0;
-		boost::shared_ptr<boost::mutex> blockMutex(new boost::mutex);
-		boost::shared_ptr<boost::condition_variable> blockConVar(new boost::condition_variable);
-		boost::weak_ptr<boost::mutex> weakMutex = blockMutex;
-		boost::weak_ptr<boost::condition_variable> weakConVar = blockConVar;
+		std::shared_ptr<boost::mutex> blockMutex(new boost::mutex);
+		std::shared_ptr<boost::condition_variable> blockConVar(new boost::condition_variable);
+		std::weak_ptr<boost::mutex> weakMutex = blockMutex;
+		std::weak_ptr<boost::condition_variable> weakConVar = blockConVar;
 		boost::unique_lock<boost::mutex> ul(*blockMutex);
 		for (size_t i = 0; i < threadNum; i++)
 		{
@@ -77,7 +77,7 @@ void ios_proxy::run(size_t threadNum)
 					MessageBoxA(NULL, "未处理的STD异常", NULL, NULL);
 					ExitProcess(3);
 				}
-				catch (boost::shared_ptr<std::string> msg)
+				catch (std::shared_ptr<std::string> msg)
 				{
 					MessageBoxA(NULL, msg->c_str(), NULL, NULL);
 					ExitProcess(4);

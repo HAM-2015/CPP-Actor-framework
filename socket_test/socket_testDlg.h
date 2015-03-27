@@ -78,16 +78,16 @@ protected:
 	BIND_MFC_RUN(CDialogEx);
 	DECLARE_MESSAGE_MAP()
 private:
-	void connectActor(my_actor* self, boost::shared_ptr<client_param> param);
-	void newSession(my_actor* self, boost::shared_ptr<session_pck> sess);
-	void serverActor(my_actor* self, boost::shared_ptr<server_param> param);
+	void connectActor(my_actor* self, std::shared_ptr<client_param> param);
+	void newSession(my_actor* self, std::shared_ptr<session_pck> sess);
+	void serverActor(my_actor* self, std::shared_ptr<server_param> param);
 	void mainActor(my_actor* self);
 private:
 	ios_proxy _ios;
 	shared_strand _strand;
 	CFont _editFont;
 	actor_msg_handle<ui_cmd> _lstCMD;
-	boost::function<void (ui_cmd)> _uiCMD;
+	std::function<void (ui_cmd)> _uiCMD;
 public:
 	CEdit _outputEdit;
 	CEdit _msgEdit;

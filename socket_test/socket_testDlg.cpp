@@ -5,6 +5,7 @@
 #include "socket_test.h"
 #include "socket_testDlg.h"
 #include "afxdialogex.h"
+#include "scattered.h"
 #include <boost/lexical_cast.hpp>
 
 #ifdef _DEBUG
@@ -168,7 +169,7 @@ void Csocket_testDlg::OnBnClickedClear()
 	_outputEdit.SetWindowText("");
 }
 
-void Csocket_testDlg::connectActor(my_actor* self, boost::shared_ptr<client_param> param)
+void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param> param)
 {
 	async_trig_handle<boost::system::error_code> ath;
 	post(boost::bind(&Csocket_testDlg::showClientMsg, this, msg_data::create("连接中...")));
@@ -253,7 +254,7 @@ void Csocket_testDlg::connectActor(my_actor* self, boost::shared_ptr<client_para
 	_uiCMD(ui_disconnect);
 }
 
-void Csocket_testDlg::newSession(my_actor* self, boost::shared_ptr<session_pck> sess)
+void Csocket_testDlg::newSession(my_actor* self, std::shared_ptr<session_pck> sess)
 {//这个Actor运行在对话框线程中
 	async_trig_handle<> lstClose;
 	dlg_session dlg;
@@ -268,7 +269,7 @@ void Csocket_testDlg::newSession(my_actor* self, boost::shared_ptr<session_pck> 
 	dlg.DestroyWindow();
 }
 
-void Csocket_testDlg::serverActor(my_actor* self, boost::shared_ptr<server_param> param)
+void Csocket_testDlg::serverActor(my_actor* self, std::shared_ptr<server_param> param)
 {
 	actor_msg_handle<socket_handle> amh;
 	accept_handle accept = acceptor_socket::create(self->this_strand(), param->_port, self->make_msg_notify(amh), false);//创建连接侦听器
@@ -291,8 +292,8 @@ void Csocket_testDlg::serverActor(my_actor* self, boost::shared_ptr<server_param
 		self->close_msg_notify(amh);
 	});
 	//创建会话关闭响应器
-	list<boost::shared_ptr<session_pck> > sessList;
-	actor_msg_handle<list<boost::shared_ptr<session_pck> >::iterator> sessDissonnLst;
+	list<std::shared_ptr<session_pck> > sessList;
+	actor_msg_handle<list<std::shared_ptr<session_pck> >::iterator> sessDissonnLst;
 	child_actor_handle sessMngActor = self->create_child_actor([&](my_actor* self)
 	{
 		while (true)
@@ -322,7 +323,7 @@ void Csocket_testDlg::serverActor(my_actor* self, boost::shared_ptr<server_param
 		}
 		if (sessList.size() < (size_t)param->_maxSessionNum && newSocket->no_delay())
 		{
-			boost::shared_ptr<session_pck> newSess(new session_pck);
+			std::shared_ptr<session_pck> newSess(new session_pck);
 			newSess->_socket = newSocket;
 			newSess->_lstClose = msg_pipe<>::make(newSess->_closeNtf);
 			sessList.push_front(newSess);
@@ -350,9 +351,9 @@ void Csocket_testDlg::serverActor(my_actor* self, boost::shared_ptr<server_param
 void Csocket_testDlg::mainActor(my_actor* self)
 {
 	BEGIN_CHECK_FORCE_QUIT;
-	boost::shared_ptr<client_param> extClient;
-	boost::function<void ()> serverNtfClose;
-	boost::function<void (shared_data)> clientPostPipe;
+	std::shared_ptr<client_param> extClient;
+	std::function<void ()> serverNtfClose;
+	std::function<void (shared_data)> clientPostPipe;
 	actor_handle clientActorHandle;
 	actor_handle serverActorHandle;
 	auto disconnectHandler = [&, this]()
@@ -363,7 +364,7 @@ void Csocket_testDlg::mainActor(my_actor* self)
 			self->actor_wait_quit(clientActorHandle);
 			extClient.reset();
 			clientActorHandle.reset();
-			clientPostPipe.clear();
+			clear_function(clientPostPipe);
 			auto _this = this;
 			this->send(self, [&, _this]()
 			{
@@ -414,7 +415,7 @@ void Csocket_testDlg::mainActor(my_actor* self)
 					});
 					try
 					{
-						extClient = boost::shared_ptr<client_param>(new client_param);
+						extClient = std::shared_ptr<client_param>(new client_param);
 						extClient->_ip = sip;
 						extClient->_port = boost::lexical_cast<int>(sport.GetBuffer());
 						extClient->_tm = boost::lexical_cast<int>(stm.GetBuffer());
@@ -450,7 +451,7 @@ void Csocket_testDlg::mainActor(my_actor* self)
 					});
 					try
 					{
-						boost::shared_ptr<server_param> param(new server_param);
+						std::shared_ptr<server_param> param(new server_param);
 						param->_port = boost::lexical_cast<int>(sport.GetBuffer());
 						param->_maxSessionNum = boost::lexical_cast<int>(snum.GetBuffer());
 						param->_closePump = msg_pipe<>::make(serverNtfClose);

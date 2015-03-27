@@ -58,7 +58,7 @@ boost::asio::io_service& boost_strand::get_io_service()
 }
 
 #ifdef ENABLE_MFC_ACTOR
-void boost_strand::_post( const boost::function<void ()>& h )
+void boost_strand::_post( const std::function<void ()>& h )
 {
 	assert(false);
 }

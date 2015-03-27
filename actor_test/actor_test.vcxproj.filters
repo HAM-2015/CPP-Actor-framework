@@ -24,9 +24,6 @@
     <ClCompile Include="main.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="..\common_code\time_info.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="..\common_code\shared_strand.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -34,6 +31,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="..\common_code\actor_stack.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common_code\scattered.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
@@ -71,13 +71,13 @@
     <ClInclude Include="..\common_code\async_buffer.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="..\common_code\time_info.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="..\common_code\actor_framework.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="..\common_code\actor_stack.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common_code\scattered.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

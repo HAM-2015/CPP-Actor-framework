@@ -15,44 +15,44 @@ private:
 	template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
 	struct pipe_type
 	{
-		typedef typename boost::function<void (T0, T1, T2, T3)> writer_type;
+		typedef typename std::function<void (T0, T1, T2, T3)> writer_type;
 		typedef typename param_list<msg_param<T0, T1, T2, T3> > reader_handle;
 	};
 
 	template <typename T0, typename T1, typename T2>
 	struct pipe_type<T0, T1, T2, void>
 	{
-		typedef typename boost::function<void (T0, T1, T2)> writer_type;
+		typedef typename std::function<void (T0, T1, T2)> writer_type;
 		typedef typename param_list<msg_param<T0, T1, T2> > reader_handle;
 	};
 
 	template <typename T0, typename T1>
 	struct pipe_type<T0, T1, void, void>
 	{
-		typedef typename boost::function<void (T0, T1)> writer_type;
+		typedef typename std::function<void (T0, T1)> writer_type;
 		typedef typename param_list<msg_param<T0, T1> > reader_handle;
 	};
 
 	template <typename T0>
 	struct pipe_type<T0, void, void, void>
 	{
-		typedef typename boost::function<void (T0)> writer_type;
+		typedef typename std::function<void (T0)> writer_type;
 		typedef typename param_list<msg_param<T0> > reader_handle;
 	};
 
 	template <>
 	struct pipe_type<void, void, void, void>
 	{
-		typedef typename boost::function<void ()> writer_type;
+		typedef typename std::function<void ()> writer_type;
 		typedef typename actor_msg_handle<> reader_handle;
 	};
 
 	typedef typename pipe_type<T0, T1, T2, T3>::reader_handle reader_handle;
 public:
 	typedef typename pipe_type<T0, T1, T2, T3>::writer_type writer_type;
-	typedef typename boost::function<size_t (my_actor*, reader_handle&)> regist_reader;
-	typedef typename boost::function<writer_type (int timeout)> get_writer_outside;
-	__yield_interrupt typedef typename boost::function<writer_type (my_actor*, int timeout)> get_writer;
+	typedef typename std::function<size_t (my_actor*, reader_handle&)> regist_reader;
+	typedef typename std::function<writer_type (int timeout)> get_writer_outside;
+	__yield_interrupt typedef typename std::function<writer_type (my_actor*, int timeout)> get_writer;
 private:
 	template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
 	struct temp_buffer
@@ -78,17 +78,17 @@ private:
 			}
 		}
 
-		writer_type temp_writer(boost::shared_ptr<temp_buffer>& st)
+		writer_type temp_writer(std::shared_ptr<temp_buffer>& st)
 		{
 			return [st](const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 			{
-				boost::shared_ptr<ps> t(new ps(p0, p1, p2, p3));
+				std::shared_ptr<ps> t(new ps(p0, p1, p2, p3));
 				boost::lock_guard<boost::mutex> lg(st->_mutex);
 				st->_tempBuff.push_back(t);
 			};
 		}
 
-		list<boost::shared_ptr<ps> > _tempBuff;
+		list<std::shared_ptr<ps> > _tempBuff;
 		boost::mutex _mutex;
 	};
 
@@ -115,17 +115,17 @@ private:
 			}
 		}
 
-		writer_type temp_writer(boost::shared_ptr<temp_buffer>& st)
+		writer_type temp_writer(std::shared_ptr<temp_buffer>& st)
 		{
 			return [st](const T0& p0, const T1& p1, const T2& p2)
 			{
-				boost::shared_ptr<ps> t(new ps(p0, p1, p2));
+				std::shared_ptr<ps> t(new ps(p0, p1, p2));
 				boost::lock_guard<boost::mutex> lg(st->_mutex);
 				st->_tempBuff.push_back(t);
 			};
 		}
 
-		list<boost::shared_ptr<ps> > _tempBuff;
+		list<std::shared_ptr<ps> > _tempBuff;
 		boost::mutex _mutex;
 	};
 
@@ -151,17 +151,17 @@ private:
 			}
 		}
 
-		writer_type temp_writer(boost::shared_ptr<temp_buffer>& st)
+		writer_type temp_writer(std::shared_ptr<temp_buffer>& st)
 		{
 			return [st](const T0& p0, const T1& p1)
 			{
-				boost::shared_ptr<ps> t(new ps(p0, p1));
+				std::shared_ptr<ps> t(new ps(p0, p1));
 				boost::lock_guard<boost::mutex> lg(st->_mutex);
 				st->_tempBuff.push_back(t);
 			};
 		}
 
-		list<boost::shared_ptr<ps> > _tempBuff;
+		list<std::shared_ptr<ps> > _tempBuff;
 		boost::mutex _mutex;
 	};
 
@@ -186,17 +186,17 @@ private:
 			}
 		}
 
-		writer_type temp_writer(boost::shared_ptr<temp_buffer>& st)
+		writer_type temp_writer(std::shared_ptr<temp_buffer>& st)
 		{
 			return [st](const T0& p0)
 			{
-				boost::shared_ptr<ps> t(new ps(p0));
+				std::shared_ptr<ps> t(new ps(p0));
 				boost::lock_guard<boost::mutex> lg(st->_mutex);
 				st->_tempBuff.push_back(t);
 			};
 		}
 
-		list<boost::shared_ptr<ps> > _tempBuff;
+		list<std::shared_ptr<ps> > _tempBuff;
 		boost::mutex _mutex;
 	};
 
@@ -218,7 +218,7 @@ private:
 			}
 		}
 
-		writer_type temp_writer(boost::shared_ptr<temp_buffer>& st)
+		writer_type temp_writer(std::shared_ptr<temp_buffer>& st)
 		{
 			return [st]()
 			{
@@ -317,7 +317,7 @@ private:
 			_param->_handler(arg1, arg2, arg3, arg4);
 		}
 	public:
-		boost::shared_ptr<wrapped_param> _param;
+		std::shared_ptr<wrapped_param> _param;
 	};
 private:
 	struct pipe_param
@@ -331,7 +331,7 @@ private:
 		bool _hasWriter;
 		writer_type _writer;
 		boost::mutex _mutex;
-		list<boost::function<void ()> > _getList;
+		list<std::function<void ()> > _getList;
 		DEBUG_OPERATION(boost::atomic<size_t> _regCount);
 	};
 
@@ -369,12 +369,12 @@ public:
 	*/
 	static regist_reader make(__out writer_type& writer)
 	{
-		boost::shared_ptr<temp_buffer<T0, T1, T2, T3> > tempBuff(new temp_buffer<T0, T1, T2, T3>());
+		std::shared_ptr<temp_buffer<T0, T1, T2, T3> > tempBuff(new temp_buffer<T0, T1, T2, T3>());
 		wrapped_invoke<writer_type> wrapWriter(tempBuff->temp_writer(tempBuff));
 		writer = wrapWriter;
 
-		boost::weak_ptr<temp_buffer<T0, T1, T2, T3> > weakBuff = tempBuff;
-		boost::shared_ptr<wrapped_param> wrappedParam = wrapWriter._param;
+		std::weak_ptr<temp_buffer<T0, T1, T2, T3> > weakBuff = tempBuff;
+		std::shared_ptr<wrapped_param> wrappedParam = wrapWriter._param;
 		return [wrappedParam, weakBuff](my_actor* hostActor, reader_handle& rh)->size_t
 		{
 			SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
@@ -411,7 +411,7 @@ public:
 	*/
 	static regist_reader make(__out get_writer& getWriterFunc)
 	{
-		boost::shared_ptr<pipe_param> pipeParam(new pipe_param);
+		std::shared_ptr<pipe_param> pipeParam(new pipe_param);
 		getWriterFunc = [pipeParam](my_actor* hostActor, int timeout)->writer_type
 		{
 			async_trig_handle<> ath;
@@ -436,10 +436,10 @@ public:
 			return pipeParam->_writer;
 		};
 
-		boost::weak_ptr<pipe_param> weakParam = pipeParam;
+		std::weak_ptr<pipe_param> weakParam = pipeParam;
 		return [weakParam](my_actor* hostActor, reader_handle& rh)->size_t
 		{
-			boost::shared_ptr<pipe_param> pipeParam = weakParam.lock();
+			std::shared_ptr<pipe_param> pipeParam = weakParam.lock();
 			if (pipeParam)
 			{
 				assert(0 == pipeParam->_regCount++);
@@ -463,7 +463,7 @@ public:
 	*/
 	static regist_reader make(__out get_writer_outside& getWriterFunc)
 	{
-		boost::shared_ptr<outsite_pipe_param> pipeParam(new outsite_pipe_param);
+		std::shared_ptr<outsite_pipe_param> pipeParam(new outsite_pipe_param);
 		getWriterFunc = [pipeParam](int timeout)->writer_type
 		{
 			{
@@ -484,10 +484,10 @@ public:
 			return pipeParam->_writer;
 		};
 
-		boost::weak_ptr<outsite_pipe_param> weakParam = pipeParam;
+		std::weak_ptr<outsite_pipe_param> weakParam = pipeParam;
 		return [weakParam](my_actor* hostActor, reader_handle& rh)->size_t
 		{
-			boost::shared_ptr<outsite_pipe_param> pipeParam = weakParam.lock();
+			std::shared_ptr<outsite_pipe_param> pipeParam = weakParam.lock();
 			if (pipeParam)
 			{
 				assert(0 == pipeParam->_regCount++);

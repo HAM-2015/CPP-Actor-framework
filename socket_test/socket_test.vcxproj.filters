@@ -74,9 +74,6 @@
     <ClInclude Include="..\common_code\text_stream_io.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
-    <ClInclude Include="..\common_code\time_info.h">
-      <Filter>头文件\common_code</Filter>
-    </ClInclude>
     <ClInclude Include="..\common_code\actor_framework.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
@@ -84,6 +81,9 @@
       <Filter>头文件\common_code</Filter>
     </ClInclude>
     <ClInclude Include="..\common_code\mfc_strand.h">
+      <Filter>头文件\common_code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common_code\scattered.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
   </ItemGroup>
@@ -115,9 +115,6 @@
     <ClCompile Include="..\common_code\text_stream_io.cpp">
       <Filter>源文件\common_code</Filter>
     </ClCompile>
-    <ClCompile Include="..\common_code\time_info.cpp">
-      <Filter>源文件\common_code</Filter>
-    </ClCompile>
     <ClCompile Include="..\common_code\shared_strand.cpp">
       <Filter>源文件\common_code</Filter>
     </ClCompile>
@@ -128,6 +125,9 @@
       <Filter>源文件\common_code</Filter>
     </ClCompile>
     <ClCompile Include="..\common_code\mfc_strand.cpp">
+      <Filter>源文件\common_code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common_code\scattered.cpp">
       <Filter>源文件\common_code</Filter>
     </ClCompile>
   </ItemGroup>

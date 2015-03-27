@@ -19,7 +19,7 @@ private:
 	shared_strand clone();
 	bool in_this_ios();
 	bool running_in_this_thread();
-	void _post(const boost::function<void ()>& h);
+	void _post(const std::function<void ()>& h);
 private:
 	bind_mfc_run* _mfc;
 	boost::thread::id _mfcThreadID;

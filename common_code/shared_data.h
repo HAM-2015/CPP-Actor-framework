@@ -1,14 +1,14 @@
 #ifndef __MSG_DATA_H
 #define __MSG_DATA_H
 
-#include <boost/shared_ptr.hpp>
-#include <boost/function.hpp>
+#include <memory>
+#include <functional>
 
 /*!
 @brief ÏûÏ¢°ü
 */
 class msg_data;
-typedef boost::shared_ptr<msg_data> shared_data;
+typedef std::shared_ptr<msg_data> shared_data;
 class msg_data
 {
 public:
@@ -26,8 +26,8 @@ public:
 	static shared_data create(const void* bf, size_t s);
 	static shared_data create(const char* bf);
 	static shared_data create(const std::string& s);
-	static shared_data create(msg_data* s, const boost::function<void (msg_data*)>& deleter);
-	static shared_data create(size_t s, const boost::function<void(msg_data*)>& deleter);
+	static shared_data create(msg_data* s, const std::function<void (msg_data*)>& deleter);
+	static shared_data create(size_t s, const std::function<void(msg_data*)>& deleter);
 	static shared_data create_ref(const void* bf, size_t s);
 public:
 	size_t size();

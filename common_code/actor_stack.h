@@ -48,7 +48,7 @@ private:
 	boost::condition_variable _clearVar;
 	boost::atomic<int> _stackCount;
 	boost::atomic<size_t> _stackTotalSize;
-	static boost::shared_ptr<actor_stack_pool> _actorStackPool;
+	static std::shared_ptr<actor_stack_pool> _actorStackPool;
 };
 
 #endif
