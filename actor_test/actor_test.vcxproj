@@ -164,7 +164,6 @@
     <ClInclude Include="..\common_code\async_buffer.h" />
     <ClInclude Include="..\common_code\actor_framework.h" />
     <ClInclude Include="..\common_code\actor_stack.h" />
-    <ClInclude Include="..\common_code\asm_ex.h" />
     <ClInclude Include="..\common_code\ios_proxy.h" />
     <ClInclude Include="..\common_code\msg_pipe.h" />
     <ClInclude Include="..\common_code\ref_ex.h" />

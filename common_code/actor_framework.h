@@ -1432,7 +1432,24 @@ public:
 	@param ms 触发延时(毫秒)
 	@param h 触发函数
 	*/
-	void delay_trig(int ms, const std::function<void ()>& h);
+	template <typename H>
+	void delay_trig(int ms, const H& h)
+	{
+		assert_enter();
+		if (ms > 0)
+		{
+			assert(_timerSleep);
+			time_out(ms, h);
+		} 
+		else if (0 == ms)
+		{
+			_strand->post(h);
+		}
+		else
+		{
+			assert(false);
+		}
+	}
 	
 	/*!
 	@brief 使用内部定时器延时触发异步句柄，使用之前必须已经调用了begin_trig(async_trig_handle)，在触发完成之前不能多次调用
@@ -1451,7 +1468,7 @@ public:
 		assert(th._actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th._pIsClosed;
-		time_out(ms, [=, &th]()
+		delay_trig(ms, [=, &th]()
 		{shared_this->_async_trig_handler(pIsClosed_, th, ref_ex<T0>((T0&)p0)); });
 	}
 
@@ -1464,7 +1481,7 @@ public:
 		assert(th->_actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th->_pIsClosed;
-		time_out(ms, [=]()
+		delay_trig(ms, [=]()
 		{shared_this->_async_trig_handler(pIsClosed_, *th, ref_ex<T0>((T0&)p0)); });
 	}
 
@@ -1477,7 +1494,7 @@ public:
 		assert(th._actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th._pIsClosed;
-		time_out(ms, [=, &th]()
+		delay_trig(ms, [=, &th]()
 		{shared_this->_async_trig_handler(pIsClosed_, th, ref_ex<T0, T1>((T0&)p0, (T1&)p1)); });
 	}
 
@@ -1490,7 +1507,7 @@ public:
 		assert(th->_actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th->_pIsClosed;
-		time_out(ms, [=]()
+		delay_trig(ms, [=]()
 		{shared_this->_async_trig_handler(pIsClosed_, *th, ref_ex<T0, T1>((T0&)p0, (T1&)p1)); });
 	}
 
@@ -1503,7 +1520,7 @@ public:
 		assert(th._actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th._pIsClosed;
-		time_out(ms, [=, &th]()
+		delay_trig(ms, [=, &th]()
 		{shared_this->_async_trig_handler(pIsClosed_, th, ref_ex<T0, T1, T2>((T0&)p0, (T1&)p1, (T2&)p2)); });
 	}
 
@@ -1516,7 +1533,7 @@ public:
 		assert(th->_actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th->_pIsClosed;
-		time_out(ms, [=]()
+		delay_trig(ms, [=]()
 		{shared_this->_async_trig_handler(pIsClosed_, *th, ref_ex<T0, T1, T2>((T0&)p0, (T1&)p1, (T2&)p2)); });
 	}
 
@@ -1529,7 +1546,7 @@ public:
 		assert(th._actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th._pIsClosed;
-		time_out(ms, [=, &th]()
+		delay_trig(ms, [=, &th]()
 		{shared_this->_async_trig_handler(pIsClosed_, th, ref_ex<T0, T1, T2, T3>((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3)); });
 	}
 
@@ -1542,7 +1559,7 @@ public:
 		assert(th->_actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th->_pIsClosed;
-		time_out(ms, [=]()
+		delay_trig(ms, [=]()
 		{shared_this->_async_trig_handler(pIsClosed_, *th, ref_ex<T0, T1, T2, T3>((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3)); });
 	}
 
@@ -1560,7 +1577,7 @@ public:
 		assert_enter();
 		if (exeStrand != _strand)
 		{
-			trig([=](const std::function<void()>& cb){boost_strand::asyncInvokeVoid(exeStrand, h, cb); });
+			trig([=](const std::function<void()>& cb){exeStrand->asyncInvokeVoid(h, cb); });
 		}
 		else
 		{
@@ -1574,7 +1591,7 @@ public:
 		assert_enter();
 		if (exeStrand != _strand)
 		{
-			return trig<T0>([=](const std::function<void(T0)>& cb){boost_strand::asyncInvoke(exeStrand, h, cb); });
+			return trig<T0>([=](const std::function<void(T0)>& cb){exeStrand->asyncInvoke(h, cb); });
 		} 
 		return h();
 	}

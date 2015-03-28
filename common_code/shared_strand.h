@@ -136,13 +136,13 @@ public:
 	@warning 此函数有可能使整个程序陷入死锁，只能在与strand所依赖的ios无关线程中调用
 	*/
 	template <typename H>
-	static void syncInvoke(shared_strand strand, const H& h)
+	void syncInvoke(const H& h)
 	{
-		assert(!strand->in_this_ios());
+		assert(!in_this_ios());
 		boost::mutex mutex;
 		boost::condition_variable con;
 		boost::unique_lock<boost::mutex> ul(mutex);
-		strand->post([&]()
+		post([&]()
 		{
 			h();
 			mutex.lock();
@@ -156,14 +156,14 @@ public:
 	@brief 同上，带返回值
 	*/
 	template <typename R, typename H>
-	static R syncInvoke(shared_strand strand, const H& h)
+	R syncInvoke(const H& h)
 	{
-		assert(!strand->in_this_ios());
+		assert(!in_this_ios());
 		R r;
 		boost::mutex mutex;
 		boost::condition_variable con;
 		boost::unique_lock<boost::mutex> ul(mutex);
-		strand->post([&]()
+		post([&]()
 		{
 			r = h();
 			mutex.lock();
@@ -179,18 +179,18 @@ public:
 	@param cb 传出参数的函数
 	*/
 	template <typename H, typename CB>
-	static void asyncInvoke(shared_strand strand, const H& h, const CB& cb)
+	void asyncInvoke(const H& h, const CB& cb)
 	{
-		strand->post([=]()
+		post([=]()
 		{
 			cb(h());
 		});
 	}
 
 	template <typename H, typename CB>
-	static void asyncInvokeVoid(shared_strand strand, const H& h, const CB& cb)
+	void asyncInvokeVoid(const H& h, const CB& cb)
 	{
-		strand->post([=]()
+		post([=]()
 		{
 			h();
 			cb();

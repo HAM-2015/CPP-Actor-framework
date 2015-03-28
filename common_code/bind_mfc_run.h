@@ -1,10 +1,10 @@
 #ifndef __BIND_MODAL_RUN_H
 #define __BIND_MODAL_RUN_H
 
-#include <boost/function.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/thread.hpp>
-#include <boost/bind.hpp>
+#include <functional>
+#include <memory>
 #include <list>
 #include "wrapped_post_handler.h"
 #include "actor_framework.h"
@@ -65,7 +65,7 @@ protected:
 	{
 		bind_run_pck() {}
 
-		bind_run_pck(const boost::function<void (T)>& cb, const boost::function<T ()>& h)
+		bind_run_pck(const std::function<void (T)>& cb, const std::function<T ()>& h)
 			: _cb(cb), _h(h) {}
 
 		void run()
@@ -73,8 +73,8 @@ protected:
 			_cb(_h());
 		}
 
-		boost::function<void (T)> _cb;
-		boost::function<T ()> _h;
+		std::function<void (T)> _cb;
+		std::function<T ()> _h;
 	};
 
 	template <>
@@ -82,7 +82,7 @@ protected:
 	{
 		bind_run_pck() {}
 
-		bind_run_pck(const boost::function<void ()>& cb, const boost::function<void ()>& h)
+		bind_run_pck(const std::function<void ()>& cb, const std::function<void ()>& h)
 			: _cb(cb), _h(h) {}
 
 		void run()
@@ -91,8 +91,8 @@ protected:
 			_cb();
 		}
 
-		boost::function<void ()> _cb;
-		boost::function<void ()> _h;
+		std::function<void ()> _cb;
+		std::function<void ()> _h;
 	};
 public:
 	bind_mfc_run(): _isClosed(false) {};
@@ -149,7 +149,7 @@ public:
 	/*!
 	@brief 发送一个执行函数到MFC消息队列中执行
 	*/
-	void post(const boost::function<void ()>& h)
+	void post(const std::function<void ()>& h)
 	{
 		boost::shared_lock<boost::shared_mutex> sl(_postMutex);
 		if (!_isClosed)
@@ -164,15 +164,15 @@ public:
 	/*!
 	@brief 发送一个执行函数到MFC消息队列中执行，完成后返回
 	*/
-	void send(my_actor* self, const boost::function<void ()>& h)
+	void send(my_actor* self, const std::function<void ()>& h)
 	{
 		assert(boost::this_thread::get_id() != thread_id());
-		self->trig([&, this](const boost::function<void ()>& cb)
+		self->trig([&, this](const std::function<void ()>& cb)
 		{
 			boost::shared_lock<boost::shared_mutex> sl(_postMutex);
 			if (!_isClosed)
 			{
-				boost::shared_ptr<bind_mfc_run::bind_run_pck<> > pck(new bind_mfc_run::bind_run_pck<>(cb, h));
+				std::shared_ptr<bind_mfc_run::bind_run_pck<> > pck(new bind_mfc_run::bind_run_pck<>(cb, h));
 				_mutex2.lock();
 				_sendOptions.push_back(pck);
 				_mutex2.unlock();
@@ -185,15 +185,15 @@ public:
 	@brief 发送一个带返回值函数到MFC消息队列中执行，完成后返回
 	*/
 	template <typename T>
-	T send(my_actor* self, const boost::function<T ()>& h)
+	T send(my_actor* self, const std::function<T ()>& h)
 	{
 		assert(boost::this_thread::get_id() != thread_id());
-		return self->trig<T>([&, this](const boost::function<void (T)>& cb)
+		return self->trig<T>([&, this](const std::function<void (T)>& cb)
 		{
 			boost::shared_lock<boost::shared_mutex> sl(_postMutex);
 			if (!_isClosed)
 			{
-				boost::shared_ptr<bind_mfc_run::bind_run_pck<T> > pck(new bind_mfc_run::bind_run_pck<T>(cb, h));
+				std::shared_ptr<bind_mfc_run::bind_run_pck<T> > pck(new bind_mfc_run::bind_run_pck<T>(cb, h));
 				_mutex2.lock();
 				_sendOptions.push_back(pck);
 				_mutex2.unlock();
@@ -222,7 +222,7 @@ protected:
 	{
 		_mutex1.lock();
 		assert(!_postOptions.empty());
-		boost::function<void ()> h = _postOptions.front();
+		std::function<void ()> h = _postOptions.front();
 		_postOptions.pop_front();
 		_mutex1.unlock();
 		assert(h);
@@ -234,15 +234,15 @@ protected:
 	{
 		_mutex2.lock();
 		assert(!_sendOptions.empty());
-		boost::shared_ptr<bind_run> pck = _sendOptions.front();
+		std::shared_ptr<bind_run> pck = _sendOptions.front();
 		_sendOptions.pop_front();
 		_mutex2.unlock();
 		pck->run();
 		return 0;
 	}
 private:
-	list<boost::function<void ()> > _postOptions;
-	list<boost::shared_ptr<bind_run> > _sendOptions;
+	list<std::function<void ()> > _postOptions;
+	list<std::shared_ptr<bind_run> > _sendOptions;
 	boost::mutex _mutex1;
 	boost::mutex _mutex2;
 	boost::shared_mutex _postMutex;

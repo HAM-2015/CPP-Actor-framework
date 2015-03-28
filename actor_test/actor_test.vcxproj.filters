@@ -65,9 +65,6 @@
     <ClInclude Include="..\common_code\wrapped_trig_handler.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="..\common_code\asm_ex.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="..\common_code\async_buffer.h">
       <Filter>头文件</Filter>
     </ClInclude>
