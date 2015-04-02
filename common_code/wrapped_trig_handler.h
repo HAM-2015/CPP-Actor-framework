@@ -3,21 +3,21 @@
 
 #ifdef _DEBUG
 
-#include <boost/detail/interlocked.hpp>
+#include <boost/atomic/atomic.hpp>
 
 template <typename Handler = void>
 class wrapped_trig_handler
 {
 public:
 	wrapped_trig_handler(const Handler& handler)
-		:handler_(handler), pIsTrig(new long(0))
+		:handler_(handler), pIsTrig(new boost::atomic<bool>(false))
 	{
 
 	}
 
 	void operator()()
 	{
-		if (!BOOST_INTERLOCKED_EXCHANGE(pIsTrig.get(), 1))
+		if (!pIsTrig->exchange(true))
 		{
 			handler_();
 		}
@@ -29,7 +29,7 @@ public:
 
 	void operator()() const
 	{
-		if (!BOOST_INTERLOCKED_EXCHANGE(pIsTrig.get(), 1))
+		if (!pIsTrig->exchange(true))
 		{
 			handler_();
 		}
@@ -42,7 +42,7 @@ public:
 	template <typename Arg1>
 	void operator()(const Arg1& arg1)
 	{
-		if (!BOOST_INTERLOCKED_EXCHANGE(pIsTrig.get(), 1))
+		if (!pIsTrig->exchange(true))
 		{
 			handler_(arg1);
 		}
@@ -55,7 +55,7 @@ public:
 	template <typename Arg1>
 	void operator()(const Arg1& arg1) const
 	{
-		if (!BOOST_INTERLOCKED_EXCHANGE(pIsTrig.get(), 1))
+		if (!pIsTrig->exchange(true))
 		{
 			handler_(arg1);
 		}
@@ -68,7 +68,7 @@ public:
 	template <typename Arg1, typename Arg2>
 	void operator()(const Arg1& arg1, const Arg2& arg2)
 	{
-		if (!BOOST_INTERLOCKED_EXCHANGE(pIsTrig.get(), 1))
+		if (!pIsTrig->exchange(true))
 		{
 			handler_(arg1, arg2);
 		}
@@ -81,7 +81,7 @@ public:
 	template <typename Arg1, typename Arg2>
 	void operator()(const Arg1& arg1, const Arg2& arg2) const
 	{
-		if (!BOOST_INTERLOCKED_EXCHANGE(pIsTrig.get(), 1))
+		if (!pIsTrig->exchange(true))
 		{
 			handler_(arg1, arg2);
 		}
@@ -94,7 +94,7 @@ public:
 	template <typename Arg1, typename Arg2, typename Arg3>
 	void operator()(const Arg1& arg1, const Arg2& arg2, const Arg3& arg3)
 	{
-		if (!BOOST_INTERLOCKED_EXCHANGE(pIsTrig.get(), 1))
+		if (!pIsTrig->exchange(true))
 		{
 			handler_(arg1, arg2, arg3);
 		}
@@ -107,7 +107,7 @@ public:
 	template <typename Arg1, typename Arg2, typename Arg3>
 	void operator()(const Arg1& arg1, const Arg2& arg2, const Arg3& arg3) const
 	{
-		if (!BOOST_INTERLOCKED_EXCHANGE(pIsTrig.get(), 1))
+		if (!pIsTrig->exchange(true))
 		{
 			handler_(arg1, arg2, arg3);
 		}
@@ -120,7 +120,7 @@ public:
 	template <typename Arg1, typename Arg2, typename Arg3, typename Arg4>
 	void operator()(const Arg1& arg1, const Arg2& arg2, const Arg3& arg3, const Arg4& arg4)
 	{
-		if (!BOOST_INTERLOCKED_EXCHANGE(pIsTrig.get(), 1))
+		if (!pIsTrig->exchange(true))
 		{
 			handler_(arg1, arg2, arg3, arg4);
 		}
@@ -133,7 +133,7 @@ public:
 	template <typename Arg1, typename Arg2, typename Arg3, typename Arg4>
 	void operator()(const Arg1& arg1, const Arg2& arg2, const Arg3& arg3, const Arg4& arg4) const
 	{
-		if (!BOOST_INTERLOCKED_EXCHANGE(pIsTrig.get(), 1))
+		if (!pIsTrig->exchange(true))
 		{
 			handler_(arg1, arg2, arg3, arg4);
 		}
@@ -143,7 +143,7 @@ public:
 		}
 	}
 
-	std::shared_ptr<long> pIsTrig;
+	std::shared_ptr<boost::atomic<bool> > pIsTrig;
 	Handler handler_;
 };
 

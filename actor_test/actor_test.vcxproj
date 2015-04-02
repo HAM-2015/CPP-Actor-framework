@@ -172,6 +172,7 @@
     <ClInclude Include="..\common_code\strand_ex.h" />
     <ClInclude Include="..\common_code\scattered.h" />
     <ClInclude Include="..\common_code\wrapped_dispatch_handler.h" />
+    <ClInclude Include="..\common_code\wrapped_no_params_handler.h" />
     <ClInclude Include="..\common_code\wrapped_post_handler.h" />
     <ClInclude Include="..\common_code\wrapped_trig_handler.h" />
   </ItemGroup>

@@ -77,5 +77,8 @@
     <ClInclude Include="..\common_code\scattered.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="..\common_code\wrapped_no_params_handler.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -162,6 +162,7 @@ void Csocket_testDlg::OnBnClickedStopLst()
 void Csocket_testDlg::OnBnClickedSendClientMsg()
 {
 	_uiCMD(ui_postMsg);
+	_msgEdit.SetFocus();
 }
 
 void Csocket_testDlg::OnBnClickedClear()
@@ -483,7 +484,6 @@ void Csocket_testDlg::mainActor(my_actor* self)
 							_msgEdit.SetWindowText("");
 							clientPostPipe(msg_data::create(cs.GetBuffer()));
 						}
-						_msgEdit.SetFocus();
 					});
 				}
 			}

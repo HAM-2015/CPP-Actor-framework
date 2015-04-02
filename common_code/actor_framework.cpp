@@ -5,6 +5,7 @@
 #include "actor_framework.h"
 #include "actor_stack.h"
 #include "scattered.h"
+#include "wrapped_no_params_handler.h"
 
 typedef boost::coroutines::coroutine<void>::pull_type actor_pull_type;
 typedef boost::coroutines::coroutine<void>::push_type actor_push_type;
@@ -403,7 +404,7 @@ public:
 			CHECK_EXCEPTION1(_actor._exitCallback.front(), !_actor._isForce);
 			_actor._exitCallback.pop_front();
 		}
-		if (_actor._timerSleep)
+		if (_actor._timer)
 		{
 			_actor.cancel_timer();
 		}
@@ -416,7 +417,7 @@ my_actor::my_actor()
 {
 	_actorPull = NULL;
 	_actorPush = NULL;
-	_timerSleep = NULL;
+	_timer = NULL;
 	_quited = false;
 	_started = false;
 	DEBUG_OPERATION(_inActor = false);
@@ -447,15 +448,15 @@ my_actor::~my_actor()
 	assert(_suspendResumeQueue.empty());
 	assert(_exitCallback.empty());
 	assert(_childActorList.empty());
-	if (_timerSleep)
+	if (_timer)
 	{
 		if (actor_stack_pool::isEnable())
 		{
-			_timerSleep->~timer_pck();
+			_timer->~timer_pck();
 		}
 		else
 		{
-			delete _timerSleep;
+			delete _timer;
 		}
 	}
 #if (CHECK_ACTOR_STACK) || (_DEBUG)
@@ -496,7 +497,7 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 		newActor = actor_handle(new(stackTop-actorSize) my_actor, actor_free(stackMem));
 		if (_autoMakeTimer)
 		{
-			newActor->_timerSleep = new(stackTop-actorSize-timerSize) timer_pck(actorStrand->get_io_service());
+			newActor->_timer = new(stackTop-actorSize-timerSize) timer_pck(actorStrand->get_io_service());
 		}
 		newActor->_strand = actorStrand;
 		newActor->_mainFunc = mainFunc;
@@ -511,7 +512,7 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 		newActor = actor_handle(new my_actor);
 		if (_autoMakeTimer)
 		{
-			newActor->_timerSleep = new timer_pck(actorStrand->get_io_service());
+			newActor->_timer = new timer_pck(actorStrand->get_io_service());
 		}
 		newActor->_strand = actorStrand;
 		newActor->_mainFunc = mainFunc;
@@ -600,11 +601,10 @@ bool my_actor::child_actor_force_quit( child_actor_handle& actorHandle )
 	return actorHandle._norQuit;
 }
 
-bool my_actor::child_actors_force_quit(const list<child_actor_handle::ptr>& actorHandles)
+void my_actor::child_actors_force_quit(const list<child_actor_handle::ptr>& actorHandles)
 {
 	assert_enter();
-	bool res = true;
-	actor_msg_handle<bool> amh;
+	actor_msg_handle<> amh;
 	auto h = make_msg_notify(amh);
 	for (auto it = actorHandles.begin(); it != actorHandles.end(); it++)
 	{
@@ -614,19 +614,18 @@ bool my_actor::child_actors_force_quit(const list<child_actor_handle::ptr>& acto
 		actor_handle actor = actorHandle->peel();
 		if (actor->this_strand() == _strand)
 		{
-			actor->force_quit(h);
+			actor->force_quit(wrap_no_params(h));
 		} 
 		else
 		{
-			actor->notify_quit(h);
+			actor->notify_quit(wrap_no_params(h));
 		}
 	}
 	for (size_t i = actorHandles.size(); i > 0; i--)
 	{
-		res &= pump_msg(amh);
+		pump_msg(amh);
 	}
 	close_msg_notify(amh);
-	return res;
 }
 
 bool my_actor::child_actor_wait_quit( child_actor_handle& actorHandle )
@@ -642,16 +641,14 @@ bool my_actor::child_actor_wait_quit( child_actor_handle& actorHandle )
 	return actorHandle._norQuit;
 }
 
-bool my_actor::child_actors_wait_quit(const list<child_actor_handle::ptr>& actorHandles)
+void my_actor::child_actors_wait_quit(const list<child_actor_handle::ptr>& actorHandles)
 {
 	assert_enter();
-	bool res = true;
 	for (auto it = actorHandles.begin(); it != actorHandles.end(); it++)
 	{
 		assert((*it)->get_actor()->parent_actor().get() == this);
-		res &= child_actor_wait_quit(**it);
+		child_actor_wait_quit(**it);
 	}
-	return res;
 }
 
 void my_actor::child_actor_suspend(child_actor_handle& actorHandle)
@@ -765,16 +762,16 @@ bool my_actor::run_child_actor_complete(const main_func& h, size_t stackSize)
 void my_actor::open_timer()
 {
 	assert_enter();
-	if (!_timerSleep)
+	if (!_timer)
 	{
 		if (actor_stack_pool::isEnable())
 		{
 			size_t timerSize = MEM_ALIGN(sizeof(timer_pck), sizeof(void*));
-			_timerSleep = new((BYTE*)this-timerSize) timer_pck(_strand->get_io_service());
+			_timer = new((BYTE*)this-timerSize) timer_pck(_strand->get_io_service());
 		}
 		else
 		{
-			_timerSleep = new timer_pck(_strand->get_io_service());
+			_timer = new timer_pck(_strand->get_io_service());
 		}
 	}
 }
@@ -907,7 +904,7 @@ void my_actor::delay_trig(int ms, async_trig_handle<>& th)
 {
 	assert_enter();
 	assert(th._pIsClosed);
-	assert(_timerSleep);
+	assert(_timer);
 	assert(th._actorID == _actorID);
 	actor_handle shared_this = shared_from_this();
 	auto& pIsClosed_ = th._pIsClosed;
@@ -918,7 +915,7 @@ void my_actor::delay_trig(int ms, std::shared_ptr<async_trig_handle<> >& th)
 {
 	assert_enter();
 	assert(th->_pIsClosed);
-	assert(_timerSleep);
+	assert(_timer);
 	assert(th->_actorID == _actorID);
 	actor_handle shared_this = shared_from_this();
 	auto& pIsClosed_ = th->_pIsClosed;
@@ -1279,7 +1276,7 @@ void my_actor::suspend()
 		if (!_suspended)
 		{
 			_suspended = true;
-			if (_timerSleep)
+			if (_timer)
 			{
 				suspend_timer();
 			}
@@ -1343,7 +1340,7 @@ void my_actor::resume()
 		if (_suspended)
 		{
 			_suspended = false;
-			if (_timerSleep)
+			if (_timer)
 			{
 				resume_timer();
 			}
@@ -1487,11 +1484,11 @@ bool my_actor::actor_force_quit( actor_handle anotherActor )
 void my_actor::actors_force_quit(const list<actor_handle>& anotherActors)
 {
 	assert_enter();
-	actor_msg_handle<bool> amh;
+	actor_msg_handle<> amh;
 	auto h = make_msg_notify(amh);
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
 	{
-		(*it)->notify_quit(h);
+		(*it)->notify_quit(wrap_no_params(h));
 	}
 	for (size_t i = anotherActors.size(); i > 0; i--)
 	{
@@ -1719,18 +1716,19 @@ void my_actor::enable_stack_pool()
 
 void my_actor::expires_timer()
 {
-	size_t tid = ++_timerSleep->_timerCount;
+	size_t tid = ++_timer->_timerCount;
 	actor_handle shared_this = shared_from_this();
 	boost::system::error_code ec;
-	_timerSleep->_timer.expires_from_now(boost::chrono::microseconds(_timerSleep->_timerTime.total_microseconds()), ec);
-	_timerSleep->_timer.async_wait(_strand->wrap_post([shared_this, tid](const boost::system::error_code& err)
+	_timer->_timer.expires_from_now(boost::chrono::microseconds(_timer->_timerTime.total_microseconds()), ec);
+	_timer->_timer.async_wait(_strand->wrap_post([shared_this, tid](const boost::system::error_code& err)
 	{
-		if (!err && tid == shared_this->_timerSleep->_timerCount)
+		timer_pck* timer = shared_this->_timer;
+		if (!err && tid == timer->_timerCount)
 		{
-			assert(!shared_this->_timerSleep->_timerSuspend && !shared_this->_timerSleep->_timerCompleted);
-			shared_this->_timerSleep->_timerCompleted = true;
+			assert(!timer->_timerSuspend && !timer->_timerCompleted);
+			timer->_timerCompleted = true;
 			std::function<void()> h;
-			shared_this->_timerSleep->_h.swap(h);
+			timer->_h.swap(h);
 			h();
 		}
 	}));
@@ -1739,47 +1737,47 @@ void my_actor::expires_timer()
 void my_actor::time_out(int ms, const std::function<void ()>& h)
 {
 	assert_enter();
-	assert(_timerSleep);
-	assert(_timerSleep->_timerCompleted);
-	assert(!_timerSleep->_timerSuspend);
-	assert(_timerSleep->_h._Empty());
+	assert(_timer);
+	assert(_timer->_timerCompleted);
+	assert(!_timer->_timerSuspend);
+	assert(_timer->_h._Empty());
 	assert(ms > 0);
-	_timerSleep->_timerCompleted = false;
-	_timerSleep->_h = h;
-	_timerSleep->_timerTime = boost::posix_time::microsec((unsigned long long)ms * 1000);
-	_timerSleep->_timerStampBegin = boost::posix_time::microsec_clock::universal_time();
+	_timer->_timerCompleted = false;
+	_timer->_h = h;
+	_timer->_timerTime = boost::posix_time::microsec((unsigned long long)ms * 1000);
+	_timer->_timerStampBegin = boost::posix_time::microsec_clock::universal_time();
 	expires_timer();
 }
 
 void my_actor::cancel_timer()
 {
-	assert(_timerSleep);
-	if (!_timerSleep->_timerCompleted)
+	assert(_timer);
+	if (!_timer->_timerCompleted)
 	{
-		_timerSleep->_timerCompleted = true;
-		_timerSleep->_timerCount++;
-		clear_function(_timerSleep->_h);
+		_timer->_timerCompleted = true;
+		_timer->_timerCount++;
+		clear_function(_timer->_h);
 		boost::system::error_code ec;
-		_timerSleep->_timer.cancel(ec);
+		_timer->_timer.cancel(ec);
 	}
 }
 
 void my_actor::suspend_timer()
 {
-	assert(_timerSleep);
-	if (!_timerSleep->_timerSuspend)
+	assert(_timer);
+	if (!_timer->_timerSuspend)
 	{
-		_timerSleep->_timerSuspend = true;
-		if (!_timerSleep->_timerCompleted)
+		_timer->_timerSuspend = true;
+		if (!_timer->_timerCompleted)
 		{
-			_timerSleep->_timerCount++;
+			_timer->_timerCount++;
 			boost::system::error_code ec;
-			_timerSleep->_timer.cancel(ec);
-			_timerSleep->_timerStampEnd = boost::posix_time::microsec_clock::universal_time();
-			auto tt = _timerSleep->_timerStampBegin+_timerSleep->_timerTime;
-			if (_timerSleep->_timerStampEnd > tt)
+			_timer->_timer.cancel(ec);
+			_timer->_timerStampEnd = boost::posix_time::microsec_clock::universal_time();
+			auto tt = _timer->_timerStampBegin+_timer->_timerTime;
+			if (_timer->_timerStampEnd > tt)
 			{
-				_timerSleep->_timerStampEnd = tt;
+				_timer->_timerStampEnd = tt;
 			}
 		}
 	}
@@ -1787,15 +1785,15 @@ void my_actor::suspend_timer()
 
 void my_actor::resume_timer()
 {
-	assert(_timerSleep);
-	if (_timerSleep->_timerSuspend)
+	assert(_timer);
+	if (_timer->_timerSuspend)
 	{
-		_timerSleep->_timerSuspend = false;
-		if (!_timerSleep->_timerCompleted)
+		_timer->_timerSuspend = false;
+		if (!_timer->_timerCompleted)
 		{
-			assert(_timerSleep->_timerTime >= _timerSleep->_timerStampEnd-_timerSleep->_timerStampBegin);
-			_timerSleep->_timerTime -= _timerSleep->_timerStampEnd-_timerSleep->_timerStampBegin;
-			_timerSleep->_timerStampBegin = boost::posix_time::microsec_clock::universal_time();
+			assert(_timer->_timerTime >= _timer->_timerStampEnd-_timer->_timerStampBegin);
+			_timer->_timerTime -= _timer->_timerStampEnd-_timer->_timerStampBegin;
+			_timer->_timerStampBegin = boost::posix_time::microsec_clock::universal_time();
 			expires_timer();
 		}
 	}

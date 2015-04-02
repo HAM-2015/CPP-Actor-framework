@@ -1081,10 +1081,9 @@ public:
 
 	/*!
 	@brief 强制终止一个子Actor
-	@return 已经被正常退出返回true，被强制退出返回false
 	*/
 	__yield_interrupt bool child_actor_force_quit(child_actor_handle& actorHandle);
-	__yield_interrupt bool child_actors_force_quit(const list<child_actor_handle::ptr>& actorHandles);
+	__yield_interrupt void child_actors_force_quit(const list<child_actor_handle::ptr>& actorHandles);
 
 	/*!
 	@brief 等待一个子Actor完成后返回
@@ -1096,7 +1095,7 @@ public:
 	@brief 等待一组子Actor完成后返回
 	@return 都正常退出的返回true，否则false
 	*/
-	__yield_interrupt bool child_actors_wait_quit(const list<child_actor_handle::ptr>& actorHandles);
+	__yield_interrupt void child_actors_wait_quit(const list<child_actor_handle::ptr>& actorHandles);
 
 	/*!
 	@brief 挂起子Actor
@@ -1438,7 +1437,7 @@ public:
 		assert_enter();
 		if (ms > 0)
 		{
-			assert(_timerSleep);
+			assert(_timer);
 			time_out(ms, h);
 		} 
 		else if (0 == ms)
@@ -1464,7 +1463,7 @@ public:
 	{
 		assert_enter();
 		assert(th._pIsClosed);
-		assert(_timerSleep);
+		assert(_timer);
 		assert(th._actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th._pIsClosed;
@@ -1477,7 +1476,7 @@ public:
 	{
 		assert_enter();
 		assert(th->_pIsClosed);
-		assert(_timerSleep);
+		assert(_timer);
 		assert(th->_actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th->_pIsClosed;
@@ -1490,7 +1489,7 @@ public:
 	{
 		assert_enter();
 		assert(th._pIsClosed);
-		assert(_timerSleep);
+		assert(_timer);
 		assert(th._actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th._pIsClosed;
@@ -1503,7 +1502,7 @@ public:
 	{
 		assert_enter();
 		assert(th->_pIsClosed);
-		assert(_timerSleep);
+		assert(_timer);
 		assert(th->_actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th->_pIsClosed;
@@ -1516,7 +1515,7 @@ public:
 	{
 		assert_enter();
 		assert(th._pIsClosed);
-		assert(_timerSleep);
+		assert(_timer);
 		assert(th._actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th._pIsClosed;
@@ -1529,7 +1528,7 @@ public:
 	{
 		assert_enter();
 		assert(th->_pIsClosed);
-		assert(_timerSleep);
+		assert(_timer);
 		assert(th->_actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th->_pIsClosed;
@@ -1542,7 +1541,7 @@ public:
 	{
 		assert_enter();
 		assert(th._pIsClosed);
-		assert(_timerSleep);
+		assert(_timer);
 		assert(th._actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th._pIsClosed;
@@ -1555,7 +1554,7 @@ public:
 	{
 		assert_enter();
 		assert(th->_pIsClosed);
-		assert(_timerSleep);
+		assert(_timer);
 		assert(th->_actorID == _actorID);
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = th->_pIsClosed;
@@ -2661,7 +2660,7 @@ private:
 	list<actor_handle> _childActorList;///<子Actor集合
 	list<std::function<void (bool)> > _exitCallback;///<Actor结束后的回调函数，强制退出返回false，正常退出返回true
 	list<std::function<void ()> > _quitHandlerList;///<Actor退出时强制调用的函数，后注册的先执行
-	timer_pck* _timerSleep;///<提供延时功能
+	timer_pck* _timer;///<提供延时功能
 	std::weak_ptr<my_actor> _weakThis;
 };
 
