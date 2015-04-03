@@ -2644,29 +2644,29 @@ public:
 	template <typename T0, typename T1, typename T2, typename T3>
 	decltype(func_type<T0, T1, T2, T3>::result()) get_buddy_notifer(actor_handle buddyActor)
 	{
-		typedef typename func_type<T0, T1, T2, T3>::result func;
-		return trig<func>([buddyActor](const std::function<void(func)>& h)
-		{
-			buddyActor->get_msg_notifier<T0, T1, T2, T3>(h);
-		});
+		typedef typename func_type<T0, T1, T2, T3>::result notifer_type;
+		return trig<notifer_type>([buddyActor](const std::function<void(notifer_type)>& h){	buddyActor->get_msg_notifier<T0, T1, T2, T3>(h); });
 	}
 
 	template <typename T0, typename T1, typename T2>
 	std::function<void(T0, T1, T2)> get_buddy_notifer(actor_handle buddyActor)
 	{
-		return get_buddy_notifer<T0, T1, T2, void>(buddyActor);
+		typedef typename func_type<T0, T1, T2>::result notifer_type;
+		return trig<notifer_type>([buddyActor](const std::function<void(notifer_type)>& h){	buddyActor->get_msg_notifier<T0, T1, T2>(h); });
 	}
 
 	template <typename T0, typename T1>
 	std::function<void(T0, T1)> get_buddy_notifer(actor_handle buddyActor)
 	{
-		return get_buddy_notifer<T0, T1, void, void>(buddyActor);
+		typedef typename func_type<T0, T1>::result notifer_type;
+		return trig<notifer_type>([buddyActor](const std::function<void(notifer_type)>& h){	buddyActor->get_msg_notifier<T0, T1>(h); });
 	}
 
 	template <typename T0>
 	std::function<void(T0)> get_buddy_notifer(actor_handle buddyActor)
 	{
-		return get_buddy_notifer<T0, void, void, void>(buddyActor);
+		typedef typename func_type<T0>::result notifer_type;
+		return trig<notifer_type>([buddyActor](const std::function<void(notifer_type)>& h){	buddyActor->get_msg_notifier<T0>(h); });
 	}
 
 	std::function<void()> get_buddy_notifer(actor_handle buddyActor);
