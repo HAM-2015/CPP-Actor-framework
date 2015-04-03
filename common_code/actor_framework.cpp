@@ -1813,7 +1813,7 @@ std::function<void()> my_actor::get_buddy_notifer(actor_handle buddyActor)
 actor_msg_handle<>& my_actor::get_msg_handle()
 {
 	assert_enter();
-	return get_pck<void, void, void, void>(_msgPumpStatus)._handle;
+	return get_pck<void, void, void, void>(this)._handle;
 }
 
 void my_actor::disable_auto_make_timer()

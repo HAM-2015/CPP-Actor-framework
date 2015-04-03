@@ -2540,11 +2540,11 @@ private:
 	}
 private:
 	template <typename T0, typename T1, typename T2, typename T3>
-	my_actor::msg_pump_status::pck<T0, T1, T2, T3>& get_pck(msg_pump_status& msgPumpStatus)
+	static my_actor::msg_pump_status::pck<T0, T1, T2, T3>& get_pck(my_actor* actor)
 	{
 		typedef my_actor::msg_pump_status::pck<T0, T1, T2, T3> msg_type;
 		msg_type* res = NULL;
-		auto& msgPumpList = msgPumpStatus._msgPumpList[func_type<T0, T1, T2, T3>::number];
+		auto& msgPumpList = actor->_msgPumpStatus._msgPumpList[func_type<T0, T1, T2, T3>::number];
 		if (0 == func_type<T0, T1, T2, T3>::number)
 		{
 			if (!msgPumpList.empty())
@@ -2567,7 +2567,7 @@ private:
 		{
 			msgPumpList.push_front(std::shared_ptr<msg_type>(new msg_type));
 			res = (msg_type*)msgPumpList.front().get();
-			res->_notifer = make_msg_notifer(res->_handle);
+			res->_notifer = actor->make_msg_notifer(res->_handle);
 		}
 		return *res;
 	}
@@ -2581,28 +2581,28 @@ public:
 	actor_msg_handle<T0>& get_msg_handle()
 	{
 		assert_enter();
-		return get_pck<T0, void, void, void>(_msgPumpStatus)._handle;
+		return get_pck<T0, void, void, void>(this)._handle;
 	}
 
 	template <typename T0, typename T1>
 	actor_msg_handle<T0, T1>& get_msg_handle()
 	{
 		assert_enter();
-		return get_pck<T0, T1, void, void>(_msgPumpStatus)._handle;
+		return get_pck<T0, T1, void, void>(this)._handle;
 	}
 
 	template <typename T0, typename T1, typename T2>
 	actor_msg_handle<T0, T1, T2>& get_msg_handle()
 	{
 		assert_enter();
-		return get_pck<T0, T1, T2, void>(_msgPumpStatus)._handle;
+		return get_pck<T0, T1, T2, void>(this)._handle;
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
 	actor_msg_handle<T0, T1, T2, T3>& get_msg_handle()
 	{
 		assert_enter();
-		return get_pck<T0, T1, T2, T3>(_msgPumpStatus)._handle;
+		return get_pck<T0, T1, T2, T3>(this)._handle;
 	}
 
 	/*!
@@ -2614,7 +2614,7 @@ public:
 		typedef typename func_type<T0, T1, T2, T3>::result notifer_type;
 		return send<notifer_type>(buddyActor->_strand, [&buddyActor]()->notifer_type
 		{
-			return buddyActor->get_pck<T0, T1, T2, T3>(buddyActor->_msgPumpStatus)._notifer;
+			return buddyActor->get_pck<T0, T1, T2, T3>(buddyActor.get())._notifer;
 		});
 	}
 
@@ -2648,7 +2648,7 @@ public:
 		typedef typename func_type<T0, T1, T2, T3>::result notifer_type;
 		return _strand->syncInvoke<notifer_type>([this]()->notifer_type
 		{
-			return this->get_pck<T0, T1, T2, T3>(_msgPumpStatus)._notifer;
+			return this->get_pck<T0, T1, T2, T3>(this)._notifer;
 		});
 	}
 
