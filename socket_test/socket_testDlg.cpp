@@ -116,8 +116,8 @@ BOOL Csocket_testDlg::OnInitDialog()
 	_ios.run();
 	_strand = boost_strand::create(_ios);
 	actor_handle mainActor = my_actor::create(_strand, boost::bind(&Csocket_testDlg::mainActor, this, _1));
-	_uiCMD = mainActor->make_msg_notify(_lstCMD);
 	mainActor->notify_run();
+	_uiCMD = mainActor->outside_get_notifer<ui_cmd>();
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -216,9 +216,9 @@ void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param>
 				}
 				post(boost::bind(&Csocket_testDlg::showClientMsg, this, msg));
 			}
-			self->close_msg_notify(amh);
+			self->close_msg_notifer(amh);
 		});
-		auto textio = text_stream_io::create(self->this_strand(), param->_clientSocket, readActor.get_actor()->make_msg_notify(amh));
+		auto textio = text_stream_io::create(self->this_strand(), param->_clientSocket, readActor.get_actor()->make_msg_notifer(amh));
 		child_actor_handle writerActor = self->create_child_actor([&textio, &param](my_actor* self)
 		{
 			actor_msg_handle<shared_data> amh;
@@ -228,7 +228,7 @@ void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param>
 				//接收对话框给的消息，然后发送给服务器
 				textio->write(self->pump_msg(amh));
 			}
-			self->close_msg_notify(amh);
+			self->close_msg_notifer(amh);
 		});
 		self->child_actor_run(readActor);
 		self->child_actor_run(writerActor);
@@ -273,10 +273,10 @@ void Csocket_testDlg::newSession(my_actor* self, std::shared_ptr<session_pck> se
 void Csocket_testDlg::serverActor(my_actor* self, std::shared_ptr<server_param> param)
 {
 	actor_msg_handle<socket_handle> amh;
-	accept_handle accept = acceptor_socket::create(self->this_strand(), param->_port, self->make_msg_notify(amh), false);//创建连接侦听器
+	accept_handle accept = acceptor_socket::create(self->this_strand(), param->_port, self->make_msg_notifer(amh), false);//创建连接侦听器
 	if (!accept)
 	{
-		self->close_msg_notify(amh);
+		self->close_msg_notifer(amh);
 		_uiCMD(ui_stopListen);
 		return;
 	}
@@ -290,7 +290,7 @@ void Csocket_testDlg::serverActor(my_actor* self, std::shared_ptr<server_param> 
 		//得到服务器关闭消息，关闭连接侦听器
 		norClosed = true;
 		accept->close();
-		self->close_msg_notify(amh);
+		self->close_msg_notifer(amh);
 	});
 	//创建会话关闭响应器
 	list<std::shared_ptr<session_pck> > sessList;
@@ -302,9 +302,9 @@ void Csocket_testDlg::serverActor(my_actor* self, std::shared_ptr<server_param> 
 			sessList.erase(self->pump_msg(sessDissonnLst));
 			post(boost::bind(&Csocket_testDlg::showSessionNum, this, sessList.size()));
 		}
-		self->close_msg_notify(sessDissonnLst);
+		self->close_msg_notifer(sessDissonnLst);
 	});
-	auto sessDissonnNtf = sessMngActor.get_actor()->make_msg_notify(sessDissonnLst);
+	auto sessDissonnNtf = sessMngActor.get_actor()->make_msg_notifer(sessDissonnLst);
 	self->child_actor_run(lstCloseProxyActor);
 	self->child_actor_run(sessMngActor);
 	while (true)
@@ -340,7 +340,7 @@ void Csocket_testDlg::serverActor(my_actor* self, std::shared_ptr<server_param> 
 	}
 	self->child_actor_wait_quit(lstCloseProxyActor);
 	self->child_actor_force_quit(sessMngActor);
-	self->close_msg_notify(amh);
+	self->close_msg_notifer(amh);
 	//通知所有存在的对话框关闭
 	for (auto it = sessList.begin(); it != sessList.end(); it++)
 	{
@@ -392,10 +392,11 @@ void Csocket_testDlg::mainActor(my_actor* self)
 		}
 	};
 
+	actor_msg_handle<ui_cmd>& lstCMD = self->get_msg_handle<ui_cmd>();
 	while (true)
 	{
 		send(self, [this](){this->EnableWindow(TRUE);});
-		ui_cmd cmd = self->pump_msg(_lstCMD);
+		ui_cmd cmd = self->pump_msg(lstCMD);
 		send(self, [this](){this->EnableWindow(FALSE);});
 		switch (cmd)
 		{
@@ -502,7 +503,7 @@ void Csocket_testDlg::mainActor(my_actor* self)
 			{
 				disconnectHandler();
 				stopListenHandler();
-				self->close_msg_notify(_lstCMD);
+				self->close_msg_notifer(lstCMD);
 				send(self, [this](){this->mfc_close();});
 				return;
 			}

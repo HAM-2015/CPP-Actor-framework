@@ -19,6 +19,7 @@
 #include "shared_strand.h"
 #include "wrapped_trig_handler.h"
 #include "ref_ex.h"
+#include "function_type.h"
 
 class my_actor;
 typedef std::shared_ptr<my_actor> actor_handle;//Actor句柄
@@ -1005,6 +1006,39 @@ class my_actor
 		std::function<void ()> _h;
 	};
 
+	struct msg_pump_status 
+	{
+		struct pck_base
+		{
+			size_t _size;
+			virtual ~pck_base() {};
+		};
+
+		template <typename T0, typename T1, typename T2, typename T3>
+		struct pck: public pck_base
+		{
+			typedef typename func_type<T0, T1, T2, T3>::result notifer_type;
+
+			pck()
+			{
+				_size = sizeof(pck<T0, T1, T2, T3>);
+			}
+
+			actor_msg_handle<T0, T1, T2, T3> _handle;
+			notifer_type _notify;
+		};
+
+		void clear()
+		{
+			for (int i = 0; i < 5; i++)
+			{
+				_msgPumpList[i].clear();
+			}
+		}
+
+		list<std::shared_ptr<pck_base> > _msgPumpList[5];
+	};
+
 	struct timer_pck;
 	class boost_actor_run;
 	friend boost_actor_run;
@@ -1682,11 +1716,11 @@ public:
 	@param amh 异步通知对象
 	@return 异步触发函数
 	*/
-	std::function<void()> make_msg_notify(actor_msg_handle<>& amh);
-	std::function<void()> make_msg_notify(const std::shared_ptr<actor_msg_handle<> >& amh);
+	std::function<void()> make_msg_notifer(actor_msg_handle<>& amh);
+	std::function<void()> make_msg_notifer(const std::shared_ptr<actor_msg_handle<> >& amh);
 
 	template <typename T0>
-	std::function<void(T0)> make_msg_notify(param_list<msg_param<T0> >& amh)
+	std::function<void(T0)> make_msg_notifer(param_list<msg_param<T0> >& amh)
 	{
 		amh.begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1696,7 +1730,7 @@ public:
 	}
 
 	template <typename T0>
-	std::function<void(T0)> make_msg_notify(const std::shared_ptr<actor_msg_handle<T0> >& amh)
+	std::function<void(T0)> make_msg_notifer(const std::shared_ptr<actor_msg_handle<T0> >& amh)
 	{
 		amh->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1706,7 +1740,7 @@ public:
 	}
 
 	template <typename T0>
-	std::function<void(T0)> make_msg_notify(const std::shared_ptr<actor_msg_bounded_handle<T0> >& amh)
+	std::function<void(T0)> make_msg_notifer(const std::shared_ptr<actor_msg_bounded_handle<T0> >& amh)
 	{
 		amh->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1716,7 +1750,7 @@ public:
 	}
 
 	template <typename T0, typename T1>
-	std::function<void(T0, T1)> make_msg_notify(param_list<msg_param<T0, T1> >& amh)
+	std::function<void(T0, T1)> make_msg_notifer(param_list<msg_param<T0, T1> >& amh)
 	{
 		amh.begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1726,7 +1760,7 @@ public:
 	}
 
 	template <typename T0, typename T1>
-	std::function<void(T0, T1)> make_msg_notify(const std::shared_ptr<actor_msg_handle<T0, T1> >& amh)
+	std::function<void(T0, T1)> make_msg_notifer(const std::shared_ptr<actor_msg_handle<T0, T1> >& amh)
 	{
 		amh->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1736,7 +1770,7 @@ public:
 	}
 
 	template <typename T0, typename T1>
-	std::function<void(T0, T1)> make_msg_notify(const std::shared_ptr<actor_msg_bounded_handle<T0, T1> >& amh)
+	std::function<void(T0, T1)> make_msg_notifer(const std::shared_ptr<actor_msg_bounded_handle<T0, T1> >& amh)
 	{
 		amh->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1746,7 +1780,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	std::function<void(T0, T1, T2)> make_msg_notify(param_list<msg_param<T0, T1, T2> >& amh)
+	std::function<void(T0, T1, T2)> make_msg_notifer(param_list<msg_param<T0, T1, T2> >& amh)
 	{
 		amh.begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1756,7 +1790,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	std::function<void(T0, T1, T2)> make_msg_notify(const std::shared_ptr<actor_msg_handle<T0, T1, T2> >& amh)
+	std::function<void(T0, T1, T2)> make_msg_notifer(const std::shared_ptr<actor_msg_handle<T0, T1, T2> >& amh)
 	{
 		amh->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1766,7 +1800,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	std::function<void(T0, T1, T2)> make_msg_notify(const std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2> >& amh)
+	std::function<void(T0, T1, T2)> make_msg_notifer(const std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2> >& amh)
 	{
 		amh->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1776,7 +1810,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	std::function<void(T0, T1, T2, T3)> make_msg_notify(param_list<msg_param<T0, T1, T2, T3> >& amh)
+	std::function<void(T0, T1, T2, T3)> make_msg_notifer(param_list<msg_param<T0, T1, T2, T3> >& amh)
 	{
 		amh.begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1786,7 +1820,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	std::function<void(T0, T1, T2, T3)> make_msg_notify(const std::shared_ptr<actor_msg_handle<T0, T1, T2, T3> >& amh)
+	std::function<void(T0, T1, T2, T3)> make_msg_notifer(const std::shared_ptr<actor_msg_handle<T0, T1, T2, T3> >& amh)
 	{
 		amh->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1796,7 +1830,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	std::function<void(T0, T1, T2, T3)> make_msg_notify(const std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2, T3> >& amh)
+	std::function<void(T0, T1, T2, T3)> make_msg_notifer(const std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2, T3> >& amh)
 	{
 		amh->begin(_actorID);
 		actor_handle shared_this = shared_from_this();
@@ -1806,12 +1840,12 @@ public:
 	}
 
 	/*!
-	@brief 关闭make_msg_notify创建的句柄，之后将不再接收任何消息
+	@brief 关闭make_msg_notifer创建的句柄，之后将不再接收任何消息
 	*/
-	void close_msg_notify(param_list_base& amh);
+	void close_msg_notifer(param_list_base& amh);
 	//////////////////////////////////////////////////////////////////////////
 	/*!
-	@brief 取出make_msg_notify创建后的回调内容
+	@brief 取出make_msg_notifer创建后的回调内容
 	@param amh 消息句柄
 	@param tm 消息等待超时ms，超时后返回false
 	@return 超时后返回false
@@ -2504,6 +2538,181 @@ private:
 			amh.move_to_back(MT(srcRef));
 		}
 	}
+private:
+	template <typename T0, typename T1, typename T2, typename T3>
+	std::shared_ptr<my_actor::msg_pump_status::pck<T0, T1, T2, T3> > get_pck(msg_pump_status& msgPumpStatus)
+	{
+		std::shared_ptr<my_actor::msg_pump_status::pck<T0, T1, T2, T3> > mh;
+		auto& msgPumpList = msgPumpStatus._msgPumpList[func_type<T0, T1, T2, T3>::number];
+		if (0 == func_type<T0, T1, T2, T3>::number)
+		{
+			if (!msgPumpList.empty())
+			{
+				mh = std::static_pointer_cast<my_actor::msg_pump_status::pck<T0, T1, T2, T3>>(msgPumpList.front());
+			}
+		}
+		else
+		{
+			for (auto it = msgPumpList.begin(); it != msgPumpList.end(); it++)
+			{
+				if (sizeof(my_actor::msg_pump_status::pck<T0, T1, T2, T3>) == (*it)->_size)
+				{
+					mh = std::dynamic_pointer_cast<my_actor::msg_pump_status::pck<T0, T1, T2, T3>>(*it);
+					if (mh)
+					{
+						break;
+					}
+				}
+			}
+		}
+
+		if (!mh)
+		{
+			mh = std::shared_ptr<my_actor::msg_pump_status::pck<T0, T1, T2, T3> >(new my_actor::msg_pump_status::pck<T0, T1, T2, T3>);
+			mh->_notify = make_msg_notifer(mh->_handle);
+			msgPumpList.push_front(mh);
+		}
+		return mh;
+	}
+
+	template <typename CB>
+	void get_msg_notifier(const CB& cb)
+	{
+		get_msg_notifier<void, void, void, void>(cb);
+	}
+
+	template <typename T0, typename CB>
+	void get_msg_notifier(const CB& cb)
+	{
+		get_msg_notifier<T0, void, void, void>(cb);
+	}
+
+	template <typename T0, typename T1, typename CB>
+	void get_msg_notifier(const CB& cb)
+	{
+		get_msg_notifier<T0, T1, void, void>(cb);
+	}
+
+	template <typename T0, typename T1, typename T2, typename CB>
+	void get_msg_notifier(const CB& cb)
+	{
+		get_msg_notifier<T0, T1, T2, void>(cb);
+	}
+
+	template <typename T0, typename T1, typename T2, typename T3,  typename CB>
+	void get_msg_notifier(const CB& cb)
+	{
+		actor_handle shared_this = shared_from_this();
+		_strand->post([=]()
+		{
+			cb(shared_this->get_pck<T0, T1, T2, T3>(shared_this->_msgPumpStatus)->_notify);
+		});
+	}
+public:
+	/*!
+	@@brief 提取一个消息泵句柄
+	*/
+	actor_msg_handle<>& get_msg_handle();
+
+	template <typename T0>
+	actor_msg_handle<T0>& get_msg_handle()
+	{
+		return get_msg_handle<T0, void, void, void>();
+	}
+
+	template <typename T0, typename T1>
+	actor_msg_handle<T0, T1>& get_msg_handle()
+	{
+		return get_msg_handle<T0, T1, void, void>();
+	}
+
+	template <typename T0, typename T1, typename T2>
+	actor_msg_handle<T0, T1, T2>& get_msg_handle()
+	{
+		return get_msg_handle<T0, T1, T2, void>();
+	}
+
+	template <typename T0, typename T1, typename T2, typename T3>
+	actor_msg_handle<T0, T1, T2, T3>& get_msg_handle()
+	{
+		assert_enter();
+		return get_pck<T0, T1, T2, T3>(_msgPumpStatus)->_handle;
+	}
+	/*!
+	@@brief 获取另一个Actor的消息传递函数
+	*/
+	template <typename T0, typename T1, typename T2, typename T3>
+	decltype(func_type<T0, T1, T2, T3>::result()) get_buddy_notifer(actor_handle buddyActor)
+	{
+		typedef typename func_type<T0, T1, T2, T3>::result func;
+		return trig<func>([buddyActor](const std::function<void(func)>& h)
+		{
+			buddyActor->get_msg_notifier<T0, T1, T2, T3>(h);
+		});
+	}
+
+	template <typename T0, typename T1, typename T2>
+	std::function<void(T0, T1, T2)> get_buddy_notifer(actor_handle buddyActor)
+	{
+		return get_buddy_notifer<T0, T1, T2, void>(buddyActor);
+	}
+
+	template <typename T0, typename T1>
+	std::function<void(T0, T1)> get_buddy_notifer(actor_handle buddyActor)
+	{
+		return get_buddy_notifer<T0, T1, void, void>(buddyActor);
+	}
+
+	template <typename T0>
+	std::function<void(T0)> get_buddy_notifer(actor_handle buddyActor)
+	{
+		return get_buddy_notifer<T0, void, void, void>(buddyActor);
+	}
+
+	std::function<void()> get_buddy_notifer(actor_handle buddyActor);
+	//////////////////////////////////////////////////////////////////////////
+
+	/*!
+	@@brief 获取该Actor的消息传递函数，在Actor所依赖的ios无关线程中使用
+	*/
+	template <typename T0, typename T1, typename T2, typename T3>
+	decltype(func_type<T0, T1, T2, T3>::result()) outside_get_notifer()
+	{
+		typedef typename func_type<T0, T1, T2, T3>::result notifer_type;
+		assert(!_strand->in_this_ios());
+		boost::condition_variable conVar;
+		boost::mutex mutex;
+		notifer_type res;
+		boost::unique_lock<boost::mutex> ul(mutex);
+		get_msg_notifier<T0, T1, T2, T3>([&](const notifer_type& h)
+		{
+			res = h;
+			boost::lock_guard<boost::mutex> lg(mutex);
+			conVar.notify_one();
+		});
+		conVar.wait(ul);
+		return res;
+	}
+
+	template <typename T0, typename T1, typename T2>
+	std::function<void(T0, T1, T2)> outside_get_notifer()
+	{
+		return outside_get_notifer<T0, T1, T2, void>();
+	}
+
+	template <typename T0, typename T1>
+	std::function<void(T0, T1)> outside_get_notifer()
+	{
+		return outside_get_notifer<T0, T1, void, void>();
+	}
+
+	template <typename T0>
+	std::function<void(T0)> outside_get_notifer()
+	{
+		return outside_get_notifer<T0, void, void, void>();
+	}
+
+	std::function<void()> outside_get_notifer();
 public:
 	/*!
 	@brief 测试当前下的Actor栈是否安全
@@ -2660,6 +2869,7 @@ private:
 	list<actor_handle> _childActorList;///<子Actor集合
 	list<std::function<void (bool)> > _exitCallback;///<Actor结束后的回调函数，强制退出返回false，正常退出返回true
 	list<std::function<void ()> > _quitHandlerList;///<Actor退出时强制调用的函数，后注册的先执行
+	msg_pump_status _msgPumpStatus;///<对方发送过来的消息泵
 	timer_pck* _timer;///<提供延时功能
 	std::weak_ptr<my_actor> _weakThis;
 };

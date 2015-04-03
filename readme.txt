@@ -9,6 +9,9 @@ oschina url
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
+2015-04-02
+添加可以直接拿一个Actor句柄发送消息，然后通过匹配弹出消息.
+
 2015-03-19
 添加消息传递的右值优化.
 

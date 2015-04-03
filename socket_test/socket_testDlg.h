@@ -86,7 +86,6 @@ private:
 	ios_proxy _ios;
 	shared_strand _strand;
 	CFont _editFont;
-	actor_msg_handle<ui_cmd> _lstCMD;
 	std::function<void (ui_cmd)> _uiCMD;
 public:
 	CEdit _outputEdit;

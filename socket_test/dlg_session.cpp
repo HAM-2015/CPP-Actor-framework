@@ -79,11 +79,11 @@ void dlg_session::sessionActor(my_actor* self)
 		self->pump_msg(amh);
 		this->_exit = true;
 		_socket->close();
-		self->close_msg_notify(amh);
+		self->close_msg_notifer(amh);
 	});
 	self->child_actor_run(lstClose);
 	actor_msg_handle<shared_data> amh;
-	std::shared_ptr<text_stream_io> textio = text_stream_io::create(_strand, _socket, self->make_msg_notify(amh));
+	std::shared_ptr<text_stream_io> textio = text_stream_io::create(_strand, _socket, self->make_msg_notifer(amh));
 	child_actor_handle wd = self->create_child_actor([this, &textio](my_actor* self)
 	{
 		actor_msg_handle<shared_data> amh;
@@ -97,7 +97,7 @@ void dlg_session::sessionActor(my_actor* self)
 			}
 			textio->write(msg);
 		}
-		self->close_msg_notify(amh);
+		self->close_msg_notifer(amh);
 	});
 	self->child_actor_run(wd);
 	while (true)
@@ -110,7 +110,7 @@ void dlg_session::sessionActor(my_actor* self)
 		post(boost::bind(&dlg_session::showClientMsg, this, msg));
 	}
 	self->child_actor_force_quit(wd);
-	self->close_msg_notify(amh);
+	self->close_msg_notifer(amh);
 	post(boost::bind(&dlg_session::showClientMsg, this, msg_data::create("Á¬½Ó¶Ï¿ª")));
 	send(self, [this]()
 	{

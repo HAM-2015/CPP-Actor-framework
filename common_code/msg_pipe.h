@@ -382,7 +382,7 @@ public:
 			{
 				auto tb = weakBuff.lock();
 				boost::unique_lock<boost::shared_mutex> ul(wrappedParam->_mutex);
-				wrappedParam->_handler = hostActor->make_msg_notify(rh);
+				wrappedParam->_handler = hostActor->make_msg_notifer(rh);
 				regCount = wrappedParam->_count++;
 				if (tb)
 				{
@@ -443,7 +443,7 @@ public:
 			if (pipeParam)
 			{
 				assert(0 == pipeParam->_regCount++);
-				pipeParam->_writer = hostActor->make_msg_notify(rh);
+				pipeParam->_writer = hostActor->make_msg_notifer(rh);
 				pipeParam->_mutex.lock();
 				pipeParam->_hasWriter = true;
 				while (!pipeParam->_getList.empty())
@@ -491,7 +491,7 @@ public:
 			if (pipeParam)
 			{
 				assert(0 == pipeParam->_regCount++);
-				pipeParam->_writer = hostActor->make_msg_notify(rh);
+				pipeParam->_writer = hostActor->make_msg_notifer(rh);
 				boost::unique_lock<boost::mutex> ul(pipeParam->_mutex);
 				pipeParam->_hasWriter = true;
 				if (pipeParam->_waitCount)

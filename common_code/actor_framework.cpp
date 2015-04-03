@@ -398,6 +398,7 @@ public:
 		}
 #endif
 		clear_function(_actor._mainFunc);
+		_actor._msgPumpStatus.clear();
 		while (!_actor._exitCallback.empty())
 		{
 			assert(_actor._exitCallback.front());
@@ -605,7 +606,7 @@ void my_actor::child_actors_force_quit(const list<child_actor_handle::ptr>& acto
 {
 	assert_enter();
 	actor_msg_handle<> amh;
-	auto h = make_msg_notify(amh);
+	auto h = make_msg_notifer(amh);
 	for (auto it = actorHandles.begin(); it != actorHandles.end(); it++)
 	{
 		child_actor_handle::ptr actorHandle = *it;
@@ -625,7 +626,7 @@ void my_actor::child_actors_force_quit(const list<child_actor_handle::ptr>& acto
 	{
 		pump_msg(amh);
 	}
-	close_msg_notify(amh);
+	close_msg_notifer(amh);
 }
 
 bool my_actor::child_actor_wait_quit( child_actor_handle& actorHandle )
@@ -671,7 +672,7 @@ void my_actor::child_actors_suspend(const list<child_actor_handle::ptr>& actorHa
 {
 	assert_enter();
 	actor_msg_handle<> amh;
-	auto h = make_msg_notify(amh);
+	auto h = make_msg_notifer(amh);
 	for (auto it = actorHandles.begin(); it != actorHandles.end(); it++)
 	{
 		child_actor_handle::ptr actorHandle = *it;
@@ -691,7 +692,7 @@ void my_actor::child_actors_suspend(const list<child_actor_handle::ptr>& actorHa
 	{
 		pump_msg(amh);
 	}
-	close_msg_notify(amh);
+	close_msg_notifer(amh);
 }
 
 void my_actor::child_actor_resume(child_actor_handle& actorHandle)
@@ -714,7 +715,7 @@ void my_actor::child_actors_resume(const list<child_actor_handle::ptr>& actorHan
 {
 	assert_enter();
 	actor_msg_handle<> amh;
-	auto h = make_msg_notify(amh);
+	auto h = make_msg_notifer(amh);
 	for (auto it = actorHandles.begin(); it != actorHandles.end(); it++)
 	{
 		child_actor_handle::ptr actorHandle = *it;
@@ -734,7 +735,7 @@ void my_actor::child_actors_resume(const list<child_actor_handle::ptr>& actorHan
 	{
 		pump_msg(amh);
 	}
-	close_msg_notify(amh);
+	close_msg_notifer(amh);
 }
 
 actor_handle my_actor::child_actor_peel(child_actor_handle& actorHandle)
@@ -928,21 +929,21 @@ void my_actor::cancel_delay_trig()
 	cancel_timer();
 }
 
-std::function<void()> my_actor::make_msg_notify(actor_msg_handle<>& amh)
+std::function<void()> my_actor::make_msg_notifer(actor_msg_handle<>& amh)
 {
 	amh.begin(_actorID);
 	actor_handle shared_this = shared_from_this();
 	return _strand->wrap_post([shared_this, &amh](){shared_this->check_run1(amh._pIsClosed, amh); });
 }
 
-std::function<void()> my_actor::make_msg_notify(const std::shared_ptr<actor_msg_handle<> >& amh)
+std::function<void()> my_actor::make_msg_notifer(const std::shared_ptr<actor_msg_handle<> >& amh)
 {
 	amh->begin(_actorID);
 	actor_handle shared_this = shared_from_this();
 	return _strand->wrap_post([shared_this, amh](){shared_this->check_run1(amh->_pIsClosed, *amh); });
 }
 
-void my_actor::close_msg_notify( param_list_base& amh )
+void my_actor::close_msg_notifer( param_list_base& amh )
 {
 	DEBUG_OPERATION(if (amh._actorID) {assert(amh._actorID == _actorID); amh._actorID = 0;})
 	amh.close();
@@ -1485,7 +1486,7 @@ void my_actor::actors_force_quit(const list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	actor_msg_handle<> amh;
-	auto h = make_msg_notify(amh);
+	auto h = make_msg_notifer(amh);
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
 	{
 		(*it)->notify_quit(wrap_no_params(h));
@@ -1494,7 +1495,7 @@ void my_actor::actors_force_quit(const list<actor_handle>& anotherActors)
 	{
 		pump_msg(amh);
 	}
-	close_msg_notify(amh);
+	close_msg_notifer(amh);
 }
 
 bool my_actor::actor_wait_quit( actor_handle anotherActor )
@@ -1524,7 +1525,7 @@ void my_actor::actors_suspend(const list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	actor_msg_handle<> amh;
-	auto h = make_msg_notify(amh);
+	auto h = make_msg_notifer(amh);
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
 	{
 		(*it)->notify_suspend(h);
@@ -1533,7 +1534,7 @@ void my_actor::actors_suspend(const list<actor_handle>& anotherActors)
 	{
 		pump_msg(amh);
 	}
-	close_msg_notify(amh);
+	close_msg_notifer(amh);
 }
 
 void my_actor::actor_resume(actor_handle anotherActor)
@@ -1547,7 +1548,7 @@ void my_actor::actors_resume(const list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	actor_msg_handle<> amh;
-	auto h = make_msg_notify(amh);
+	auto h = make_msg_notifer(amh);
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
 	{
 		(*it)->notify_resume(h);
@@ -1556,7 +1557,7 @@ void my_actor::actors_resume(const list<actor_handle>& anotherActors)
 	{
 		pump_msg(amh);
 	}
-	close_msg_notify(amh);
+	close_msg_notifer(amh);
 }
 
 bool my_actor::actor_switch(actor_handle anotherActor)
@@ -1571,7 +1572,7 @@ bool my_actor::actors_switch(const list<actor_handle>& anotherActors)
 	assert_enter();
 	bool isPause = true;
 	actor_msg_handle<bool> amh;
-	auto h = make_msg_notify(amh);
+	auto h = make_msg_notifer(amh);
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
 	{
 		(*it)->switch_pause_play(h);
@@ -1580,7 +1581,7 @@ bool my_actor::actors_switch(const list<actor_handle>& anotherActors)
 	{
 		isPause &= pump_msg(amh);
 	}
-	close_msg_notify(amh);
+	close_msg_notifer(amh);
 	return isPause;
 }
 
@@ -1797,6 +1798,21 @@ void my_actor::resume_timer()
 			expires_timer();
 		}
 	}
+}
+
+std::function<void()> my_actor::outside_get_notifer()
+{
+	return outside_get_notifer<void, void, void, void>();
+}
+
+std::function<void()> my_actor::get_buddy_notifer(actor_handle anotherActor)
+{
+	return get_buddy_notifer<void, void, void, void>(anotherActor);
+}
+
+actor_msg_handle<>& my_actor::get_msg_handle()
+{
+	return get_msg_handle<void, void, void, void>();
 }
 
 void my_actor::disable_auto_make_timer()

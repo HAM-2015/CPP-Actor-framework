@@ -176,7 +176,7 @@ void shift_key(my_actor* self, actor_handle pauseactor)
 {
 	list<child_actor_handle::ptr> childs;
 	actor_msg_handle<int> amh;
-	auto h = self->make_msg_notify(amh);
+	auto h = self->make_msg_notifer(amh);
 	for (int i = 'A'; i <= 'Z'; i++)
 	{
 		auto tp = child_actor_handle::make_ptr();
@@ -197,7 +197,7 @@ void shift_key(my_actor* self, actor_handle pauseactor)
 			printf("shift+%c\n", id);
 		}
 	}
-	self->close_msg_notify(amh);
+	self->close_msg_notifer(amh);
 	self->child_actors_force_quit(childs);
 }
 
@@ -321,7 +321,7 @@ void async_buffer_read(my_actor* self, std::shared_ptr<async_buffer<int> > buffe
 			printf("read 缓存来数据\n");
 		}
 	}
-	self->close_msg_notify(amh);
+	self->close_msg_notifer(amh);
 }
 
 void async_buffer_test(my_actor* self)
@@ -331,7 +331,7 @@ void async_buffer_test(my_actor* self)
 	std::shared_ptr<async_buffer<int> > buffer = async_buffer<int>::create(10);
 	actor_msg_handle<> amh;
 	int testCyc = 30;
-	buffer->setNotify(fullNotify, self->make_msg_notify(amh));
+	buffer->setNotify(fullNotify, self->make_msg_notifer(amh));
 	child_actor_handle readactor = self->create_child_actor(boost::bind(&async_buffer_read, _1, buffer, regWaitFull, testCyc-1));
 	self->child_actor_run(readactor);
 	for (int i = 0; i < testCyc; i++)
@@ -346,7 +346,7 @@ void async_buffer_test(my_actor* self)
 		}
 	}
 	self->child_actor_wait_quit(readactor);
-	self->close_msg_notify(amh);
+	self->close_msg_notifer(amh);
 	printf("缓存测试结束\n");
 }
 
@@ -369,10 +369,10 @@ void actor_test(my_actor* self)
 	child_actor_handle actorProducer2;
 	child_actor_handle actorConsumer;
 	//创建生产者/消费者模型测试
-	actor_msg_handle<int, int> conCmh;
 	{
-		actorConsumer = self->create_child_actor([&conCmh](my_actor* self)
+		actorConsumer = self->create_child_actor([](my_actor* self)
 		{//消费者
+			actor_msg_handle<int, int>& conCmh = self->get_msg_handle<int, int>();
 			while (true)
 			{
 				int p0;
@@ -381,11 +381,10 @@ void actor_test(my_actor* self)
 				printf("%d-%d id=%d\n", p0, (int)conCmh.length(), id);
 				self->sleep(1000);
 			}
-			self->close_msg_notify(conCmh);
 		});
-		auto writer = actorConsumer.get_actor()->make_msg_notify(conCmh);
-		auto test_producer = [writer](my_actor* self)
+		auto test_producer = [&actorConsumer](my_actor* self)
 		{//生产者
+			auto writer = self->get_buddy_notifer<int, int>(actorConsumer.get_actor());
 			for (int i = 0; true; i++)
 			{
 				writer(i, (int)self->this_id());
