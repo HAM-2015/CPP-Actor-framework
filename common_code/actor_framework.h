@@ -1025,7 +1025,7 @@ class my_actor
 			}
 
 			actor_msg_handle<T0, T1, T2, T3> _handle;
-			notifer_type _notify;
+			notifer_type _notifer;
 		};
 
 		void clear()
@@ -2540,73 +2540,36 @@ private:
 	}
 private:
 	template <typename T0, typename T1, typename T2, typename T3>
-	std::shared_ptr<my_actor::msg_pump_status::pck<T0, T1, T2, T3> > get_pck(msg_pump_status& msgPumpStatus)
+	my_actor::msg_pump_status::pck<T0, T1, T2, T3>& get_pck(msg_pump_status& msgPumpStatus)
 	{
-		std::shared_ptr<my_actor::msg_pump_status::pck<T0, T1, T2, T3> > mh;
+		typedef my_actor::msg_pump_status::pck<T0, T1, T2, T3> msg_type;
+		msg_type* res = NULL;
 		auto& msgPumpList = msgPumpStatus._msgPumpList[func_type<T0, T1, T2, T3>::number];
 		if (0 == func_type<T0, T1, T2, T3>::number)
 		{
 			if (!msgPumpList.empty())
 			{
-				mh = std::static_pointer_cast<my_actor::msg_pump_status::pck<T0, T1, T2, T3>>(msgPumpList.front());
+				res = (msg_type*)msgPumpList.front().get();
 			}
 		}
 		else
 		{
-			for (auto it = msgPumpList.begin(); it != msgPumpList.end(); it++)
+			for (auto it = msgPumpList.begin(); it != msgPumpList.end() && !res; it++)
 			{
-				if (sizeof(my_actor::msg_pump_status::pck<T0, T1, T2, T3>) == (*it)->_size)
+				if (sizeof(msg_type) == (*it)->_size && dynamic_cast<msg_type*>(it->get()))
 				{
-					mh = std::dynamic_pointer_cast<my_actor::msg_pump_status::pck<T0, T1, T2, T3>>(*it);
-					if (mh)
-					{
-						break;
-					}
+					res = (msg_type*)it->get();
 				}
 			}
 		}
 
-		if (!mh)
+		if (!res)
 		{
-			mh = std::shared_ptr<my_actor::msg_pump_status::pck<T0, T1, T2, T3> >(new my_actor::msg_pump_status::pck<T0, T1, T2, T3>);
-			mh->_notify = make_msg_notifer(mh->_handle);
-			msgPumpList.push_front(mh);
+			msgPumpList.push_front(std::shared_ptr<msg_type>(new msg_type));
+			res = (msg_type*)msgPumpList.front().get();
+			res->_notifer = make_msg_notifer(res->_handle);
 		}
-		return mh;
-	}
-
-	template <typename CB>
-	void get_msg_notifier(const CB& cb)
-	{
-		get_msg_notifier<void, void, void, void>(cb);
-	}
-
-	template <typename T0, typename CB>
-	void get_msg_notifier(const CB& cb)
-	{
-		get_msg_notifier<T0, void, void, void>(cb);
-	}
-
-	template <typename T0, typename T1, typename CB>
-	void get_msg_notifier(const CB& cb)
-	{
-		get_msg_notifier<T0, T1, void, void>(cb);
-	}
-
-	template <typename T0, typename T1, typename T2, typename CB>
-	void get_msg_notifier(const CB& cb)
-	{
-		get_msg_notifier<T0, T1, T2, void>(cb);
-	}
-
-	template <typename T0, typename T1, typename T2, typename T3,  typename CB>
-	void get_msg_notifier(const CB& cb)
-	{
-		actor_handle shared_this = shared_from_this();
-		_strand->post([=]()
-		{
-			cb(shared_this->get_pck<T0, T1, T2, T3>(shared_this->_msgPumpStatus)->_notify);
-		});
+		return *res;
 	}
 public:
 	/*!
@@ -2617,81 +2580,76 @@ public:
 	template <typename T0>
 	actor_msg_handle<T0>& get_msg_handle()
 	{
-		return get_msg_handle<T0, void, void, void>();
+		assert_enter();
+		return get_pck<T0, void, void, void>(_msgPumpStatus)._handle;
 	}
 
 	template <typename T0, typename T1>
 	actor_msg_handle<T0, T1>& get_msg_handle()
 	{
-		return get_msg_handle<T0, T1, void, void>();
+		assert_enter();
+		return get_pck<T0, T1, void, void>(_msgPumpStatus)._handle;
 	}
 
 	template <typename T0, typename T1, typename T2>
 	actor_msg_handle<T0, T1, T2>& get_msg_handle()
 	{
-		return get_msg_handle<T0, T1, T2, void>();
+		assert_enter();
+		return get_pck<T0, T1, T2, void>(_msgPumpStatus)._handle;
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
 	actor_msg_handle<T0, T1, T2, T3>& get_msg_handle()
 	{
 		assert_enter();
-		return get_pck<T0, T1, T2, T3>(_msgPumpStatus)->_handle;
+		return get_pck<T0, T1, T2, T3>(_msgPumpStatus)._handle;
 	}
+
 	/*!
 	@@brief 获取另一个Actor的消息传递函数
 	*/
 	template <typename T0, typename T1, typename T2, typename T3>
-	decltype(func_type<T0, T1, T2, T3>::result()) get_buddy_notifer(actor_handle buddyActor)
+	__yield_interrupt typename func_type<T0, T1, T2, T3>::result get_buddy_notifer(actor_handle buddyActor)
 	{
 		typedef typename func_type<T0, T1, T2, T3>::result notifer_type;
-		return trig<notifer_type>([buddyActor](const std::function<void(notifer_type)>& h){	buddyActor->get_msg_notifier<T0, T1, T2, T3>(h); });
+		return send<notifer_type>(buddyActor->_strand, [&buddyActor]()->notifer_type
+		{
+			return buddyActor->get_pck<T0, T1, T2, T3>(buddyActor->_msgPumpStatus)._notifer;
+		});
 	}
 
 	template <typename T0, typename T1, typename T2>
-	std::function<void(T0, T1, T2)> get_buddy_notifer(actor_handle buddyActor)
+	__yield_interrupt std::function<void(T0, T1, T2)> get_buddy_notifer(actor_handle buddyActor)
 	{
-		typedef typename func_type<T0, T1, T2>::result notifer_type;
-		return trig<notifer_type>([buddyActor](const std::function<void(notifer_type)>& h){	buddyActor->get_msg_notifier<T0, T1, T2>(h); });
+		return get_buddy_notifer<T0, T1, T2, void>(buddyActor);
 	}
 
 	template <typename T0, typename T1>
-	std::function<void(T0, T1)> get_buddy_notifer(actor_handle buddyActor)
+	__yield_interrupt std::function<void(T0, T1)> get_buddy_notifer(actor_handle buddyActor)
 	{
-		typedef typename func_type<T0, T1>::result notifer_type;
-		return trig<notifer_type>([buddyActor](const std::function<void(notifer_type)>& h){	buddyActor->get_msg_notifier<T0, T1>(h); });
+		return get_buddy_notifer<T0, T1, void, void>(buddyActor);
 	}
 
 	template <typename T0>
-	std::function<void(T0)> get_buddy_notifer(actor_handle buddyActor)
+	__yield_interrupt std::function<void(T0)> get_buddy_notifer(actor_handle buddyActor)
 	{
-		typedef typename func_type<T0>::result notifer_type;
-		return trig<notifer_type>([buddyActor](const std::function<void(notifer_type)>& h){	buddyActor->get_msg_notifier<T0>(h); });
+		return get_buddy_notifer<T0, void, void, void>(buddyActor);
 	}
 
-	std::function<void()> get_buddy_notifer(actor_handle buddyActor);
+	__yield_interrupt std::function<void()> get_buddy_notifer(actor_handle buddyActor);
 	//////////////////////////////////////////////////////////////////////////
 
 	/*!
 	@@brief 获取该Actor的消息传递函数，在Actor所依赖的ios无关线程中使用
 	*/
 	template <typename T0, typename T1, typename T2, typename T3>
-	decltype(func_type<T0, T1, T2, T3>::result()) outside_get_notifer()
+	typename func_type<T0, T1, T2, T3>::result outside_get_notifer()
 	{
 		typedef typename func_type<T0, T1, T2, T3>::result notifer_type;
-		assert(!_strand->in_this_ios());
-		boost::condition_variable conVar;
-		boost::mutex mutex;
-		notifer_type res;
-		boost::unique_lock<boost::mutex> ul(mutex);
-		get_msg_notifier<T0, T1, T2, T3>([&](const notifer_type& h)
+		return _strand->syncInvoke<notifer_type>([this]()->notifer_type
 		{
-			res = h;
-			boost::lock_guard<boost::mutex> lg(mutex);
-			conVar.notify_one();
+			return this->get_pck<T0, T1, T2, T3>(_msgPumpStatus)._notifer;
 		});
-		conVar.wait(ul);
-		return res;
 	}
 
 	template <typename T0, typename T1, typename T2>

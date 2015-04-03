@@ -1807,13 +1807,13 @@ std::function<void()> my_actor::outside_get_notifer()
 
 std::function<void()> my_actor::get_buddy_notifer(actor_handle buddyActor)
 {
-	typedef func_type<>::result notifer_type;
-	return trig<notifer_type>([buddyActor](const std::function<void(notifer_type)>& h){	buddyActor->get_msg_notifier(h); });
+	return get_buddy_notifer<void, void, void, void>(buddyActor);
 }
 
 actor_msg_handle<>& my_actor::get_msg_handle()
 {
-	return get_msg_handle<void, void, void, void>();
+	assert_enter();
+	return get_pck<void, void, void, void>(_msgPumpStatus)._handle;
 }
 
 void my_actor::disable_auto_make_timer()
