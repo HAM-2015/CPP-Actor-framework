@@ -1,8 +1,6 @@
 #include "actor_stack.h"
 #include "shared_data.h"
 #include "scattered.h"
-#include <malloc.h>
-#include <boost/thread/lock_guard.hpp>
 
 //堆栈清理最小周期(秒)
 #define STACK_MIN_CLEAR_CYCLE		30
@@ -49,25 +47,26 @@ actor_stack_pool::~actor_stack_pool()
 	}
 	_clearThread.join();
 
-	if (_stackCount < 10000)
+	int ic = 0;
+	vector<void*> tempPool;
+	tempPool.resize(_stackCount);
+	for (int i = 0; i < 256; i++)
 	{
-		for (int i = 0; i < 256; i++)
+		boost::lock_guard<boost::mutex> lg1(_stackPool[i]._mutex);
+		while (!_stackPool[i]._pool.empty())
 		{
-			boost::lock_guard<boost::mutex> lg1(_stackPool[i]._mutex);
-			while (!_stackPool[i]._pool.empty())
-			{
-				stack_pck pck = _stackPool[i]._pool.back();
-				_stackPool[i]._pool.pop_back();
-				CHECK_STACK(pck);
-				free(((char*)pck._stack.sp) - pck._stack.size);
-				_stackCount--;
-			}
+			stack_pck pck = _stackPool[i]._pool.back();
+			_stackPool[i]._pool.pop_back();
+			tempPool[ic++] = ((char*)pck._stack.sp) - pck._stack.size;
+			CHECK_STACK(pck);
+			_stackCount--;
 		}
-		assert(0 == _stackCount);
 	}
-	else
+	assert(0 == _stackCount);
+	sort(tempPool.begin(), tempPool.end());
+	for (int j = 0; j < (int)tempPool.size(); j++)
 	{
-		exit(-2);
+		free(tempPool[j]);
 	}
 }
 
