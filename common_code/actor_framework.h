@@ -60,7 +60,6 @@ catch (my_actor::force_quit_exception& e)\
 template <typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
 struct msg_param
 {
-	typedef std::function<void (T0, T1, T2, T3)> overflow_notify;
 	typedef ref_ex<T0, T1, T2, T3> ref_type;
 	typedef const_ref_ex<T0, T1, T2, T3> const_ref_type;
 
@@ -102,11 +101,6 @@ struct msg_param
 		_res3 = std::move(s._res3);
 	}
 
-	static void proxy_notify(const overflow_notify& nfy, const msg_param& p)
-	{
-		nfy(p._res0, p._res1, p._res2, p._res3);
-	}
-
 	void move_out(ref_type& dst)
 	{
 		dst._p0 = std::move(_res0);
@@ -140,7 +134,6 @@ struct msg_param
 template <typename T0, typename T1, typename T2>
 struct msg_param<T0, T1, T2, void>
 {
-	typedef std::function<void (T0, T1, T2)> overflow_notify;
 	typedef ref_ex<T0, T1, T2> ref_type;
 	typedef const_ref_ex<T0, T1, T2> const_ref_type;
 
@@ -180,11 +173,6 @@ struct msg_param<T0, T1, T2, void>
 		_res2 = std::move(s._res2);
 	}
 
-	static void proxy_notify(const overflow_notify& nfy, const msg_param& p)
-	{
-		nfy(p._res0, p._res1, p._res2);
-	}
-
 	void move_out(ref_type& dst)
 	{
 		dst._p0 = std::move(_res0);
@@ -214,7 +202,6 @@ struct msg_param<T0, T1, T2, void>
 template <typename T0, typename T1>
 struct msg_param<T0, T1, void, void>
 {
-	typedef std::function<void (T0, T1)> overflow_notify;
 	typedef ref_ex<T0, T1> ref_type;
 	typedef const_ref_ex<T0, T1> const_ref_type;
 
@@ -252,11 +239,6 @@ struct msg_param<T0, T1, void, void>
 		_res1 = std::move(s._res1);
 	}
 
-	static void proxy_notify(const overflow_notify& nfy, const msg_param& p)
-	{
-		nfy(p._res0, p._res1);
-	}
-
 	void move_out(ref_type& dst)
 	{
 		dst._p0 = std::move(_res0);
@@ -282,7 +264,6 @@ struct msg_param<T0, T1, void, void>
 template <typename T0>
 struct msg_param<T0, void, void, void>
 {
-	typedef std::function<void (T0)> overflow_notify;
 	typedef ref_ex<T0> ref_type;
 	typedef const_ref_ex<T0> const_ref_type;
 
@@ -316,11 +297,6 @@ struct msg_param<T0, void, void, void>
 	void operator =(msg_param&& s)
 	{
 		_res0 = std::move(s._res0);
-	}
-
-	static void proxy_notify(const overflow_notify& nfy, const msg_param& p)
-	{
-		nfy(p._res0);
 	}
 
 	void move_out(ref_type& dst)
@@ -470,13 +446,8 @@ public:
 		_params.clear();
 	}
 protected:
-	typedef typename T::overflow_notify overflow_notify;
-
-	param_list_bounded(size_t maxBuff, const overflow_notify& ofh)
-		:_params(maxBuff)
-	{
-		_ofh = ofh;
-	}
+	param_list_bounded(size_t maxBuff)
+		:_params(maxBuff) {}
 
 	void close()
 	{
@@ -487,7 +458,6 @@ protected:
 			(*_pIsClosed) = true;
 			_waiting = false;
 			_pIsClosed.reset();
-			_ofh.clear();
 		}
 	}
 
@@ -497,16 +467,13 @@ protected:
 		if (_params.size() < _params.capacity())
 		{
 			_params.push_back(std::move(src));
-			return _params.size();
 		}
-		if (!_ofh)
+		else
 		{
 			_params.pop_front();
 			_params.push_back(std::move(src));
-			return _params.size();
-		} 
-		T::proxy_notify(_ofh, src);
-		return 0;
+		}
+		return _params.size();
 	}
 
 	T* front()
@@ -527,7 +494,6 @@ protected:
 		return _params.size();
 	}
 private:
-	overflow_notify _ofh;
 	boost::circular_buffer<T> _params;
 };
 
@@ -550,12 +516,13 @@ template <typename T0 = void, typename T1 = void, typename T2 = void, typename T
 class actor_msg_handle: public param_list_no_bounded<msg_param<T0, T1, T2, T3> >
 {
 	friend my_actor;
+	typedef actor_msg_handle<T0, T1, T2, T3> type;
 public:
-	typedef std::shared_ptr<actor_msg_handle<T0, T1, T2, T3> > ptr;
+	typedef std::shared_ptr<type> ptr;
 
-	static std::shared_ptr<actor_msg_handle<T0, T1, T2, T3> > make_ptr()
+	static ptr make_ptr()
 	{
-		return std::shared_ptr<actor_msg_handle<T0, T1, T2, T3> >(new actor_msg_handle<T0, T1, T2, T3>);
+		return ptr(new type);
 	}
 };
 
@@ -563,12 +530,13 @@ template <typename T0, typename T1, typename T2>
 class actor_msg_handle<T0, T1, T2, void>: public param_list_no_bounded<msg_param<T0, T1, T2> >
 {
 	friend my_actor;
+	typedef actor_msg_handle<T0, T1, T2> type;
 public:
-	typedef std::shared_ptr<actor_msg_handle<T0, T1, T2> > ptr;
+	typedef std::shared_ptr<type> ptr;
 
-	static std::shared_ptr<actor_msg_handle<T0, T1, T2> > make_ptr()
+	static ptr make_ptr()
 	{
-		return std::shared_ptr<actor_msg_handle<T0, T1, T2> >(new actor_msg_handle<T0, T1, T2>);
+		return ptr(new type);
 	}
 };
 
@@ -576,12 +544,13 @@ template <typename T0, typename T1>
 class actor_msg_handle<T0, T1, void, void>: public param_list_no_bounded<msg_param<T0, T1> >
 {
 	friend my_actor;
+	typedef actor_msg_handle<T0, T1> type;
 public:
-	typedef std::shared_ptr<actor_msg_handle<T0, T1> > ptr;
+	typedef std::shared_ptr<type> ptr;
 
-	static std::shared_ptr<actor_msg_handle<T0, T1> > make_ptr()
+	static ptr make_ptr()
 	{
-		return std::shared_ptr<actor_msg_handle<T0, T1> >(new actor_msg_handle<T0, T1>);
+		return ptr(new type);
 	}
 };
 
@@ -589,12 +558,13 @@ template <typename T0>
 class actor_msg_handle<T0, void, void, void>: public param_list_no_bounded<msg_param<T0> >
 {
 	friend my_actor;
+	typedef actor_msg_handle<T0> type;
 public:
-	typedef std::shared_ptr<actor_msg_handle<T0> > ptr;
+	typedef std::shared_ptr<type> ptr;
 
-	static std::shared_ptr<actor_msg_handle<T0> > make_ptr()
+	static ptr make_ptr()
 	{
-		return std::shared_ptr<actor_msg_handle<T0> >(new actor_msg_handle<T0>);
+		return ptr(new type);
 	}
 };
 
@@ -602,12 +572,13 @@ template <>
 class actor_msg_handle<void, void, void, void>: public null_param_list
 {
 	friend my_actor;
+	typedef actor_msg_handle<> type;
 public:
-	typedef std::shared_ptr<actor_msg_handle<> > ptr;
+	typedef std::shared_ptr<type> ptr;
 
-	static std::shared_ptr<actor_msg_handle<> > make_ptr()
+	static ptr make_ptr()
 	{
-		return std::shared_ptr<actor_msg_handle<> >(new actor_msg_handle<>);
+		return ptr(new type);
 	}
 };
 //////////////////////////////////////////////////////////////////////////
@@ -615,23 +586,19 @@ template <typename T0 = void, typename T1 = void, typename T2 = void, typename T
 class actor_msg_bounded_handle: public param_list_bounded<msg_param<T0, T1, T2, T3> >
 {
 	friend my_actor;
+	typedef actor_msg_bounded_handle<T0, T1, T2, T3> type;
 public:
-	typedef typename msg_param<T0, T1, T2, T3>::overflow_notify overflow_notify;
-	typedef std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2, T3> > ptr;
+	typedef std::shared_ptr<type> ptr;
 
-	/*!
-	@param maxBuff 最大缓存个数
-	@param ofh 溢出触发函数
-	*/
-	actor_msg_bounded_handle(int maxBuff,  const overflow_notify& ofh)
-		:param_list_bounded<msg_param<T0, T1, T2, T3> >(maxBuff, ofh)
+	actor_msg_bounded_handle(int maxBuff)
+		:param_list_bounded<msg_param<T0, T1, T2, T3> >(maxBuff)
 	{
 
 	}
 
-	static std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2, T3> > make_ptr(int maxBuff,  const overflow_notify& ofh)
+	static ptr make_ptr(int maxBuff)
 	{
-		return std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2, T3> >(new actor_msg_bounded_handle<T0, T1, T2, T3>(maxBuff, ofh));
+		return ptr(new type(maxBuff));
 	}
 };
 
@@ -639,19 +606,19 @@ template <typename T0, typename T1, typename T2>
 class actor_msg_bounded_handle<T0, T1, T2, void>: public param_list_bounded<msg_param<T0, T1, T2> >
 {
 	friend my_actor;
+	typedef actor_msg_bounded_handle<T0, T1, T2> type;
 public:
-	typedef typename msg_param<T0, T1, T2>::overflow_notify overflow_notify;
-	typedef std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2> > ptr;
+	typedef std::shared_ptr<type> ptr;
 
-	actor_msg_bounded_handle(int maxBuff,  const overflow_notify& ofh)
-		:param_list_bounded<msg_param<T0, T1, T2> >(maxBuff, ofh)
+	actor_msg_bounded_handle(int maxBuff)
+		:param_list_bounded<msg_param<T0, T1, T2> >(maxBuff)
 	{
 
 	}
 
-	static std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2> > make_ptr(int maxBuff,  const overflow_notify& ofh)
+	static ptr make_ptr(int maxBuff)
 	{
-		return std::shared_ptr<actor_msg_bounded_handle<T0, T1, T2> >(new actor_msg_bounded_handle<T0, T1, T2>(maxBuff, ofh));
+		return ptr(new type(maxBuff));
 	}
 };
 
@@ -659,19 +626,19 @@ template <typename T0, typename T1>
 class actor_msg_bounded_handle<T0, T1, void, void>: public param_list_bounded<msg_param<T0, T1> >
 {
 	friend my_actor;
+	typedef actor_msg_bounded_handle<T0, T1> type;
 public:
-	typedef typename msg_param<T0, T1>::overflow_notify overflow_notify;
-	typedef std::shared_ptr<actor_msg_bounded_handle<T0, T1> > ptr;
+	typedef std::shared_ptr<type> ptr;
 
-	actor_msg_bounded_handle(int maxBuff,  const overflow_notify& ofh)
-		:param_list_bounded<msg_param<T0, T1> >(maxBuff, ofh)
+	actor_msg_bounded_handle(int maxBuff)
+		:param_list_bounded<msg_param<T0, T1> >(maxBuff)
 	{
 
 	}
 
-	static std::shared_ptr<actor_msg_bounded_handle<T0, T1> > make_ptr(int maxBuff,  const overflow_notify& ofh)
+	static ptr make_ptr(int maxBuff)
 	{
-		return std::shared_ptr<actor_msg_bounded_handle<T0, T1> >(new actor_msg_bounded_handle<T0, T1>(maxBuff, ofh));
+		return ptr(new type(maxBuff));
 	}
 };
 
@@ -679,19 +646,19 @@ template <typename T0>
 class actor_msg_bounded_handle<T0, void, void, void>: public param_list_bounded<msg_param<T0> >
 {
 	friend my_actor;
+	typedef actor_msg_bounded_handle<T0> type;
 public:
-	typedef typename msg_param<T0>::overflow_notify overflow_notify;
-	typedef std::shared_ptr<actor_msg_bounded_handle<T0> > ptr;
+	typedef std::shared_ptr<type> ptr;
 
-	actor_msg_bounded_handle(int maxBuff,  const overflow_notify& ofh)
-		:param_list_bounded<msg_param<T0> >(maxBuff, ofh)
+	actor_msg_bounded_handle(int maxBuff)
+		:param_list_bounded<msg_param<T0> >(maxBuff)
 	{
 
 	}
 
-	static std::shared_ptr<actor_msg_bounded_handle<T0> > make_ptr(int maxBuff,  const overflow_notify& ofh)
+	static ptr make_ptr(int maxBuff)
 	{
-		return std::shared_ptr<actor_msg_bounded_handle<T0> >(new actor_msg_bounded_handle<T0>(maxBuff, ofh));
+		return ptr(new type(maxBuff));
 	}
 };
 
@@ -730,12 +697,13 @@ class async_trig_handle: public async_trig_base
 	typedef ref_ex<T0, T1, T2, T3> ref_type;
 	typedef const_ref_ex<T0, T1, T2, T3> const_ref_type;
 	typedef msg_param<T0, T1, T2, T3> msg_type;
+	typedef async_trig_handle<T0, T1, T2, T3> type;
 public:
-	typedef std::shared_ptr<async_trig_handle<T0, T1, T2, T3> > ptr;
+	typedef std::shared_ptr<type> ptr;
 
-	static std::shared_ptr<async_trig_handle<T0, T1, T2, T3> > make_ptr()
+	static ptr make_ptr()
 	{
-		return std::shared_ptr<async_trig_handle<T0, T1, T2, T3> >(new async_trig_handle<T0, T1, T2, T3>);
+		return ptr(new type);
 	}
 
 	void move_out(void* dst)
@@ -777,12 +745,13 @@ class async_trig_handle<T0, T1, T2, void>: public async_trig_base
 	typedef ref_ex<T0, T1, T2> ref_type;
 	typedef const_ref_ex<T0, T1, T2> const_ref_type;
 	typedef msg_param<T0, T1, T2> msg_type;
+	typedef async_trig_handle<T0, T1, T2> type;
 public:
-	typedef std::shared_ptr<async_trig_handle<T0, T1, T2> > ptr;
+	typedef std::shared_ptr<type> ptr;
 
-	static std::shared_ptr<async_trig_handle<T0, T1, T2> > make_ptr()
+	static ptr make_ptr()
 	{
-		return std::shared_ptr<async_trig_handle<T0, T1, T2> >(new async_trig_handle<T0, T1, T2>);
+		return ptr(new type);
 	}
 
 	void move_out(void* dst)
@@ -824,12 +793,13 @@ class async_trig_handle<T0, T1, void, void>: public async_trig_base
 	typedef ref_ex<T0, T1> ref_type;
 	typedef const_ref_ex<T0, T1> const_ref_type;
 	typedef msg_param<T0, T1> msg_type;
+	typedef async_trig_handle<T0, T1> type;
 public:
-	typedef std::shared_ptr<async_trig_handle<T0, T1> > ptr;
+	typedef std::shared_ptr<type> ptr;
 
-	static std::shared_ptr<async_trig_handle<T0, T1> > make_ptr()
+	static ptr make_ptr()
 	{
-		return std::shared_ptr<async_trig_handle<T0, T1> >(new async_trig_handle<T0, T1>);
+		return ptr(new type);
 	}
 
 	void move_out(void* dst)
@@ -871,12 +841,13 @@ class async_trig_handle<T0, void, void, void>: public async_trig_base
 	typedef ref_ex<T0> ref_type;
 	typedef const_ref_ex<T0> const_ref_type;
 	typedef msg_param<T0> msg_type;
+	typedef async_trig_handle<T0> type;
 public:
-	typedef std::shared_ptr<async_trig_handle<T0> > ptr;
+	typedef std::shared_ptr<type> ptr;
 
-	static std::shared_ptr<async_trig_handle<T0> > make_ptr()
+	static ptr make_ptr()
 	{
-		return std::shared_ptr<async_trig_handle<T0> >(new async_trig_handle<T0>);
+		return ptr(new type);
 	}
 
 	void move_out(void* dst)
@@ -915,12 +886,13 @@ template <>
 class async_trig_handle<void, void, void, void>: public async_trig_base
 {
 	friend my_actor;
+	typedef async_trig_handle<> type;
 public:
-	typedef std::shared_ptr<async_trig_handle<> > ptr;
+	typedef std::shared_ptr<type> ptr;
 
-	static std::shared_ptr<async_trig_handle<> > make_ptr()
+	static ptr make_ptr()
 	{
-		return std::shared_ptr<async_trig_handle<> >(new async_trig_handle<>);
+		return ptr(new type);
 	}
 
 	void move_out(void* dst)
@@ -1736,7 +1708,7 @@ public:
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = amh->_pIsClosed;
 		return [=](const T0& p0)
-		{shared_this->notify_handler_ptr(pIsClosed_, std::static_pointer_cast<param_list<msg_param<T0> >>(amh), p0); };
+		{shared_this->notify_handler_ptr<T0>(pIsClosed_, amh, p0); };
 	}
 
 	template <typename T0>
@@ -1746,7 +1718,7 @@ public:
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = amh->_pIsClosed;
 		return [=](const T0& p0)
-		{shared_this->notify_handler_ptr(pIsClosed_, std::static_pointer_cast<param_list<msg_param<T0> >>(amh), p0); };
+		{shared_this->notify_handler_ptr<T0>(pIsClosed_, amh, p0); };
 	}
 
 	template <typename T0, typename T1>
@@ -1766,7 +1738,7 @@ public:
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = amh->_pIsClosed;
 		return [=](const T0& p0, const T1& p1)
-		{shared_this->notify_handler_ptr(pIsClosed_, std::static_pointer_cast<param_list<msg_param<T0, T1> >>(amh), p0, p1); };
+		{shared_this->notify_handler_ptr<T0, T1>(pIsClosed_, amh, p0, p1); };
 	}
 
 	template <typename T0, typename T1>
@@ -1776,7 +1748,7 @@ public:
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = amh->_pIsClosed;
 		return [=](const T0& p0, const T1& p1)
-		{shared_this->notify_handler_ptr(pIsClosed_, std::static_pointer_cast<param_list<msg_param<T0, T1> >>(amh), p0, p1); };
+		{shared_this->notify_handler_ptr<T0, T1>(pIsClosed_, amh, p0, p1); };
 	}
 
 	template <typename T0, typename T1, typename T2>
@@ -1796,7 +1768,7 @@ public:
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = amh->_pIsClosed;
 		return [=](const T0& p0, const T1& p1, const T2& p2)
-		{shared_this->notify_handler_ptr(pIsClosed_, std::static_pointer_cast<param_list<msg_param<T0, T1, T2> >>(amh), p0, p1, p2); };
+		{shared_this->notify_handler_ptr<T0, T1, T2>(pIsClosed_, amh, p0, p1, p2); };
 	}
 
 	template <typename T0, typename T1, typename T2>
@@ -1806,7 +1778,7 @@ public:
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = amh->_pIsClosed;
 		return [=](const T0& p0, const T1& p1, const T2& p2)
-		{shared_this->notify_handler_ptr(pIsClosed_, std::static_pointer_cast<param_list<msg_param<T0, T1, T2> >>(amh), p0, p1, p2); };
+		{shared_this->notify_handler_ptr<T0, T1, T2>(pIsClosed_, amh, p0, p1, p2); };
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
@@ -1826,7 +1798,7 @@ public:
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = amh->_pIsClosed;
 		return [=](const T0& p0, const T1& p1, const T2& p2, const T3& p3)
-		{shared_this->notify_handler_ptr(pIsClosed_, std::static_pointer_cast<param_list<msg_param<T0, T1, T2, T3> >>(amh), p0, p1, p2, p3); };
+		{shared_this->notify_handler_ptr<T0, T1, T2, T3>(pIsClosed_, amh, p0, p1, p2, p3); };
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
@@ -1836,7 +1808,7 @@ public:
 		actor_handle shared_this = shared_from_this();
 		auto& pIsClosed_ = amh->_pIsClosed;
 		return [=](const T0& p0, const T1& p1, const T2& p2, const T3& p3)
-		{shared_this->notify_handler_ptr(pIsClosed_, std::static_pointer_cast<param_list<msg_param<T0, T1, T2, T3> >>(amh), p0, p1, p2, p3); };
+		{shared_this->notify_handler_ptr<T0, T1, T2, T3>(pIsClosed_, amh, p0, p1, p2, p3); };
 	}
 
 	/*!

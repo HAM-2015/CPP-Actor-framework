@@ -219,14 +219,14 @@ void perfor_test(my_actor* self, ios_proxy& ios)
 	self->check_stack();
 	vector<shared_strand> strands;
 	strands.resize(ios.threadNumber());
-	for (int i = 0; i < (int)ios.threadNumber(); i++)
+	for (size_t i = 0; i < strands.size(); i++)
 	{
 		strands[i] = boost_strand::create(ios);
 	}
 
 	for (int n = 1; n < 200; n++)
 	{
-		int num = (1 + n)*n / 2;
+		int num = n*n;
 		long long tk = get_tick_us();
 		list<child_actor_handle::ptr> childList;
 		vector<int> count;

@@ -65,27 +65,27 @@ void ios_proxy::run(size_t threadNum)
 				catch (msg_data::pool_memory_exception&)
 				{
 					MessageBoxA(NULL, "内存不足", NULL, NULL);
-					ExitProcess(1);
+					exit(1);
 				}
 				catch (boost::exception&)
 				{
 					MessageBoxA(NULL, "未处理的BOOST异常", NULL, NULL);
-					ExitProcess(2);
+					exit(2);
 				}
 				catch (std::exception&)
 				{
 					MessageBoxA(NULL, "未处理的STD异常", NULL, NULL);
-					ExitProcess(3);
+					exit(3);
 				}
 				catch (std::shared_ptr<std::string> msg)
 				{
 					MessageBoxA(NULL, msg->c_str(), NULL, NULL);
-					ExitProcess(4);
+					exit(4);
 				}
 				catch (...)
 				{
 					MessageBoxA(NULL, "未知异常", NULL, NULL);
-					ExitProcess(-1);
+					exit(-1);
 				}
 			});
 			_threadIDs.insert(newThread->get_id());

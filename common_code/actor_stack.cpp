@@ -49,17 +49,26 @@ actor_stack_pool::~actor_stack_pool()
 	}
 	_clearThread.join();
 
-	for (int i = 0; i < 256; i++)
+	if (_stackCount < 10000)
 	{
-		boost::lock_guard<boost::mutex> lg1(_stackPool[i]._mutex);
-		for (auto it = _stackPool[i]._pool.begin(); it != _stackPool[i]._pool.end(); it++)
+		for (int i = 0; i < 256; i++)
 		{
-			CHECK_STACK(*it);
-			free(((char*)it->_stack.sp)-it->_stack.size);
-			_stackCount--;
+			boost::lock_guard<boost::mutex> lg1(_stackPool[i]._mutex);
+			while (!_stackPool[i]._pool.empty())
+			{
+				stack_pck pck = _stackPool[i]._pool.back();
+				_stackPool[i]._pool.pop_back();
+				CHECK_STACK(pck);
+				free(((char*)pck._stack.sp) - pck._stack.size);
+				_stackCount--;
+			}
 		}
+		assert(0 == _stackCount);
 	}
-	assert(0 == _stackCount);
+	else
+	{
+		exit(-2);
+	}
 }
 
 void actor_stack_pool::enable()
