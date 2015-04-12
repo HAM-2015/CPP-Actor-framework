@@ -105,135 +105,6 @@ struct actor_free
 };
 //////////////////////////////////////////////////////////////////////////
 
-bool param_list_base::closed()
-{
-	return (*_pIsClosed);
-}
-
-bool param_list_base::empty()
-{
-	return 0 == length();
-}
-
-void param_list_base::begin(long long actorID)
-{
-	close();
-	_timeout = false;
-	_hasTm = false;
-	DEBUG_OPERATION(_actorID = actorID);
-	_pIsClosed = std::shared_ptr<bool>(new bool(false));
-}
-
-param_list_base& param_list_base::operator=( const param_list_base& )
-{
-	assert(false);
-	return *this;
-}
-
-param_list_base::param_list_base( const param_list_base& )
-{
-	assert(false);
-}
-
-param_list_base::param_list_base()
-{
-	_waiting = false;
-	_timeout = false;
-	_hasTm = false;
-	DEBUG_OPERATION(_actorID = 0);
-}
-
-param_list_base::~param_list_base()
-{
-	if (_pIsClosed)
-	{
-		(*_pIsClosed) = true;
-	}
-}
-//////////////////////////////////////////////////////////////////////////
-
-void null_param_list::close()
-{
-	count = 0;
-	if (_pIsClosed)
-	{
-		assert(!(*_pIsClosed));
-		(*_pIsClosed) = true;
-		_waiting = false;
-		_pIsClosed.reset();
-	}
-}
-
-null_param_list::null_param_list()
-{
-	count = 0;
-}
-
-void null_param_list::clear()
-{
-	count = 0;
-}
-
-size_t null_param_list::length()
-{
-	return count;
-}
-//////////////////////////////////////////////////////////////////////////
-
-async_trig_base& async_trig_base::operator=( const async_trig_base& )
-{
-	assert(false);
-	return *this;
-}
-
-async_trig_base::async_trig_base( const async_trig_base& )
-{
-	assert(false);
-}
-
-async_trig_base::async_trig_base()
-{
-	_waiting = false;
-	_notify = true;
-	_timeout = false;
-	_hasTm = false;
-	_dstRefPt = NULL;
-	DEBUG_OPERATION(_actorID = 0);
-}
-
-async_trig_base::~async_trig_base()
-{
-	close();
-}
-
-bool async_trig_base::has_trig()
-{
-	return _notify;
-}
-
-void async_trig_base::begin(long long actorID)
-{
-	close();
-	_pIsClosed = std::shared_ptr<bool>(new bool(false));
-	_notify = false;
-	_timeout = false;
-	_hasTm = false;
-	_dstRefPt = NULL;
-	DEBUG_OPERATION(_actorID = actorID);
-}
-
-void async_trig_base::close()
-{
-	if (_pIsClosed)
-	{
-		assert(!(*_pIsClosed));
-		(*_pIsClosed) = true;
-		_waiting = false;
-		_pIsClosed.reset();
-	}
-}
-//////////////////////////////////////////////////////////////////////////
-
 #ifdef _DEBUG
 child_actor_handle::child_actor_param& child_actor_handle::child_actor_param::operator=( child_actor_handle::child_actor_param& s )
 {
@@ -326,6 +197,11 @@ child_actor_handle::ptr child_actor_handle::make_ptr()
 	return ptr(new child_actor_handle);
 }
 
+bool child_actor_handle::empty()
+{
+	return !_param._actor;
+}
+
 void* child_actor_handle::operator new(size_t s)
 {
 	void* p = malloc(s);
@@ -339,6 +215,301 @@ void child_actor_handle::operator delete(void* p)
 	{
 		free(p);
 	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+
+void actor_msg_handle_base::run_one()
+{
+	_hostActor->run_one();
+}
+
+actor_msg_handle_base::actor_msg_handle_base()
+:_waiting(false)
+{
+
+}
+
+void actor_msg_handle_base::set_actor(const actor_handle& hostActor)
+{
+	_hostActor = hostActor;
+	_strand = hostActor->this_strand();
+}
+
+//////////////////////////////////////////////////////////////////////////
+
+void actor_msg_notifer_void::operator()() const
+{
+	auto& refThis_ = *this;
+	_strand->post([=]()
+	{
+		if (!refThis_._hostActor->is_quited() && !(*refThis_._closed))
+		{
+			refThis_._msgHandle->push_msg();
+		}
+	});
+}
+
+actor_msg_notifer_void::actor_msg_notifer_void(msg_handle* msgHandle)
+:_msgHandle(msgHandle), _strand(msgHandle->_strand), _hostActor(msgHandle->_hostActor), _closed(msgHandle->_closed)
+{
+
+}
+
+actor_msg_notifer_void::actor_msg_notifer_void()
+: _msgHandle(NULL)
+{
+
+}
+
+actor_handle actor_msg_notifer_void::host_actor()
+{
+	return _hostActor;
+}
+
+//////////////////////////////////////////////////////////////////////////
+void actor_trig_notifer_void::operator()() const
+{
+	auto& refThis_ = *this;
+	_strand->post([=]()
+	{
+		if (!refThis_._hostActor->is_quited() && !(*refThis_._closed))
+		{
+			refThis_._trigHandle->push_msg();
+		}
+	});
+}
+
+actor_trig_notifer_void::actor_trig_notifer_void(trig_handle* trigHandle)
+:_trigHandle(trigHandle), _strand(trigHandle->_strand), _hostActor(trigHandle->_hostActor), _closed(trigHandle->_closed)
+{
+
+}
+
+actor_trig_notifer_void::actor_trig_notifer_void()
+: _trigHandle(NULL)
+{
+
+}
+
+actor_handle actor_trig_notifer_void::host_actor()
+{
+	return _hostActor;
+}
+
+//////////////////////////////////////////////////////////////////////////
+void msg_pump_base::run_one()
+{
+	_hostActor->run_one();
+}
+//////////////////////////////////////////////////////////////////////////
+
+msg_pool_void::msg_pool_void(shared_strand strand)
+{
+	_strand = strand;
+	_waiting = false;
+	_msgBuff = 0;
+}
+
+msg_pool_void::~msg_pool_void()
+{
+
+}
+
+msg_pool_void::pump_handler msg_pool_void::connect_pump(const std::shared_ptr<msg_pump_type>& msgPump)
+{
+	assert(msgPump);
+	assert(_strand->running_in_this_thread());
+	_msgPump = msgPump;
+	pump_handler compHandler;
+	compHandler._thisPool = _weakThis.lock();
+	compHandler._msgPump = msgPump;
+	_waiting = false;
+	return compHandler;
+}
+
+void msg_pool_void::push_msg()
+{
+	if (_strand->running_in_this_thread())
+	{
+		send_msg(true);
+	}
+	else
+	{
+		auto shared_this = _weakThis.lock();
+		_strand->post([=]()
+		{
+			shared_this->send_msg(false);
+		});
+	}
+}
+
+void msg_pool_void::send_msg(bool post)
+{
+	if (_waiting)
+	{
+		_waiting = false;
+		assert(_msgPump);
+		if (post)
+		{
+			_msgPump->receive_msg_post();
+		}
+		else
+		{
+			_msgPump->receive_msg();
+		}
+	}
+	else
+	{
+		_msgBuff++;
+	}
+}
+
+void msg_pool_void::disconnect()
+{
+	assert(_strand->running_in_this_thread());
+	_msgPump.reset();
+	_waiting = false;
+}
+
+void msg_pool_void::pump_handler::clear()
+{
+	_thisPool.reset();
+	_msgPump.reset();
+}
+
+bool msg_pool_void::pump_handler::empty()
+{
+	return !_thisPool;
+}
+
+void msg_pool_void::pump_handler::post_pump()
+{
+	_thisPool->_strand->post(*this);
+}
+
+void msg_pool_void::pump_handler::operator()()
+{
+	assert(_thisPool);
+	if (_thisPool->_strand->running_in_this_thread())
+	{
+		if (_msgPump == _thisPool->_msgPump)
+		{
+			assert(!_thisPool->_waiting);
+			if (_thisPool->_msgBuff)
+			{
+				_thisPool->_msgBuff--;
+				_thisPool->_msgPump->receive_msg();
+			}
+			else
+			{
+				_thisPool->_waiting = true;
+			}
+		}
+	}
+	else
+	{
+		_thisPool->_strand->post(*this);
+	}
+}
+//////////////////////////////////////////////////////////////////////////
+
+msg_pump_void::msg_pump_void(const actor_handle& hostActor)
+{
+	_waiting = false;
+	_hasMsg = false;
+	_hostActor = hostActor;
+	_strand = hostActor->this_strand();
+}
+
+msg_pump_void::~msg_pump_void()
+{
+
+}
+
+void msg_pump_void::clear()
+{
+	assert(_strand->running_in_this_thread());
+	_pumpHandler.clear();
+}
+
+void msg_pump_void::close()
+{
+	_hasMsg = false;
+	_waiting = false;
+	_pumpHandler.clear();
+	_hostActor.reset();
+}
+
+void msg_pump_void::connect(const pump_handler& pumpHandler)
+{
+	assert(_strand->running_in_this_thread());
+	if (_hostActor)
+	{
+		_pumpHandler = pumpHandler;
+		if (_waiting)
+		{
+			_pumpHandler.post_pump();
+		}
+	}
+}
+
+void msg_pump_void::receiver()
+{
+	if (_hostActor)
+	{
+		assert(!_hasMsg);
+		if (_waiting)
+		{
+			_waiting = false;
+			run_one();
+		}
+		else
+		{
+			_hasMsg = true;
+		}
+	}
+}
+
+bool msg_pump_void::read_msg()
+{
+	assert(_strand->running_in_this_thread());
+	assert(!_waiting);
+	if (_hasMsg)
+	{
+		_hasMsg = false;
+		return true;
+	}
+	if (!_pumpHandler.empty())
+	{
+		_pumpHandler();
+		_waiting = !_hasMsg;
+		_hasMsg = false;
+		return !_waiting;
+	}
+	_waiting = true;
+	return false;
+}
+
+void msg_pump_void::receive_msg()
+{
+	if (_strand->running_in_this_thread())
+	{
+		receiver();
+	}
+	else
+	{
+		receive_msg_post();
+	}
+}
+
+void msg_pump_void::receive_msg_post()
+{
+	auto shared_this = _weakThis.lock();
+	_strand->post([=]()
+	{
+		shared_this->receiver();
+	});
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -398,7 +569,7 @@ public:
 		}
 #endif
 		clear_function(_actor._mainFunc);
-		_actor._msgPumpStatus.clear();
+		_actor._msgPoolStatus.clear();
 		while (!_actor._exitCallback.empty())
 		{
 			assert(_actor._exitCallback.front());
@@ -738,15 +909,6 @@ void my_actor::child_actors_resume(const list<child_actor_handle::ptr>& actorHan
 	close_msg_notifer(amh);
 }
 
-actor_handle my_actor::child_actor_peel(child_actor_handle& actorHandle)
-{
-	assert_enter();
-	assert(!actorHandle._quited);
-	assert(actorHandle.get_actor());
-	assert(actorHandle.get_actor()->parent_actor().get() == this);
-	return actorHandle.peel();
-}
-
 bool my_actor::run_child_actor_complete( shared_strand actorStrand, const main_func& h, size_t stackSize )
 {
 	assert_enter();
@@ -808,320 +970,16 @@ void my_actor::cancel_quit_handler( quit_iterator qh )
 	_quitHandlerList.erase(qh);
 }
 
-std::function<void ()> my_actor::begin_trig(async_trig_handle<>& th)
-{
-	assert_enter();
-	th.begin(_actorID);
-	std::shared_ptr<bool>& pIsClosed = th._pIsClosed;
-	actor_handle shared_this = shared_from_this();
-	return [=, &th]()
-	{
-		if (_strand->running_in_this_thread())
-		{
-			if (!_quited && !(*pIsClosed) && !th._notify)
-			{
-				shared_this->async_trig_post_yield(th, NULL);
-			}
-		}
-		else
-		{
-			auto& pIsClosed_ = pIsClosed;
-			auto& shared_this_ = shared_this;
-			auto& th_ = th;
-			_strand->post((std::function<void(void)>)[=, &th_]()
-			{
-				shared_this_->_async_trig_handler(pIsClosed_, th_);
-			});
-		}
-	};
-}
-
-std::function<void ()> my_actor::begin_trig(const std::shared_ptr<async_trig_handle<> >& th)
-{
-	assert_enter();
-	th->begin(_actorID);
-	std::shared_ptr<bool>& pIsClosed = th->_pIsClosed;
-	actor_handle shared_this = shared_from_this();
-	return [=]()
-	{
-		if (_strand->running_in_this_thread())
-		{
-			if (!_quited && !(*pIsClosed) && !th->_notify)
-			{
-				shared_this->async_trig_post_yield(*th, NULL);
-			}
-		}
-		else
-		{
-			auto& pIsClosed_ = pIsClosed;
-			auto& shared_this_ = shared_this;
-			auto& th_ = th;
-			_strand->post((std::function<void(void)>)[=]()
-			{
-				shared_this_->_async_trig_handler(pIsClosed_, *th_);
-			});
-		}
-	};
-}
-
-bool my_actor::timed_wait_trig(async_trig_handle<>& th, int tm)
-{
-	assert(th._actorID == _actorID);
-	assert_enter();
-	if (async_trig_push(th, tm, NULL))
-	{
-		close_trig(th);
-		return true;
-	}
-	return false;
-}
-
-void my_actor::wait_trig(async_trig_handle<>& th)
-{
-	timed_wait_trig(th, -1);
-}
-
-bool my_actor::timed_wait_trig(const std::shared_ptr<async_trig_handle<> >& th, int tm)
-{
-	assert(th);
-	auto lockTh = th;
-	return timed_wait_trig(*th, tm);
-}
-
-void my_actor::wait_trig(const std::shared_ptr<async_trig_handle<> >& th)
-{
-	assert(th);
-	auto lockTh = th;
-	timed_wait_trig(*th, -1);
-}
-
-void my_actor::close_trig(async_trig_base& th)
-{
-	DEBUG_OPERATION(if (th._actorID) {assert(th._actorID == _actorID); th._actorID = 0;})
-	th.close();
-}
-
-void my_actor::delay_trig(int ms, async_trig_handle<>& th)
-{
-	assert_enter();
-	assert(th._pIsClosed);
-	assert(_timer);
-	assert(th._actorID == _actorID);
-	actor_handle shared_this = shared_from_this();
-	auto& pIsClosed_ = th._pIsClosed;
-	delay_trig(ms, [=, &th](){shared_this->_async_trig_handler(pIsClosed_, th); });
-}
-
-void my_actor::delay_trig(int ms, std::shared_ptr<async_trig_handle<> >& th)
-{
-	assert_enter();
-	assert(th->_pIsClosed);
-	assert(_timer);
-	assert(th->_actorID == _actorID);
-	actor_handle shared_this = shared_from_this();
-	auto& pIsClosed_ = th->_pIsClosed;
-	delay_trig(ms, [=](){shared_this->_async_trig_handler(pIsClosed_, *th); });
-}
-
 void my_actor::cancel_delay_trig()
 {
 	assert_enter();
 	cancel_timer();
 }
 
-std::function<void()> my_actor::make_msg_notifer(actor_msg_handle<>& amh)
-{
-	amh.begin(_actorID);
-	actor_handle shared_this = shared_from_this();
-	return _strand->wrap_post([shared_this, &amh](){shared_this->check_run1(amh._pIsClosed, amh); });
-}
-
-std::function<void()> my_actor::make_msg_notifer(const std::shared_ptr<actor_msg_handle<> >& amh)
-{
-	amh->begin(_actorID);
-	actor_handle shared_this = shared_from_this();
-	return _strand->wrap_post([shared_this, amh](){shared_this->check_run1(amh->_pIsClosed, *amh); });
-}
-
-void my_actor::close_msg_notifer( param_list_base& amh )
-{
-	DEBUG_OPERATION(if (amh._actorID) {assert(amh._actorID == _actorID); amh._actorID = 0;})
-	amh.close();
-}
-
-bool my_actor::timed_pump_msg(actor_msg_handle<>& amh, int tm)
-{
-	assert(amh._actorID == _actorID);
-	assert_enter();
-	assert(amh._pIsClosed);
-	if (amh.count)
-	{
-		amh.count--;
-		return true;
-	}
-	amh._waiting = true;
-	return pump_msg_push(amh, tm);
-}
-
-void my_actor::pump_msg(actor_msg_handle<>& amh)
-{
-	timed_pump_msg(amh, -1);
-}
-
-bool my_actor::timed_pump_msg(const std::shared_ptr<actor_msg_handle<> >& amh, int tm)
-{
-	assert(amh);
-	auto lockAmh = amh;
-	return timed_pump_msg(*amh, tm);
-}
-
-void my_actor::pump_msg(const std::shared_ptr<actor_msg_handle<> >& amh)
-{
-	assert(amh);
-	auto lockAmh = amh;
-	timed_pump_msg(*amh, -1);
-}
-
-bool my_actor::pump_msg_push(param_list_base& pm, int tm)
-{
-	if (tm >= 0)
-	{
-		pm._hasTm = true;
-		actor_handle shared_this = shared_from_this();
-		delay_trig(tm, [shared_this, &pm]()
-		{
-			if (!shared_this->_quited)
-			{
-				assert(pm._waiting);
-				pm._waiting = false;
-				pm._timeout = true;
-				shared_this->pull_yield();
-			}
-		});
-	}
-	push_yield();
-	assert(!_quited);
-	if (pm._timeout)
-	{
-		pm._timeout = false;
-		pm._hasTm = false;
-		return false;
-	} 
-	return true;
-}
-
 void my_actor::trig_handler()
 {
 	actor_handle shared_this = shared_from_this();
 	_strand->post([shared_this](){shared_this->run_one(); });
-}
-
-bool my_actor::async_trig_push(async_trig_base& th, int tm, void* dst)
-{
-	assert(th._pIsClosed);
-	if (!th._notify)
-	{
-		th._waiting = true;
-		th._dstRefPt = dst;
-		if (tm >= 0)
-		{
-			th._hasTm = true;
-			actor_handle shared_this = shared_from_this();
-			delay_trig(tm, [shared_this, &th]()
-			{
-				if (!shared_this->_quited)
-				{
-					assert(th._waiting);
-					th._waiting = false;
-					th._timeout = true;
-					shared_this->pull_yield();
-				}
-			});
-		}
-		push_yield();
-		if (th._timeout)
-		{
-			th._timeout = false;
-			th._hasTm = false;
-			return false;
-		}
-	}
-	else
-	{
-		th.move_out(dst);
-	}
-	return true;
-}
-
-void my_actor::async_trig_post_yield(async_trig_base& th, void* src)
-{
-	th._notify = true;
-	if (th._waiting)
-	{
-		th._waiting = false;
-		if (th._hasTm)
-		{
-			th._hasTm = false;
-			cancel_timer();
-		}
-		th.save_from(src);
-		actor_handle shared_this = shared_from_this();
-		_strand->post([shared_this](){shared_this->run_one(); });
-	} 
-	else
-	{
-		th.save_to_temp(src);
-	}
-}
-
-void my_actor::async_trig_pull_yield(async_trig_base& th, void* src)
-{
-	th._notify = true;
-	if (th._waiting)
-	{
-		th._waiting = false;
-		if (th._hasTm)
-		{
-			th._hasTm = false;
-			cancel_timer();
-		}
-		th.move_from(src);
-		pull_yield();
-	} 
-	else
-	{
-		th.move_to_temp(src);
-	}
-}
-
-void my_actor::_async_trig_handler(const std::shared_ptr<bool>& pIsClosed, async_trig_handle<>& th)
-{
-	assert(_strand->running_in_this_thread());
-	if (!_quited && !(*pIsClosed) && !th._notify)
-	{
-		async_trig_pull_yield(th, NULL);
-	}
-}
-
-void my_actor::check_run1( std::shared_ptr<bool>& pIsClosed, actor_msg_handle<>& amh )
-{
-	if (_quited || (*pIsClosed)) return;
-
-	if (amh._waiting)
-	{
-		amh._waiting = false;
-		if (amh._hasTm)
-		{
-			amh._hasTm = false;
-			cancel_timer();
-		}
-		assert(0 == amh.count);
-		pull_yield();
-	} 
-	else
-	{
-		amh.count++;
-	}
 }
 
 shared_strand my_actor::this_strand()
@@ -1238,6 +1096,18 @@ void my_actor::force_quit( const std::function<void (bool)>& h )
 			_exitCallback.push_back(h);
 		}
 	}
+}
+
+bool my_actor::is_started()
+{
+	assert(_strand->running_in_this_thread());
+	return _started;
+}
+
+bool my_actor::is_quited()
+{
+	assert(_strand->running_in_this_thread());
+	return _quited;
 }
 
 void my_actor::notify_suspend()
@@ -1475,7 +1345,7 @@ void my_actor::actors_start_run(const list<actor_handle>& anotherActors)
 	}
 }
 
-bool my_actor::actor_force_quit( actor_handle anotherActor )
+bool my_actor::actor_force_quit( const actor_handle& anotherActor )
 {
 	assert_enter();
 	assert(anotherActor);
@@ -1498,7 +1368,7 @@ void my_actor::actors_force_quit(const list<actor_handle>& anotherActors)
 	close_msg_notifer(amh);
 }
 
-bool my_actor::actor_wait_quit( actor_handle anotherActor )
+bool my_actor::actor_wait_quit( const actor_handle& anotherActor )
 {
 	assert_enter();
 	assert(anotherActor);
@@ -1514,7 +1384,7 @@ void my_actor::actors_wait_quit(const list<actor_handle>& anotherActors)
 	}
 }
 
-void my_actor::actor_suspend(actor_handle anotherActor)
+void my_actor::actor_suspend(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
@@ -1537,7 +1407,7 @@ void my_actor::actors_suspend(const list<actor_handle>& anotherActors)
 	close_msg_notifer(amh);
 }
 
-void my_actor::actor_resume(actor_handle anotherActor)
+void my_actor::actor_resume(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
@@ -1560,7 +1430,7 @@ void my_actor::actors_resume(const list<actor_handle>& anotherActors)
 	close_msg_notifer(amh);
 }
 
-bool my_actor::actor_switch(actor_handle anotherActor)
+bool my_actor::actor_switch(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
@@ -1800,22 +1670,6 @@ void my_actor::resume_timer()
 	}
 }
 
-std::function<void()> my_actor::outside_get_notifer()
-{
-	return outside_get_notifer<void, void, void, void>();
-}
-
-std::function<void()> my_actor::get_buddy_notifer(actor_handle buddyActor)
-{
-	return get_buddy_notifer<void, void, void, void>(buddyActor);
-}
-
-actor_msg_handle<>& my_actor::get_msg_handle()
-{
-	assert_enter();
-	return get_pck<void, void, void, void>(this)._handle;
-}
-
 void my_actor::disable_auto_make_timer()
 {
 	assert(0 == _actorIDCount);
@@ -1841,4 +1695,164 @@ size_t my_actor::stack_free_space()
 		return 0;
 	}
 	return (size_t)s;
+}
+
+void my_actor::msg_agent_to(child_actor_handle& childActor)
+{
+	msg_agent_to<void, void, void, void>(childActor);
+}
+
+void my_actor::msg_agent_off()
+{
+	msg_agent_off<void, void, void, void>();
+}
+
+post_actor_msg<> my_actor::connect_msg_notifer_to(const actor_handle& buddyActor)
+{
+	return connect_msg_notifer_to<void, void, void, void>(buddyActor);
+}
+
+post_actor_msg<> my_actor::connect_msg_notifer_to(child_actor_handle& childActor)
+{
+	return connect_msg_notifer_to<void, void, void, void>(childActor.get_actor());
+}
+
+post_actor_msg<> my_actor::connect_msg_notifer()
+{
+	return connect_msg_notifer<void, void, void, void>(0);
+}
+
+msg_pump<>::handle my_actor::connect_msg_pump()
+{
+	return connect_msg_pump<void, void, void, void>();
+}
+
+actor_msg_notifer<> my_actor::make_msg_notifer(actor_msg_handle<>& amh)
+{
+	return amh.make_notifer(shared_from_this());
+}
+
+void my_actor::close_msg_notifer(actor_msg_handle_base& amh)
+{
+	assert_enter();
+	amh.close();
+}
+
+bool my_actor::timed_pump_msg(int tm, actor_msg_handle<>& amh)
+{
+	assert_enter();
+	assert(amh._closed && !(*amh._closed));
+	if (!amh.read_msg())
+	{
+		bool timeout = false;
+		if (tm >= 0)
+		{
+			delay_trig(tm, [this, &timeout]()
+			{
+				timeout = true;
+				run_one();
+			});
+		}
+		push_yield();
+		if (!timeout)
+		{
+			if (tm >= 0)
+			{
+				cancel_delay_trig();
+			}
+			return true;
+		}
+		amh._waiting = false;
+		return false;
+	}
+	return true;
+}
+
+bool my_actor::timed_pump_msg(int tm, const msg_pump<>::handle& pump)
+{
+	assert_enter();
+	if (!pump->read_msg())
+	{
+		bool timeOut = false;
+		if (tm >= 0)
+		{
+			actor_handle shared_this = shared_from_this();
+			delay_trig(tm, [shared_this, &timeOut]()
+			{
+				if (!shared_this->_quited)
+				{
+					timeOut = true;
+					shared_this->pull_yield();
+				}
+			});
+		}
+		push_yield();
+		if (!timeOut)
+		{
+			if (tm >= 0)
+			{
+				cancel_delay_trig();
+			}
+			return true;
+		}
+		pump->_waiting = false;
+		return false;
+	}
+	return true;
+}
+
+void my_actor::pump_msg(actor_msg_handle<>& amh)
+{
+	timed_pump_msg(-1, amh);
+}
+
+void my_actor::pump_msg(const msg_pump<>::handle& pump)
+{
+	timed_pump_msg(-1, pump);
+}
+
+actor_trig_notifer<> my_actor::make_trig_notifer(actor_trig_handle<>& ath)
+{
+	return ath.make_notifer(shared_from_this());
+}
+
+void my_actor::close_trig_notifer(actor_msg_handle_base& ath)
+{
+	assert_enter();
+	ath.close();
+}
+
+bool my_actor::timed_wait_trig(int tm, actor_trig_handle<>& ath)
+{
+	assert_enter();
+	assert(ath._closed && !(*ath._closed));
+	if (!ath.read_msg())
+	{
+		bool timeout = false;
+		if (tm >= 0)
+		{
+			delay_trig(tm, [this, &timeout]()
+			{
+				timeout = true;
+				run_one();
+			});
+		}
+		push_yield();
+		if (!timeout)
+		{
+			if (tm >= 0)
+			{
+				cancel_delay_trig();
+			}
+			return true;
+		}
+		ath._waiting = false;
+		return false;
+	}
+	return true;
+}
+
+void my_actor::wait_trig(actor_trig_handle<>& ath)
+{
+	timed_wait_trig(-1, ath);
 }

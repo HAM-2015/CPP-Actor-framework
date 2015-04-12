@@ -5,10 +5,10 @@
 #include <boost/thread/thread.hpp>
 #include <functional>
 #include <memory>
-#include <list>
 #include "wrapped_post_handler.h"
 #include "actor_framework.h"
 #include "mfc_strand.h"
+#include "msg_queue.h"
 
 using namespace std;
 
@@ -95,7 +95,7 @@ protected:
 		std::function<void ()> _h;
 	};
 public:
-	bind_mfc_run(): _isClosed(false) {};
+	bind_mfc_run(): _isClosed(false), _postOptions(16), _sendOptions(16) {};
 	~bind_mfc_run() {};
 public:
 	/*!
@@ -202,6 +202,15 @@ public:
 		});
 	}
 
+	void post_queue_size(size_t fixedSize)
+	{
+		_postOptions.expand_fixed(fixedSize);
+	}
+
+	void send_queue_size(size_t fixedSize)
+	{
+		_sendOptions.expand_fixed(fixedSize);
+	}
 #ifdef ENABLE_MFC_ACTOR
 	/*!
 	@brief 在MFC线程中创建一个Actor
@@ -241,8 +250,8 @@ protected:
 		return 0;
 	}
 private:
-	list<std::function<void ()> > _postOptions;
-	list<std::shared_ptr<bind_run> > _sendOptions;
+	msg_queue<std::function<void ()> > _postOptions;
+	msg_queue<std::shared_ptr<bind_run> > _sendOptions;
 	boost::mutex _mutex1;
 	boost::mutex _mutex2;
 	boost::shared_mutex _postMutex;

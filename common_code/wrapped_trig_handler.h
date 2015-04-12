@@ -147,16 +147,19 @@ public:
 	Handler handler_;
 };
 
-template <>
-class wrapped_trig_handler<void>
+template <typename H>
+static wrapped_trig_handler<H> wrap_trig(const H& h)
 {
-public:
-	template <typename H>
-	static wrapped_trig_handler<H> wrap(const H& h)
-	{
-		return wrapped_trig_handler<H>(h);
-	}
-};
+	return wrapped_trig_handler<H>(h);
+}
+
+#else
+
+template <typename H>
+static H& wrap_trig(const H& h)
+{
+	return (H&)h;
+}
 
 #endif
 

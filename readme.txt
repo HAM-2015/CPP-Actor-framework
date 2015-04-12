@@ -9,6 +9,11 @@ oschina url
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
+2015-04-12
+核心功能整体优化;
+添加actor_mutex;
+添加消息代理.
+
 2015-04-02
 添加可以直接拿一个Actor句柄发送消息，然后通过匹配弹出消息.
 

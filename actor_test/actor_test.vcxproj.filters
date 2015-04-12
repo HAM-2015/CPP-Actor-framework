@@ -36,12 +36,12 @@
     <ClCompile Include="..\common_code\scattered.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="..\common_code\actor_mutex.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common_code\ios_proxy.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common_code\msg_pipe.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="..\common_code\ref_ex.h">
@@ -81,6 +81,12 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="..\common_code\function_type.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common_code\msg_queue.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common_code\actor_mutex.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

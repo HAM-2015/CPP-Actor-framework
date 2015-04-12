@@ -2,6 +2,7 @@
 #define __MSG_PIPE_H
 
 #include "actor_framework.h"
+#include "function_type.h"
 #include <boost/atomic/atomic.hpp>
 #include <boost/thread/shared_mutex.hpp>
 
@@ -11,45 +12,9 @@
 template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
 class msg_pipe
 {
-private:
-	template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
-	struct pipe_type
-	{
-		typedef typename std::function<void (T0, T1, T2, T3)> writer_type;
-		typedef typename param_list<msg_param<T0, T1, T2, T3> > reader_handle;
-	};
-
-	template <typename T0, typename T1, typename T2>
-	struct pipe_type<T0, T1, T2, void>
-	{
-		typedef typename std::function<void (T0, T1, T2)> writer_type;
-		typedef typename param_list<msg_param<T0, T1, T2> > reader_handle;
-	};
-
-	template <typename T0, typename T1>
-	struct pipe_type<T0, T1, void, void>
-	{
-		typedef typename std::function<void (T0, T1)> writer_type;
-		typedef typename param_list<msg_param<T0, T1> > reader_handle;
-	};
-
-	template <typename T0>
-	struct pipe_type<T0, void, void, void>
-	{
-		typedef typename std::function<void (T0)> writer_type;
-		typedef typename param_list<msg_param<T0> > reader_handle;
-	};
-
-	template <>
-	struct pipe_type<void, void, void, void>
-	{
-		typedef typename std::function<void ()> writer_type;
-		typedef typename actor_msg_handle<> reader_handle;
-	};
-
-	typedef typename pipe_type<T0, T1, T2, T3>::reader_handle reader_handle;
+	typedef typename actor_msg_handle<T0, T1, T2, T3> reader_handle;
 public:
-	typedef typename pipe_type<T0, T1, T2, T3>::writer_type writer_type;
+	typedef typename func_type<T0, T1, T2, T3>::result writer_type;
 	typedef typename std::function<size_t (my_actor*, reader_handle&)> regist_reader;
 	typedef typename std::function<writer_type (int timeout)> get_writer_outside;
 	__yield_interrupt typedef typename std::function<writer_type (my_actor*, int timeout)> get_writer;
@@ -57,16 +22,7 @@ private:
 	template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
 	struct temp_buffer
 	{
-		struct ps 
-		{
-			ps(const T0& p0, const T1& p1, const T2& p2, const T3& p3)
-				:_p0(p0), _p1(p1), _p2(p2), _p3(p3) {}
-
-			T0 _p0;
-			T1 _p1;
-			T2 _p2;
-			T3 _p3;
-		};
+		typedef msg_param<T0, T1, T2, T3> msg_type;
 
 		void pop(const writer_type& wt)
 		{
@@ -74,36 +30,28 @@ private:
 			{
 				auto t = _tempBuff.front();
 				_tempBuff.pop_front();
-				wt(t->_p0, t->_p1, t->_p2, t->_p3);
+				wt(t->_res0, t->_res1, t->_res2, t->_res3);
 			}
 		}
 
-		writer_type temp_writer(std::shared_ptr<temp_buffer>& st)
+		writer_type temp_writer(boost::shared_mutex& mutex, std::shared_ptr<temp_buffer>& st)
 		{
-			return [st](const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+			return [st, &mutex](const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 			{
-				std::shared_ptr<ps> t(new ps(p0, p1, p2, p3));
-				boost::lock_guard<boost::mutex> lg(st->_mutex);
+				std::shared_ptr<msg_type> t(new msg_type(p0, p1, p2, p3));
+				mutex.lock_upgrade();
 				st->_tempBuff.push_back(t);
+				mutex.unlock_upgrade();
 			};
 		}
 
-		list<std::shared_ptr<ps> > _tempBuff;
-		boost::mutex _mutex;
+		list<std::shared_ptr<msg_type> > _tempBuff;
 	};
 
 	template <typename T0, typename T1, typename T2>
 	struct temp_buffer<T0, T1, T2, void>
 	{
-		struct ps 
-		{
-			ps(const T0& p0, const T1& p1, const T2& p2)
-				:_p0(p0), _p1(p1), _p2(p2) {}
-
-			T0 _p0;
-			T1 _p1;
-			T2 _p2;
-		};
+		typedef msg_param<T0, T1, T2> msg_type;
 
 		void pop(const writer_type& wt)
 		{
@@ -111,35 +59,28 @@ private:
 			{
 				auto t = _tempBuff.front();
 				_tempBuff.pop_front();
-				wt(t->_p0, t->_p1, t->_p2);
+				wt(t->_res0, t->_res1, t->_res2);
 			}
 		}
 
-		writer_type temp_writer(std::shared_ptr<temp_buffer>& st)
+		writer_type temp_writer(boost::shared_mutex& mutex, std::shared_ptr<temp_buffer>& st)
 		{
-			return [st](const T0& p0, const T1& p1, const T2& p2)
+			return [st, &mutex](const T0& p0, const T1& p1, const T2& p2)
 			{
-				std::shared_ptr<ps> t(new ps(p0, p1, p2));
-				boost::lock_guard<boost::mutex> lg(st->_mutex);
+				std::shared_ptr<msg_type> t(new msg_type(p0, p1, p2));
+				mutex.lock_upgrade();
 				st->_tempBuff.push_back(t);
+				mutex.unlock_upgrade();
 			};
 		}
 
-		list<std::shared_ptr<ps> > _tempBuff;
-		boost::mutex _mutex;
+		list<std::shared_ptr<msg_type> > _tempBuff;
 	};
 
 	template <typename T0, typename T1>
 	struct temp_buffer<T0, T1, void, void>
 	{
-		struct ps 
-		{
-			ps(const T0& p0, const T1& p1)
-				:_p0(p0), _p1(p1) {}
-
-			T0 _p0;
-			T1 _p1;
-		};
+		typedef msg_param<T0, T1> msg_type;
 
 		void pop(const writer_type& wt)
 		{
@@ -147,34 +88,28 @@ private:
 			{
 				auto t = _tempBuff.front();
 				_tempBuff.pop_front();
-				wt(t->_p0, t->_p1);
+				wt(t->_res0, t->_res1);
 			}
 		}
 
-		writer_type temp_writer(std::shared_ptr<temp_buffer>& st)
+		writer_type temp_writer(boost::shared_mutex& mutex, std::shared_ptr<temp_buffer>& st)
 		{
-			return [st](const T0& p0, const T1& p1)
+			return [st, &mutex](const T0& p0, const T1& p1)
 			{
-				std::shared_ptr<ps> t(new ps(p0, p1));
-				boost::lock_guard<boost::mutex> lg(st->_mutex);
+				std::shared_ptr<msg_type> t(new msg_type(p0, p1));
+				mutex.lock_upgrade();
 				st->_tempBuff.push_back(t);
+				mutex.unlock_upgrade();
 			};
 		}
 
-		list<std::shared_ptr<ps> > _tempBuff;
-		boost::mutex _mutex;
+		list<std::shared_ptr<msg_type> > _tempBuff;
 	};
 
 	template <typename T0>
 	struct temp_buffer<T0, void, void, void>
 	{
-		struct ps 
-		{
-			ps(const T0& p0)
-				:_p0(p0) {}
-
-			T0 _p0;
-		};
+		typedef msg_param<T0> msg_type;
 
 		void pop(const writer_type& wt)
 		{
@@ -182,22 +117,22 @@ private:
 			{
 				auto t = _tempBuff.front();
 				_tempBuff.pop_front();
-				wt(t->_p0);
+				wt(t->_res0);
 			}
 		}
 
-		writer_type temp_writer(std::shared_ptr<temp_buffer>& st)
+		writer_type temp_writer(boost::shared_mutex& mutex, std::shared_ptr<temp_buffer>& st)
 		{
-			return [st](const T0& p0)
+			return [st, &mutex](const T0& p0)
 			{
-				std::shared_ptr<ps> t(new ps(p0));
-				boost::lock_guard<boost::mutex> lg(st->_mutex);
+				std::shared_ptr<msg_type> t(new msg_type(p0));
+				mutex.lock_upgrade();
 				st->_tempBuff.push_back(t);
+				mutex.unlock_upgrade();
 			};
 		}
 
-		list<std::shared_ptr<ps> > _tempBuff;
-		boost::mutex _mutex;
+		list<std::shared_ptr<msg_type> > _tempBuff;
 	};
 
 	template <>
@@ -218,7 +153,7 @@ private:
 			}
 		}
 
-		writer_type temp_writer(std::shared_ptr<temp_buffer>& st)
+		writer_type temp_writer(boost::shared_mutex& mutex, std::shared_ptr<temp_buffer>& st)
 		{
 			return [st]()
 			{
@@ -236,15 +171,13 @@ private:
 		boost::shared_mutex _mutex;
 	};
 
-	template <typename Handler>
 	class wrapped_invoke
 	{
 	public:
-		wrapped_invoke(const Handler& handler)
-			: _param(new wrapped_param)
+		wrapped_invoke(const std::shared_ptr<wrapped_param>& param)
 		{
+			_param = param;
 			_param->_count = 0;
-			_param->_handler = handler;
 		}
 	public:
 		void operator()()
@@ -369,12 +302,12 @@ public:
 	*/
 	static regist_reader make(__out writer_type& writer)
 	{
+		std::shared_ptr<wrapped_param> wrappedParam(new wrapped_param);
 		std::shared_ptr<temp_buffer<T0, T1, T2, T3> > tempBuff(new temp_buffer<T0, T1, T2, T3>());
-		wrapped_invoke<writer_type> wrapWriter(tempBuff->temp_writer(tempBuff));
-		writer = wrapWriter;
+		wrappedParam->_handler = tempBuff->temp_writer(wrappedParam->_mutex, tempBuff);
+		writer = wrapped_invoke(wrappedParam);
 
 		std::weak_ptr<temp_buffer<T0, T1, T2, T3> > weakBuff = tempBuff;
-		std::shared_ptr<wrapped_param> wrappedParam = wrapWriter._param;
 		return [wrappedParam, weakBuff](my_actor* hostActor, reader_handle& rh)->size_t
 		{
 			SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
@@ -414,11 +347,11 @@ public:
 		std::shared_ptr<pipe_param> pipeParam(new pipe_param);
 		getWriterFunc = [pipeParam](my_actor* hostActor, int timeout)->writer_type
 		{
-			async_trig_handle<> ath;
+			actor_trig_handle<> ath;
 			pipeParam->_mutex.lock();
 			if (!pipeParam->_hasWriter)
 			{
-				pipeParam->_getList.push_back(hostActor->begin_trig(ath));
+				pipeParam->_getList.push_back(hostActor->make_trig_notifer(ath));
 				pipeParam->_mutex.unlock();
 				if (timeout >= 0)
 				{

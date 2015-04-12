@@ -3,7 +3,6 @@
 
 #include "ios_proxy.h"
 #include "actor_framework.h"
-#include "msg_pipe.h"
 #include "async_buffer.h"
 #include "scattered.h"
 #include <list>
@@ -113,13 +112,13 @@ void check_two_down(my_actor* self, int dt, int id1, int id2)
 			bool st2 = false;
 			child_actor_handle up1 = self->create_child_actor(boost::bind(&check_both_up, _1, id1, boost::ref(st1), boost::ref(st2)));
 			child_actor_handle up2 = self->create_child_actor(boost::bind(&check_both_up, _1, id2, boost::ref(st2), boost::ref(st1)));
-			async_trig_handle<bool> ath;
-			auto nh = self->begin_trig(ath);
+			actor_trig_handle<bool> ath;
+			auto nh = self->make_trig_notifer(ath);
 			up1.get_actor()->append_quit_callback(nh);
 			up2.get_actor()->append_quit_callback(nh);
 			self->child_actor_run(up1);
 			self->child_actor_run(up2);
-			if (self->timed_wait_trig(ath, st1, 3000))
+			if (self->timed_wait_trig(3000, ath, st1))
 			{
 				self->child_actor_force_quit(up1);
 				self->child_actor_force_quit(up2);
@@ -129,17 +128,17 @@ void check_two_down(my_actor* self, int dt, int id1, int id2)
 				printf("退出 check_two_down\n");
 				self->child_actor_force_quit(up1);
 				self->child_actor_force_quit(up2);
-				self->close_trig(ath);
+				self->close_trig_notifer(ath);
 				break;
 			}
 		}
 		{
 			child_actor_handle check1 = self->create_child_actor(boost::bind(&check_key_down, _1, id1));
 			child_actor_handle check2 = self->create_child_actor(boost::bind(&check_key_down, _1, id2));
-			async_trig_handle<actor_handle, bool> ath;
-			auto nh = self->begin_trig(ath);
-			check1.get_actor()->append_quit_callback(boost::bind(nh, check2.get_actor(), _1));
-			check2.get_actor()->append_quit_callback(boost::bind(nh, check1.get_actor(), _1));
+			actor_trig_handle<actor_handle, bool> ath;
+			auto nh = self->make_trig_notifer(ath);
+			//check1.get_actor()->append_quit_callback(boost::bind(nh, check2.get_actor(), _1));
+			//check2.get_actor()->append_quit_callback(boost::bind(nh, check1.get_actor(), _1));
 			self->child_actor_run(check1);
 			self->child_actor_run(check2);
 			actor_handle ah;
@@ -186,7 +185,7 @@ void shift_key(my_actor* self, actor_handle pauseactor)
 	}
 	while (true)
 	{
-		int id = self->pump_msg(amh);
+		int id = self->pump_msg<int>(amh);
 		if ('P' == id)
 		{
 			bool isPause = self->actor_switch(pauseactor);
@@ -298,58 +297,6 @@ void create_actor_test(my_actor* self)
 	}
 }
 
-void async_buffer_read(my_actor* self, std::shared_ptr<async_buffer<int> > buffer, msg_pipe<>::regist_reader regWaitFull, int max)
-{
-	actor_msg_handle<> amh;
-	regWaitFull(self, amh);
-	goto __start;
-	while (true)
-	{
-		self->sleep(500);
-		int i;
-		bool empty = buffer->pop(i);
-		printf("%d\n", i);
-		if (max == i)
-		{
-			break;
-		}
-		if (empty)
-		{
-			printf("read 缓存空\n");
-			__start:
-			self->pump_msg(amh);
-			printf("read 缓存来数据\n");
-		}
-	}
-	self->close_msg_notifer(amh);
-}
-
-void async_buffer_test(my_actor* self)
-{
-	msg_pipe<>::writer_type fullNotify;
-	msg_pipe<>::regist_reader regWaitFull = msg_pipe<>::make(fullNotify);
-	std::shared_ptr<async_buffer<int> > buffer = async_buffer<int>::create(10);
-	actor_msg_handle<> amh;
-	int testCyc = 30;
-	buffer->setNotify(fullNotify, self->make_msg_notifer(amh));
-	child_actor_handle readactor = self->create_child_actor(boost::bind(&async_buffer_read, _1, buffer, regWaitFull, testCyc-1));
-	self->child_actor_run(readactor);
-	for (int i = 0; i < testCyc; i++)
-	{
-		check_key_down(self, VK_CONTROL);
-		check_key_up(self, VK_CONTROL);
-		if (buffer->push(i))
-		{
-			printf("writer 缓存满\n");
-			self->pump_msg(amh);
-			printf("writer 缓存半空\n");
-		}
-	}
-	self->child_actor_wait_quit(readactor);
-	self->close_msg_notifer(amh);
-	printf("缓存测试结束\n");
-}
-
 void actor_test(my_actor* self)
 {
 	ios_proxy perforIos;//用于测试多线程下的Actor切换性能
@@ -364,37 +311,82 @@ void actor_test(my_actor* self)
 	child_actor_handle actorPerfor = self->create_child_actor(boost::bind(&perfor_test, _1, boost::ref(perforIos)));//Actor切换性能测试
 	child_actor_handle actorCreate = self->create_child_actor(boost::bind(&create_actor_test, _1));//Actor创建性能测试
 	child_actor_handle actorShift = self->create_child_actor(boost::bind(&test_shift, _1, actorPerfor.get_actor()));//shift+字母检测
-	child_actor_handle actorBuffer = self->create_child_actor(boost::bind(&async_buffer_test, _1));//异步缓冲队列测试
 	child_actor_handle actorProducer1;
 	child_actor_handle actorProducer2;
 	child_actor_handle actorConsumer;
+	child_actor_handle actorMutex1;
+	child_actor_handle actorMutex2;
+	child_actor_handle actorMutex3;
 	//创建生产者/消费者模型测试
 	{
-		actorConsumer = self->create_child_actor([](my_actor* self)
+		actorConsumer = self->create_child_actor(self->this_strand()->clone(), [](my_actor* self)
 		{//消费者
-			actor_msg_handle<int, int>& conCmh = self->get_msg_handle<int, int>();
-			while (true)
-			{
-				int p0;
-				int id;
-				self->pump_msg(conCmh, p0, id);
-				printf("%d-%d id=%d\n", p0, (int)conCmh.length(), id);
-				self->sleep(1000);
-			}
+				auto run = [](my_actor* self)
+				{
+					self->sleep(10);
+					auto conCmh = self->connect_msg_pump<int, int>();
+					while (true)
+					{
+						int p0;
+						int id;
+						self->sleep(1);
+						self->pump_msg(conCmh, p0, id);
+						printf("%d %d %d\n", p0, id, (int)self->this_id());
+						self->sleep(1);
+					}
+				};
+				auto st = self->this_strand()->clone();
+				child_actor_handle agent1 = self->create_child_actor(st, run, 64 kB);
+				child_actor_handle agent2 = self->create_child_actor(st, run, 64 kB);
+				self->child_actor_run(agent1);
+				self->child_actor_run(agent2);
+				while (true)
+				{
+					self->msg_agent_to<int, int>(agent1);
+					self->sleep(200);
+					self->msg_agent_to<int, int>(agent2);
+					self->sleep(200);
+					auto conCmh = self->connect_msg_pump<int, int>();
+					for (int i = 0; i < 3; i++)
+					{
+						int p0;
+						int id;
+						self->pump_msg(conCmh, p0, id);
+						printf("%d %d %d\n", p0, id, (int)self->this_id());
+						self->sleep(1);
+					}
+				}
 		});
-		auto test_producer = [&actorConsumer](my_actor* self)
+		auto writer = self->connect_msg_notifer_to<int, int>(actorConsumer);
+		auto test_producer = [writer](my_actor* self)
 		{//生产者
-			auto writer = self->get_buddy_notifer<int, int>(actorConsumer.get_actor());
 			for (int i = 0; true; i++)
 			{
 				writer(i, (int)self->this_id());
-				self->sleep(2100);
+				self->sleep(1000);
 			}
 		};
 		actorProducer1 = self->create_child_actor(test_producer);
 		actorProducer2 = self->create_child_actor(test_producer);
 	}
-
+	actor_mutex amutex(self->this_strand());
+	{
+		std::function<void(my_actor*, int)> actorMutexH = [amutex](my_actor* self, int id)
+		{
+			while (true)
+			{
+				actor_lock_guard lg(amutex, self);
+				for (int i = 0; i < 10; i++)
+				{
+					printf("%d\n", id);
+					self->sleep(100);
+				}
+			}
+		};
+		actorMutex1 = self->create_child_actor(boost::bind(actorMutexH, _1, 1));
+		actorMutex2 = self->create_child_actor(boost::bind(actorMutexH, _1, 2));
+		actorMutex3 = self->create_child_actor(boost::bind(actorMutexH, _1, 3));
+	}
 	list<actor_handle> chs;//需要被挂起的Actor对象，可以从下方注释几个测试
 	chs.push_back(actorLeft.get_actor());
 	chs.push_back(actorRight.get_actor());
@@ -403,10 +395,10 @@ void actor_test(my_actor* self)
 	chs.push_back(actorPrint.get_actor());
 	chs.push_back(actorShift.get_actor());
 	chs.push_back(actorTwo.get_actor());
-	chs.push_back(actorConsumer.get_actor());
+//	chs.push_back(actorConsumer.get_actor());
 //	chs.push_back(actorPerfor.get_actor());
-	chs.push_back(actorProducer1.get_actor());
-	chs.push_back(actorProducer2.get_actor());
+//	chs.push_back(actorProducer1.get_actor());
+//	chs.push_back(actorProducer2.get_actor());
 	chs.push_back(actorCreate.get_actor());
 	child_actor_handle actorSuspend = self->create_child_actor(boost::bind(&actor_suspend, _1, boost::ref(chs)), 32 kB);//点击鼠标右键暂停按键检测
 	child_actor_handle actorResume = self->create_child_actor(boost::bind(&actor_resume, _1, boost::ref(chs)), 32 kB);//点击鼠标左键恢复按键检测
@@ -418,13 +410,15 @@ void actor_test(my_actor* self)
 	self->child_actor_run(actorShift);
 	self->child_actor_run(actorTwo);
 	self->child_actor_run(actorPerfor);
-// 	self->child_actor_run(actorConsumer);
-// 	self->child_actor_run(actorProducer1);
-// 	self->child_actor_run(actorProducer2);
+//	self->child_actor_run(actorConsumer);
+//	self->child_actor_run(actorProducer1);
+//	self->child_actor_run(actorProducer2);
 //	self->child_actor_run(actorCreate);
 	self->child_actor_run(actorSuspend);
 	self->child_actor_run(actorResume);
-	self->child_actor_run(actorBuffer);
+	self->child_actor_run(actorMutex1);
+	self->child_actor_run(actorMutex2);
+	self->child_actor_run(actorMutex3);
 	self->child_actor_suspend(actorPerfor);
 	check_key_down(self, VK_ESCAPE);//ESC键退出
 	self->child_actor_force_quit(actorLeft);
@@ -441,7 +435,10 @@ void actor_test(my_actor* self)
 	self->child_actor_force_quit(actorCreate);
 	self->child_actor_force_quit(actorSuspend);
 	self->child_actor_force_quit(actorResume);
-	self->child_actor_force_quit(actorBuffer);
+	self->child_actor_force_quit(actorMutex1);
+	self->child_actor_force_quit(actorMutex2);
+	self->child_actor_force_quit(actorMutex3);
+	amutex.reset_mutex(self);
 	perforIos.stop();
 }
 

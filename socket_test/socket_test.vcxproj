@@ -115,6 +115,7 @@
   <ItemGroup>
     <ClInclude Include="..\common_code\acceptor_socket.h" />
     <ClInclude Include="..\common_code\actor_framework.h" />
+    <ClInclude Include="..\common_code\actor_mutex.h" />
     <ClInclude Include="..\common_code\actor_stack.h" />
     <ClInclude Include="..\common_code\ios_proxy.h" />
     <ClInclude Include="..\common_code\mfc_strand.h" />
@@ -136,6 +137,7 @@
   <ItemGroup>
     <ClCompile Include="..\common_code\acceptor_socket.cpp" />
     <ClCompile Include="..\common_code\actor_framework.cpp" />
+    <ClCompile Include="..\common_code\actor_mutex.cpp" />
     <ClCompile Include="..\common_code\actor_stack.cpp" />
     <ClCompile Include="..\common_code\ios_proxy.cpp" />
     <ClCompile Include="..\common_code\mfc_strand.cpp" />

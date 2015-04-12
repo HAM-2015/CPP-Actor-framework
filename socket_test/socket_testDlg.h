@@ -44,14 +44,12 @@ public:
 		string _ip;
 		int _port;
 		int _tm;
-		msg_pipe<shared_data>::regist_reader _msgPump;
 	};
 
 	struct server_param 
 	{
 		int _port;
 		int _maxSessionNum;
-		msg_pipe<>::regist_reader _closePump;
 	};
 
 	struct session_pck 

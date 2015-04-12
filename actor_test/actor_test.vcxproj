@@ -153,6 +153,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\common_code\actor_framework.cpp" />
+    <ClCompile Include="..\common_code\actor_mutex.cpp" />
     <ClCompile Include="..\common_code\actor_stack.cpp" />
     <ClCompile Include="..\common_code\ios_proxy.cpp" />
     <ClCompile Include="..\common_code\shared_data.cpp" />
@@ -161,12 +162,13 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\common_code\actor_mutex.h" />
     <ClInclude Include="..\common_code\async_buffer.h" />
     <ClInclude Include="..\common_code\actor_framework.h" />
     <ClInclude Include="..\common_code\actor_stack.h" />
     <ClInclude Include="..\common_code\function_type.h" />
     <ClInclude Include="..\common_code\ios_proxy.h" />
-    <ClInclude Include="..\common_code\msg_pipe.h" />
+    <ClInclude Include="..\common_code\msg_queue.h" />
     <ClInclude Include="..\common_code\ref_ex.h" />
     <ClInclude Include="..\common_code\shared_data.h" />
     <ClInclude Include="..\common_code\shared_strand.h" />

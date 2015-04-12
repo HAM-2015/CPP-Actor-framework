@@ -116,8 +116,8 @@ BOOL Csocket_testDlg::OnInitDialog()
 	_ios.run();
 	_strand = boost_strand::create(_ios);
 	actor_handle mainActor = my_actor::create(_strand, boost::bind(&Csocket_testDlg::mainActor, this, _1));
+	_uiCMD = mainActor->connect_msg_notifer<ui_cmd>();
 	mainActor->notify_run();
-	_uiCMD = mainActor->outside_get_notifer<ui_cmd>();
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -172,9 +172,9 @@ void Csocket_testDlg::OnBnClickedClear()
 
 void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param> param)
 {
-	async_trig_handle<boost::system::error_code> ath;
+	actor_trig_handle<boost::system::error_code> ath;
 	post(boost::bind(&Csocket_testDlg::showClientMsg, this, msg_data::create("连接中...")));
-	param->_clientSocket->async_connect(param->_ip.c_str(), param->_port, self->begin_trig(ath));
+	param->_clientSocket->async_connect(param->_ip.c_str(), param->_port, self->make_trig_notifer(ath));
 	actor_handle connecting = create_mfc_actor(_ios, [this](my_actor* self)
 	{//让“连接”按钮在连接中闪烁
 		self->open_timer();
@@ -194,7 +194,7 @@ void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param>
 	connecting->notify_run();
 	self->open_timer();
 	boost::system::error_code err;
-	if (self->timed_wait_trig(ath, err, param->_tm) && !err && param->_clientSocket->no_delay())
+	if (self->timed_wait_trig(param->_tm, ath, err) && !err && param->_clientSocket->no_delay())
 	{
 		self->actor_force_quit(connecting);
 		send(self, [this]()
@@ -221,15 +221,14 @@ void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param>
 		auto textio = text_stream_io::create(self->this_strand(), param->_clientSocket, readActor.get_actor()->make_msg_notifer(amh));
 		child_actor_handle writerActor = self->create_child_actor([&textio, &param](my_actor* self)
 		{
-			actor_msg_handle<shared_data> amh;
-			param->_msgPump(self, amh);
+			msg_pump<shared_data>::handle amh = self->connect_msg_pump<shared_data>();
 			while (true)
 			{
 				//接收对话框给的消息，然后发送给服务器
-				textio->write(self->pump_msg(amh));
+				textio->write(self->pump_msg<shared_data>(amh));
 			}
-			self->close_msg_notifer(amh);
 		});
+		self->msg_agent_to<shared_data>(writerActor);
 		self->child_actor_run(readActor);
 		self->child_actor_run(writerActor);
 		send(self, [this]()
@@ -257,13 +256,13 @@ void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param>
 
 void Csocket_testDlg::newSession(my_actor* self, std::shared_ptr<session_pck> sess)
 {//这个Actor运行在对话框线程中
-	async_trig_handle<> lstClose;
+	actor_trig_handle<> lstClose;
 	dlg_session dlg;
 	dlg._strand = _strand;
 	dlg._socket = sess->_socket;
 	dlg._lstClose = sess->_lstClose;
 	dlg._closeNtf = sess->_closeNtf;
-	dlg._closeCallback = self->begin_trig(lstClose);
+	dlg._closeCallback = self->make_trig_notifer(lstClose);
 	dlg.Create(IDD_SESSION, this);
 	dlg.ShowWindow(SW_SHOW);
 	self->wait_trig(lstClose);
@@ -284,14 +283,13 @@ void Csocket_testDlg::serverActor(my_actor* self, std::shared_ptr<server_param> 
 	//创建侦听服务器关闭
 	child_actor_handle lstCloseProxyActor = self->create_child_actor([&](my_actor* self)//侦听服务器关闭
 	{
-		actor_msg_handle<> amh;
-		param->_closePump(self, amh);
+		msg_pump<>::handle amh = self->connect_msg_pump();
 		self->pump_msg(amh);
 		//得到服务器关闭消息，关闭连接侦听器
 		norClosed = true;
 		accept->close();
-		self->close_msg_notifer(amh);
 	});
+	self->msg_agent_to(lstCloseProxyActor);
 	//创建会话关闭响应器
 	list<std::shared_ptr<session_pck> > sessList;
 	actor_msg_handle<list<std::shared_ptr<session_pck> >::iterator> sessDissonnLst;
@@ -330,7 +328,7 @@ void Csocket_testDlg::serverActor(my_actor* self, std::shared_ptr<server_param> 
 			sessList.push_front(newSess);
 			post(boost::bind(&Csocket_testDlg::showSessionNum, this, sessList.size()));
 			newSess->_sessionDlg = create_mfc_actor(boost::bind(&Csocket_testDlg::newSession, this, _1, newSess));
-			newSess->_sessionDlg->append_quit_callback(boost::bind(sessDissonnNtf, sessList.begin()));
+			newSess->_sessionDlg->append_quit_callback(boost::bind((std::function<void(list<std::shared_ptr<session_pck> >::iterator)>)sessDissonnNtf, sessList.begin()));
 			newSess->_sessionDlg->notify_run();
 		}
 		else
@@ -355,16 +353,15 @@ void Csocket_testDlg::mainActor(my_actor* self)
 	std::shared_ptr<client_param> extClient;
 	std::function<void ()> serverNtfClose;
 	std::function<void (shared_data)> clientPostPipe;
-	actor_handle clientActorHandle;
-	actor_handle serverActorHandle;
+	child_actor_handle clientActorHandle;
+	child_actor_handle serverActorHandle;
 	auto disconnectHandler = [&, this]()
 	{
-		if (clientActorHandle)
+		if (!clientActorHandle.empty())
 		{
 			extClient->_clientSocket->close();
-			self->actor_wait_quit(clientActorHandle);
+			self->child_actor_wait_quit(clientActorHandle);
 			extClient.reset();
-			clientActorHandle.reset();
 			clear_function(clientPostPipe);
 			auto _this = this;
 			this->send(self, [&, _this]()
@@ -377,11 +374,10 @@ void Csocket_testDlg::mainActor(my_actor* self)
 	};
 	auto stopListenHandler = [&, this]()
 	{
-		if (serverActorHandle)
+		if (!serverActorHandle.empty())
 		{
 			serverNtfClose();
-			self->actor_wait_quit(serverActorHandle);
-			serverActorHandle.reset();
+			self->child_actor_wait_quit(serverActorHandle);
 			auto _this = this;
 			this->send(self, [_this]()
 			{
@@ -392,17 +388,17 @@ void Csocket_testDlg::mainActor(my_actor* self)
 		}
 	};
 
-	actor_msg_handle<ui_cmd>& lstCMD = self->get_msg_handle<ui_cmd>();
+	msg_pump<ui_cmd>::handle lstCMD = self->connect_msg_pump<ui_cmd>();
 	while (true)
 	{
 		send(self, [this](){this->EnableWindow(TRUE);});
-		ui_cmd cmd = self->pump_msg(lstCMD);
+		ui_cmd cmd = self->pump_msg<ui_cmd>(lstCMD);
 		send(self, [this](){this->EnableWindow(FALSE);});
 		switch (cmd)
 		{
 		case ui_connect:
 			{
-				if (!clientActorHandle)
+				if (clientActorHandle.empty())
 				{
 					char sip[32];
 					CString sport;
@@ -422,10 +418,10 @@ void Csocket_testDlg::mainActor(my_actor* self)
 						extClient->_port = boost::lexical_cast<int>(sport.GetBuffer());
 						extClient->_tm = boost::lexical_cast<int>(stm.GetBuffer());
 						extClient->_clientSocket = socket_io::create(_ios);
-						extClient->_msgPump = msg_pipe<shared_data>::make(clientPostPipe);
-						clientActorHandle = my_actor::create(_strand, 
+						clientActorHandle = self->create_child_actor(_strand, 
 							boost::bind(&Csocket_testDlg::connectActor, this, _1, extClient));
-						clientActorHandle->notify_run();
+						self->child_actor_run(clientActorHandle);
+						clientPostPipe = self->connect_msg_notifer_to<shared_data>(clientActorHandle);
 						send(self, [this]()
 						{
 							this->GetDlgItem(IDC_BUTTON1)->EnableWindow(FALSE);
@@ -441,7 +437,7 @@ void Csocket_testDlg::mainActor(my_actor* self)
 			break;
 		case ui_listen:
 			{
-				if (!serverActorHandle)
+				if (serverActorHandle.empty())
 				{
 					CString sport;
 					CString snum;
@@ -456,9 +452,9 @@ void Csocket_testDlg::mainActor(my_actor* self)
 						std::shared_ptr<server_param> param(new server_param);
 						param->_port = boost::lexical_cast<int>(sport.GetBuffer());
 						param->_maxSessionNum = boost::lexical_cast<int>(snum.GetBuffer());
-						param->_closePump = msg_pipe<>::make(serverNtfClose);
-						serverActorHandle = my_actor::create(_strand, boost::bind(&Csocket_testDlg::serverActor, this, _1, param));
-						serverActorHandle->notify_run();
+						serverActorHandle = self->create_child_actor(_strand, boost::bind(&Csocket_testDlg::serverActor, this, _1, param));
+						self->child_actor_run(serverActorHandle);
+						serverNtfClose = self->connect_msg_notifer_to(serverActorHandle);
 						send(self, [this]()
 						{
 							this->GetDlgItem(IDC_BUTTON4)->EnableWindow(FALSE);
@@ -503,7 +499,6 @@ void Csocket_testDlg::mainActor(my_actor* self)
 			{
 				disconnectHandler();
 				stopListenHandler();
-				self->close_msg_notifer(lstCMD);
 				send(self, [this](){this->mfc_close();});
 				return;
 			}
