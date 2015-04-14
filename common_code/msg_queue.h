@@ -13,20 +13,17 @@ class msg_queue
 
 	struct mem_alloc 
 	{
-		struct node_space
+		union node_space
 		{
 			void set_ef()
 			{
 #ifdef _DEBUG
-				memset(&_obj, 0xEF, sizeof(_obj));
+				memset(this, 0xEF, sizeof(*this));
 #endif
 			}
 
-			union
-			{
-				node _node;
-				node_space* _link;
-			} _obj;
+			node _node;
+			node_space* _link;
 		};
 
 		mem_alloc(size_t poolSize)
@@ -47,7 +44,7 @@ class msg_queue
 			{
 				_poolSize--;
 				node_space* t = pIt;
-				pIt = pIt->_obj._link;
+				pIt = pIt->_link;
 				free(t);
 			}
 			assert(0 == _poolSize);
@@ -62,7 +59,7 @@ class msg_queue
 			{
 				_poolSize--;
 				node_space* fixedSpace = _pool;
-				_pool = fixedSpace->_obj._link;
+				_pool = fixedSpace->_link;
 				return (node*)fixedSpace;
 			}
 			return (node*)malloc(sizeof(node_space));
@@ -78,7 +75,7 @@ class msg_queue
 			{
 				_poolSize++;
 				space->set_ef();
-				space->_obj._link = _pool;
+				space->_link = _pool;
 				_pool = space;
 				return;
 			}

@@ -90,7 +90,7 @@ void text_stream_io::writeActor( my_actor* self )
 	string textTail = "\r\n";
 	while (true)
 	{
-		shared_data msg = self->pump_msg(_writerPipeOut);
+		shared_data msg = self->wait_msg(_writerPipeOut);
 		if (!msg)
 		{
 			break;

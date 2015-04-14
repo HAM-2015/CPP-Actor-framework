@@ -233,71 +233,11 @@ actor_msg_handle_base::actor_msg_handle_base()
 void actor_msg_handle_base::set_actor(const actor_handle& hostActor)
 {
 	_hostActor = hostActor;
-	_strand = hostActor->this_strand();
+	_strand = hostActor->self_strand();
 }
 
 //////////////////////////////////////////////////////////////////////////
 
-void actor_msg_notifer_void::operator()() const
-{
-	auto& refThis_ = *this;
-	_strand->post([=]()
-	{
-		if (!refThis_._hostActor->is_quited() && !(*refThis_._closed))
-		{
-			refThis_._msgHandle->push_msg();
-		}
-	});
-}
-
-actor_msg_notifer_void::actor_msg_notifer_void(msg_handle* msgHandle)
-:_msgHandle(msgHandle), _strand(msgHandle->_strand), _hostActor(msgHandle->_hostActor), _closed(msgHandle->_closed)
-{
-
-}
-
-actor_msg_notifer_void::actor_msg_notifer_void()
-: _msgHandle(NULL)
-{
-
-}
-
-actor_handle actor_msg_notifer_void::host_actor()
-{
-	return _hostActor;
-}
-
-//////////////////////////////////////////////////////////////////////////
-void actor_trig_notifer_void::operator()() const
-{
-	auto& refThis_ = *this;
-	_strand->post([=]()
-	{
-		if (!refThis_._hostActor->is_quited() && !(*refThis_._closed))
-		{
-			refThis_._trigHandle->push_msg();
-		}
-	});
-}
-
-actor_trig_notifer_void::actor_trig_notifer_void(trig_handle* trigHandle)
-:_trigHandle(trigHandle), _strand(trigHandle->_strand), _hostActor(trigHandle->_hostActor), _closed(trigHandle->_closed)
-{
-
-}
-
-actor_trig_notifer_void::actor_trig_notifer_void()
-: _trigHandle(NULL)
-{
-
-}
-
-actor_handle actor_trig_notifer_void::host_actor()
-{
-	return _hostActor;
-}
-
-//////////////////////////////////////////////////////////////////////////
 void msg_pump_base::run_one()
 {
 	_hostActor->run_one();
@@ -308,6 +248,7 @@ msg_pool_void::msg_pool_void(shared_strand strand)
 {
 	_strand = strand;
 	_waiting = false;
+	_sendCount = 0;
 	_msgBuff = 0;
 }
 
@@ -325,6 +266,7 @@ msg_pool_void::pump_handler msg_pool_void::connect_pump(const std::shared_ptr<ms
 	compHandler._thisPool = _weakThis.lock();
 	compHandler._msgPump = msgPump;
 	_waiting = false;
+	_sendCount = 0;
 	return compHandler;
 }
 
@@ -350,6 +292,7 @@ void msg_pool_void::send_msg(bool post)
 	{
 		_waiting = false;
 		assert(_msgPump);
+		_sendCount++;
 		if (post)
 		{
 			_msgPump->receive_msg_post();
@@ -383,12 +326,16 @@ bool msg_pool_void::pump_handler::empty()
 	return !_thisPool;
 }
 
-void msg_pool_void::pump_handler::post_pump()
+void msg_pool_void::pump_handler::post_pump(BYTE pumpID)
 {
-	_thisPool->_strand->post(*this);
+	auto& refThis_ = *this;
+	_thisPool->_strand->post([refThis_, pumpID]()
+	{
+		((pump_handler&)refThis_)(pumpID);
+	});
 }
 
-void msg_pool_void::pump_handler::operator()()
+void msg_pool_void::pump_handler::operator()(BYTE pumpID)
 {
 	assert(_thisPool);
 	if (_thisPool->_strand->running_in_this_thread())
@@ -396,20 +343,33 @@ void msg_pool_void::pump_handler::operator()()
 		if (_msgPump == _thisPool->_msgPump)
 		{
 			assert(!_thisPool->_waiting);
-			if (_thisPool->_msgBuff)
+			if (pumpID == _thisPool->_sendCount)
 			{
-				_thisPool->_msgBuff--;
-				_thisPool->_msgPump->receive_msg();
+				if (_thisPool->_msgBuff)
+				{
+					_thisPool->_msgBuff--;
+					_thisPool->_sendCount++;
+					_thisPool->_msgPump->receive_msg();
+				} 
+				else
+				{
+					_thisPool->_waiting = true;
+				}
 			}
 			else
-			{
-				_thisPool->_waiting = true;
+			{//上次消息没取到，重新取，但实际中间已经post出去了
+				assert(!_thisPool->_waiting);
+				assert(pumpID + 1 == _thisPool->_sendCount);
 			}
 		}
 	}
 	else
 	{
-		_thisPool->_strand->post(*this);
+		auto& refThis_ = *this;
+		_thisPool->_strand->post([refThis_, pumpID]()
+		{
+			((pump_handler&)refThis_)(pumpID);
+		});
 	}
 }
 //////////////////////////////////////////////////////////////////////////
@@ -418,8 +378,9 @@ msg_pump_void::msg_pump_void(const actor_handle& hostActor)
 {
 	_waiting = false;
 	_hasMsg = false;
+	_pumpCount = 0;
 	_hostActor = hostActor;
-	_strand = hostActor->this_strand();
+	_strand = hostActor->self_strand();
 }
 
 msg_pump_void::~msg_pump_void()
@@ -447,9 +408,10 @@ void msg_pump_void::connect(const pump_handler& pumpHandler)
 	if (_hostActor)
 	{
 		_pumpHandler = pumpHandler;
+		_pumpCount = 0;
 		if (_waiting)
 		{
-			_pumpHandler.post_pump();
+			_pumpHandler.post_pump(_pumpCount);
 		}
 	}
 }
@@ -458,6 +420,7 @@ void msg_pump_void::receiver()
 {
 	if (_hostActor)
 	{
+		_pumpCount++;
 		assert(!_hasMsg);
 		if (_waiting)
 		{
@@ -482,7 +445,7 @@ bool msg_pump_void::read_msg()
 	}
 	if (!_pumpHandler.empty())
 	{
-		_pumpHandler();
+		_pumpHandler(_pumpCount);
 		_waiting = !_hasMsg;
 		_hasMsg = false;
 		return !_waiting;
@@ -596,12 +559,14 @@ my_actor::my_actor()
 	_suspended = false;
 	_hasNotify = false;
 	_isForce = false;
+	_notifyQuited = false;
+	_lockQuit = 0;
 	_stackTop = NULL;
 	_stackSize = 0;
 	_yieldCount = 0;
 	_childOverCount = 0;
 	_childSuspendResumeCount = 0;
-	_actorID = ++_actorIDCount;
+	_selfID = ++_actorIDCount;
 }
 
 my_actor::my_actor(const my_actor&)
@@ -614,6 +579,7 @@ my_actor::~my_actor()
 	assert(_quited);
 	assert(!_mainFunc);
 	assert(!_childOverCount);
+	assert(!_lockQuit);
 	assert(!_childSuspendResumeCount);
 	assert(_suspendResumeQueue.empty());
 	assert(_quitHandlerList.empty());
@@ -636,7 +602,7 @@ my_actor::~my_actor()
 	{
 		assert(false);
 		char buf[48];
-		sprintf_s(buf, "%llu Actor堆栈溢出", _actorID);
+		sprintf_s(buf, "%llu Actor堆栈溢出", _selfID);
 		throw std::shared_ptr<string>(new string(buf));
 	}
 #endif
@@ -731,7 +697,7 @@ child_actor_handle::child_actor_param my_actor::create_child_actor( shared_stran
 
 child_actor_handle::child_actor_param my_actor::create_child_actor(const main_func& mainFunc, size_t stackSize)
 {
-	return create_child_actor(this_strand(), mainFunc, stackSize);
+	return create_child_actor(self_strand(), mainFunc, stackSize);
 }
 
 void my_actor::child_actor_run( child_actor_handle& actorHandle )
@@ -739,7 +705,7 @@ void my_actor::child_actor_run( child_actor_handle& actorHandle )
 	assert_enter();
 	assert(!actorHandle._quited);
 	assert(actorHandle.get_actor());
-	assert(actorHandle.get_actor()->parent_actor().get() == this);
+	assert(actorHandle.get_actor()->parent_actor()->self_id() == self_id());
 	actorHandle._param._actor->notify_run();
 }
 
@@ -758,10 +724,10 @@ bool my_actor::child_actor_force_quit( child_actor_handle& actorHandle )
 	if (!actorHandle._quited)
 	{
 		assert(actorHandle.get_actor());
-		assert(actorHandle.get_actor()->parent_actor().get() == this);
+		assert(actorHandle.get_actor()->parent_actor()->self_id() == self_id());
 
 		actor_handle actor = actorHandle.peel();
-		if (actor->this_strand() == _strand)
+		if (actor->self_strand() == _strand)
 		{
 			actorHandle._norQuit = trig<bool>([actor](const std::function<void(bool)>& h){actor->force_quit(h); });
 		} 
@@ -782,9 +748,9 @@ void my_actor::child_actors_force_quit(const list<child_actor_handle::ptr>& acto
 	{
 		child_actor_handle::ptr actorHandle = *it;
 		assert(actorHandle->get_actor());
-		assert(actorHandle->get_actor()->parent_actor().get() == this);
+		assert(actorHandle->get_actor()->parent_actor()->self_id() == self_id());
 		actor_handle actor = actorHandle->peel();
-		if (actor->this_strand() == _strand)
+		if (actor->self_strand() == _strand)
 		{
 			actor->force_quit(wrap_no_params(h));
 		} 
@@ -795,7 +761,7 @@ void my_actor::child_actors_force_quit(const list<child_actor_handle::ptr>& acto
 	}
 	for (size_t i = actorHandles.size(); i > 0; i--)
 	{
-		pump_msg(amh);
+		wait_msg(amh);
 	}
 	close_msg_notifer(amh);
 }
@@ -806,7 +772,7 @@ bool my_actor::child_actor_wait_quit( child_actor_handle& actorHandle )
 	if (!actorHandle._quited)
 	{
 		assert(actorHandle.get_actor());
-		assert(actorHandle.get_actor()->parent_actor().get() == this);
+		assert(actorHandle.get_actor()->parent_actor()->self_id() == self_id());
 		actorHandle._norQuit = actor_wait_quit(actorHandle.get_actor());
 		actorHandle.peel();
 	}
@@ -818,7 +784,7 @@ void my_actor::child_actors_wait_quit(const list<child_actor_handle::ptr>& actor
 	assert_enter();
 	for (auto it = actorHandles.begin(); it != actorHandles.end(); it++)
 	{
-		assert((*it)->get_actor()->parent_actor().get() == this);
+		assert((*it)->get_actor()->parent_actor()->self_id() == self_id());
 		child_actor_wait_quit(**it);
 	}
 }
@@ -827,9 +793,9 @@ void my_actor::child_actor_suspend(child_actor_handle& actorHandle)
 {
 	assert_enter();
 	assert(actorHandle.get_actor());
-	assert(actorHandle.get_actor()->parent_actor().get() == this);
+	assert(actorHandle.get_actor()->parent_actor()->self_id() == self_id());
 	actor_handle actor = actorHandle.get_actor();
-	if (actorHandle.get_actor()->this_strand() == _strand)
+	if (actorHandle.get_actor()->self_strand() == _strand)
 	{
 		trig([actor](const std::function<void()>& h){actor->suspend(h); });
 	} 
@@ -848,9 +814,9 @@ void my_actor::child_actors_suspend(const list<child_actor_handle::ptr>& actorHa
 	{
 		child_actor_handle::ptr actorHandle = *it;
 		assert(actorHandle->get_actor());
-		assert(actorHandle->get_actor()->parent_actor().get() == this);
+		assert(actorHandle->get_actor()->parent_actor()->self_id() == self_id());
 		actor_handle actor = actorHandle->get_actor();
-		if (actor->this_strand() == _strand)
+		if (actor->self_strand() == _strand)
 		{
 			actor->suspend(h);
 		}
@@ -861,7 +827,7 @@ void my_actor::child_actors_suspend(const list<child_actor_handle::ptr>& actorHa
 	}
 	for (size_t i = actorHandles.size(); i > 0; i--)
 	{
-		pump_msg(amh);
+		wait_msg(amh);
 	}
 	close_msg_notifer(amh);
 }
@@ -870,9 +836,9 @@ void my_actor::child_actor_resume(child_actor_handle& actorHandle)
 {
 	assert_enter();
 	assert(actorHandle.get_actor());
-	assert(actorHandle.get_actor()->parent_actor().get() == this);
+	assert(actorHandle.get_actor()->parent_actor()->self_id() == self_id());
 	actor_handle actor = actorHandle.get_actor();
-	if (actorHandle.get_actor()->this_strand() == _strand)
+	if (actorHandle.get_actor()->self_strand() == _strand)
 	{
 		trig([actor](const std::function<void()>& h){actor->resume(h); });
 	}
@@ -891,9 +857,9 @@ void my_actor::child_actors_resume(const list<child_actor_handle::ptr>& actorHan
 	{
 		child_actor_handle::ptr actorHandle = *it;
 		assert(actorHandle->get_actor());
-		assert(actorHandle->get_actor()->parent_actor().get() == this);
+		assert(actorHandle->get_actor()->parent_actor()->self_id() == self_id());
 		actor_handle actor = actorHandle->get_actor();
-		if (actor->this_strand() == _strand)
+		if (actor->self_strand() == _strand)
 		{
 			actor->resume(h);
 		}
@@ -904,7 +870,7 @@ void my_actor::child_actors_resume(const list<child_actor_handle::ptr>& actorHan
 	}
 	for (size_t i = actorHandles.size(); i > 0; i--)
 	{
-		pump_msg(amh);
+		wait_msg(amh);
 	}
 	close_msg_notifer(amh);
 }
@@ -919,7 +885,7 @@ bool my_actor::run_child_actor_complete( shared_strand actorStrand, const main_f
 
 bool my_actor::run_child_actor_complete(const main_func& h, size_t stackSize)
 {
-	return run_child_actor_complete(this_strand(), h, stackSize);
+	return run_child_actor_complete(self_strand(), h, stackSize);
 }
 
 void my_actor::open_timer()
@@ -982,7 +948,7 @@ void my_actor::trig_handler()
 	_strand->post([shared_this](){shared_this->run_one(); });
 }
 
-shared_strand my_actor::this_strand()
+shared_strand my_actor::self_strand()
 {
 	return _strand;
 }
@@ -992,9 +958,9 @@ actor_handle my_actor::shared_from_this()
 	return _weakThis.lock();
 }
 
-long long my_actor::this_id()
+long long my_actor::self_id()
 {
-	return _actorID;
+	return _selfID;
 }
 
 size_t my_actor::yield_count()
@@ -1059,31 +1025,40 @@ void my_actor::force_quit( const std::function<void (bool)>& h )
 	assert(!_inActor);
 	if (!_quited)
 	{
-		_quited = true;
-		_isForce = true;
-		if (h) _exitCallback.push_back(h);
-		if (!_childActorList.empty())
+		if (!_lockQuit)
 		{
-			_childOverCount = _childActorList.size();
-			while (!_childActorList.empty())
+			_quited = true;
+			_isForce = true;
+			if (h) _exitCallback.push_back(h);
+			if (!_childActorList.empty())
 			{
-				auto cc = _childActorList.front();
-				_childActorList.pop_front();
-				actor_handle shared_this = shared_from_this();
-				if (cc->_strand == _strand)
+				_childOverCount = _childActorList.size();
+				while (!_childActorList.empty())
 				{
-					cc->force_quit([shared_this](bool){shared_this->force_quit_cb_handler(); });
-				} 
-				else
-				{
-					cc->notify_quit(_strand->wrap_post((std::function<void(bool)>)[shared_this](bool){shared_this->force_quit_cb_handler(); }));
+					auto cc = _childActorList.front();
+					_childActorList.pop_front();
+					actor_handle shared_this = shared_from_this();
+					if (cc->_strand == _strand)
+					{
+						cc->force_quit([shared_this](bool){shared_this->force_quit_cb_handler(); });
+					}
+					else
+					{
+						cc->notify_quit(_strand->wrap_post((std::function<void(bool)>)[shared_this](bool){shared_this->force_quit_cb_handler(); }));
+					}
 				}
 			}
+			else
+			{
+				exit_callback();
+			}
+			return;
 		} 
-		else
+		else if (h)
 		{
-			exit_callback();
+			_exitCallback.push_back(h);
 		}
+		_notifyQuited = true;
 	}
 	else if (h)
 	{
@@ -1108,6 +1083,24 @@ bool my_actor::is_quited()
 {
 	assert(_strand->running_in_this_thread());
 	return _quited;
+}
+
+void my_actor::lock_quit()
+{
+	assert_enter();
+	_lockQuit++;
+}
+
+void my_actor::unlock_quit()
+{
+	assert_enter();
+	assert(_lockQuit);
+	if (0 == --_lockQuit && _notifyQuited)
+	{
+		_notifyQuited = false;
+		notify_quit();
+		push_yield();
+	}
 }
 
 void my_actor::notify_suspend()
@@ -1363,7 +1356,7 @@ void my_actor::actors_force_quit(const list<actor_handle>& anotherActors)
 	}
 	for (size_t i = anotherActors.size(); i > 0; i--)
 	{
-		pump_msg(amh);
+		wait_msg(amh);
 	}
 	close_msg_notifer(amh);
 }
@@ -1402,7 +1395,7 @@ void my_actor::actors_suspend(const list<actor_handle>& anotherActors)
 	}
 	for (size_t i = anotherActors.size(); i > 0; i--)
 	{
-		pump_msg(amh);
+		wait_msg(amh);
 	}
 	close_msg_notifer(amh);
 }
@@ -1425,7 +1418,7 @@ void my_actor::actors_resume(const list<actor_handle>& anotherActors)
 	}
 	for (size_t i = anotherActors.size(); i > 0; i--)
 	{
-		pump_msg(amh);
+		wait_msg(amh);
 	}
 	close_msg_notifer(amh);
 }
@@ -1449,7 +1442,7 @@ bool my_actor::actors_switch(const list<actor_handle>& anotherActors)
 	}
 	for (size_t i = anotherActors.size(); i > 0; i--)
 	{
-		isPause &= pump_msg(amh);
+		isPause &= wait_msg(amh);
 	}
 	close_msg_notifer(amh);
 	return isPause;
@@ -1707,19 +1700,24 @@ void my_actor::msg_agent_off()
 	msg_agent_off<void, void, void, void>();
 }
 
-post_actor_msg<> my_actor::connect_msg_notifer_to(const actor_handle& buddyActor)
+post_actor_msg<> my_actor::connect_msg_notifer_to(const actor_handle& buddyActor, bool makeNew)
 {
-	return connect_msg_notifer_to<void, void, void, void>(buddyActor);
+	return connect_msg_notifer_to<void, void, void, void>(buddyActor, makeNew, 0);
 }
 
-post_actor_msg<> my_actor::connect_msg_notifer_to(child_actor_handle& childActor)
+post_actor_msg<> my_actor::connect_msg_notifer_to(child_actor_handle& childActor, bool makeNew)
 {
-	return connect_msg_notifer_to<void, void, void, void>(childActor.get_actor());
+	return connect_msg_notifer_to<void, void, void, void>(childActor.get_actor(), makeNew, 0);
 }
 
 post_actor_msg<> my_actor::connect_msg_notifer()
 {
 	return connect_msg_notifer<void, void, void, void>(0);
+}
+
+post_actor_msg<> my_actor::connect_msg_notifer_to_self(bool makeNew)
+{
+	return connect_msg_notifer_to_self<void, void, void, void>(makeNew, 0);
 }
 
 msg_pump<>::handle my_actor::connect_msg_pump()
@@ -1738,7 +1736,7 @@ void my_actor::close_msg_notifer(actor_msg_handle_base& amh)
 	amh.close();
 }
 
-bool my_actor::timed_pump_msg(int tm, actor_msg_handle<>& amh)
+bool my_actor::timed_wait_msg(int tm, actor_msg_handle<>& amh)
 {
 	assert_enter();
 	assert(amh._closed && !(*amh._closed));
@@ -1801,9 +1799,9 @@ bool my_actor::timed_pump_msg(int tm, const msg_pump<>::handle& pump)
 	return true;
 }
 
-void my_actor::pump_msg(actor_msg_handle<>& amh)
+void my_actor::wait_msg(actor_msg_handle<>& amh)
 {
-	timed_pump_msg(-1, amh);
+	timed_wait_msg(-1, amh);
 }
 
 void my_actor::pump_msg(const msg_pump<>::handle& pump)

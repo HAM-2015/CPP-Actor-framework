@@ -185,7 +185,7 @@ void shift_key(my_actor* self, actor_handle pauseactor)
 	}
 	while (true)
 	{
-		int id = self->pump_msg<int>(amh);
+		int id = self->wait_msg(amh);
 		if ('P' == id)
 		{
 			bool isPause = self->actor_switch(pauseactor);
@@ -319,73 +319,82 @@ void actor_test(my_actor* self)
 	child_actor_handle actorMutex3;
 	//创建生产者/消费者模型测试
 	{
-		actorConsumer = self->create_child_actor(self->this_strand()->clone(), [](my_actor* self)
+		actorConsumer = self->create_child_actor(self->self_strand()->clone(), [](my_actor* self)
 		{//消费者
-				auto run = [](my_actor* self)
-				{
-					self->sleep(10);
-					auto conCmh = self->connect_msg_pump<int, int>();
-					while (true)
-					{
-						int p0;
-						int id;
-						self->sleep(1);
-						self->pump_msg(conCmh, p0, id);
-						printf("%d %d %d\n", p0, id, (int)self->this_id());
-						self->sleep(1);
-					}
-				};
-				auto st = self->this_strand()->clone();
-				child_actor_handle agent1 = self->create_child_actor(st, run, 64 kB);
-				child_actor_handle agent2 = self->create_child_actor(st, run, 64 kB);
-				self->child_actor_run(agent1);
-				self->child_actor_run(agent2);
+			auto run = [](my_actor* self)
+			{
+				self->sleep(10);
+				auto conCmh = self->connect_msg_pump<int, int>();
 				while (true)
 				{
-					self->msg_agent_to<int, int>(agent1);
-					self->sleep(200);
-					self->msg_agent_to<int, int>(agent2);
-					self->sleep(200);
-					auto conCmh = self->connect_msg_pump<int, int>();
-					for (int i = 0; i < 3; i++)
+					int p0;
+					int id;
+					self->pump_msg(conCmh, p0, id);
+					printf("%d %d %d\n", p0, id, (int)self->self_id());
+				}
+			};
+			auto st = self->self_strand()->clone();
+			child_actor_handle agent1 = self->create_child_actor(st, run, 64 kB);
+			child_actor_handle agent2 = self->create_child_actor(st, run, 64 kB);
+			self->child_actor_run(agent1);
+			self->child_actor_run(agent2);
+			auto selfh = self->connect_msg_notifer_to_self<int, int>();
+			while (true)
+			{
+				self->msg_agent_to<int, int>(agent1);
+				self->sleep(2000);
+				self->msg_agent_to<int, int>(agent2);
+				self->sleep(2100);
+				auto conCmh = self->connect_msg_pump<int, int>();
+				for (int i = 0; i < 3; i++)
+				{
+					int p0;
+					int id;
+					if (self->timed_pump_msg(10, conCmh, p0, id))
 					{
-						int p0;
-						int id;
-						self->pump_msg(conCmh, p0, id);
-						printf("%d %d %d\n", p0, id, (int)self->this_id());
-						self->sleep(1);
+						printf("%d %d %d\n", p0, id, (int)self->self_id());
 					}
 				}
+				selfh(1111, 2222);
+			}
 		});
+		self->child_actor_run(actorConsumer);
+		self->sleep(1000);
 		auto writer = self->connect_msg_notifer_to<int, int>(actorConsumer);
 		auto test_producer = [writer](my_actor* self)
 		{//生产者
 			for (int i = 0; true; i++)
 			{
-				writer(i, (int)self->this_id());
-				self->sleep(1000);
+				writer(i, (int)self->self_id());
+				self->sleep(200);
 			}
 		};
 		actorProducer1 = self->create_child_actor(test_producer);
 		actorProducer2 = self->create_child_actor(test_producer);
+		self->child_actor_run(actorProducer1);
+		self->child_actor_run(actorProducer2);
 	}
-	actor_mutex amutex(self->this_strand());
 	{
-		std::function<void(my_actor*, int)> actorMutexH = [amutex](my_actor* self, int id)
+		actor_mutex amutex(self->self_strand());
+		auto actorMutexH = [amutex](my_actor* self)
 		{
 			while (true)
 			{
+				my_actor::quit_guard qg(self);
 				actor_lock_guard lg(amutex, self);
 				for (int i = 0; i < 10; i++)
 				{
-					printf("%d\n", id);
+					printf("%d--%d\n", i, (int)self->self_id());
 					self->sleep(100);
 				}
 			}
 		};
-		actorMutex1 = self->create_child_actor(boost::bind(actorMutexH, _1, 1));
-		actorMutex2 = self->create_child_actor(boost::bind(actorMutexH, _1, 2));
-		actorMutex3 = self->create_child_actor(boost::bind(actorMutexH, _1, 3));
+		actorMutex1 = self->create_child_actor(actorMutexH);
+		actorMutex2 = self->create_child_actor(actorMutexH);
+		actorMutex3 = self->create_child_actor(actorMutexH);
+		self->child_actor_run(actorMutex1);
+		self->child_actor_run(actorMutex2);
+		self->child_actor_run(actorMutex3);
 	}
 	list<actor_handle> chs;//需要被挂起的Actor对象，可以从下方注释几个测试
 	chs.push_back(actorLeft.get_actor());
@@ -397,8 +406,8 @@ void actor_test(my_actor* self)
 	chs.push_back(actorTwo.get_actor());
 //	chs.push_back(actorConsumer.get_actor());
 //	chs.push_back(actorPerfor.get_actor());
-//	chs.push_back(actorProducer1.get_actor());
-//	chs.push_back(actorProducer2.get_actor());
+	chs.push_back(actorProducer1.get_actor());
+	chs.push_back(actorProducer2.get_actor());
 	chs.push_back(actorCreate.get_actor());
 	child_actor_handle actorSuspend = self->create_child_actor(boost::bind(&actor_suspend, _1, boost::ref(chs)), 32 kB);//点击鼠标右键暂停按键检测
 	child_actor_handle actorResume = self->create_child_actor(boost::bind(&actor_resume, _1, boost::ref(chs)), 32 kB);//点击鼠标左键恢复按键检测
@@ -410,15 +419,9 @@ void actor_test(my_actor* self)
 	self->child_actor_run(actorShift);
 	self->child_actor_run(actorTwo);
 	self->child_actor_run(actorPerfor);
-//	self->child_actor_run(actorConsumer);
-//	self->child_actor_run(actorProducer1);
-//	self->child_actor_run(actorProducer2);
 //	self->child_actor_run(actorCreate);
 	self->child_actor_run(actorSuspend);
 	self->child_actor_run(actorResume);
-	self->child_actor_run(actorMutex1);
-	self->child_actor_run(actorMutex2);
-	self->child_actor_run(actorMutex3);
 	self->child_actor_suspend(actorPerfor);
 	check_key_down(self, VK_ESCAPE);//ESC键退出
 	self->child_actor_force_quit(actorLeft);
@@ -435,10 +438,12 @@ void actor_test(my_actor* self)
 	self->child_actor_force_quit(actorCreate);
 	self->child_actor_force_quit(actorSuspend);
 	self->child_actor_force_quit(actorResume);
-	self->child_actor_force_quit(actorMutex1);
-	self->child_actor_force_quit(actorMutex2);
-	self->child_actor_force_quit(actorMutex3);
-	amutex.reset_mutex(self);
+	actorMutex1.get_actor()->notify_quit();
+	actorMutex2.get_actor()->notify_quit();
+	actorMutex3.get_actor()->notify_quit();
+	self->child_actor_wait_quit(actorMutex1);
+	self->child_actor_wait_quit(actorMutex2);
+	self->child_actor_wait_quit(actorMutex3);
 	perforIos.stop();
 }
 

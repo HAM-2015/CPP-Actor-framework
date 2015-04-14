@@ -346,7 +346,6 @@ class actor_trig_handle;
 template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
 class actor_msg_notifer
 {
-	typedef msg_param<T0, T1, T2, T3> msg_type;
 	typedef actor_msg_handle<T0, T1, T2, T3> msg_handle;
 
 	friend msg_handle;
@@ -357,169 +356,107 @@ private:
 	actor_msg_notifer(msg_handle* msgHandle)
 		:_msgHandle(msgHandle), _strand(msgHandle->_strand), _hostActor(msgHandle->_hostActor), _closed(msgHandle->_closed) {}
 public:
-	void operator()(const T0& p0, const T1& p1, const T2& p2, const T3& p3) const
+	template <typename PT0, typename PT1, typename PT2, typename PT3>
+	void operator()(const PT0& p0, const PT1& p1, const PT2& p2, const PT3& p3) const
 	{
-		auto& refThis_ = *this;
+		auto& msgHandle_ = _msgHandle;
+		auto& hostActor_ = _hostActor;
+		auto& closed_ = _closed;
 		_strand->post([=]()
 		{
-			if (!refThis_._hostActor->is_quited() && !(*refThis_._closed))
+			if (!hostActor_->is_quited() && !(*closed_))
 			{
-				refThis_._msgHandle->push_msg(ref_ex<T0, T1, T2, T3>((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3));
+				msgHandle_->push_msg(ref_ex<PT0, PT1, PT2, PT3>((PT0&)p0, (PT1&)p1, (PT2&)p2, (PT3&)p3));
 			}
 		});
 	}
 
-	actor_handle host_actor()
+	template <typename PT0, typename PT1, typename PT2>
+	void operator()(const PT0& p0, const PT1& p1, const PT2& p2) const
 	{
-		return _hostActor;
-	}
-private:
-	msg_handle* _msgHandle;
-	shared_strand _strand;
-	actor_handle _hostActor;
-	std::shared_ptr<bool> _closed;
-};
-
-template <typename T0, typename T1, typename T2>
-class actor_msg_notifer<T0, T1, T2, void>
-{
-	typedef msg_param<T0, T1, T2> msg_type;
-	typedef actor_msg_handle<T0, T1, T2> msg_handle;
-
-	friend msg_handle;
-public:
-	actor_msg_notifer()
-		:_msgHandle(NULL){}
-private:
-	actor_msg_notifer(msg_handle* msgHandle)
-		:_msgHandle(msgHandle), _strand(msgHandle->_strand), _hostActor(msgHandle->_hostActor), _closed(msgHandle->_closed) {}
-public:
-	void operator()(const T0& p0, const T1& p1, const T2& p2) const
-	{
-		auto& refThis_ = *this;
+		auto& msgHandle_ = _msgHandle;
+		auto& hostActor_ = _hostActor;
+		auto& closed_ = _closed;
 		_strand->post([=]()
 		{
-			if (!refThis_._hostActor->is_quited() && !(*refThis_._closed))
+			if (!hostActor_->is_quited() && !(*closed_))
 			{
-				refThis_._msgHandle->push_msg(ref_ex<T0, T1, T2>((T0&)p0, (T1&)p1, (T2&)p2));
+				msgHandle_->push_msg(ref_ex<PT0, PT1, PT2>((PT0&)p0, (PT1&)p1, (PT2&)p2));
 			}
 		});
 	}
 
-	actor_handle host_actor()
+	template <typename PT0, typename PT1>
+	void operator()(const PT0& p0, const PT1& p1) const
 	{
-		return _hostActor;
-	}
-private:
-	msg_handle* _msgHandle;
-	shared_strand _strand;
-	actor_handle _hostActor;
-	std::shared_ptr<bool> _closed;
-};
-
-template <typename T0, typename T1>
-class actor_msg_notifer<T0, T1, void, void>
-{
-	typedef msg_param<T0, T1> msg_type;
-	typedef actor_msg_handle<T0, T1> msg_handle;
-
-	friend msg_handle;
-public:
-	actor_msg_notifer()
-		:_msgHandle(NULL){}
-private:
-	actor_msg_notifer(msg_handle* msgHandle)
-		:_msgHandle(msgHandle), _strand(msgHandle->_strand), _hostActor(msgHandle->_hostActor), _closed(msgHandle->_closed) {}
-public:
-	void operator()(const T0& p0, const T1& p1) const
-	{
-		auto& refThis_ = *this;
+		auto& msgHandle_ = _msgHandle;
+		auto& hostActor_ = _hostActor;
+		auto& closed_ = _closed;
 		_strand->post([=]()
 		{
-			if (!refThis_._hostActor->is_quited() && !(*refThis_._closed))
+			if (!hostActor_->is_quited() && !(*closed_))
 			{
-				refThis_._msgHandle->push_msg(ref_ex<T0, T1>((T0&)p0, (T1&)p1));
+				msgHandle_->push_msg(ref_ex<PT0, PT1>((PT0&)p0, (PT1&)p1));
 			}
 		});
 	}
 
-	actor_handle host_actor()
+	template <typename PT0>
+	void operator()(const PT0& p0) const
 	{
-		return _hostActor;
-	}
-private:
-	msg_handle* _msgHandle;
-	shared_strand _strand;
-	actor_handle _hostActor;
-	std::shared_ptr<bool> _closed;
-};
-
-template <typename T0>
-class actor_msg_notifer<T0, void, void, void>
-{
-	typedef msg_param<T0> msg_type;
-	typedef actor_msg_handle<T0> msg_handle;
-
-	friend msg_handle;
-public:
-	actor_msg_notifer()
-		:_msgHandle(NULL){}
-private:
-	actor_msg_notifer(msg_handle* msgHandle)
-		:_msgHandle(msgHandle), _strand(msgHandle->_strand), _hostActor(msgHandle->_hostActor), _closed(msgHandle->_closed) {}
-public:
-	void operator()(const T0& p0) const
-	{
-		auto& refThis_ = *this;
+		auto& msgHandle_ = _msgHandle;
+		auto& hostActor_ = _hostActor;
+		auto& closed_ = _closed;
 		_strand->post([=]()
 		{
-			if (!refThis_._hostActor->is_quited() && !(*refThis_._closed))
+			if (!hostActor_->is_quited() && !(*closed_))
 			{
-				refThis_._msgHandle->push_msg(ref_ex<T0>((T0&)p0));
+				msgHandle_->push_msg(ref_ex<PT0>((PT0&)p0));
 			}
 		});
 	}
 
-	actor_handle host_actor()
+	void operator()() const
+	{
+		auto& msgHandle_ = _msgHandle;
+		auto& hostActor_ = _hostActor;
+		auto& closed_ = _closed;
+		_strand->post([=]()
+		{
+			if (!hostActor_->is_quited() && !(*closed_))
+			{
+				msgHandle_->push_msg();
+			}
+		});
+	}
+
+	actor_handle host_actor() const
 	{
 		return _hostActor;
+	}
+
+	bool empty() const
+	{
+		return !_msgHandle;
+	}
+
+	void clear()
+	{
+		_msgHandle = NULL;
+		_strand.reset();
+		_hostActor.reset();
+		_closed.reset();
+	}
+
+	operator bool() const
+	{
+		return !empty();
 	}
 private:
 	msg_handle* _msgHandle;
 	shared_strand _strand;
 	actor_handle _hostActor;
 	std::shared_ptr<bool> _closed;
-};
-
-class actor_msg_notifer_void
-{
-	typedef actor_msg_handle<> msg_handle;
-
-	friend msg_handle;
-protected:
-	actor_msg_notifer_void();
-	actor_msg_notifer_void(msg_handle* msgHandle);
-public:
-	void operator()() const;
-	actor_handle host_actor();
-protected:
-	msg_handle* _msgHandle;
-	shared_strand _strand;
-	actor_handle _hostActor;
-	std::shared_ptr<bool> _closed;
-};
-
-template <>
-class actor_msg_notifer<void, void, void, void>: public actor_msg_notifer_void
-{
-	typedef actor_msg_handle<> msg_handle;
-
-	friend msg_handle;
-public:
-	actor_msg_notifer(){}
-private:
-	actor_msg_notifer(msg_handle* msgHandle)
-		:actor_msg_notifer_void(msgHandle){}
 };
 
 template <typename T0, typename T1, typename T2, typename T3>
@@ -602,7 +539,7 @@ class actor_msg_handle<void, void, void, void> : public actor_msg_handle_base
 {
 	typedef actor_msg_notifer<> msg_notifer;
 
-	friend actor_msg_notifer_void;
+	friend msg_notifer;
 	friend my_actor;
 public:
 	~actor_msg_handle()
@@ -662,7 +599,6 @@ private:
 template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
 class actor_trig_notifer
 {
-	typedef msg_param<T0, T1, T2, T3> msg_type;
 	typedef actor_trig_handle<T0, T1, T2, T3> trig_handle;
 
 	friend trig_handle;
@@ -673,169 +609,107 @@ private:
 	actor_trig_notifer(trig_handle* trigHandle)
 		:_trigHandle(trigHandle), _strand(trigHandle->_strand), _hostActor(trigHandle->_hostActor), _closed(trigHandle->_closed) {}
 public:
-	void operator()(const T0& p0, const T1& p1, const T2& p2, const T3& p3) const
+	template <typename PT0, typename PT1, typename PT2, typename PT3>
+	void operator()(const PT0& p0, const PT1& p1, const PT2& p2, const PT3& p3) const
 	{
-		auto& refThis_ = *this;
+		auto& trigHandle_ = _trigHandle;
+		auto& hostActor_ = _hostActor;
+		auto& closed_ = _closed;
 		_strand->post([=]()
 		{
-			if (!refThis_._hostActor->is_quited() && !(*refThis_._closed))
+			if (!hostActor_->is_quited() && !(*closed_))
 			{
-				refThis_._trigHandle->push_msg(ref_ex<T0, T1, T2, T3>((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3));
+				trigHandle_->push_msg(ref_ex<PT0, PT1, PT2, PT3>((PT0&)p0, (PT1&)p1, (PT2&)p2, (PT3&)p3));
 			}
 		});
 	}
 
-	actor_handle host_actor()
+	template <typename PT0, typename PT1, typename PT2>
+	void operator()(const PT0& p0, const PT1& p1, const PT2& p2) const
 	{
-		return _hostActor;
-	}
-private:
-	trig_handle* _trigHandle;
-	shared_strand _strand;
-	actor_handle _hostActor;
-	std::shared_ptr<bool> _closed;
-};
-
-template <typename T0, typename T1, typename T2>
-class actor_trig_notifer<T0, T1, T2, void>
-{
-	typedef msg_param<T0, T1, T2> msg_type;
-	typedef actor_trig_handle<T0, T1, T2> trig_handle;
-
-	friend trig_handle;
-public:
-	actor_trig_notifer()
-		:_trigHandle(NULL){}
-private:
-	actor_trig_notifer(trig_handle* trigHandle)
-		:_trigHandle(trigHandle), _strand(trigHandle->_strand), _hostActor(trigHandle->_hostActor), _closed(trigHandle->_closed) {}
-public:
-	void operator()(const T0& p0, const T1& p1, const T2& p2) const
-	{
-		auto& refThis_ = *this;
+		auto& trigHandle_ = _trigHandle;
+		auto& hostActor_ = _hostActor;
+		auto& closed_ = _closed;
 		_strand->post([=]()
 		{
-			if (!refThis_._hostActor->is_quited() && !(*refThis_._closed))
+			if (!hostActor_->is_quited() && !(*closed_))
 			{
-				refThis_._trigHandle->push_msg(ref_ex<T0, T1, T2>((T0&)p0, (T1&)p1, (T2&)p2));
+				trigHandle_->push_msg(ref_ex<PT0, PT1, PT2>((PT0&)p0, (PT1&)p1, (PT2&)p2));
 			}
 		});
 	}
 
-	actor_handle host_actor()
+	template <typename PT0, typename PT1>
+	void operator()(const PT0& p0, const PT1& p1) const
 	{
-		return _hostActor;
-	}
-private:
-	trig_handle* _trigHandle;
-	shared_strand _strand;
-	actor_handle _hostActor;
-	std::shared_ptr<bool> _closed;
-};
-
-template <typename T0, typename T1>
-class actor_trig_notifer<T0, T1, void, void>
-{
-	typedef msg_param<T0, T1> msg_type;
-	typedef actor_trig_handle<T0, T1> trig_handle;
-
-	friend trig_handle;
-public:
-	actor_trig_notifer()
-		:_trigHandle(NULL){}
-private:
-	actor_trig_notifer(trig_handle* trigHandle)
-		:_trigHandle(trigHandle), _strand(trigHandle->_strand), _hostActor(trigHandle->_hostActor), _closed(trigHandle->_closed) {}
-public:
-	void operator()(const T0& p0, const T1& p1) const
-	{
-		auto& refThis_ = *this;
-		_trigHandle->_strand->post([=]()
-		{
-			if (!refThis_._hostActor->is_quited() && !(*refThis_._closed))
-			{
-				refThis_._trigHandle->push_msg(ref_ex<T0, T1>((T0&)p0, (T1&)p1));
-			}
-		});
-	}
-
-	actor_handle host_actor()
-	{
-		return _hostActor;
-	}
-private:
-	trig_handle* _trigHandle;
-	shared_strand _strand;
-	actor_handle _hostActor;
-	std::shared_ptr<bool> _closed;
-};
-
-template <typename T0>
-class actor_trig_notifer<T0, void, void, void>
-{
-	typedef msg_param<T0> msg_type;
-	typedef actor_trig_handle<T0> trig_handle;
-
-	friend trig_handle;
-public:
-	actor_trig_notifer()
-		:_trigHandle(NULL){}
-private:
-	actor_trig_notifer(trig_handle* trigHandle)
-		:_trigHandle(trigHandle), _strand(trigHandle->_strand), _hostActor(trigHandle->_hostActor), _closed(trigHandle->_closed) {}
-public:
-	void operator()(const T0& p0) const
-	{
-		auto& refThis_ = *this;
+		auto& trigHandle_ = _trigHandle;
+		auto& hostActor_ = _hostActor;
+		auto& closed_ = _closed;
 		_strand->post([=]()
 		{
-			if (!refThis_._hostActor->is_quited() && !(*refThis_._closed))
+			if (!hostActor_->is_quited() && !(*closed_))
 			{
-				refThis_._trigHandle->push_msg(ref_ex<T0>((T0&)p0));
+				trigHandle_->push_msg(ref_ex<PT0, PT1>((PT0&)p0, (PT1&)p1));
 			}
 		});
 	}
 
-	actor_handle host_actor()
+	template <typename PT0>
+	void operator()(const PT0& p0) const
+	{
+		auto& trigHandle_ = _trigHandle;
+		auto& hostActor_ = _hostActor;
+		auto& closed_ = _closed;
+		_strand->post([=]()
+		{
+			if (!hostActor_->is_quited() && !(*closed_))
+			{
+				trigHandle_->push_msg(ref_ex<PT0>((PT0&)p0));
+			}
+		});
+	}
+
+	void operator()() const
+	{
+		auto& trigHandle_ = _trigHandle;
+		auto& hostActor_ = _hostActor;
+		auto& closed_ = _closed;
+		_strand->post([=]()
+		{
+			if (!hostActor_->is_quited() && !(*closed_))
+			{
+				trigHandle_->push_msg();
+			}
+		});
+	}
+
+	actor_handle host_actor() const
 	{
 		return _hostActor;
+	}
+
+	bool empty() const
+	{
+		return !_trigHandle;
+	}
+
+	void clear()
+	{
+		_trigHandle = NULL;
+		_strand.reset();
+		_hostActor.reset();
+		_closed.reset();
+	}
+
+	operator bool() const
+	{
+		return !empty();
 	}
 private:
 	trig_handle* _trigHandle;
 	shared_strand _strand;
 	actor_handle _hostActor;
 	std::shared_ptr<bool> _closed;
-};
-
-class actor_trig_notifer_void
-{
-	typedef actor_trig_handle<> trig_handle;
-
-	friend trig_handle;
-protected:
-	actor_trig_notifer_void();
-	actor_trig_notifer_void(trig_handle* trigHandle);
-public:
-	void operator()() const;
-	actor_handle host_actor();
-protected:
-	trig_handle* _trigHandle;
-	shared_strand _strand;
-	actor_handle _hostActor;
-	std::shared_ptr<bool> _closed;
-};
-
-template <>
-class actor_trig_notifer<void, void, void, void>: public actor_trig_notifer_void
-{
-	typedef actor_trig_handle<> trig_handle;
-
-	friend trig_handle;
-public:
-	actor_trig_notifer(){}
-private:
-	actor_trig_notifer(trig_handle* trigHandle)
-		:actor_trig_notifer_void(trigHandle){}
 };
 
 template <typename T0, typename T1, typename T2, typename T3>
@@ -925,7 +799,7 @@ class actor_trig_handle<void, void, void, void> : public actor_msg_handle_base
 {
 	typedef actor_trig_notifer<> msg_notifer;
 
-	friend actor_trig_notifer_void;
+	friend msg_notifer;
 	friend my_actor;
 public:
 	actor_trig_handle()
@@ -1029,21 +903,22 @@ class msg_pump : public msg_pump_base
 	friend my_actor;
 	friend msg_pool<T0, T1, T2, T3>;
 public:
-	typedef std::shared_ptr<msg_pump> handle;
+	typedef msg_pump* handle;
 private:
 	msg_pump(){}
 public:
 	~msg_pump(){}
 private:
-	static handle make(const actor_handle& hostActor)
+	static std::shared_ptr<msg_pump> make(const actor_handle& hostActor)
 	{
-		handle res(new msg_pump());
+		std::shared_ptr<msg_pump> res(new msg_pump());
 		res->_weakThis = res;
 		res->_hasMsg = false;
 		res->_waiting = false;
+		res->_pumpCount = 0;
 		res->_dstRef = NULL;
 		res->_hostActor = hostActor;
-		res->_strand = hostActor->this_strand();
+		res->_strand = hostActor->self_strand();
 		return res;
 	}
 
@@ -1052,6 +927,7 @@ private:
 		if (_hostActor)
 		{
 			assert(!_hasMsg);
+			_pumpCount++;
 			if (_dstRef)
 			{
 				msg.move_out(*_dstRef);
@@ -1107,7 +983,7 @@ private:
 		_dstRef = &dst;
 		if (!_pumpHandler.empty())
 		{
-			_pumpHandler();
+			_pumpHandler(_pumpCount);
 			_waiting = !!_dstRef;
 			return !_dstRef;
 		}
@@ -1121,9 +997,10 @@ private:
 		if (_hostActor)
 		{
 			_pumpHandler = pumpHandler;
+			_pumpCount = 0;
 			if (_waiting)
 			{
-				_pumpHandler.post_pump();
+				_pumpHandler.post_pump(_pumpCount);
 			}
 		}
 	}
@@ -1153,6 +1030,7 @@ private:
 	pump_handler _pumpHandler;
 	shared_strand _strand;
 	ref_type* _dstRef;
+	BYTE _pumpCount;
 	bool _hasMsg;
 	bool _waiting;
 };
@@ -1168,36 +1046,52 @@ class msg_pool : public msg_pool_base
 
 	struct pump_handler
 	{
-		void operator()()
+		void operator()(BYTE pumpID)
 		{
 			assert(_thisPool);
 			if (_thisPool->_strand->running_in_this_thread())
 			{
 				if (_msgPump == _thisPool->_msgPump)
 				{
-					assert(!_thisPool->_waiting);
 					auto& msgBuff = _thisPool->_msgBuff;
-					if (!msgBuff.empty())
+					if (pumpID == _thisPool->_sendCount)
 					{
-						msg_type mt_ = std::move(msgBuff.front());
-						msgBuff.pop_front();
-						_thisPool->_msgPump->receive_msg(std::move(mt_));
+						if (!msgBuff.empty())
+						{
+							msg_type mt_ = std::move(msgBuff.front());
+							msgBuff.pop_front();
+							_thisPool->_sendCount++;
+							_thisPool->_msgPump->receive_msg(std::move(mt_));
+						}
+						else
+						{
+							_thisPool->_waiting = true;
+						}
 					}
 					else
-					{
-						_thisPool->_waiting = true;
+					{//上次消息没取到，重新取，但实际中间已经post出去了
+						assert(!_thisPool->_waiting);
+						assert(pumpID + 1 == _thisPool->_sendCount);
 					}
 				}
 			}
 			else
 			{
-				_thisPool->_strand->post(*this);
+				auto& refThis_ = *this;
+				_thisPool->_strand->post([refThis_, pumpID]()
+				{
+					((pump_handler&)refThis_)(pumpID);
+				});
 			}
 		}
 
-		void post_pump()
+		void post_pump(BYTE pumpID)
 		{
-			_thisPool->_strand->post(*this);
+			auto& refThis_ = *this;
+			_thisPool->_strand->post([refThis_, pumpID]()
+			{
+				((pump_handler&)refThis_)(pumpID);
+			});
 		}
 
 		bool empty()
@@ -1235,6 +1129,7 @@ private:
 		res->_weakThis = res;
 		res->_strand = strand;
 		res->_waiting = false;
+		res->_sendCount = 0;
 		return res;
 	}
 
@@ -1244,6 +1139,7 @@ private:
 		{
 			_waiting = false;
 			assert(_msgPump);
+			_sendCount++;
 			if (_msgBuff.empty())
 			{
 				if (post)
@@ -1309,6 +1205,7 @@ private:
 		pump_handler compHandler;
 		compHandler._thisPool = _weakThis.lock();
 		compHandler._msgPump = msgPump;
+		_sendCount = 0;
 		_waiting = false;
 		return compHandler;
 	}
@@ -1330,6 +1227,7 @@ private:
 	std::shared_ptr<msg_pump_type> _msgPump;
 	msg_queue<msg_type> _msgBuff;
 	shared_strand _strand;
+	BYTE _sendCount;
 	bool _waiting;
 };
 
@@ -1342,8 +1240,8 @@ class msg_pool_void : public msg_pool_base
 
 	struct pump_handler
 	{
-		void operator()();
-		void post_pump();
+		void operator()(BYTE pumpID);
+		void post_pump(BYTE pumpID);
 		bool empty();
 		bool same_strand();
 		void clear();
@@ -1370,6 +1268,7 @@ protected:
 	std::shared_ptr<msg_pump_type> _msgPump;
 	size_t _msgBuff;
 	shared_strand _strand;
+	BYTE _sendCount;
 	bool _waiting;
 };
 
@@ -1396,6 +1295,7 @@ protected:
 	std::weak_ptr<msg_pump_void> _weakThis;
 	pump_handler _pumpHandler;
 	shared_strand _strand;
+	BYTE _pumpCount;
 	bool _waiting;
 	bool _hasMsg;
 };
@@ -1426,7 +1326,7 @@ class msg_pump<void, void, void, void> : public msg_pump_void
 {
 	friend my_actor;
 public:
-	typedef std::shared_ptr<msg_pump> handle;
+	typedef msg_pump* handle;
 private:
 	msg_pump(const actor_handle& hostActor)
 		:msg_pump_void(hostActor)
@@ -1434,9 +1334,9 @@ private:
 
 	}
 
-	static handle make(const actor_handle& hostActor)
+	static std::shared_ptr<msg_pump> make(const actor_handle& hostActor)
 	{
-		handle res(new msg_pump(hostActor));
+		std::shared_ptr<msg_pump> res(new msg_pump(hostActor));
 		res->_weakThis = res;
 		return res;
 	}
@@ -1445,91 +1345,59 @@ private:
 template <typename T0, typename T1, typename T2, typename T3>
 class post_actor_msg
 {
-	typedef msg_param<T0, T1, T2, T3> msg_type;
 	typedef msg_pool<T0, T1, T2, T3> msg_pool_type;
 public:
 	post_actor_msg(){}
 	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool)
 		:_msgPool(msgPool){}
 public:
-	void operator()(const T0& p0, const T1& p1, const T2& p2, const T3& p3) const
+	template <typename PT0, typename PT1, typename PT2, typename PT3>
+	void operator()(const PT0& p0, const PT1& p1, const PT2& p2, const PT3& p3) const
 	{
-		_msgPool->push_msg(std::move(msg_type(p0, p1, p2, p3)));
+		_msgPool->push_msg(std::move(msg_param<PT0, PT1, PT2, PT3>(p0, p1, p2, p3)));
 	}
-private:
-	std::shared_ptr<msg_pool_type> _msgPool;
-};
 
-template <typename T0, typename T1, typename T2>
-class post_actor_msg<T0, T1, T2, void>
-{
-	typedef msg_param<T0, T1, T2> msg_type;
-	typedef msg_pool<T0, T1, T2> msg_pool_type;
-public:
-	post_actor_msg(){}
-	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool)
-		:_msgPool(msgPool){}
-public:
-	void operator()(const T0& p0, const T1& p1, const T2& p2) const
+	template <typename PT0, typename PT1, typename PT2>
+	void operator()(const PT0& p0, const PT1& p1, const PT2& p2) const
 	{
-		_msgPool->push_msg(std::move(msg_type(p0, p1, p2)));
+		_msgPool->push_msg(std::move(msg_param<PT0, PT1, PT2>(p0, p1, p2)));
 	}
-private:
-	std::shared_ptr<msg_pool_type> _msgPool;
-};
 
-template <typename T0, typename T1>
-class post_actor_msg<T0, T1, void, void>
-{
-	typedef msg_param<T0, T1> msg_type;
-	typedef msg_pool<T0, T1> msg_pool_type;
-public:
-	post_actor_msg(){}
-	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool)
-		:_msgPool(msgPool){}
-public:
-	void operator()(const T0& p0, const T1& p1) const
+	template <typename PT0, typename PT1>
+	void operator()(const PT0& p0, const PT1& p1) const
 	{
-		_msgPool->push_msg(std::move(msg_type(p0, p1)));
+		_msgPool->push_msg(std::move(msg_param<PT0, PT1>(p0, p1)));
 	}
-private:
-	std::shared_ptr<msg_pool_type> _msgPool;
-};
 
-template <typename T0>
-class post_actor_msg<T0, void, void, void>
-{
-	typedef msg_param<T0> msg_type;
-	typedef msg_pool<T0> msg_pool_type;
-public:
-	post_actor_msg(){}
-	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool)
-		:_msgPool(msgPool){}
-public:
-	void operator()(const T0& p0) const
+	template <typename PT0>
+	void operator()(const PT0& p0) const
 	{
-		_msgPool->push_msg(std::move(msg_type(p0)));
+		_msgPool->push_msg(std::move(msg_param<PT0>(p0)));
 	}
-private:
-	std::shared_ptr<msg_pool_type> _msgPool;
-};
 
-template <>
-class post_actor_msg<void, void, void, void>
-{
-	typedef msg_pool<> msg_pool_type;
-public:
-	post_actor_msg(){}
-	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool)
-		:_msgPool(msgPool){}
-public:
 	void operator()() const
 	{
 		_msgPool->push_msg();
 	}
+
+	bool empty() const
+	{
+		return !_msgPool;
+	}
+
+	void clear()
+	{
+		_msgPool.reset();
+	}
+
+	operator bool() const
+	{
+		return !empty();
+	}
 private:
 	std::shared_ptr<msg_pool_type> _msgPool;
 };
+
 //////////////////////////////////////////////////////////////////////////
 /*!
 @brief 子Actor句柄，不可拷贝
@@ -1592,7 +1460,7 @@ class my_actor
 		struct pck_base 
 		{
 			pck_base(shared_strand strand)
-			:_strand(strand), _amutex(strand){}
+			:_strand(strand), _amutex(strand), _isHead(true){}
 
 			virtual ~pck_base(){};
 
@@ -1610,6 +1478,7 @@ class my_actor
 
 			shared_strand _strand;
 			actor_mutex _amutex;
+			bool _isHead;
 		};
 
 		template <typename T0, typename T1, typename T2, typename T3>
@@ -1639,7 +1508,6 @@ class my_actor
 				{
 					(*it)->close();
 				}
-				_msgPumpList[i].clear();
 			}
 		}
 
@@ -1653,6 +1521,28 @@ class my_actor
 	friend msg_pump_base;
 	friend actor_msg_handle_base;
 public:
+	/*!
+	@brief 在{}一定范围内锁定当前Actor不被强制退出
+	*/
+	class quit_guard
+	{
+	public:
+		quit_guard(my_actor* self)
+		:_self(self)
+		{
+			_self->lock_quit();
+		}
+
+		~quit_guard()
+		{
+			_self->unlock_quit();
+		}
+	private:
+		quit_guard(const quit_guard&){};
+		void operator=(const quit_guard&){};
+		my_actor* _self;
+	};
+
 	/*!
 	@brief Actor被强制退出的异常类型
 	*/
@@ -2013,7 +1903,7 @@ public:
 	void delay_trig(int ms, actor_trig_handle<T0, T1, T2, T3>& ath, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 	{
 		assert_enter();
-		assert(this == ath._hostActor.get());
+		assert(ath._hostActor && ath._hostActor->self_id() == self_id());
 		assert(ath._closed && !(*ath._closed));
 		auto& closed_ = ath._closed;
 		delay_trig(ms, [=, &ath]()
@@ -2029,7 +1919,7 @@ public:
 	void delay_trig(int ms, actor_trig_handle<T0, T1, T2>& ath, const T0& p0, const T1& p1, const T2& p2)
 	{
 		assert_enter();
-		assert(this == ath._hostActor.get());
+		assert(ath._hostActor && ath._hostActor->self_id() == self_id());
 		assert(ath._closed && !(*ath._closed));
 		auto& closed_ = ath._closed;
 		delay_trig(ms, [=, &ath]()
@@ -2045,7 +1935,7 @@ public:
 	void delay_trig(int ms, actor_trig_handle<T0, T1>& ath, const T0& p0, const T1& p1)
 	{
 		assert_enter();
-		assert(this == ath._hostActor.get());
+		assert(ath._hostActor && ath._hostActor->self_id() == self_id());
 		assert(ath._closed && !(*ath._closed));
 		auto& closed_ = ath._closed;
 		delay_trig(ms, [=, &ath]()
@@ -2061,7 +1951,7 @@ public:
 	void delay_trig(int ms, actor_trig_handle<T0>& ath, const T0& p0)
 	{
 		assert_enter();
-		assert(this == ath._hostActor.get());
+		assert(ath._hostActor && ath._hostActor->self_id() == self_id());
 		assert(ath._closed && !(*ath._closed));
 		auto& closed_ = ath._closed;
 		delay_trig(ms, [=, &ath]()
@@ -2074,8 +1964,9 @@ public:
 	}
 private:
 	template <typename AMH, typename DST>
-	bool _timed_pump_msg(AMH& amh, DST& dstRef, int tm)
+	bool _timed_wait_msg(AMH& amh, DST& dstRef, int tm)
 	{
+		assert(amh._hostActor && amh._hostActor->self_id() == self_id());
 		if (!amh.read_msg(dstRef))
 		{
 			bool timeout = false;
@@ -2109,79 +2000,79 @@ public:
 	@return 超时完成返回false，成功提取消息返回true
 	*/
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt bool timed_pump_msg(int tm, actor_msg_handle<T0, T1, T2, T3>& amh, T0& r0, T1& r1, T2& r2, T3& r3)
+	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1, T2, T3>& amh, T0& r0, T1& r1, T2& r2, T3& r3)
 	{
 		assert_enter();
 		assert(amh._closed && !(*amh._closed));
 		ref_ex<T0, T1, T2, T3> dstRef(r0, r1, r2, r3);
-		return _timed_pump_msg(amh, dstRef, tm);
+		return _timed_wait_msg(amh, dstRef, tm);
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt bool timed_pump_msg(int tm, actor_msg_handle<T0, T1, T2>& amh, T0& r0, T1& r1, T2& r2)
+	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1, T2>& amh, T0& r0, T1& r1, T2& r2)
 	{
 		assert_enter();
 		assert(amh._closed && !(*amh._closed));
 		ref_ex<T0, T1, T2> dstRef(r0, r1, r2);
-		return _timed_pump_msg(amh, dstRef, tm);
+		return _timed_wait_msg(amh, dstRef, tm);
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt bool timed_pump_msg(int tm, actor_msg_handle<T0, T1>& amh, T0& r0, T1& r1)
+	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1>& amh, T0& r0, T1& r1)
 	{
 		assert_enter();
 		assert(amh._closed && !(*amh._closed));
 		ref_ex<T0, T1> dstRef(r0, r1);
-		return _timed_pump_msg(amh, dstRef, tm);
+		return _timed_wait_msg(amh, dstRef, tm);
 	}
 
 	template <typename T0>
-	__yield_interrupt bool timed_pump_msg(int tm, actor_msg_handle<T0>& amh, T0& r0)
+	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0>& amh, T0& r0)
 	{
 		assert_enter();
 		assert(amh._closed && !(*amh._closed));
 		ref_ex<T0> dstRef(r0);
-		return _timed_pump_msg(amh, dstRef, tm);
+		return _timed_wait_msg(amh, dstRef, tm);
 	}
 
-	__yield_interrupt bool timed_pump_msg(int tm, actor_msg_handle<>& amh);
+	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<>& amh);
 
 	/*!
 	@brief 从消息句柄中提取消息
 	*/
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt void pump_msg(actor_msg_handle<T0, T1, T2, T3>& amh, T0& r0, T1& r1, T2& r2, T3& r3)
+	__yield_interrupt void wait_msg(actor_msg_handle<T0, T1, T2, T3>& amh, T0& r0, T1& r1, T2& r2, T3& r3)
 	{
-		timed_pump_msg(-1, amh, r0, r1, r2, r3);
+		timed_wait_msg(-1, amh, r0, r1, r2, r3);
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt void pump_msg(actor_msg_handle<T0, T1, T2>& amh, T0& r0, T1& r1, T2& r2)
+	__yield_interrupt void wait_msg(actor_msg_handle<T0, T1, T2>& amh, T0& r0, T1& r1, T2& r2)
 	{
-		timed_pump_msg(-1, amh, r0, r1, r2);
+		timed_wait_msg(-1, amh, r0, r1, r2);
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt void pump_msg(actor_msg_handle<T0, T1>& amh, T0& r0, T1& r1)
+	__yield_interrupt void wait_msg(actor_msg_handle<T0, T1>& amh, T0& r0, T1& r1)
 	{
-		timed_pump_msg(-1, amh, r0, r1);
+		timed_wait_msg(-1, amh, r0, r1);
 	}
 
 	template <typename T0>
-	__yield_interrupt void pump_msg(actor_msg_handle<T0>& amh, T0& r0)
+	__yield_interrupt void wait_msg(actor_msg_handle<T0>& amh, T0& r0)
 	{
-		timed_pump_msg(-1, amh, r0);
+		timed_wait_msg(-1, amh, r0);
 	}
 
 	template <typename T0>
-	__yield_interrupt T0 pump_msg(actor_msg_handle<T0>& amh)
+	__yield_interrupt T0 wait_msg(actor_msg_handle<T0>& amh)
 	{
 		T0 r0;
-		timed_pump_msg(-1, amh, r0);
+		timed_wait_msg(-1, amh, r0);
 		return r0;
 	}
 
-	__yield_interrupt void pump_msg(actor_msg_handle<>& amh);
+	__yield_interrupt void wait_msg(actor_msg_handle<>& amh);
 public:
 	/*!
 	@brief 创建一个消息触发函数，只有一次触发有效
@@ -2228,7 +2119,7 @@ public:
 		assert_enter();
 		assert(ath._closed && !(*ath._closed));
 		ref_ex<T0, T1, T2, T3> dstRef(r0, r1, r2, r3);
-		return _timed_pump_msg(ath, dstRef, tm);
+		return _timed_wait_msg(ath, dstRef, tm);
 	}
 
 	template <typename T0, typename T1, typename T2>
@@ -2237,7 +2128,7 @@ public:
 		assert_enter();
 		assert(ath._closed && !(*ath._closed));
 		ref_ex<T0, T1, T2> dstRef(r0, r1, r2);
-		return _timed_pump_msg(ath, dstRef, tm);
+		return _timed_wait_msg(ath, dstRef, tm);
 	}
 
 	template <typename T0, typename T1>
@@ -2246,7 +2137,7 @@ public:
 		assert_enter();
 		assert(ath._closed && !(*ath._closed));
 		ref_ex<T0, T1> dstRef(r0, r1);
-		return _timed_pump_msg(ath, dstRef, tm);
+		return _timed_wait_msg(ath, dstRef, tm);
 	}
 
 	template <typename T0>
@@ -2255,7 +2146,7 @@ public:
 		assert_enter();
 		assert(ath._closed && !(*ath._closed));
 		ref_ex<T0> dstRef(r0);
-		return _timed_pump_msg(ath, dstRef, tm);
+		return _timed_wait_msg(ath, dstRef, tm);
 	}
 
 	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<>& ath);
@@ -2395,7 +2286,10 @@ private:
 					});
 					send(msgPump_->_strand, [msgPump_, ph]()
 					{
-						msgPump_->connect(ph);
+						if (msgPump_->_hostActor && !msgPump_->_hostActor->is_quited())
+						{
+							msgPump_->connect(ph);
+						}
 					});
 				}
 				else
@@ -2420,26 +2314,32 @@ public:
 
 		assert_enter();
 		assert(childActor.get_actor());
-		assert(childActor.get_actor()->parent_actor().get() == this);
-		auto msgPck = msg_pool_pck<T0, T1, T2, T3>();
-		msgPck->lock(this);
-		if (msgPck->_next)
+		if (childActor.get_actor()->parent_actor()->self_id() == self_id())
 		{
-			msgPck->_next->lock(this);
-			clear_msg_list<T0, T1, T2, T3>(msgPck->_next);
-			msgPck->_next->unlock(this);
+			auto msgPck = msg_pool_pck<T0, T1, T2, T3>();
+			quit_guard qg(this);
+			msgPck->lock(this);
+			if (msgPck->_next)
+			{
+				msgPck->_next->lock(this);
+				clear_msg_list<T0, T1, T2, T3>(msgPck->_next);
+				msgPck->_next->unlock(this);
+			}
+			auto nextActor = childActor.get_actor();
+			auto childPck = send<pck_type>(nextActor->self_strand(), [nextActor]()->pck_type
+			{
+				return nextActor->msg_pool_pck<T0, T1, T2, T3>();
+			});
+			msgPck->_next = childPck;
+			childPck->lock(this);
+			childPck->_isHead = false;
+			auto& msgPool_ = msgPck->_msgPool;
+			update_msg_list<T0, T1, T2, T3>(childPck, msgPool_);
+			childPck->unlock(this);
+			msgPck->unlock(this);
+			return;
 		}
-		auto nextActor = childActor.get_actor();
-		auto childPck = send<pck_type>(nextActor->this_strand(), [nextActor]()->pck_type
-		{
-			return nextActor->msg_pool_pck<T0, T1, T2, T3>();
-		});
-		msgPck->_next = childPck;
-		childPck->lock(this);
-		auto& msgPool_ = msgPck->_msgPool;
-		update_msg_list<T0, T1, T2, T3>(childPck, msgPool_);
-		childPck->unlock(this);
-		msgPck->unlock(this);
+		assert(false);
 	}
 
 	template <typename T0, typename T1, typename T2>
@@ -2472,14 +2372,16 @@ public:
 		auto msgPck = msg_pool_pck<T0, T1, T2, T3>();
 		if (msgPck)
 		{
+			quit_guard qg(this);
 			msgPck->lock(this);
 			if (msgPck->_next)
 			{
 				msgPck->_next->lock(this);
 				clear_msg_list<T0, T1, T2, T3>(msgPck->_next);
+				msgPck->_next->_isHead = true;
 				msgPck->_next->unlock(this);
+				msgPck->_next.reset();
 			}
-			msgPck->_next.reset();
 			msgPck->unlock(this);
 		}
 	}
@@ -2506,101 +2408,185 @@ public:
 public:
 	/*!
 	@brief 连接消息通知到一个伙伴Actor，该Actor必须是子Actor或没有父Actor
+	@param makeNew false 如果存在返回之前，否则创建新的通知；true 强制创建新的通知，之前的将失效，且断开与buddyActor的关联
 	@param fixedSize 消息队列内存池长度
+	@warning 如果 makeNew = false 且该节点为父的代理，将创建失败
 	@return 消息通知函数
 	*/
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt post_actor_msg<T0, T1, T2, T3> connect_msg_notifer_to(const actor_handle& buddyActor, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<T0, T1, T2, T3> connect_msg_notifer_to(const actor_handle& buddyActor, bool makeNew = false, size_t fixedSize = 16)
 	{
 		typedef msg_pool<T0, T1, T2, T3> pool_type;
 		typedef typename pool_type::pump_handler pump_handler;
 		typedef std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>> pck_type;
 
 		assert_enter();
-		assert(buddyActor && buddyActor->parent_actor().get() == this || !buddyActor->parent_actor());
+		if (!(buddyActor && (!buddyActor->parent_actor() || buddyActor->parent_actor()->self_id() == self_id())))
+		{
+			assert(false);
+			return post_actor_msg<T0, T1, T2, T3>();
+		}
 		auto msgPck = msg_pool_pck<T0, T1, T2, T3>();
+		quit_guard qg(this);
 		msgPck->lock(this);
-		auto childPck = send<pck_type>(buddyActor->this_strand(), [buddyActor]()->pck_type
+		auto childPck = send<pck_type>(buddyActor->self_strand(), [buddyActor]()->pck_type
 		{
 			return buddyActor->msg_pool_pck<T0, T1, T2, T3>();
 		});
-		auto newPool = pool_type::make(buddyActor->this_strand(), fixedSize);
+		if (makeNew)
 		{
+			auto newPool = pool_type::make(buddyActor->self_strand(), fixedSize);
 			childPck->lock(this);
+			childPck->_isHead = true;
 			update_msg_list<T0, T1, T2, T3>(childPck, newPool);
 			childPck->unlock(this);
-		}
-		if (msgPck->_next == childPck)
-		{
-			msgPck->_next.reset();
-			if (msgPck->_msgPump)
+			if (msgPck->_next == childPck)
 			{
-				auto& msgPump_ = msgPck->_msgPump;
-				if (msgPck->_msgPool)
+				msgPck->_next.reset();
+				if (msgPck->_msgPump)
 				{
-					auto& msgPool_ = msgPck->_msgPool;
-					msgPump_->connect(send<pump_handler>(msgPool_->_strand, [msgPool_, msgPump_]()->pump_handler
+					auto& msgPump_ = msgPck->_msgPump;
+					if (msgPck->_msgPool)
 					{
-						return msgPool_->connect_pump(msgPump_);
-					}));
-				}
-				else
-				{
-					msgPump_->clear();
+						auto& msgPool_ = msgPck->_msgPool;
+						msgPump_->connect(this->send<pump_handler>(msgPool_->_strand, [msgPool_, msgPump_]()->pump_handler
+						{
+							return msgPool_->connect_pump(msgPump_);
+						}));
+					}
+					else
+					{
+						msgPump_->clear();
+					}
 				}
 			}
+			msgPck->unlock(this);
+			return post_actor_msg<T0, T1, T2, T3>(newPool);
 		}
+		childPck->lock(this);
+		if (childPck->_isHead)
+		{
+			assert(msgPck->_next != childPck);
+			if (childPck->_msgPool)
+			{
+				auto childPool = childPck->_msgPool;
+				update_msg_list<T0, T1, T2, T3>(childPck, childPool);
+				childPck->unlock(this);
+				msgPck->unlock(this);
+				return post_actor_msg<T0, T1, T2, T3>(childPool);
+			}
+			auto newPool = pool_type::make(buddyActor->self_strand(), fixedSize);
+			update_msg_list<T0, T1, T2, T3>(childPck, newPool);
+			childPck->unlock(this);
+			msgPck->unlock(this);
+			return post_actor_msg<T0, T1, T2, T3>(newPool);
+		}
+		childPck->unlock(this);
 		msgPck->unlock(this);
-		return post_actor_msg<T0, T1, T2, T3>(newPool);
+		return post_actor_msg<T0, T1, T2, T3>();
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt post_actor_msg<T0, T1, T2, T3> connect_msg_notifer_to(child_actor_handle& childActor, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<T0, T1, T2, T3> connect_msg_notifer_to(child_actor_handle& childActor, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to<T0, T1, T2, T3>(childActor.get_actor(), fixedSize);
+		return connect_msg_notifer_to<T0, T1, T2, T3>(childActor.get_actor(), makeNew, fixedSize);
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt post_actor_msg<T0, T1, T2> connect_msg_notifer_to(const actor_handle& buddyActor, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<T0, T1, T2> connect_msg_notifer_to(const actor_handle& buddyActor, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to<T0, T1, T2, void>(buddyActor, fixedSize);
+		return connect_msg_notifer_to<T0, T1, T2, void>(buddyActor, makeNew, fixedSize);
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt post_actor_msg<T0, T1, T2> connect_msg_notifer_to(child_actor_handle& childActor, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<T0, T1, T2> connect_msg_notifer_to(child_actor_handle& childActor, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to<T0, T1, T2, void>(childActor.get_actor(), fixedSize);
+		return connect_msg_notifer_to<T0, T1, T2, void>(childActor.get_actor(), makeNew, fixedSize);
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt post_actor_msg<T0, T1> connect_msg_notifer_to(const actor_handle& buddyActor, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<T0, T1> connect_msg_notifer_to(const actor_handle& buddyActor, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to<T0, T1, void, void>(buddyActor, fixedSize);
+		return connect_msg_notifer_to<T0, T1, void, void>(buddyActor, makeNew, fixedSize);
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt post_actor_msg<T0, T1> connect_msg_notifer_to(child_actor_handle& childActor, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<T0, T1> connect_msg_notifer_to(child_actor_handle& childActor, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to<T0, T1, void, void>(childActor.get_actor(), fixedSize);
+		return connect_msg_notifer_to<T0, T1, void, void>(childActor.get_actor(), makeNew, fixedSize);
 	}
 
 	template <typename T0>
-	__yield_interrupt post_actor_msg<T0> connect_msg_notifer_to(const actor_handle& buddyActor, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<T0> connect_msg_notifer_to(const actor_handle& buddyActor, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to<T0, void, void, void>(buddyActor, fixedSize);
+		return connect_msg_notifer_to<T0, void, void, void>(buddyActor, makeNew, fixedSize);
 	}
 
 	template <typename T0>
-	__yield_interrupt post_actor_msg<T0> connect_msg_notifer_to(child_actor_handle& childActor, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<T0> connect_msg_notifer_to(child_actor_handle& childActor, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to<T0, void, void, void>(childActor.get_actor(), fixedSize);
+		return connect_msg_notifer_to<T0, void, void, void>(childActor.get_actor(), makeNew, fixedSize);
 	}
 
-	__yield_interrupt post_actor_msg<> connect_msg_notifer_to(const actor_handle& buddyActor);
-	__yield_interrupt post_actor_msg<> connect_msg_notifer_to(child_actor_handle& childActor);
+	__yield_interrupt post_actor_msg<> connect_msg_notifer_to(const actor_handle& buddyActor, bool makeNew = false);
+	__yield_interrupt post_actor_msg<> connect_msg_notifer_to(child_actor_handle& childActor, bool makeNew = false);
 
 	/*!
-	@brief 创建一个消息通知函数，在Actor所依赖的ios无关线程中使用
+	@brief 连接消息通知到自己的Actor
+	@param makeNew false 如果存在返回之前，否则创建新的通知；true 强制创建新的通知，之前的将失效，且断开与buddyActor的关联
+	@param fixedSize 消息队列内存池长度
+	@warning 如果该节点为父的代理，那么将创建失败
+	@return 消息通知函数
+	*/
+	template <typename T0, typename T1, typename T2, typename T3>
+	__yield_interrupt post_actor_msg<T0, T1, T2, T3> connect_msg_notifer_to_self(bool makeNew = false, size_t fixedSize = 16)
+	{
+		typedef msg_pool<T0, T1, T2, T3> pool_type;
+
+		assert_enter();
+		auto msgPck = msg_pool_pck<T0, T1, T2, T3>();
+		quit_guard qg(this);
+		msgPck->lock(this);
+		if (msgPck->_isHead)
+		{
+			if (makeNew || !msgPck->_msgPool)
+			{
+				auto newPool = pool_type::make(self_strand(), fixedSize);
+				update_msg_list<T0, T1, T2, T3>(msgPck, newPool);
+				msgPck->unlock(this);
+				return post_actor_msg<T0, T1, T2, T3>(newPool);
+			}
+			auto msgPool = msgPck->_msgPool;
+			update_msg_list<T0, T1, T2, T3>(msgPck, msgPool);
+			msgPck->unlock(this);
+			return post_actor_msg<T0, T1, T2, T3>(msgPool);
+		}
+		msgPck->unlock(this);
+		return post_actor_msg<T0, T1, T2, T3>();
+	}
+
+	template <typename T0, typename T1, typename T2>
+	__yield_interrupt post_actor_msg<T0, T1, T2> connect_msg_notifer_to_self(bool makeNew = false, size_t fixedSize = 16)
+	{
+		return connect_msg_notifer_to_self<T0, T1, T2, void>(makeNew, fixedSize);
+	}
+
+	template <typename T0, typename T1>
+	__yield_interrupt post_actor_msg<T0, T1> connect_msg_notifer_to_self(bool makeNew = false, size_t fixedSize = 16)
+	{
+		return connect_msg_notifer_to_self<T0, T1, void, void>(makeNew, fixedSize);
+	}
+
+	template <typename T0>
+	__yield_interrupt post_actor_msg<T0> connect_msg_notifer_to_self(bool makeNew = false, size_t fixedSize = 16)
+	{
+		return connect_msg_notifer_to_self<T0, void, void, void>(makeNew, fixedSize);
+	}
+
+	__yield_interrupt post_actor_msg<> connect_msg_notifer_to_self(bool makeNew = false);
+
+	/*!
+	@brief 创建一个消息通知函数，在该Actor所依赖的ios无关线程中使用，且在该Actor调用 notify_run() 之前
 	@param fixedSize 消息队列内存池长度
 	@return 消息通知函数
 	*/
@@ -2609,15 +2595,17 @@ public:
 	{
 		typedef post_actor_msg<T0, T1, T2, T3> post_type;
 
-		assert(!_strand->running_in_this_thread());
 		return _strand->syncInvoke<post_type>([this, fixedSize]()->post_type
 		{
 			typedef msg_pool<T0, T1, T2, T3> pool_type;
-			assert(!this->parent_actor() && !this->is_started());
-			auto msgPck = this->msg_pool_pck<T0, T1, T2, T3>();
-			auto newPool = pool_type::make(this->this_strand(), fixedSize);
-			msgPck->_msgPool = newPool;
-			return post_type(newPool);
+			if (!this->parent_actor() && !this->is_started())
+			{
+				auto msgPck = this->msg_pool_pck<T0, T1, T2, T3>();
+				msgPck->_msgPool = pool_type::make(this->self_strand(), fixedSize);
+				return post_type(msgPck->_msgPool);
+			}
+			assert(false);
+			return post_type();
 		});
 	}
 
@@ -2655,6 +2643,7 @@ public:
 
 		assert_enter();
 		auto msgPck = msg_pool_pck<T0, T1, T2, T3>();
+		quit_guard qg(this);
 		msgPck->lock(this);
 		if (msgPck->_next)
 		{
@@ -2663,22 +2652,17 @@ public:
 			msgPck->_next->unlock(this);
 		}
 		msgPck->_next.reset();
-		pump_type::handle msgPump;
 		if (!msgPck->_msgPump)
 		{
-			msgPump = pump_type::make(shared_from_this());
-			msgPck->_msgPump = msgPump;
+			msgPck->_msgPump = pump_type::make(shared_from_this());
 		}
-		else
+		auto msgPump = msgPck->_msgPump;
+		auto msgPool = msgPck->_msgPool;
+		if (msgPool)
 		{
-			msgPump = std::static_pointer_cast<pump_type>(msgPck->_msgPump);
-		}
-		if (msgPck->_msgPool)
-		{
-			auto msgPool = std::static_pointer_cast<pool_type>(msgPck->_msgPool);
-			msgPump->connect(send<pump_handler>(msgPool->_strand, [msgPool, msgPump]()->pump_handler
+			msgPump->connect(send<pump_handler>(msgPool->_strand, [msgPck]()->pump_handler
 			{
-				return msgPool->connect_pump(msgPump);
+				return msgPck->_msgPool->connect_pump(msgPck->_msgPump);
 			}));
 		}
 		else
@@ -2686,7 +2670,7 @@ public:
 			msgPump->clear();
 		}
 		msgPck->unlock(this);
-		return msgPump;
+		return msgPump.get();
 	}
 
 	template <typename T0, typename T1, typename T2>
@@ -2710,8 +2694,9 @@ public:
 	msg_pump<>::handle connect_msg_pump();
 private:
 	template <typename PUMP, typename DST>
-	bool _pool_timed_pump_msg(const PUMP& pump, DST& dstRef, int tm)
+	bool _timed_pump_msg(const PUMP& pump, DST& dstRef, int tm)
 	{
+		assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
 		if (!pump->read_msg(dstRef))
 		{
 			bool timeOut = false;
@@ -2754,7 +2739,7 @@ public:
 	{
 		assert_enter();
 		ref_ex<T0, T1, T2, T3> dstRef(r0, r1, r2, r3);
-		return _pool_timed_pump_msg(pump, dstRef, tm);
+		return _timed_pump_msg(pump, dstRef, tm);
 	}
 
 	template <typename T0, typename T1, typename T2>
@@ -2762,7 +2747,7 @@ public:
 	{
 		assert_enter();
 		ref_ex<T0, T1, T2> dstRef(r0, r1, r2);
-		return _pool_timed_pump_msg(pump, dstRef, tm);
+		return _timed_pump_msg(pump, dstRef, tm);
 	}
 
 	template <typename T0, typename T1>
@@ -2770,7 +2755,7 @@ public:
 	{
 		assert_enter();
 		ref_ex<T0, T1> dstRef(r0, r1);
-		return _pool_timed_pump_msg(pump, dstRef, tm);
+		return _timed_pump_msg(pump, dstRef, tm);
 	}
 
 	template <typename T0>
@@ -2778,7 +2763,7 @@ public:
 	{
 		assert_enter();
 		ref_ex<T0> dstRef(r0);
-		return _pool_timed_pump_msg(pump, dstRef, tm);
+		return _timed_pump_msg(pump, dstRef, tm);
 	}
 
 	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump<>::handle& pump);
@@ -2811,10 +2796,10 @@ public:
 	}
 
 	template <typename T0>
-	__yield_interrupt T0 pump_msg(const typename msg_pump<T0>::handle& pump)
+	__yield_interrupt T0 pump_msg(msg_pump<T0>& pump)
 	{
 		T0 r0;
-		timed_pump_msg(-1, pump, r0);
+		timed_pump_msg(-1, &pump, r0);
 		return r0;
 	}
 
@@ -2833,7 +2818,7 @@ public:
 	/*!
 	@brief 获取当前Actor调度器
 	*/
-	shared_strand this_strand();
+	shared_strand self_strand();
 
 	/*!
 	@brief 返回本对象的智能指针
@@ -2843,7 +2828,7 @@ public:
 	/*!
 	@brief 获取当前ActorID号
 	*/
-	long long this_id();
+	long long self_id();
 
 	/*!
 	@brief 获取Actor切换计数
@@ -2879,6 +2864,16 @@ public:
 	@brief Actor是否已经退出
 	*/
 	bool is_quited();
+
+	/*!
+	@brief 锁定当前Actor，暂时不让强制退出
+	*/
+	void lock_quit();
+
+	/*!
+	@brief 解除退出锁定
+	*/
+	void unlock_quit();
 
 	/*!
 	@brief 暂停Actor
@@ -2968,7 +2963,7 @@ private:
 	void* _actorPull;///<Actor中断点恢复
 	void* _actorPush;///<Actor中断点
 	void* _stackTop;///<Actor栈顶
-	long long _actorID;///<ActorID
+	long long _selfID;///<ActorID
 	size_t _stackSize;///<Actor栈大小
 	shared_strand _strand;///<Actor调度器
 	DEBUG_OPERATION(bool _inActor);///<当前正在Actor内部执行标记
@@ -2977,6 +2972,8 @@ private:
 	bool _suspended;///<Actor挂起标记
 	bool _hasNotify;///<当前Actor挂起，有外部触发准备进入Actor标记
 	bool _isForce;///<是否是强制退出的标记，成功调用了force_quit
+	bool _notifyQuited;///<当前Actor被锁定后，收到退出消息
+	size_t _lockQuit;///<锁定当前Actor，如果当前接收到退出消息，暂时不退，等到解锁后退出
 	size_t _yieldCount;//yield计数
 	size_t _childOverCount;///<子Actor退出时计数
 	size_t _childSuspendResumeCount;///<子Actor挂起/恢复计数

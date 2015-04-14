@@ -6,7 +6,6 @@
 #include "afxwin.h"
 #include "afxcmn.h"
 #include "bind_mfc_run.h"
-#include "msg_pipe.h"
 #include "shared_data.h"
 #include "socket_io.h"
 #include "text_stream_io.h"
@@ -55,8 +54,7 @@ public:
 	struct session_pck 
 	{
 		socket_handle _socket;
-		msg_pipe<>::writer_type _closeNtf;
-		msg_pipe<>::regist_reader _lstClose;
+		post_actor_msg<> _closeNtf;
 		actor_handle _sessionDlg;
 	};
 // й╣ож

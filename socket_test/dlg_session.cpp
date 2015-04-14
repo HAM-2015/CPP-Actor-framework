@@ -43,11 +43,20 @@ BOOL dlg_session::OnInitDialog()
 	_editFont.CreatePointFont(90, "宋体");
 	_msgEdit.SetFont(&_editFont);
 	_outputEdit.SetFont(&_editFont);
-
-	_sendPump = msg_pipe<shared_data>::make(_sendPipe);
-	actor_handle sessionActor = my_actor::create(_strand, boost::bind(&dlg_session::sessionActor, this, _1));
-	sessionActor->notify_run();
 	return TRUE;
+}
+
+void dlg_session::run(my_actor* parent)
+{
+	_sessionActor = parent->create_child_actor(_strand, boost::bind(&dlg_session::sessionActor, this, _1));
+	parent->child_actor_run(_sessionActor);
+	_sendPipe = parent->connect_msg_notifer_to<shared_data>(_sessionActor);
+	parent->msg_agent_to(_sessionActor);
+}
+
+void dlg_session::waitQuit(my_actor* parent)
+{
+	parent->child_actor_wait_quit(_sessionActor);
 }
 
 // dlg_session 消息处理程序
@@ -73,36 +82,34 @@ void dlg_session::sessionActor(my_actor* self)
 	post(boost::bind(&dlg_session::showClientMsg, this, msg_data::create(_socket->ip())));
 	child_actor_handle lstClose = self->create_child_actor([&, this](my_actor* self)
 	{
-		actor_msg_handle<> amh;
-		_lstClose(self, amh);
+		auto amh = self->connect_msg_pump();
 		//侦听请求对话框关闭消息，然后通知对话框关闭
 		self->pump_msg(amh);
 		this->_exit = true;
 		_socket->close();
-		self->close_msg_notifer(amh);
 	});
+	self->msg_agent_to(lstClose);
 	self->child_actor_run(lstClose);
 	actor_msg_handle<shared_data> amh;
 	std::shared_ptr<text_stream_io> textio = text_stream_io::create(_strand, _socket, self->make_msg_notifer(amh));
 	child_actor_handle wd = self->create_child_actor([this, &textio](my_actor* self)
 	{
-		actor_msg_handle<shared_data> amh;
-		_sendPump(self, amh);
+		auto amh = self->connect_msg_pump<shared_data>();
 		while (true)
 		{
-			auto msg = self->pump_msg(amh);
+			auto msg = self->pump_msg(*amh);
 			if (!msg)
 			{
 				break;
 			}
 			textio->write(msg);
 		}
-		self->close_msg_notifer(amh);
 	});
 	self->child_actor_run(wd);
+	self->msg_agent_to<shared_data>(wd);
 	while (true)
 	{
-		auto msg = self->pump_msg(amh);
+		auto msg = self->wait_msg(amh);
 		if (!msg)
 		{
 			break;
@@ -117,11 +124,11 @@ void dlg_session::sessionActor(my_actor* self)
 		this->GetDlgItem(IDC_BUTTON3)->EnableWindow(FALSE);
 	});
 	self->child_actor_wait_quit(lstClose);
-	send(self, wrap([this]()
+	send(self, [this]()
 	{
 		this->mfc_close();
 		_closeCallback();
-	}));
+	});
 }
 
 void dlg_session::OnBnClickedSendMsg()

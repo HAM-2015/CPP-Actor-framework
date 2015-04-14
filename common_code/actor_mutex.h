@@ -7,7 +7,7 @@ class _actor_mutex;
 class my_actor;
 
 /*!
-@brief Actor锁，可递归
+@brief Actor锁，可递归，使用前与 my_actor::quit_guard 配合，防止 lock 后被强制退出造成无法 unlock
 */
 class actor_mutex
 {

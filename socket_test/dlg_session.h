@@ -1,7 +1,6 @@
 #pragma once
 #include "afxwin.h"
 #include "bind_mfc_run.h"
-#include "msg_pipe.h"
 #include "socket_io.h"
 #include "text_stream_io.h"
 
@@ -28,18 +27,20 @@ protected:
 	void showClientMsg(shared_data msg);
 	BIND_MFC_RUN(CDialogEx)
 	DECLARE_MESSAGE_MAP()
+public:
+	void run(my_actor* parent);
+	void waitQuit(my_actor* parent);
 private:
 	void sessionActor(my_actor* self);
 public:
 	shared_strand _strand;
 	socket_handle _socket;
-	std::function<void ()> _closeCallback;
-	msg_pipe<>::writer_type _closeNtf;
-	msg_pipe<>::regist_reader _lstClose;
+	actor_trig_notifer<> _closeCallback;
+	post_actor_msg<> _closeNtf;
+	child_actor_handle _sessionActor;
 private:
 	bool _exit;
-	msg_pipe<shared_data>::writer_type _sendPipe;
-	msg_pipe<shared_data>::regist_reader _sendPump;
+	post_actor_msg<shared_data> _sendPipe;
 	CFont _editFont;
 public:
 	CEdit _msgEdit;
