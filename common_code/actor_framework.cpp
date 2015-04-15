@@ -489,7 +489,25 @@ bool msg_pump_void::isDisconnected()
 {
 	return _pumpHandler.empty();
 }
+//////////////////////////////////////////////////////////////////////////
 
+void trig_once_base::trig_handler() const
+{
+#ifdef _DEBUG
+	if (!_pIsTrig->exchange(true))
+	{
+		assert(_hostActor);
+		_hostActor->trig_handler();
+	}
+	else
+	{
+		assert(false);
+	}
+#else
+	assert(_hostActor);
+	_hostActor->trig_handler();
+#endif
+}
 //////////////////////////////////////////////////////////////////////////
 
 struct my_actor::timer_pck
@@ -756,11 +774,11 @@ bool my_actor::child_actor_force_quit( child_actor_handle& actorHandle )
 		actor_handle actor = actorHandle.peel();
 		if (actor->self_strand() == _strand)
 		{
-			actorHandle._norQuit = trig<bool>([actor](const std::function<void(bool)>& h){actor->force_quit(h); });
+			actorHandle._norQuit = trig<bool>([actor](const trig_once_notifer<bool>& h){actor->force_quit(h); });
 		} 
 		else
 		{
-			actorHandle._norQuit = trig<bool>([actor](const std::function<void(bool)>& h){actor->notify_quit(h); });
+			actorHandle._norQuit = trig<bool>([actor](const trig_once_notifer<bool>& h){actor->notify_quit(h); });
 		}
 	}
 	return actorHandle._norQuit;
@@ -824,11 +842,11 @@ void my_actor::child_actor_suspend(child_actor_handle& actorHandle)
 	actor_handle actor = actorHandle.get_actor();
 	if (actorHandle.get_actor()->self_strand() == _strand)
 	{
-		trig([actor](const std::function<void()>& h){actor->suspend(h); });
+		trig([actor](const trig_once_notifer<>& h){actor->suspend(h); });
 	} 
 	else
 	{
-		trig([actor](const std::function<void()>& h){actor->notify_suspend(h); });
+		trig([actor](const trig_once_notifer<>& h){actor->notify_suspend(h); });
 	}
 }
 
@@ -867,11 +885,11 @@ void my_actor::child_actor_resume(child_actor_handle& actorHandle)
 	actor_handle actor = actorHandle.get_actor();
 	if (actorHandle.get_actor()->self_strand() == _strand)
 	{
-		trig([actor](const std::function<void()>& h){actor->resume(h); });
+		trig([actor](const trig_once_notifer<>& h){actor->resume(h); });
 	}
 	else
 	{
-		trig([actor](const std::function<void()>& h){actor->notify_resume(h); });
+		trig([actor](const trig_once_notifer<>& h){actor->notify_resume(h); });
 	}
 }
 
@@ -1386,7 +1404,7 @@ bool my_actor::actor_force_quit( const actor_handle& anotherActor )
 {
 	assert_enter();
 	assert(anotherActor);
-	return trig<bool>([anotherActor](const std::function<void (bool)>& h){anotherActor->notify_quit(h); });
+	return trig<bool>([anotherActor](const trig_once_notifer<bool>& h){anotherActor->notify_quit(h); });
 }
 
 void my_actor::actors_force_quit(const list<actor_handle>& anotherActors)
@@ -1409,7 +1427,7 @@ bool my_actor::actor_wait_quit( const actor_handle& anotherActor )
 {
 	assert_enter();
 	assert(anotherActor);
-	return trig<bool>([anotherActor](const std::function<void(bool)>& h){anotherActor->append_quit_callback(h); });
+	return trig<bool>([anotherActor](const trig_once_notifer<bool>& h){anotherActor->append_quit_callback(h); });
 }
 
 void my_actor::actors_wait_quit(const list<actor_handle>& anotherActors)
@@ -1425,7 +1443,7 @@ void my_actor::actor_suspend(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
-	trig([anotherActor](const std::function<void()>& h){anotherActor->notify_suspend(h); });
+	trig([anotherActor](const trig_once_notifer<>& h){anotherActor->notify_suspend(h); });
 }
 
 void my_actor::actors_suspend(const list<actor_handle>& anotherActors)
@@ -1448,7 +1466,7 @@ void my_actor::actor_resume(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
-	trig([anotherActor](const std::function<void()>& h){anotherActor->notify_resume(h); });
+	trig([anotherActor](const trig_once_notifer<>& h){anotherActor->notify_resume(h); });
 }
 
 void my_actor::actors_resume(const list<actor_handle>& anotherActors)
@@ -1471,7 +1489,7 @@ bool my_actor::actor_switch(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
-	return trig<bool>([anotherActor](const std::function<void(bool)>& h){anotherActor->switch_pause_play(h); });
+	return trig<bool>([anotherActor](const trig_once_notifer<bool>& h){anotherActor->switch_pause_play(h); });
 }
 
 bool my_actor::actors_switch(const list<actor_handle>& anotherActors)

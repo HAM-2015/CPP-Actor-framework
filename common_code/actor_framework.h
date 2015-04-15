@@ -17,7 +17,6 @@
 #include <functional>
 #include "ios_proxy.h"
 #include "shared_strand.h"
-#include "wrapped_trig_handler.h"
 #include "ref_ex.h"
 #include "function_type.h"
 #include "msg_queue.h"
@@ -528,6 +527,12 @@ private:
 		_msgBuff.clear();
 		_hostActor.reset();
 	}
+
+	size_t size()
+	{
+		assert(_strand->running_in_this_thread());
+		return _msgBuff.size();
+	}
 private:
 	ref_type* _dstRef;
 	msg_queue<msg_type> _msgBuff;
@@ -590,6 +595,12 @@ private:
 		_msgCount = 0;
 		_waiting = false;
 		_hostActor.reset();
+	}
+
+	size_t size()
+	{
+		assert(_strand->running_in_this_thread());
+		return _msgCount;
 	}
 private:
 	size_t _msgCount;
@@ -788,6 +799,11 @@ private:
 		_waiting = false;
 		_hostActor.reset();
 	}
+public:
+	bool has()
+	{
+		return _hasMsg;
+	}
 private:
 	ref_type* _dstRef;
 	bool _hasMsg;
@@ -855,6 +871,11 @@ private:
 		_hasMsg = false;
 		_waiting = false;
 		_hostActor.reset();
+	}
+public:
+	bool has()
+	{
+		return _hasMsg;
 	}
 private:
 	bool _hasMsg;
@@ -1416,6 +1437,83 @@ public:
 private:
 	std::shared_ptr<msg_pool_type> _msgPool;
 };
+//////////////////////////////////////////////////////////////////////////
+
+class trig_once_base
+{
+protected:
+	DEBUG_OPERATION(trig_once_base() :_pIsTrig(new boost::atomic<bool>(false)){})
+public:
+	virtual ~trig_once_base(){};
+protected:
+	template <typename DST /*ref_ex*/, typename SRC /*msg_param*/>
+	void _trig_handler(DST& dstRef, SRC&& src) const
+	{
+#ifdef _DEBUG
+		if (!_pIsTrig->exchange(true))
+		{
+			assert(_hostActor);
+			_hostActor->_trig_handler(dstRef, std::move(src));
+		}
+		else
+		{
+			assert(false);
+		}
+#else
+		assert(_hostActor);
+		_hostActor->_trig_handler(dstRef, std::move(src));
+#endif
+	}
+
+	void trig_handler() const;
+protected:
+	actor_handle _hostActor;
+	DEBUG_OPERATION(std::shared_ptr<boost::atomic<bool> > _pIsTrig);
+};
+
+template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
+class trig_once_notifer: public trig_once_base
+{
+	typedef ref_ex<T0, T1, T2, T3> ref_type;
+
+	friend my_actor;
+public:
+	trig_once_notifer():_dstRef(0) {};
+private:
+	trig_once_notifer(const actor_handle& hostActor, ref_type* dstRef)
+		:_dstRef(dstRef) {_hostActor = hostActor;}
+public:
+	template <typename PT0, typename PT1, typename PT2, typename PT3>
+	void operator()(const PT0& p0, const PT1& p1, const PT2& p2, const PT3& p3) const
+	{
+		_trig_handler(*_dstRef, std::move(msg_param<PT0, PT1, PT2, PT3>(p0, p1, p2, p3)));
+	}
+
+	template <typename PT0, typename PT1, typename PT2>
+	void operator()(const PT0& p0, const PT1& p1, const PT2& p2) const
+	{
+		_trig_handler(*_dstRef, std::move(msg_param<PT0, PT1, PT2>(p0, p1, p2)));
+	}
+
+	template <typename PT0, typename PT1>
+	void operator()(const PT0& p0, const PT1& p1) const
+	{
+		_trig_handler(*_dstRef, std::move(msg_param<PT0, PT1>(p0, p1)));
+	}
+
+	template <typename PT0>
+	void operator()(const PT0& p0) const
+	{
+		_trig_handler(*_dstRef, std::move(msg_param<PT0>(p0)));
+	}
+
+	void operator()() const
+	{
+		trig_handler();
+	}
+private:
+	ref_type* _dstRef;
+};
 
 //////////////////////////////////////////////////////////////////////////
 /*!
@@ -1539,6 +1637,7 @@ class my_actor
 	friend child_actor_handle;
 	friend msg_pump_base;
 	friend actor_msg_handle_base;
+	friend trig_once_base;
 public:
 	/*!
 	@brief 在{}一定范围内锁定当前Actor不被强制退出
@@ -1756,12 +1855,12 @@ public:
 		assert_enter();
 		if (exeStrand != _strand)
 		{
-			trig([=](const std::function<void()>& cb){exeStrand->asyncInvokeVoid(h, cb); });
+			actor_handle shared_this = shared_from_this();
+			exeStrand->asyncInvokeVoid(h, [shared_this](){shared_this->trig_handler(); });
+			push_yield();
+			return;
 		}
-		else
-		{
-			h();
-		}
+		h();
 	}
 
 	template <typename T0, typename H>
@@ -1770,7 +1869,12 @@ public:
 		assert_enter();
 		if (exeStrand != _strand)
 		{
-			return trig<T0>([=](const std::function<void(T0)>& cb){exeStrand->asyncInvoke(h, cb); });
+			T0 r0;
+			ref_ex<T0> dstRef(r0);
+			actor_handle shared_this = shared_from_this();
+			exeStrand->asyncInvoke(h, [shared_this, &dstRef](const T0& p0){shared_this->_trig_handler(dstRef, std::move(msg_param<T0>(p0))); });
+			push_yield();
+			return r0;
 		} 
 		return h();
 	}
@@ -1779,14 +1883,21 @@ public:
 	__yield_interrupt void async_send(shared_strand exeStrand, const H& h)
 	{
 		assert_enter();
-		trig([=](const std::function<void()>& cb){exeStrand->asyncInvokeVoid(h, cb); });
+		actor_handle shared_this = shared_from_this();
+		exeStrand->asyncInvokeVoid(h, [shared_this](){shared_this->trig_handler(); });
+		push_yield();
 	}
 
 	template <typename T0, typename H>
 	__yield_interrupt T0 async_send(shared_strand exeStrand, const H& h)
 	{
 		assert_enter();
-		return trig<T0>([=](const std::function<void(T0)>& cb){exeStrand->asyncInvoke(h, cb); });
+		T0 r0;
+		ref_ex<T0> dstRef(r0);
+		actor_handle shared_this = shared_from_this();
+		exeStrand->asyncInvoke(h, [shared_this, &dstRef](const T0& p0){shared_this->_trig_handler(dstRef, std::move(msg_param<T0>(p0))); });
+		push_yield();
+		return r0;
 	}
 
 	/*!
@@ -1796,11 +1907,7 @@ public:
 	__yield_interrupt void trig(const H& h)
 	{
 		assert_enter();
-		actor_handle shared_this = shared_from_this();
-		h(wrap_trig([shared_this]()
-		{
-			shared_this->trig_handler();
-		}));
+		h(trig_once_notifer<>(shared_from_this(), NULL));
 		push_yield();
 	}
 
@@ -1809,11 +1916,7 @@ public:
 	{
 		assert_enter();
 		ref_ex<T0> dstRef(r0);
-		actor_handle shared_this = shared_from_this();
-		h(wrap_trig([shared_this, &dstRef](const T0& p0)
-		{
-			shared_this->_trig_handler(dstRef, std::move(msg_param<T0>(p0)));
-		}));
+		h(trig_once_notifer<T0>(shared_from_this(), &dstRef));
 		push_yield();
 	}
 
@@ -1830,11 +1933,7 @@ public:
 	{
 		assert_enter();
 		ref_ex<T0, T1> dstRef(r0, r1);
-		actor_handle shared_this = shared_from_this();
-		h(wrap_trig([shared_this, &dstRef](const T0& p0, const T1& p1)
-		{
-			shared_this->_trig_handler(dstRef, std::move(msg_param<T0, T1>(p0, p1)));
-		}));
+		h(trig_once_notifer<T0, T1>(shared_from_this(), &dstRef));
 		push_yield();
 	}
 
@@ -1843,11 +1942,7 @@ public:
 	{
 		assert_enter();
 		ref_ex<T0, T1, T2> dstRef(r0, r1, r2);
-		actor_handle shared_this = shared_from_this();
-		h(wrap_trig([shared_this, &dstRef](const T0& p0, const T1& p1, const T2& p2)
-		{
-			shared_this->_trig_handler(dstRef, std::move(msg_param<T0, T1, T2>(p0, p1, p2)));
-		}));
+		h(trig_once_notifer<T0, T1, T2>(shared_from_this(), &dstRef));
 		push_yield();
 	}
 
@@ -1856,11 +1951,7 @@ public:
 	{
 		assert_enter();
 		ref_ex<T0, T1, T2, T3> dstRef(r0, r1, r2, r3);
-		actor_handle shared_this = shared_from_this();
-		h(wrap_trig([shared_this, &dstRef](const T0& p0, const T1& p1, const T2& p2, const T3& p3)
-		{
-			shared_this->_trig_handler(dstRef, std::move(msg_param<T0, T1, T2, T3>(p0, p1, p2, p3)));
-		}));
+		h(trig_once_notifer<T0, T1, T2, T3>(shared_from_this(), &dstRef));
 		push_yield();
 	}
 private:

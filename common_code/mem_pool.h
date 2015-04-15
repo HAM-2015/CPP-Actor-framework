@@ -75,7 +75,8 @@ public:
 			}
 		}
 		node* newNode = (node*)malloc(sizeof(node));
-		_creater(newNode->_data);
+		assert((void*)newNode == (void*)newNode->_data);
+		_creater(newNode);
 		return (T*)newNode->_data;
 	}
 
@@ -94,7 +95,7 @@ public:
 				return;
 			}
 		}
-		((T*)p)->~T();
+		((T*)((node*)p)->_data)->~T();
 		free(p);
 	}
 private:

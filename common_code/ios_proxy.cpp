@@ -1,8 +1,8 @@
 #include "ios_proxy.h"
 #include "shared_data.h"
-#include "strand_ex.h"
 #include "mem_pool.h"
 #include <boost/asio/high_resolution_timer.hpp>
+#include <boost/asio/detail/strand_service.hpp>
 #include <memory>
 
 typedef boost::asio::detail::strand_service::strand_impl impl_type;

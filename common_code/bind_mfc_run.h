@@ -14,8 +14,7 @@ using namespace std;
 
 #define 	WM_USER_BEGIN		(WM_USER+0x8000)
 #define 	WM_USER_POST		(WM_USER+0x8001)
-#define 	WM_USER_SEND		(WM_USER+0x8002)
-#define		WM_USER_END			(WM_USER+0x8003)
+#define		WM_USER_END			(WM_USER+0x8002)
 
 #define		BIND_MFC_RUN(__base__) \
 private:\
@@ -40,63 +39,18 @@ LRESULT _postRun(WPARAM wp, LPARAM lp)\
 	return bind_mfc_run::_postRun(wp, lp);\
 }\
 \
-LRESULT _sendRun(WPARAM wp, LPARAM lp)\
-{\
-	return bind_mfc_run::_sendRun(wp, lp);\
-}\
-\
 afx_msg void OnCancel();
 
 #define REGIEST_MFC_RUN(__dlg__) \
 ON_WM_CLOSE()\
-ON_MESSAGE(WM_USER_POST, &__dlg__::_postRun)\
-ON_MESSAGE(WM_USER_SEND, &__dlg__::_sendRun)
+ON_MESSAGE(WM_USER_POST, &__dlg__::_postRun)
 
 class bind_mfc_run
 {
 protected:
-	struct bind_run
-	{
-		virtual void run() = 0;
-	};
-
-	template <typename T = void>
-	struct bind_run_pck: public bind_run
-	{
-		bind_run_pck() {}
-
-		bind_run_pck(const std::function<void (T)>& cb, const std::function<T ()>& h)
-			: _cb(cb), _h(h) {}
-
-		void run()
-		{
-			_cb(_h());
-		}
-
-		std::function<void (T)> _cb;
-		std::function<T ()> _h;
-	};
-
-	template <>
-	struct bind_run_pck<void>: public bind_run
-	{
-		bind_run_pck() {}
-
-		bind_run_pck(const std::function<void ()>& cb, const std::function<void ()>& h)
-			: _cb(cb), _h(h) {}
-
-		void run()
-		{
-			_h();
-			_cb();
-		}
-
-		std::function<void ()> _cb;
-		std::function<void ()> _h;
-	};
+	bind_mfc_run(): _isClosed(false), _postOptions(16) {};
 public:
-	bind_mfc_run(): _isClosed(false), _postOptions(16), _sendOptions(16) {};
-	~bind_mfc_run() {};
+	virtual ~bind_mfc_run() {};
 public:
 	/*!
 	@brief 绑定一个函数到MFC队列执行
@@ -116,7 +70,6 @@ protected:
 		boost::unique_lock<boost::shared_mutex> ul(_postMutex);
 		peek_message();
 		_postOptions.clear();
-		_sendOptions.clear();
 	}
 
 	/*!
@@ -154,9 +107,9 @@ public:
 		boost::shared_lock<boost::shared_mutex> sl(_postMutex);
 		if (!_isClosed)
 		{
-			_mutex1.lock();
+			_mutex.lock();
 			_postOptions.push_back(h);
-			_mutex1.unlock();
+			_mutex.unlock();
 			post_message(WM_USER_POST);
 		}
 	}
@@ -167,16 +120,20 @@ public:
 	void send(my_actor* self, const std::function<void ()>& h)
 	{
 		assert(boost::this_thread::get_id() != thread_id());
-		self->trig([&, this](const std::function<void ()>& cb)
+		self->trig([&, this](const trig_once_notifer<>& cb)
 		{
 			boost::shared_lock<boost::shared_mutex> sl(_postMutex);
 			if (!_isClosed)
 			{
-				std::shared_ptr<bind_mfc_run::bind_run_pck<> > pck(new bind_mfc_run::bind_run_pck<>(cb, h));
-				_mutex2.lock();
-				_sendOptions.push_back(pck);
-				_mutex2.unlock();
-				this->post_message(WM_USER_SEND);
+				auto& h_ = h;
+				_mutex.lock();
+				_postOptions.push_back([h_, cb]()
+				{
+					h_();
+					cb();
+				});
+				_mutex.unlock();
+				this->post_message(WM_USER_POST);
 			}
 		});
 	}
@@ -188,16 +145,19 @@ public:
 	T send(my_actor* self, const std::function<T ()>& h)
 	{
 		assert(boost::this_thread::get_id() != thread_id());
-		return self->trig<T>([&, this](const std::function<void (T)>& cb)
+		return self->trig<T>([&, this](const trig_once_notifer<T>& cb)
 		{
 			boost::shared_lock<boost::shared_mutex> sl(_postMutex);
 			if (!_isClosed)
 			{
-				std::shared_ptr<bind_mfc_run::bind_run_pck<T> > pck(new bind_mfc_run::bind_run_pck<T>(cb, h));
-				_mutex2.lock();
-				_sendOptions.push_back(pck);
-				_mutex2.unlock();
-				this->post_message(WM_USER_SEND);
+				auto& h_ = h;
+				_mutex.lock();
+				_postOptions.push_back([h_, cb]()
+				{
+					cb(h_());
+				});
+				_mutex.unlock();
+				this->post_message(WM_USER_POST);
 			}
 		});
 	}
@@ -205,11 +165,6 @@ public:
 	void post_queue_size(size_t fixedSize)
 	{
 		_postOptions.expand_fixed(fixedSize);
-	}
-
-	void send_queue_size(size_t fixedSize)
-	{
-		_sendOptions.expand_fixed(fixedSize);
 	}
 #ifdef ENABLE_MFC_ACTOR
 	/*!
@@ -229,31 +184,18 @@ public:
 protected:
 	LRESULT _postRun(WPARAM wp, LPARAM lp)
 	{
-		_mutex1.lock();
+		_mutex.lock();
 		assert(!_postOptions.empty());
-		std::function<void ()> h = _postOptions.front();
+		auto h = _postOptions.front();
 		_postOptions.pop_front();
-		_mutex1.unlock();
+		_mutex.unlock();
 		assert(h);
 		h();
 		return 0;
 	}
-
-	LRESULT _sendRun(WPARAM wp, LPARAM lp)
-	{
-		_mutex2.lock();
-		assert(!_sendOptions.empty());
-		std::shared_ptr<bind_run> pck = _sendOptions.front();
-		_sendOptions.pop_front();
-		_mutex2.unlock();
-		pck->run();
-		return 0;
-	}
 private:
 	msg_queue<std::function<void ()> > _postOptions;
-	msg_queue<std::shared_ptr<bind_run> > _sendOptions;
-	boost::mutex _mutex1;
-	boost::mutex _mutex2;
+	boost::mutex _mutex;
 	boost::shared_mutex _postMutex;
 	boost::thread::id _threadID;
 	bool _isClosed;
