@@ -49,9 +49,13 @@ public:
 private:
 	actor_lock_guard(const actor_lock_guard&);
 	void operator=(const actor_lock_guard&);
+public:
+	void unlock();
+	void lock();
 private:
 	actor_mutex _amutex;
 	my_actor* _self;
+	bool _isUnlock;
 };
 
 #endif

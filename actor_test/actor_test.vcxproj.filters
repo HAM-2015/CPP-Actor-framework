@@ -89,5 +89,8 @@
     <ClInclude Include="..\common_code\actor_mutex.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="..\common_code\mem_pool.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -915,6 +915,7 @@ private:
 		res->_weakThis = res;
 		res->_hasMsg = false;
 		res->_waiting = false;
+		res->_checkDis = false;
 		res->_pumpCount = 0;
 		res->_dstRef = NULL;
 		res->_hostActor = hostActor;
@@ -935,6 +936,7 @@ private:
 				if (_waiting)
 				{
 					_waiting = false;
+					_checkDis = false;
 					run_one();
 				}
 			}
@@ -1010,6 +1012,13 @@ private:
 		assert(_strand->running_in_this_thread());
 		assert(_hostActor);
 		_pumpHandler.clear();
+		if (_checkDis)
+		{
+			assert(_waiting);
+			_waiting = false;
+			_dstRef = NULL;
+			run_one();
+		}
 	}
 
 	void close()
@@ -1020,9 +1029,16 @@ private:
 		}
 		_hasMsg = false;
 		_dstRef = NULL;
+		_pumpCount = 0;
 		_waiting = false;
+		_checkDis = false;
 		_pumpHandler.clear();
 		_hostActor.reset();
+	}
+
+	bool isDisconnected()
+	{
+		return _pumpHandler.empty();
 	}
 private:
 	std::weak_ptr<msg_pump> _weakThis;
@@ -1033,6 +1049,7 @@ private:
 	BYTE _pumpCount;
 	bool _hasMsg;
 	bool _waiting;
+	bool _checkDis;
 };
 
 template <typename T0, typename T1, typename T2, typename T3>
@@ -1291,6 +1308,7 @@ protected:
 	void connect(const pump_handler& pumpHandler);
 	void clear();
 	void close();
+	bool isDisconnected();
 protected:
 	std::weak_ptr<msg_pump_void> _weakThis;
 	pump_handler _pumpHandler;
@@ -1298,6 +1316,7 @@ protected:
 	BYTE _pumpCount;
 	bool _waiting;
 	bool _hasMsg;
+	bool _checkDis;
 };
 
 template <>
@@ -1549,6 +1568,11 @@ public:
 	struct force_quit_exception { };
 
 	/*!
+	@brief 消息泵被断开
+	*/
+	struct pump_disconnected_exception { };
+
+	/*!
 	@brief Actor入口函数体
 	*/
 	typedef std::function<void (my_actor*)> main_func;
@@ -1666,6 +1690,11 @@ public:
 	@brief 调用disable_auto_make_timer后，使用这个打开当前Actor定时器
 	*/
 	void open_timer();
+
+	/*!
+	@brief 关闭内部定时器
+	*/
+	void close_timer();
 
 	/*!
 	@brief 获取父Actor
@@ -2236,7 +2265,7 @@ private:
 			if (msgPck->_msgPool)
 			{
 				auto& msgPool_ = msgPck->_msgPool;
-				send(msgPool_->_strand, [msgPool_]()
+				send(msgPool_->_strand, [&msgPool_]()
 				{
 					msgPool_->disconnect();
 				});
@@ -2244,7 +2273,7 @@ private:
 			if (msgPck->_msgPump)
 			{
 				auto& msgPump_ = msgPck->_msgPump;
-				send(msgPump_->_strand, [msgPump_]()
+				send(msgPump_->_strand, [&msgPump_]()
 				{
 					msgPump_->clear();
 				});
@@ -2270,7 +2299,7 @@ private:
 			if (msgPck->_msgPool)
 			{
 				auto& msgPool_ = msgPck->_msgPool;
-				send(msgPool_->_strand, [msgPool_]()
+				send(msgPool_->_strand, [&msgPool_]()
 				{
 					msgPool_->disconnect();
 				});
@@ -2280,11 +2309,11 @@ private:
 				auto& msgPump_ = msgPck->_msgPump;
 				if (newPool)
 				{
-					auto ph = send<pump_handler>(newPool->_strand, [newPool, msgPump_]()->pump_handler
+					auto ph = send<pump_handler>(newPool->_strand, [&newPool, &msgPump_]()->pump_handler
 					{
 						return newPool->connect_pump(msgPump_);
 					});
-					send(msgPump_->_strand, [msgPump_, ph]()
+					send(msgPump_->_strand, [&msgPump_, &ph]()
 					{
 						if (msgPump_->_hostActor && !msgPump_->_hostActor->is_quited())
 						{
@@ -2294,7 +2323,7 @@ private:
 				}
 				else
 				{
-					send(msgPump_->_strand, [msgPump_]()
+					send(msgPump_->_strand, [&msgPump_]()
 					{
 						msgPump_->clear();
 					});
@@ -2303,18 +2332,18 @@ private:
 		}
 		msgPck->_msgPool = newPool;
 	}
-public:
+private:
 	/*!
 	@brief 把本Actor内消息由伙伴Actor代理处理
 	*/
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt void msg_agent_to(child_actor_handle& childActor)
+	__yield_interrupt void msg_agent_to(const actor_handle& childActor)
 	{
 		typedef std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>> pck_type;
 
 		assert_enter();
-		assert(childActor.get_actor());
-		if (childActor.get_actor()->parent_actor()->self_id() == self_id())
+		assert(childActor);
+		if (childActor->parent_actor() && childActor->parent_actor()->self_id() == self_id())
 		{
 			auto msgPck = msg_pool_pck<T0, T1, T2, T3>();
 			quit_guard qg(this);
@@ -2325,10 +2354,9 @@ public:
 				clear_msg_list<T0, T1, T2, T3>(msgPck->_next);
 				msgPck->_next->unlock(this);
 			}
-			auto nextActor = childActor.get_actor();
-			auto childPck = send<pck_type>(nextActor->self_strand(), [nextActor]()->pck_type
+			auto childPck = send<pck_type>(childActor->self_strand(), [&childActor]()->pck_type
 			{
-				return nextActor->msg_pool_pck<T0, T1, T2, T3>();
+				return childActor->msg_pool_pck<T0, T1, T2, T3>();
 			});
 			msgPck->_next = childPck;
 			childPck->lock(this);
@@ -2341,26 +2369,76 @@ public:
 		}
 		assert(false);
 	}
+public:
+	template <typename T0, typename T1, typename T2, typename T3>
+	__yield_interrupt void msg_agent_to(child_actor_handle& childActor)
+	{
+		msg_agent_to<T0, T1, T2, T3>(childActor.get_actor());
+	}
 
 	template <typename T0, typename T1, typename T2>
 	__yield_interrupt void msg_agent_to(child_actor_handle& childActor)
 	{
-		msg_agent_to<T0, T1, T2, void>(childActor);
+		msg_agent_to<T0, T1, T2, void>(childActor.get_actor());
 	}
 
 	template <typename T0, typename T1>
 	__yield_interrupt void msg_agent_to(child_actor_handle& childActor)
 	{
-		msg_agent_to<T0, T1, void, void>(childActor);
+		msg_agent_to<T0, T1, void, void>(childActor.get_actor());
 	}
 
 	template <typename T0>
 	__yield_interrupt void msg_agent_to(child_actor_handle& childActor)
 	{
-		msg_agent_to<T0, void, void, void>(childActor);
+		msg_agent_to<T0, void, void, void>(childActor.get_actor());
 	}
 
 	__yield_interrupt void msg_agent_to(child_actor_handle& childActor);
+
+public:
+	/*!
+	@brief 把消息指定到一个特定Actor函数体去处理
+	@return 返回处理该消息的子Actor句柄
+	*/
+	template <typename T0, typename T1, typename T2, typename T3, typename Handler>
+	child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	{
+		child_actor_handle::child_actor_param childActor = create_child_actor([agentActor](my_actor* self)
+		{
+			agentActor(self, self->connect_msg_pump<T0, T1, T2, T3>());
+		}, stackSize);
+		msg_agent_to<T0, T1, T2, T3>(childActor._actor);
+		if (autoRun)
+		{
+			childActor._actor->notify_run();
+		}
+		return childActor;
+	}
+
+	template <typename T0, typename T1, typename T2, typename Handler>
+	child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	{
+		return msg_agent_to_actor<T0, T1, T2, void>(autoRun, agentActor, stackSize);
+	}
+
+	template <typename T0, typename T1, typename Handler>
+	child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	{
+		return msg_agent_to_actor<T0, T1, void, void>(autoRun, agentActor, stackSize);
+	}
+
+	template <typename T0, typename Handler>
+	child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	{
+		return msg_agent_to_actor<T0, void, void, void>(autoRun, agentActor, stackSize);
+	}
+
+	template <typename Handler>
+	child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	{
+		return msg_agent_to_actor<void, void, void, void>(autoRun, agentActor, stackSize);
+	}
 public:
 	/*!
 	@brief 断开伙伴代理该消息
@@ -2426,10 +2504,20 @@ public:
 			assert(false);
 			return post_actor_msg<T0, T1, T2, T3>();
 		}
+#ifdef _DEBUG
+		{
+			auto pa = parent_actor();
+			while (pa)
+			{
+				assert(pa->self_id() != buddyActor->self_id());
+				pa = pa->parent_actor();
+			}
+		}
+#endif
 		auto msgPck = msg_pool_pck<T0, T1, T2, T3>();
 		quit_guard qg(this);
 		msgPck->lock(this);
-		auto childPck = send<pck_type>(buddyActor->self_strand(), [buddyActor]()->pck_type
+		auto childPck = send<pck_type>(buddyActor->self_strand(), [&buddyActor]()->pck_type
 		{
 			return buddyActor->msg_pool_pck<T0, T1, T2, T3>();
 		});
@@ -2449,7 +2537,7 @@ public:
 					if (msgPck->_msgPool)
 					{
 						auto& msgPool_ = msgPck->_msgPool;
-						msgPump_->connect(this->send<pump_handler>(msgPool_->_strand, [msgPool_, msgPump_]()->pump_handler
+						msgPump_->connect(this->send<pump_handler>(msgPool_->_strand, [&msgPool_, &msgPump_]()->pump_handler
 						{
 							return msgPool_->connect_pump(msgPump_);
 						}));
@@ -2660,7 +2748,7 @@ public:
 		auto msgPool = msgPck->_msgPool;
 		if (msgPool)
 		{
-			msgPump->connect(send<pump_handler>(msgPool->_strand, [msgPck]()->pump_handler
+			msgPump->connect(send<pump_handler>(msgPool->_strand, [&msgPck]()->pump_handler
 			{
 				return msgPck->_msgPool->connect_pump(msgPck->_msgPump);
 			}));
@@ -2694,11 +2782,18 @@ public:
 	msg_pump<>::handle connect_msg_pump();
 private:
 	template <typename PUMP, typename DST>
-	bool _timed_pump_msg(const PUMP& pump, DST& dstRef, int tm)
+	bool _timed_pump_msg(const PUMP& pump, DST& dstRef, int tm, bool checkDis)
 	{
 		assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
 		if (!pump->read_msg(dstRef))
 		{
+			if (checkDis && pump->isDisconnected())
+			{
+				pump->_waiting = false;
+				pump->_dstRef = NULL;
+				throw pump_disconnected_exception();
+			}
+			pump->_checkDis = checkDis;
 			bool timeOut = false;
 			if (tm >= 0)
 			{
@@ -2719,8 +2814,15 @@ private:
 				{
 					cancel_delay_trig();
 				}
+				if (pump->_checkDis)
+				{
+					assert(checkDis);
+					pump->_checkDis = false;
+					throw pump_disconnected_exception();
+				}
 				return true;
 			}
+			pump->_checkDis = false;
 			pump->_waiting = false;
 			pump->_dstRef = NULL;
 			return false;
@@ -2732,78 +2834,79 @@ public:
 	/*!
 	@brief 从消息泵中提取消息
 	@param tm 超时时间
+	@param checkDis 检测是否被断开连接，是就抛出 pump_disconnected_exception 异常
 	@return 超时完成返回false，成功取到消息返回true
 	*/
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0, T1, T2, T3>::handle& pump, T0& r0, T1& r1, T2& r2, T3& r3)
+	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0, T1, T2, T3>::handle& pump, T0& r0, T1& r1, T2& r2, T3& r3, bool checkDis = false)
 	{
 		assert_enter();
 		ref_ex<T0, T1, T2, T3> dstRef(r0, r1, r2, r3);
-		return _timed_pump_msg(pump, dstRef, tm);
+		return _timed_pump_msg(pump, dstRef, tm, checkDis);
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0, T1, T2>::handle& pump, T0& r0, T1& r1, T2& r2)
+	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0, T1, T2>::handle& pump, T0& r0, T1& r1, T2& r2, bool checkDis = false)
 	{
 		assert_enter();
 		ref_ex<T0, T1, T2> dstRef(r0, r1, r2);
-		return _timed_pump_msg(pump, dstRef, tm);
+		return _timed_pump_msg(pump, dstRef, tm, checkDis);
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0, T1>::handle& pump, T0& r0, T1& r1)
+	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0, T1>::handle& pump, T0& r0, T1& r1, bool checkDis = false)
 	{
 		assert_enter();
 		ref_ex<T0, T1> dstRef(r0, r1);
-		return _timed_pump_msg(pump, dstRef, tm);
+		return _timed_pump_msg(pump, dstRef, tm, checkDis);
 	}
 
 	template <typename T0>
-	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0>::handle& pump, T0& r0)
+	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0>::handle& pump, T0& r0, bool checkDis = false)
 	{
 		assert_enter();
 		ref_ex<T0> dstRef(r0);
-		return _timed_pump_msg(pump, dstRef, tm);
+		return _timed_pump_msg(pump, dstRef, tm, checkDis);
 	}
 
-	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump<>::handle& pump);
+	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump<>::handle& pump, bool checkDis = false);
 
 	/*!
 	@brief 从消息泵中提取消息
 	*/
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt void pump_msg(const typename msg_pump<T0, T1, T2, T3>::handle& pump, T0& r0, T1& r1, T2& r2, T3& r3)
+	__yield_interrupt void pump_msg(const typename msg_pump<T0, T1, T2, T3>::handle& pump, T0& r0, T1& r1, T2& r2, T3& r3, bool checkDis = false)
 	{
-		timed_pump_msg(-1, pump, r0, r1, r2, r3);
+		timed_pump_msg(-1, pump, r0, r1, r2, r3, checkDis);
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt void pump_msg(const typename msg_pump<T0, T1, T2>::handle& pump, T0& r0, T1& r1, T2& r2)
+	__yield_interrupt void pump_msg(const typename msg_pump<T0, T1, T2>::handle& pump, T0& r0, T1& r1, T2& r2, bool checkDis = false)
 	{
-		timed_pump_msg(-1, pump, r0, r1, r2);
+		timed_pump_msg(-1, pump, r0, r1, r2, checkDis);
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt void pump_msg(const typename msg_pump<T0, T1>::handle& pump, T0& r0, T1& r1)
+	__yield_interrupt void pump_msg(const typename msg_pump<T0, T1>::handle& pump, T0& r0, T1& r1, bool checkDis = false)
 	{
-		timed_pump_msg(-1, pump, r0, r1);
+		timed_pump_msg(-1, pump, r0, r1, checkDis);
 	}
 
 	template <typename T0>
-	__yield_interrupt void pump_msg(const typename msg_pump<T0>::handle& pump, T0& r0)
+	__yield_interrupt void pump_msg(const typename msg_pump<T0>::handle& pump, T0& r0, bool checkDis = false)
 	{
-		timed_pump_msg(-1, pump, r0);
+		timed_pump_msg(-1, pump, r0, checkDis);
 	}
 
 	template <typename T0>
-	__yield_interrupt T0 pump_msg(msg_pump<T0>& pump)
+	__yield_interrupt T0 pump_msg(msg_pump<T0>& pump, bool checkDis = false)
 	{
 		T0 r0;
-		timed_pump_msg(-1, &pump, r0);
+		timed_pump_msg(-1, &pump, r0, checkDis);
 		return r0;
 	}
 
-	__yield_interrupt void pump_msg(const msg_pump<>::handle& pump);
+	__yield_interrupt void pump_msg(const msg_pump<>::handle& pump, bool checkDis = false);
 public:
 	/*!
 	@brief 测试当前下的Actor栈是否安全

@@ -5,10 +5,10 @@
 #include <boost/atomic/atomic.hpp>
 #include <boost/thread.hpp>
 #include <set>
-#include <list>
 #include <vector>
 
 class strand_ex;
+class my_actor;
 
 /*!
 @brief io_serviceµ÷¶ÈÆ÷·â×°
@@ -16,6 +16,7 @@ class strand_ex;
 class ios_proxy
 {
 	friend strand_ex;
+	friend my_actor;
 public:
 	enum priority
 	{
@@ -99,17 +100,18 @@ public:
 private:
 	void* getImpl();
 	void freeImpl(void* impl);
+	void* getTimer();
+	void freeTimer(void* timer);
 private:
 	bool _opend;
-	size_t _implCount;
 	priority _priority;
 	std::set<boost::thread::id> _threadIDs;
-	std::list<void*> _implPool;
+	void* _implPool;
+	void* _timerPool;
 	std::vector<HANDLE> _handleList;
 	boost::atomic<long long> _runCount;
 	boost::mutex _ctrlMutex;
 	boost::mutex _runMutex;
-	boost::mutex _implMutex;
 	boost::asio::io_service _ios;
 	boost::asio::io_service::work* _runLock;
 	boost::thread_group _runThreads;

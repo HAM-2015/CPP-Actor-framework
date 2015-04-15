@@ -170,6 +170,7 @@
     <ClInclude Include="..\common_code\ios_proxy.h" />
     <ClInclude Include="..\common_code\msg_queue.h" />
     <ClInclude Include="..\common_code\ref_ex.h" />
+    <ClInclude Include="..\common_code\mem_pool.h" />
     <ClInclude Include="..\common_code\shared_data.h" />
     <ClInclude Include="..\common_code\shared_strand.h" />
     <ClInclude Include="..\common_code\strand_ex.h" />

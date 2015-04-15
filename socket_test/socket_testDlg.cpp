@@ -218,19 +218,17 @@ void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param>
 			}
 			self->close_msg_notifer(amh);
 		});
+		self->child_actor_run(readActor);
 		auto textio = text_stream_io::create(self->self_strand(), param->_clientSocket, readActor.get_actor()->make_msg_notifer(amh));
-		child_actor_handle writerActor = self->create_child_actor([&textio, &param](my_actor* self)
+		child_actor_handle writerActor = self->msg_agent_to_actor<shared_data>(true, 
+			[&textio, &param](my_actor* self, msg_pump<shared_data>::handle amh)
 		{
-			auto amh = self->connect_msg_pump<shared_data>();
 			while (true)
 			{
 				//接收对话框给的消息，然后发送给服务器
 				textio->write(self->pump_msg(*amh));
 			}
 		});
-		self->msg_agent_to<shared_data>(writerActor);
-		self->child_actor_run(readActor);
-		self->child_actor_run(writerActor);
 		send(self, [this]()
 		{
 			this->GetDlgItem(IDC_BUTTON3)->EnableWindow(TRUE);
@@ -282,15 +280,13 @@ void Csocket_testDlg::serverActor(my_actor* self, std::shared_ptr<server_param> 
 	}
 	bool norClosed = false;
 	//创建侦听服务器关闭
-	child_actor_handle lstCloseProxyActor = self->create_child_actor([&](my_actor* self)//侦听服务器关闭
+	child_actor_handle lstCloseProxyActor = self->msg_agent_to_actor(true, [&](my_actor* self, msg_pump<>::handle amh)//侦听服务器关闭
 	{
-		auto amh = self->connect_msg_pump();
 		self->pump_msg(amh);
 		//得到服务器关闭消息，关闭连接侦听器
 		norClosed = true;
 		accept->close();
 	});
-	self->msg_agent_to(lstCloseProxyActor);
 	//创建会话关闭响应器
 	list<std::shared_ptr<session_pck> > sessList;
 	actor_msg_handle<list<std::shared_ptr<session_pck> >::iterator> sessDissonnLst;
@@ -304,7 +300,6 @@ void Csocket_testDlg::serverActor(my_actor* self, std::shared_ptr<server_param> 
 		self->close_msg_notifer(sessDissonnLst);
 	});
 	auto sessDissonnNtf = sessMngActor.get_actor()->make_msg_notifer(sessDissonnLst);
-	self->child_actor_run(lstCloseProxyActor);
 	self->child_actor_run(sessMngActor);
 	while (true)
 	{

@@ -378,6 +378,7 @@ msg_pump_void::msg_pump_void(const actor_handle& hostActor)
 {
 	_waiting = false;
 	_hasMsg = false;
+	_checkDis = false;
 	_pumpCount = 0;
 	_hostActor = hostActor;
 	_strand = hostActor->self_strand();
@@ -392,12 +393,20 @@ void msg_pump_void::clear()
 {
 	assert(_strand->running_in_this_thread());
 	_pumpHandler.clear();
+	if (_checkDis)
+	{
+		assert(_waiting);
+		_waiting = false;
+		run_one();
+	}
 }
 
 void msg_pump_void::close()
 {
 	_hasMsg = false;
 	_waiting = false;
+	_checkDis = false;
+	_pumpCount = 0;
 	_pumpHandler.clear();
 	_hostActor.reset();
 }
@@ -425,6 +434,7 @@ void msg_pump_void::receiver()
 		if (_waiting)
 		{
 			_waiting = false;
+			_checkDis = false;
 			run_one();
 		}
 		else
@@ -475,14 +485,27 @@ void msg_pump_void::receive_msg_post()
 	});
 }
 
+bool msg_pump_void::isDisconnected()
+{
+	return _pumpHandler.empty();
+}
+
 //////////////////////////////////////////////////////////////////////////
 
 struct my_actor::timer_pck
 {
-	timer_pck(boost::asio::io_service& ios)
-		:_timer(ios), _timerTime(0), _timerSuspend(false), _timerCompleted(true), _timerCount(0) {}
+	timer_pck(ios_proxy& ios)
+		:_ios(ios), _timer((timer_type*)ios.getTimer()), _timerTime(0), _timerSuspend(false), _timerCompleted(true), _timerCount(0) {}
 
-	timer_type _timer;
+	~timer_pck()
+	{
+		boost::system::error_code ec;
+		_timer->cancel(ec);
+		_ios.freeTimer(_timer);
+	}
+
+	ios_proxy& _ios;
+	timer_type* _timer;
 	bool _timerSuspend;
 	bool _timerCompleted;
 	size_t _timerCount;
@@ -526,6 +549,10 @@ public:
 			assert(!_actor._inActor);
 		}
 #ifdef _DEBUG
+		catch (my_actor::pump_disconnected_exception&)
+		{
+			assert(false);
+		}
 		catch (...)
 		{
 			assert(false);
@@ -635,7 +662,7 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 		newActor = actor_handle(new(stackTop-actorSize) my_actor, actor_free(stackMem));
 		if (_autoMakeTimer)
 		{
-			newActor->_timer = new(stackTop-actorSize-timerSize) timer_pck(actorStrand->get_io_service());
+			newActor->_timer = new(stackTop-actorSize-timerSize) timer_pck(actorStrand->get_ios_proxy());
 		}
 		newActor->_strand = actorStrand;
 		newActor->_mainFunc = mainFunc;
@@ -650,7 +677,7 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 		newActor = actor_handle(new my_actor);
 		if (_autoMakeTimer)
 		{
-			newActor->_timer = new timer_pck(actorStrand->get_io_service());
+			newActor->_timer = new timer_pck(actorStrand->get_ios_proxy());
 		}
 		newActor->_strand = actorStrand;
 		newActor->_mainFunc = mainFunc;
@@ -896,12 +923,29 @@ void my_actor::open_timer()
 		if (actor_stack_pool::isEnable())
 		{
 			size_t timerSize = MEM_ALIGN(sizeof(timer_pck), sizeof(void*));
-			_timer = new((BYTE*)this-timerSize) timer_pck(_strand->get_io_service());
+			_timer = new((BYTE*)this-timerSize) timer_pck(_strand->get_ios_proxy());
 		}
 		else
 		{
-			_timer = new timer_pck(_strand->get_io_service());
+			_timer = new timer_pck(_strand->get_ios_proxy());
 		}
+	}
+}
+
+void my_actor::close_timer()
+{
+	assert_enter();
+	if (_timer)
+	{
+		if (actor_stack_pool::isEnable())
+		{
+			_timer->~timer_pck();
+		} 
+		else
+		{
+			delete _timer;
+		}
+		_timer = NULL;
 	}
 }
 
@@ -1583,8 +1627,8 @@ void my_actor::expires_timer()
 	size_t tid = ++_timer->_timerCount;
 	actor_handle shared_this = shared_from_this();
 	boost::system::error_code ec;
-	_timer->_timer.expires_from_now(boost::chrono::microseconds(_timer->_timerTime.total_microseconds()), ec);
-	_timer->_timer.async_wait(_strand->wrap_post([shared_this, tid](const boost::system::error_code& err)
+	_timer->_timer->expires_from_now(boost::chrono::microseconds(_timer->_timerTime.total_microseconds()), ec);
+	_timer->_timer->async_wait(_strand->wrap_post([shared_this, tid](const boost::system::error_code& err)
 	{
 		timer_pck* timer = shared_this->_timer;
 		if (!err && tid == timer->_timerCount)
@@ -1622,7 +1666,7 @@ void my_actor::cancel_timer()
 		_timer->_timerCount++;
 		clear_function(_timer->_h);
 		boost::system::error_code ec;
-		_timer->_timer.cancel(ec);
+		_timer->_timer->cancel(ec);
 	}
 }
 
@@ -1636,7 +1680,7 @@ void my_actor::suspend_timer()
 		{
 			_timer->_timerCount++;
 			boost::system::error_code ec;
-			_timer->_timer.cancel(ec);
+			_timer->_timer->cancel(ec);
 			_timer->_timerStampEnd = boost::posix_time::microsec_clock::universal_time();
 			auto tt = _timer->_timerStampBegin+_timer->_timerTime;
 			if (_timer->_timerStampEnd > tt)
@@ -1692,7 +1736,7 @@ size_t my_actor::stack_free_space()
 
 void my_actor::msg_agent_to(child_actor_handle& childActor)
 {
-	msg_agent_to<void, void, void, void>(childActor);
+	msg_agent_to<void, void, void, void>(childActor.get_actor());
 }
 
 void my_actor::msg_agent_off()
@@ -1766,11 +1810,17 @@ bool my_actor::timed_wait_msg(int tm, actor_msg_handle<>& amh)
 	return true;
 }
 
-bool my_actor::timed_pump_msg(int tm, const msg_pump<>::handle& pump)
+bool my_actor::timed_pump_msg(int tm, const msg_pump<>::handle& pump, bool checkDis)
 {
 	assert_enter();
 	if (!pump->read_msg())
 	{
+		if (checkDis && pump->isDisconnected())
+		{
+			pump->_waiting = false;
+			throw pump_disconnected_exception();
+		}
+		pump->_checkDis = checkDis;
 		bool timeOut = false;
 		if (tm >= 0)
 		{
@@ -1791,8 +1841,15 @@ bool my_actor::timed_pump_msg(int tm, const msg_pump<>::handle& pump)
 			{
 				cancel_delay_trig();
 			}
+			if (pump->_checkDis)
+			{
+				assert(checkDis);
+				pump->_checkDis = false;
+				throw pump_disconnected_exception();
+			}
 			return true;
 		}
+		pump->_checkDis = false;
 		pump->_waiting = false;
 		return false;
 	}
@@ -1804,9 +1861,9 @@ void my_actor::wait_msg(actor_msg_handle<>& amh)
 	timed_wait_msg(-1, amh);
 }
 
-void my_actor::pump_msg(const msg_pump<>::handle& pump)
+void my_actor::pump_msg(const msg_pump<>::handle& pump, bool checkDis)
 {
-	timed_pump_msg(-1, pump);
+	timed_pump_msg(-1, pump, checkDis);
 }
 
 actor_trig_notifer<> my_actor::make_trig_notifer(actor_trig_handle<>& ath)

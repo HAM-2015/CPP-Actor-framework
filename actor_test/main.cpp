@@ -318,55 +318,61 @@ void actor_test(my_actor* self)
 	child_actor_handle actorMutex2;
 	child_actor_handle actorMutex3;
 	//创建生产者/消费者模型测试
-	{
+	{//模拟消息转发，转发切换
 		actorConsumer = self->create_child_actor(self->self_strand()->clone(), [](my_actor* self)
 		{//消费者
-			auto run = [](my_actor* self)
+			auto agentRun = [](my_actor* self)
 			{
 				self->sleep(10);
 				auto conCmh = self->connect_msg_pump<int, int>();
+				int p0;
+				int id;
+				goto __start;
 				while (true)
 				{
-					int p0;
-					int id;
+					try
+					{
+						self->pump_msg(conCmh, p0, id, true);
+						printf("数据:%d 发送者:%d 接收者:%d\n", p0, id, (int)self->self_id());
+						continue;
+					} catch (my_actor::pump_disconnected_exception) {}
+					printf("接收者:%d 被断开\n", (int)self->self_id());//消息泵被父关闭，抛出异常
+					__start:
 					self->pump_msg(conCmh, p0, id);
-					printf("%d %d %d\n", p0, id, (int)self->self_id());
+					printf("数据:%d 发送者:%d 接收者:%d\n", p0, id, (int)self->self_id());
 				}
 			};
 			auto st = self->self_strand()->clone();
-			child_actor_handle agent1 = self->create_child_actor(st, run, 64 kB);
-			child_actor_handle agent2 = self->create_child_actor(st, run, 64 kB);
+			child_actor_handle agent1 = self->create_child_actor(st, agentRun, 64 kB);
+			child_actor_handle agent2 = self->create_child_actor(st, agentRun, 64 kB);
 			self->child_actor_run(agent1);
 			self->child_actor_run(agent2);
-			auto selfh = self->connect_msg_notifer_to_self<int, int>();
 			while (true)
 			{
-				self->msg_agent_to<int, int>(agent1);
+				self->msg_agent_to<int, int>(agent1);//消息由agent1代理
+				self->sleep(5000);
+				self->msg_agent_to<int, int>(agent2);//断开agent1代理，切换到agent2代理
 				self->sleep(2000);
-				self->msg_agent_to<int, int>(agent2);
-				self->sleep(2100);
-				auto conCmh = self->connect_msg_pump<int, int>();
+				self->msg_agent_off<int, int>();//断开agent2代理
+				self->sleep(2000);
+				auto conCmh = self->connect_msg_pump<int, int>();//停止消息代理，由自己处理
 				for (int i = 0; i < 3; i++)
 				{
 					int p0;
 					int id;
-					if (self->timed_pump_msg(10, conCmh, p0, id))
-					{
-						printf("%d %d %d\n", p0, id, (int)self->self_id());
-					}
+					self->pump_msg(conCmh, p0, id);
+					printf("数据:%d 发送者:%d 接收者:%d\n", p0, id, (int)self->self_id());
 				}
-				selfh(1111, 2222);
 			}
 		});
 		self->child_actor_run(actorConsumer);
-		self->sleep(1000);
-		auto writer = self->connect_msg_notifer_to<int, int>(actorConsumer);
+		auto writer = self->connect_msg_notifer_to<int, int>(actorConsumer);//连接消息到actorConsumer
 		auto test_producer = [writer](my_actor* self)
 		{//生产者
 			for (int i = 0; true; i++)
 			{
 				writer(i, (int)self->self_id());
-				self->sleep(200);
+				self->sleep(2000);
 			}
 		};
 		actorProducer1 = self->create_child_actor(test_producer);
@@ -377,10 +383,10 @@ void actor_test(my_actor* self)
 	{
 		actor_mutex amutex(self->self_strand());
 		auto actorMutexH = [amutex](my_actor* self)
-		{
+		{//模拟actor_mutex互斥特性
 			while (true)
 			{
-				my_actor::quit_guard qg(self);
+				my_actor::quit_guard qg(self);//保护上锁期间不让Actor强制退出
 				actor_lock_guard lg(amutex, self);
 				for (int i = 0; i < 10; i++)
 				{
@@ -392,9 +398,9 @@ void actor_test(my_actor* self)
 		actorMutex1 = self->create_child_actor(actorMutexH);
 		actorMutex2 = self->create_child_actor(actorMutexH);
 		actorMutex3 = self->create_child_actor(actorMutexH);
-		self->child_actor_run(actorMutex1);
-		self->child_actor_run(actorMutex2);
-		self->child_actor_run(actorMutex3);
+		//self->child_actor_run(actorMutex1);//模拟actor_mutex互斥特性
+		//self->child_actor_run(actorMutex2);
+		//self->child_actor_run(actorMutex3);
 	}
 	list<actor_handle> chs;//需要被挂起的Actor对象，可以从下方注释几个测试
 	chs.push_back(actorLeft.get_actor());

@@ -1,26 +1,34 @@
 #include "ios_proxy.h"
 #include "shared_data.h"
 #include "strand_ex.h"
+#include "mem_pool.h"
+#include <boost/asio/high_resolution_timer.hpp>
 #include <memory>
+
+typedef boost::asio::detail::strand_service::strand_impl impl_type;
+typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> timer_type;
 
 ios_proxy::ios_proxy()
 {
 	_opend = false;
 	_runLock = NULL;
-	_implCount = 0;
 	_runCount = 0;
 	_priority = normal;
+	_implPool = create_pool<impl_type>(256, [](void* p)
+	{
+		new(p)impl_type();
+	});
+	_timerPool = create_pool<timer_type>(4096, [this](void* p)
+	{
+		new(p)timer_type(_ios);
+	});
 }
 
 ios_proxy::~ios_proxy()
 {
 	assert(!_opend);
-	boost::lock_guard<boost::mutex> lg(_implMutex);
-	assert(_implPool.size() == _implCount);
-	for (auto it = _implPool.begin(); it != _implPool.end(); it++)
-	{
-		delete (boost::asio::detail::strand_service::strand_impl*)*it;
-	}
+	delete (mem_pool_base<impl_type>*)_implPool;
+	delete (mem_pool_base<timer_type>*)_timerPool;
 }
 
 void ios_proxy::run(size_t threadNum)
@@ -189,22 +197,20 @@ ios_proxy::operator boost::asio::io_service&() const
 
 void* ios_proxy::getImpl()
 {
-	_implMutex.lock();
-	if (_implPool.empty())
-	{
-		assert(_implCount < 4096);
-		_implCount++;
-		_implMutex.unlock();
-		return new boost::asio::detail::strand_service::strand_impl;
-	}
-	void* res = _implPool.front();
-	_implPool.pop_front();
-	_implMutex.unlock();
-	return res;
+	return ((mem_pool_base<impl_type>*)_implPool)->new_();
 }
 
 void ios_proxy::freeImpl(void* impl)
 {
-	boost::lock_guard<boost::mutex> lg(_implMutex);
-	_implPool.push_back(impl);
+	((mem_pool_base<impl_type>*)_implPool)->delete_(impl);
+}
+
+void* ios_proxy::getTimer()
+{
+	return ((mem_pool_base<timer_type>*)_timerPool)->new_();
+}
+
+void ios_proxy::freeTimer(void* timer)
+{
+	((mem_pool_base<timer_type>*)_timerPool)->delete_(timer);
 }

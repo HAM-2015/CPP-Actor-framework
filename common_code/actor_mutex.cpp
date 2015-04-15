@@ -149,7 +149,7 @@ void actor_mutex::reset_mutex(my_actor* self)
 //////////////////////////////////////////////////////////////////////////
 
 actor_lock_guard::actor_lock_guard(const actor_mutex& amutex, my_actor* self)
-:_amutex(amutex), _self(self)
+:_amutex(amutex), _self(self), _isUnlock(false)
 {
 	_amutex.lock(_self);
 }
@@ -162,7 +162,8 @@ actor_lock_guard::actor_lock_guard(const actor_lock_guard&)
 
 actor_lock_guard::~actor_lock_guard()
 {
-	if (!_self->is_quited())
+	assert(!_self->is_quited());
+	if (!_isUnlock)
 	{
 		_amutex.unlock(_self);
 	}
@@ -171,4 +172,16 @@ actor_lock_guard::~actor_lock_guard()
 void actor_lock_guard::operator=(const actor_lock_guard&)
 {
 
+}
+
+void actor_lock_guard::unlock()
+{
+	_isUnlock = true;
+	_amutex.unlock(_self);
+}
+
+void actor_lock_guard::lock()
+{
+	_isUnlock = false;
+	_amutex.lock(_self);
 }
