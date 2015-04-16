@@ -26,10 +26,8 @@ actor_stack_pool::actor_stack_pool()
 {
 	_exit = false;
 	_clearWait = false;
-	_isBack = true;
 	_stackCount = 0;
 	_stackTotalSize = 0;
-	_nextPck._stack.sp = NULL;
 	boost::thread rh(&actor_stack_pool::clearThread, this);
 	_clearThread.swap(rh);
 }
@@ -90,10 +88,6 @@ stack_pck actor_stack_pool::getStack( size_t size )
 		{
 			stack_pck r = pool._pool.back();
 			pool._pool.pop_back();
-			if (!_actorStackPool->_isBack)
-			{
-				_actorStackPool->_isBack = (r._stack.sp == _actorStackPool->_nextPck._stack.sp);
-			}
 			pool._mutex.unlock();
 			r._tick = 0;
 			CHECK_STACK(r);
@@ -136,46 +130,52 @@ void actor_stack_pool::clearThread()
 				break;
 			}
 			_clearWait = true;
-			if (_clearVar.timed_wait(ul, boost::posix_time::millisec(STACK_MIN_CLEAR_CYCLE*1000+123)))
+			if (_clearVar.timed_wait(ul, boost::posix_time::seconds(STACK_MIN_CLEAR_CYCLE)))
 			{
 				break;
 			}
 			_clearWait = false;
 		}
+		size_t freeCount;
+		goto _checkFree;
+		do
 		{
+			{
+				boost::unique_lock<boost::mutex> ul(_clearMutex);
+				if (_exit)
+				{
+					break;
+				}
+				_clearWait = true;
+				if (_clearVar.timed_wait(ul, boost::posix_time::millisec(100)))
+				{
+					break;
+				}
+				_clearWait = false;
+			}
+			_checkFree:;
+			freeCount = 0;
 			int extTick = get_tick_s();
 			for (int i = 0; i < 256; i++)
 			{
 				_stackPool[i]._mutex.lock();
-				_nextPck._stack.sp = NULL;
-				auto it = _stackPool[i]._pool.begin();
-				_isBack = _stackPool[i]._pool.end() == it;
-				while (!_isBack)
+				if (!_stackPool[i]._pool.empty() && extTick - _stackPool[i]._pool.front()._tick >= STACK_MIN_CLEAR_CYCLE)
 				{
-					if (extTick - it->_tick >= STACK_MIN_CLEAR_CYCLE)
-					{
-						stack_pck pck = *it;
-						_stackPool[i]._pool.erase(it++);
-						_isBack = _stackPool[i]._pool.end() == it;
-						if (!_isBack)
-						{
-							_nextPck = *it;
-						}
-						_stackPool[i]._mutex.unlock();
-						CHECK_STACK(pck);
-						free(((char*)pck._stack.sp)-pck._stack.size);
-						_stackCount--;
-						_stackTotalSize -= pck._stack.size;
+					stack_pck pck = _stackPool[i]._pool.front();
+					_stackPool[i]._pool.pop_front();
+					_stackPool[i]._mutex.unlock();
 
-						_stackPool[i]._mutex.lock();
-					}
-					else
-					{
-						break;
-					}
+					CHECK_STACK(pck);
+					free(((char*)pck._stack.sp) - pck._stack.size);
+					_stackCount--;
+					_stackTotalSize -= pck._stack.size;
+					freeCount++;
 				}
-				_stackPool[i]._mutex.unlock();
+				else
+				{
+					_stackPool[i]._mutex.unlock();
+				}
 			}
-		}
+		} while (freeCount);
 	}
 }

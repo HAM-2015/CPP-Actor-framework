@@ -40,8 +40,6 @@ private:
 private:
 	bool _exit;
 	bool _clearWait;
-	bool _isBack;
-	stack_pck _nextPck;
 	stack_pool_pck _stackPool[256];
 	boost::mutex _clearMutex;
 	boost::thread _clearThread;

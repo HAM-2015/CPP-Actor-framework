@@ -102,7 +102,8 @@ public:
 	/*!
 	@brief 发送一个执行函数到MFC消息队列中执行
 	*/
-	void post(const std::function<void ()>& h)
+	template <typename H>
+	void post(const H& h)
 	{
 		boost::shared_lock<boost::shared_mutex> sl(_postMutex);
 		if (!_isClosed)
@@ -117,7 +118,8 @@ public:
 	/*!
 	@brief 发送一个执行函数到MFC消息队列中执行，完成后返回
 	*/
-	void send(my_actor* self, const std::function<void ()>& h)
+	template <typename H>
+	void send(my_actor* self, const H& h)
 	{
 		assert(boost::this_thread::get_id() != thread_id());
 		self->trig([&, this](const trig_once_notifer<>& cb)
@@ -141,8 +143,8 @@ public:
 	/*!
 	@brief 发送一个带返回值函数到MFC消息队列中执行，完成后返回
 	*/
-	template <typename T>
-	T send(my_actor* self, const std::function<T ()>& h)
+	template <typename T, typename H>
+	T send(my_actor* self, const H& h)
 	{
 		assert(boost::this_thread::get_id() != thread_id());
 		return self->trig<T>([&, this](const trig_once_notifer<T>& cb)

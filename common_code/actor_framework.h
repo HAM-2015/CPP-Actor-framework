@@ -3060,6 +3060,11 @@ public:
 	bool is_quited();
 
 	/*!
+	@brief lock_quit后检测是否收到退出消息
+	*/
+	bool quit_msg();
+
+	/*!
 	@brief 锁定当前Actor，暂时不让强制退出
 	*/
 	void lock_quit();

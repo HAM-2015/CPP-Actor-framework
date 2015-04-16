@@ -1147,6 +1147,12 @@ bool my_actor::is_quited()
 	return _quited;
 }
 
+bool my_actor::quit_msg()
+{
+	assert_enter();
+	return _notifyQuited;
+}
+
 void my_actor::lock_quit()
 {
 	assert_enter();

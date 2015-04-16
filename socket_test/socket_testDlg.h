@@ -69,7 +69,7 @@ protected:
 	afx_msg void OnBnClickedListen();
 	afx_msg void OnBnClickedStopLst();
 	afx_msg void OnBnClickedClear();
-	void showClientMsg(shared_data msg);
+	void showClientMsg(const char* msg);
 	void showSessionNum(int n);
 	BIND_MFC_RUN(CDialogEx);
 	DECLARE_MESSAGE_MAP()

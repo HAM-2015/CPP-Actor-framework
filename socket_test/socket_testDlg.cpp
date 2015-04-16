@@ -121,11 +121,11 @@ BOOL Csocket_testDlg::OnInitDialog()
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
-void Csocket_testDlg::showClientMsg(shared_data msg)
+void Csocket_testDlg::showClientMsg(const char* msg)
 {
 	int nLength = _outputEdit.GetWindowTextLength();
 	_outputEdit.SetSel(nLength, nLength);
-	_outputEdit.ReplaceSel(msg->c_str());
+	_outputEdit.ReplaceSel(msg);
 	_outputEdit.ReplaceSel("\n");
 }
 
@@ -173,7 +173,6 @@ void Csocket_testDlg::OnBnClickedClear()
 void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param> param)
 {
 	actor_trig_handle<boost::system::error_code> ath;
-	post(boost::bind(&Csocket_testDlg::showClientMsg, this, msg_data::create("连接中...")));
 	param->_clientSocket->async_connect(param->_ip.c_str(), param->_port, self->make_trig_notifer(ath));
 	actor_handle connecting = create_mfc_actor(_ios, [this](my_actor* self)
 	{//让“连接”按钮在连接中闪烁
@@ -196,13 +195,14 @@ void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param>
 	boost::system::error_code err;
 	if (self->timed_wait_trig(param->_tm, ath, err) && !err && param->_clientSocket->no_delay())
 	{
+		self->close_timer();
 		self->actor_force_quit(connecting);
 		send(self, [this]()
 		{
 			this->GetDlgItem(IDC_BUTTON1)->EnableWindow(FALSE);
 			this->GetDlgItem(IDC_BUTTON1)->SetWindowText("连接");
+			this->showClientMsg("连接成功");
 		});
-		post(boost::bind(&Csocket_testDlg::showClientMsg, this, msg_data::create("连接成功")));
 		actor_msg_handle<shared_data> amh;
 		child_actor_handle readActor = self->create_child_actor([this, &amh](my_actor* self)
 		{
@@ -214,7 +214,8 @@ void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param>
 				{
 					break;
 				}
-				post(boost::bind(&Csocket_testDlg::showClientMsg, this, msg));
+				auto this_ = this;
+				this->send(self, [this_, msg](){this_->showClientMsg(msg->c_str()); });
 			}
 			self->close_msg_notifer(amh);
 		});
@@ -236,7 +237,7 @@ void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param>
 		self->child_actor_wait_quit(readActor);
 		self->child_actor_force_quit(writerActor);
 		textio->close();
-		post(boost::bind(&Csocket_testDlg::showClientMsg, this, msg_data::create("断开连接")));
+		send(self, [this](){this->showClientMsg("断开连接"); });
 	} 
 	else
 	{
@@ -245,8 +246,8 @@ void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param>
 		{
 			this->GetDlgItem(IDC_BUTTON1)->EnableWindow(FALSE);
 			this->GetDlgItem(IDC_BUTTON1)->SetWindowText("连接");
+			this->showClientMsg("连接失败");
 		});
-		post(boost::bind(&Csocket_testDlg::showClientMsg, this, msg_data::create("连接失败")));
 		param->_clientSocket->close();
 	}
 	_uiCMD(ui_disconnect);
@@ -290,12 +291,17 @@ void Csocket_testDlg::serverActor(my_actor* self, std::shared_ptr<server_param> 
 	//创建会话关闭响应器
 	list<std::shared_ptr<session_pck> > sessList;
 	actor_msg_handle<list<std::shared_ptr<session_pck> >::iterator> sessDissonnLst;
-	child_actor_handle sessMngActor = self->create_child_actor([&](my_actor* self)
+	child_actor_handle sessMngActor = self->create_child_actor([&, this](my_actor* self)
 	{
 		while (true)
 		{
 			sessList.erase(self->wait_msg(sessDissonnLst));
-			post(boost::bind(&Csocket_testDlg::showSessionNum, this, sessList.size()));
+			auto this_ = this;
+			size_t size = sessList.size();
+			this->send(self, [this_, size]()
+			{
+				this_->showSessionNum(size);
+			});
 		}
 		self->close_msg_notifer(sessDissonnLst);
 	});
@@ -321,10 +327,18 @@ void Csocket_testDlg::serverActor(my_actor* self, std::shared_ptr<server_param> 
 			std::shared_ptr<session_pck> newSess(new session_pck);
 			newSess->_socket = newSocket;
 			sessList.push_front(newSess);
-			post(boost::bind(&Csocket_testDlg::showSessionNum, this, sessList.size()));
+			size_t size = sessList.size();
+			this->send(self, [this, size]()
+			{
+				this->showSessionNum(size);
+			});
 			newSess->_sessionDlg = create_mfc_actor(boost::bind(&Csocket_testDlg::newSession, this, _1, newSess));
 			newSess->_closeNtf = self->connect_msg_notifer_to(newSess->_sessionDlg);
-			newSess->_sessionDlg->append_quit_callback(boost::bind((std::function<void(list<std::shared_ptr<session_pck> >::iterator)>)sessDissonnNtf, sessList.begin()));
+			auto nit = sessList.begin();
+			newSess->_sessionDlg->append_quit_callback([&sessDissonnNtf, nit](bool)
+			{
+				sessDissonnNtf(nit);
+			});
 			newSess->_sessionDlg->notify_run();
 		}
 		else

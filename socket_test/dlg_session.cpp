@@ -66,20 +66,20 @@ void dlg_session::OnCancel()
 	_closeNtf();
 }
 
-void dlg_session::showClientMsg(shared_data msg)
+void dlg_session::showClientMsg(const char* msg)
 {
 	if (!_exit)
 	{
 		int nLength = _outputEdit.GetWindowTextLength();
 		_outputEdit.SetSel(nLength, nLength);
-		_outputEdit.ReplaceSel(msg->c_str());
+		_outputEdit.ReplaceSel(msg);
 		_outputEdit.ReplaceSel("\n");
 	}
 }
 
 void dlg_session::sessionActor(my_actor* self)
 {
-	post(boost::bind(&dlg_session::showClientMsg, this, msg_data::create(_socket->ip())));
+	send(self, [this](){this->showClientMsg(_socket->ip().c_str()); });
 	child_actor_handle lstClose = self->create_child_actor([&, this](my_actor* self)
 	{
 		auto amh = self->connect_msg_pump();
@@ -114,21 +114,21 @@ void dlg_session::sessionActor(my_actor* self)
 		{
 			break;
 		}
-		post(boost::bind(&dlg_session::showClientMsg, this, msg));
+		send(self, [this, msg](){this->showClientMsg(msg->c_str()); });
 	}
 	self->child_actor_force_quit(wd);
 	self->close_msg_notifer(amh);
-	post(boost::bind(&dlg_session::showClientMsg, this, msg_data::create("连接断开")));
 	send(self, [this]()
 	{
 		this->GetDlgItem(IDC_BUTTON3)->EnableWindow(FALSE);
+		this->showClientMsg("连接断开");
 	});
 	self->child_actor_wait_quit(lstClose);
 	send(self, [this]()
 	{
 		this->mfc_close();
-		_closeCallback();
 	});
+	_closeCallback();
 }
 
 void dlg_session::OnBnClickedSendMsg()

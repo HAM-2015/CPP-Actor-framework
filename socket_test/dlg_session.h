@@ -24,7 +24,7 @@ protected:
 
 	afx_msg void OnBnClickedSendMsg();
 	afx_msg void OnBnClickedClear();
-	void showClientMsg(shared_data msg);
+	void showClientMsg(const char* msg);
 	BIND_MFC_RUN(CDialogEx)
 	DECLARE_MESSAGE_MAP()
 public:
