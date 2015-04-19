@@ -44,8 +44,6 @@ void ios_proxy::run(size_t threadNum)
 		size_t rc = 0;
 		std::shared_ptr<boost::mutex> blockMutex(new boost::mutex);
 		std::shared_ptr<boost::condition_variable> blockConVar(new boost::condition_variable);
-		std::weak_ptr<boost::mutex> weakMutex = blockMutex;
-		std::weak_ptr<boost::condition_variable> weakConVar = blockConVar;
 		boost::unique_lock<boost::mutex> ul(*blockMutex);
 		for (size_t i = 0; i < threadNum; i++)
 		{
@@ -56,16 +54,16 @@ void ios_proxy::run(size_t threadNum)
 					{
 						SetThreadPriority(GetCurrentThread(), _priority);
 						DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &_handleList[i], 0, FALSE, DUPLICATE_SAME_ACCESS);
-						auto blockMutex = weakMutex.lock();
-						auto blockConVar = weakConVar.lock();
-						boost::unique_lock<boost::mutex> ul(*blockMutex);
+						auto lockMutex = blockMutex;
+						auto lockConVar = blockConVar;
+						boost::unique_lock<boost::mutex> ul(*lockMutex);
 						if (threadNum == ++rc)
 						{
-							blockConVar->notify_all();
+							lockConVar->notify_all();
 						}
 						else
 						{
-							blockConVar->wait(ul);
+							lockConVar->wait(ul);
 						}
 					}
 					_runCount += _ios.run();

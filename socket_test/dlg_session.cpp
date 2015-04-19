@@ -114,7 +114,7 @@ void dlg_session::sessionActor(my_actor* self)
 		{
 			break;
 		}
-		send(self, [this, msg](){this->showClientMsg(msg->c_str()); });
+		send(self, [this, &msg](){this->showClientMsg(msg->c_str()); });
 	}
 	self->child_actor_force_quit(wd);
 	self->close_msg_notifer(amh);

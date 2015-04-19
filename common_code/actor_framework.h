@@ -2646,19 +2646,15 @@ public:
 		if (childPck->_isHead)
 		{
 			assert(msgPck->_next != childPck);
-			if (childPck->_msgPool)
+			auto childPool = childPck->_msgPool;
+			if (!childPool)
 			{
-				auto childPool = childPck->_msgPool;
-				update_msg_list<T0, T1, T2, T3>(childPck, childPool);
-				childPck->unlock(this);
-				msgPck->unlock(this);
-				return post_actor_msg<T0, T1, T2, T3>(childPool);
+				childPool = pool_type::make(buddyActor->self_strand(), fixedSize);
 			}
-			auto newPool = pool_type::make(buddyActor->self_strand(), fixedSize);
-			update_msg_list<T0, T1, T2, T3>(childPck, newPool);
+			update_msg_list<T0, T1, T2, T3>(childPck, childPool);
 			childPck->unlock(this);
 			msgPck->unlock(this);
-			return post_actor_msg<T0, T1, T2, T3>(newPool);
+			return post_actor_msg<T0, T1, T2, T3>(childPool);
 		}
 		childPck->unlock(this);
 		msgPck->unlock(this);
@@ -2829,8 +2825,8 @@ public:
 			msgPck->_next->lock(this);
 			clear_msg_list<T0, T1, T2, T3>(msgPck->_next);
 			msgPck->_next->unlock(this);
+			msgPck->_next.reset();
 		}
-		msgPck->_next.reset();
 		if (!msgPck->_msgPump)
 		{
 			msgPck->_msgPump = pump_type::make(shared_from_this());

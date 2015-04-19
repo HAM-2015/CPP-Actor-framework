@@ -215,7 +215,7 @@ void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param>
 					break;
 				}
 				auto this_ = this;
-				this->send(self, [this_, msg](){this_->showClientMsg(msg->c_str()); });
+				this->send(self, [this_, &msg](){this_->showClientMsg(msg->c_str()); });
 			}
 			self->close_msg_notifer(amh);
 		});

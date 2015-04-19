@@ -7,7 +7,6 @@ class msg_queue
 	struct node 
 	{
 		BYTE _data[sizeof(T)];
-		node* _previous;
 		node* _next;
 	};
 
@@ -94,8 +93,8 @@ public:
 		:_alloc(poolSize)
 	{
 		_size = 0;
-		_head._next = &_head;
-		_head._previous = &_head;
+		_head._next = NULL;
+		_tail = &_head;
 	}
 
 	~msg_queue()
@@ -119,23 +118,25 @@ public:
 
 	T& front()
 	{
-		assert(_size);
+		assert(_size && _head._next);
 		return *(T*)_head._next->_data;
 	}
 
 	T& back()
 	{
 		assert(_size);
-		return *(T*)_head._previous->_data;
+		return *(T*)_tail->_data;
 	}
 
 	void pop_front()
 	{
 		assert(_size);
-		_size--;
+		if (0 == --_size)
+		{
+			_tail = &_head;
+		}
 		node* frontNode = _head._next;
 		_head._next = frontNode->_next;
-		_head._next->_previous = frontNode->_previous;
 		((T*)frontNode->_data)->~T();
 		_alloc.deallocate(frontNode);
 	}
@@ -153,7 +154,7 @@ public:
 	void clear()
 	{
 		node* pIt = _head._next;
-		while (pIt != &_head)
+		while (pIt)
 		{
 			_size--;
 			((T*)pIt->_data)->~T();
@@ -175,15 +176,14 @@ private:
 	node* new_back()
 	{
 		node* newNode = _alloc.allocate();
-		node* endNode = _head._previous;
-		newNode->_next = endNode->_next;
-		newNode->_previous = endNode;
-		endNode->_next = newNode;
-		newNode->_next->_previous = newNode;
+		_tail->_next = newNode;
+		_tail = newNode;
+		_tail->_next = NULL;
 		return newNode;
 	}
 private:
 	node _head;
+	node* _tail;
 	size_t _size;
 	mem_alloc _alloc;
 };
