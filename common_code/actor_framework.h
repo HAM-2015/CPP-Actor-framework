@@ -2344,33 +2344,45 @@ private:
 	template <typename T0, typename T1, typename T2, typename T3>
 	void clear_msg_list(const std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>>& msgPck)
 	{
-		check_stack();
-		if (msgPck->_next)
+		std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>> uStack[16];
+		size_t stackl = 0;
+		auto pckIt = msgPck;
+		while (true)
 		{
-			msgPck->_next->lock(this);
-			clear_msg_list<T0, T1, T2, T3>(msgPck->_next);
-			msgPck->_next->unlock(this);
-		}
-		else
-		{
-			if (msgPck->_msgPool)
+			if (pckIt->_next)
 			{
-				auto& msgPool_ = msgPck->_msgPool;
-				send(msgPool_->_strand, [&msgPool_]()
-				{
-					msgPool_->disconnect();
-				});
+				pckIt->_msgPool.reset();
+				pckIt = pckIt->_next;
+				pckIt->lock(this);
+				assert(stackl < 15);
+				uStack[stackl++] = pckIt;
 			}
-			if (msgPck->_msgPump)
+			else
 			{
-				auto& msgPump_ = msgPck->_msgPump;
-				send(msgPump_->_strand, [&msgPump_]()
+				if (pckIt->_msgPool)
 				{
-					msgPump_->clear();
-				});
+					auto& msgPool_ = pckIt->_msgPool;
+					send(msgPool_->_strand, [&msgPool_]()
+					{
+						msgPool_->disconnect();
+					});
+					pckIt->_msgPool.reset();
+				}
+				if (pckIt->_msgPump)
+				{
+					auto& msgPump_ = pckIt->_msgPump;
+					send(msgPump_->_strand, [&msgPump_]()
+					{
+						msgPump_->clear();
+					});
+				}
+				while (stackl)
+				{
+					uStack[--stackl]->unlock(this);
+				}
+				return;
 			}
 		}
-		msgPck->_msgPool.reset();
 	}
 
 	template <typename T0, typename T1, typename T2, typename T3>
@@ -2378,50 +2390,62 @@ private:
 	{
 		typedef typename msg_pool<T0, T1, T2, T3>::pump_handler pump_handler;
 
-		check_stack();
-		if (msgPck->_next)
+		std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>> uStack[16];
+		size_t stackl = 0;
+		auto pckIt = msgPck;
+		while (true)
 		{
-			msgPck->_next->lock(this);
-			update_msg_list<T0, T1, T2, T3>(msgPck->_next, newPool);
-			msgPck->_next->unlock(this);
-		}
-		else
-		{
-			if (msgPck->_msgPool)
+			if (pckIt->_next)
 			{
-				auto& msgPool_ = msgPck->_msgPool;
-				send(msgPool_->_strand, [&msgPool_]()
-				{
-					msgPool_->disconnect();
-				});
-			}
-			if (msgPck->_msgPump)
+				pckIt->_msgPool = newPool;
+				pckIt = pckIt->_next;
+				pckIt->lock(this);
+				assert(stackl < 15);
+				uStack[stackl++] = pckIt;
+			} 
+			else
 			{
-				auto& msgPump_ = msgPck->_msgPump;
-				if (newPool)
+				if (pckIt->_msgPool)
 				{
-					auto ph = send<pump_handler>(newPool->_strand, [&newPool, &msgPump_]()->pump_handler
+					auto& msgPool_ = pckIt->_msgPool;
+					send(msgPool_->_strand, [&msgPool_]()
 					{
-						return newPool->connect_pump(msgPump_);
+						msgPool_->disconnect();
 					});
-					send(msgPump_->_strand, [&msgPump_, &ph]()
+				}
+				pckIt->_msgPool = newPool;
+				if (pckIt->_msgPump)
+				{
+					auto& msgPump_ = pckIt->_msgPump;
+					if (newPool)
 					{
-						if (msgPump_->_hostActor && !msgPump_->_hostActor->is_quited())
+						auto ph = send<pump_handler>(newPool->_strand, [&newPool, &msgPump_]()->pump_handler
 						{
-							msgPump_->connect(ph);
-						}
-					});
-				}
-				else
-				{
-					send(msgPump_->_strand, [&msgPump_]()
+							return newPool->connect_pump(msgPump_);
+						});
+						send(msgPump_->_strand, [&msgPump_, &ph]()
+						{
+							if (msgPump_->_hostActor && !msgPump_->_hostActor->is_quited())
+							{
+								msgPump_->connect(ph);
+							}
+						});
+					}
+					else
 					{
-						msgPump_->clear();
-					});
+						send(msgPump_->_strand, [&msgPump_]()
+						{
+							msgPump_->clear();
+						});
+					}
 				}
+				while (stackl)
+				{
+					uStack[--stackl]->unlock(this);
+				}
+				return;
 			}
 		}
-		msgPck->_msgPool = newPool;
 	}
 private:
 	/*!
