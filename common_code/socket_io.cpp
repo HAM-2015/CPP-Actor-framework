@@ -15,7 +15,7 @@ socket_io::~socket_io()
 
 socket_handle socket_io::create(boost::asio::io_service& ios)
 {
-	return socket_handle(new socket_io(ios));
+	return socket_handle(new socket_io(ios), [](socket_io* p){delete p; });
 }
 
 void socket_io::close()

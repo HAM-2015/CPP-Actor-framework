@@ -58,6 +58,10 @@ catch (my_actor::force_quit_exception& e)\
 #define kB	*1024
 #define DEFAULT_STACKSIZE	64 kB
 
+//检测 pump_msg 是否有 pump_disconnected_exception 异常抛出，因为在 catch 内部不能安全的进行coro切换
+#define TRY_PUMP bool __catch_pump_disconnected_exception = false;try
+#define CATCH_PUMP_DISCONNECTED catch (my_actor::pump_disconnected_exception) { __catch_pump_disconnected_exception = true; } if (__catch_pump_disconnected_exception)
+
 template <typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
 struct msg_param
 {
@@ -329,6 +333,7 @@ public:
 protected:
 	void run_one();
 	void set_actor(const actor_handle& hostActor);
+	std::shared_ptr<bool> new_bool();
 protected:
 	bool _waiting;
 	shared_strand _strand;
@@ -480,7 +485,7 @@ private:
 	{
 		close();
 		set_actor(hostActor);
-		_closed = std::shared_ptr<bool>(new bool(false));
+		_closed = new_bool();
 		_waiting = false;
 		return msg_notifer(this);
 	}
@@ -556,7 +561,7 @@ private:
 	{
 		close();
 		set_actor(hostActor);
-		_closed = std::shared_ptr<bool>(new bool(false));
+		_closed = new_bool();
 		_waiting = false;
 		return msg_notifer(this);
 	}
@@ -745,7 +750,7 @@ private:
 	{
 		close();
 		set_actor(hostActor);
-		_closed = std::shared_ptr<bool>(new bool(false));
+		_closed = new_bool();
 		_waiting = false;
 		_hasMsg = false;
 		return msg_notifer(this);
@@ -830,7 +835,7 @@ private:
 	{
 		close();
 		set_actor(hostActor);
-		_closed = std::shared_ptr<bool>(new bool(false));
+		_closed = new_bool();
 		_waiting = false;
 		_hasMsg = false;
 		return msg_notifer(this);
@@ -927,12 +932,11 @@ public:
 	typedef msg_pump* handle;
 private:
 	msg_pump(){}
-public:
 	~msg_pump(){}
 private:
 	static std::shared_ptr<msg_pump> make(const actor_handle& hostActor)
 	{
-		std::shared_ptr<msg_pump> res(new msg_pump());
+		std::shared_ptr<msg_pump> res(new msg_pump(), [](msg_pump* p){delete p; });
 		res->_weakThis = res;
 		res->_hasMsg = false;
 		res->_waiting = false;
@@ -1150,7 +1154,7 @@ class msg_pool : public msg_pool_base
 	friend my_actor;
 	friend msg_pump_type;
 	friend post_type;
-public:
+private:
 	msg_pool(size_t fixedSize)
 		:_msgBuff(fixedSize)
 	{
@@ -1163,7 +1167,7 @@ public:
 private:
 	static std::shared_ptr<msg_pool> make(shared_strand strand, size_t fixedSize)
 	{
-		std::shared_ptr<msg_pool> res(new msg_pool(fixedSize));
+		std::shared_ptr<msg_pool> res(new msg_pool(fixedSize), [](msg_pool* p){delete p; });
 		res->_weakThis = res;
 		res->_strand = strand;
 		res->_waiting = false;
@@ -1348,14 +1352,13 @@ private:
 	typedef std::shared_ptr<msg_pool> handle;
 
 	msg_pool(shared_strand strand)
-		:msg_pool_void(strand)
-	{
+		:msg_pool_void(strand){}
 
-	}
+	~msg_pool(){}
 
 	static handle make(shared_strand strand, size_t fixedSize)
 	{
-		handle res(new msg_pool(strand));
+		handle res(new msg_pool(strand), [](msg_pool* p){delete p; });
 		res->_weakThis = res;
 		return res;
 	}
@@ -1369,14 +1372,13 @@ public:
 	typedef msg_pump* handle;
 private:
 	msg_pump(const actor_handle& hostActor)
-		:msg_pump_void(hostActor)
-	{
+		:msg_pump_void(hostActor){}
 
-	}
+	~msg_pump(){}
 
 	static std::shared_ptr<msg_pump> make(const actor_handle& hostActor)
 	{
-		std::shared_ptr<msg_pump> res(new msg_pump(hostActor));
+		std::shared_ptr<msg_pump> res(new msg_pump(hostActor), [](msg_pump* p){delete p; });
 		res->_weakThis = res;
 		return res;
 	}
@@ -1572,6 +1574,18 @@ class my_actor
 		std::function<void ()> _h;
 	};
 
+	template <typename T = void>
+	struct my_size_of
+	{
+		enum{ size = sizeof(T) };
+	};
+
+	template <>
+	struct my_size_of<void>
+	{
+		enum{ size = -1 };
+	};
+
 	struct msg_pool_status 
 	{
 		struct pck_base 
@@ -1582,6 +1596,7 @@ class my_actor
 			virtual ~pck_base(){};
 
 			virtual void close() = 0;
+			virtual bool cmp_size(const size_t s0, const size_t s1, const size_t s2, const size_t s3) = 0;
 
 			void lock(my_actor* self)
 			{
@@ -1610,6 +1625,11 @@ class my_actor
 				{
 					_msgPump->close();
 				}
+			}
+
+			bool cmp_size(const size_t s0, const size_t s1, const size_t s2, const size_t s3)
+			{
+				return 0 == (((my_size_of<T0>::size ^ s0) | (my_size_of<T1>::size ^ s1)) | ((my_size_of<T2>::size ^ s2) | (my_size_of<T3>::size ^ s3)));
 			}
 
 			std::shared_ptr<msg_pool<T0, T1, T2, T3> > _msgPool;
@@ -1679,7 +1699,6 @@ private:
 	my_actor();
 	my_actor(const my_actor&);
 	my_actor& operator =(const my_actor&);
-public:
 	~my_actor();
 public:
 	/*!
@@ -2308,6 +2327,9 @@ public:
 
 	__yield_interrupt void wait_trig(actor_trig_handle<>& ath);
 private:
+	/*!
+	@brief 寻找出与模板参数类型匹配的消息池
+	*/
 	template <typename T0, typename T1, typename T2, typename T3>
 	std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3> > msg_pool_pck(bool make = true)
 	{
@@ -2318,6 +2340,7 @@ private:
 		{
 			if (!msgPumpList.empty())
 			{
+				//没有参数的消息，不需要匹配类型
 				return std::static_pointer_cast<pck_type>(msgPumpList.front());
 			}
 		}
@@ -2325,10 +2348,15 @@ private:
 		{
 			for (auto it = msgPumpList.begin(); it != msgPumpList.end(); it++)
 			{
-				auto pool = std::dynamic_pointer_cast<pck_type>(*it);
-				if (pool)
+				//先匹配参数类型大小是否一样
+				if ((*it)->cmp_size(my_size_of<T0>::size, my_size_of<T1>::size, my_size_of<T2>::size, my_size_of<T3>::size))
 				{
-					return pool;
+					//然后动态类型测试
+					auto pool = std::dynamic_pointer_cast<pck_type>(*it);
+					if (pool)
+					{
+						return pool;
+					}
 				}
 			}
 		}
@@ -2341,6 +2369,9 @@ private:
 		return std::shared_ptr<pck_type>();
 	}
 
+	/*!
+	@brief 清除消息代理链
+	*/
 	template <typename T0, typename T1, typename T2, typename T3>
 	void clear_msg_list(const std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>>& msgPck)
 	{
@@ -2385,6 +2416,9 @@ private:
 		}
 	}
 
+	/*!
+	@brief 更新消息代理链
+	*/
 	template <typename T0, typename T1, typename T2, typename T3>
 	void update_msg_list(const std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>>& msgPck, const std::shared_ptr<msg_pool<T0, T1, T2, T3>>& newPool)
 	{
@@ -3205,6 +3239,7 @@ private:
 	msg_pool_status _msgPoolStatus;//消息池列表
 	timer_pck* _timer;///<提供延时功能
 	std::weak_ptr<my_actor> _weakThis;
+	static std::shared_ptr<shared_obj_pool_base<bool>> _sharedBoolPool;
 };
 
 #endif

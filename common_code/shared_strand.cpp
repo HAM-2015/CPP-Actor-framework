@@ -16,7 +16,7 @@ boost_strand::~boost_strand()
 
 shared_strand boost_strand::create( ios_proxy& iosProxy )
 {
-	shared_strand res(new boost_strand);
+	shared_strand res(new boost_strand, [](boost_strand* p){delete p; });
 	res->_iosProxy = &iosProxy;
 	res->_strand = new strand_type(iosProxy);
 	return res;

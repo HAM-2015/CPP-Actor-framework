@@ -28,12 +28,12 @@ msg_data::~msg_data()
 
 shared_data msg_data::create( size_t s )
 {
-	return shared_data(new msg_data(s));
+	return shared_data(new msg_data(s), [](msg_data* p){delete p; });
 }
 
 shared_data msg_data::create( const void* bf, size_t s )
 {
-	shared_data r = shared_data(new msg_data(s));
+	shared_data r = shared_data(new msg_data(s), [](msg_data* p){delete p; });
 	memcpy(r->_buff, bf, s);
 	return r;
 }
@@ -64,7 +64,7 @@ shared_data msg_data::create(size_t s, const std::function<void(msg_data*)>& del
 
 shared_data msg_data::create_ref(const void* bf, size_t s)
 {
-	shared_data r = shared_data(new msg_data(0));
+	shared_data r = shared_data(new msg_data(0), [](msg_data* p){delete p; });
 	r->_buff = (char*)bf;
 	r->_size = s;
 	r->_isRef = true;

@@ -11,8 +11,8 @@ class mfc_strand: public boost_strand
 {
 private:
 	mfc_strand();
-public:
 	~mfc_strand();
+public:
 	static shared_strand create(ios_proxy& iosProxy, bind_mfc_run* mfc);
 	static shared_strand create(bind_mfc_run* mfc);
 private:

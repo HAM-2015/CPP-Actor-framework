@@ -11,7 +11,7 @@
 */
 class stream_io_base
 {
-public:
+protected:
 	stream_io_base(boost::asio::io_service& ios)
 		:_ios(ios) {}
 

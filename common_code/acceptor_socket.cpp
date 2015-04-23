@@ -15,7 +15,7 @@ accept_handle acceptor_socket::create(shared_strand strand, size_t port, const s
 {
 	try
 	{
-		accept_handle shared_accept(new acceptor_socket());
+		accept_handle shared_accept(new acceptor_socket(), [](acceptor_socket* p){delete p; });
 		shared_accept->_acceptor = new boost::asio::ip::tcp::acceptor(strand->get_io_service(),
 			boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), (unsigned short)port), reuse);
 		shared_accept->_h = h;

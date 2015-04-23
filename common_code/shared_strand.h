@@ -34,8 +34,8 @@ class boost_strand
 #endif
 protected:
 	boost_strand();
-public:
 	virtual ~boost_strand();
+public:
 	static shared_strand create(ios_proxy& iosProxy);
 public:
 	/*!

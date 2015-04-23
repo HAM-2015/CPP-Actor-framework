@@ -13,7 +13,7 @@ text_stream_io::~text_stream_io()
 
 std::shared_ptr<text_stream_io> text_stream_io::create( shared_strand strand, std::shared_ptr<stream_io_base> ioObj, const std::function<void (shared_data)>& h )
 {
-	std::shared_ptr<text_stream_io> res(new text_stream_io);
+	std::shared_ptr<text_stream_io> res(new text_stream_io, [](text_stream_io* p){delete p; });
 	res->_ioObj = ioObj;
 	res->_msgNotify = h;
 	auto wc = my_actor::create(strand, [res](my_actor* self){res->writeActor(self); });

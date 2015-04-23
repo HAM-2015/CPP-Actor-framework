@@ -14,7 +14,7 @@ mfc_strand::~mfc_strand()
 
 shared_strand mfc_strand::create( ios_proxy& iosProxy, bind_mfc_run* mfc )
 {
-	std::shared_ptr<mfc_strand> res(new mfc_strand);
+	std::shared_ptr<mfc_strand> res(new mfc_strand, [](mfc_strand* p){delete p; });
 	res->_iosProxy = &iosProxy;
 	res->_mfc = mfc;
 	res->_mfcThreadID = mfc->thread_id();
@@ -23,7 +23,7 @@ shared_strand mfc_strand::create( ios_proxy& iosProxy, bind_mfc_run* mfc )
 
 shared_strand mfc_strand::create( bind_mfc_run* mfc )
 {
-	std::shared_ptr<mfc_strand> res(new mfc_strand);
+	std::shared_ptr<mfc_strand> res(new mfc_strand, [](mfc_strand* p){delete p; });
 	res->_mfc = mfc;
 	res->_mfcThreadID = mfc->thread_id();
 	return res;

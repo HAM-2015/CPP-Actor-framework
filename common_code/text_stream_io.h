@@ -12,8 +12,8 @@ class text_stream_io
 {
 private:
 	text_stream_io();
-public:
 	~text_stream_io();
+public:
 	static std::shared_ptr<text_stream_io> create(shared_strand strand, std::shared_ptr<stream_io_base> ioObj, const std::function<void (shared_data)>& h);
 public:
 	void close();

@@ -1,6 +1,8 @@
 #ifndef __MSG_QUEUE_H
 #define __MSG_QUEUE_H
 
+#include "mem_pool.h"
+
 template <typename T>
 class msg_queue
 {
@@ -8,85 +10,6 @@ class msg_queue
 	{
 		BYTE _data[sizeof(T)];
 		node* _next;
-	};
-
-	struct mem_alloc 
-	{
-		union node_space
-		{
-			void set_ef()
-			{
-#ifdef _DEBUG
-				memset(this, 0xEF, sizeof(*this));
-#endif
-			}
-
-			node _node;
-			node_space* _link;
-		};
-
-		mem_alloc(size_t poolSize)
-		{
-			_poolSize = 0;
-			_poolMaxSize = poolSize;
-			_pool = NULL;
-#ifdef _DEBUG
-			_nodeNumber = 0;
-#endif
-		}
-
-		~mem_alloc()
-		{
-			assert(0 == _nodeNumber);
-			node_space* pIt = _pool;
-			while (pIt)
-			{
-				_poolSize--;
-				node_space* t = pIt;
-				pIt = pIt->_link;
-				free(t);
-			}
-			assert(0 == _poolSize);
-		}
-
-		node* allocate()
-		{
-#ifdef _DEBUG
-			_nodeNumber++;
-#endif
-			if (_pool)
-			{
-				_poolSize--;
-				node_space* fixedSpace = _pool;
-				_pool = fixedSpace->_link;
-				return (node*)fixedSpace;
-			}
-			return (node*)malloc(sizeof(node_space));
-		}
-
-		void deallocate(void* p)
-		{
-#ifdef _DEBUG
-			_nodeNumber--;
-#endif
-			node_space* space = (node_space*)p;
-			if (_poolSize < _poolMaxSize)
-			{
-				_poolSize++;
-				space->set_ef();
-				space->_link = _pool;
-				_pool = space;
-				return;
-			}
-			free(space);
-		}
-
-		node_space* _pool;
-		size_t _poolSize;
-		size_t _poolMaxSize;
-#ifdef _DEBUG
-		size_t _nodeNumber;
-#endif
 	};
 public:
 	msg_queue(size_t poolSize)
@@ -185,7 +108,7 @@ private:
 	node _head;
 	node* _tail;
 	size_t _size;
-	mem_alloc _alloc;
+	mem_alloc<node> _alloc;
 };
 
 #endif

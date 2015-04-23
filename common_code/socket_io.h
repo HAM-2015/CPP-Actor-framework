@@ -15,8 +15,8 @@ class socket_io: public stream_io_base
 {
 private:
 	socket_io(boost::asio::io_service& ios);
-public:
 	~socket_io();
+public:
 	static socket_handle create(boost::asio::io_service& ios);
 public:
 	void close();

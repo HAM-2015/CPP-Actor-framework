@@ -20,8 +20,8 @@ public:
 private:
 	msg_data(msg_data& s){};
 	msg_data& operator =(msg_data& s){return *this;};
-public:
 	~msg_data();
+public:
 	static shared_data create(size_t s);
 	static shared_data create(const void* bf, size_t s);
 	static shared_data create(const char* bf);

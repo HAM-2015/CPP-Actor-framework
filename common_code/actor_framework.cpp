@@ -85,24 +85,6 @@ struct actor_stack_allocate
 	void** _sp;
 	size_t* _size;
 };
-
-struct actor_free 
-{
-	actor_free() {}
-
-	actor_free(stack_pck& stack)
-	{
-		_stack = stack;
-	}
-
-	void operator ()(my_actor* actor)
-	{
-		actor->~my_actor();
-		actor_stack_pool::recovery(_stack);
-	}
-
-	stack_pck _stack;
-};
 //////////////////////////////////////////////////////////////////////////
 
 #ifdef _DEBUG
@@ -234,6 +216,17 @@ void actor_msg_handle_base::set_actor(const actor_handle& hostActor)
 {
 	_hostActor = hostActor;
 	_strand = hostActor->self_strand();
+}
+
+std::shared_ptr<bool> actor_msg_handle_base::new_bool()
+{
+	if (my_actor::_sharedBoolPool)
+	{
+		std::shared_ptr<bool> r = my_actor::_sharedBoolPool->new_();
+		*r = false;
+		return r;
+	} 
+	return std::shared_ptr<bool>(new bool(false));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -510,6 +503,54 @@ void trig_once_base::trig_handler() const
 }
 //////////////////////////////////////////////////////////////////////////
 
+template <typename T>
+struct actor_ref_count_alloc
+{
+	template<class Other>
+	struct rebind
+	{
+		typedef actor_ref_count_alloc<Other> other;
+	};
+
+	actor_ref_count_alloc(stack_pck& stackMem, void** ptr)
+		:_stackMem(stackMem), _ptr(ptr)
+	{
+	}
+
+	actor_ref_count_alloc(const actor_ref_count_alloc<T>& s)
+		:_stackMem(s._stackMem), _ptr(s._ptr)
+	{
+	}
+
+	template<class Other>
+	actor_ref_count_alloc(const actor_ref_count_alloc<Other>& s)
+		: _stackMem(s._stackMem), _ptr(s._ptr)
+	{
+	}
+
+	T* allocate(size_t count)
+	{
+		assert(1 == count);
+		*_ptr = (BYTE*)*_ptr - MEM_ALIGN(sizeof(T), sizeof(void*));
+		return (T*)*_ptr;
+	}
+
+	void deallocate(T* ptr, size_t count)
+	{
+		assert(1 == count);
+		actor_stack_pool::recovery(_stackMem);
+	}
+
+	void destroy(T* ptr)
+	{
+		ptr->~T();
+	}
+
+	stack_pck _stackMem;
+	void** _ptr;
+};
+//////////////////////////////////////////////////////////////////////////
+
 struct my_actor::timer_pck
 {
 	timer_pck(ios_proxy& ios)
@@ -535,6 +576,8 @@ struct my_actor::timer_pck
 
 boost::atomic<long long> _actorIDCount(0);//ID计数
 bool _autoMakeTimer = true;
+
+std::shared_ptr<shared_obj_pool_base<bool>> my_actor::_sharedBoolPool;
 
 class my_actor::boost_actor_run
 {
@@ -671,28 +714,28 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 	actor_handle newActor;
 	if (actor_stack_pool::isEnable())
 	{
+		/*内存结构:|------Actor Stack------|----timer_type----|---shared_ptr_ref_count---|--Actor Obj--|*/
 		const size_t actorSize = MEM_ALIGN(sizeof(my_actor), sizeof(void*));
 		const size_t timerSize = MEM_ALIGN(sizeof(timer_pck), sizeof(void*));
-		assert(actorSize+timerSize < stackSize - 2 kB);
 		stack_pck stackMem = actor_stack_pool::getStack(stackSize);
-		const size_t totalSize = stackMem._stack.size;
-		BYTE* stackTop = (BYTE*)stackMem._stack.sp;
-		newActor = actor_handle(new(stackTop-actorSize) my_actor, actor_free(stackMem));
-		if (_autoMakeTimer)
-		{
-			newActor->_timer = new(stackTop-actorSize-timerSize) timer_pck(actorStrand->get_ios_proxy());
-		}
+		BYTE* refTop = (BYTE*)stackMem._stack.sp - actorSize;
+		newActor = actor_handle(new(refTop)my_actor, [stackMem](my_actor* p){p->~my_actor(); },
+			actor_ref_count_alloc<void>(stackMem, (void**)&refTop));
+		newActor->_stackTop = refTop - timerSize;
+		newActor->_stackSize = stackMem._stack.size - ((size_t)stackMem._stack.sp - (size_t)newActor->_stackTop);
 		newActor->_strand = actorStrand;
 		newActor->_mainFunc = mainFunc;
-		newActor->_stackTop = stackTop-actorSize-timerSize;
-		newActor->_stackSize = totalSize-actorSize-timerSize;
+		if (_autoMakeTimer)
+		{
+			newActor->_timer = new(newActor->_stackTop) timer_pck(actorStrand->get_ios_proxy());
+		}
 		if (cb) newActor->_exitCallback.push_back(cb);
 		newActor->_actorPull = new actor_pull_type(boost_actor_run(*newActor),
 			boost::coroutines::attributes(newActor->_stackSize), actor_stack_pool_allocate(newActor->_stackTop, newActor->_stackSize));
 	} 
 	else
 	{
-		newActor = actor_handle(new my_actor);
+		newActor = actor_handle(new my_actor, [](my_actor* p){delete p; });
 		if (_autoMakeTimer)
 		{
 			newActor->_timer = new timer_pck(actorStrand->get_ios_proxy());
@@ -941,7 +984,7 @@ void my_actor::open_timer()
 		if (actor_stack_pool::isEnable())
 		{
 			size_t timerSize = MEM_ALIGN(sizeof(timer_pck), sizeof(void*));
-			_timer = new((BYTE*)this-timerSize) timer_pck(_strand->get_ios_proxy());
+			_timer = new(_stackTop) timer_pck(_strand->get_ios_proxy());
 		}
 		else
 		{
@@ -1644,6 +1687,7 @@ void my_actor::enable_stack_pool()
 {
 	assert(0 == _actorIDCount);
 	actor_stack_pool::enable();
+	_sharedBoolPool = std::shared_ptr<shared_obj_pool_base<bool>>(create_shared_pool<bool>(4096, [](void*){}));
 }
 
 void my_actor::expires_timer()

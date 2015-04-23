@@ -326,19 +326,21 @@ void actor_test(my_actor* self)
 				auto conCmh = self->connect_msg_pump<int, int>();
 				int p0;
 				int id;
-				goto __start;
+				self->pump_msg(conCmh, p0, id);
+				printf("数据:%d 发送者:%d 接收者:%d\n", p0, id, (int)self->self_id());
 				while (true)
 				{
-					try
+					TRY_PUMP
 					{
 						self->pump_msg(conCmh, p0, id, true);
 						printf("数据:%d 发送者:%d 接收者:%d\n", p0, id, (int)self->self_id());
-						continue;
-					} catch (my_actor::pump_disconnected_exception) {}
-					printf("接收者:%d 被断开\n", (int)self->self_id());//消息泵被父关闭，抛出异常
-				__start:;
-					self->pump_msg(conCmh, p0, id);
-					printf("数据:%d 发送者:%d 接收者:%d\n", p0, id, (int)self->self_id());
+					}
+					CATCH_PUMP_DISCONNECTED
+					{
+						printf("接收者:%d 被断开\n", (int)self->self_id());//消息泵被父关闭，抛出异常
+						self->pump_msg(conCmh, p0, id);
+						printf("数据:%d 发送者:%d 接收者:%d\n", p0, id, (int)self->self_id());
+					}
 				}
 			};
 			auto st = self->self_strand()->clone();
@@ -397,9 +399,9 @@ void actor_test(my_actor* self)
 		actorMutex1 = self->create_child_actor(actorMutexH);
 		actorMutex2 = self->create_child_actor(actorMutexH);
 		actorMutex3 = self->create_child_actor(actorMutexH);
-		self->child_actor_run(actorMutex1);//模拟actor_mutex互斥特性
-		self->child_actor_run(actorMutex2);
-		self->child_actor_run(actorMutex3);
+// 		self->child_actor_run(actorMutex1);//模拟actor_mutex互斥特性
+// 		self->child_actor_run(actorMutex2);
+// 		self->child_actor_run(actorMutex3);
 	}
 	list<actor_handle> chs;//需要被挂起的Actor对象，可以从下方注释几个测试
 	chs.push_back(actorLeft.get_actor());

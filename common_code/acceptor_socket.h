@@ -12,8 +12,8 @@ class acceptor_socket
 {
 private:
 	acceptor_socket();
-public:
 	~acceptor_socket();
+public:
 	static accept_handle create(shared_strand  strand, size_t port, const std::function<void(socket_handle)>& h, bool reuse = true);
 public:
 	void close();
