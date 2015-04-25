@@ -25,6 +25,10 @@
 class my_actor;
 typedef std::shared_ptr<my_actor> actor_handle;//Actor句柄
 
+class mutex_trig_notifer;
+class mutex_trig_handle;
+class _actor_mutex;
+
 using namespace std;
 
 //此函数会进入Actor中断标记，使用时注意逻辑的“连续性”可能会被打破
@@ -325,7 +329,7 @@ struct msg_param<T0, void, void, void>
 
 class actor_msg_handle_base
 {
-public:
+protected:
 	actor_msg_handle_base();
 	virtual ~actor_msg_handle_base(){};
 public:
@@ -337,7 +341,7 @@ protected:
 protected:
 	bool _waiting;
 	shared_strand _strand;
-	actor_handle _hostActor;
+	my_actor* _hostActor;
 	std::shared_ptr<bool> _closed;
 };
 
@@ -358,7 +362,12 @@ public:
 		:_msgHandle(NULL){}
 private:
 	actor_msg_notifer(msg_handle* msgHandle)
-		:_msgHandle(msgHandle), _strand(msgHandle->_strand), _hostActor(msgHandle->_hostActor), _closed(msgHandle->_closed) {}
+		:_msgHandle(msgHandle),
+		_hostActor(_msgHandle->_hostActor->shared_from_this()),
+		_closed(msgHandle->_closed)
+	{
+		assert(msgHandle->_strand == _hostActor->self_strand());
+	}
 public:
 	template <typename PT0, typename PT1, typename PT2, typename PT3>
 	void operator()(const PT0& p0, const PT1& p1, const PT2& p2, const PT3& p3) const
@@ -366,7 +375,7 @@ public:
 		auto& msgHandle_ = _msgHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_strand->post([=]()
+		_hostActor->self_strand()->post([=]()
 		{
 			if (!hostActor_->is_quited() && !(*closed_))
 			{
@@ -381,7 +390,7 @@ public:
 		auto& msgHandle_ = _msgHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_strand->post([=]()
+		_hostActor->self_strand()->post([=]()
 		{
 			if (!hostActor_->is_quited() && !(*closed_))
 			{
@@ -396,7 +405,7 @@ public:
 		auto& msgHandle_ = _msgHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_strand->post([=]()
+		_hostActor->self_strand()->post([=]()
 		{
 			if (!hostActor_->is_quited() && !(*closed_))
 			{
@@ -411,7 +420,7 @@ public:
 		auto& msgHandle_ = _msgHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_strand->post([=]()
+		_hostActor->self_strand()->post([=]()
 		{
 			if (!hostActor_->is_quited() && !(*closed_))
 			{
@@ -425,7 +434,7 @@ public:
 		auto& msgHandle_ = _msgHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_strand->post([=]()
+		_hostActor->self_strand()->post([=]()
 		{
 			if (!hostActor_->is_quited() && !(*closed_))
 			{
@@ -447,7 +456,6 @@ public:
 	void clear()
 	{
 		_msgHandle = NULL;
-		_strand.reset();
 		_hostActor.reset();
 		_closed.reset();
 	}
@@ -458,7 +466,6 @@ public:
 	}
 private:
 	msg_handle* _msgHandle;
-	shared_strand _strand;
 	actor_handle _hostActor;
 	std::shared_ptr<bool> _closed;
 };
@@ -530,7 +537,7 @@ private:
 		_dstRef = NULL;
 		_waiting = false;
 		_msgBuff.clear();
-		_hostActor.reset();
+		_hostActor = NULL;
 	}
 
 	size_t size()
@@ -599,7 +606,7 @@ private:
 		}
 		_msgCount = 0;
 		_waiting = false;
-		_hostActor.reset();
+		_hostActor = NULL;
 	}
 
 	size_t size()
@@ -623,7 +630,12 @@ public:
 		:_trigHandle(NULL){}
 private:
 	actor_trig_notifer(trig_handle* trigHandle)
-		:_trigHandle(trigHandle), _strand(trigHandle->_strand), _hostActor(trigHandle->_hostActor), _closed(trigHandle->_closed) {}
+		:_trigHandle(trigHandle),
+		_hostActor(trigHandle->_hostActor->shared_from_this()),
+		_closed(trigHandle->_closed)
+	{
+		assert(_trigHandle->_strand == _hostActor->self_strand());
+	}
 public:
 	template <typename PT0, typename PT1, typename PT2, typename PT3>
 	void operator()(const PT0& p0, const PT1& p1, const PT2& p2, const PT3& p3) const
@@ -646,7 +658,7 @@ public:
 		auto& trigHandle_ = _trigHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_strand->post([=]()
+		_hostActor->self_strand()->post([=]()
 		{
 			if (!hostActor_->is_quited() && !(*closed_))
 			{
@@ -661,7 +673,7 @@ public:
 		auto& trigHandle_ = _trigHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_strand->post([=]()
+		_hostActor->self_strand()->post([=]()
 		{
 			if (!hostActor_->is_quited() && !(*closed_))
 			{
@@ -676,7 +688,7 @@ public:
 		auto& trigHandle_ = _trigHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_strand->post([=]()
+		_hostActor->self_strand()->post([=]()
 		{
 			if (!hostActor_->is_quited() && !(*closed_))
 			{
@@ -690,18 +702,13 @@ public:
 		auto& trigHandle_ = _trigHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_strand->post([=]()
+		_hostActor->self_strand()->post([=]()
 		{
 			if (!hostActor_->is_quited() && !(*closed_))
 			{
 				trigHandle_->push_msg();
 			}
 		});
-	}
-
-	actor_handle host_actor() const
-	{
-		return _hostActor;
 	}
 
 	bool empty() const
@@ -712,7 +719,6 @@ public:
 	void clear()
 	{
 		_trigHandle = NULL;
-		_strand.reset();
 		_hostActor.reset();
 		_closed.reset();
 	}
@@ -723,7 +729,6 @@ public:
 	}
 private:
 	trig_handle* _trigHandle;
-	shared_strand _strand;
 	actor_handle _hostActor;
 	std::shared_ptr<bool> _closed;
 };
@@ -802,7 +807,7 @@ private:
 		}
 		_dstRef = NULL;
 		_waiting = false;
-		_hostActor.reset();
+		_hostActor = NULL;
 	}
 public:
 	bool has()
@@ -875,7 +880,7 @@ private:
 		}
 		_hasMsg = false;
 		_waiting = false;
-		_hostActor.reset();
+		_hostActor = NULL;
 	}
 public:
 	bool has()
@@ -904,9 +909,10 @@ public:
 	virtual void clear() = 0;
 	virtual void close() = 0;
 protected:
+	bool is_quited();
 	void run_one();
 protected:
-	actor_handle _hostActor;
+	my_actor* _hostActor;
 };
 
 class msg_pool_base
@@ -943,14 +949,14 @@ private:
 		res->_checkDis = false;
 		res->_pumpCount = 0;
 		res->_dstRef = NULL;
-		res->_hostActor = hostActor;
+		res->_hostActor = hostActor.get();
 		res->_strand = hostActor->self_strand();
 		return res;
 	}
 
 	void receiver(msg_type&& msg)
 	{
-		if (_hostActor)
+		if (!is_quited())
 		{
 			assert(!_hasMsg);
 			_pumpCount++;
@@ -1021,14 +1027,12 @@ private:
 	void connect(const pump_handler& pumpHandler)
 	{
 		assert(_strand->running_in_this_thread());
-		if (_hostActor)
+		assert(_hostActor);
+		_pumpHandler = pumpHandler;
+		_pumpCount = 0;
+		if (_waiting)
 		{
-			_pumpHandler = pumpHandler;
-			_pumpCount = 0;
-			if (_waiting)
-			{
-				_pumpHandler.post_pump(_pumpCount);
-			}
+			_pumpHandler.post_pump(_pumpCount);
 		}
 	}
 
@@ -1037,7 +1041,7 @@ private:
 		assert(_strand->running_in_this_thread());
 		assert(_hostActor);
 		_pumpHandler.clear();
-		if (_checkDis)
+		if (!is_quited() && _checkDis)
 		{
 			assert(_waiting);
 			_waiting = false;
@@ -1058,7 +1062,7 @@ private:
 		_waiting = false;
 		_checkDis = false;
 		_pumpHandler.clear();
-		_hostActor.reset();
+		_hostActor = NULL;
 	}
 
 	bool isDisconnected()
@@ -1390,8 +1394,8 @@ class post_actor_msg
 	typedef msg_pool<T0, T1, T2, T3> msg_pool_type;
 public:
 	post_actor_msg(){}
-	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool)
-		:_msgPool(msgPool){}
+	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool, const actor_handle& hostActor)
+		:_msgPool(msgPool), _lockHost(hostActor){}
 public:
 	template <typename PT0, typename PT1, typename PT2, typename PT3>
 	void operator()(const PT0& p0, const PT1& p1, const PT2& p2, const PT3& p3) const
@@ -1429,6 +1433,7 @@ public:
 
 	void clear()
 	{
+		_lockHost.reset();
 		_msgPool.reset();
 	}
 
@@ -1437,6 +1442,7 @@ public:
 		return !empty();
 	}
 private:
+	actor_handle _lockHost;
 	std::shared_ptr<msg_pool_type> _msgPool;
 };
 //////////////////////////////////////////////////////////////////////////
@@ -1590,13 +1596,19 @@ class my_actor
 	{
 		struct pck_base 
 		{
-			pck_base(shared_strand strand)
-			:_strand(strand), _amutex(strand), _isHead(true){}
+			pck_base(my_actor* hostActor)
+			:_strand(hostActor->_strand), _amutex(_strand), _isHead(true), _hostActor(hostActor){}
 
 			virtual ~pck_base(){};
 
 			virtual void close() = 0;
+
 			virtual bool cmp_size(const size_t s0, const size_t s1, const size_t s2, const size_t s3) = 0;
+
+			bool is_closed()
+			{
+				return !_hostActor;
+			}
 
 			void lock(my_actor* self)
 			{
@@ -1611,13 +1623,14 @@ class my_actor
 			shared_strand _strand;
 			actor_mutex _amutex;
 			bool _isHead;
+			my_actor* _hostActor;
 		};
 
 		template <typename T0, typename T1, typename T2, typename T3>
 		struct pck: public pck_base
 		{
-			pck(shared_strand strand)
-			:pck_base(strand){}
+			pck(my_actor* hostActor)
+			:pck_base(hostActor){}
 
 			void close()
 			{
@@ -1625,6 +1638,7 @@ class my_actor
 				{
 					_msgPump->close();
 				}
+				_hostActor = NULL;
 			}
 
 			bool cmp_size(const size_t s0, const size_t s1, const size_t s2, const size_t s3)
@@ -1637,13 +1651,21 @@ class my_actor
 			std::shared_ptr<pck> _next;
 		};
 
-		void clear()
+		void clear(my_actor* self)
 		{
 			for (int i = 0; i < 5; i++)
 			{
 				for (auto it = _msgPumpList[i].begin(); it != _msgPumpList[i].end(); it++)
 				{
+					(*it)->lock(self);
+				}
+				for (auto it = _msgPumpList[i].begin(); it != _msgPumpList[i].end(); it++)
+				{
 					(*it)->close();
+				}
+				for (auto it = _msgPumpList[i].begin(); it != _msgPumpList[i].end(); it++)
+				{
+					(*it)->unlock(self);
 				}
 			}
 		}
@@ -1658,6 +1680,9 @@ class my_actor
 	friend msg_pump_base;
 	friend actor_msg_handle_base;
 	friend trig_once_base;
+	friend mutex_trig_notifer;
+	friend mutex_trig_handle;
+	friend _actor_mutex;
 public:
 	/*!
 	@brief 在{}一定范围内锁定当前Actor不被强制退出
@@ -2113,8 +2138,11 @@ private:
 			{
 				delay_trig(tm, [this, &timeout]()
 				{
-					timeout = true;
-					run_one();
+					if (!_quited)
+					{
+						timeout = true;
+						pull_yield();
+					}
 				});
 			}
 			push_yield();
@@ -2362,7 +2390,7 @@ private:
 		}
 		if (make)
 		{
-			std::shared_ptr<pck_type> newPck(new pck_type(_strand));
+			std::shared_ptr<pck_type> newPck(new pck_type(this));
 			msgPumpList.push_back(newPck);
 			return newPck;
 		}
@@ -2373,7 +2401,7 @@ private:
 	@brief 清除消息代理链
 	*/
 	template <typename T0, typename T1, typename T2, typename T3>
-	void clear_msg_list(const std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>>& msgPck)
+	void clear_msg_list(const std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>>& msgPck, bool poolDis = true)
 	{
 		std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>> uStack[16];
 		size_t stackl = 0;
@@ -2390,22 +2418,30 @@ private:
 			}
 			else
 			{
-				if (pckIt->_msgPool)
+				if (!pckIt->is_closed())
 				{
-					auto& msgPool_ = pckIt->_msgPool;
-					send(msgPool_->_strand, [&msgPool_]()
+					if (pckIt->_msgPool)
 					{
-						msgPool_->disconnect();
-					});
-					pckIt->_msgPool.reset();
-				}
-				if (pckIt->_msgPump)
-				{
-					auto& msgPump_ = pckIt->_msgPump;
-					send(msgPump_->_strand, [&msgPump_]()
+						if (poolDis)
+						{
+							auto& msgPool_ = pckIt->_msgPool;
+							auto& msgPump_ = pckIt->_msgPump;
+							send(msgPool_->_strand, [&msgPool_, &msgPump_]()
+							{
+								assert(msgPool_->_msgPump == msgPump_);
+								msgPool_->disconnect();
+							});
+						}
+						pckIt->_msgPool.reset();
+					}
+					if (pckIt->_msgPump)
 					{
-						msgPump_->clear();
-					});
+						auto& msgPump_ = pckIt->_msgPump;
+						send(msgPump_->_strand, [&msgPump_]()
+						{
+							msgPump_->clear();
+						});
+					}
 				}
 				while (stackl)
 				{
@@ -2420,7 +2456,7 @@ private:
 	@brief 更新消息代理链
 	*/
 	template <typename T0, typename T1, typename T2, typename T3>
-	void update_msg_list(const std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>>& msgPck, const std::shared_ptr<msg_pool<T0, T1, T2, T3>>& newPool)
+	actor_handle update_msg_list(const std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>>& msgPck, const std::shared_ptr<msg_pool<T0, T1, T2, T3>>& newPool)
 	{
 		typedef typename msg_pool<T0, T1, T2, T3>::pump_handler pump_handler;
 
@@ -2439,45 +2475,50 @@ private:
 			} 
 			else
 			{
-				if (pckIt->_msgPool)
+				if (!pckIt->is_closed())
 				{
-					auto& msgPool_ = pckIt->_msgPool;
-					send(msgPool_->_strand, [&msgPool_]()
+					if (pckIt->_msgPool)
 					{
-						msgPool_->disconnect();
-					});
-				}
-				pckIt->_msgPool = newPool;
-				if (pckIt->_msgPump)
-				{
-					auto& msgPump_ = pckIt->_msgPump;
-					if (newPool)
-					{
-						auto ph = send<pump_handler>(newPool->_strand, [&newPool, &msgPump_]()->pump_handler
+						auto& msgPool_ = pckIt->_msgPool;
+						send(msgPool_->_strand, [&msgPool_]()
 						{
-							return newPool->connect_pump(msgPump_);
+							msgPool_->disconnect();
 						});
-						send(msgPump_->_strand, [&msgPump_, &ph]()
+					}
+					pckIt->_msgPool = newPool;
+					if (pckIt->_msgPump)
+					{
+						auto& msgPump_ = pckIt->_msgPump;
+						if (newPool)
 						{
-							if (msgPump_->_hostActor && !msgPump_->_hostActor->is_quited())
+							auto ph = send<pump_handler>(newPool->_strand, [&newPool, &msgPump_]()->pump_handler
+							{
+								return newPool->connect_pump(msgPump_);
+							});
+							send(msgPump_->_strand, [&msgPump_, &ph]()
 							{
 								msgPump_->connect(ph);
-							}
-						});
-					}
-					else
-					{
-						send(msgPump_->_strand, [&msgPump_]()
+							});
+						}
+						else
 						{
-							msgPump_->clear();
-						});
+							send(msgPump_->_strand, [&msgPump_]()
+							{
+								msgPump_->clear();
+							});
+						}
 					}
+					while (stackl)
+					{
+						uStack[--stackl]->unlock(this);
+					}
+					return pckIt->_hostActor->shared_from_this();
 				}
 				while (stackl)
 				{
 					uStack[--stackl]->unlock(this);
 				}
-				return;
+				return actor_handle();
 			}
 		}
 	}
@@ -2486,7 +2527,7 @@ private:
 	@brief 把本Actor内消息由伙伴Actor代理处理
 	*/
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt void msg_agent_to(const actor_handle& childActor)
+	__yield_interrupt bool msg_agent_to(const actor_handle& childActor)
 	{
 		typedef std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>> pck_type;
 
@@ -2494,56 +2535,69 @@ private:
 		assert(childActor);
 		if (childActor->parent_actor() && childActor->parent_actor()->self_id() == self_id())
 		{
-			auto msgPck = msg_pool_pck<T0, T1, T2, T3>();
 			quit_guard qg(this);
-			msgPck->lock(this);
-			if (msgPck->_next)
-			{
-				msgPck->_next->lock(this);
-				clear_msg_list<T0, T1, T2, T3>(msgPck->_next);
-				msgPck->_next->unlock(this);
-			}
 			auto childPck = send<pck_type>(childActor->self_strand(), [&childActor]()->pck_type
 			{
-				return childActor->msg_pool_pck<T0, T1, T2, T3>();
+				if (!childActor->is_quited())
+				{
+					return childActor->msg_pool_pck<T0, T1, T2, T3>();
+				}
+				return pck_type();
 			});
-			msgPck->_next = childPck;
-			childPck->lock(this);
-			childPck->_isHead = false;
-			auto& msgPool_ = msgPck->_msgPool;
-			update_msg_list<T0, T1, T2, T3>(childPck, msgPool_);
-			childPck->unlock(this);
-			msgPck->unlock(this);
-			return;
+			if (childPck)
+			{
+				auto msgPck = msg_pool_pck<T0, T1, T2, T3>();
+				msgPck->lock(this);
+				childPck->lock(this);
+				childPck->_isHead = false;
+				actor_handle hostActor = update_msg_list<T0, T1, T2, T3>(childPck, msgPck->_msgPool);
+				if (hostActor)
+				{
+					if (msgPck->_next && msgPck->_next != childPck)
+					{
+						msgPck->_next->lock(this);
+						clear_msg_list<T0, T1, T2, T3>(msgPck->_next, false);
+						msgPck->_next->unlock(this);
+					}
+					msgPck->_next = childPck;
+					childPck->unlock(this);
+					msgPck->unlock(this);
+					return true;
+				}
+				childPck->unlock(this);
+				msgPck->unlock(this);
+			}
+			return false;
 		}
 		assert(false);
+		return false;
 	}
 public:
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt void msg_agent_to(child_actor_handle& childActor)
+	__yield_interrupt bool msg_agent_to(child_actor_handle& childActor)
 	{
-		msg_agent_to<T0, T1, T2, T3>(childActor.get_actor());
+		return msg_agent_to<T0, T1, T2, T3>(childActor.get_actor());
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt void msg_agent_to(child_actor_handle& childActor)
+	__yield_interrupt bool msg_agent_to(child_actor_handle& childActor)
 	{
-		msg_agent_to<T0, T1, T2, void>(childActor.get_actor());
+		return msg_agent_to<T0, T1, T2, void>(childActor.get_actor());
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt void msg_agent_to(child_actor_handle& childActor)
+	__yield_interrupt bool msg_agent_to(child_actor_handle& childActor)
 	{
-		msg_agent_to<T0, T1, void, void>(childActor.get_actor());
+		return msg_agent_to<T0, T1, void, void>(childActor.get_actor());
 	}
 
 	template <typename T0>
-	__yield_interrupt void msg_agent_to(child_actor_handle& childActor)
+	__yield_interrupt bool msg_agent_to(child_actor_handle& childActor)
 	{
-		msg_agent_to<T0, void, void, void>(childActor.get_actor());
+		return msg_agent_to<T0, void, void, void>(childActor.get_actor());
 	}
 
-	__yield_interrupt void msg_agent_to(child_actor_handle& childActor);
+	__yield_interrupt bool msg_agent_to(child_actor_handle& childActor);
 
 public:
 	/*!
@@ -2596,7 +2650,7 @@ public:
 	__yield_interrupt void msg_agent_off()
 	{
 		assert_enter();
-		auto msgPck = msg_pool_pck<T0, T1, T2, T3>();
+		auto msgPck = msg_pool_pck<T0, T1, T2, T3>(false);
 		if (msgPck)
 		{
 			quit_guard qg(this);
@@ -2668,37 +2722,53 @@ public:
 		msgPck->lock(this);
 		auto childPck = send<pck_type>(buddyActor->self_strand(), [&buddyActor]()->pck_type
 		{
-			return buddyActor->msg_pool_pck<T0, T1, T2, T3>();
+			if (!buddyActor->is_quited())
+			{
+				return buddyActor->msg_pool_pck<T0, T1, T2, T3>();
+			}
+			return pck_type();
 		});
+		if (!childPck)
+		{
+			msgPck->unlock(this);
+			return post_actor_msg<T0, T1, T2, T3>();
+		}
 		if (makeNew)
 		{
 			auto newPool = pool_type::make(buddyActor->self_strand(), fixedSize);
 			childPck->lock(this);
 			childPck->_isHead = true;
-			update_msg_list<T0, T1, T2, T3>(childPck, newPool);
+			actor_handle hostActor = update_msg_list<T0, T1, T2, T3>(childPck, newPool);
 			childPck->unlock(this);
-			if (msgPck->_next == childPck)
+			if (hostActor)
 			{
-				msgPck->_next.reset();
-				if (msgPck->_msgPump)
+				//如果当前消息节点在更新的消息链中，则断开，然后连接到本地消息泵
+				if (msgPck->_next == childPck)
 				{
-					auto& msgPump_ = msgPck->_msgPump;
-					if (msgPck->_msgPool)
+					msgPck->_next.reset();
+					if (msgPck->_msgPump)
 					{
-						auto& msgPool_ = msgPck->_msgPool;
-						msgPump_->connect(this->send<pump_handler>(msgPool_->_strand, [&msgPool_, &msgPump_]()->pump_handler
+						auto& msgPump_ = msgPck->_msgPump;
+						if (msgPck->_msgPool)
 						{
-							return msgPool_->connect_pump(msgPump_);
-						}));
-					}
-					else
-					{
-						msgPump_->clear();
+							auto& msgPool_ = msgPck->_msgPool;
+							msgPump_->connect(this->send<pump_handler>(msgPool_->_strand, [&msgPool_, &msgPump_]()->pump_handler
+							{
+								return msgPool_->connect_pump(msgPump_);
+							}));
+						}
+						else
+						{
+							msgPump_->clear();
+						}
 					}
 				}
+				msgPck->unlock(this);
+				return post_actor_msg<T0, T1, T2, T3>(newPool, hostActor);
 			}
 			msgPck->unlock(this);
-			return post_actor_msg<T0, T1, T2, T3>(newPool);
+			//消息链的代理人已经退出，失败
+			return post_actor_msg<T0, T1, T2, T3>();
 		}
 		childPck->lock(this);
 		if (childPck->_isHead)
@@ -2709,10 +2779,14 @@ public:
 			{
 				childPool = pool_type::make(buddyActor->self_strand(), fixedSize);
 			}
-			update_msg_list<T0, T1, T2, T3>(childPck, childPool);
-			childPck->unlock(this);
-			msgPck->unlock(this);
-			return post_actor_msg<T0, T1, T2, T3>(childPool);
+			actor_handle hostActor = update_msg_list<T0, T1, T2, T3>(childPck, childPool);
+			if (hostActor)
+			{
+				childPck->unlock(this);
+				msgPck->unlock(this);
+				return post_actor_msg<T0, T1, T2, T3>(childPool, hostActor);
+			}
+			//消息链的代理人已经退出，失败
 		}
 		childPck->unlock(this);
 		msgPck->unlock(this);
@@ -2782,17 +2856,21 @@ public:
 		msgPck->lock(this);
 		if (msgPck->_isHead)
 		{
+			std::shared_ptr<pool_type> msgPool;
 			if (makeNew || !msgPck->_msgPool)
 			{
-				auto newPool = pool_type::make(self_strand(), fixedSize);
-				update_msg_list<T0, T1, T2, T3>(msgPck, newPool);
-				msgPck->unlock(this);
-				return post_actor_msg<T0, T1, T2, T3>(newPool);
+				msgPool = pool_type::make(self_strand(), fixedSize);
 			}
-			auto msgPool = msgPck->_msgPool;
-			update_msg_list<T0, T1, T2, T3>(msgPck, msgPool);
-			msgPck->unlock(this);
-			return post_actor_msg<T0, T1, T2, T3>(msgPool);
+			else
+			{
+				msgPool = msgPck->_msgPool;
+			}
+			actor_handle hostActor = update_msg_list<T0, T1, T2, T3>(msgPck, msgPool);
+			if (hostActor)
+			{
+				msgPck->unlock(this);
+				return post_actor_msg<T0, T1, T2, T3>(msgPool, hostActor);
+			}
 		}
 		msgPck->unlock(this);
 		return post_actor_msg<T0, T1, T2, T3>();
@@ -2831,11 +2909,11 @@ public:
 		return _strand->syncInvoke<post_type>([this, fixedSize]()->post_type
 		{
 			typedef msg_pool<T0, T1, T2, T3> pool_type;
-			if (!this->parent_actor() && !this->is_started())
+			if (!this->parent_actor() && !this->is_started() && !this->is_quited())
 			{
 				auto msgPck = this->msg_pool_pck<T0, T1, T2, T3>();
 				msgPck->_msgPool = pool_type::make(this->self_strand(), fixedSize);
-				return post_type(msgPck->_msgPool);
+				return post_type(msgPck->_msgPool, shared_from_this());
 			}
 			assert(false);
 			return post_type();
@@ -2939,21 +3017,20 @@ private:
 				throw pump_disconnected_exception();
 			}
 			pump->_checkDis = checkDis;
-			bool timeOut = false;
+			bool timeout = false;
 			if (tm >= 0)
 			{
-				actor_handle shared_this = shared_from_this();
-				delay_trig(tm, [shared_this, &timeOut]()
+				delay_trig(tm, [this, &timeout]()
 				{
-					if (!shared_this->_quited)
+					if (!_quited)
 					{
-						timeOut = true;
-						shared_this->pull_yield();
+						timeout = true;
+						pull_yield();
 					}
 				});
 			}
 			push_yield();
-			if (!timeOut)
+			if (!timeout)
 			{
 				if (tm >= 0)
 				{
@@ -3054,6 +3131,77 @@ public:
 	__yield_interrupt void pump_msg(const msg_pump<>::handle& pump, bool checkDis = false);
 public:
 	/*!
+	@brief 查询当前消息由谁代理
+	*/
+	template <typename T0, typename T1, typename T2, typename T3>
+	actor_handle msg_agent_handle(actor_handle buddyActor)
+	{
+		typedef std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>> pck_type;
+
+		quit_guard qg(this);
+		auto msgPck = send<pck_type>(buddyActor->self_strand(), [&buddyActor]()->pck_type
+		{
+			if (!buddyActor->is_quited())
+			{
+				return buddyActor->msg_pool_pck<T0, T1, T2, T3>(false);
+			}
+			return pck_type();
+		});
+		if (msgPck)
+		{
+			std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>> uStack[16];
+			size_t stackl = 0;
+			msgPck->lock(this);
+			auto pckIt = msgPck;
+			while (true)
+			{
+				if (pckIt->_next)
+				{
+					assert(stackl < 15);
+					pckIt = pckIt->_next;
+					uStack[stackl++] = pckIt;
+					pckIt->lock(this);
+				}
+				else
+				{
+					actor_handle r;
+					if (!pckIt->is_closed())
+					{
+						r = pckIt->_hostActor->shared_from_this();
+					}
+					while (stackl)
+					{
+						uStack[--stackl]->unlock(this);
+					}
+					msgPck->unlock(this);
+					return r;
+				}
+			}
+		}
+		return actor_handle();
+	}
+
+	template <typename T0, typename T1, typename T2>
+	actor_handle msg_agent_handle(actor_handle buddyActor)
+	{
+		return msg_agent_handle<T0, T1, T2, void>(buddyActor);
+	}
+
+	template <typename T0, typename T1>
+	actor_handle msg_agent_handle(actor_handle buddyActor)
+	{
+		return msg_agent_handle<T0, T1, void, void>(buddyActor);
+	}
+
+	template <typename T0>
+	actor_handle msg_agent_handle(actor_handle buddyActor)
+	{
+		return msg_agent_handle<T0, void, void, void>(buddyActor);
+	}
+
+	actor_handle msg_agent_handle(actor_handle buddyActor);
+public:
+	/*!
 	@brief 测试当前下的Actor栈是否安全
 	*/
 	void check_stack();
@@ -3112,6 +3260,11 @@ public:
 	@brief Actor是否已经退出
 	*/
 	bool is_quited();
+
+	/*!
+	@brief 是否在Actor中
+	*/
+	bool in_actor();
 
 	/*!
 	@brief lock_quit后检测是否收到退出消息
@@ -3207,7 +3360,9 @@ private:
 	void resume();
 	void run_one();
 	void pull_yield();
+	void pull_yield_as_mutex();
 	void push_yield();
+	void push_yield_as_mutex();
 	void force_quit_cb_handler();
 	void exit_callback();
 	void child_suspend_cb_handler();
@@ -3219,9 +3374,9 @@ private:
 	long long _selfID;///<ActorID
 	size_t _stackSize;///<Actor栈大小
 	shared_strand _strand;///<Actor调度器
-	DEBUG_OPERATION(bool _inActor);///<当前正在Actor内部执行标记
+	bool _inActor;///<当前正在Actor内部执行标记
 	bool _started;///<已经开始运行的标记
-	bool _quited;///<已经准备退出标记
+	bool _quited;///<已经退出完毕
 	bool _suspended;///<Actor挂起标记
 	bool _hasNotify;///<当前Actor挂起，有外部触发准备进入Actor标记
 	bool _isForce;///<是否是强制退出的标记，成功调用了force_quit

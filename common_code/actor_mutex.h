@@ -35,7 +35,7 @@ public:
 	/*!
 	@brief 重置mutex，使用前确保当前没有一个Actor依赖该mutex了
 	*/
-	void reset_mutex(my_actor* self);
+	//void reset_mutex(my_actor* self);
 private:
 	std::shared_ptr<_actor_mutex> _amutex;
 };

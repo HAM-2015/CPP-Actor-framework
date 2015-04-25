@@ -203,7 +203,8 @@ void child_actor_handle::operator delete(void* p)
 
 void actor_msg_handle_base::run_one()
 {
-	_hostActor->run_one();
+	assert(!_hostActor->is_quited());
+	_hostActor->pull_yield();
 }
 
 actor_msg_handle_base::actor_msg_handle_base()
@@ -214,7 +215,7 @@ actor_msg_handle_base::actor_msg_handle_base()
 
 void actor_msg_handle_base::set_actor(const actor_handle& hostActor)
 {
-	_hostActor = hostActor;
+	_hostActor = hostActor.get();
 	_strand = hostActor->self_strand();
 }
 
@@ -233,8 +234,15 @@ std::shared_ptr<bool> actor_msg_handle_base::new_bool()
 
 void msg_pump_base::run_one()
 {
-	_hostActor->run_one();
+	assert(!_hostActor->is_quited());
+	_hostActor->pull_yield();
 }
+
+bool msg_pump_base::is_quited()
+{
+	return !_hostActor || _hostActor->is_quited();
+}
+
 //////////////////////////////////////////////////////////////////////////
 
 msg_pool_void::msg_pool_void(shared_strand strand)
@@ -373,7 +381,7 @@ msg_pump_void::msg_pump_void(const actor_handle& hostActor)
 	_hasMsg = false;
 	_checkDis = false;
 	_pumpCount = 0;
-	_hostActor = hostActor;
+	_hostActor = hostActor.get();
 	_strand = hostActor->self_strand();
 }
 
@@ -386,7 +394,7 @@ void msg_pump_void::clear()
 {
 	assert(_strand->running_in_this_thread());
 	_pumpHandler.clear();
-	if (_checkDis)
+	if (!is_quited() && _checkDis)
 	{
 		assert(_waiting);
 		_waiting = false;
@@ -401,26 +409,24 @@ void msg_pump_void::close()
 	_checkDis = false;
 	_pumpCount = 0;
 	_pumpHandler.clear();
-	_hostActor.reset();
+	_hostActor = NULL;
 }
 
 void msg_pump_void::connect(const pump_handler& pumpHandler)
 {
 	assert(_strand->running_in_this_thread());
-	if (_hostActor)
+	assert(_hostActor);
+	_pumpHandler = pumpHandler;
+	_pumpCount = 0;
+	if (_waiting)
 	{
-		_pumpHandler = pumpHandler;
-		_pumpCount = 0;
-		if (_waiting)
-		{
-			_pumpHandler.post_pump(_pumpCount);
-		}
+		_pumpHandler.post_pump(_pumpCount);
 	}
 }
 
 void msg_pump_void::receiver()
 {
-	if (_hostActor)
+	if (!is_quited())
 	{
 		_pumpCount++;
 		assert(!_hasMsg);
@@ -595,12 +601,12 @@ public:
 		_actor._actorPush = &actorPush;
 		try
 		{
-			DEBUG_OPERATION(_actor._inActor = true);
+			_actor._inActor = true;
 			_actor.push_yield();
 			assert(_actor._strand->running_in_this_thread());
 			_actor._mainFunc(&_actor);
-			DEBUG_OPERATION(_actor._inActor = false);
 			_actor._quited = true;
+			assert(_actor._inActor);
 			assert(_actor._childActorList.empty());
 			assert(_actor._quitHandlerList.empty());
 			assert(_actor._suspendResumeQueue.empty());
@@ -608,6 +614,7 @@ public:
 		catch (my_actor::force_quit_exception&)
 		{//捕获Actor被强制退出异常
 			assert(!_actor._inActor);
+			_actor._inActor = true;
 		}
 #ifdef _DEBUG
 		catch (my_actor::pump_disconnected_exception&)
@@ -619,17 +626,19 @@ public:
 			assert(false);
 		}
 #endif
+		assert(_actor._quited);
 		clear_function(_actor._mainFunc);
-		_actor._msgPoolStatus.clear();
+		if (_actor._timer)
+		{
+			_actor.cancel_timer();
+		}
+		_actor._msgPoolStatus.clear(&_actor);
+		_actor._inActor = false;
 		while (!_actor._exitCallback.empty())
 		{
 			assert(_actor._exitCallback.front());
 			CHECK_EXCEPTION1(_actor._exitCallback.front(), !_actor._isForce);
 			_actor._exitCallback.pop_front();
-		}
-		if (_actor._timer)
-		{
-			_actor.cancel_timer();
 		}
 	}
 private:
@@ -643,7 +652,7 @@ my_actor::my_actor()
 	_timer = NULL;
 	_quited = false;
 	_started = false;
-	DEBUG_OPERATION(_inActor = false);
+	_inActor = false;
 	_suspended = false;
 	_hasNotify = false;
 	_isForce = false;
@@ -1190,6 +1199,12 @@ bool my_actor::is_quited()
 	return _quited;
 }
 
+bool my_actor::in_actor()
+{
+	assert(_strand->running_in_this_thread());
+	return _inActor;
+}
+
 bool my_actor::quit_msg()
 {
 	assert_enter();
@@ -1583,19 +1598,29 @@ void my_actor::pull_yield()
 	}
 }
 
+void my_actor::pull_yield_as_mutex()
+{
+	(*(actor_pull_type*)_actorPull)();
+}
+
 void my_actor::push_yield()
 {
 	assert(!_quited);
 	assert(_inActor);
 	_yieldCount++;
-	DEBUG_OPERATION(_inActor = false);
+	_inActor = false;
 	(*(actor_push_type*)_actorPush)();
 	if (!_quited)
 	{
-		DEBUG_OPERATION(_inActor = true);
+		_inActor = true;
 		return;
 	}
 	throw force_quit_exception();
+}
+
+void my_actor::push_yield_as_mutex()
+{
+	(*(actor_push_type*)_actorPush)();
 }
 
 void my_actor::force_quit_cb_handler()
@@ -1802,9 +1827,9 @@ size_t my_actor::stack_free_space()
 	return (size_t)s;
 }
 
-void my_actor::msg_agent_to(child_actor_handle& childActor)
+bool my_actor::msg_agent_to(child_actor_handle& childActor)
 {
-	msg_agent_to<void, void, void, void>(childActor.get_actor());
+	return msg_agent_to<void, void, void, void>(childActor.get_actor());
 }
 
 void my_actor::msg_agent_off()
@@ -1859,8 +1884,11 @@ bool my_actor::timed_wait_msg(int tm, actor_msg_handle<>& amh)
 		{
 			delay_trig(tm, [this, &timeout]()
 			{
-				timeout = true;
-				run_one();
+				if (!_quited)
+				{
+					timeout = true;
+					pull_yield();
+				}
 			});
 		}
 		push_yield();
@@ -1889,21 +1917,20 @@ bool my_actor::timed_pump_msg(int tm, const msg_pump<>::handle& pump, bool check
 			throw pump_disconnected_exception();
 		}
 		pump->_checkDis = checkDis;
-		bool timeOut = false;
+		bool timeout = false;
 		if (tm >= 0)
 		{
-			actor_handle shared_this = shared_from_this();
-			delay_trig(tm, [shared_this, &timeOut]()
+			delay_trig(tm, [this, &timeout]()
 			{
-				if (!shared_this->_quited)
+				if (!_quited)
 				{
-					timeOut = true;
-					shared_this->pull_yield();
+					timeout = true;
+					pull_yield();
 				}
 			});
 		}
 		push_yield();
-		if (!timeOut)
+		if (!timeout)
 		{
 			if (tm >= 0)
 			{
@@ -1956,8 +1983,11 @@ bool my_actor::timed_wait_trig(int tm, actor_trig_handle<>& ath)
 		{
 			delay_trig(tm, [this, &timeout]()
 			{
-				timeout = true;
-				run_one();
+				if (!_quited)
+				{
+					timeout = true;
+					pull_yield();
+				}
 			});
 		}
 		push_yield();
@@ -1978,4 +2008,9 @@ bool my_actor::timed_wait_trig(int tm, actor_trig_handle<>& ath)
 void my_actor::wait_trig(actor_trig_handle<>& ath)
 {
 	timed_wait_trig(-1, ath);
+}
+
+actor_handle my_actor::msg_agent_handle(actor_handle buddyActor)
+{
+	return msg_agent_handle<void, void, void, void>(buddyActor);
 }
