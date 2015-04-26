@@ -949,10 +949,7 @@ class msg_pool_base
 	friend msg_pump<>;
 	friend my_actor;
 public:
-	msg_pool_base() :_hostActor(NULL){}
 	virtual ~msg_pool_base() {};
-protected:
-	my_actor* _hostActor;
 };
 
 template <typename T0, typename T1, typename T2, typename T3>
@@ -1013,10 +1010,9 @@ private:
 		}
 	}
 
-	void receive_msg_post(msg_type&& msg)
+	void receive_msg_post(msg_type&& msg, const actor_handle& hostActor)
 	{
 		auto shared_this = _weakThis.lock();
-		auto hostActor = _hostActor->shared_from_this();
 		_strand->post([=]
 		{
 			actor_handle lockActor = hostActor;
@@ -1024,7 +1020,7 @@ private:
 		});
 	}
 
-	void receive_msg(msg_type&& msg)
+	void receive_msg(msg_type&& msg, const actor_handle& hostActor)
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -1032,7 +1028,7 @@ private:
 		} 
 		else
 		{
-			receive_msg_post(std::move(msg));
+			receive_msg_post(std::move(msg), hostActor);
 		}
 	}
 
@@ -1142,7 +1138,7 @@ class msg_pool : public msg_pool_base
 							msg_type mt_ = std::move(msgBuff.front());
 							msgBuff.pop_front();
 							_thisPool->_sendCount++;
-							_thisPool->_msgPump->receive_msg(std::move(mt_));
+							_thisPool->_msgPump->receive_msg(std::move(mt_), _msgPump->_hostActor->shared_from_this());
 						}
 						else
 						{
@@ -1213,7 +1209,7 @@ private:
 		return res;
 	}
 
-	void send_msg(msg_type&& mt)
+	void send_msg(msg_type&& mt, const actor_handle& hostActor)
 	{
 		if (_waiting)
 		{
@@ -1222,14 +1218,14 @@ private:
 			_sendCount++;
 			if (_msgBuff.empty())
 			{
-				_msgPump->receive_msg(std::move(mt));
+				_msgPump->receive_msg(std::move(mt), hostActor);
 			}
 			else
 			{
 				_msgBuff.push_back(std::move(mt));
 				msg_type mt_ = std::move(_msgBuff.front());
 				_msgBuff.pop_front();
-				_msgPump->receive_msg(std::move(mt_));
+				_msgPump->receive_msg(std::move(mt_), hostActor);
 			}
 		}
 		else
@@ -1238,7 +1234,7 @@ private:
 		}
 	}
 
-	void post_msg(msg_type&& mt)
+	void post_msg(msg_type&& mt, const actor_handle& hostActor)
 	{
 		if (_waiting)
 		{
@@ -1247,12 +1243,12 @@ private:
 			_sendCount++;
 			if (_msgBuff.empty())
 			{
-				_msgPump->receive_msg_post(std::move(mt));
+				_msgPump->receive_msg_post(std::move(mt), hostActor);
 			}
 			else
 			{
 				_msgBuff.push_back(std::move(mt));
-				_msgPump->receive_msg_post(std::move(_msgBuff.front()));
+				_msgPump->receive_msg_post(std::move(_msgBuff.front()), hostActor);
 				_msgBuff.pop_front();
 			}
 		}
@@ -1262,20 +1258,19 @@ private:
 		}
 	}
 
-	void push_msg(msg_type&& mt)
+	void push_msg(msg_type&& mt, const actor_handle& hostActor)
 	{
 		if (_strand->running_in_this_thread())
 		{
-			post_msg(std::move(mt));
+			post_msg(std::move(mt), hostActor);
 		}
 		else
 		{
 			auto shared_this = _weakThis.lock();
-			auto hostActor = _hostActor->shared_from_this();
 			_strand->post([=]
 			{
-				actor_handle lockActor = hostActor;
-				shared_this->send_msg(std::move((msg_type&)mt));
+				auto& hostActor_ = hostActor;
+				shared_this->send_msg(std::move((msg_type&)mt), hostActor_);
 			});
 		}
 	}
@@ -1285,7 +1280,6 @@ private:
 		assert(msgPump);
 		assert(_strand->running_in_this_thread());
 		_msgPump = msgPump;
-		_hostActor = _msgPump->_hostActor;
 		pump_handler compHandler;
 		compHandler._thisPool = _weakThis.lock();
 		compHandler._msgPump = msgPump;
@@ -1298,7 +1292,6 @@ private:
 	{
 		assert(_strand->running_in_this_thread());
 		_msgPump.reset();
-		_hostActor = NULL;
 		_waiting = false;
 	}
 
@@ -1343,9 +1336,9 @@ protected:
 public:
 	virtual ~msg_pool_void();
 protected:
-	void send_msg();
-	void post_msg();
-	void push_msg();
+	void send_msg(const actor_handle& hostActor);
+	void post_msg(const actor_handle& hostActor);
+	void push_msg(const actor_handle& hostActor);
 	pump_handler connect_pump(const std::shared_ptr<msg_pump_type>& msgPump);
 	void disconnect();
 	void expand_fixed(size_t fixedSize){};
@@ -1372,8 +1365,8 @@ public:
 	virtual ~msg_pump_void();
 protected:
 	void receiver();
-	void receive_msg_post();
-	void receive_msg();
+	void receive_msg_post(const actor_handle& hostActor);
+	void receive_msg(const actor_handle& hostActor);
 	bool read_msg();
 	void connect(const pump_handler& pumpHandler);
 	void clear();
@@ -1436,35 +1429,40 @@ class post_actor_msg
 public:
 	post_actor_msg(){}
 	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool, const actor_handle& hostActor)
-		:_msgPool(msgPool), _lockHost(hostActor){}
+		:_msgPool(msgPool), _hostActor(hostActor){}
 public:
 	template <typename PT0, typename PT1, typename PT2, typename PT3>
 	void operator()(const PT0& p0, const PT1& p1, const PT2& p2, const PT3& p3) const
 	{
-		_msgPool->push_msg(std::move(msg_param<PT0, PT1, PT2, PT3>(p0, p1, p2, p3)));
+		assert(!empty());
+		_msgPool->push_msg(std::move(msg_param<PT0, PT1, PT2, PT3>(p0, p1, p2, p3)), _hostActor);
 	}
 
 	template <typename PT0, typename PT1, typename PT2>
 	void operator()(const PT0& p0, const PT1& p1, const PT2& p2) const
 	{
-		_msgPool->push_msg(std::move(msg_param<PT0, PT1, PT2>(p0, p1, p2)));
+		assert(!empty());
+		_msgPool->push_msg(std::move(msg_param<PT0, PT1, PT2>(p0, p1, p2)), _hostActor);
 	}
 
 	template <typename PT0, typename PT1>
 	void operator()(const PT0& p0, const PT1& p1) const
 	{
-		_msgPool->push_msg(std::move(msg_param<PT0, PT1>(p0, p1)));
+		assert(!empty());
+		_msgPool->push_msg(std::move(msg_param<PT0, PT1>(p0, p1)), _hostActor);
 	}
 
 	template <typename PT0>
 	void operator()(const PT0& p0) const
 	{
-		_msgPool->push_msg(std::move(msg_param<PT0>(p0)));
+		assert(!empty());
+		_msgPool->push_msg(std::move(msg_param<PT0>(p0)), _hostActor);
 	}
 
 	void operator()() const
 	{
-		_msgPool->push_msg();
+		assert(!empty());
+		_msgPool->push_msg(_hostActor);
 	}
 
 	bool empty() const
@@ -1474,7 +1472,7 @@ public:
 
 	void clear()
 	{
-		_lockHost.reset();
+		_hostActor.reset();
 		_msgPool.reset();
 	}
 
@@ -1483,7 +1481,7 @@ public:
 		return !empty();
 	}
 private:
-	actor_handle _lockHost;
+	actor_handle _hostActor;
 	std::shared_ptr<msg_pool_type> _msgPool;
 };
 //////////////////////////////////////////////////////////////////////////

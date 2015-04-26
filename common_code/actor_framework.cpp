@@ -268,7 +268,6 @@ msg_pool_void::pump_handler msg_pool_void::connect_pump(const std::shared_ptr<ms
 	assert(msgPump);
 	assert(_strand->running_in_this_thread());
 	_msgPump = msgPump;
-	_hostActor = msgPump->_hostActor;
 	pump_handler compHandler;
 	compHandler._thisPool = _weakThis.lock();
 	compHandler._msgPump = msgPump;
@@ -277,32 +276,31 @@ msg_pool_void::pump_handler msg_pool_void::connect_pump(const std::shared_ptr<ms
 	return compHandler;
 }
 
-void msg_pool_void::push_msg()
+void msg_pool_void::push_msg(const actor_handle& hostActor)
 {
 	if (_strand->running_in_this_thread())
 	{
-		post_msg();
+		post_msg(hostActor);
 	}
 	else
 	{
 		auto shared_this = _weakThis.lock();
-		auto hostActor = _hostActor->shared_from_this();
 		_strand->post([=]
 		{
-			actor_handle lockActor = hostActor;
-			shared_this->send_msg();
+			auto& lockActor_ = hostActor;
+			shared_this->send_msg(lockActor_);
 		});
 	}
 }
 
-void msg_pool_void::send_msg()
+void msg_pool_void::send_msg(const actor_handle& hostActor)
 {
 	if (_waiting)
 	{
 		_waiting = false;
 		assert(_msgPump);
 		_sendCount++;
-		_msgPump->receive_msg();
+		_msgPump->receive_msg(hostActor);
 	}
 	else
 	{
@@ -310,14 +308,14 @@ void msg_pool_void::send_msg()
 	}
 }
 
-void msg_pool_void::post_msg()
+void msg_pool_void::post_msg(const actor_handle& hostActor)
 {
 	if (_waiting)
 	{
 		_waiting = false;
 		assert(_msgPump);
 		_sendCount++;
-		_msgPump->receive_msg_post();
+		_msgPump->receive_msg_post(hostActor);
 	}
 	else
 	{
@@ -329,7 +327,6 @@ void msg_pool_void::disconnect()
 {
 	assert(_strand->running_in_this_thread());
 	_msgPump.reset();
-	_hostActor = NULL;
 	_waiting = false;
 }
 
@@ -370,7 +367,7 @@ void msg_pool_void::pump_handler::operator()(BYTE pumpID)
 				{
 					_thisPool->_msgBuff--;
 					_thisPool->_sendCount++;
-					_thisPool->_msgPump->receive_msg();
+					_thisPool->_msgPump->receive_msg(_msgPump->_hostActor->shared_from_this());
 				} 
 				else
 				{
@@ -479,7 +476,7 @@ bool msg_pump_void::read_msg()
 	return false;
 }
 
-void msg_pump_void::receive_msg()
+void msg_pump_void::receive_msg(const actor_handle& hostActor)
 {
 	if (_strand->running_in_this_thread())
 	{
@@ -487,14 +484,13 @@ void msg_pump_void::receive_msg()
 	}
 	else
 	{
-		receive_msg_post();
+		receive_msg_post(hostActor);
 	}
 }
 
-void msg_pump_void::receive_msg_post()
+void msg_pump_void::receive_msg_post(const actor_handle& hostActor)
 {
 	auto shared_this = _weakThis.lock();
-	auto hostActor = _hostActor->shared_from_this();
 	_strand->post([=]
 	{
 		actor_handle lockActor = hostActor;

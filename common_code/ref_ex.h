@@ -1,6 +1,8 @@
 #ifndef __REF_EX_H
 #define __REF_EX_H
 
+template <typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
+struct ref_ex;
 
 template <typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
 struct const_ref_ex
@@ -12,6 +14,12 @@ struct const_ref_ex
 	}
 
 	const_ref_ex(const const_ref_ex& s)
+		:_p0(s._p0), _p1(s._p1), _p2(s._p2), _p3(s._p3)
+	{
+
+	}
+
+	const_ref_ex(const ref_ex<T0, T1, T2, T3>& s)
 		:_p0(s._p0), _p1(s._p1), _p2(s._p2), _p3(s._p3)
 	{
 
@@ -38,6 +46,12 @@ struct const_ref_ex<T0, T1, T2, void>
 
 	}
 
+	const_ref_ex(const ref_ex<T0, T1, T2>& s)
+		:_p0(s._p0), _p1(s._p1), _p2(s._p2)
+	{
+
+	}
+
 	const T0& _p0;
 	const T1& _p1;
 	const T2& _p2;
@@ -53,6 +67,12 @@ struct const_ref_ex<T0, T1, void, void>
 	}
 
 	const_ref_ex(const const_ref_ex& s)
+		:_p0(s._p0), _p1(s._p1)
+	{
+
+	}
+
+	const_ref_ex(const ref_ex<T0, T1>& s)
 		:_p0(s._p0), _p1(s._p1)
 	{
 
@@ -77,11 +97,17 @@ struct const_ref_ex<T0, void, void, void>
 
 	}
 
+	const_ref_ex(const ref_ex<T0>& s)
+		:_p0(s._p0)
+	{
+
+	}
+
 	const T0& _p0;
 };
 //////////////////////////////////////////////////////////////////////////
 
-template <typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
+template <typename T0, typename T1, typename T2, typename T3>
 struct ref_ex
 {
 	ref_ex(T0& p0, T1& p1, T2& p2, T3& p3)
