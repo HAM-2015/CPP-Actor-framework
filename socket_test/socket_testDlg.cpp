@@ -197,7 +197,7 @@ void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param>
 	{
 		self->close_timer();
 		self->actor_force_quit(connecting);
-		send(self, [this]()
+		send(self, [this]
 		{
 			this->GetDlgItem(IDC_BUTTON1)->EnableWindow(FALSE);
 			this->GetDlgItem(IDC_BUTTON1)->SetWindowText("连接");
@@ -215,7 +215,7 @@ void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param>
 					break;
 				}
 				auto this_ = this;
-				this->send(self, [this_, &msg](){this_->showClientMsg(msg->c_str()); });
+				this->send(self, [this_, &msg]{this_->showClientMsg(msg->c_str()); });
 			}
 			self->close_msg_notifer(amh);
 		});
@@ -230,19 +230,19 @@ void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param>
 				textio->write(self->pump_msg(*amh));
 			}
 		});
-		send(self, [this]()
+		send(self, [this]
 		{
 			this->GetDlgItem(IDC_BUTTON3)->EnableWindow(TRUE);
 		});
 		self->child_actor_wait_quit(readActor);
 		self->child_actor_force_quit(writerActor);
 		textio->close();
-		send(self, [this](){this->showClientMsg("断开连接"); });
+		send(self, [this]{this->showClientMsg("断开连接"); });
 	} 
 	else
 	{
 		self->actor_force_quit(connecting);
-		send(self, [this]()
+		send(self, [this]
 		{
 			this->GetDlgItem(IDC_BUTTON1)->EnableWindow(FALSE);
 			this->GetDlgItem(IDC_BUTTON1)->SetWindowText("连接");
@@ -298,7 +298,7 @@ void Csocket_testDlg::serverActor(my_actor* self, std::shared_ptr<server_param> 
 			sessList.erase(self->wait_msg(sessDissonnLst));
 			auto this_ = this;
 			size_t size = sessList.size();
-			this->send(self, [this_, size]()
+			this->send(self, [this_, size]
 			{
 				this_->showSessionNum(size);
 			});
@@ -315,7 +315,7 @@ void Csocket_testDlg::serverActor(my_actor* self, std::shared_ptr<server_param> 
 			if (!norClosed)
 			{
 				self->child_actor_force_quit(lstCloseProxyActor);
-				send(self, [this]()
+				send(self, [this]
 				{
 					this->MessageBox("服务器意外关闭");
 				});
@@ -328,7 +328,7 @@ void Csocket_testDlg::serverActor(my_actor* self, std::shared_ptr<server_param> 
 			newSess->_socket = newSocket;
 			sessList.push_front(newSess);
 			size_t size = sessList.size();
-			this->send(self, [this, size]()
+			this->send(self, [this, size]
 			{
 				this->showSessionNum(size);
 			});
@@ -365,7 +365,7 @@ void Csocket_testDlg::mainActor(my_actor* self)
 	post_actor_msg<shared_data> clientPostPipe;
 	actor_handle clientActorHandle;
 	actor_handle serverActorHandle;
-	auto disconnectHandler = [&, this]()
+	auto disconnectHandler = [&, this]
 	{
 		if (clientActorHandle)
 		{
@@ -375,7 +375,7 @@ void Csocket_testDlg::mainActor(my_actor* self)
 			extClient.reset();
 			clientPostPipe.clear();
 			auto _this = this;
-			this->send(self, [&, _this]()
+			this->send(self, [&, _this]
 			{
 				_this->GetDlgItem(IDC_BUTTON1)->EnableWindow(TRUE);
 				_this->GetDlgItem(IDC_BUTTON2)->EnableWindow(FALSE);
@@ -383,7 +383,7 @@ void Csocket_testDlg::mainActor(my_actor* self)
 			});
 		}
 	};
-	auto stopListenHandler = [&, this]()
+	auto stopListenHandler = [&, this]
 	{
 		if (serverActorHandle)
 		{
@@ -391,7 +391,7 @@ void Csocket_testDlg::mainActor(my_actor* self)
 			self->actor_wait_quit(serverActorHandle);
 			serverActorHandle.reset();
 			auto _this = this;
-			this->send(self, [_this]()
+			this->send(self, [_this]
 			{
 				_this->_extSessNumEdit.SetWindowText("");
 				_this->GetDlgItem(IDC_BUTTON4)->EnableWindow(TRUE);
@@ -403,9 +403,9 @@ void Csocket_testDlg::mainActor(my_actor* self)
 	msg_pump<ui_cmd>::handle lstCMD = self->connect_msg_pump<ui_cmd>();
 	while (true)
 	{
-		send(self, [this](){this->EnableWindow(TRUE);});
+		send(self, [this]{this->EnableWindow(TRUE);});
 		ui_cmd cmd = self->pump_msg(*lstCMD);
-		send(self, [this](){this->EnableWindow(FALSE);});
+		send(self, [this]{this->EnableWindow(FALSE);});
 		switch (cmd)
 		{
 		case ui_connect:
@@ -415,7 +415,7 @@ void Csocket_testDlg::mainActor(my_actor* self)
 					char sip[32];
 					CString sport;
 					CString stm;
-					send(self, [&, this]()
+					send(self, [&, this]
 					{
 						BYTE bip[4];
 						_clientIpEdit.GetAddress(bip[0], bip[1], bip[2], bip[3]);
@@ -434,7 +434,7 @@ void Csocket_testDlg::mainActor(my_actor* self)
 							boost::bind(&Csocket_testDlg::connectActor, this, _1, extClient));
 						clientActorHandle->notify_run();
 						clientPostPipe = self->connect_msg_notifer_to<shared_data>(clientActorHandle);
-						send(self, [this]()
+						send(self, [this]
 						{
 							this->GetDlgItem(IDC_BUTTON1)->EnableWindow(FALSE);
 							this->GetDlgItem(IDC_BUTTON2)->EnableWindow(TRUE);
@@ -453,7 +453,7 @@ void Csocket_testDlg::mainActor(my_actor* self)
 				{
 					CString sport;
 					CString snum;
-					send(self, [&, this]()
+					send(self, [&, this]
 					{
 						_serverPortEdit.GetWindowText(sport);
 						_maxSessionEdit.GetWindowText(snum);
@@ -467,7 +467,7 @@ void Csocket_testDlg::mainActor(my_actor* self)
 						serverActorHandle = my_actor::create(_strand, boost::bind(&Csocket_testDlg::serverActor, this, _1, param));
 						serverActorHandle->notify_run();
 						serverNtfClose = self->connect_msg_notifer_to(serverActorHandle);
-						send(self, [this]()
+						send(self, [this]
 						{
 							this->GetDlgItem(IDC_BUTTON4)->EnableWindow(FALSE);
 							this->GetDlgItem(IDC_BUTTON5)->EnableWindow(TRUE);
@@ -484,7 +484,7 @@ void Csocket_testDlg::mainActor(my_actor* self)
 			{
 				if (clientPostPipe)
 				{
-					send(self, [&]()
+					send(self, [&]
 					{
 						CString cs;
 						_msgEdit.GetWindowText(cs);
@@ -511,7 +511,7 @@ void Csocket_testDlg::mainActor(my_actor* self)
 			{
 				disconnectHandler();
 				stopListenHandler();
-				send(self, [this](){this->mfc_close();});
+				send(self, [this]{this->mfc_close();});
 				return;
 			}
 			break;

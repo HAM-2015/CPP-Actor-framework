@@ -47,7 +47,7 @@ void ios_proxy::run(size_t threadNum)
 		boost::unique_lock<boost::mutex> ul(*blockMutex);
 		for (size_t i = 0; i < threadNum; i++)
 		{
-			boost::thread* newThread = new boost::thread([&, i]()
+			boost::thread* newThread = new boost::thread([&, i]
 			{
 				try
 				{

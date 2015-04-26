@@ -79,7 +79,7 @@ void dlg_session::showClientMsg(const char* msg)
 
 void dlg_session::sessionActor(my_actor* self)
 {
-	send(self, [this](){this->showClientMsg(_socket->ip().c_str()); });
+	send(self, [this]{this->showClientMsg(_socket->ip().c_str()); });
 	child_actor_handle lstClose = self->create_child_actor([&, this](my_actor* self)
 	{
 		auto amh = self->connect_msg_pump();
@@ -114,17 +114,17 @@ void dlg_session::sessionActor(my_actor* self)
 		{
 			break;
 		}
-		send(self, [this, &msg](){this->showClientMsg(msg->c_str()); });
+		send(self, [this, &msg]{this->showClientMsg(msg->c_str()); });
 	}
 	self->child_actor_force_quit(wd);
 	self->close_msg_notifer(amh);
-	send(self, [this]()
+	send(self, [this]
 	{
 		this->GetDlgItem(IDC_BUTTON3)->EnableWindow(FALSE);
 		this->showClientMsg("Á¬½Ó¶Ï¿ª");
 	});
 	self->child_actor_wait_quit(lstClose);
-	send(self, [this]()
+	send(self, [this]
 	{
 		this->mfc_close();
 	});

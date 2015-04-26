@@ -39,7 +39,7 @@ public:
 void mutex_trig_notifer::operator()() const
 {
 	auto& trigHandle_ = _trigHandle;
-	_strand->post([=]()
+	_strand->post([=]
 	{
 		trigHandle_->push_msg();
 	});
@@ -210,7 +210,7 @@ public:
 				{
 					complete = b;
 					auto& shared_this_ = shared_this;
-					shared_this->_strand->post([=]()
+					shared_this->_strand->post([=]
 					{
 						shared_this_->pull_yield_as_mutex();
 					});
@@ -265,7 +265,7 @@ public:
 		DEBUG_OPERATION(check_quit cq);
 
 		auto shared_this = _weakThis.lock();
-		auto h = [shared_this, self]()
+		auto h = [shared_this, self]
 		{
 			auto& recCount_ = shared_this->_recCount;
 			auto& lockActor_ = shared_this->_lockActor;
@@ -292,10 +292,10 @@ public:
 			if (self->is_quited())
 			{
 				actor_handle shared_this = self->shared_from_this();
-				_strand->asyncInvokeVoid(h, [shared_this]()
+				_strand->asyncInvokeVoid(h, [shared_this]
 				{
 					auto& shared_this_ = shared_this;
-					shared_this->_strand->post([=]()
+					shared_this->_strand->post([=]
 					{
 						shared_this_->pull_yield_as_mutex();
 					});
@@ -319,7 +319,7 @@ public:
 	{
 		DEBUG_OPERATION(check_quit cq);
 		auto shared_this = _weakThis.lock();
-		self->send(_strand, [shared_this]()
+		self->send(_strand, [shared_this]
 		{
 			shared_this->_lockActor = NULL;
 			shared_this->_recCount = 0;

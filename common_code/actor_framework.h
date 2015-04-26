@@ -336,13 +336,14 @@ public:
 	virtual void close() = 0;
 protected:
 	void run_one();
+	bool is_quited();
 	void set_actor(const actor_handle& hostActor);
 	std::shared_ptr<bool> new_bool();
 protected:
 	bool _waiting;
-	shared_strand _strand;
 	my_actor* _hostActor;
 	std::shared_ptr<bool> _closed;
+	DEBUG_OPERATION(shared_strand _strand);
 };
 
 template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
@@ -375,10 +376,11 @@ public:
 		auto& msgHandle_ = _msgHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]()
+		_hostActor->self_strand()->post([=]
 		{
-			if (!hostActor_->is_quited() && !(*closed_))
+			if (!(*closed_))
 			{
+				auto lockActor = hostActor_;
 				msgHandle_->push_msg(ref_ex<PT0, PT1, PT2, PT3>((PT0&)p0, (PT1&)p1, (PT2&)p2, (PT3&)p3));
 			}
 		});
@@ -390,10 +392,11 @@ public:
 		auto& msgHandle_ = _msgHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]()
+		_hostActor->self_strand()->post([=]
 		{
-			if (!hostActor_->is_quited() && !(*closed_))
+			if (!(*closed_))
 			{
+				auto lockActor = hostActor_;
 				msgHandle_->push_msg(ref_ex<PT0, PT1, PT2>((PT0&)p0, (PT1&)p1, (PT2&)p2));
 			}
 		});
@@ -405,10 +408,11 @@ public:
 		auto& msgHandle_ = _msgHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]()
+		_hostActor->self_strand()->post([=]
 		{
-			if (!hostActor_->is_quited() && !(*closed_))
+			if (!(*closed_))
 			{
+				auto lockActor = hostActor_;
 				msgHandle_->push_msg(ref_ex<PT0, PT1>((PT0&)p0, (PT1&)p1));
 			}
 		});
@@ -420,10 +424,11 @@ public:
 		auto& msgHandle_ = _msgHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]()
+		_hostActor->self_strand()->post([=]
 		{
-			if (!hostActor_->is_quited() && !(*closed_))
+			if (!(*closed_))
 			{
+				auto lockActor = hostActor_;
 				msgHandle_->push_msg(ref_ex<PT0>((PT0&)p0));
 			}
 		});
@@ -434,10 +439,11 @@ public:
 		auto& msgHandle_ = _msgHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]()
+		_hostActor->self_strand()->post([=]
 		{
-			if (!hostActor_->is_quited() && !(*closed_))
+			if (!(*closed_))
 			{
+				auto lockActor = hostActor_;
 				msgHandle_->push_msg();
 			}
 		});
@@ -500,17 +506,20 @@ private:
 	void push_msg(ref_type& msg)
 	{
 		assert(_strand->running_in_this_thread());
-		if (_waiting)
+		if (!is_quited())
 		{
-			_waiting = false;
-			assert(_msgBuff.empty());
-			assert(_dstRef);
-			_dstRef->move_from(msg);
-			_dstRef = NULL;
-			run_one();
-			return;
+			if (_waiting)
+			{
+				_waiting = false;
+				assert(_msgBuff.empty());
+				assert(_dstRef);
+				_dstRef->move_from(msg);
+				_dstRef = NULL;
+				run_one();
+				return;
+			}
+			_msgBuff.push_back(std::move(msg_type(msg)));
 		}
-		_msgBuff.push_back(std::move(msg_type(msg)));
 	}
 
 	bool read_msg(ref_type& dst)
@@ -531,8 +540,9 @@ private:
 	{
 		if (_closed)
 		{
-			*_closed = true;
 			assert(_strand->running_in_this_thread());
+			*_closed = true;
+			_closed.reset();
 		}
 		_dstRef = NULL;
 		_waiting = false;
@@ -576,13 +586,16 @@ private:
 	void push_msg()
 	{
 		assert(_strand->running_in_this_thread());
-		if (_waiting)
+		if (!is_quited())
 		{
-			_waiting = false;
-			run_one();
-			return;
+			if (_waiting)
+			{
+				_waiting = false;
+				run_one();
+				return;
+			}
+			_msgCount++;
 		}
-		_msgCount++;
 	}
 
 	bool read_msg()
@@ -601,8 +614,9 @@ private:
 	{
 		if (_closed)
 		{
-			*_closed = true;
 			assert(_strand->running_in_this_thread());
+			*_closed = true;
+			_closed.reset();
 		}
 		_msgCount = 0;
 		_waiting = false;
@@ -643,10 +657,11 @@ public:
 		auto& trigHandle_ = _trigHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_strand->post([=]()
+		_strand->post([=]
 		{
-			if (!hostActor_->is_quited() && !(*closed_))
+			if (!(*closed_))
 			{
+				auto lockActor = hostActor_;
 				trigHandle_->push_msg(ref_ex<PT0, PT1, PT2, PT3>((PT0&)p0, (PT1&)p1, (PT2&)p2, (PT3&)p3));
 			}
 		});
@@ -658,10 +673,11 @@ public:
 		auto& trigHandle_ = _trigHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]()
+		_hostActor->self_strand()->post([=]
 		{
-			if (!hostActor_->is_quited() && !(*closed_))
+			if (!(*closed_))
 			{
+				auto lockActor = hostActor_;
 				trigHandle_->push_msg(ref_ex<PT0, PT1, PT2>((PT0&)p0, (PT1&)p1, (PT2&)p2));
 			}
 		});
@@ -673,10 +689,11 @@ public:
 		auto& trigHandle_ = _trigHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]()
+		_hostActor->self_strand()->post([=]
 		{
-			if (!hostActor_->is_quited() && !(*closed_))
+			if (!(*closed_))
 			{
+				auto lockActor = hostActor_;
 				trigHandle_->push_msg(ref_ex<PT0, PT1>((PT0&)p0, (PT1&)p1));
 			}
 		});
@@ -688,10 +705,11 @@ public:
 		auto& trigHandle_ = _trigHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]()
+		_hostActor->self_strand()->post([=]
 		{
-			if (!hostActor_->is_quited() && !(*closed_))
+			if (!(*closed_))
 			{
+				auto lockActor = hostActor_;
 				trigHandle_->push_msg(ref_ex<PT0>((PT0&)p0));
 			}
 		});
@@ -702,10 +720,11 @@ public:
 		auto& trigHandle_ = _trigHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]()
+		_hostActor->self_strand()->post([=]
 		{
-			if (!hostActor_->is_quited() && !(*closed_))
+			if (!(*closed_))
 			{
+				auto lockActor = hostActor_;
 				trigHandle_->push_msg();
 			}
 		});
@@ -765,17 +784,20 @@ private:
 	{
 		assert(_strand->running_in_this_thread());
 		*_closed = true;
-		if (_waiting)
+		if (!is_quited())
 		{
-			_waiting = false;
-			assert(_dstRef);
-			_dstRef->move_from(msg);
-			_dstRef = NULL;
-			run_one();
-			return;
+			if (_waiting)
+			{
+				_waiting = false;
+				assert(_dstRef);
+				_dstRef->move_from(msg);
+				_dstRef = NULL;
+				run_one();
+				return;
+			}
+			_hasMsg = true;
+			new (_msgBuff)msg_type(msg);
 		}
-		_hasMsg = true;
-		new (_msgBuff)msg_type(msg);
 	}
 
 	bool read_msg(ref_type& dst)
@@ -797,8 +819,9 @@ private:
 	{
 		if (_closed)
 		{
-			*_closed = true;
 			assert(_strand->running_in_this_thread());
+			*_closed = true;
+			_closed.reset();
 		}
 		if (_hasMsg)
 		{
@@ -812,6 +835,7 @@ private:
 public:
 	bool has()
 	{
+		assert(_strand->running_in_this_thread());
 		return _hasMsg;
 	}
 private:
@@ -850,13 +874,16 @@ private:
 	{
 		assert(_strand->running_in_this_thread());
 		*_closed = true;
-		if (_waiting)
+		if (!is_quited())
 		{
-			_waiting = false;
-			run_one();
-			return;
+			if (_waiting)
+			{
+				_waiting = false;
+				run_one();
+				return;
+			}
+			_hasMsg = true;
 		}
-		_hasMsg = true;
 	}
 
 	bool read_msg()
@@ -875,8 +902,9 @@ private:
 	{
 		if (_closed)
 		{
-			*_closed = true;
 			assert(_strand->running_in_this_thread());
+			*_closed = true;
+			_closed.reset();
 		}
 		_hasMsg = false;
 		_waiting = false;
@@ -885,6 +913,7 @@ private:
 public:
 	bool has()
 	{
+		assert(_strand->running_in_this_thread());
 		return _hasMsg;
 	}
 private:
@@ -920,7 +949,10 @@ class msg_pool_base
 	friend msg_pump<>;
 	friend my_actor;
 public:
+	msg_pool_base() :_hostActor(NULL){}
 	virtual ~msg_pool_base() {};
+protected:
+	my_actor* _hostActor;
 };
 
 template <typename T0, typename T1, typename T2, typename T3>
@@ -934,6 +966,7 @@ class msg_pump : public msg_pump_base
 
 	friend my_actor;
 	friend msg_pool<T0, T1, T2, T3>;
+	friend pump_handler;
 public:
 	typedef msg_pump* handle;
 private:
@@ -983,8 +1016,10 @@ private:
 	void receive_msg_post(msg_type&& msg)
 	{
 		auto shared_this = _weakThis.lock();
-		_strand->post([=]()
+		auto hostActor = _hostActor->shared_from_this();
+		_strand->post([=]
 		{
+			actor_handle lockActor = hostActor;
 			shared_this->receiver(std::move((msg_type&)msg));
 		});
 	}
@@ -1123,19 +1158,18 @@ class msg_pool : public msg_pool_base
 			}
 			else
 			{
-				auto& refThis_ = *this;
-				_thisPool->_strand->post([refThis_, pumpID]()
-				{
-					((pump_handler&)refThis_)(pumpID);
-				});
+				post_pump(pumpID);
 			}
 		}
 
 		void post_pump(BYTE pumpID)
 		{
+			assert(!empty());
 			auto& refThis_ = *this;
-			_thisPool->_strand->post([refThis_, pumpID]()
+			auto hostActor = _msgPump->_hostActor->shared_from_this();
+			_thisPool->_strand->post([=]
 			{
+				actor_handle lockActor = hostActor;
 				((pump_handler&)refThis_)(pumpID);
 			});
 		}
@@ -1179,7 +1213,7 @@ private:
 		return res;
 	}
 
-	void send_msg(msg_type&& mt, bool post)
+	void send_msg(msg_type&& mt)
 	{
 		if (_waiting)
 		{
@@ -1188,42 +1222,43 @@ private:
 			_sendCount++;
 			if (_msgBuff.empty())
 			{
-				if (post)
-				{
-					_msgPump->receive_msg_post(std::move(mt));
-				}
-				else
-				{
-					_msgPump->receive_msg(std::move(mt));
-				}
-			}
-			else
-			{
-				if (post)
-				{
-					_msgBuff.push_back(std::move(mt));
-					_msgPump->receive_msg_post(std::move(_msgBuff.front()));
-					_msgBuff.pop_front();
-				}
-				else
-				{
-					_msgBuff.push_back(std::move(mt));
-					msg_type mt_ = std::move(_msgBuff.front());
-					_msgBuff.pop_front();
-					_msgPump->receive_msg(std::move(mt_));
-				}
-			}
-		}
-		else
-		{
-			if (post)
-			{
-				_msgBuff.push_back(mt);
+				_msgPump->receive_msg(std::move(mt));
 			}
 			else
 			{
 				_msgBuff.push_back(std::move(mt));
+				msg_type mt_ = std::move(_msgBuff.front());
+				_msgBuff.pop_front();
+				_msgPump->receive_msg(std::move(mt_));
 			}
+		}
+		else
+		{
+			_msgBuff.push_back(std::move(mt));
+		}
+	}
+
+	void post_msg(msg_type&& mt)
+	{
+		if (_waiting)
+		{
+			_waiting = false;
+			assert(_msgPump);
+			_sendCount++;
+			if (_msgBuff.empty())
+			{
+				_msgPump->receive_msg_post(std::move(mt));
+			}
+			else
+			{
+				_msgBuff.push_back(std::move(mt));
+				_msgPump->receive_msg_post(std::move(_msgBuff.front()));
+				_msgBuff.pop_front();
+			}
+		}
+		else
+		{
+			_msgBuff.push_back(std::move(mt));
 		}
 	}
 
@@ -1231,14 +1266,16 @@ private:
 	{
 		if (_strand->running_in_this_thread())
 		{
-			send_msg(std::move(mt), true);
+			post_msg(std::move(mt));
 		}
 		else
 		{
 			auto shared_this = _weakThis.lock();
-			_strand->post([=]()
+			auto hostActor = _hostActor->shared_from_this();
+			_strand->post([=]
 			{
-				shared_this->send_msg(std::move((msg_type&)mt), false);
+				actor_handle lockActor = hostActor;
+				shared_this->send_msg(std::move((msg_type&)mt));
 			});
 		}
 	}
@@ -1248,6 +1285,7 @@ private:
 		assert(msgPump);
 		assert(_strand->running_in_this_thread());
 		_msgPump = msgPump;
+		_hostActor = _msgPump->_hostActor;
 		pump_handler compHandler;
 		compHandler._thisPool = _weakThis.lock();
 		compHandler._msgPump = msgPump;
@@ -1260,6 +1298,7 @@ private:
 	{
 		assert(_strand->running_in_this_thread());
 		_msgPump.reset();
+		_hostActor = NULL;
 		_waiting = false;
 	}
 
@@ -1304,7 +1343,8 @@ protected:
 public:
 	virtual ~msg_pool_void();
 protected:
-	void send_msg(bool post);
+	void send_msg();
+	void post_msg();
 	void push_msg();
 	pump_handler connect_pump(const std::shared_ptr<msg_pump_type>& msgPump);
 	void disconnect();
@@ -1325,6 +1365,7 @@ class msg_pump_void : public msg_pump_base
 
 	friend my_actor;
 	friend msg_pool_void;
+	friend pump_handler;
 protected:
 	msg_pump_void(const actor_handle& hostActor);
 public:
@@ -1655,18 +1696,9 @@ class my_actor
 		{
 			for (int i = 0; i < 5; i++)
 			{
-				for (auto it = _msgPumpList[i].begin(); it != _msgPumpList[i].end(); it++)
-				{
-					(*it)->lock(self);
-				}
-				for (auto it = _msgPumpList[i].begin(); it != _msgPumpList[i].end(); it++)
-				{
-					(*it)->close();
-				}
-				for (auto it = _msgPumpList[i].begin(); it != _msgPumpList[i].end(); it++)
-				{
-					(*it)->unlock(self);
-				}
+				for_each(_msgPumpList[i].begin(), _msgPumpList[i].end(), [&self](const std::shared_ptr<pck_base>& p){p->lock(self); });
+				for_each(_msgPumpList[i].begin(), _msgPumpList[i].end(), [](const std::shared_ptr<pck_base>& p){p->close(); });
+				for_each(_msgPumpList[i].begin(), _msgPumpList[i].end(), [&self](const std::shared_ptr<pck_base>& p){p->unlock(self); });
 			}
 		}
 
@@ -1900,7 +1932,7 @@ public:
 		if (exeStrand != _strand)
 		{
 			actor_handle shared_this = shared_from_this();
-			exeStrand->asyncInvokeVoid(h, [shared_this](){shared_this->trig_handler(); });
+			exeStrand->asyncInvokeVoid(h, [shared_this]{shared_this->trig_handler(); });
 			push_yield();
 			return;
 		}
@@ -1928,7 +1960,7 @@ public:
 	{
 		assert_enter();
 		actor_handle shared_this = shared_from_this();
-		exeStrand->asyncInvokeVoid(h, [shared_this](){shared_this->trig_handler(); });
+		exeStrand->asyncInvokeVoid(h, [shared_this]{shared_this->trig_handler(); });
 		push_yield();
 	}
 
@@ -2015,7 +2047,7 @@ private:
 		else
 		{
 			actor_handle shared_this = shared_from_this();
-			_strand->post([=, &dstRef]()
+			_strand->post([=, &dstRef]
 			{
 				if (!shared_this->_quited)
 				{
@@ -2070,7 +2102,7 @@ public:
 		assert(ath._hostActor && ath._hostActor->self_id() == self_id());
 		assert(ath._closed && !(*ath._closed));
 		auto& closed_ = ath._closed;
-		delay_trig(ms, [=, &ath]()
+		delay_trig(ms, [=, &ath]
 		{
 			if (!*(closed_))
 			{
@@ -2086,7 +2118,7 @@ public:
 		assert(ath._hostActor && ath._hostActor->self_id() == self_id());
 		assert(ath._closed && !(*ath._closed));
 		auto& closed_ = ath._closed;
-		delay_trig(ms, [=, &ath]()
+		delay_trig(ms, [=, &ath]
 		{
 			if (!*(closed_))
 			{
@@ -2102,7 +2134,7 @@ public:
 		assert(ath._hostActor && ath._hostActor->self_id() == self_id());
 		assert(ath._closed && !(*ath._closed));
 		auto& closed_ = ath._closed;
-		delay_trig(ms, [=, &ath]()
+		delay_trig(ms, [=, &ath]
 		{
 			if (!*(closed_))
 			{
@@ -2118,7 +2150,7 @@ public:
 		assert(ath._hostActor && ath._hostActor->self_id() == self_id());
 		assert(ath._closed && !(*ath._closed));
 		auto& closed_ = ath._closed;
-		delay_trig(ms, [=, &ath]()
+		delay_trig(ms, [=, &ath]
 		{
 			if (!*(closed_))
 			{
@@ -2136,7 +2168,7 @@ private:
 			bool timeout = false;
 			if (tm >= 0)
 			{
-				delay_trig(tm, [this, &timeout]()
+				delay_trig(tm, [this, &timeout]
 				{
 					if (!_quited)
 					{
@@ -2426,7 +2458,7 @@ private:
 						{
 							auto& msgPool_ = pckIt->_msgPool;
 							auto& msgPump_ = pckIt->_msgPump;
-							send(msgPool_->_strand, [&msgPool_, &msgPump_]()
+							send(msgPool_->_strand, [&msgPool_, &msgPump_]
 							{
 								assert(msgPool_->_msgPump == msgPump_);
 								msgPool_->disconnect();
@@ -2437,7 +2469,7 @@ private:
 					if (pckIt->_msgPump)
 					{
 						auto& msgPump_ = pckIt->_msgPump;
-						send(msgPump_->_strand, [&msgPump_]()
+						send(msgPump_->_strand, [&msgPump_]
 						{
 							msgPump_->clear();
 						});
@@ -2480,7 +2512,7 @@ private:
 					if (pckIt->_msgPool)
 					{
 						auto& msgPool_ = pckIt->_msgPool;
-						send(msgPool_->_strand, [&msgPool_]()
+						send(msgPool_->_strand, [&msgPool_]
 						{
 							msgPool_->disconnect();
 						});
@@ -2495,14 +2527,14 @@ private:
 							{
 								return newPool->connect_pump(msgPump_);
 							});
-							send(msgPump_->_strand, [&msgPump_, &ph]()
+							send(msgPump_->_strand, [&msgPump_, &ph]
 							{
 								msgPump_->connect(ph);
 							});
 						}
 						else
 						{
-							send(msgPump_->_strand, [&msgPump_]()
+							send(msgPump_->_strand, [&msgPump_]
 							{
 								msgPump_->clear();
 							});
@@ -3020,7 +3052,7 @@ private:
 			bool timeout = false;
 			if (tm >= 0)
 			{
-				delay_trig(tm, [this, &timeout]()
+				delay_trig(tm, [this, &timeout]
 				{
 					if (!_quited)
 					{
@@ -3376,7 +3408,8 @@ private:
 	shared_strand _strand;///<Actor调度器
 	bool _inActor;///<当前正在Actor内部执行标记
 	bool _started;///<已经开始运行的标记
-	bool _quited;///<已经退出完毕
+	bool _quited;///<_mainFunc已经执行完毕
+	bool _exited;///<完全退出
 	bool _suspended;///<Actor挂起标记
 	bool _hasNotify;///<当前Actor挂起，有外部触发准备进入Actor标记
 	bool _isForce;///<是否是强制退出的标记，成功调用了force_quit

@@ -142,7 +142,7 @@ public:
 		boost::mutex mutex;
 		boost::condition_variable con;
 		boost::unique_lock<boost::mutex> ul(mutex);
-		post([&]()
+		post([&]
 		{
 			h();
 			mutex.lock();
@@ -163,7 +163,7 @@ public:
 		boost::mutex mutex;
 		boost::condition_variable con;
 		boost::unique_lock<boost::mutex> ul(mutex);
-		post([&]()
+		post([&]
 		{
 			r = h();
 			mutex.lock();
@@ -181,7 +181,7 @@ public:
 	template <typename H, typename CB>
 	void asyncInvoke(const H& h, const CB& cb)
 	{
-		post([=]()
+		post([=]
 		{
 			cb(h());
 		});
@@ -190,7 +190,7 @@ public:
 	template <typename H, typename CB>
 	void asyncInvokeVoid(const H& h, const CB& cb)
 	{
-		post([=]()
+		post([=]
 		{
 			h();
 			cb();

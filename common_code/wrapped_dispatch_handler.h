@@ -25,42 +25,42 @@ public:
 	void operator()(const Arg1& arg1)
 	{
 		Handler& h_ = _handler;
-		_dispatcher->dispatch([=](){h_((Arg1&)arg1); });
+		_dispatcher->dispatch([=]{h_((Arg1&)arg1); });
 	}
 
 	template <typename Arg1>
 	void operator()(const Arg1& arg1) const
 	{
 		Handler& h_ = _handler;
-		_dispatcher->dispatch([=](){h_((Arg1&)arg1); });
+		_dispatcher->dispatch([=]{h_((Arg1&)arg1); });
 	}
 
 	template <typename Arg1, typename Arg2>
 	void operator()(const Arg1& arg1, const Arg2& arg2)
 	{
 		Handler& h_ = _handler;
-		_dispatcher->dispatch([=](){h_((Arg1&)arg1, (Arg2&)arg2); });
+		_dispatcher->dispatch([=]{h_((Arg1&)arg1, (Arg2&)arg2); });
 	}
 
 	template <typename Arg1, typename Arg2>
 	void operator()(const Arg1& arg1, const Arg2& arg2) const
 	{
 		Handler& h_ = _handler;
-		_dispatcher->dispatch([=](){h_((Arg1&)arg1, (Arg2&)arg2); });
+		_dispatcher->dispatch([=]{h_((Arg1&)arg1, (Arg2&)arg2); });
 	}
 
 	template <typename Arg1, typename Arg2, typename Arg3>
 	void operator()(const Arg1& arg1, const Arg2& arg2, const Arg3& arg3)
 	{
 		Handler& h_ = _handler;
-		_dispatcher->dispatch([=](){h_((Arg1&)arg1, (Arg2&)arg2, (Arg3&)arg3); });
+		_dispatcher->dispatch([=]{h_((Arg1&)arg1, (Arg2&)arg2, (Arg3&)arg3); });
 	}
 
 	template <typename Arg1, typename Arg2, typename Arg3>
 	void operator()(const Arg1& arg1, const Arg2& arg2, const Arg3& arg3) const
 	{
 		Handler& h_ = _handler;
-		_dispatcher->dispatch([=](){h_((Arg1&)arg1, (Arg2&)arg2, (Arg3&)arg3); });
+		_dispatcher->dispatch([=]{h_((Arg1&)arg1, (Arg2&)arg2, (Arg3&)arg3); });
 	}
 
 	template <typename Arg1, typename Arg2, typename Arg3, typename Arg4>
@@ -68,7 +68,7 @@ public:
 		const Arg4& arg4)
 	{
 		Handler& h_ = _handler;
-		_dispatcher->dispatch([=](){h_((Arg1&)arg1, (Arg2&)arg2, (Arg3&)arg3, (Arg4&)arg4); });
+		_dispatcher->dispatch([=]{h_((Arg1&)arg1, (Arg2&)arg2, (Arg3&)arg3, (Arg4&)arg4); });
 	}
 
 	template <typename Arg1, typename Arg2, typename Arg3, typename Arg4>
@@ -76,7 +76,7 @@ public:
 		const Arg4& arg4) const
 	{
 		Handler& h_ = _handler;
-		_dispatcher->dispatch([=](){h_((Arg1&)arg1, (Arg2&)arg2, (Arg3&)arg3, (Arg4&)arg4); });
+		_dispatcher->dispatch([=]{h_((Arg1&)arg1, (Arg2&)arg2, (Arg3&)arg3, (Arg4&)arg4); });
 	}
 
 	template <typename Arg1, typename Arg2, typename Arg3, typename Arg4,
@@ -85,7 +85,7 @@ public:
 		const Arg4& arg4, const Arg5& arg5)
 	{
 			Handler& h_ = _handler;
-			_dispatcher->dispatch([=](){h_((Arg1&)arg1, (Arg2&)arg2, (Arg3&)arg3, (Arg4&)arg4, (Arg5&)arg5); });
+			_dispatcher->dispatch([=]{h_((Arg1&)arg1, (Arg2&)arg2, (Arg3&)arg3, (Arg4&)arg4, (Arg5&)arg5); });
 	}
 
 	template <typename Arg1, typename Arg2, typename Arg3, typename Arg4,
@@ -94,7 +94,7 @@ public:
 		const Arg4& arg4, const Arg5& arg5) const
 	{
 			Handler& h_ = _handler;
-			_dispatcher->dispatch([=](){h_((Arg1&)arg1, (Arg2&)arg2, (Arg3&)arg3, (Arg4&)arg4, (Arg5&)arg5); });
+			_dispatcher->dispatch([=]{h_((Arg1&)arg1, (Arg2&)arg2, (Arg3&)arg3, (Arg4&)arg4, (Arg5&)arg5); });
 	}
 
 	//private:
