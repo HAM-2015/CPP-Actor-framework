@@ -122,6 +122,7 @@ public:
 	void send(my_actor* self, const H& h)
 	{
 		assert(boost::this_thread::get_id() != thread_id());
+		my_actor::quit_guard qg(self);
 		self->trig([&, this](const trig_once_notifer<>& cb)
 		{
 			boost::shared_lock<boost::shared_mutex> sl(_postMutex);
@@ -129,7 +130,7 @@ public:
 			{
 				auto& h_ = h;
 				_mutex.lock();
-				_postOptions.push_back([h_, cb]()
+				_postOptions.push_back([&h_, cb]()
 				{
 					h_();
 					cb();
@@ -147,6 +148,7 @@ public:
 	T send(my_actor* self, const H& h)
 	{
 		assert(boost::this_thread::get_id() != thread_id());
+		my_actor::quit_guard qg(self);
 		return self->trig<T>([&, this](const trig_once_notifer<T>& cb)
 		{
 			boost::shared_lock<boost::shared_mutex> sl(_postMutex);
@@ -154,7 +156,7 @@ public:
 			{
 				auto& h_ = h;
 				_mutex.lock();
-				_postOptions.push_back([h_, cb]()
+				_postOptions.push_back([&h_, cb]()
 				{
 					cb(h_());
 				});

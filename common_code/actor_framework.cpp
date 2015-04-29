@@ -287,8 +287,7 @@ void msg_pool_void::push_msg(const actor_handle& hostActor)
 		auto shared_this = _weakThis.lock();
 		_strand->post([=]
 		{
-			auto& lockActor_ = hostActor;
-			shared_this->send_msg(lockActor_);
+			shared_this->send_msg(hostActor);
 		});
 	}
 }

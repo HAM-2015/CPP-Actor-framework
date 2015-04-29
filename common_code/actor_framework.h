@@ -1269,8 +1269,7 @@ private:
 			auto shared_this = _weakThis.lock();
 			_strand->post([=]
 			{
-				auto& hostActor_ = hostActor;
-				shared_this->send_msg(std::move((msg_type&)mt), hostActor_);
+				shared_this->send_msg(std::move((msg_type&)mt), hostActor);
 			});
 		}
 	}
@@ -2563,43 +2562,46 @@ private:
 
 		assert_enter();
 		assert(childActor);
-		if (childActor->parent_actor() && childActor->parent_actor()->self_id() == self_id())
 		{
-			quit_guard qg(this);
-			auto childPck = send<pck_type>(childActor->self_strand(), [&childActor]()->pck_type
+			auto isSelf = childActor->parent_actor();
+			if (!isSelf || isSelf->self_id() != self_id())
 			{
-				if (!childActor->is_quited())
-				{
-					return childActor->msg_pool_pck<T0, T1, T2, T3>();
-				}
-				return pck_type();
-			});
-			if (childPck)
+				assert(false);
+				return false;
+			}
+		}
+		quit_guard qg(this);
+		auto childPck = send<pck_type>(childActor->self_strand(), [&childActor]()->pck_type
+		{
+			if (!childActor->is_quited())
 			{
-				auto msgPck = msg_pool_pck<T0, T1, T2, T3>();
-				msgPck->lock(this);
-				childPck->lock(this);
-				childPck->_isHead = false;
-				actor_handle hostActor = update_msg_list<T0, T1, T2, T3>(childPck, msgPck->_msgPool);
-				if (hostActor)
+				return childActor->msg_pool_pck<T0, T1, T2, T3>();
+			}
+			return pck_type();
+		});
+		if (childPck)
+		{
+			auto msgPck = msg_pool_pck<T0, T1, T2, T3>();
+			msgPck->lock(this);
+			childPck->lock(this);
+			childPck->_isHead = false;
+			actor_handle hostActor = update_msg_list<T0, T1, T2, T3>(childPck, msgPck->_msgPool);
+			if (hostActor)
+			{
+				if (msgPck->_next && msgPck->_next != childPck)
 				{
-					if (msgPck->_next && msgPck->_next != childPck)
-					{
-						msgPck->_next->lock(this);
-						clear_msg_list<T0, T1, T2, T3>(msgPck->_next, false);
-						msgPck->_next->unlock(this);
-					}
-					msgPck->_next = childPck;
-					childPck->unlock(this);
-					msgPck->unlock(this);
-					return true;
+					msgPck->_next->lock(this);
+					clear_msg_list<T0, T1, T2, T3>(msgPck->_next, false);
+					msgPck->_next->unlock(this);
 				}
+				msgPck->_next = childPck;
 				childPck->unlock(this);
 				msgPck->unlock(this);
+				return true;
 			}
-			return false;
+			childPck->unlock(this);
+			msgPck->unlock(this);
 		}
-		assert(false);
 		return false;
 	}
 public:
@@ -2732,10 +2734,13 @@ public:
 		typedef std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>> pck_type;
 
 		assert_enter();
-		if (!(buddyActor && (!buddyActor->parent_actor() || buddyActor->parent_actor()->self_id() == self_id())))
 		{
-			assert(false);
-			return post_actor_msg<T0, T1, T2, T3>();
+			auto buddyParent = buddyActor->parent_actor();
+			if (!(buddyActor && (!buddyParent || buddyParent->self_id() == self_id())))
+			{
+				assert(false);
+				return post_actor_msg<T0, T1, T2, T3>();
+			}
 		}
 #ifdef _DEBUG
 		{
