@@ -31,9 +31,9 @@ void check_key_test(my_actor* self, int id)
 	while (true)
 	{//按键按下后，检测弹起，1000ms内没有弹起就是超时错误
 		check_key_down(self, id);//检测按下
-		child_actor_handle checkUp = self->create_child_actor(boost::bind(&check_key_up, _1, id), 24 kB);//创建一个检测弹起的子Actor
+		child_actor_handle checkUp = self->create_child_actor([&](my_actor* self){check_key_up(self, id); }, 24 kB);//创建一个检测弹起的子Actor
 		self->child_actor_run(checkUp);//开始运行子Actor
-		self->delay_trig(1000, boost::bind(&my_actor::notify_quit, checkUp.get_actor()));//启用弹起超时处理，超时后强制关闭checkUp
+		self->delay_trig(1000, [&](){checkUp.get_actor()->notify_quit(); });//启用弹起超时处理，超时后强制关闭checkUp
 		if (self->child_actor_wait_quit(checkUp))//正常退出的返回true，被强制关闭的返回false
 		{
 			self->cancel_delay_trig();
@@ -110,20 +110,19 @@ void check_two_down(my_actor* self, int dt, int id1, int id2)
 		{//检测两个按键是否都处于弹起状态
 			bool st1 = false;
 			bool st2 = false;
-			child_actor_handle up1 = self->create_child_actor(boost::bind(&check_both_up, _1, id1, boost::ref(st1), boost::ref(st2)));
-			child_actor_handle up2 = self->create_child_actor(boost::bind(&check_both_up, _1, id2, boost::ref(st2), boost::ref(st1)));
+			child_actor_handle up1 = self->create_child_actor([&](my_actor* self){check_both_up(self, id1, st1, st2); });
+			child_actor_handle up2 = self->create_child_actor([&](my_actor* self){check_both_up(self, id2, st2, st1); });
 			actor_trig_handle<bool> ath;
 			auto nh = self->make_trig_notifer(ath);
 			up1.get_actor()->append_quit_callback(nh);
 			up2.get_actor()->append_quit_callback(nh);
 			self->child_actor_run(up1);
 			self->child_actor_run(up2);
-			if (self->timed_wait_trig(3000, ath, st1))
+			if (!self->timed_wait_trig(3000, ath, [&](bool)
 			{
 				self->child_actor_force_quit(up1);
 				self->child_actor_force_quit(up2);
-			}
-			else
+			}))
 			{
 				printf("退出 check_two_down\n");
 				self->child_actor_force_quit(up1);
@@ -133,18 +132,18 @@ void check_two_down(my_actor* self, int dt, int id1, int id2)
 			}
 		}
 		{
-			child_actor_handle check1 = self->create_child_actor(boost::bind(&check_key_down, _1, id1));
-			child_actor_handle check2 = self->create_child_actor(boost::bind(&check_key_down, _1, id2));
+			child_actor_handle check1 = self->create_child_actor([&](my_actor* self){check_key_down(self, id1); });
+			child_actor_handle check2 = self->create_child_actor([&](my_actor* self){check_key_down(self, id2); });
 			actor_trig_handle<actor_handle, bool> ath;
 			auto nh = self->make_trig_notifer(ath);
-			//check1.get_actor()->append_quit_callback(boost::bind(nh, check2.get_actor(), _1));
-			//check2.get_actor()->append_quit_callback(boost::bind(nh, check1.get_actor(), _1));
+			check1.get_actor()->append_quit_callback([&](bool ok){nh(check2.get_actor(), ok); });
+			check2.get_actor()->append_quit_callback([&](bool ok){nh(check1.get_actor(), ok); });
 			self->child_actor_run(check1);
 			self->child_actor_run(check2);
 			actor_handle ah;
 			bool ok = false;
 			self->wait_trig(ath, ah, ok);
-			self->delay_trig(dt, boost::bind(&my_actor::notify_quit, ah));
+			self->delay_trig(dt, [&](){ah->notify_quit(); });
 			if (self->actor_wait_quit(ah))
 			{
 				printf("*success*\n");
@@ -359,10 +358,10 @@ void actor_test(my_actor* self)
 				auto conCmh = self->connect_msg_pump<int, int>();//停止消息代理，由自己处理
 				for (int i = 0; i < 3; i++)
 				{
-					int p0;
-					int id;
-					self->pump_msg(conCmh, p0, id);
-					printf("数据:%d 发送者:%d 接收者:%d\n", p0, id, (int)self->self_id());
+					self->pump_msg<int, int>(conCmh, [self](int p0, int id)
+					{
+						printf("数据:%d 发送者:%d 接收者:%d\n", p0, id, (int)self->self_id());
+					});
 				}
 			}
 		});

@@ -327,6 +327,88 @@ struct msg_param<T0, void, void, void>
 };
 //////////////////////////////////////////////////////////////////////////
 
+template <typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
+struct dst_receiver_base
+{
+	typedef ref_ex<T0, T1, T2, T3> ref_type;
+	typedef msg_param<T0, T1, T2, T3> param_type;
+	virtual void move_from(ref_type& s) = 0;
+	virtual void move_from(param_type& s) = 0;
+};
+
+template <typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
+struct dst_receiver_ref : public dst_receiver_base<T0, T1, T2, T3>
+{
+	typedef ref_ex<T0, T1, T2, T3> ref_type;
+	typedef msg_param<T0, T1, T2, T3> param_type;
+
+	dst_receiver_ref(ref_type& dst)
+		:_dstRef(dst){}
+
+	void move_from(ref_type& s)
+	{
+		_dstRef.move_from(s);
+	}
+
+	void move_from(param_type& s)
+	{
+		s.move_out(_dstRef);
+	}
+
+	ref_type& _dstRef;
+};
+
+template <typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
+struct dst_receiver_buff : public dst_receiver_base<T0, T1, T2, T3>
+{
+	typedef ref_ex<T0, T1, T2, T3> ref_type;
+	typedef msg_param<T0, T1, T2, T3> param_type;
+
+	struct dst_buff 
+	{
+		dst_buff()
+		:_has(false){}
+
+		~dst_buff()
+		{
+			if (_has)
+			{
+				((param_type*)_buff)->~param_type();
+			}
+		}
+
+		param_type& get()
+		{
+			assert(_has);
+			return *(param_type*)_buff;
+		}
+
+		bool _has;
+		BYTE _buff[sizeof(param_type)];
+	};
+
+	dst_receiver_buff(dst_buff& dstBuff)
+		:_dstBuff(dstBuff){}
+
+	void move_from(ref_type& s)
+	{
+		assert(!_dstBuff._has);
+		_dstBuff._has = true;
+		new(_dstBuff._buff)param_type(s);
+	}
+
+	void move_from(param_type& s)
+	{
+		assert(!_dstBuff._has);
+		_dstBuff._has = true;
+		new(_dstBuff._buff)param_type(std::move(s));
+	}
+
+	dst_buff& _dstBuff;
+};
+
+//////////////////////////////////////////////////////////////////////////
+
 class actor_msg_handle_base
 {
 protected:
@@ -449,6 +531,11 @@ public:
 		});
 	}
 
+	typename func_type<T0, T1, T2, T3>::result case_func()
+	{
+		return typename func_type<T0, T1, T2, T3>::result(*this);
+	}
+
 	actor_handle host_actor() const
 	{
 		return _hostActor;
@@ -481,13 +568,14 @@ class actor_msg_handle: public actor_msg_handle_base
 {
 	typedef msg_param<T0, T1, T2, T3> msg_type;
 	typedef ref_ex<T0, T1, T2, T3> ref_type;
+	typedef dst_receiver_base<T0, T1, T2, T3> dst_receiver;
 	typedef actor_msg_notifer<T0, T1, T2, T3> msg_notifer;
 
 	friend msg_notifer;
 	friend my_actor;
 public:
 	actor_msg_handle(size_t fixedSize = 16)
-		:_msgBuff(fixedSize), _dstRef(NULL) {}
+		:_msgBuff(fixedSize), _dstRec(NULL) {}
 
 	~actor_msg_handle()
 	{
@@ -512,9 +600,9 @@ private:
 			{
 				_waiting = false;
 				assert(_msgBuff.empty());
-				assert(_dstRef);
-				_dstRef->move_from(msg);
-				_dstRef = NULL;
+				assert(_dstRec);
+				_dstRec->move_from(msg);
+				_dstRec = NULL;
 				run_one();
 				return;
 			}
@@ -522,16 +610,16 @@ private:
 		}
 	}
 
-	bool read_msg(ref_type& dst)
+	bool read_msg(dst_receiver& dst)
 	{
 		assert(_strand->running_in_this_thread());
 		if (!_msgBuff.empty())
 		{
-			_msgBuff.front().move_out(dst);
+			dst.move_from(_msgBuff.front());
 			_msgBuff.pop_front();
 			return true;
 		}
-		_dstRef = &dst;
+		_dstRec = &dst;
 		_waiting = true;
 		return false;
 	}
@@ -544,7 +632,7 @@ private:
 			*_closed = true;
 			_closed.reset();
 		}
-		_dstRef = NULL;
+		_dstRec = NULL;
 		_waiting = false;
 		_msgBuff.clear();
 		_hostActor = NULL;
@@ -556,7 +644,7 @@ private:
 		return _msgBuff.size();
 	}
 private:
-	ref_type* _dstRef;
+	dst_receiver* _dstRec;
 	msg_queue<msg_type> _msgBuff;
 };
 
@@ -730,6 +818,11 @@ public:
 		});
 	}
 
+	typename func_type<T0, T1, T2, T3>::result case_func()
+	{
+		return typename func_type<T0, T1, T2, T3>::result(*this);
+	}
+
 	bool empty() const
 	{
 		return !_trigHandle;
@@ -757,13 +850,14 @@ class actor_trig_handle : public actor_msg_handle_base
 {
 	typedef msg_param<T0, T1, T2, T3> msg_type;
 	typedef ref_ex<T0, T1, T2, T3> ref_type;
+	typedef dst_receiver_base<T0, T1, T2, T3> dst_receiver;
 	typedef actor_trig_notifer<T0, T1, T2, T3> msg_notifer;
 
 	friend msg_notifer;
 	friend my_actor;
 public:
 	actor_trig_handle()
-		:_hasMsg(false), _dstRef(NULL) {}
+		:_hasMsg(false), _dstRec(NULL) {}
 
 	~actor_trig_handle()
 	{
@@ -789,9 +883,9 @@ private:
 			if (_waiting)
 			{
 				_waiting = false;
-				assert(_dstRef);
-				_dstRef->move_from(msg);
-				_dstRef = NULL;
+				assert(_dstRec);
+				_dstRec->move_from(msg);
+				_dstRec = NULL;
 				run_one();
 				return;
 			}
@@ -800,17 +894,17 @@ private:
 		}
 	}
 
-	bool read_msg(ref_type& dst)
+	bool read_msg(dst_receiver& dst)
 	{
 		assert(_strand->running_in_this_thread());
 		if (_hasMsg)
 		{
 			_hasMsg = false;
-			((msg_type*)_msgBuff)->move_out(dst);
+			dst.move_from(*(msg_type*)_msgBuff);
 			((msg_type*)_msgBuff)->~msg_type();
 			return true;
 		}
-		_dstRef = &dst;
+		_dstRec = &dst;
 		_waiting = true;
 		return false;
 	}
@@ -828,7 +922,7 @@ private:
 			_hasMsg = false;
 			((msg_type*)_msgBuff)->~msg_type();
 		}
-		_dstRef = NULL;
+		_dstRec = NULL;
 		_waiting = false;
 		_hostActor = NULL;
 	}
@@ -839,7 +933,7 @@ public:
 		return _hasMsg;
 	}
 private:
-	ref_type* _dstRef;
+	dst_receiver* _dstRec;
 	bool _hasMsg;
 	BYTE _msgBuff[sizeof(msg_type)];
 };
@@ -959,6 +1053,7 @@ class msg_pump : public msg_pump_base
 	typedef const_ref_ex<T0, T1, T2, T3> const_ref_type;
 	typedef ref_ex<T0, T1, T2, T3> ref_type;
 	typedef msg_pool<T0, T1, T2, T3> msg_pool_type;
+	typedef dst_receiver_base<T0, T1, T2, T3> dst_receiver;
 	typedef typename msg_pool_type::pump_handler pump_handler;
 
 	friend my_actor;
@@ -978,7 +1073,7 @@ private:
 		res->_waiting = false;
 		res->_checkDis = false;
 		res->_pumpCount = 0;
-		res->_dstRef = NULL;
+		res->_dstRec = NULL;
 		res->_hostActor = hostActor.get();
 		res->_strand = hostActor->self_strand();
 		return res;
@@ -990,10 +1085,10 @@ private:
 		{
 			assert(!_hasMsg);
 			_pumpCount++;
-			if (_dstRef)
+			if (_dstRec)
 			{
-				msg.move_out(*_dstRef);
-				_dstRef = NULL;
+				_dstRec->move_from(msg);
+				_dstRec = NULL;
 				if (_waiting)
 				{
 					_waiting = false;
@@ -1032,24 +1127,24 @@ private:
 		}
 	}
 
-	bool read_msg(ref_type& dst)
+	bool read_msg(dst_receiver& dst)
 	{
 		assert(_strand->running_in_this_thread());
-		assert(!_dstRef);
+		assert(!_dstRec);
 		assert(!_waiting);
 		if (_hasMsg)
 		{
 			_hasMsg = false;
-			((msg_type*)_msgSpace)->move_out(dst);
+			dst.move_from(*(msg_type*)_msgSpace);
 			((msg_type*)_msgSpace)->~msg_type();
 			return true;
 		}
-		_dstRef = &dst;
+		_dstRec = &dst;
 		if (!_pumpHandler.empty())
 		{
 			_pumpHandler(_pumpCount);
-			_waiting = !!_dstRef;
-			return !_dstRef;
+			_waiting = !!_dstRec;
+			return !_dstRec;
 		}
 		_waiting = true;
 		return false;
@@ -1076,7 +1171,7 @@ private:
 		{
 			assert(_waiting);
 			_waiting = false;
-			_dstRef = NULL;
+			_dstRec = NULL;
 			run_one();
 		}
 	}
@@ -1088,7 +1183,7 @@ private:
 			((msg_type*)_msgSpace)->~msg_type();
 		}
 		_hasMsg = false;
-		_dstRef = NULL;
+		_dstRec = NULL;
 		_pumpCount = 0;
 		_waiting = false;
 		_checkDis = false;
@@ -1105,7 +1200,7 @@ private:
 	BYTE _msgSpace[sizeof(msg_type)];
 	pump_handler _pumpHandler;
 	shared_strand _strand;
-	ref_type* _dstRef;
+	dst_receiver* _dstRec;
 	BYTE _pumpCount;
 	bool _hasMsg;
 	bool _waiting;
@@ -1464,6 +1559,11 @@ public:
 		_msgPool->push_msg(_hostActor);
 	}
 
+	typename func_type<T0, T1, T2, T3>::result case_func()
+	{
+		return typename func_type<T0, T1, T2, T3>::result(*this);
+	}
+
 	bool empty() const
 	{
 		return !_msgPool;
@@ -1492,14 +1592,14 @@ protected:
 public:
 	virtual ~trig_once_base(){};
 protected:
-	template <typename DST /*ref_ex*/, typename SRC /*msg_param*/>
-	void _trig_handler(DST& dstRef, SRC&& src) const
+	template <typename DST /*dst_receiver*/, typename SRC /*msg_param*/>
+	void _trig_handler(DST& dstRec, SRC&& src) const
 	{
 #ifdef _DEBUG
 		if (!_pIsTrig->exchange(true))
 		{
 			assert(_hostActor);
-			_hostActor->_trig_handler(dstRef, std::move(src));
+			_hostActor->_trig_handler(dstRec, std::move(src));
 		}
 		else
 		{
@@ -1507,7 +1607,7 @@ protected:
 		}
 #else
 		assert(_hostActor);
-		_hostActor->_trig_handler(dstRef, std::move(src));
+		_hostActor->_trig_handler(dstRec, std::move(src));
 #endif
 	}
 
@@ -1520,37 +1620,39 @@ protected:
 template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
 class trig_once_notifer: public trig_once_base
 {
-	typedef ref_ex<T0, T1, T2, T3> ref_type;
+	typedef dst_receiver_base<T0, T1, T2, T3> dst_receiver;
 
 	friend my_actor;
 public:
-	trig_once_notifer():_dstRef(0) {};
+	trig_once_notifer() :_dstRec(0) {};
 private:
-	trig_once_notifer(const actor_handle& hostActor, ref_type* dstRef)
-		:_dstRef(dstRef) {_hostActor = hostActor;}
+	trig_once_notifer(const actor_handle& hostActor, dst_receiver* dstRec)
+		:_dstRec(dstRec) {
+		_hostActor = hostActor;
+	}
 public:
 	template <typename PT0, typename PT1, typename PT2, typename PT3>
 	void operator()(const PT0& p0, const PT1& p1, const PT2& p2, const PT3& p3) const
 	{
-		_trig_handler(*_dstRef, std::move(msg_param<PT0, PT1, PT2, PT3>(p0, p1, p2, p3)));
+		_trig_handler(*_dstRec, std::move(msg_param<PT0, PT1, PT2, PT3>(p0, p1, p2, p3)));
 	}
 
 	template <typename PT0, typename PT1, typename PT2>
 	void operator()(const PT0& p0, const PT1& p1, const PT2& p2) const
 	{
-		_trig_handler(*_dstRef, std::move(msg_param<PT0, PT1, PT2>(p0, p1, p2)));
+		_trig_handler(*_dstRec, std::move(msg_param<PT0, PT1, PT2>(p0, p1, p2)));
 	}
 
 	template <typename PT0, typename PT1>
 	void operator()(const PT0& p0, const PT1& p1) const
 	{
-		_trig_handler(*_dstRef, std::move(msg_param<PT0, PT1>(p0, p1)));
+		_trig_handler(*_dstRec, std::move(msg_param<PT0, PT1>(p0, p1)));
 	}
 
 	template <typename PT0>
 	void operator()(const PT0& p0) const
 	{
-		_trig_handler(*_dstRef, std::move(msg_param<PT0>(p0)));
+		_trig_handler(*_dstRec, std::move(msg_param<PT0>(p0)));
 	}
 
 	void operator()() const
@@ -1558,7 +1660,7 @@ public:
 		trig_handler();
 	}
 private:
-	ref_type* _dstRef;
+	dst_receiver* _dstRec;
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -1693,9 +1795,9 @@ class my_actor
 		{
 			for (int i = 0; i < 5; i++)
 			{
-				for_each(_msgPumpList[i].begin(), _msgPumpList[i].end(), [&self](const std::shared_ptr<pck_base>& p){p->lock(self); });
+				for_each(_msgPumpList[i].begin(), _msgPumpList[i].end(), [&](const std::shared_ptr<pck_base>& p){p->lock(self); });
 				for_each(_msgPumpList[i].begin(), _msgPumpList[i].end(), [](const std::shared_ptr<pck_base>& p){p->close(); });
-				for_each(_msgPumpList[i].begin(), _msgPumpList[i].end(), [&self](const std::shared_ptr<pck_base>& p){p->unlock(self); });
+				for_each(_msgPumpList[i].begin(), _msgPumpList[i].end(), [&](const std::shared_ptr<pck_base>& p){p->unlock(self); });
 			}
 		}
 
@@ -1942,12 +2044,12 @@ public:
 		assert_enter();
 		if (exeStrand != _strand)
 		{
-			T0 r0;
-			ref_ex<T0> dstRef(r0);
+			dst_receiver_buff<T0>::dst_buff dstBuff;
+			dst_receiver_buff<T0> dstRec(dstBuff);
 			actor_handle shared_this = shared_from_this();
-			exeStrand->asyncInvoke(h, [shared_this, &dstRef](const T0& p0){shared_this->_trig_handler(dstRef, std::move(msg_param<T0>(p0))); });
+			exeStrand->asyncInvoke(h, [shared_this, &dstRec](const T0& p0){shared_this->_trig_handler(dstRec, std::move(msg_param<T0>(p0))); });
 			push_yield();
-			return r0;
+			return dstBuff.get()._res0;
 		} 
 		return h();
 	}
@@ -1965,12 +2067,12 @@ public:
 	__yield_interrupt T0 async_send(shared_strand exeStrand, const H& h)
 	{
 		assert_enter();
-		T0 r0;
-		ref_ex<T0> dstRef(r0);
+		dst_receiver_buff<T0>::dst_buff dstBuff;
+		dst_receiver_buff<T0> dstRec(dstBuff);
 		actor_handle shared_this = shared_from_this();
-		exeStrand->asyncInvoke(h, [shared_this, &dstRef](const T0& p0){shared_this->_trig_handler(dstRef, std::move(msg_param<T0>(p0))); });
+		exeStrand->asyncInvoke(h, [shared_this, &dstRec](const T0& p0){shared_this->_trig_handler(dstRec, std::move(msg_param<T0>(p0))); });
 		push_yield();
-		return r0;
+		return dstBuff.get()._res0;
 	}
 
 	/*!
@@ -1989,7 +2091,8 @@ public:
 	{
 		assert_enter();
 		ref_ex<T0> dstRef(r0);
-		h(trig_once_notifer<T0>(shared_from_this(), &dstRef));
+		dst_receiver_ref<T0> dstRec(dstRef);
+		h(trig_once_notifer<T0>(shared_from_this(), &dstRec));
 		push_yield();
 	}
 
@@ -2006,7 +2109,8 @@ public:
 	{
 		assert_enter();
 		ref_ex<T0, T1> dstRef(r0, r1);
-		h(trig_once_notifer<T0, T1>(shared_from_this(), &dstRef));
+		dst_receiver_ref<T0, T1> dstRec(dstRef);
+		h(trig_once_notifer<T0, T1>(shared_from_this(), &dstRec));
 		push_yield();
 	}
 
@@ -2015,7 +2119,8 @@ public:
 	{
 		assert_enter();
 		ref_ex<T0, T1, T2> dstRef(r0, r1, r2);
-		h(trig_once_notifer<T0, T1, T2>(shared_from_this(), &dstRef));
+		dst_receiver_ref<T0, T1, T2> dstRec(dstRef);
+		h(trig_once_notifer<T0, T1, T2>(shared_from_this(), &dstRec));
 		push_yield();
 	}
 
@@ -2024,31 +2129,32 @@ public:
 	{
 		assert_enter();
 		ref_ex<T0, T1, T2, T3> dstRef(r0, r1, r2, r3);
-		h(trig_once_notifer<T0, T1, T2, T3>(shared_from_this(), &dstRef));
+		dst_receiver_ref<T0, T1, T2, T3> dstRec(dstRef);
+		h(trig_once_notifer<T0, T1, T2, T3>(shared_from_this(), &dstRec));
 		push_yield();
 	}
 private:
 	void trig_handler();
 
-	template <typename DST /*ref_ex*/, typename SRC /*msg_param*/>
-	void _trig_handler(DST& dstRef, SRC&& src)
+	template <typename DST /*dst_receiver*/, typename SRC /*msg_param*/>
+	void _trig_handler(DST& dstRec, SRC&& src)
 	{
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited)
 			{
-				src.move_out(dstRef);
+				dstRec.move_from(src);
 				trig_handler();
 			}
 		} 
 		else
 		{
 			actor_handle shared_this = shared_from_this();
-			_strand->post([=, &dstRef]
+			_strand->post([=, &dstRec]
 			{
 				if (!shared_this->_quited)
 				{
-					((SRC&)src).move_out(dstRef);
+					dstRec.move_from((SRC&)src);
 					shared_this->pull_yield();
 				}
 			});
@@ -2157,10 +2263,10 @@ public:
 	}
 private:
 	template <typename AMH, typename DST>
-	bool _timed_wait_msg(AMH& amh, DST& dstRef, int tm)
+	bool _timed_wait_msg(AMH& amh, DST& dstRec, int tm)
 	{
 		assert(amh._hostActor && amh._hostActor->self_id() == self_id());
-		if (!amh.read_msg(dstRef))
+		if (!amh.read_msg(dstRec))
 		{
 			bool timeout = false;
 			if (tm >= 0)
@@ -2183,7 +2289,7 @@ private:
 				}
 				return true;
 			}
-			amh._dstRef = NULL;
+			amh._dstRec = NULL;
 			amh._waiting = false;
 			return false;
 		}
@@ -2201,7 +2307,8 @@ public:
 		assert_enter();
 		assert(amh._closed && !(*amh._closed));
 		ref_ex<T0, T1, T2, T3> dstRef(r0, r1, r2, r3);
-		return _timed_wait_msg(amh, dstRef, tm);
+		dst_receiver_ref<T0, T1, T2, T3> dstRec(dstRef);
+		return _timed_wait_msg(amh, dstRec, tm);
 	}
 
 	template <typename T0, typename T1, typename T2>
@@ -2210,7 +2317,8 @@ public:
 		assert_enter();
 		assert(amh._closed && !(*amh._closed));
 		ref_ex<T0, T1, T2> dstRef(r0, r1, r2);
-		return _timed_wait_msg(amh, dstRef, tm);
+		dst_receiver_ref<T0, T1, T2> dstRec(dstRef);
+		return _timed_wait_msg(amh, dstRec, tm);
 	}
 
 	template <typename T0, typename T1>
@@ -2219,7 +2327,8 @@ public:
 		assert_enter();
 		assert(amh._closed && !(*amh._closed));
 		ref_ex<T0, T1> dstRef(r0, r1);
-		return _timed_wait_msg(amh, dstRef, tm);
+		dst_receiver_ref<T0, T1> dstRec(dstRef);
+		return _timed_wait_msg(amh, dstRec, tm);
 	}
 
 	template <typename T0>
@@ -2228,10 +2337,89 @@ public:
 		assert_enter();
 		assert(amh._closed && !(*amh._closed));
 		ref_ex<T0> dstRef(r0);
-		return _timed_wait_msg(amh, dstRef, tm);
+		dst_receiver_ref<T0> dstRec(dstRef);
+		return _timed_wait_msg(amh, dstRec, tm);
 	}
 
 	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<>& amh);
+
+	template <typename T0, typename T1, typename T2, typename T3, typename Handler>
+	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1, T2, T3>& amh, const Handler& h)
+	{
+		assert_enter();
+		assert(amh._closed && !(*amh._closed));
+		dst_receiver_buff<T0, T1, T2, T3>::dst_buff dstBuff;
+		dst_receiver_buff<T0, T1, T2, T3> dstRec(dstBuff);
+		if (_timed_wait_msg(amh, dstRec, tm))
+		{
+			msg_param<T0, T1, T2, T3>& msg = dstBuff.get();
+			h(msg._res0, msg._res1, msg._res2, msg._res3);
+			return true;
+		}
+		return false;
+	}
+
+	template <typename T0, typename T1, typename T2, typename Handler>
+	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1, T2>& amh, const Handler& h)
+	{
+		assert_enter();
+		assert(amh._closed && !(*amh._closed));
+		dst_receiver_buff<T0, T1, T2>::dst_buff dstBuff;
+		dst_receiver_buff<T0, T1, T2> dstRec(dstBuff);
+		if (_timed_wait_msg(amh, dstRec, tm))
+		{
+			msg_param<T0, T1, T2>& msg = dstBuff.get();
+			h(msg._res0, msg._res1, msg._res2);
+			return true;
+		}
+		return false;
+	}
+
+	template <typename T0, typename T1, typename Handler>
+	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1>& amh, const Handler& h)
+	{
+		assert_enter();
+		assert(amh._closed && !(*amh._closed));
+		dst_receiver_buff<T0, T1>::dst_buff dstBuff;
+		dst_receiver_buff<T0, T1> dstRec(dstBuff);
+		if (_timed_wait_msg(amh, dstRec, tm))
+		{
+			msg_param<T0, T1>& msg = dstBuff.get();
+			h(msg._res0, msg._res1);
+			return true;
+		}
+		return false;
+	}
+
+	template <typename T0, typename Handler>
+	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0>& amh, const Handler& h)
+	{
+		assert_enter();
+		assert(amh._closed && !(*amh._closed));
+		dst_receiver_buff<T0>::dst_buff dstBuff;
+		dst_receiver_buff<T0> dstRec(dstBuff);
+		if (_timed_wait_msg(amh, dstRec, tm))
+		{
+			msg_param<T0>& msg = dstBuff.get();
+			h(msg._res0);
+			return true;
+		}
+		return false;
+	}
+
+	template <typename Handler>
+	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<>& amh, const Handler& h)
+	{
+		assert_enter();
+		assert(amh._closed && !(*amh._closed));
+		if (timed_wait_msg(tm, amh))
+		{
+			h();
+			return true;
+		}
+		return false;
+	}
+
 
 	/*!
 	@brief 从消息句柄中提取消息
@@ -2269,6 +2457,36 @@ public:
 	}
 
 	__yield_interrupt void wait_msg(actor_msg_handle<>& amh);
+
+	template <typename T0, typename T1, typename T2, typename T3, typename Handler>
+	__yield_interrupt void wait_msg(actor_msg_handle<T0, T1, T2, T3>& amh, const Handler& h)
+	{
+		timed_wait_msg<T0, T1, T2, T3>(-1, amh, h);
+	}
+
+	template <typename T0, typename T1, typename T2, typename Handler>
+	__yield_interrupt void wait_msg(actor_msg_handle<T0, T1, T2>& amh, const Handler& h)
+	{
+		timed_wait_msg<T0, T1, T2>(-1, amh, h);
+	}
+
+	template <typename T0, typename T1, typename Handler>
+	__yield_interrupt void wait_msg(actor_msg_handle<T0, T1>& amh, const Handler& h)
+	{
+		timed_wait_msg<T0, T1>(-1, amh, h);
+	}
+
+	template <typename T0, typename Handler>
+	__yield_interrupt void wait_msg(actor_msg_handle<T0>& amh, const Handler& h)
+	{
+		timed_wait_msg<T0>(-1, amh, h);
+	}
+
+	template <typename Handler>
+	__yield_interrupt void wait_msg(actor_msg_handle<>& amh, const Handler& h)
+	{
+		timed_wait_msg(-1, amh, h);
+	}
 public:
 	/*!
 	@brief 创建一个消息触发函数，只有一次触发有效
@@ -2315,7 +2533,8 @@ public:
 		assert_enter();
 		assert(ath._closed && !(*ath._closed));
 		ref_ex<T0, T1, T2, T3> dstRef(r0, r1, r2, r3);
-		return _timed_wait_msg(ath, dstRef, tm);
+		dst_receiver_ref<T0, T1, T2, T3> dstRec(dstRef);
+		return _timed_wait_msg(ath, dstRec, tm);
 	}
 
 	template <typename T0, typename T1, typename T2>
@@ -2324,7 +2543,8 @@ public:
 		assert_enter();
 		assert(ath._closed && !(*ath._closed));
 		ref_ex<T0, T1, T2> dstRef(r0, r1, r2);
-		return _timed_wait_msg(ath, dstRef, tm);
+		dst_receiver_ref<T0, T1, T2> dstRec(dstRef);
+		return _timed_wait_msg(ath, dstRec, tm);
 	}
 
 	template <typename T0, typename T1>
@@ -2333,7 +2553,8 @@ public:
 		assert_enter();
 		assert(ath._closed && !(*ath._closed));
 		ref_ex<T0, T1> dstRef(r0, r1);
-		return _timed_wait_msg(ath, dstRef, tm);
+		dst_receiver_ref<T0, T1> dstRec(dstRef);
+		return _timed_wait_msg(ath, dstRec, tm);
 	}
 
 	template <typename T0>
@@ -2342,10 +2563,88 @@ public:
 		assert_enter();
 		assert(ath._closed && !(*ath._closed));
 		ref_ex<T0> dstRef(r0);
-		return _timed_wait_msg(ath, dstRef, tm);
+		dst_receiver_ref<T0> dstRec(dstRef);
+		return _timed_wait_msg(ath, dstRec, tm);
 	}
 
 	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<>& ath);
+
+	template <typename T0, typename T1, typename T2, typename T3, typename Handler>
+	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0, T1, T2, T3>& ath, const Handler& h)
+	{
+		assert_enter();
+		assert(ath._closed && !(*ath._closed));
+		dst_receiver_buff<T0, T1, T2, T3>::dst_buff dstBuff;
+		dst_receiver_buff<T0, T1, T2, T3> dstRec(dstBuff);
+		if (_timed_wait_msg(ath, dstRec, tm))
+		{
+			msg_param<T0, T1, T2, T3>& msg = dstBuff.get();
+			h(msg._res0, msg._res1, msg._res2, msg._res3);
+			return true;
+		}
+		return false;
+	}
+
+	template <typename T0, typename T1, typename T2, typename Handler>
+	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0, T1, T2>& ath, const Handler& h)
+	{
+		assert_enter();
+		assert(ath._closed && !(*ath._closed));
+		dst_receiver_buff<T0, T1, T2>::dst_buff dstBuff;
+		dst_receiver_buff<T0, T1, T2> dstRec(dstBuff);
+		if (_timed_wait_msg(ath, dstRec, tm))
+		{
+			msg_param<T0, T1, T2>& msg = dstBuff.get();
+			h(msg._res0, msg._res1, msg._res2);
+			return true;
+		}
+		return false;
+	}
+
+	template <typename T0, typename T1, typename Handler>
+	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0, T1>& ath, const Handler& h)
+	{
+		assert_enter();
+		assert(ath._closed && !(*ath._closed));
+		dst_receiver_buff<T0, T1>::dst_buff dstBuff;
+		dst_receiver_buff<T0, T1> dstRec(dstBuff);
+		if (_timed_wait_msg(ath, dstRec, tm))
+		{
+			msg_param<T0, T1>& msg = dstBuff.get();
+			h(msg._res0, msg._res1);
+			return true;
+		}
+		return false;
+	}
+
+	template <typename T0, typename Handler>
+	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0>& ath, const Handler& h)
+	{
+		assert_enter();
+		assert(ath._closed && !(*ath._closed));
+		dst_receiver_buff<T0>::dst_buff dstBuff;
+		dst_receiver_buff<T0> dstRec(dstBuff);
+		if (_timed_wait_msg(ath, dstRec, tm))
+		{
+			msg_param<T0>& msg = dstBuff.get();
+			h(msg._res0);
+			return true;
+		}
+		return false;
+	}
+
+	template <typename Handler>
+	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<>& ath, const Handler& h)
+	{
+		assert_enter();
+		assert(ath._closed && !(*ath._closed));
+		if (timed_wait_trig(tm, ath))
+		{
+			h();
+			return true;
+		}
+		return false;
+	}
 
 	/*!
 	@brief 从触发句柄中提取消息
@@ -2383,6 +2682,36 @@ public:
 	}
 
 	__yield_interrupt void wait_trig(actor_trig_handle<>& ath);
+
+	template <typename T0, typename T1, typename T2, typename T3, typename Handler>
+	__yield_interrupt void wait_trig(actor_trig_handle<T0, T1, T2, T3>& ath, const Handler& h)
+	{
+		timed_wait_trig<T0, T1, T2, T3>(-1, ath, h);
+	}
+
+	template <typename T0, typename T1, typename T2, typename Handler>
+	__yield_interrupt void wait_trig(actor_trig_handle<T0, T1, T2>& ath, const Handler& h)
+	{
+		timed_wait_trig<T0, T1, T2>(-1, ath, h);
+	}
+
+	template <typename T0, typename T1, typename Handler>
+	__yield_interrupt void wait_trig(actor_trig_handle<T0, T1>& ath, const Handler& h)
+	{
+		timed_wait_trig<T0, T1>(-1, ath, h);
+	}
+
+	template <typename T0, typename Handler>
+	__yield_interrupt void wait_trig(actor_trig_handle<T0>& ath, const Handler& h)
+	{
+		timed_wait_trig<T0>(-1, ath, h);
+	}
+
+	template <typename Handler>
+	__yield_interrupt void wait_trig(actor_trig_handle<>& ath, const Handler& h)
+	{
+		timed_wait_trig(-1, ath, h);
+	}
 private:
 	/*!
 	@brief 寻找出与模板参数类型匹配的消息池
@@ -3040,15 +3369,15 @@ public:
 	msg_pump<>::handle connect_msg_pump();
 private:
 	template <typename PUMP, typename DST>
-	bool _timed_pump_msg(const PUMP& pump, DST& dstRef, int tm, bool checkDis)
+	bool _timed_pump_msg(const PUMP& pump, DST& dstRec, int tm, bool checkDis)
 	{
 		assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
-		if (!pump->read_msg(dstRef))
+		if (!pump->read_msg(dstRec))
 		{
 			if (checkDis && pump->isDisconnected())
 			{
 				pump->_waiting = false;
-				pump->_dstRef = NULL;
+				pump->_dstRec = NULL;
 				throw pump_disconnected_exception();
 			}
 			pump->_checkDis = checkDis;
@@ -3081,7 +3410,7 @@ private:
 			}
 			pump->_checkDis = false;
 			pump->_waiting = false;
-			pump->_dstRef = NULL;
+			pump->_dstRec = NULL;
 			return false;
 		}
 		return true;
@@ -3099,7 +3428,8 @@ public:
 	{
 		assert_enter();
 		ref_ex<T0, T1, T2, T3> dstRef(r0, r1, r2, r3);
-		return _timed_pump_msg(pump, dstRef, tm, checkDis);
+		dst_receiver_ref<T0, T1, T2, T3> dstRec(dstRef);
+		return _timed_pump_msg(pump, dstRec, tm, checkDis);
 	}
 
 	template <typename T0, typename T1, typename T2>
@@ -3107,7 +3437,8 @@ public:
 	{
 		assert_enter();
 		ref_ex<T0, T1, T2> dstRef(r0, r1, r2);
-		return _timed_pump_msg(pump, dstRef, tm, checkDis);
+		dst_receiver_ref<T0, T1, T2> dstRec(dstRef);
+		return _timed_pump_msg(pump, dstRec, tm, checkDis);
 	}
 
 	template <typename T0, typename T1>
@@ -3115,7 +3446,8 @@ public:
 	{
 		assert_enter();
 		ref_ex<T0, T1> dstRef(r0, r1);
-		return _timed_pump_msg(pump, dstRef, tm, checkDis);
+		dst_receiver_ref<T0, T1> dstRec(dstRef);
+		return _timed_pump_msg(pump, dstRec, tm, checkDis);
 	}
 
 	template <typename T0>
@@ -3123,10 +3455,83 @@ public:
 	{
 		assert_enter();
 		ref_ex<T0> dstRef(r0);
-		return _timed_pump_msg(pump, dstRef, tm, checkDis);
+		dst_receiver_ref<T0> dstRec(dstRef);
+		return _timed_pump_msg(pump, dstRec, tm, checkDis);
 	}
 
 	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump<>::handle& pump, bool checkDis = false);
+
+	template <typename T0, typename T1, typename T2, typename T3, typename Handler>
+	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0, T1, T2, T3>::handle& pump, const Handler& h, bool checkDis = false)
+	{
+		assert_enter();
+		dst_receiver_buff<T0, T1, T2, T3>::dst_buff dstBuff;
+		dst_receiver_buff<T0, T1, T2, T3> dstRec(dstBuff);
+		if (_timed_pump_msg(pump, dstRec, tm, checkDis))
+		{
+			msg_param<T0, T1, T2, T3>& msg = dstBuff.get();
+			h(msg._res0, msg._res1, msg._res2, msg._res3);
+			return true;
+		}
+		return false;
+	}
+
+	template <typename T0, typename T1, typename T2, typename Handler>
+	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0, T1, T2>::handle& pump, const Handler& h, bool checkDis = false)
+	{
+		assert_enter();
+		dst_receiver_buff<T0, T1, T2>::dst_buff dstBuff;
+		dst_receiver_buff<T0, T1, T2> dstRec(dstBuff);
+		if (_timed_pump_msg(pump, dstRec, tm, checkDis))
+		{
+			msg_param<T0, T1, T2>& msg = dstBuff.get();
+			h(msg._res0, msg._res1, msg._res2);
+			return true;
+		}
+		return false;
+	}
+
+	template <typename T0, typename T1, typename Handler>
+	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0, T1>::handle& pump, const Handler& h, bool checkDis = false)
+	{
+		assert_enter();
+		dst_receiver_buff<T0, T1>::dst_buff dstBuff;
+		dst_receiver_buff<T0, T1> dstRec(dstBuff);
+		if (_timed_pump_msg(pump, dstRec, tm, checkDis))
+		{
+			msg_param<T0, T1>& msg = dstBuff.get();
+			h(msg._res0, msg._res1);
+			return true;
+		}
+		return false;
+	}
+
+	template <typename T0, typename Handler>
+	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0>::handle& pump, const Handler& h, bool checkDis = false)
+	{
+		assert_enter();
+		dst_receiver_buff<T0>::dst_buff dstBuff;
+		dst_receiver_buff<T0> dstRec(dstBuff);
+		if (_timed_pump_msg(pump, dstRec, tm, checkDis))
+		{
+			msg_param<T0>& msg = dstBuff.get();
+			h(msg._res0);
+			return true;
+		}
+		return false;
+	}
+
+	template <typename Handler>
+	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<>::handle& pump, const Handler& h, bool checkDis = false)
+	{
+		assert_enter();
+		if (timed_pump_msg(tm, pump, checkDis))
+		{
+			h();
+			return true;
+		}
+		return false;
+	}
 
 	/*!
 	@brief 从消息泵中提取消息
@@ -3164,6 +3569,36 @@ public:
 	}
 
 	__yield_interrupt void pump_msg(const msg_pump<>::handle& pump, bool checkDis = false);
+
+	template <typename T0, typename T1, typename T2, typename T3, typename Handler>
+	__yield_interrupt void pump_msg(const typename msg_pump<T0, T1, T2, T3>::handle& pump, const Handler& h, bool checkDis = false)
+	{
+		timed_pump_msg<T0, T1, T2, T3>(-1, pump, h, checkDis);
+	}
+
+	template <typename T0, typename T1, typename T2, typename Handler>
+	__yield_interrupt void pump_msg(const typename msg_pump<T0, T1, T2>::handle& pump, const Handler& h, bool checkDis = false)
+	{
+		timed_pump_msg<T0, T1, T2>(-1, pump, h, checkDis);
+	}
+
+	template <typename T0, typename T1, typename Handler>
+	__yield_interrupt void pump_msg(const typename msg_pump<T0, T1>::handle& pump, const Handler& h, bool checkDis = false)
+	{
+		timed_pump_msg<T0, T1>(-1, pump, h, checkDis);
+	}
+
+	template <typename T0, typename Handler>
+	__yield_interrupt void pump_msg(const typename msg_pump<T0>::handle& pump, const Handler& h, bool checkDis = false)
+	{
+		timed_pump_msg<T0>(-1, pump, h, checkDis);
+	}
+
+	template <typename Handler>
+	__yield_interrupt void pump_msg(const typename msg_pump<>::handle& pump, const Handler& h, bool checkDis = false)
+	{
+		timed_pump_msg(-1, pump, h, checkDis);
+	}
 public:
 	/*!
 	@brief 查询当前消息由谁代理
@@ -3421,6 +3856,7 @@ private:
 	size_t _yieldCount;//yield计数
 	size_t _childOverCount;///<子Actor退出时计数
 	size_t _childSuspendResumeCount;///<子Actor挂起/恢复计数
+	size_t _timerCount;//定时器计数
 	std::weak_ptr<my_actor> _parentActor;///<父Actor
 	main_func _mainFunc;///<Actor入口
 	list<suspend_resume_option> _suspendResumeQueue;///<挂起/恢复操作队列
@@ -3428,7 +3864,7 @@ private:
 	list<std::function<void (bool)> > _exitCallback;///<Actor结束后的回调函数，强制退出返回false，正常退出返回true
 	list<std::function<void ()> > _quitHandlerList;///<Actor退出时强制调用的函数，后注册的先执行
 	msg_pool_status _msgPoolStatus;//消息池列表
-	timer_pck* _timer;///<提供延时功能
+	timer_pck* _timer;///<定时器
 	std::weak_ptr<my_actor> _weakThis;
 	static std::shared_ptr<shared_obj_pool_base<bool>> _sharedBoolPool;
 };

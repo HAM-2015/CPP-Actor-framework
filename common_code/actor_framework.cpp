@@ -573,7 +573,7 @@ struct actor_ref_count_alloc
 struct my_actor::timer_pck
 {
 	timer_pck(ios_proxy& ios)
-		:_ios(ios), _timer((timer_type*)ios.getTimer()), _timerTime(0), _timerSuspend(false), _timerCompleted(true), _timerCount(0) {}
+		:_ios(ios), _timer((timer_type*)ios.getTimer()), _timerTime(0), _timerSuspend(false), _timerCompleted(true) {}
 
 	~timer_pck()
 	{
@@ -586,7 +586,6 @@ struct my_actor::timer_pck
 	timer_type* _timer;
 	bool _timerSuspend;
 	bool _timerCompleted;
-	size_t _timerCount;
 	boost::posix_time::microsec _timerTime;
 	boost::posix_time::ptime _timerStampBegin;
 	boost::posix_time::ptime _timerStampEnd;
@@ -643,6 +642,7 @@ public:
 		clear_function(_actor._mainFunc);
 		if (_actor._timer)
 		{
+			_actor._timerCount++;
 			_actor.cancel_timer();
 		}
 		_actor._msgPoolStatus.clear(&_actor);
@@ -678,6 +678,7 @@ my_actor::my_actor()
 	_stackTop = NULL;
 	_stackSize = 0;
 	_yieldCount = 0;
+	_timerCount = 0;
 	_childOverCount = 0;
 	_childSuspendResumeCount = 0;
 	_selfID = ++_actorIDCount;
@@ -1025,6 +1026,7 @@ void my_actor::close_timer()
 	assert_enter();
 	if (_timer)
 	{
+		_timerCount++;
 		if (actor_stack_pool::isEnable())
 		{
 			_timer->~timer_pck();
@@ -1747,15 +1749,16 @@ void my_actor::enable_stack_pool()
 
 void my_actor::expires_timer()
 {
-	size_t tid = ++_timer->_timerCount;
+	size_t tid = ++_timerCount;
 	actor_handle shared_this = shared_from_this();
 	boost::system::error_code ec;
 	_timer->_timer->expires_from_now(boost::chrono::microseconds(_timer->_timerTime.total_microseconds()), ec);
 	_timer->_timer->async_wait(_strand->wrap_post([shared_this, tid](const boost::system::error_code& err)
 	{
 		timer_pck* timer = shared_this->_timer;
-		if (!err && tid == timer->_timerCount)
+		if (tid == shared_this->_timerCount)
 		{
+			assert(!err);
 			assert(!timer->_timerSuspend && !timer->_timerCompleted);
 			timer->_timerCompleted = true;
 			std::function<void()> h;
@@ -1785,8 +1788,8 @@ void my_actor::cancel_timer()
 	assert(_timer);
 	if (!_timer->_timerCompleted)
 	{
+		_timerCount++;
 		_timer->_timerCompleted = true;
-		_timer->_timerCount++;
 		clear_function(_timer->_h);
 		boost::system::error_code ec;
 		_timer->_timer->cancel(ec);
@@ -1801,7 +1804,7 @@ void my_actor::suspend_timer()
 		_timer->_timerSuspend = true;
 		if (!_timer->_timerCompleted)
 		{
-			_timer->_timerCount++;
+			_timerCount++;
 			boost::system::error_code ec;
 			_timer->_timer->cancel(ec);
 			_timer->_timerStampEnd = boost::posix_time::microsec_clock::universal_time();

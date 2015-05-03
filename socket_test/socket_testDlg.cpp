@@ -484,16 +484,16 @@ void Csocket_testDlg::mainActor(my_actor* self)
 			{
 				if (clientPostPipe)
 				{
+					CString cs;
 					send(self, [&]
 					{
-						CString cs;
 						_msgEdit.GetWindowText(cs);
-						if (cs.GetLength())
-						{
-							_msgEdit.SetWindowText("");
-							clientPostPipe(msg_data::create(cs.GetBuffer()));
-						}
+						_msgEdit.SetWindowText("");
 					});
+					if (cs.GetLength())
+					{
+						clientPostPipe(msg_data::create(cs.GetBuffer()));
+					}
 				}
 			}
 			break;
