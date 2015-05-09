@@ -57,7 +57,7 @@ boost::asio::io_service& boost_strand::get_io_service()
 	return *_iosProxy;
 }
 
-#ifdef ENABLE_MFC_ACTOR
+#if (defined ENABLE_MFC_ACTOR || defined ENABLE_WX_ACTOR)
 void boost_strand::_post( const std::function<void ()>& h )
 {
 	assert(false);

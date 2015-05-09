@@ -375,7 +375,7 @@ void Csocket_testDlg::mainActor(my_actor* self)
 			extClient.reset();
 			clientPostPipe.clear();
 			auto _this = this;
-			this->send(self, [&, _this]
+			this->send(self, [_this]
 			{
 				_this->GetDlgItem(IDC_BUTTON1)->EnableWindow(TRUE);
 				_this->GetDlgItem(IDC_BUTTON2)->EnableWindow(FALSE);

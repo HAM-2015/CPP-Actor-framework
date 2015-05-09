@@ -1922,6 +1922,8 @@ public:
 	*/
 	__yield_interrupt bool child_actor_wait_quit(child_actor_handle& actorHandle);
 
+	__yield_interrupt bool timed_child_actor_wait_quit(int tm, child_actor_handle& actorHandle);
+
 	/*!
 	@brief 等待一组子Actor完成后返回
 	@return 都正常退出的返回true，否则false
@@ -2966,7 +2968,7 @@ public:
 	@return 返回处理该消息的子Actor句柄
 	*/
 	template <typename T0, typename T1, typename T2, typename T3, typename Handler>
-	child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		child_actor_handle::child_actor_param childActor = create_child_actor([agentActor](my_actor* self)
 		{
@@ -2981,25 +2983,25 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename Handler>
-	child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return msg_agent_to_actor<T0, T1, T2, void>(autoRun, agentActor, stackSize);
 	}
 
 	template <typename T0, typename T1, typename Handler>
-	child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return msg_agent_to_actor<T0, T1, void, void>(autoRun, agentActor, stackSize);
 	}
 
 	template <typename T0, typename Handler>
-	child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return msg_agent_to_actor<T0, void, void, void>(autoRun, agentActor, stackSize);
 	}
 
 	template <typename Handler>
-	child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return msg_agent_to_actor<void, void, void, void>(autoRun, agentActor, stackSize);
 	}
@@ -3795,6 +3797,7 @@ public:
 	*/
 	__yield_interrupt bool actor_wait_quit(const actor_handle& anotherActor);
 	__yield_interrupt void actors_wait_quit(const list<actor_handle>& anotherActors);
+	__yield_interrupt bool timed_actor_wait_quit(int tm, const actor_handle& anotherActor);
 
 	/*!
 	@brief 挂起另一个Actor，等待其所有子Actor都调用后才返回

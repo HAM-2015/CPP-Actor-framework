@@ -895,6 +895,24 @@ bool my_actor::child_actor_wait_quit( child_actor_handle& actorHandle )
 	return actorHandle._norQuit;
 }
 
+bool my_actor::timed_child_actor_wait_quit(int tm, child_actor_handle& actorHandle)
+{
+	assert_enter();
+	if (!actorHandle._quited)
+	{
+		assert(actorHandle.get_actor());
+		assert(actorHandle.get_actor()->parent_actor()->self_id() == self_id());
+		if (timed_actor_wait_quit(tm, actorHandle.get_actor()))
+		{
+			actorHandle._norQuit = !actorHandle.get_actor()->_isForce;
+			actorHandle.peel();
+			return true;
+		} 
+		return false;
+	}
+	return true;
+}
+
 void my_actor::child_actors_wait_quit(const list<child_actor_handle::ptr>& actorHandles)
 {
 	assert_enter();
@@ -1529,6 +1547,15 @@ void my_actor::actors_wait_quit(const list<actor_handle>& anotherActors)
 	}
 }
 
+bool my_actor::timed_actor_wait_quit(int tm, const actor_handle& anotherActor)
+{
+	assert_enter();
+	assert(anotherActor);
+	actor_trig_handle<> ath;
+	anotherActor->append_quit_callback(wrap_no_params(make_trig_notifer(ath)));
+	return timed_wait_trig(tm, ath);
+}
+
 void my_actor::actor_suspend(const actor_handle& anotherActor)
 {
 	assert_enter();
@@ -1755,10 +1782,11 @@ void my_actor::expires_timer()
 	_timer->_timer->expires_from_now(boost::chrono::microseconds(_timer->_timerTime.total_microseconds()), ec);
 	_timer->_timer->async_wait(_strand->wrap_post([shared_this, tid](const boost::system::error_code& err)
 	{
-		timer_pck* timer = shared_this->_timer;
 		if (tid == shared_this->_timerCount)
 		{
+			timer_pck* timer = shared_this->_timer;
 			assert(!err);
+			assert(timer);
 			assert(!timer->_timerSuspend && !timer->_timerCompleted);
 			timer->_timerCompleted = true;
 			std::function<void()> h;

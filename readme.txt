@@ -9,6 +9,9 @@ oschina url
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
+2015-05-09
+添加在wxWidgets库UI线程中运行Actor.
+
 2015-04-14
 核心功能整体优化;
 添加actor_mutex;

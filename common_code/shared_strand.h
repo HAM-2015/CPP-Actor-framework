@@ -22,6 +22,16 @@
 class boost_strand;
 typedef std::shared_ptr<boost_strand> shared_strand;
 
+#define UI_STRAND()\
+if (_strand)\
+{\
+	_strand->post(handler);\
+}\
+else\
+{\
+	_post(handler);\
+};
+
 /*!
 @brief 重新定义dispatch实现，所有不同strand中以消息方式进行函数调用
 */
@@ -61,17 +71,12 @@ public:
 	template <typename Handler>
 	void post(const Handler& handler)
 	{
-#ifndef ENABLE_MFC_ACTOR
-		_strand->post(handler);
+#ifdef ENABLE_MFC_ACTOR
+		UI_STRAND()
+#elif ENABLE_WX_ACTOR
+		UI_STRAND()
 #else
-		if (_strand)
-		{
-			_strand->post(handler);
-		}
-		else
-		{
-			_post(handler);
-		}
+		_strand->post(handler);
 #endif
 	}
 
@@ -124,7 +129,7 @@ public:
 	*/
 	boost::asio::io_service& get_io_service();
 
-#ifdef ENABLE_MFC_ACTOR
+#if (defined ENABLE_MFC_ACTOR || defined ENABLE_WX_ACTOR)
 	virtual void _post(const std::function<void ()>& h);
 #endif
 protected:

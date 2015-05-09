@@ -1,9 +1,13 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 11.00
-# Visual Studio 2010
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.21005.1
+MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "actor_test", "actor_test\actor_test.vcxproj", "{65FCD501-E7F9-4F3A-B925-E59D1631A57C}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "socket_test", "socket_test\socket_test.vcxproj", "{DFD5B3D4-3998-4ADB-8B95-8AD227E6AA63}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "wx_test", "wx_test\wx_test.vcxproj", "{CAA763FD-C600-4101-8C10-F5B880F0C1E5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -27,6 +31,12 @@ Global
 		{DFD5B3D4-3998-4ADB-8B95-8AD227E6AA63}.Release|Win32.ActiveCfg = Release|Win32
 		{DFD5B3D4-3998-4ADB-8B95-8AD227E6AA63}.Release|Win32.Build.0 = Release|Win32
 		{DFD5B3D4-3998-4ADB-8B95-8AD227E6AA63}.Release|x64.ActiveCfg = Release|Win32
+		{CAA763FD-C600-4101-8C10-F5B880F0C1E5}.Debug|Win32.ActiveCfg = Debug|Win32
+		{CAA763FD-C600-4101-8C10-F5B880F0C1E5}.Debug|Win32.Build.0 = Debug|Win32
+		{CAA763FD-C600-4101-8C10-F5B880F0C1E5}.Debug|x64.ActiveCfg = Debug|Win32
+		{CAA763FD-C600-4101-8C10-F5B880F0C1E5}.Release|Win32.ActiveCfg = Release|Win32
+		{CAA763FD-C600-4101-8C10-F5B880F0C1E5}.Release|Win32.Build.0 = Release|Win32
+		{CAA763FD-C600-4101-8C10-F5B880F0C1E5}.Release|x64.ActiveCfg = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
