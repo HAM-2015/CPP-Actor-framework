@@ -15,9 +15,12 @@ bind_wx_run::~bind_wx_run()
 void bind_wx_run::wx_close()
 {
 	assert(boost::this_thread::get_id() == _threadID);
-	_isClosed = true;
-	__disconnectCloseEvent();
-	__unbindPostEvent();
+	{
+		boost::unique_lock<boost::shared_mutex> ul(_postMutex);
+		_isClosed = true;
+		__disconnectCloseEvent();
+		__unbindPostEvent();
+	}
 	__cancel();
 }
 
@@ -66,7 +69,7 @@ void bind_wx_run::__postRun(wxEvent& ue)
 {
 	_mutex.lock();
 	assert(!_postOptions.empty());
-	auto h = _postOptions.front();
+	auto h = std::move(_postOptions.front());
 	_postOptions.pop_front();
 	_mutex.unlock();
 	assert(h);
