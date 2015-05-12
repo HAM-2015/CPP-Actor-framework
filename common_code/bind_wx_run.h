@@ -121,199 +121,37 @@ END_DECLARE_EVENT_TYPES()
 //////////////////////////////////////////////////////////////////////////
 class bind_wx_run_base
 {
+protected:
+	bind_wx_run_base();
+	virtual ~bind_wx_run_base();
 public:
-	virtual boost::thread::id thread_id() = 0;
-	virtual void post(const std::function<void()>& h) = 0;
 	shared_strand make_wx_strand();
 	shared_strand make_wx_strand(ios_proxy& ios);
-};
 
-/*!
-@brief 作为wx对象基类使用，将使wx对象支持Actor，方法函数、构造和析构函数必须在本wx对象运行线程中执行
-*/
-template <typename FRAME>
-class bind_wx_run: public FRAME, public bind_wx_run_base
-{
-protected:
-	template <typename T0, typename T1, typename T2, typename T3, typename T4, typename T5>
-	bind_wx_run(const T0& p0, const T1& p1, const T2& p2, const T3& p3, const T4& p4, const T5& p5)
-		: FRAME((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3, (T4&)p4, (T5&)p5), _isClosed(false), _postOptions(16)
-	{
-		init();
-	}
-
-	template <typename T0, typename T1, typename T2, typename T3, typename T4>
-	bind_wx_run(const T0& p0, const T1& p1, const T2& p2, const T3& p3, const T4& p4)
-		: FRAME((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3, (T4&)p4), _isClosed(false), _postOptions(16)
-	{
-		init();
-	}
-
-	template <typename T0, typename T1, typename T2, typename T3>
-	bind_wx_run(const T0& p0, const T1& p1, const T2& p2, const T3& p3)
-		: FRAME((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3), _isClosed(false), _postOptions(16)
-	{
-		init();
-	}
-
-	template <typename T0, typename T1, typename T2>
-	bind_wx_run(const T0& p0, const T1& p1, const T2& p2)
-		: FRAME((T0&)p0, (T1&)p1, (T2&)p2), _isClosed(false), _postOptions(16)
-	{
-		init();
-	}
-
-	template <typename T0, typename T1>
-	bind_wx_run(const T0& p0, const T1& p1)
-		: FRAME((T0&)p0, (T1&)p1), _isClosed(false), _postOptions(16)
-	{
-		init();
-	}
-
-	template <typename T0>
-	bind_wx_run(const T0& p0)
-		: FRAME((T0&)p0), _isClosed(false), _postOptions(16)
-	{
-		init();
-	}
-
-	bind_wx_run()
-		: _isClosed(false), _postOptions(16)
-	{
-		init();
-	}
-
-public:
-	virtual ~bind_wx_run()
-	{
-		assert(boost::this_thread::get_id() == _threadID);
-	}
-public:
-	/*!
-	@brief 绑定一个函数到UI队列执行
-	*/
-	template <typename Handler>
-	wrapped_post_handler<bind_wx_run, Handler> wrap(const Handler& handler)
-	{
-		return wrapped_post_handler<bind_wx_run, Handler>(this, handler);
-	}
-private:
-	void init()
-	{
-		_threadID = boost::this_thread::get_id();
-		Connect(wxEVT_CLOSE_WINDOW, wxCloseEventHandler(bind_wx_run::closeEventHandler));
-		Bind(wxEVT_POST, &bind_wx_run::postRun, this);
-	}
-
-	void closeEventHandler(wxCloseEvent& event)
-	{
-		OnClose();
-	}
-
-	void postRun(wxEvent& ue)
-	{
-		_mutex.lock();
-		assert(!_postOptions.empty());
-		auto h = std::move(_postOptions.front());
-		_postOptions.pop_front();
-		_mutex.unlock();
-		assert(h);
-		h();
-	}
-protected:
-	/*!
-	@brief 在wx线程中调用，将关闭该对象，之后该对象将不能进行任何操作(包括post，所以不要在wx_actor内调用)
-	*/
-	void wx_close()
-	{
-		assert(boost::this_thread::get_id() == _threadID);
-		boost::unique_lock<boost::shared_mutex> ul(_postMutex);
-		_isClosed = true;
-		Disconnect(wxEVT_CLOSE_WINDOW, wxCloseEventHandler(bind_wx_run::closeEventHandler));
-		Unbind(wxEVT_POST, &bind_wx_run::postRun, this);
-		Close();
-		while (!_closedCallback.empty())
-		{
-			_closedCallback.front()();
-			_closedCallback.pop_front();
-		}
-	}
-
-	/*!
-	@brief 继承该函数，将收到wx对象关闭消息
-	*/
-	virtual void OnClose()
-	{
-
-	}
-public:
 	/*!
 	@brief 等待对象关闭
 	*/
-	void wait_closed(my_actor* host)
-	{
-		boost::unique_lock<boost::shared_mutex> ul(_postMutex);
-		if (!_isClosed)
-		{
-			actor_trig_handle<> ath;
-			_closedCallback.push_back(host->make_trig_notifer(ath));
-			ul.unlock();
-			host->wait_trig(ath);
-		}
-	}
+	void wait_closed(my_actor* host);
 
 	/*!
 	@brief 获取主线程ID
 	*/
-	boost::thread::id thread_id()
-	{
-		assert(boost::thread::id() != _threadID);
-		return _threadID;
-	}
+	boost::thread::id thread_id();
 
 	/*!
-	@brief 设置当前窗口为焦点
+	@brief 在wx线程中调用，将关闭该对象，之后该对象将不能进行任何操作(包括post，所以不要在wx_actor内调用)
 	*/
-	void SetFocus()
-	{
-		assert(boost::this_thread::get_id() == _threadID);
-		if (IsEnabled())
-		{
-			FRAME::SetFocus();
-		}
-		else
-		{
-			Enable();
-			FRAME::SetFocus();
-			Disable();
-		}
-	}
+	void wx_close();
 
 	/*!
 	@brief 扩充队列池长度
 	*/
-	void post_queue_size(size_t fixedSize)
-	{
-		assert(boost::this_thread::get_id() == _threadID);
-		_mutex.lock();
-		_postOptions.expand_fixed(fixedSize);
-		_mutex.unlock();
-	}
+	void post_queue_size(size_t fixedSize);
 
 	/*!
 	@brief 发送一个执行函数到UI消息队列中执行
 	*/
-	void post(const std::function<void()>& h)
-	{
-		boost::shared_lock<boost::shared_mutex> sl(_postMutex);
-		if (!_isClosed)
-		{
-			_mutex.lock();
-			_postOptions.push_back(h);
-			_mutex.unlock();
-			wxPostEvent(this, wxCommandEvent(wxEVT_POST));
-		}
-	}
+	void post(const std::function<void()>& h);
 
 	/*!
 	@brief 发送一个执行函数到UI消息队列中执行，完成后返回
@@ -335,7 +173,7 @@ public:
 					cb();
 				});
 				_mutex.unlock();
-				wxPostEvent(this, wxCommandEvent(wxEVT_POST));
+				post_event();
 			}
 		});
 	}
@@ -359,34 +197,145 @@ public:
 					cb(h_());
 				});
 				_mutex.unlock();
-				wxPostEvent(this, wxCommandEvent(wxEVT_POST));
+				post_event();
 			}
 		});
 	}
+
+	/*!
+	@brief 绑定一个函数到UI队列执行
+	*/
+	template <typename Handler>
+	wrapped_post_handler<bind_wx_run_base, Handler> wrap(const Handler& handler)
+	{
+		return wrapped_post_handler<bind_wx_run_base, Handler>(this, handler);
+	}
+protected:
+	/*!
+	@brief 继承该函数，将收到wx对象关闭消息
+	*/
+	virtual void OnClose();
 #ifdef ENABLE_WX_ACTOR
 	/*!
 	@brief 在UI线程中创建一个Actor
 	@param ios Actor内部timer使用的调度器，没有就不能用timer
 	*/
-	actor_handle create_wx_actor(ios_proxy& ios, const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE)
-	{
-		assert(!_isClosed);
-		return my_actor::create(make_wx_strand(ios), mainFunc, stackSize);
-	}
+	actor_handle create_wx_actor(ios_proxy& ios, const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 
-	actor_handle create_wx_actor(const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE)
-	{
-		assert(!_isClosed);
-		return my_actor::create(make_wx_strand(), mainFunc, stackSize);
-	}
+	actor_handle create_wx_actor(const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 #endif
-private:
+	virtual void post_event() = 0;
+	virtual void disconnect() = 0;
+	void postRun(wxEvent& ue);
+protected:
 	msg_queue<std::function<void()> > _postOptions;
 	list<actor_trig_notifer<>> _closedCallback;
 	boost::mutex _mutex;
 	boost::shared_mutex _postMutex;
 	boost::thread::id _threadID;
 	bool _isClosed;
+};
+
+/*!
+@brief 作为wx对象基类使用，将使wx对象支持Actor，方法函数、构造和析构函数必须在本wx对象运行线程中执行
+*/
+template <typename FRAME>
+class bind_wx_run: public FRAME, public bind_wx_run_base
+{
+protected:
+	template <typename T0, typename T1, typename T2, typename T3, typename T4, typename T5>
+	bind_wx_run(const T0& p0, const T1& p1, const T2& p2, const T3& p3, const T4& p4, const T5& p5)
+		: FRAME((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3, (T4&)p4, (T5&)p5)
+	{
+		connect();
+	}
+
+	template <typename T0, typename T1, typename T2, typename T3, typename T4>
+	bind_wx_run(const T0& p0, const T1& p1, const T2& p2, const T3& p3, const T4& p4)
+		: FRAME((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3, (T4&)p4)
+	{
+		connect();
+	}
+
+	template <typename T0, typename T1, typename T2, typename T3>
+	bind_wx_run(const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+		: FRAME((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3)
+	{
+		connect();
+	}
+
+	template <typename T0, typename T1, typename T2>
+	bind_wx_run(const T0& p0, const T1& p1, const T2& p2)
+		: FRAME((T0&)p0, (T1&)p1, (T2&)p2)
+	{
+		connect();
+	}
+
+	template <typename T0, typename T1>
+	bind_wx_run(const T0& p0, const T1& p1)
+		: FRAME((T0&)p0, (T1&)p1)
+	{
+		connect();
+	}
+
+	template <typename T0>
+	bind_wx_run(const T0& p0)
+		: FRAME((T0&)p0)
+	{
+		connect();
+	}
+
+	bind_wx_run()
+	{
+		connect();
+	}
+
+public:
+	virtual ~bind_wx_run()
+	{
+		assert(boost::this_thread::get_id() == _threadID);
+	}
+private:
+	void connect()
+	{
+		Connect(wxEVT_CLOSE_WINDOW, wxCloseEventHandler(bind_wx_run::closeEventHandler));
+		Bind(wxEVT_POST, &bind_wx_run::postRun, this);
+	}
+
+	void disconnect()
+	{
+		Disconnect(wxEVT_CLOSE_WINDOW, wxCloseEventHandler(bind_wx_run::closeEventHandler));
+		Unbind(wxEVT_POST, &bind_wx_run::postRun, this);
+		Close();
+	}
+
+	void closeEventHandler(wxCloseEvent& event)
+	{
+		OnClose();
+	}
+
+	void post_event()
+	{
+		wxPostEvent(this, wxCommandEvent(wxEVT_POST));
+	}
+public:
+	/*!
+	@brief 设置当前窗口为焦点
+	*/
+	virtual void SetFocus()
+	{
+		assert(boost::this_thread::get_id() == _threadID);
+		if (IsEnabled())
+		{
+			FRAME::SetFocus();
+		}
+		else
+		{
+			Enable();
+			FRAME::SetFocus();
+			Disable();
+		}
+	}
 };
 
 #endif

@@ -1,4 +1,4 @@
-///////////////////////////////////////////////////////////////////////////
+﻿///////////////////////////////////////////////////////////////////////////
 // C++ code generated with wxFormBuilder (version Jun  5 2014)
 // http://www.wxformbuilder.org/
 //
@@ -82,7 +82,7 @@ MyDialog2::MyDialog2( wxWindow* parent, wxWindowID id, const wxString& title, co
 	
 	bSizer5->Add( m_staticText1, 0, wxALL|wxALIGN_CENTER_HORIZONTAL, 5 );
 	
-	m_button3 = new wxButton( this, wxID_ANY, wxT("cancel"), wxDefaultPosition, wxSize( -1,40 ), 0 );
+	m_button3 = new wxButton( this, wxID_ANY, wxT("取消"), wxDefaultPosition, wxSize( -1,40 ), 0 );
 	bSizer5->Add( m_button3, 0, wxALL|wxALIGN_CENTER_HORIZONTAL, 5 );
 	
 	

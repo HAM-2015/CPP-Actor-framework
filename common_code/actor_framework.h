@@ -2968,9 +2968,9 @@ public:
 	@return 返回处理该消息的子Actor句柄
 	*/
 	template <typename T0, typename T1, typename T2, typename T3, typename Handler>
-	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(shared_strand strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
-		child_actor_handle::child_actor_param childActor = create_child_actor([agentActor](my_actor* self)
+		child_actor_handle::child_actor_param childActor = create_child_actor(strand, [agentActor](my_actor* self)
 		{
 			agentActor(self, self->connect_msg_pump<T0, T1, T2, T3>());
 		}, stackSize);
@@ -2983,27 +2983,57 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename Handler>
+	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(shared_strand strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	{
+		return msg_agent_to_actor<T0, T1, T2, void>(strand, autoRun, agentActor, stackSize);
+	}
+
+	template <typename T0, typename T1, typename Handler>
+	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(shared_strand strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	{
+		return msg_agent_to_actor<T0, T1, void, void>(strand, autoRun, agentActor, stackSize);
+	}
+
+	template <typename T0, typename Handler>
+	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(shared_strand strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	{
+		return msg_agent_to_actor<T0, void, void, void>(strand, autoRun, agentActor, stackSize);
+	}
+
+	template <typename Handler>
+	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(shared_strand strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	{
+		return msg_agent_to_actor<void, void, void, void>(strand, autoRun, agentActor, stackSize);
+	}
+
+	template <typename T0, typename T1, typename T2, typename T3, typename Handler>
 	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
-		return msg_agent_to_actor<T0, T1, T2, void>(autoRun, agentActor, stackSize);
+		return msg_agent_to_actor<T0, T1, T2, T3>(self_strand(), autoRun, agentActor, stackSize);
+	}
+
+	template <typename T0, typename T1, typename T2, typename Handler>
+	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	{
+		return msg_agent_to_actor<T0, T1, T2, void>(self_strand(), autoRun, agentActor, stackSize);
 	}
 
 	template <typename T0, typename T1, typename Handler>
 	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
-		return msg_agent_to_actor<T0, T1, void, void>(autoRun, agentActor, stackSize);
+		return msg_agent_to_actor<T0, T1, void, void>(self_strand(), autoRun, agentActor, stackSize);
 	}
 
 	template <typename T0, typename Handler>
 	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
-		return msg_agent_to_actor<T0, void, void, void>(autoRun, agentActor, stackSize);
+		return msg_agent_to_actor<T0, void, void, void>(self_strand(), autoRun, agentActor, stackSize);
 	}
 
 	template <typename Handler>
 	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
-		return msg_agent_to_actor<void, void, void, void>(autoRun, agentActor, stackSize);
+		return msg_agent_to_actor<void, void, void, void>(self_strand(), autoRun, agentActor, stackSize);
 	}
 public:
 	/*!

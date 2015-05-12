@@ -104,7 +104,8 @@ wx_ui::wx_ui(ios_proxy& ios)
 				self->sleep(500);
 				m_textCtrl1->SetLabelText("delay close 0");
 				self->sleep(500);
-				SHOW_MODAL(sure = wxMessageBox("¹Ø±Õ?", "", wxYES_NO) == wxYES);
+				//SHOW_MODAL(sure = wxMessageBox("¹Ø±Õ?", "", wxYES_NO) == wxYES);
+				SHOW_MODAL(sure = MessageBoxA(this->GetHWND(), "¹Ø±Õ?", "", MB_YESNO) == IDYES);
 				end_ACTOR_RUN_IN_WX();
 				if (sure)
 				{
