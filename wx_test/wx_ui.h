@@ -4,37 +4,34 @@
 #include "bind_wx_run.h"
 #include "wx_ui_base.h"
 
-class wx_ui : public MyDialog1, bind_wx_run
+class wx_ui : public bind_wx_run<MyDialog1>
 {
 	enum ui_cmd
 	{
 		ui_run,
-		ui_run_over,
 		ui_close
 	};
 public:
 	wx_ui(ios_proxy& ios);
 	~wx_ui();
-	BIND_WX_RUN(wx_ui, MyDialog1)
 private:
 	void btn_click_run(wxCommandEvent& event);
 	void OnClose();
 private:
 	ios_proxy& _ios;
 	wxFont _font;
-	actor_handle _mainActor;
 	post_actor_msg<ui_cmd> _uiCMD;
 
 };
 
 template <typename dlg>
-class cancel_dlg: public dlg, bind_wx_run
+class cancel_dlg: public bind_wx_run<dlg>
 {
 public:
 	cancel_dlg(ios_proxy& ios, wxWindow* parent, const std::function<void ()>& cancelNtf)
-		:dlg(parent), _ios(ios), _cancelNtf(cancelNtf)
+		:bind_wx_run(parent), _ios(ios), _cancelNtf(cancelNtf)
 	{
-		start_wx_actor();
+
 	}
 
 	~cancel_dlg()
@@ -46,15 +43,20 @@ public:
 	{
 		_mainActor = my_actor::create(host->self_strand(), [this](my_actor* self)
 		{
-			RUN_IN_WX(Show());
+			actor_handle modalRun = my_actor::create(self->self_strand(), [this](my_actor* self)
+			{
+				RUN_IN_WX(SHOW_MODAL(ShowModal()));
+			});
+			modalRun->notify_run();
 			self->pump_msg(self->connect_msg_pump());
-			BEGIN_RUN_IN_WX();
+			begin_RUN_IN_WX();
 			if (isCancel())
 			{
 				_cancelNtf();
 			}
 			wx_close();
-			END_RUN_IN_WX();
+			end_RUN_IN_WX();
+			self->actor_wait_quit(modalRun);
 		});
 		_ntfClose = host->connect_msg_notifer_to(_mainActor);
 		_mainActor->notify_run();
@@ -70,8 +72,6 @@ private:
 	{
 		_ntfClose();
 	}
-
-	BIND_WX_RUN(cancel_dlg, dlg)
 private:
 	ios_proxy& _ios;
 	actor_handle _mainActor;

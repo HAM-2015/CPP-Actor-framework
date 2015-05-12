@@ -16,14 +16,12 @@ void wx_ui::OnClose()
 }
 
 wx_ui::wx_ui(ios_proxy& ios)
-:MyDialog1(NULL), _ios(ios)
+:bind_wx_run((wxWindow*)NULL), _ios(ios)
 {
-	start_wx_actor();
-
 	_font = wxFont(9, wxDEFAULT, wxNORMAL, wxNORMAL, false, "宋体");
 	m_textCtrl1->SetFont(_font);
 	_ios.run();
-	_mainActor = my_actor::create(boost_strand::create(_ios), [this](my_actor* self)
+	actor_handle mainActor = my_actor::create(boost_strand::create(_ios), [this](my_actor* self)
 	{
 		actor_handle runActor;
 		post_actor_msg<> runStop;
@@ -39,7 +37,7 @@ wx_ui::wx_ui(ios_proxy& ios)
 					runActor = my_actor::create(self->self_strand(), [&, this](my_actor* self)
 					{//启动一个Actor管理新"任务"
 						bool taskCompleted = false;
-						child_actor_handle actionActor = self->create_child_actor(wx_strand::create(_ios, this), [&, this](my_actor* self)
+						child_actor_handle actionActor = self->create_child_actor(make_wx_strand(_ios), [&, this](my_actor* self)
 						{
 							child_actor_handle lstCancel = self->msg_agent_to_actor(true, [](my_actor* self, msg_pump<>::handle mh)
 							{//侦听任务是否要取消
@@ -66,35 +64,27 @@ wx_ui::wx_ui(ios_proxy& ios)
 						if (!self->timed_child_actor_wait_quit(1000, actionActor))
 						{
 							stack_obj<cancel_dlg<cancel_ui>> cu;
-							RUN_IN_WX(cu.make(_ios, this, runStop));
+							RUN_IN_WX(cu.create(_ios, this, runStop));
 							cu->run(self);
 							self->child_actor_wait_quit(actionActor);
 							cu->close_dlg(self);
-							BEGIN_RUN_IN_WX();
+							begin_RUN_IN_WX();
 							m_textCtrl1->SetLabelText(taskCompleted? "完成": "取消");
 							cu.destroy();
-							END_RUN_IN_WX();
+							end_RUN_IN_WX();
 						}
 						else
 						{
 							RUN_IN_WX(m_textCtrl1->SetLabelText("完成"));
 						}
-						_uiCMD(ui_run_over);
+						runActor.reset();
 					});
 					runStop = self->connect_msg_notifer_to(runActor);
 					runActor->notify_run();
 				}
 				else
 				{
-
-				}
-				break;
-			case ui_run_over:
-				if (runActor)
-				{
-					self->actor_wait_quit(runActor);
-					runActor.reset();
-					runStop.clear();
+					RUN_IN_WX(SHOW_MODAL(wxMessageBox("正在运行")));
 				}
 				break;
 			case ui_close:
@@ -105,31 +95,28 @@ wx_ui::wx_ui(ios_proxy& ios)
 				}
 
 				bool sure = false;
-				BEGIN_ACTOR_RUN_IN_WX(_ios);
-				m_textCtrl1->SetLabelText("delay over 3");
+				begin_ACTOR_RUN_IN_WX(_ios);
+				m_textCtrl1->SetLabelText("delay close 3");
 				self->sleep(500);
-				m_textCtrl1->SetLabelText("delay over 2");
+				m_textCtrl1->SetLabelText("delay close 2");
 				self->sleep(500);
-				m_textCtrl1->SetLabelText("delay over 1");
+				m_textCtrl1->SetLabelText("delay close 1");
 				self->sleep(500);
-				m_textCtrl1->SetLabelText("delay over 0");
+				m_textCtrl1->SetLabelText("delay close 0");
 				self->sleep(500);
-				sure = wxMessageBox("关闭?", "", wxYES_NO) == wxYES;
-				END_ACTOR_RUN_IN_WX();
-				if (!sure)
+				SHOW_MODAL(sure = wxMessageBox("关闭?", "", wxYES_NO) == wxYES);
+				end_ACTOR_RUN_IN_WX();
+				if (sure)
 				{
-					BEGIN_RUN_IN_WX();
-					wx_ui wxTest(_ios);
-					wxTest.ShowModal();
-					END_RUN_IN_WX();
+					RUN_IN_WX(wx_close());
+					return;
 				}
-				RUN_IN_WX(wx_close());
-				return;
+				RUN_IN_WX(m_textCtrl1->Clear());
 			}
 		}
 	});
-	_uiCMD = _mainActor->connect_msg_notifer<ui_cmd>();
-	_mainActor->notify_run();
+	_uiCMD = mainActor->connect_msg_notifer<ui_cmd>();
+	mainActor->notify_run();
 }
 
 wx_ui::~wx_ui()

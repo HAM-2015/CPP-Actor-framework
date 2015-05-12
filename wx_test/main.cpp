@@ -7,8 +7,9 @@
 class MyApp :public wxApp
 {
 public:
-	bool OnInit()
+	int OnRun()
 	{
+		my_actor::enable_stack_pool();
 		ios_proxy ios;
 		ios.run();
 		{
@@ -16,7 +17,7 @@ public:
 			wxTest.ShowModal();
 		}
 		ios.stop();
-		return false;
+		return 0;
 	}
 };
 

@@ -21,6 +21,7 @@
 #include "function_type.h"
 #include "msg_queue.h"
 #include "actor_mutex.h"
+#include "scattered.h"
 
 class my_actor;
 typedef std::shared_ptr<my_actor> actor_handle;//Actor句柄
@@ -51,12 +52,6 @@ catch (my_actor::force_quit_exception& e)\
 {\
 	throw e;\
 }
-
-#ifdef _DEBUG
-#define DEBUG_OPERATION(__exp__)	__exp__
-#else
-#define DEBUG_OPERATION(__exp__)
-#endif
 
 //默认堆栈大小64k
 #define kB	*1024
@@ -1963,6 +1958,11 @@ public:
 	__yield_interrupt void sleep(int ms);
 
 	/*!
+	@brief 中断当前时间片，等到下次被调度(因为Actor是非抢占式调度，当有占用时间片较长的逻辑时，适当使用yield分割时间片)
+	*/
+	__yield_interrupt void yield();
+
+	/*!
 	@brief 调用disable_auto_make_timer后，使用这个打开当前Actor定时器
 	*/
 	void open_timer();
@@ -2887,7 +2887,7 @@ private:
 	@brief 把本Actor内消息由伙伴Actor代理处理
 	*/
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt bool msg_agent_to(const actor_handle& childActor)
+	__yield_interrupt bool msg_agent_to(actor_handle childActor)
 	{
 		typedef std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>> pck_type;
 
@@ -3058,7 +3058,7 @@ public:
 	@return 消息通知函数
 	*/
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt post_actor_msg<T0, T1, T2, T3> connect_msg_notifer_to(const actor_handle& buddyActor, bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<T0, T1, T2, T3> connect_msg_notifer_to(actor_handle buddyActor, bool makeNew = false, size_t fixedSize = 16)
 	{
 		typedef msg_pool<T0, T1, T2, T3> pool_type;
 		typedef typename pool_type::pump_handler pump_handler;
@@ -3654,24 +3654,24 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	actor_handle msg_agent_handle(actor_handle buddyActor)
+	actor_handle msg_agent_handle(const actor_handle& buddyActor)
 	{
 		return msg_agent_handle<T0, T1, T2, void>(buddyActor);
 	}
 
 	template <typename T0, typename T1>
-	actor_handle msg_agent_handle(actor_handle buddyActor)
+	actor_handle msg_agent_handle(const actor_handle& buddyActor)
 	{
 		return msg_agent_handle<T0, T1, void, void>(buddyActor);
 	}
 
 	template <typename T0>
-	actor_handle msg_agent_handle(actor_handle buddyActor)
+	actor_handle msg_agent_handle(const actor_handle& buddyActor)
 	{
 		return msg_agent_handle<T0, void, void, void>(buddyActor);
 	}
 
-	actor_handle msg_agent_handle(actor_handle buddyActor);
+	actor_handle msg_agent_handle(const actor_handle& buddyActor);
 public:
 	/*!
 	@brief 测试当前下的Actor栈是否安全
@@ -3789,33 +3789,33 @@ public:
 	/*!
 	@brief 强制退出另一个Actor，并且等待完成
 	*/
-	__yield_interrupt bool actor_force_quit(const actor_handle& anotherActor);
+	__yield_interrupt bool actor_force_quit(actor_handle anotherActor);
 	__yield_interrupt void actors_force_quit(const list<actor_handle>& anotherActors);
 
 	/*!
 	@brief 等待另一个Actor结束后返回
 	*/
-	__yield_interrupt bool actor_wait_quit(const actor_handle& anotherActor);
+	__yield_interrupt bool actor_wait_quit(actor_handle anotherActor);
 	__yield_interrupt void actors_wait_quit(const list<actor_handle>& anotherActors);
-	__yield_interrupt bool timed_actor_wait_quit(int tm, const actor_handle& anotherActor);
+	__yield_interrupt bool timed_actor_wait_quit(int tm, actor_handle anotherActor);
 
 	/*!
 	@brief 挂起另一个Actor，等待其所有子Actor都调用后才返回
 	*/
-	__yield_interrupt void actor_suspend(const actor_handle& anotherActor);
+	__yield_interrupt void actor_suspend(actor_handle anotherActor);
 	__yield_interrupt void actors_suspend(const list<actor_handle>& anotherActors);
 
 	/*!
 	@brief 恢复另一个Actor，等待其所有子Actor都调用后才返回
 	*/
-	__yield_interrupt void actor_resume(const actor_handle& anotherActor);
+	__yield_interrupt void actor_resume(actor_handle anotherActor);
 	__yield_interrupt void actors_resume(const list<actor_handle>& anotherActors);
 
 	/*!
 	@brief 对另一个Actor进行挂起/恢复状态切换
 	@return 都已挂起返回true，否则false
 	*/
-	__yield_interrupt bool actor_switch(const actor_handle& anotherActor);
+	__yield_interrupt bool actor_switch(actor_handle anotherActor);
 	__yield_interrupt bool actors_switch(const list<actor_handle>& anotherActors);
 
 	void assert_enter();

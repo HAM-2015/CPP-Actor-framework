@@ -12,7 +12,7 @@ wx_strand::~wx_strand()
 
 }
 
-shared_strand wx_strand::create(ios_proxy& iosProxy, bind_wx_run* wx)
+shared_strand wx_strand::create(ios_proxy& iosProxy, bind_wx_run_base* wx)
 {
 	std::shared_ptr<wx_strand> res(new wx_strand, [](wx_strand* p){delete p; });
 	res->_iosProxy = &iosProxy;
@@ -21,7 +21,7 @@ shared_strand wx_strand::create(ios_proxy& iosProxy, bind_wx_run* wx)
 	return res;
 }
 
-shared_strand wx_strand::create(bind_wx_run* wx)
+shared_strand wx_strand::create(bind_wx_run_base* wx)
 {
 	std::shared_ptr<wx_strand> res(new wx_strand, [](wx_strand* p){delete p; });
 	res->_wx = wx;

@@ -4,7 +4,6 @@
 #include <boost/asio/high_resolution_timer.hpp>
 #include "actor_framework.h"
 #include "actor_stack.h"
-#include "scattered.h"
 #include "wrapped_no_params_handler.h"
 
 typedef boost::coroutines::coroutine<void>::pull_type actor_pull_type;
@@ -1065,6 +1064,14 @@ void my_actor::sleep( int ms )
 	push_yield();
 }
 
+void my_actor::yield()
+{
+	assert_enter();
+	actor_handle shared_this = shared_from_this();
+	_strand->post([shared_this]{shared_this->run_one(); });
+	push_yield();
+}
+
 actor_handle my_actor::parent_actor()
 {
 	return _parentActor.lock();
@@ -1508,7 +1515,7 @@ void my_actor::actors_start_run(const list<actor_handle>& anotherActors)
 	}
 }
 
-bool my_actor::actor_force_quit( const actor_handle& anotherActor )
+bool my_actor::actor_force_quit( actor_handle anotherActor )
 {
 	assert_enter();
 	assert(anotherActor);
@@ -1531,7 +1538,7 @@ void my_actor::actors_force_quit(const list<actor_handle>& anotherActors)
 	close_msg_notifer(amh);
 }
 
-bool my_actor::actor_wait_quit( const actor_handle& anotherActor )
+bool my_actor::actor_wait_quit( actor_handle anotherActor )
 {
 	assert_enter();
 	assert(anotherActor);
@@ -1547,7 +1554,7 @@ void my_actor::actors_wait_quit(const list<actor_handle>& anotherActors)
 	}
 }
 
-bool my_actor::timed_actor_wait_quit(int tm, const actor_handle& anotherActor)
+bool my_actor::timed_actor_wait_quit(int tm, actor_handle anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
@@ -1556,7 +1563,7 @@ bool my_actor::timed_actor_wait_quit(int tm, const actor_handle& anotherActor)
 	return timed_wait_trig(tm, ath);
 }
 
-void my_actor::actor_suspend(const actor_handle& anotherActor)
+void my_actor::actor_suspend(actor_handle anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
@@ -1579,7 +1586,7 @@ void my_actor::actors_suspend(const list<actor_handle>& anotherActors)
 	close_msg_notifer(amh);
 }
 
-void my_actor::actor_resume(const actor_handle& anotherActor)
+void my_actor::actor_resume(actor_handle anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
@@ -1602,7 +1609,7 @@ void my_actor::actors_resume(const list<actor_handle>& anotherActors)
 	close_msg_notifer(amh);
 }
 
-bool my_actor::actor_switch(const actor_handle& anotherActor)
+bool my_actor::actor_switch(actor_handle anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
@@ -2071,7 +2078,7 @@ void my_actor::wait_trig(actor_trig_handle<>& ath)
 	timed_wait_trig(-1, ath);
 }
 
-actor_handle my_actor::msg_agent_handle(actor_handle buddyActor)
+actor_handle my_actor::msg_agent_handle(const actor_handle& buddyActor)
 {
 	return msg_agent_handle<void, void, void, void>(buddyActor);
 }
