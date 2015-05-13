@@ -58,8 +58,7 @@ catch (my_actor::force_quit_exception& e)\
 #define DEFAULT_STACKSIZE	64 kB
 
 //检测 pump_msg 是否有 pump_disconnected_exception 异常抛出，因为在 catch 内部不能安全的进行coro切换
-#define TRY_PUMP bool __catch_pump_disconnected_exception = false;try
-#define CATCH_PUMP_DISCONNECTED catch (my_actor::pump_disconnected_exception) { __catch_pump_disconnected_exception = true; } if (__catch_pump_disconnected_exception)
+#define CATCH_PUMP_DISCONNECTED CATCH_FOR(my_actor::pump_disconnected_exception)
 
 template <typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
 struct msg_param

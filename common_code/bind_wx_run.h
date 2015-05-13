@@ -76,20 +76,20 @@ END_DECLARE_EVENT_TYPES()
 
 //////////////////////////////////////////////////////////////////////////
 //开始在Actor中，嵌入一段在wx线程中执行的连续逻辑
-#define begin_RUN_IN_WX_FOR(__self__) send(__self__, [&, this]() {
+#define begin_RUN_IN_WX_FOR(__self__) send(__self__, [&]() {
 #define begin_RUN_IN_WX() begin_RUN_IN_WX_FOR(self)
 //结束在wx线程中执行的一段连续逻辑，只有当这段逻辑执行完毕后才会执行END后续代码
 #define end_RUN_IN_WX() })
 //////////////////////////////////////////////////////////////////////////
 //在Actor中，嵌入一段在wx线程中执行的语句
-#define RUN_IN_WX_FOR(__self__, __exp__) send(__self__, [&, this]() {__exp__;})
+#define RUN_IN_WX_FOR(__self__, __exp__) send(__self__, [&]() {__exp__;})
 //在Actor中，嵌入一段在wx线程中执行的语句
 #define RUN_IN_WX(__exp__) RUN_IN_WX_FOR(self, __exp__)
 //////////////////////////////////////////////////////////////////////////
 //在Actor中，嵌入一段在wx线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用begin_RUN_IN_WX_FOR）
 #define begin_ACTOR_RUN_IN_WX_FOR(__self__, __ios__) {\
 	my_actor::quit_guard ___qg(__self__); \
-	auto ___tactor = create_wx_actor(__ios__, [&, this](my_actor* __self__) {
+	auto ___tactor = create_wx_actor(__ios__, [&](my_actor* __self__) {
 
 //结束在wx线程中执行的Actor，只有当Actor内逻辑执行完毕后才会执行END后续代码
 #define end_ACTOR_RUN_IN_WX_FOR(__self__)\
@@ -160,7 +160,7 @@ public:
 	void send(my_actor* self, const H& h)
 	{
 		my_actor::quit_guard qg(self);
-		self->trig([&, this](const trig_once_notifer<>& cb)
+		self->trig([&](const trig_once_notifer<>& cb)
 		{
 			boost::shared_lock<boost::shared_mutex> sl(_postMutex);
 			if (!_isClosed)
@@ -185,7 +185,7 @@ public:
 	T send(my_actor* self, const H& h)
 	{
 		my_actor::quit_guard qg(self);
-		return self->trig<T>([&, this](const trig_once_notifer<T>& cb)
+		return self->trig<T>([&](const trig_once_notifer<T>& cb)
 		{
 			boost::shared_lock<boost::shared_mutex> sl(_postMutex);
 			if (!_isClosed)

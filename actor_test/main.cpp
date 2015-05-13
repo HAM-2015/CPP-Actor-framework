@@ -118,10 +118,11 @@ void check_two_down(my_actor* self, int dt, int id1, int id2)
 			up2.get_actor()->append_quit_callback(nh);
 			self->child_actor_run(up1);
 			self->child_actor_run(up2);
-			if (!self->timed_wait_trig(3000, ath, [&](bool)
+			LAMBDA_REF3(ref3, self, up1, up2);
+			if (!self->timed_wait_trig(3000, ath, [&ref3](bool)
 			{
-				self->child_actor_force_quit(up1);
-				self->child_actor_force_quit(up2);
+				ref3.self->child_actor_force_quit(ref3.up1);
+				ref3.self->child_actor_force_quit(ref3.up2);
 			}))
 			{
 				printf("退出 check_two_down\n");
@@ -329,7 +330,7 @@ void actor_test(my_actor* self)
 				printf("数据:%d 发送者:%d 接收者:%d\n", p0, id, (int)self->self_id());
 				while (true)
 				{
-					TRY_PUMP
+					BEGIN_TRY_
 					{
 						self->pump_msg(conCmh, p0, id, true);
 						printf("数据:%d 发送者:%d 接收者:%d\n", p0, id, (int)self->self_id());
@@ -340,6 +341,7 @@ void actor_test(my_actor* self)
 						self->pump_msg(conCmh, p0, id);
 						printf("数据:%d 发送者:%d 接收者:%d\n", p0, id, (int)self->self_id());
 					}
+					END_TRY_;
 				}
 			};
 			auto st = self->self_strand()->clone();
@@ -452,7 +454,6 @@ void actor_test(my_actor* self)
 	self->child_actor_wait_quit(actorMutex3);
 	perforIos.stop();
 }
-
 
 	/*
 	逻辑控制测试程序

@@ -34,10 +34,10 @@ wx_ui::wx_ui(ios_proxy& ios)
 			case ui_run:
 				if (!runActor)
 				{
-					runActor = my_actor::create(self->self_strand(), [&, this](my_actor* self)
+					runActor = my_actor::create(self->self_strand(), [&](my_actor* self)
 					{//启动一个Actor管理新"任务"
 						bool taskCompleted = false;
-						child_actor_handle actionActor = self->create_child_actor(make_wx_strand(_ios), [&, this](my_actor* self)
+						child_actor_handle actionActor = self->create_child_actor(make_wx_strand(_ios), [&](my_actor* self)
 						{
 							child_actor_handle lstCancel = self->msg_agent_to_actor(true, [](my_actor* self, msg_pump<>::handle mh)
 							{//侦听任务是否要取消
