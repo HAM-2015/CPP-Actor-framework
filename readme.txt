@@ -9,6 +9,9 @@ oschina url
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
+2015-05-15
+添加黑盒下获取当前代码运行在哪个Actor下.
+
 2015-05-09
 添加在wxWidgets库UI线程中运行Actor.
 

@@ -3703,6 +3703,17 @@ public:
 	actor_handle msg_agent_handle(const actor_handle& buddyActor);
 public:
 	/*!
+	@brief 获取当前代码运行在哪个Actor下
+	@return 不运行在Actor下或没启动 CHECK_ACTOR 返回NULL
+	*/
+	static my_actor* self_actor();
+
+	/*!
+	@brief 检测当前是否在该Actor内运行
+	*/
+	void check_actor();
+
+	/*!
 	@brief 测试当前下的Actor栈是否安全
 	*/
 	void check_stack();
@@ -3899,6 +3910,10 @@ private:
 	timer_pck* _timer;///<定时器
 	std::weak_ptr<my_actor> _weakThis;
 	static std::shared_ptr<shared_obj_pool_base<bool>> _sharedBoolPool;
+#ifdef CHECK_ACTOR
+	map<void*, my_actor*>::iterator _btIt;
+	map<void*, my_actor*>::iterator _topIt;
+#endif
 };
 
 #endif

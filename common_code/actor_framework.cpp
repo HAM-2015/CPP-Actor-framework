@@ -593,6 +593,10 @@ struct my_actor::timer_pck
 
 boost::atomic<long long> _actorIDCount(0);//ID¼ÆÊý
 bool _autoMakeTimer = true;
+#ifdef CHECK_ACTOR
+map<void*, my_actor*> _stackLine;
+boost::mutex _stackLineMutex;
+#endif
 
 std::shared_ptr<shared_obj_pool_base<bool>> my_actor::_sharedBoolPool;
 
@@ -712,6 +716,12 @@ my_actor::~my_actor()
 			delete _timer;
 		}
 	}
+#ifdef CHECK_ACTOR
+	_stackLineMutex.lock();
+	_stackLine.erase(_btIt);
+	_stackLine.erase(_topIt);
+	_stackLineMutex.unlock();
+#endif
 #if (CHECK_ACTOR_STACK) || (_DEBUG)
 	if (*(long long*)((BYTE*)_stackTop-_stackSize+STACK_RESERVED_SPACE_SIZE-sizeof(long long)) != 0xFEFEFEFEFEFEFEFE)
 	{
@@ -774,6 +784,12 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 			boost::coroutines::attributes(stackSize), actor_stack_allocate(&newActor->_stackTop, &newActor->_stackSize));
 	}
 	newActor->_weakThis = newActor;
+#ifdef CHECK_ACTOR
+	_stackLineMutex.lock();
+	newActor->_btIt = _stackLine.insert(make_pair((BYTE*)newActor->_stackTop-newActor->_stackSize, newActor.get())).first;
+	newActor->_topIt = _stackLine.insert(make_pair(newActor->_stackTop, (my_actor*)NULL)).first;
+	_stackLineMutex.unlock();
+#endif
 #if (CHECK_ACTOR_STACK) || (_DEBUG)
 	*(long long*)((BYTE*)newActor->_stackTop-newActor->_stackSize+STACK_RESERVED_SPACE_SIZE-sizeof(long long)) = 0xFEFEFEFEFEFEFEFE;
 #endif
@@ -1882,6 +1898,31 @@ void my_actor::check_stack()
 		assert(false);
 		throw std::shared_ptr<string>(new string("Actor¶ÑÕ»Òì³£"));
 	}
+#endif
+	check_actor();
+}
+
+my_actor* my_actor::self_actor()
+{
+#ifdef CHECK_ACTOR
+	boost::lock_guard<boost::mutex> lg(_stackLineMutex);
+	auto it = _stackLine.insert(make_pair(get_sp(), (my_actor*)NULL)).first;
+	if (it != _stackLine.end())
+	{
+		_stackLine.erase(it--);
+		if (it != _stackLine.end())
+		{
+			return it->second;
+		}
+	}
+#endif
+	return NULL;
+}
+
+void my_actor::check_actor()
+{
+#ifdef CHECK_ACTOR
+	assert(this == self_actor());
 #endif
 }
 

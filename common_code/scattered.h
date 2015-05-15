@@ -231,7 +231,7 @@ struct REF_STRUCT_NAME(__NAME__)\
 {\
 	typedef decltype(this) this_type; \
 	REF_STRUCT_NAME(__NAME__)(this_type ts, decltype(__P0__)& p0, decltype(__P1__)& p1, decltype(__P2__)& p2, decltype(__P3__)& p3)\
-	:__P0__(p0), __P1__(p1), __P2__(p2), __P3__(p3) {}\
+	:__this(ts), __P0__(p0), __P1__(p1), __P2__(p2), __P3__(p3) {}\
 	decltype(__P0__)& __P0__; \
 	decltype(__P1__)& __P1__; \
 	decltype(__P2__)& __P2__; \
@@ -251,7 +251,7 @@ struct REF_STRUCT_NAME(__NAME__)\
 	typedef decltype(this) this_type; \
 	REF_STRUCT_NAME(__NAME__)\
 	(this_type ts, decltype(__P0__)& p0, decltype(__P1__)& p1, decltype(__P2__)& p2, decltype(__P3__)& p3, decltype(__P4__)& p4)\
-	:__P0__(p0), __P1__(p1), __P2__(p2), __P3__(p3), __P4__(p4) {}\
+	:__this(ts), __P0__(p0), __P1__(p1), __P2__(p2), __P3__(p3), __P4__(p4) {}\
 	decltype(__P0__)& __P0__; \
 	decltype(__P1__)& __P1__; \
 	decltype(__P2__)& __P2__; \
@@ -272,7 +272,7 @@ struct REF_STRUCT_NAME(__NAME__)\
 	typedef decltype(this) this_type; \
 	REF_STRUCT_NAME(__NAME__)\
 	(this_type ts, decltype(__P0__)& p0, decltype(__P1__)& p1, decltype(__P2__)& p2, decltype(__P3__)& p3, decltype(__P4__)& p4, decltype(__P5__)& p5)\
-	:__P0__(p0), __P1__(p1), __P2__(p2), __P3__(p3), __P4__(p4), __P5__(p5){}\
+	:__this(ts), __P0__(p0), __P1__(p1), __P2__(p2), __P3__(p3), __P4__(p4), __P5__(p5){}\
 	decltype(__P0__)& __P0__; \
 	decltype(__P1__)& __P1__; \
 	decltype(__P2__)& __P2__; \

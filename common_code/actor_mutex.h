@@ -7,7 +7,7 @@ class _actor_mutex;
 class my_actor;
 
 /*!
-@brief Actor锁，可递归，使用前与 my_actor::quit_guard 配合，防止 lock 后被强制退出造成无法 unlock
+@brief Actor锁，可递归
 */
 class actor_mutex
 {
@@ -16,7 +16,7 @@ public:
 	~actor_mutex();
 public:
 	/*!
-	@brief 锁定资源，如果被别的Actor持有，等待，直到被调度，用 unlock 解除持有；可递归调用
+	@brief 锁定资源，如果被别的Actor持有，等待，直到被调度，用 unlock 解除持有；可递归调用；lock期间Actor将锁定强制退出
 	@warning 所在Actor如果被强制退出，有可能造成 lock 后，无法 unlock
 	*/
 	void lock(my_actor* self) const;
@@ -28,9 +28,16 @@ public:
 	bool try_lock(my_actor* self) const;
 
 	/*!
+	@brief 在一段时间内尝试锁定资源
+	@return 成功返回true，超时失败返回false
+	*/
+	bool timed_lock(int tm, my_actor* self) const;
+
+	/*!
 	@brief 解除当前Actor对其持有，递归 lock 几次，就需要 unlock 几次
 	*/
 	void unlock(my_actor* self) const;
+	void unlock() const;
 
 	/*!
 	@brief 重置mutex，使用前确保当前没有一个Actor依赖该mutex了

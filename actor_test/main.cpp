@@ -379,8 +379,8 @@ void actor_test(my_actor* self)
 		};
 		actorProducer1 = self->create_child_actor(test_producer);
 		actorProducer2 = self->create_child_actor(test_producer);
-		self->child_actor_run(actorProducer1);
-		self->child_actor_run(actorProducer2);
+//		self->child_actor_run(actorProducer1);
+//		self->child_actor_run(actorProducer2);
 	}
 	{
 		actor_mutex amutex(self->self_strand());
@@ -389,20 +389,28 @@ void actor_test(my_actor* self)
 			while (true)
 			{
 				my_actor::quit_guard qg(self);//保护上锁期间不让Actor强制退出
-				actor_lock_guard lg(amutex, self);
-				for (int i = 0; i < 10 && !self->quit_msg(); i++)
+				//actor_lock_guard lg(amutex, self);
+				if (amutex.timed_lock(800, self))
 				{
-					printf("%d--%d\n", i, (int)self->self_id());
-					self->sleep(100);
+					for (int i = 0; i < 10 && !self->quit_msg(); i++)
+					{
+						printf("%d--%d\n", i, (int)self->self_id());
+						self->sleep(100);
+					}
+					amutex.unlock(self);
+				}
+				else
+				{
+					printf("---\n");
 				}
 			}
 		};
 		actorMutex1 = self->create_child_actor(actorMutexH);
 		actorMutex2 = self->create_child_actor(actorMutexH);
 		actorMutex3 = self->create_child_actor(actorMutexH);
-// 		self->child_actor_run(actorMutex1);//模拟actor_mutex互斥特性
-// 		self->child_actor_run(actorMutex2);
-// 		self->child_actor_run(actorMutex3);
+		self->child_actor_run(actorMutex1);//模拟actor_mutex互斥特性
+		self->child_actor_run(actorMutex2);
+		self->child_actor_run(actorMutex3);
 	}
 	list<actor_handle> chs;//需要被挂起的Actor对象，可以从下方注释几个测试
 	chs.push_back(actorLeft.get_actor());

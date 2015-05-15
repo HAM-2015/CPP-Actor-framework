@@ -25,6 +25,7 @@ wx_ui::wx_ui(ios_proxy& ios)
 	{
 		actor_handle runActor;
 		post_actor_msg<> runStop;
+		actor_mutex modalMutex(self->self_strand());
 		auto cmd_pump = self->connect_msg_pump<ui_cmd>();
 		while (true)
 		{
@@ -61,17 +62,26 @@ wx_ui::wx_ui(ios_proxy& ios)
 						});
 						self->msg_agent_to(actionActor);
 						self->child_actor_run(actionActor);
+						at_wait:
 						if (!self->timed_child_actor_wait_quit(1000, actionActor))
 						{
-							stack_obj<cancel_dlg<cancel_ui>> cu;
-							RUN_IN_WX(cu.create(_ios, this, runStop));
-							cu->run(self);
-							self->child_actor_wait_quit(actionActor);
-							cu->close_dlg(self);
-							begin_RUN_IN_WX();
-							m_textCtrl1->SetLabelText(taskCompleted? "完成": "取消");
-							cu.destroy();
-							end_RUN_IN_WX();
+							if (modalMutex.try_lock(self))
+							{
+								stack_obj<cancel_dlg<cancel_ui>> cu;
+								RUN_IN_WX(cu.create(_ios, this, runStop));
+								cu->run(self);
+								self->child_actor_wait_quit(actionActor);
+								cu->close_dlg(self);
+								begin_RUN_IN_WX();
+								m_textCtrl1->SetLabelText(taskCompleted ? "完成" : "取消");
+								cu.destroy();
+								end_RUN_IN_WX();
+								modalMutex.unlock(self);
+							}
+							else
+							{
+								goto at_wait;
+							}
 						}
 						else
 						{
@@ -84,7 +94,11 @@ wx_ui::wx_ui(ios_proxy& ios)
 				}
 				else
 				{
-					RUN_IN_WX(SHOW_MODAL(wxMessageBox("正在运行")));
+					if (modalMutex.try_lock(self))
+					{
+						RUN_IN_WX(SHOW_MODAL(MessageBoxA(GetHWND(), "正在运行", "", MB_OK)));
+						modalMutex.unlock(self);
+					}
 				}
 				break;
 			case ui_close:
@@ -105,7 +119,7 @@ wx_ui::wx_ui(ios_proxy& ios)
 				m_textCtrl1->SetLabelText("delay close 0");
 				self->sleep(500);
 				//SHOW_MODAL(sure = wxMessageBox("关闭?", "", wxYES_NO) == wxYES);
-				SHOW_MODAL(sure = MessageBoxA(this->GetHWND(), "关闭?", "", MB_YESNO) == IDYES);
+				SHOW_MODAL(sure = MessageBoxA(GetHWND(), "关闭?", "", MB_YESNO) == IDYES);
 				end_ACTOR_RUN_IN_WX();
 				if (sure)
 				{

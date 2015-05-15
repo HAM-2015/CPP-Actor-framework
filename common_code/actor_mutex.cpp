@@ -9,10 +9,11 @@ public:
 	mutex_trig_notifer();
 	mutex_trig_notifer(mutex_trig_handle* trigHandle);
 public:
-	void operator()() const;
+	void operator()();
 public:
 	mutex_trig_handle* _trigHandle;
 	shared_strand _strand;
+	bool _notified;
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -26,6 +27,7 @@ public:
 	void push_msg();
 	bool read_msg();
 	void wait(my_actor* self);
+	bool timed_wait(int tm, my_actor* self);
 public:
 	bool _hasMsg;
 	bool _waiting;
@@ -36,9 +38,11 @@ public:
 
 //////////////////////////////////////////////////////////////////////////
 
-void mutex_trig_notifer::operator()() const
+void mutex_trig_notifer::operator()()
 {
+	assert(!_notified);
 	auto& trigHandle_ = _trigHandle;
+	_notified = true;
 	_strand->post([=]
 	{
 		trigHandle_->push_msg();
@@ -47,12 +51,14 @@ void mutex_trig_notifer::operator()() const
 
 mutex_trig_notifer::mutex_trig_notifer(mutex_trig_handle* trigHandle)
 :_trigHandle(trigHandle),
-_strand(trigHandle->_strand)
+_strand(trigHandle->_strand),
+_notified(false)
 {
 
 }
 
-mutex_trig_notifer::mutex_trig_notifer() :_trigHandle(NULL)
+mutex_trig_notifer::mutex_trig_notifer()
+:_trigHandle(NULL), _notified(false)
 {
 
 }
@@ -71,6 +77,36 @@ void mutex_trig_handle::wait(my_actor* self)
 			self->push_yield_as_mutex();
 		}
 	}
+}
+
+bool mutex_trig_handle::timed_wait(int tm, my_actor* self)
+{
+	assert(!_outActor);
+	if (!read_msg())
+	{
+		bool timeout = false;
+		LAMBDA_REF2(ref2, self, timeout);
+		if (tm >= 0)
+		{
+			self->delay_trig(tm, [&ref2]
+			{
+				ref2.timeout = true;
+				ref2.self->pull_yield();
+			});
+		}
+		self->push_yield();
+		if (!timeout)
+		{
+			if (tm >= 0)
+			{
+				self->cancel_delay_trig();
+			}
+			return true;
+		}
+		_waiting = false;
+		return false;
+	}
+	return true;
 }
 
 bool mutex_trig_handle::read_msg()
@@ -135,26 +171,9 @@ mutex_trig_handle::mutex_trig_handle(const actor_handle& hostActor)
 
 class _actor_mutex
 {
-	struct check_quit
-	{
-		check_quit() :_sign(true){}
-
-		~check_quit()
-		{
-			assert(!_sign);
-		}
-
-		void reset()
-		{
-			_sign = false;
-		}
-
-		bool _sign;
-	};
-
 	struct wait_node
 	{
-		mutex_trig_notifer ntf;
+		mutex_trig_notifer& ntf;
 		my_actor* _waitSelf;
 	};
 private:
@@ -171,9 +190,7 @@ public:
 
 	static std::shared_ptr<_actor_mutex> make(shared_strand strand)
 	{
-		std::shared_ptr<_actor_mutex> res(new _actor_mutex(strand));
-		res->_weakThis = res;
-		return res;
+		return std::shared_ptr<_actor_mutex>(new _actor_mutex(strand));
 	}
 public:
 	void lock(my_actor* self)
@@ -182,78 +199,137 @@ public:
 		assert(self->in_actor());
 		self->check_stack();
 
-		DEBUG_OPERATION(check_quit cq);
-
-		mutex_trig_handle ath(self->shared_from_this());
-		auto shared_this = _weakThis.lock();
-		auto h = [shared_this, self, &ath]()->bool
+		if (!self->is_quited())
 		{
-			auto& lockActor_ = shared_this->_lockActor;
-			if (!lockActor_ || self == lockActor_)
+			self->lock_quit();
+		}
+		bool complete;
+		mutex_trig_handle ath(self->shared_from_this());
+		mutex_trig_notifer ntf;
+		LAMBDA_THIS_REF4(ref4, self, complete, ath, ntf);
+		auto h = [&ref4]
+		{
+			if (!ref4->_lockActor || ref4.self == ref4->_lockActor)
 			{
-				lockActor_ = self;
-				shared_this->_recCount++;
-				return true;
+				ref4->_lockActor = ref4.self;
+				ref4->_recCount++;
+				ref4.complete = true;
 			}
-			wait_node wn = { ath.make_notifer(), self };
-			shared_this->_waitQueue.push_back(wn);
-			return false;
+			else
+			{
+				ref4.ntf = ref4.ath.make_notifer();
+				wait_node wn = { ref4.ntf, ref4.self };
+				ref4->_waitQueue.push_back(wn);
+				ref4.complete = false;
+			}
 		};
 
-		bool complete;
-		if (_strand != self->_strand)
+		if (_strand != self->self_strand())
 		{
 			if (self->is_quited())
 			{
-				actor_handle shared_this = self->shared_from_this();
-				_strand->asyncInvoke(h, [shared_this, &complete](bool b)
+				actor_handle shared_self = self->shared_from_this();
+				_strand->asyncInvokeVoid(h, [shared_self]
 				{
-					complete = b;
-					auto& shared_this_ = shared_this;
-					shared_this->_strand->post([=]
+					auto& shared_self_ = shared_self;
+					shared_self->self_strand()->post([=]
 					{
-						shared_this_->pull_yield_as_mutex();
+						shared_self_->pull_yield_as_mutex();
 					});
 				});
 				self->push_yield_as_mutex();
 			} 
 			else
 			{
-				complete = self->send<bool>(_strand, h);
+				self->send(_strand, h);
 			}
 		}
 		else
 		{
-			complete = h();
+			h();
 		}
 
 		if (!complete)
 		{
 			ath.wait(self);
-			assert(_lockActor == self && 1 == _recCount);
+			assert(ntf._notified && _lockActor == self && 1 == _recCount);
 		}
-		DEBUG_OPERATION(cq.reset());
+		if (!self->is_quited())
+		{
+			self->unlock_quit();
+		}
 	}
 
 	bool try_lock(my_actor* self)
 	{
 		self->assert_enter();
 
-		DEBUG_OPERATION(check_quit cq);
-		auto shared_this = _weakThis.lock();
-		bool complete = self->send<bool>(_strand, [shared_this, self]()->bool
+		my_actor::quit_guard qg(self);
+		bool complete;
+		LAMBDA_THIS_REF2(ref2, self, complete);
+		self->send(_strand, [&ref2]
 		{
-			auto& lockActor_ = shared_this->_lockActor;
-			if (!lockActor_ || self == lockActor_)
+			if (!ref2->_lockActor || ref2.self == ref2->_lockActor)
 			{
-				lockActor_ = self;
-				shared_this->_recCount++;
-				return true;
+				ref2->_lockActor = ref2.self;
+				ref2->_recCount++;
+				ref2.complete = true;
 			}
-			return false;
+			else
+			{
+				ref2.complete = false;
+			}
 		});
-		DEBUG_OPERATION(cq.reset());
 		return complete;
+	}
+
+	bool timed_lock(int tm, my_actor* self)
+	{
+		assert(self->self_strand()->running_in_this_thread());
+		assert(self->in_actor());
+		assert(!self->is_quited());
+		self->check_stack();
+
+		my_actor::quit_guard qg(self);
+		msg_list<wait_node>::node_it nit;
+		bool complete;
+		mutex_trig_handle ath(self->shared_from_this());
+		mutex_trig_notifer ntf;
+		LAMBDA_THIS_REF5(ref5, self, nit, complete, ath, ntf);
+		self->send(_strand, [&ref5]
+		{
+			if (!ref5->_lockActor || ref5.self == ref5->_lockActor)
+			{
+				ref5->_lockActor = ref5.self;
+				ref5->_recCount++;
+				ref5.complete = true;
+			}
+			else
+			{
+				ref5.ntf = ref5.ath.make_notifer();
+				wait_node wn = { ref5.ntf, ref5.self };
+				ref5.nit = ref5->_waitQueue.push_back(wn);
+				ref5.complete = false;
+			}
+		});
+
+		if (!complete)
+		{
+			if (!ath.timed_wait(tm, self))
+			{
+				self->send(_strand, [&ref5]
+				{
+					if (!ref5.ntf._notified)
+					{
+						ref5.ntf._notified = true;
+						ref5->_waitQueue.erase(ref5.nit);
+					}
+				});
+				return false;
+			}
+			assert(ntf._notified && _lockActor == self && 1 == _recCount);
+		}
+		return true;
 	}
 
 	void unlock(my_actor* self)
@@ -262,27 +338,25 @@ public:
 		assert(self->in_actor());
 		self->check_stack();
 
-		DEBUG_OPERATION(check_quit cq);
-
-		auto shared_this = _weakThis.lock();
-		auto h = [shared_this, self]
+		if (!self->is_quited())
 		{
-			auto& recCount_ = shared_this->_recCount;
-			auto& lockActor_ = shared_this->_lockActor;
-			auto& waitQueue_ = shared_this->_waitQueue;
-			assert(lockActor_ == self);
-			if (0 == --recCount_)
+			self->lock_quit();
+		}
+		auto h = [&]
+		{
+			assert(_lockActor == self);
+			if (0 == --_recCount)
 			{
-				if (!waitQueue_.empty())
+				if (!_waitQueue.empty())
 				{
-					recCount_ = 1;
-					lockActor_ = waitQueue_.front()._waitSelf;
-					waitQueue_.front().ntf();
-					waitQueue_.pop_front();
+					_recCount = 1;
+					_lockActor = _waitQueue.front()._waitSelf;
+					_waitQueue.front().ntf();
+					_waitQueue.pop_front();
 				}
 				else
 				{
-					lockActor_ = NULL;
+					_lockActor = NULL;
 				}
 			}
 		};
@@ -291,13 +365,13 @@ public:
 		{
 			if (self->is_quited())
 			{
-				actor_handle shared_this = self->shared_from_this();
-				_strand->asyncInvokeVoid(h, [shared_this]
+				actor_handle shared_self = self->shared_from_this();
+				_strand->asyncInvokeVoid(h, [shared_self]
 				{
-					auto& shared_this_ = shared_this;
-					shared_this->_strand->post([=]
+					auto& shared_self_ = shared_self;
+					shared_self->self_strand()->post([=]
 					{
-						shared_this_->pull_yield_as_mutex();
+						shared_self_->pull_yield_as_mutex();
 					});
 				});
 				self->push_yield_as_mutex();
@@ -311,33 +385,41 @@ public:
 		{
 			h();
 		}
+		if (!self->is_quited())
+		{
+			self->unlock_quit();
+		}
+	}
 
-		DEBUG_OPERATION(cq.reset());
+	void unlock()
+	{
+		assert(_lockActor);
+#ifdef CHECK_ACTOR
+		assert(my_actor::self_actor() == _lockActor);
+#endif
+		unlock(_lockActor);
 	}
 
 	void reset_mutex(my_actor* self)
 	{
-		DEBUG_OPERATION(check_quit cq);
-		auto shared_this = _weakThis.lock();
-		self->send(_strand, [shared_this]
+		my_actor::quit_guard qg(self);
+		self->send(_strand, [this]
 		{
-			shared_this->_lockActor = NULL;
-			shared_this->_recCount = 0;
-			auto& waitQueue_ = shared_this->_waitQueue;
+			_lockActor = NULL;
+			_recCount = 0;
+			auto& waitQueue_ = _waitQueue;
 			while (!waitQueue_.empty())
 			{
 				waitQueue_.front().ntf();
 				waitQueue_.pop_front();
 			}
 		});
-		DEBUG_OPERATION(cq.reset());
 	}
 private:
 	shared_strand _strand;
 	my_actor* _lockActor;
 	size_t _recCount;
-	std::weak_ptr<_actor_mutex> _weakThis;
-	msg_queue<wait_node> _waitQueue;
+	msg_list<wait_node> _waitQueue;
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -362,9 +444,19 @@ bool actor_mutex::try_lock(my_actor* self) const
 	return _amutex->try_lock(self);
 }
 
+bool actor_mutex::timed_lock(int tm, my_actor* self) const
+{
+	return _amutex->timed_lock(tm, self);
+}
+
 void actor_mutex::unlock(my_actor* self) const
 {
 	_amutex->unlock(self);
+}
+
+void actor_mutex::unlock() const
+{
+	_amutex->unlock();
 }
 
 // void actor_mutex::reset_mutex(my_actor* self)
