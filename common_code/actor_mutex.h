@@ -11,6 +11,7 @@ class my_actor;
 */
 class actor_mutex
 {
+	friend my_actor;
 public:
 	actor_mutex(shared_strand strand);
 	~actor_mutex();
@@ -43,6 +44,9 @@ public:
 	@brief 重置mutex，使用前确保当前没有一个Actor依赖该mutex了
 	*/
 	//void reset_mutex(my_actor* self);
+private:
+	void quited_lock(my_actor* self) const;
+	void quited_unlock(my_actor* self) const;
 private:
 	std::shared_ptr<_actor_mutex> _amutex;
 };

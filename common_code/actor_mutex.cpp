@@ -195,14 +195,43 @@ public:
 public:
 	void lock(my_actor* self)
 	{
+		self->assert_enter();
+
+		my_actor::quit_guard qg(self);
+		bool complete;
+		mutex_trig_handle ath(self->shared_from_this());
+		mutex_trig_notifer ntf;
+		LAMBDA_THIS_REF4(ref4, self, complete, ath, ntf);
+		self->send(_strand, [&ref4]
+		{
+			if (!ref4->_lockActor || ref4.self == ref4->_lockActor)
+			{
+				ref4->_lockActor = ref4.self;
+				ref4->_recCount++;
+				ref4.complete = true;
+			}
+			else
+			{
+				ref4.ntf = ref4.ath.make_notifer();
+				wait_node wn = { ref4.ntf, ref4.self };
+				ref4->_waitQueue.push_back(wn);
+				ref4.complete = false;
+			}
+		});
+
+		if (!complete)
+		{
+			ath.wait(self);
+			assert(ntf._notified && _lockActor == self && 1 == _recCount);
+		}
+	}
+
+	void quited_lock(my_actor* self)
+	{
 		assert(self->self_strand()->running_in_this_thread());
 		assert(self->in_actor());
+		assert(self->is_quited());
 		self->check_stack();
-
-		if (!self->is_quited())
-		{
-			self->lock_quit();
-		}
 		bool complete;
 		mutex_trig_handle ath(self->shared_from_this());
 		mutex_trig_notifer ntf;
@@ -226,23 +255,16 @@ public:
 
 		if (_strand != self->self_strand())
 		{
-			if (self->is_quited())
+			actor_handle shared_self = self->shared_from_this();
+			_strand->asyncInvokeVoid(h, [shared_self]
 			{
-				actor_handle shared_self = self->shared_from_this();
-				_strand->asyncInvokeVoid(h, [shared_self]
+				auto& shared_self_ = shared_self;
+				shared_self->self_strand()->post([=]
 				{
-					auto& shared_self_ = shared_self;
-					shared_self->self_strand()->post([=]
-					{
-						shared_self_->pull_yield_as_mutex();
-					});
+					shared_self_->pull_yield_as_mutex();
 				});
-				self->push_yield_as_mutex();
-			} 
-			else
-			{
-				self->send(_strand, h);
-			}
+			});
+			self->push_yield_as_mutex();
 		}
 		else
 		{
@@ -253,10 +275,6 @@ public:
 		{
 			ath.wait(self);
 			assert(ntf._notified && _lockActor == self && 1 == _recCount);
-		}
-		if (!self->is_quited())
-		{
-			self->unlock_quit();
 		}
 	}
 
@@ -285,10 +303,7 @@ public:
 
 	bool timed_lock(int tm, my_actor* self)
 	{
-		assert(self->self_strand()->running_in_this_thread());
-		assert(self->in_actor());
-		assert(!self->is_quited());
-		self->check_stack();
+		self->assert_enter();
 
 		my_actor::quit_guard qg(self);
 		msg_list<wait_node>::node_it nit;
@@ -334,14 +349,35 @@ public:
 
 	void unlock(my_actor* self)
 	{
+		self->assert_enter();
+
+		my_actor::quit_guard qg(self);
+		self->send(_strand, [&]
+		{
+			assert(_lockActor == self);
+			if (0 == --_recCount)
+			{
+				if (!_waitQueue.empty())
+				{
+					_recCount = 1;
+					_lockActor = _waitQueue.front()._waitSelf;
+					_waitQueue.front().ntf();
+					_waitQueue.pop_front();
+				}
+				else
+				{
+					_lockActor = NULL;
+				}
+			}
+		});
+	}
+	
+	void quited_unlock(my_actor* self)
+	{
 		assert(self->self_strand()->running_in_this_thread());
 		assert(self->in_actor());
+		assert(self->is_quited());
 		self->check_stack();
-
-		if (!self->is_quited())
-		{
-			self->lock_quit();
-		}
 		auto h = [&]
 		{
 			assert(_lockActor == self);
@@ -363,45 +399,34 @@ public:
 
 		if (_strand != self->self_strand())
 		{
-			if (self->is_quited())
+			actor_handle shared_self = self->shared_from_this();
+			_strand->asyncInvokeVoid(h, [shared_self]
 			{
-				actor_handle shared_self = self->shared_from_this();
-				_strand->asyncInvokeVoid(h, [shared_self]
+				auto& shared_self_ = shared_self;
+				shared_self->self_strand()->post([=]
 				{
-					auto& shared_self_ = shared_self;
-					shared_self->self_strand()->post([=]
-					{
-						shared_self_->pull_yield_as_mutex();
-					});
+					shared_self_->pull_yield_as_mutex();
 				});
-				self->push_yield_as_mutex();
-			} 
-			else
-			{
-				self->send(_strand, h);
-			}
-		} 
+			});
+			self->push_yield_as_mutex();
+		}
 		else
 		{
 			h();
-		}
-		if (!self->is_quited())
-		{
-			self->unlock_quit();
 		}
 	}
 
 	void unlock()
 	{
 		assert(_lockActor);
-#ifdef CHECK_ACTOR
-		assert(my_actor::self_actor() == _lockActor);
-#endif
+		_lockActor->check_self();
 		unlock(_lockActor);
 	}
 
 	void reset_mutex(my_actor* self)
 	{
+		self->assert_enter();
+
 		my_actor::quit_guard qg(self);
 		self->send(_strand, [this]
 		{
@@ -457,6 +482,16 @@ void actor_mutex::unlock(my_actor* self) const
 void actor_mutex::unlock() const
 {
 	_amutex->unlock();
+}
+
+void actor_mutex::quited_lock(my_actor* self) const
+{
+	_amutex->quited_lock(self);
+}
+
+void actor_mutex::quited_unlock(my_actor* self) const
+{
+	_amutex->quited_unlock(self);
 }
 
 // void actor_mutex::reset_mutex(my_actor* self)

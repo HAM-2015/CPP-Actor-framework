@@ -1789,9 +1789,9 @@ class my_actor
 		{
 			for (int i = 0; i < 5; i++)
 			{
-				for_each(_msgPumpList[i].begin(), _msgPumpList[i].end(), [&](const std::shared_ptr<pck_base>& p){p->lock(self); });
+				for_each(_msgPumpList[i].begin(), _msgPumpList[i].end(), [&](const std::shared_ptr<pck_base>& p){p->_amutex.quited_lock(self); });
 				for_each(_msgPumpList[i].begin(), _msgPumpList[i].end(), [](const std::shared_ptr<pck_base>& p){p->close(); });
-				for_each(_msgPumpList[i].begin(), _msgPumpList[i].end(), [&](const std::shared_ptr<pck_base>& p){p->unlock(self); });
+				for_each(_msgPumpList[i].begin(), _msgPumpList[i].end(), [&](const std::shared_ptr<pck_base>& p){p->_amutex.quited_unlock(self); });
 			}
 		}
 
@@ -3704,14 +3704,14 @@ public:
 public:
 	/*!
 	@brief 获取当前代码运行在哪个Actor下
-	@return 不运行在Actor下或没启动 CHECK_ACTOR 返回NULL
+	@return 不运行在Actor下或没启动 CHECK_SELF 返回NULL
 	*/
 	static my_actor* self_actor();
 
 	/*!
 	@brief 检测当前是否在该Actor内运行
 	*/
-	void check_actor();
+	void check_self();
 
 	/*!
 	@brief 测试当前下的Actor栈是否安全
@@ -3910,7 +3910,7 @@ private:
 	timer_pck* _timer;///<定时器
 	std::weak_ptr<my_actor> _weakThis;
 	static std::shared_ptr<shared_obj_pool_base<bool>> _sharedBoolPool;
-#ifdef CHECK_ACTOR
+#ifdef CHECK_SELF
 	map<void*, my_actor*>::iterator _btIt;
 	map<void*, my_actor*>::iterator _topIt;
 #endif
