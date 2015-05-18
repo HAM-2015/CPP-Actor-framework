@@ -414,7 +414,7 @@ protected:
 	void run_one();
 	bool is_quited();
 	void set_actor(const actor_handle& hostActor);
-	std::shared_ptr<bool> new_bool();
+	static std::shared_ptr<bool> new_bool();
 protected:
 	bool _waiting;
 	my_actor* _hostActor;

@@ -596,6 +596,10 @@ bool _autoMakeTimer = true;
 #ifdef CHECK_SELF
 map<void*, my_actor*> _stackLine;
 boost::mutex _stackLineMutex;
+struct initStackLine
+{
+	initStackLine()	{ _stackLine.insert(make_pair((void*)NULL, (my_actor*)NULL)); }
+} _initStackLine;
 #endif
 
 std::shared_ptr<shared_obj_pool_base<bool>> my_actor::_sharedBoolPool;
@@ -1906,14 +1910,12 @@ my_actor* my_actor::self_actor()
 {
 #ifdef CHECK_SELF
 	boost::lock_guard<boost::mutex> lg(_stackLineMutex);
-	auto it = _stackLine.insert(make_pair(get_sp(), (my_actor*)NULL)).first;
-	if (it != _stackLine.end())
+	auto eit = _stackLine.insert(make_pair(get_sp(), (my_actor*)NULL));
+	if (eit.second)
 	{
-		_stackLine.erase(it--);
-		if (it != _stackLine.end())
-		{
-			return it->second;
-		}
+		_stackLine.erase(eit.first--);
+		assert(eit.first != _stackLine.end());
+		return eit.first->second;
 	}
 #endif
 	return NULL;

@@ -334,13 +334,18 @@ public:
 			{
 				self->send(_strand, [&ref5]
 				{
-					if (!ref5.ntf._notified)
+					ref5.complete = ref5.ntf._notified;
+					if (!ref5.complete)
 					{
 						ref5.ntf._notified = true;
 						ref5->_waitQueue.erase(ref5.nit);
 					}
 				});
-				return false;
+				if (!complete)
+				{
+					return false;
+				}
+				ath.wait(self);
 			}
 			assert(ntf._notified && _lockActor == self && 1 == _recCount);
 		}

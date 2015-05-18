@@ -33,7 +33,7 @@ void check_key_test(my_actor* self, int id)
 		check_key_down(self, id);//检测按下
 		child_actor_handle checkUp = self->create_child_actor([&](my_actor* self){check_key_up(self, id); }, 24 kB);//创建一个检测弹起的子Actor
 		self->child_actor_run(checkUp);//开始运行子Actor
-		self->delay_trig(1000, [&](){checkUp.get_actor()->notify_quit(); });//启用弹起超时处理，超时后强制关闭checkUp
+		self->delay_trig(1000, [&]{checkUp.get_actor()->notify_quit(); });//启用弹起超时处理，超时后强制关闭checkUp
 		if (self->child_actor_wait_quit(checkUp))//正常退出的返回true，被强制关闭的返回false
 		{
 			self->cancel_delay_trig();
@@ -144,7 +144,7 @@ void check_two_down(my_actor* self, int dt, int id1, int id2)
 			actor_handle ah;
 			bool ok = false;
 			self->wait_trig(ath, ah, ok);
-			self->delay_trig(dt, [&](){ah->notify_quit(); });
+			self->delay_trig(dt, [&]{ah->notify_quit(); });
 			if (self->actor_wait_quit(ah))
 			{
 				printf("*success*\n");
