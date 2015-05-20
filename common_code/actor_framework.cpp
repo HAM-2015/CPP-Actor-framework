@@ -640,6 +640,10 @@ public:
 		{
 			assert(false);
 		}
+		catch (actor_mutex::close_exception&)
+		{
+			assert(false);
+		}
 		catch (...)
 		{
 			assert(false);

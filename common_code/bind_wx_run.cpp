@@ -1,7 +1,8 @@
 #include "bind_wx_run.h"
 
-DEFINE_EVENT_TYPE(wxEVT_POST)
+#ifdef ENABLE_WX_ACTOR
 
+DEFINE_EVENT_TYPE(wxEVT_POST)
 
 bind_wx_run_base::bind_wx_run_base()
 :_isClosed(false), _postOptions(16)
@@ -14,7 +15,6 @@ bind_wx_run_base::~bind_wx_run_base()
 	assert(boost::this_thread::get_id() == _threadID);
 }
 
-#ifdef ENABLE_WX_ACTOR
 actor_handle bind_wx_run_base::create_wx_actor(ios_proxy& ios, const my_actor::main_func& mainFunc, size_t stackSize /*= DEFAULT_STACKSIZE*/)
 {
 	assert(!_isClosed);
@@ -26,7 +26,6 @@ actor_handle bind_wx_run_base::create_wx_actor(const my_actor::main_func& mainFu
 	assert(!_isClosed);
 	return my_actor::create(make_wx_strand(), mainFunc, stackSize);
 }
-#endif
 
 shared_strand bind_wx_run_base::make_wx_strand()
 {
@@ -104,3 +103,5 @@ void bind_wx_run_base::postRun(wxEvent& ue)
 	assert(h);
 	h();
 }
+
+#endif //ENABLE_WX_ACTOR

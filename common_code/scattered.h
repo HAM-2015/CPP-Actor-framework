@@ -182,6 +182,7 @@ struct REF_STRUCT_NAME(__NAME__)\
 	REF_STRUCT_NAME(__NAME__)(this_type ts, decltype(__P0__)& p0)\
 	:__this(ts), __P0__(p0){}\
 	decltype(__P0__)& __P0__; \
+	this_type get(){ return __this; }\
 	this_type operator->(){ return __this; }\
 private:\
 	REF_STRUCT_NAME(__NAME__)(const REF_STRUCT_NAME(__NAME__)& s)\
@@ -199,6 +200,7 @@ struct REF_STRUCT_NAME(__NAME__)\
 	:__this(ts), __P0__(p0), __P1__(p1){}\
 	decltype(__P0__)& __P0__; \
 	decltype(__P1__)& __P1__; \
+	this_type get(){ return __this; }\
 	this_type operator->(){ return __this; }\
 private:\
 	REF_STRUCT_NAME(__NAME__)(const REF_STRUCT_NAME(__NAME__)& s)\
@@ -217,6 +219,7 @@ struct REF_STRUCT_NAME(__NAME__)\
 	decltype(__P0__)& __P0__; \
 	decltype(__P1__)& __P1__; \
 	decltype(__P2__)& __P2__; \
+	this_type get(){ return __this; }\
 	this_type operator->(){ return __this; }\
 private:\
 	REF_STRUCT_NAME(__NAME__)(const REF_STRUCT_NAME(__NAME__)& s)\
@@ -236,6 +239,7 @@ struct REF_STRUCT_NAME(__NAME__)\
 	decltype(__P1__)& __P1__; \
 	decltype(__P2__)& __P2__; \
 	decltype(__P3__)& __P3__; \
+	this_type get(){ return __this; }\
 	this_type operator->(){ return __this; }\
 private:\
 	REF_STRUCT_NAME(__NAME__)(const REF_STRUCT_NAME(__NAME__)& s)\
@@ -257,6 +261,7 @@ struct REF_STRUCT_NAME(__NAME__)\
 	decltype(__P2__)& __P2__; \
 	decltype(__P3__)& __P3__; \
 	decltype(__P4__)& __P4__; \
+	this_type get(){ return __this; }\
 	this_type operator->(){ return __this; }\
 private:\
 	REF_STRUCT_NAME(__NAME__)(const REF_STRUCT_NAME(__NAME__)& s)\
@@ -279,6 +284,7 @@ struct REF_STRUCT_NAME(__NAME__)\
 	decltype(__P3__)& __P3__; \
 	decltype(__P4__)& __P4__; \
 	decltype(__P5__)& __P5__; \
+	this_type get(){ return __this; }\
 	this_type operator->(){ return __this; }\
 private:\
 	REF_STRUCT_NAME(__NAME__)(const REF_STRUCT_NAME(__NAME__)& s)\

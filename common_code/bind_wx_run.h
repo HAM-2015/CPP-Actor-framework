@@ -1,6 +1,8 @@
 #ifndef __BIND_WX_RUN_H
 #define __BIND_WX_RUN_H
 
+#ifdef ENABLE_WX_ACTOR
+
 #include "wrapped_post_handler.h"
 #include "actor_framework.h"
 #include "wx_strand.h"
@@ -337,5 +339,6 @@ public:
 		}
 	}
 };
+#endif// ENABLE_WX_ACTOR
 
 #endif
