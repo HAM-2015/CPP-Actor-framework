@@ -27,12 +27,12 @@ actor_handle bind_wx_run_base::create_wx_actor(const my_actor::main_func& mainFu
 	return my_actor::create(make_wx_strand(), mainFunc, stackSize);
 }
 
-shared_strand bind_wx_run_base::make_wx_strand()
+shared_wx_strand bind_wx_run_base::make_wx_strand()
 {
 	return wx_strand::create(this);
 }
 
-shared_strand bind_wx_run_base::make_wx_strand(ios_proxy& ios)
+shared_wx_strand bind_wx_run_base::make_wx_strand(ios_proxy& ios)
 {
 	return wx_strand::create(ios, this);
 }
@@ -57,14 +57,18 @@ boost::thread::id bind_wx_run_base::thread_id()
 
 void bind_wx_run_base::post(const std::function<void()>& h)
 {
-	boost::shared_lock<boost::shared_mutex> sl(_postMutex);
-	if (!_isClosed)
 	{
-		_mutex.lock();
-		_postOptions.push_back(h);
-		_mutex.unlock();
-		post_event();
+		boost::shared_lock<boost::shared_mutex> sl(_postMutex);
+		if (!_isClosed)
+		{
+			_mutex.lock();
+			_postOptions.push_back(h);
+			_mutex.unlock();
+			post_event();
+			return;
+		}
 	}
+	assert(false);
 }
 
 void bind_wx_run_base::wx_close()

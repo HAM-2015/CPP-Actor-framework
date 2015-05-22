@@ -1,6 +1,9 @@
 #ifndef __SCATTERED_H
 #define __SCATTERED_H
 
+#include <functional>
+#include <memory>
+
 #define   LIBPATH(p, f)   p##f 
 
 #ifdef _WIN64
@@ -75,6 +78,29 @@ inline void clear_function(F& f)
 {
 	f = F();
 }
+
+/*!
+@brief 这个类在测试消息传递时使用
+*/
+struct passing_test
+{
+	struct count 
+	{
+		int _id;
+		size_t _copyCount;
+		size_t _moveCount;
+		std::function<void(std::shared_ptr<count>)> _cb;
+	};
+
+	passing_test(int id);
+	~passing_test();
+	passing_test(int id, const std::function<void(std::shared_ptr<count>)>& cb);
+	passing_test(const passing_test& s);
+	passing_test(passing_test&& s);
+	void operator=(const passing_test& s);
+	void operator=(passing_test&& s);
+	std::shared_ptr<count> _count;
+};
 
 #ifdef _DEBUG
 #define DEBUG_OPERATION(__exp__)	__exp__
@@ -306,5 +332,11 @@ catch (__exp__&)\
 if (__catched){
 
 #define END_TRY_ }}
+
+#define RUN_IN_STRAND(__host__, __strand__, __exp__) __host__->send(__strand__, [&]() {__exp__;})
+
+#define begin_RUN_IN_STRAND(__host__, __strand__) __host__->send(__strand__, [&] {
+
+#define end_RUN_IN_STRAND() })
 
 #endif

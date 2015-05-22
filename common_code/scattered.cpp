@@ -98,3 +98,59 @@ int get_tick_s()
 	QueryPerformanceCounter(&quadPart);
 	return (int)((double)quadPart.QuadPart*_pcCycle._sCycle);
 }
+//////////////////////////////////////////////////////////////////////////
+
+void passing_test::operator=(passing_test&& s)
+{
+	assert(s._count);
+	_count = s._count;
+	_count->_moveCount++;
+	s._count.reset();
+	if (_count->_cb)
+	{
+		_count->_cb(_count);
+	}
+}
+
+void passing_test::operator=(const passing_test& s)
+{
+	assert(s._count);
+	_count = s._count;
+	_count->_copyCount++;
+	if (_count->_cb)
+	{
+		_count->_cb(_count);
+	}
+}
+
+passing_test::passing_test(passing_test&& s)
+{
+	*this = std::move(s);
+}
+
+passing_test::passing_test(const passing_test& s)
+{
+	*this = s;
+}
+
+passing_test::passing_test(int id, const std::function<void(std::shared_ptr<count>)>& cb)
+{
+	_count = std::shared_ptr<count>(new count);
+	_count->_copyCount = 0;
+	_count->_moveCount = 0;
+	_count->_id = id;
+	_count->_cb = cb;
+}
+
+passing_test::passing_test(int id)
+{
+	_count = std::shared_ptr<count>(new count);
+	_count->_copyCount = 0;
+	_count->_moveCount = 0;
+	_count->_id = id;
+}
+
+passing_test::~passing_test()
+{
+
+}

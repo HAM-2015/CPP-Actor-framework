@@ -6,6 +6,8 @@
 #include "shared_strand.h"
 
 class bind_wx_run_base;
+class wx_strand;
+typedef std::shared_ptr<wx_strand> shared_wx_strand;
 
 class wx_strand : public boost_strand
 {
@@ -13,8 +15,8 @@ private:
 	wx_strand();
 	~wx_strand();
 public:
-	static shared_strand create(ios_proxy& iosProxy, bind_wx_run_base* wx);
-	static shared_strand create(bind_wx_run_base* wx);
+	static shared_wx_strand create(ios_proxy& iosProxy, bind_wx_run_base* wx);
+	static shared_wx_strand create(bind_wx_run_base* wx);
 private:
 	shared_strand clone();
 	bool in_this_ios();

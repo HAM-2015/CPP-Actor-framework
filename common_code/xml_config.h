@@ -10,6 +10,8 @@
 
 using namespace std;
 
+#define ATTR_NODE	"<xmlattr>"
+
 /*!
 @brief xmlÅäÖÃÎÄ¼ş²Ù×÷
 */
@@ -68,15 +70,21 @@ public:
 	bool saveAs(const char* file, const char* pas = NULL);
 	bool saveAs(const wchar_t* file, const char* pas = NULL);
 	void erase(const char* path, const string& name);
-	void clear(const char* path);
+	void clear(const char* path, bool clearAtt = true);
 
 	bool getAttr(const char* path, const string& key, string& res);
 	bool getAttr(const char* path, const string& key, int& res);
 	bool getAttr(const char* path, const string& key, double& res);
 
+	bool setAttr(const char* path, const string& key, const string& att);
+	bool setAttr(const char* path, const string& key, int att);
+	bool setAttr(const char* path, const string& key, double att, int fmt = 3);
+
 	bool getAttr(const char* path, map<string, string>& res);
 	bool getAttr(const char* path, map<string, int>& res);
 	bool getAttr(const char* path, map<string, double>& res);
+
+	bool setAttr(const char* path, const map<string, string>& att);
 
 	bool getGroup(const char* path, list<vals_string>& res);
 	bool getGroup(const char* path, list<vals_int>& res);

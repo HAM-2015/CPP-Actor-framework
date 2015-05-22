@@ -78,32 +78,31 @@ END_DECLARE_EVENT_TYPES()
 
 //////////////////////////////////////////////////////////////////////////
 //开始在Actor中，嵌入一段在wx线程中执行的连续逻辑
-#define begin_RUN_IN_WX_FOR(__self__) send(__self__, [&]() {
-#define begin_RUN_IN_WX() begin_RUN_IN_WX_FOR(self)
+#define begin_RUN_IN_WX_FOR(__WX__, __host__) (__WX__)->send(__host__, [&]() {
+#define begin_RUN_IN_WX() begin_RUN_IN_WX_FOR(this, self)
 //结束在wx线程中执行的一段连续逻辑，只有当这段逻辑执行完毕后才会执行END后续代码
 #define end_RUN_IN_WX() })
 //////////////////////////////////////////////////////////////////////////
 //在Actor中，嵌入一段在wx线程中执行的语句
-#define RUN_IN_WX_FOR(__self__, __exp__) send(__self__, [&]() {__exp__;})
+#define RUN_IN_WX_FOR(__WX__, __host__, __exp__) (__WX__)->send(__host__, [&]() {__exp__;})
 //在Actor中，嵌入一段在wx线程中执行的语句
-#define RUN_IN_WX(__exp__) RUN_IN_WX_FOR(self, __exp__)
+#define RUN_IN_WX(__exp__) RUN_IN_WX_FOR(this, self, __exp__)
 //////////////////////////////////////////////////////////////////////////
 //在Actor中，嵌入一段在wx线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用begin_RUN_IN_WX_FOR）
-#define begin_ACTOR_RUN_IN_WX_FOR(__self__, __ios__) {\
-	my_actor::quit_guard ___qg(__self__); \
-	auto ___tactor = create_wx_actor(__ios__, [&](my_actor* __self__) {
-
-//结束在wx线程中执行的Actor，只有当Actor内逻辑执行完毕后才会执行END后续代码
-#define end_ACTOR_RUN_IN_WX_FOR(__self__)\
-}); \
-	___tactor->notify_run(); \
-	__self__->actor_wait_quit(___tactor); \
-}
+#define begin_ACTOR_RUN_IN_WX_FOR(__WX__, __host__, __ios__) {\
+	auto ___host = __host__;\
+	my_actor::quit_guard ___qg(__host__); \
+	auto ___tactor = (__WX__)->create_wx_actor(__ios__, [&](my_actor* __host__) {
 
 //在Actor中，嵌入一段在wx线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用begin_RUN_IN_WX）
-#define begin_ACTOR_RUN_IN_WX(__ios__) begin_ACTOR_RUN_IN_WX_FOR(self, __ios__)
+#define begin_ACTOR_RUN_IN_WX(__ios__) begin_ACTOR_RUN_IN_WX_FOR(this, self, __ios__)
+
 //结束在wx线程中执行的Actor，只有当Actor内逻辑执行完毕后才会执行END后续代码
-#define end_ACTOR_RUN_IN_WX() end_ACTOR_RUN_IN_WX_FOR(self)
+#define end_ACTOR_RUN_IN_WX()\
+}); \
+	___tactor->notify_run(); \
+	___host->actor_wait_quit(___tactor); \
+}
 
 //运行一个模态对话框（当前界面如果Disable，将Enable后启动）
 #define SHOW_MODAL(__dlg__)\
@@ -127,8 +126,8 @@ protected:
 	bind_wx_run_base();
 	virtual ~bind_wx_run_base();
 public:
-	shared_strand make_wx_strand();
-	shared_strand make_wx_strand(ios_proxy& ios);
+	shared_wx_strand make_wx_strand();
+	shared_wx_strand make_wx_strand(ios_proxy& ios);
 
 	/*!
 	@brief 等待对象关闭
@@ -212,11 +211,7 @@ public:
 	{
 		return wrapped_post_handler<bind_wx_run_base, Handler>(this, handler);
 	}
-protected:
-	/*!
-	@brief 继承该函数，将收到wx对象关闭消息
-	*/
-	virtual void OnClose();
+
 #ifdef ENABLE_WX_ACTOR
 	/*!
 	@brief 在UI线程中创建一个Actor
@@ -226,6 +221,11 @@ protected:
 
 	actor_handle create_wx_actor(const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 #endif
+protected:
+	/*!
+	@brief 继承该函数，将收到wx对象关闭消息
+	*/
+	virtual void OnClose();
 	virtual void post_event() = 0;
 	virtual void disconnect() = 0;
 	void postRun(wxEvent& ue);

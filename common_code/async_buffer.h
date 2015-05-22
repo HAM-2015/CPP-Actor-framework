@@ -4,69 +4,239 @@
 #include <boost/circular_buffer.hpp>
 #include <functional>
 #include <memory>
+#include "actor_framework.h"
 
 /*!
-@brief 异步缓冲队列，在同一个shared_strand中使用
+@brief 异步缓冲队列，多写/多读
 */
 template <typename T>
 class async_buffer
 {
-private:
-	async_buffer(size_t maxLength)
-		:_buffer(maxLength)
-	{
-		_waitData = true;
-		_waitHalf = false;
-	}
 public:
+	struct close_exception 
+	{
+	};
+public:
+	async_buffer(size_t maxLength, shared_strand strand)
+		:_buffer(maxLength), _pushWait(4), _popWait(4)
+	{
+		_closed = false;
+		_strand = strand;
+	}
+
 	~async_buffer()
 	{
 
 	}
-
-	static std::shared_ptr<async_buffer> create(size_t maxLength)
-	{
-		return std::shared_ptr<async_buffer>(new async_buffer(maxLength));
-	}
 public:
-	void setNotify(const std::function<void ()>& newDataNotify, const std::function<void ()>& emptyNotify)
+	void push(my_actor* host, const T& msg)
 	{
-		_newDataNotify = newDataNotify;
-		_halfNotify = emptyNotify;
+		T t = msg;
+		push(host, std::move(t));
 	}
 
-	bool push(const T& p)
+	void push(my_actor* host, T&& msg)
 	{
-		assert(_buffer.size() < _buffer.capacity());
-		_buffer.push_back(p);
-		_waitHalf = _buffer.size() == _buffer.capacity();
-		if (_waitData)
+		my_actor::quit_guard qg(host);
+		while (true)
 		{
-			_waitData = false;
-			_newDataNotify();
+			actor_trig_handle<bool> ath;
+			bool isFull = false;
+			bool closed = false;
+			host->send(_strand, [&]
+			{
+				closed = _closed;
+				if (!_closed)
+				{
+					isFull = _buffer.full();
+					if (!isFull)
+					{
+						_buffer.push_back(std::move(msg));
+						if (!_popWait.empty())
+						{
+							_popWait.front()(true);
+							_popWait.pop_front();
+						}
+					}
+					else
+					{
+						_pushWait.push_back(host->make_trig_notifer(ath));
+					}
+				}
+			});
+			if (closed)
+			{
+				qg.unlock();
+				throw close_exception();
+			}
+			if (!isFull)
+			{
+				return;
+			}
+			if (!host->wait_trig(ath))
+			{
+				qg.unlock();
+				throw close_exception();
+			}
 		}
-		return _waitHalf;
 	}
 
-	bool pop(T& p)
+	bool try_push(my_actor* host, const T& msg)
 	{
-		assert(!_buffer.empty());
-		p = _buffer.front();
-		_buffer.pop_front();
-		_waitData = _buffer.empty();
-		if (_waitHalf && _buffer.size() <= _buffer.capacity()/2)
+		T t = msg;
+		return try_push(host, std::move(t));
+	}
+
+	bool try_push(my_actor* host, T&& msg)
+	{
+		my_actor::quit_guard qg(host);
+		bool isFull = false;
+		bool closed = false;
+		host->send(_strand, [&]
 		{
-			_waitHalf = false;
-			_halfNotify();
+			closed = _closed;
+			if (!_closed)
+			{
+				isFull = _buffer.full();
+				if (!isFull)
+				{
+					_buffer.push_back(std::move(msg));
+					if (!_popWait.empty())
+					{
+						_popWait.front()(true);
+						_popWait.pop_front();
+					}
+				}
+			}
+		});
+		if (closed)
+		{
+			qg.unlock();
+			throw close_exception();
 		}
-		return _waitData;
+		return !isFull;
+	}
+
+	T pop(my_actor* host)
+	{
+		my_actor::quit_guard qg(host);
+		char resBuf[sizeof(T)];
+		while (true)
+		{
+			actor_trig_handle<bool> ath;
+			bool isEmpty = false;
+			bool closed = false;
+			host->send(_strand, [&]
+			{
+				closed = _closed;
+				if (!_closed)
+				{
+					isEmpty = _buffer.empty();
+					if (!isEmpty)
+					{
+						new(resBuf)T(std::move(_buffer.front()));
+						_buffer.pop_front();
+					}
+					else
+					{
+						_popWait.push_back(host->make_trig_notifer(ath));
+					}
+					if (_buffer.size() <= _buffer.capacity() / 2 && !_pushWait.empty())
+					{
+						_pushWait.front()(true);
+						_pushWait.pop_front();
+					}
+				}
+			});
+			if (closed)
+			{
+				qg.unlock();
+				throw close_exception();
+			}
+			if (!isEmpty)
+			{
+				struct destory_t 
+				{
+					~destory_t()
+					{
+						_p->~T();
+					}
+					T* _p;
+				} ad = { (T*)resBuf };
+				return std::move(*(T*)resBuf);
+			}
+			if (!host->wait_trig(ath))
+			{
+				qg.unlock();
+				throw close_exception();
+			}
+		}
+	}
+
+	bool try_pop(my_actor* host, T& out)
+	{
+		my_actor::quit_guard qg(host);
+		bool isEmpty = false;
+		bool closed = false;
+		host->send(_strand, [&]
+		{
+			closed = _closed;
+			if (!_closed)
+			{
+				isEmpty = _buffer.empty();
+				if (!isEmpty)
+				{
+					out = std::move(_buffer.front());
+					_buffer.pop_front();
+				}
+				if (_buffer.size() <= _buffer.capacity() / 2 && !_pushWait.empty())
+				{
+					_pushWait.front()(true);
+					_pushWait.pop_front();
+				}
+			}
+		});
+		if (closed)
+		{
+			qg.unlock();
+			throw close_exception();
+		}
+		return !isEmpty;
+	}
+
+	void close(my_actor* host)
+	{
+		my_actor::quit_guard qg(host);
+		host->send(_strand, [&]
+		{
+			_closed = true;
+			_buffer.clear();
+			while (!_pushWait.empty())
+			{
+				_pushWait.front()(false);
+				_pushWait.pop_front();
+			}
+			while (!_popWait.empty())
+			{
+				_popWait.front()(false);
+				_popWait.pop_front();
+			}
+		});
+	}
+
+	void reset()
+	{
+		_closed = false;
+		_buffer.clear();
+		_pushWait.clear();
+		_popWait.clear();
 	}
 private:
-	bool _waitData;
-	bool _waitHalf;
+	bool _closed;
+	shared_strand _strand;
 	boost::circular_buffer<T> _buffer;
-	std::function<void ()> _newDataNotify;
-	std::function<void ()> _halfNotify;
+	msg_queue<actor_trig_notifer<bool>> _pushWait;
+	msg_queue<actor_trig_notifer<bool>> _popWait;
 };
 
 #endif

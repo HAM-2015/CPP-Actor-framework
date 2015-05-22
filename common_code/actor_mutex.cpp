@@ -236,6 +236,7 @@ public:
 		}
 		if (ath._closed)
 		{
+			qg.unlock();
 			throw actor_mutex::close_exception();
 		}
 	}
@@ -323,6 +324,7 @@ public:
 		});
 		if (closed)
 		{
+			qg.unlock();
 			throw actor_mutex::close_exception();
 		}
 		return complete;
@@ -390,6 +392,7 @@ public:
 		}
 		if (ath._closed)
 		{
+			qg.unlock();
 			throw actor_mutex::close_exception();
 		}
 		return true;

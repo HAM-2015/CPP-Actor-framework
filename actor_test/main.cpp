@@ -317,6 +317,8 @@ void actor_test(my_actor* self)
 	child_actor_handle actorMutex1;
 	child_actor_handle actorMutex2;
 	child_actor_handle actorMutex3;
+	child_actor_handle buffPush;
+	child_actor_handle buffPop;
 	//创建生产者/消费者模型测试
 	{//模拟消息转发，转发切换
 		actorConsumer = self->create_child_actor(self->self_strand()->clone(), [](my_actor* self)
@@ -408,9 +410,46 @@ void actor_test(my_actor* self)
 		actorMutex1 = self->create_child_actor(actorMutexH);
 		actorMutex2 = self->create_child_actor(actorMutexH);
 		actorMutex3 = self->create_child_actor(actorMutexH);
-		self->child_actor_run(actorMutex1);//模拟actor_mutex互斥特性
-		self->child_actor_run(actorMutex2);
-		self->child_actor_run(actorMutex3);
+		//self->child_actor_run(actorMutex1);//模拟actor_mutex互斥特性
+		//self->child_actor_run(actorMutex2);
+		//self->child_actor_run(actorMutex3);
+	}
+	async_buffer<passing_test> abuff(2, self->self_strand());
+	{
+		buffPush = self->create_child_actor(self->self_strand(), [&](my_actor* self)
+		{
+			int i = 0;
+			try
+			{
+				while (true)
+				{
+					abuff.push(self, passing_test(i++));
+				}
+			}
+			catch (async_buffer<int>::close_exception)
+			{
+				printf("--\n");
+			}
+		});
+		buffPop = self->create_child_actor(self->self_strand(), [&](my_actor* self)
+		{
+			int i = 0;
+			try
+			{
+				while (true)
+				{
+					passing_test id = abuff.pop(self);
+					printf("%d\n", id._count->_id);
+					self->sleep(1000);
+				}
+			}
+			catch (async_buffer<int>::close_exception)
+			{
+				printf("!--\n");
+			}
+		});
+		//self->child_actor_run(buffPush);
+		//self->child_actor_run(buffPop);
 	}
 	list<actor_handle> chs;//需要被挂起的Actor对象，可以从下方注释几个测试
 	chs.push_back(actorLeft.get_actor());
@@ -460,6 +499,9 @@ void actor_test(my_actor* self)
 	self->child_actor_wait_quit(actorMutex1);
 	self->child_actor_wait_quit(actorMutex2);
 	self->child_actor_wait_quit(actorMutex3);
+	abuff.close(self);
+	self->child_actor_force_quit(buffPush);
+	self->child_actor_force_quit(buffPop);
 	perforIos.stop();
 }
 

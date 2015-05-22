@@ -1818,17 +1818,36 @@ public:
 		quit_guard(my_actor* self)
 		:_self(self)
 		{
+			_locked = true;
 			_self->lock_quit();
 		}
 
 		~quit_guard()
 		{
+			if (_locked)
+			{
+				_self->unlock_quit();
+			}
+		}
+
+		void lock()
+		{
+			assert(!_locked);
+			_locked = true;
+			_self->lock_quit();
+		}
+
+		void unlock()
+		{
+			assert(_locked);
+			_locked = false;
 			_self->unlock_quit();
 		}
 	private:
 		quit_guard(const quit_guard&){};
 		void operator=(const quit_guard&){};
 		my_actor* _self;
+		bool _locked;
 	};
 
 	/*!

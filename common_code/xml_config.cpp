@@ -5,8 +5,6 @@
 #include <codecvt>
 #include <windows.h>
 
-#define ATTR_NODE	"<xmlattr>"
-
 #ifndef DISABLE_XML_ENC
 #pragma comment(lib, "libeay32.lib")
 #include <openssl/aes.h>
@@ -270,7 +268,14 @@ void xml_config::clearData()
 
 bool xml_config::save()
 {
-	return saveAs(_filePath.c_str(), _password.c_str());
+	if (_password.empty())
+	{
+		return saveAs(_filePath.c_str(), NULL);
+	}
+	else
+	{
+		return saveAs(_filePath.c_str(), _password.c_str());
+	}
 }
 
 bool xml_config::saveAs(const char* file, const char* pas /* = NULL */)
@@ -317,17 +322,17 @@ void xml_config::erase(const char* path, const string& name)
 {
 	try
 	{
-		auto& cd = _xml;
+		auto* cd = &_xml;
 		if (path)
 		{
-			cd = _xml.get_child(path);
+			cd = &_xml.get_child(path);
 		}
-		for (auto it = cd.begin(); it != cd.end();)
+		for (auto it = cd->begin(); it != cd->end();)
 		{
 			if (name == it->first)
 			{
 				auto t = it++;
-				cd.erase(t);
+				cd->erase(t);
 			}
 			else
 			{
@@ -341,13 +346,23 @@ void xml_config::erase(const char* path, const string& name)
 	}
 }
 
-void xml_config::clear(const char* path)
+void xml_config::clear(const char* path, bool clearAtt /* = true */)
 {
 	try
 	{
 		if (path)
 		{
-			_xml.get_child(path).clear();
+			if (clearAtt)
+			{
+				_xml.get_child(path).clear();
+			}
+			else
+			{
+				auto cdatt = _xml.get_child(string(path) + "." + ATTR_NODE);
+				auto& cd = _xml.get_child(path);
+				cd.clear();
+				cd.add_child(ATTR_NODE, cdatt);
+			}
 		}
 		else
 		{
@@ -454,6 +469,61 @@ bool xml_config::getAttr(const char* path, map<string, double>& res)
 		return false;
 	}
 	return true;
+}
+
+bool xml_config::setAttr(const char* path, const string& key, const string& att)
+{
+	try
+	{
+		auto& cd = getChild((string(path) + "." + ATTR_NODE).c_str(), false);
+		auto it = cd.find(key);
+		if (it != cd.not_found())
+		{
+			it->second.put_value(att);
+		}
+		else
+		{
+			cd.put(key, att);
+		}
+		return true;
+	}
+	catch (...) {}
+	return false;
+}
+
+bool xml_config::setAttr(const char* path, const map<string, string>& att)
+{
+	try
+	{
+		auto& cd = getChild((string(path) + "." + ATTR_NODE).c_str(), false);
+		for (auto it = att.begin(); it != att.begin(); it++)
+		{
+			auto sit = cd.find(it->first);
+			if (sit != cd.not_found())
+			{
+				sit->second.put_value(it->second);
+			}
+			else
+			{
+				cd.put(it->first, it->second);
+			}
+		}
+		return true;
+	}
+	catch (...) {}
+	return false;
+}
+
+bool xml_config::setAttr(const char* path, const string& key, int att)
+{
+	string satt = boost::lexical_cast<string>(att);
+	return setAttr(path, key, satt);
+}
+
+bool xml_config::setAttr(const char* path, const string& key, double att, int fmt)
+{
+	string satt = floatFormat(att, fmt);
+	return setAttr(path, key, satt);
 }
 
 bool xml_config::getGroup( const char* path, list<vals_string>& res )
