@@ -174,18 +174,18 @@ class _actor_mutex
 	struct wait_node
 	{
 		mutex_trig_notifer& ntf;
-		my_actor* _waitHost;
+		my_actor::id _waitHostID;
 	};
 private:
 	_actor_mutex(shared_strand strand)
-		:_strand(strand), _lockActor(NULL), _recCount(0), _closed(false), _waitQueue(4)
+		:_strand(strand), _lockActorID(0), _recCount(0), _closed(false), _waitQueue(4)
 	{
 
 	}
 public:
 	~_actor_mutex()
 	{
-		assert(!_lockActor);
+		assert(!_lockActorID);
 	}
 
 	static std::shared_ptr<_actor_mutex> make(shared_strand strand)
@@ -211,11 +211,11 @@ public:
 			}
 			else
 			{
-				auto& lockActor_ = ref4->_lockActor;
+				auto& lockActorID_ = ref4->_lockActorID;
 				auto& host_ = ref4.host;
-				if (!lockActor_ || host_ == lockActor_)
+				if (!lockActorID_ || host_->self_id() == lockActorID_)
 				{
-					lockActor_ = host_;
+					lockActorID_ = host_->self_id();
 					ref4->_recCount++;
 					ref4.complete = true;
 				}
@@ -223,7 +223,7 @@ public:
 				{
 					auto& ntf_ = ref4.ntf;
 					ntf_ = ref4.ath.make_notifer();
-					wait_node wn = { ntf_, host_ };
+					wait_node wn = { ntf_, host_->self_id() };
 					ref4->_waitQueue.push_back(wn);
 					ref4.complete = false;
 				}
@@ -253,16 +253,16 @@ public:
 		LAMBDA_THIS_REF4(ref4, host, complete, ath, ntf);
 		auto h = [&ref4]
 		{
-			if (!ref4->_lockActor || ref4.host == ref4->_lockActor)
+			if (!ref4->_lockActorID || ref4.host->self_id() == ref4->_lockActorID)
 			{
-				ref4->_lockActor = ref4.host;
+				ref4->_lockActorID = ref4.host->self_id();
 				ref4->_recCount++;
 				ref4.complete = true;
 			}
 			else
 			{
 				ref4.ntf = ref4.ath.make_notifer();
-				wait_node wn = { ref4.ntf, ref4.host };
+				wait_node wn = { ref4.ntf, ref4.host->self_id() };
 				ref4->_waitQueue.push_back(wn);
 				ref4.complete = false;
 			}
@@ -308,11 +308,11 @@ public:
 			}
 			else
 			{
-				auto& lockActor_ = ref3->_lockActor;
+				auto& lockActorID_ = ref3->_lockActorID;
 				auto& host_ = ref3.host;
-				if (!lockActor_ || host_ == lockActor_)
+				if (!lockActorID_ || host_->self_id() == lockActorID_)
 				{
-					lockActor_ = host_;
+					lockActorID_ = host_->self_id();
 					ref3->_recCount++;
 					ref3.complete = true;
 				}
@@ -349,11 +349,11 @@ public:
 			}
 			else
 			{
-				auto& lockActor_ = ref5->_lockActor;
+				auto& lockActorID_ = ref5->_lockActorID;
 				auto& host_ = ref5.host;
-				if (!lockActor_ || host_ == lockActor_)
+				if (!lockActorID_ || host_->self_id() == lockActorID_)
 				{
-					lockActor_ = host_;
+					lockActorID_ = host_->self_id();
 					ref5->_recCount++;
 					ref5.complete = true;
 				}
@@ -361,7 +361,7 @@ public:
 				{
 					auto& ntf_ = ref5.ntf;
 					ntf_ = ref5.ath.make_notifer();
-					wait_node wn = { ntf_, host_ };
+					wait_node wn = { ntf_, host_->self_id() };
 					ref5.nit = ref5->_waitQueue.push_back(wn);
 					ref5.complete = false;
 				}
@@ -405,19 +405,19 @@ public:
 		my_actor::quit_guard qg(host);
 		host->send(_strand, [&]
 		{
-			assert(_lockActor == host);
+			assert(host->self_id() == _lockActorID);
 			if (0 == --_recCount)
 			{
 				if (!_waitQueue.empty())
 				{
 					_recCount = 1;
-					_lockActor = _waitQueue.front()._waitHost;
+					_lockActorID = _waitQueue.front()._waitHostID;
 					_waitQueue.front().ntf(false);
 					_waitQueue.pop_front();
 				}
 				else
 				{
-					_lockActor = NULL;
+					_lockActorID = 0;
 				}
 			}
 		});
@@ -431,19 +431,19 @@ public:
 		host->check_stack();
 		auto h = [&]
 		{
-			assert(_lockActor == host);
+			assert(host->self_id() == _lockActorID);
 			if (0 == --_recCount)
 			{
 				if (!_waitQueue.empty())
 				{
 					_recCount = 1;
-					_lockActor = _waitQueue.front()._waitHost;
+					_lockActorID = _waitQueue.front()._waitHostID;
 					_waitQueue.front().ntf(false);
 					_waitQueue.pop_front();
 				}
 				else
 				{
-					_lockActor = NULL;
+					_lockActorID = 0;
 				}
 			}
 		};
@@ -467,13 +467,6 @@ public:
 		}
 	}
 
-	void unlock()
-	{
-		assert(_lockActor);
-		_lockActor->check_self();
-		unlock(_lockActor);
-	}
-
 	void close(my_actor* host)
 	{
 		host->assert_enter();
@@ -481,7 +474,7 @@ public:
 		my_actor::quit_guard qg(host);
 		host->send(_strand, [this]
 		{
-			_lockActor = NULL;
+			_lockActorID = 0;
 			_recCount = 0;
 			_closed = true;
 			while (!_waitQueue.empty())
@@ -494,14 +487,14 @@ public:
 
 	void reset()
 	{
-		_lockActor = NULL;
+		_lockActorID = 0;
 		_recCount = 0;
 		_closed = false;
 		_waitQueue.clear();
 	}
 private:
 	shared_strand _strand;
-	my_actor* _lockActor;
+	my_actor::id _lockActorID;
 	size_t _recCount;
 	bool _closed;
 	msg_list<wait_node> _waitQueue;
@@ -537,11 +530,6 @@ bool actor_mutex::timed_lock(int tm, my_actor* host) const
 void actor_mutex::unlock(my_actor* host) const
 {
 	_amutex->unlock(host);
-}
-
-void actor_mutex::unlock() const
-{
-	_amutex->unlock();
 }
 
 void actor_mutex::quited_lock(my_actor* host) const

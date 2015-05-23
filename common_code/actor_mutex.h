@@ -43,7 +43,6 @@ public:
 	@brief 解除当前Actor对其持有，递归 lock 几次，就需要 unlock 几次
 	*/
 	void unlock(my_actor* host) const;
-	void unlock() const;
 
 	/*!
 	@brief 关闭mutex，所有等待 lock 将抛出close_exception

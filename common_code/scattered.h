@@ -339,4 +339,13 @@ if (__catched){
 
 #define end_RUN_IN_STRAND() })
 
+#define begin_ACTOR_RUN_IN_STRAND(__host__, __strand__) {\
+	my_actor* ___host = __host__; \
+	actor_handle ___actor = my_actor::create(__strand__, [&](my_actor* __host__) {
+
+#define end_ACTOR_RUN_IN_STRAND() });\
+	___actor->notify_run();\
+	___host->actor_wait_quit(___actor); \
+}
+
 #endif

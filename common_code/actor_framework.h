@@ -1864,6 +1864,11 @@ public:
 	@brief Actor入口函数体
 	*/
 	typedef std::function<void (my_actor*)> main_func;
+
+	/*!
+	@brief actor id
+	*/
+	typedef long long id;
 private:
 	my_actor();
 	my_actor(const my_actor&);
@@ -1877,25 +1882,6 @@ public:
 	@param stackSize Actor栈大小，默认64k字节，必须是4k的整数倍，最小4k，最大1M
 	*/
 	static actor_handle create(shared_strand actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-
-	/*!
-	@brief 同上，带完成Actor后的回调通知
-	@param cb Actor完成后的触发函数，false强制结束的，true正常结束
-	*/
-	static actor_handle create(shared_strand actorStrand, const main_func& mainFunc, 
-		const std::function<void (bool)>& cb, size_t stackSize = DEFAULT_STACKSIZE);
-
-	/*!
-	@brief 异步创建一个Actor，创建成功后通过回调函数通知
-	*/
-	static void async_create(shared_strand actorStrand, const main_func& mainFunc, 
-		const std::function<void (actor_handle)>& ch, size_t stackSize = DEFAULT_STACKSIZE);
-
-	/*!
-	@brief 同上，带完成Actor后的回调通知
-	*/
-	static void async_create(shared_strand actorStrand, const main_func& mainFunc, 
-		const std::function<void (actor_handle)>& ch, const std::function<void (bool)>& cb, size_t stackSize = DEFAULT_STACKSIZE);
 
 	/*!
 	@brief 启用堆栈内存池
@@ -3755,7 +3741,7 @@ public:
 	/*!
 	@brief 获取当前ActorID号
 	*/
-	long long self_id();
+	id self_id();
 
 	/*!
 	@brief 获取Actor切换计数
@@ -3903,7 +3889,7 @@ private:
 	void* _actorPull;///<Actor中断点恢复
 	void* _actorPush;///<Actor中断点
 	void* _stackTop;///<Actor栈顶
-	long long _selfID;///<ActorID
+	id _selfID;///<ActorID
 	size_t _stackSize;///<Actor栈大小
 	shared_strand _strand;///<Actor调度器
 	bool _inActor;///<当前正在Actor内部执行标记

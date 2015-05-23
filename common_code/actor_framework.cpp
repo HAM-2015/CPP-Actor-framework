@@ -591,7 +591,7 @@ struct my_actor::timer_pck
 	std::function<void ()> _h;
 };
 
-boost::atomic<long long> _actorIDCount(0);//ID计数
+boost::atomic<my_actor::id> _actorIDCount(0);//ID计数
 bool _autoMakeTimer = true;
 #ifdef CHECK_SELF
 map<void*, my_actor*> _stackLine;
@@ -749,12 +749,6 @@ my_actor& my_actor::operator =(const my_actor&)
 
 actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainFunc, size_t stackSize )
 {
-	return create(actorStrand, mainFunc, std::function<void (bool)>(), stackSize);
-}
-
-actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainFunc,
-	const std::function<void (bool)>& cb, size_t stackSize )
-{
 	assert(stackSize && stackSize <= 1024 kB && 0 == stackSize % (4 kB));
 	actor_handle newActor;
 	if (actor_stack_pool::isEnable())
@@ -774,7 +768,6 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 		{
 			newActor->_timer = new(newActor->_stackTop) timer_pck(actorStrand->get_ios_proxy());
 		}
-		if (cb) newActor->_exitCallback.push_back(cb);
 		newActor->_actorPull = new actor_pull_type(boost_actor_run(*newActor),
 			boost::coroutines::attributes(newActor->_stackSize), actor_stack_pool_allocate(newActor->_stackTop, newActor->_stackSize));
 	} 
@@ -787,7 +780,6 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 		}
 		newActor->_strand = actorStrand;
 		newActor->_mainFunc = mainFunc;
-		if (cb) newActor->_exitCallback.push_back(cb);
 		newActor->_actorPull = new actor_pull_type(boost_actor_run(*newActor),
 			boost::coroutines::attributes(stackSize), actor_stack_allocate(&newActor->_stackTop, &newActor->_stackSize));
 	}
@@ -802,24 +794,6 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 	*(long long*)((BYTE*)newActor->_stackTop-newActor->_stackSize+STACK_RESERVED_SPACE_SIZE-sizeof(long long)) = 0xFEFEFEFEFEFEFEFE;
 #endif
 	return newActor;
-}
-
-void my_actor::async_create( shared_strand actorStrand, const main_func& mainFunc,
-	const std::function<void (actor_handle)>& ch, size_t stackSize )
-{
-	actorStrand->asyncInvoke([actorStrand, mainFunc, stackSize]()->actor_handle
-	{
-		return my_actor::create(actorStrand, mainFunc, stackSize);
-	}, ch);
-}
-
-void my_actor::async_create( shared_strand actorStrand, const main_func& mainFunc,
-	const std::function<void (actor_handle)>& ch, const std::function<void (bool)>& cb, size_t stackSize )
-{
-	actorStrand->asyncInvoke([actorStrand, mainFunc, cb, stackSize]()->actor_handle
-	{
-		return my_actor::create(actorStrand, mainFunc, cb, stackSize);
-	}, ch);
 }
 
 child_actor_handle::child_actor_param my_actor::create_child_actor( shared_strand actorStrand, const main_func& mainFunc, size_t stackSize )
@@ -1141,7 +1115,7 @@ actor_handle my_actor::shared_from_this()
 	return _weakThis.lock();
 }
 
-long long my_actor::self_id()
+my_actor::id my_actor::self_id()
 {
 	return _selfID;
 }
