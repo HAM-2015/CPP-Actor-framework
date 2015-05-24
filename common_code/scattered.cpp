@@ -1,7 +1,14 @@
 #include "scattered.h"
 #include <assert.h>
 #include <Windows.h>
-
+#ifdef _DEBUG
+#include <WinDNS.h>
+#include <DbgHelp.h>
+#include <Psapi.h>
+#include <boost/lexical_cast.hpp>
+#pragma comment( lib, "Dbghelp.lib" )
+#pragma comment( lib, "Psapi.lib" )
+#endif
 #pragma comment( lib, "Winmm.lib" )
 
 typedef LONG (__stdcall * NT_SET_TIMER_RESOLUTION)
@@ -154,3 +161,217 @@ passing_test::~passing_test()
 {
 
 }
+//////////////////////////////////////////////////////////////////////////
+
+#ifdef _DEBUG
+extern "C" void __fastcall get_bp_sp_ip(void** pbp, void** psp, void** pip);
+
+bool _loadAllModules()
+{
+	HANDLE hProcess = ::GetCurrentProcess();
+	static const int maxHandles = 4096;
+	HMODULE aryHandles[maxHandles] = { 0 };
+
+	unsigned bytes = 0;
+
+	BOOL result = ::EnumProcessModules(
+		hProcess, aryHandles, sizeof(aryHandles), (LPDWORD)&bytes);
+
+	if (FALSE == result)
+	{
+		return false;
+	}
+
+	const int iCount = bytes / sizeof(HMODULE);
+
+	for (int i = 0; i < iCount; ++i)
+	{
+		char moduleName[256] = { 0 };
+		char imageName[256] = { 0 };
+		MODULEINFO Info;
+
+		::GetModuleInformation(hProcess, aryHandles[i], &Info, sizeof(Info));
+		::GetModuleFileNameExA(hProcess, aryHandles[i], imageName, 256);
+		::GetModuleBaseNameA(hProcess, aryHandles[i], moduleName, 256);
+
+		::SymLoadModule64(hProcess, aryHandles[i], imageName, moduleName, (DWORD64)Info.lpBaseOfDll, (DWORD)Info.SizeOfImage);
+	}
+
+	return true;
+}
+
+bool _initialize()
+{
+	// ÉèÖÃ·ûºÅÒýÇæ
+	DWORD symOpts = ::SymGetOptions();
+	symOpts |= SYMOPT_LOAD_LINES;
+	symOpts |= SYMOPT_DEBUG;
+	::SymSetOptions(symOpts);
+
+	if (FALSE == ::SymInitialize(::GetCurrentProcess(), NULL, TRUE))
+	{
+		return false;
+	}
+
+	// 	if (!_loadAllModules())
+	// 	{
+	// 		return false;
+	// 	}
+	return true;
+}
+
+void _stackwalk(QWORD *pTrace, size_t maxDepth, CONTEXT *pContext)
+{
+	STACKFRAME64 stackFrame64;
+	HANDLE hProcess = ::GetCurrentProcess();
+	HANDLE hThread = ::GetCurrentThread();
+
+	DWORD depth = 0;
+
+	::ZeroMemory(&stackFrame64, sizeof(stackFrame64));
+
+	__try
+	{
+#ifdef _WIN64
+		stackFrame64.AddrPC.Offset = pContext->Rip;
+		stackFrame64.AddrPC.Mode = AddrModeFlat;
+		stackFrame64.AddrStack.Offset = pContext->Rsp;
+		stackFrame64.AddrStack.Mode = AddrModeFlat;
+		stackFrame64.AddrFrame.Offset = pContext->Rbp;
+		stackFrame64.AddrFrame.Mode = AddrModeFlat;
+#else
+		stackFrame64.AddrPC.Offset = pContext->Eip;
+		stackFrame64.AddrPC.Mode = AddrModeFlat;
+		stackFrame64.AddrStack.Offset = pContext->Esp;
+		stackFrame64.AddrStack.Mode = AddrModeFlat;
+		stackFrame64.AddrFrame.Offset = pContext->Ebp;
+		stackFrame64.AddrFrame.Mode = AddrModeFlat;
+#endif
+
+		bool successed = true;
+
+		while (successed && (depth < maxDepth))
+		{
+			successed = ::StackWalk64(
+#ifdef _WIN64
+				IMAGE_FILE_MACHINE_AMD64,
+#else
+				IMAGE_FILE_MACHINE_I386,
+#endif
+				hProcess,
+				hThread,
+				&stackFrame64,
+				pContext,
+				NULL,
+				SymFunctionTableAccess64,
+				SymGetModuleBase64,
+				NULL
+				) != FALSE;
+
+			pTrace[depth] = stackFrame64.AddrPC.Offset;
+			++depth;
+
+			if (!successed)
+			{
+				break;
+			}
+
+			if (stackFrame64.AddrFrame.Offset == 0)
+			{
+				break;
+			}
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+	}
+}
+
+list<stack_line_info> get_stack_line(size_t maxDepth)
+{
+	assert(maxDepth < 32);
+
+	QWORD trace[32];
+	CONTEXT context;
+
+	::ZeroMemory(&context, sizeof(context));
+	context.ContextFlags = CONTEXT_FULL;
+#ifdef _WIN64
+	get_bp_sp_ip((void**)&context.Rbp, (void**)&context.Rsp, (void**)&context.Rip);
+#else
+	get_bp_sp_ip((void**)&context.Ebp, (void**)&context.Esp, (void**)&context.Eip);
+#endif
+	_stackwalk(trace, maxDepth, &context);
+
+	list<stack_line_info> imageList;
+	HANDLE hProcess = ::GetCurrentProcess();
+	for (int i = 0; i < (int)maxDepth && trace[i]; i++)
+	{
+		static const int maxNameLength = 256;
+		char symbolBf[sizeof(IMAGEHLP_SYMBOL64)+maxNameLength] = { 0 };
+		PIMAGEHLP_SYMBOL64 symbol;
+		DWORD symbolDisplacement = 0;
+		DWORD64 symbolDisplacement64 = 0;
+
+		symbol = (PIMAGEHLP_SYMBOL64)symbolBf;
+		symbol->SizeOfStruct = sizeof(symbolBf);
+		symbol->MaxNameLength = maxNameLength;
+
+		stack_line_info stackResult;
+
+		if (::SymGetSymFromAddr64(
+			hProcess,
+			trace[i],
+			&symbolDisplacement64,
+			symbol)
+			)
+		{
+			stackResult.symbolName = symbol->Name;
+		}
+		else
+		{
+			stackResult.symbolName = "unknow...";
+		}
+
+		IMAGEHLP_LINE64 imageHelpLine;
+		imageHelpLine.SizeOfStruct = sizeof(imageHelpLine);
+
+		if (::SymGetLineFromAddr64(hProcess, trace[i], &symbolDisplacement, &imageHelpLine))
+		{
+			stackResult.file = imageHelpLine.FileName;
+			if (*(imageHelpLine.FileName + stackResult.file.size() + 1))
+			{
+				stackResult.file += string(".") + (imageHelpLine.FileName + stackResult.file.size() + 1);
+			}
+			stackResult.line = (int)imageHelpLine.LineNumber;
+		}
+		else
+		{
+			stackResult.line = -1;
+		}
+
+		IMAGEHLP_MODULE64 imageHelpModule;
+		imageHelpModule.SizeOfStruct = sizeof(imageHelpModule);
+
+		if (::SymGetModuleInfo64(hProcess, trace[i], &imageHelpModule))
+		{
+			stackResult.module = imageHelpModule.ImageName;
+			if (*(imageHelpModule.ImageName + stackResult.module.size() + 1))
+			{
+				stackResult.module += string(".") + (imageHelpModule.ImageName + stackResult.module.size() + 1);
+			}
+		}
+		imageList.push_back(std::move(stackResult));
+	}
+	return std::move(imageList);
+}
+
+struct init_mod
+{
+	init_mod()
+	{
+		bool ok = _initialize();
+		assert(ok);
+	}
+} _init;
+#endif

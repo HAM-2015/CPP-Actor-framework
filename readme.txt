@@ -9,6 +9,9 @@ oschina url
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
+2015-05-24
+添加在DEBUG下创建Actor时保存调用堆栈，方便某个Actor异常时调试跟踪.
+
 2015-05-15
 添加可以检测当前代码运行在哪个Actor下.
 

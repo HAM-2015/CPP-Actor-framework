@@ -11,7 +11,6 @@
 #ifndef __ACTOR_FRAMEWORK_H
 #define __ACTOR_FRAMEWORK_H
 
-#include <boost/circular_buffer.hpp>
 #include <list>
 #include <xutility>
 #include <functional>
@@ -3915,6 +3914,9 @@ private:
 	timer_pck* _timer;///<定时器
 	std::weak_ptr<my_actor> _weakThis;
 	static std::shared_ptr<shared_obj_pool_base<bool>> _sharedBoolPool;
+#ifdef _DEBUG
+	list<stack_line_info> _createStack;//当前Actor创建时的调用堆栈
+#endif
 #ifdef CHECK_SELF
 	map<void*, my_actor*>::iterator _btIt;
 	map<void*, my_actor*>::iterator _topIt;
