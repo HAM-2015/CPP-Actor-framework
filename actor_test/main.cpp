@@ -279,7 +279,7 @@ void create_null_actor(my_actor* self, int* count)
 		self->child_actors_force_quit(childList);
 		if (self->yield_count() == yieldTick)
 		{
-			self->sleep(0);
+			self->yield();
 		}
 	}
 }

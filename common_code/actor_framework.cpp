@@ -794,11 +794,7 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 	*(long long*)((BYTE*)newActor->_stackTop-newActor->_stackSize+STACK_RESERVED_SPACE_SIZE-sizeof(long long)) = 0xFEFEFEFEFEFEFEFE;
 #endif
 #ifdef _DEBUG
-	newActor->_createStack = get_stack_line(12);
-	for (int i = 0; i < 2 && !newActor->_createStack.empty(); i++)
-	{
-		newActor->_createStack.pop_front();
-	}
+	newActor->_createStack = get_stack_list(8);
 #endif
 	return newActor;
 }

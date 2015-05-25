@@ -10,12 +10,9 @@ using namespace std;
 #define   LIBPATH(p, f)   p##f 
 
 #ifdef _WIN64
-#pragma comment(lib, LIBPATH(__FILE__, "./../get_sp_x64.lib"))
-#pragma comment(lib, LIBPATH(__FILE__, "./../get_bp_sp_ip_x64.lib"))
+#pragma comment(lib, LIBPATH(__FILE__, "./../asm_lib_x64.lib"))
 #else
-#pragma comment(lib, LIBPATH(__FILE__, "./../get_sp_x86.lib"))
-#pragma comment(lib, LIBPATH(__FILE__, "./../64div32_x86.lib"))
-#pragma comment(lib, LIBPATH(__FILE__, "./../get_bp_sp_ip_x86.lib"))
+#pragma comment(lib, LIBPATH(__FILE__, "./../asm_lib_x86.lib"))
 #endif // _WIN64
 
 #undef LIBPATH
@@ -23,7 +20,12 @@ using namespace std;
 /*!
 @brief 获取当前esp/rsp栈顶寄存器值
 */
-extern "C" void* __stdcall get_sp();
+void* get_sp();
+
+/*!
+@brief 获取bp,sp,ip寄存器值
+*/
+extern "C" void __fastcall get_bp_sp_ip(void** pbp, void** psp, void** pip);
 
 /*!
 @brief 获取CPU计数
@@ -75,9 +77,6 @@ long long get_tick_us();
 long long get_tick_ms();
 int get_tick_s();
 
-/*!
-@brief 获取当前调用堆栈信息
-*/
 #ifdef _DEBUG
 struct stack_line_info 
 {
@@ -87,7 +86,11 @@ struct stack_line_info
 	int line;
 };
 
-list<stack_line_info> get_stack_line(size_t maxDepth);
+/*!
+@brief 获取当前调用堆栈信息
+@param maxDepth 获取当前堆栈向下最高层次，最大32层
+*/
+list<stack_line_info> get_stack_list(size_t maxDepth = 32);
 #endif
 
 /*!

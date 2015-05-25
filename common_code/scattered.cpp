@@ -107,6 +107,18 @@ int get_tick_s()
 }
 //////////////////////////////////////////////////////////////////////////
 
+void* get_sp()
+{
+	void* bp;
+	void* sp;
+	void* ip;
+
+	get_bp_sp_ip(&bp, &sp, &ip);
+	return sp;
+}
+
+//////////////////////////////////////////////////////////////////////////
+
 void passing_test::operator=(passing_test&& s)
 {
 	assert(s._count);
@@ -164,7 +176,6 @@ passing_test::~passing_test()
 //////////////////////////////////////////////////////////////////////////
 
 #ifdef _DEBUG
-extern "C" void __fastcall get_bp_sp_ip(void** pbp, void** psp, void** pip);
 
 bool _loadAllModules()
 {
@@ -220,13 +231,13 @@ bool _initialize()
 	return true;
 }
 
-void _stackwalk(QWORD *pTrace, size_t maxDepth, CONTEXT *pContext)
+size_t _stackwalk(QWORD *pTrace, size_t maxDepth, CONTEXT *pContext)
 {
 	STACKFRAME64 stackFrame64;
 	HANDLE hProcess = ::GetCurrentProcess();
 	HANDLE hThread = ::GetCurrentThread();
 
-	DWORD depth = 0;
+	size_t depth = 0;
 
 	::ZeroMemory(&stackFrame64, sizeof(stackFrame64));
 
@@ -269,7 +280,6 @@ void _stackwalk(QWORD *pTrace, size_t maxDepth, CONTEXT *pContext)
 				) != FALSE;
 
 			pTrace[depth] = stackFrame64.AddrPC.Offset;
-			++depth;
 
 			if (!successed)
 			{
@@ -280,18 +290,20 @@ void _stackwalk(QWORD *pTrace, size_t maxDepth, CONTEXT *pContext)
 			{
 				break;
 			}
+			++depth;
 		}
 	}
 	__except (EXCEPTION_EXECUTE_HANDLER)
 	{
 	}
+	return depth;
 }
 
-list<stack_line_info> get_stack_line(size_t maxDepth)
+list<stack_line_info> get_stack_list(size_t maxDepth)
 {
-	assert(maxDepth < 32);
+	assert(maxDepth <= 32);
 
-	QWORD trace[32];
+	QWORD trace[33];
 	CONTEXT context;
 
 	::ZeroMemory(&context, sizeof(context));
@@ -301,11 +313,11 @@ list<stack_line_info> get_stack_line(size_t maxDepth)
 #else
 	get_bp_sp_ip((void**)&context.Ebp, (void**)&context.Esp, (void**)&context.Eip);
 #endif
-	_stackwalk(trace, maxDepth, &context);
+	size_t depths = _stackwalk(trace, maxDepth+1, &context);
 
 	list<stack_line_info> imageList;
 	HANDLE hProcess = ::GetCurrentProcess();
-	for (int i = 0; i < (int)maxDepth && trace[i]; i++)
+	for (size_t i = 1; i < depths; i++)
 	{
 		static const int maxNameLength = 256;
 		char symbolBf[sizeof(IMAGEHLP_SYMBOL64)+maxNameLength] = { 0 };

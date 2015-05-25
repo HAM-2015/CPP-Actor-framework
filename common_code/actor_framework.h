@@ -3885,6 +3885,9 @@ private:
 	void child_suspend_cb_handler();
 	void child_resume_cb_handler();
 private:
+#ifdef _DEBUG
+	list<stack_line_info> _createStack;//当前Actor创建时的调用堆栈
+#endif
 	void* _actorPull;///<Actor中断点恢复
 	void* _actorPush;///<Actor中断点
 	void* _stackTop;///<Actor栈顶
@@ -3914,9 +3917,6 @@ private:
 	timer_pck* _timer;///<定时器
 	std::weak_ptr<my_actor> _weakThis;
 	static std::shared_ptr<shared_obj_pool_base<bool>> _sharedBoolPool;
-#ifdef _DEBUG
-	list<stack_line_info> _createStack;//当前Actor创建时的调用堆栈
-#endif
 #ifdef CHECK_SELF
 	map<void*, my_actor*>::iterator _btIt;
 	map<void*, my_actor*>::iterator _topIt;
