@@ -317,6 +317,8 @@ void actor_test(my_actor* self)
 	child_actor_handle actorMutex1;
 	child_actor_handle actorMutex2;
 	child_actor_handle actorMutex3;
+	child_actor_handle actorConVarWait;
+	child_actor_handle actorConVarNtf;
 	child_actor_handle buffPush;
 	child_actor_handle buffPop;
 	//创建生产者/消费者模型测试
@@ -414,8 +416,48 @@ void actor_test(my_actor* self)
 		//self->child_actor_run(actorMutex2);
 		//self->child_actor_run(actorMutex3);
 	}
+	{//条件变量测试
+		std::shared_ptr<bool> waiting(new bool(false));
+		actor_mutex amutex(self->self_strand());
+		actor_condition_variable aconVar(self->self_strand());
+		actorConVarWait = self->create_child_actor([waiting, amutex, aconVar](my_actor* self)
+		{
+			while (true)
+			{
+				actor_lock_guard lg(amutex, self);
+				assert(!*waiting);
+				*waiting = true;
+				if (aconVar.timed_wait(90, self, lg))
+				{
+					printf("notify\n");
+				}
+				else
+				{
+					*waiting = false;
+					printf("tm\n");
+				}
+			}
+		});
+		actorConVarNtf = self->create_child_actor([&](my_actor* self)
+		{
+			while (true)
+			{
+				{
+					actor_lock_guard lg(amutex, self);
+					if (*waiting)
+					{
+						*waiting = false;
+						aconVar.notify_one(self);
+					}
+				}
+				self->sleep(100);
+			}
+		});
+		//self->child_actor_run(actorConVarWait);
+		//self->child_actor_run(actorConVarNtf);
+	}
 	async_buffer<passing_test> abuff(2, self->self_strand());
-	{
+	{//异步队列测试
 		buffPush = self->create_child_actor(self->self_strand(), [&](my_actor* self)
 		{
 			int i = 0;
@@ -499,6 +541,8 @@ void actor_test(my_actor* self)
 	self->child_actor_wait_quit(actorMutex1);
 	self->child_actor_wait_quit(actorMutex2);
 	self->child_actor_wait_quit(actorMutex3);
+	self->child_actor_force_quit(actorConVarWait);
+	self->child_actor_force_quit(actorConVarNtf);
 	abuff.close(self);
 	self->child_actor_force_quit(buffPush);
 	self->child_actor_force_quit(buffPop);

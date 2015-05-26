@@ -16,7 +16,7 @@ struct mem_alloc
 #endif
 		}
 
-		BYTE _node[sizeof(DATA)];
+		char _node[sizeof(DATA)];
 		node_space* _link;
 	};
 
@@ -76,12 +76,22 @@ struct mem_alloc
 		free(space);
 	}
 
+	void reCount()
+	{
+#ifdef _DEBUG
+		_nodeNumber = 0;
+#endif
+	}
+
 	node_space* _pool;
 	size_t _poolSize;
 	size_t _poolMaxSize;
 #ifdef _DEBUG
 	size_t _nodeNumber;
 #endif
+private:
+	mem_alloc(const mem_alloc&){}
+	void operator=(const mem_alloc&){}
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -97,7 +107,7 @@ struct mem_alloc_mt
 #endif
 		}
 
-		BYTE _node[sizeof(DATA)];
+		char _node[sizeof(DATA)];
 		node_space* _link;
 	};
 
@@ -171,8 +181,92 @@ struct mem_alloc_mt
 #ifdef _DEBUG
 	size_t _nodeNumber;
 #endif
+private:
+	mem_alloc_mt(const mem_alloc_mt&){}
+	void operator=(const mem_alloc_mt&){}
 };
 
+//////////////////////////////////////////////////////////////////////////
+template<class _Ty>
+class pool_alloc
+{
+public:
+	typedef typename std::allocator<_Ty>::pointer pointer;
+	typedef typename std::allocator<_Ty>::difference_type difference_type;
+	typedef typename std::allocator<_Ty>::reference reference;
+	typedef typename std::allocator<_Ty>::const_pointer const_pointer;
+	typedef typename std::allocator<_Ty>::const_reference const_reference;
+	typedef typename std::allocator<_Ty>::size_type size_type;
+	typedef typename std::allocator<_Ty>::value_type value_type;
+
+	template<class _Other>
+	struct rebind
+	{
+		typedef pool_alloc<_Other> other;
+	};
+
+	pool_alloc()
+		:_memAlloc(0)
+	{
+
+	}
+
+	pool_alloc(size_t poolSize)
+		:_memAlloc(poolSize)
+	{
+
+	}
+
+	~pool_alloc()
+	{
+		_memAlloc.reCount();
+	}
+
+	pool_alloc(const pool_alloc& s)
+		:_memAlloc(s._memAlloc._poolMaxSize)
+	{
+	}
+
+	template<class _Other>
+	pool_alloc(const pool_alloc<_Other>& s)
+		:_memAlloc(s._memAlloc._poolMaxSize)
+	{
+	}
+
+	void deallocate(pointer _Ptr, size_type)
+	{
+		_memAlloc.deallocate(_Ptr);
+	}
+
+	pointer allocate(size_type _Count)
+	{
+		assert(1 == _Count);
+		return _memAlloc.allocate();
+	}
+
+	void construct(_Ty *_Ptr, const _Ty& _Val)
+	{
+		new ((void *)_Ptr) _Ty(_Val);
+	}
+
+	void construct(_Ty *_Ptr, _Ty&& _Val)
+	{
+		new ((void *)_Ptr) _Ty(std::move(_Val));
+	}
+
+	template<class _Uty>
+	void destroy(_Uty *_Ptr)
+	{
+		_Ptr->~_Uty();
+	}
+
+	size_t max_size() const
+	{
+		return ((size_t)(-1) / sizeof (_Ty));
+	}
+
+	mem_alloc<_Ty> _memAlloc;
+};
 //////////////////////////////////////////////////////////////////////////
 
 template <typename T, typename CREATER, typename DESTORY>
@@ -213,7 +307,7 @@ class obj_pool: public obj_pool_base<T>
 {
 	struct node 
 	{
-		BYTE _data[sizeof(T)];
+		char _data[sizeof(T)];
 		node* _link;
 	};
 

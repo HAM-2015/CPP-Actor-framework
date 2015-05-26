@@ -6,7 +6,7 @@
 #include <boost/thread/thread.hpp>
 #include <boost/thread/condition_variable.hpp>
 #include <boost/atomic/atomic.hpp>
-#include <list>
+#include "msg_queue.h"
 
 using namespace std;
 
@@ -23,8 +23,10 @@ class actor_stack_pool
 {
 	struct stack_pool_pck 
 	{
+		stack_pool_pck()
+		:_pool(1*1024*1024){}
 		boost::mutex _mutex;
-		list<stack_pck> _pool;
+		msg_list<stack_pck> _pool;
 	};
 private:
 	actor_stack_pool();

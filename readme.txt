@@ -9,6 +9,9 @@ oschina url
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
+2015-05-25
+添加能在Actor下运行的条件变量actor_condition_variable.
+
 2015-05-24
 添加在DEBUG下创建Actor时保存调用堆栈，方便某个Actor异常时调试跟踪.
 
