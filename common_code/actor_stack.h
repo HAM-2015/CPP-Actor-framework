@@ -24,7 +24,7 @@ class actor_stack_pool
 	struct stack_pool_pck 
 	{
 		stack_pool_pck()
-		:_pool(1*1024*1024){}
+		:_pool(100000){}
 		boost::mutex _mutex;
 		msg_list<stack_pck> _pool;
 	};

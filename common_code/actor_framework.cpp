@@ -594,7 +594,7 @@ struct my_actor::timer_pck
 boost::atomic<my_actor::id> _actorIDCount(0);//ID¼ÆÊý
 bool _autoMakeTimer = true;
 #ifdef CHECK_SELF
-map<void*, my_actor*> _stackLine;
+msg_map<void*, my_actor*> _stackLine(100000);
 boost::mutex _stackLineMutex;
 struct initStackLine
 {
@@ -1078,7 +1078,7 @@ actor_handle my_actor::parent_actor()
 	return _parentActor.lock();
 }
 
-const list<actor_handle>& my_actor::child_actors()
+const msg_list<actor_handle>& my_actor::child_actors()
 {
 	return _childActorList;
 }

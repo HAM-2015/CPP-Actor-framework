@@ -4,8 +4,27 @@
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/lock_guard.hpp>
 
+struct mem_alloc_base 
+{
+	mem_alloc_base(){}
+	virtual ~mem_alloc_base(){}
+	virtual void* allocate() = 0;
+	virtual void deallocate(void* p) = 0;
+	virtual void reCount() = 0;
+	virtual bool shared() const = 0;
+	virtual size_t alloc_size() const = 0;
+	size_t _poolSize;
+	size_t _poolMaxSize;
+#ifdef _DEBUG
+	size_t _nodeNumber;
+#endif
+private:
+	mem_alloc_base(const mem_alloc_base&){}
+	void operator=(const mem_alloc_base&){}
+};
+
 template <typename DATA>
-struct mem_alloc
+struct mem_alloc : public mem_alloc_base
 {
 	union node_space
 	{
@@ -44,7 +63,7 @@ struct mem_alloc
 		assert(0 == _poolSize);
 	}
 
-	DATA* allocate()
+	void* allocate()
 	{
 #ifdef _DEBUG
 		_nodeNumber++;
@@ -54,9 +73,9 @@ struct mem_alloc
 			_poolSize--;
 			node_space* fixedSpace = _pool;
 			_pool = fixedSpace->_link;
-			return (DATA*)fixedSpace;
+			return fixedSpace;
 		}
-		return (DATA*)malloc(sizeof(node_space));
+		return malloc(sizeof(node_space));
 	}
 
 	void deallocate(void* p)
@@ -83,20 +102,22 @@ struct mem_alloc
 #endif
 	}
 
+	size_t alloc_size() const
+	{
+		return sizeof(DATA);
+	}
+
+	bool shared() const
+	{
+		return false;
+	}
+
 	node_space* _pool;
-	size_t _poolSize;
-	size_t _poolMaxSize;
-#ifdef _DEBUG
-	size_t _nodeNumber;
-#endif
-private:
-	mem_alloc(const mem_alloc&){}
-	void operator=(const mem_alloc&){}
 };
 //////////////////////////////////////////////////////////////////////////
 
 template <typename DATA>
-struct mem_alloc_mt
+struct mem_alloc_mt: mem_alloc_base
 {
 	union node_space
 	{
@@ -136,7 +157,7 @@ struct mem_alloc_mt
 		assert(0 == _poolSize);
 	}
 
-	DATA* allocate()
+	void* allocate()
 	{
 		{
 			boost::lock_guard<boost::mutex> lg(_mutex);
@@ -148,10 +169,10 @@ struct mem_alloc_mt
 				_poolSize--;
 				node_space* fixedSpace = _pool;
 				_pool = fixedSpace->_link;
-				return (DATA*)fixedSpace;
+				return fixedSpace;
 			}
 		}
-		return (DATA*)malloc(sizeof(node_space));
+		return malloc(sizeof(node_space));
 	}
 
 	void deallocate(void* p)
@@ -174,23 +195,35 @@ struct mem_alloc_mt
 		free(space);
 	}
 
-	node_space* _pool;
-	size_t _poolSize;
-	size_t _poolMaxSize;
-	boost::mutex _mutex;
+	void reCount()
+	{
 #ifdef _DEBUG
-	size_t _nodeNumber;
+		_nodeNumber = 0;
 #endif
-private:
-	mem_alloc_mt(const mem_alloc_mt&){}
-	void operator=(const mem_alloc_mt&){}
+	}
+
+	size_t alloc_size() const
+	{
+		return sizeof(DATA);
+	}
+
+	bool shared() const
+	{
+		return true;
+	}
+
+	node_space* _pool;
+	boost::mutex _mutex;
 };
 
 //////////////////////////////////////////////////////////////////////////
 template<class _Ty>
-class pool_alloc
+class pool_alloc_mt
 {
 public:
+	typedef _Ty node_type;
+	typedef typename mem_alloc<_Ty> mem_alloc_type;
+	typedef typename mem_alloc_mt<_Ty> mem_alloc_mt_type;
 	typedef typename std::allocator<_Ty>::pointer pointer;
 	typedef typename std::allocator<_Ty>::difference_type difference_type;
 	typedef typename std::allocator<_Ty>::reference reference;
@@ -202,46 +235,79 @@ public:
 	template<class _Other>
 	struct rebind
 	{
-		typedef pool_alloc<_Other> other;
+		typedef pool_alloc_mt<_Other> other;
 	};
 
-	pool_alloc()
-		:_memAlloc(0)
+	pool_alloc_mt(size_t poolSize, bool shared = true)
+	{
+		if (shared)
+		{
+			_memAlloc = std::shared_ptr<mem_alloc_base>(new mem_alloc_mt_type(poolSize));
+		} 
+		else
+		{
+			_memAlloc = std::shared_ptr<mem_alloc_base>(new mem_alloc_type(poolSize));
+		}
+	}
+
+	~pool_alloc_mt()
 	{
 
 	}
 
-	pool_alloc(size_t poolSize)
-		:_memAlloc(poolSize)
+	pool_alloc_mt(const pool_alloc_mt& s)
 	{
-
-	}
-
-	~pool_alloc()
-	{
-		_memAlloc.reCount();
-	}
-
-	pool_alloc(const pool_alloc& s)
-		:_memAlloc(s._memAlloc._poolMaxSize)
-	{
+		if (s.is_shared())
+		{
+			_memAlloc = s._memAlloc;
+		} 
+		else
+		{
+			_memAlloc = std::shared_ptr<mem_alloc_base>(new mem_alloc_type(s._memAlloc->_poolMaxSize));
+		}
 	}
 
 	template<class _Other>
-	pool_alloc(const pool_alloc<_Other>& s)
-		:_memAlloc(s._memAlloc._poolMaxSize)
+	pool_alloc_mt(const pool_alloc_mt<_Other>& s)
 	{
+		//if (sizeof(_Ty) <= sizeof(_Other) && s.is_shared())
+		if (s.is_shared() && sizeof(_Ty) <= s._memAlloc->alloc_size())
+		{
+			_memAlloc = s._memAlloc;
+		}
+		else
+		{
+			_memAlloc = std::shared_ptr<mem_alloc_base>(new mem_alloc_type(s._memAlloc->_poolMaxSize));
+		}
+	}
+
+	pool_alloc_mt& operator=(const pool_alloc_mt& s)
+	{
+		assert(false);
+		return *this;
+	}
+
+	template<class _Other>
+	pool_alloc_mt& operator=(const pool_alloc_mt<_Other>& s)
+	{
+		assert(false);
+		return *this;
+	}
+
+	bool operator==(const pool_alloc_mt& s)
+	{
+		return is_shared() == s.is_shared();
 	}
 
 	void deallocate(pointer _Ptr, size_type)
 	{
-		_memAlloc.deallocate(_Ptr);
+		_memAlloc->deallocate(_Ptr);
 	}
 
 	pointer allocate(size_type _Count)
 	{
 		assert(1 == _Count);
-		return _memAlloc.allocate();
+		return (pointer)_memAlloc->allocate();
 	}
 
 	void construct(_Ty *_Ptr, const _Ty& _Val)
@@ -265,7 +331,111 @@ public:
 		return ((size_t)(-1) / sizeof (_Ty));
 	}
 
-	mem_alloc<_Ty> _memAlloc;
+	bool is_shared() const
+	{
+		return _memAlloc->shared();
+	}
+
+	std::shared_ptr<mem_alloc_base> _memAlloc;
+};
+//////////////////////////////////////////////////////////////////////////
+template<class _Ty>
+class pool_alloc
+{
+public:
+	typedef _Ty node_type;
+	typedef typename mem_alloc<_Ty> mem_alloc_type;
+	typedef typename std::allocator<_Ty>::pointer pointer;
+	typedef typename std::allocator<_Ty>::difference_type difference_type;
+	typedef typename std::allocator<_Ty>::reference reference;
+	typedef typename std::allocator<_Ty>::const_pointer const_pointer;
+	typedef typename std::allocator<_Ty>::const_reference const_reference;
+	typedef typename std::allocator<_Ty>::size_type size_type;
+	typedef typename std::allocator<_Ty>::value_type value_type;
+
+	template<class _Other>
+	struct rebind
+	{
+		typedef pool_alloc<_Other> other;
+	};
+
+	pool_alloc(size_t poolSize)
+		:_memAlloc(poolSize)
+	{
+	}
+
+	~pool_alloc()
+	{
+		_memAlloc.reCount();
+	}
+
+	pool_alloc(const pool_alloc& s)
+		:_memAlloc(s._memAlloc._poolMaxSize)
+	{
+	}
+
+	template<class _Other>
+	pool_alloc(const pool_alloc<_Other>& s)
+		:_memAlloc(s._memAlloc._poolMaxSize)
+	{
+	}
+
+	pool_alloc& operator=(const pool_alloc& s)
+	{
+		assert(false);
+		return *this;
+	}
+
+	template<class _Other>
+	pool_alloc& operator=(const pool_alloc<_Other>& s)
+	{
+		assert(false);
+		return *this;
+	}
+
+	bool operator==(const pool_alloc& s)
+	{
+		return true;
+	}
+
+	void deallocate(pointer _Ptr, size_type)
+	{
+		_memAlloc.deallocate(_Ptr);
+	}
+
+	pointer allocate(size_type _Count)
+	{
+		assert(1 == _Count);
+		return (pointer)_memAlloc.allocate();
+	}
+
+	void construct(_Ty *_Ptr, const _Ty& _Val)
+	{
+		new ((void *)_Ptr) _Ty(_Val);
+	}
+
+	void construct(_Ty *_Ptr, _Ty&& _Val)
+	{
+		new ((void *)_Ptr) _Ty(std::move(_Val));
+	}
+
+	template<class _Uty>
+	void destroy(_Uty *_Ptr)
+	{
+		_Ptr->~_Uty();
+	}
+
+	size_t max_size() const
+	{
+		return ((size_t)(-1) / sizeof (_Ty));
+	}
+
+	bool is_shared() const
+	{
+		return _memAlloc.shared();
+	}
+
+	mem_alloc_type _memAlloc;
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -481,7 +651,7 @@ class shared_obj_pool: public shared_obj_pool_base<T>
 		RC* allocate(size_t count)
 		{
 			assert(1 == count);
-			return ((mem_alloc_mt<RC>*)_refCountAlloc)->allocate();
+			return (RC*)((mem_alloc_mt<RC>*)_refCountAlloc)->allocate();
 		}
 
 		void deallocate(RC* ptr, size_t count)

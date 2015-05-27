@@ -16,7 +16,7 @@ class msg_queue
 		node* _next;
 	};
 public:
-	msg_queue(size_t poolSize)
+	msg_queue(size_t poolSize = sizeof(void*))
 		:_alloc(poolSize)
 	{
 		_size = 0;
@@ -102,7 +102,7 @@ public:
 private:
 	node* new_back()
 	{
-		node* newNode = _alloc.allocate();
+		node* newNode = (node*)_alloc.allocate();
 		_tail->_next = newNode;
 		_tail = newNode;
 		_tail->_next = NULL;
@@ -115,28 +115,204 @@ private:
 	mem_alloc<node> _alloc;
 };
 
-template <typename T>
-class msg_list: public std::list<T, pool_alloc<T>>
+template <typename T, typename AlNod = pool_alloc<T>>
+class msg_list : public std::list<T, AlNod>
 {
 public:
-	msg_list(size_t poolSize)
-		:std::list<T, pool_alloc<T>>(pool_alloc<T>(poolSize)) {}
+#if _MSC_VER == 1600
+	typedef typename std::_List_nod<T, AlNod>::_Node node_type;
+#elif _MSC_VER > 1600
+	typedef std::_List_node<T, typename AlNod::pointer> node_type;
+#endif
+	typedef pool_alloc<node_type> node_alloc;
+	typedef pool_alloc_mt<node_type> shared_node_alloc;
+public:
+	typedef std::list<T, AlNod> base_list;
+public:
+	explicit msg_list(size_t poolSize = sizeof(void*))
+		:base_list(AlNod(poolSize)) {}
+
+	explicit msg_list(AlNod& Al)
+		:base_list(Al) {}
+
+	msg_list(const msg_list& s)
+		:base_list(s) {}
+
+	msg_list(msg_list&& s)
+		:base_list(std::move((base_list&)s)) {}
+
+	template <typename Al>
+	msg_list(const std::list<T, Al>& s, size_t poolSize = -1)
+		: base_list(AlNod(-1 == poolSize ? s.size() : poolSize))
+	{
+		*this = s;
+	}
+public:
+	msg_list& operator=(const msg_list& s)
+	{
+		(base_list&)*this = (const base_list&)s;
+		return *this;
+	}
+
+	msg_list& operator=(msg_list&& s)
+	{
+		(base_list&)*this = std::move((base_list&)s);
+		return *this;
+	}
+
+	template <typename Al>
+	msg_list& operator=(const std::list<T, Al>& s)
+	{
+		clear();
+		for (auto it = s.begin(); s.end() != it; it++)
+		{
+			push_back(*it);
+		}
+		return *this;
+	}
+
+	template <typename Al>
+	void copy_to(std::list<T, Al>& d)
+	{
+		for (auto it = begin(); end() != it; it++)
+		{
+			d.push_back(*it);
+		}
+	}
 };
 
-template <typename Tkey, typename Tval, typename Tcmp = std::less<Tkey>>
-class msg_map : public std::map<Tkey, Tval, Tcmp, pool_alloc<std::pair<const Tkey, Tval>> >
+template <typename Tkey, typename Tval, typename AlNod = pool_alloc<std::pair<const Tkey, Tval>> >
+class msg_map : public std::map<Tkey, Tval, std::less<Tkey>, AlNod>
 {
+	typedef std::less<Tkey> Tcmp;
 public:
-	msg_map(size_t poolSize)
-		:std::map<Tkey, Tval, Tcmp, pool_alloc<std::pair<const Tkey, Tval>> >(Tcmp(), pool_alloc<std::pair<const Tkey, Tval>>(poolSize)){}
+#if _MSC_VER == 1600
+	typedef typename std::_Tree_nod<std::_Tmap_traits<Tkey, Tval, Tcmp, AlNod, false>>::_Node node_type;
+#elif _MSC_VER > 1600
+	typedef std::_Tree_node<std::pair<Tkey const, Tval>, typename AlNod::pointer> node_type;
+#endif
+	typedef pool_alloc<node_type> node_alloc;
+	typedef pool_alloc_mt<node_type> shared_node_alloc;
+public:
+	typedef std::map<Tkey, Tval, Tcmp, AlNod> base_map;
+public:
+	explicit msg_map(size_t poolSize = sizeof(void*))
+		:base_map(Tcmp(), AlNod(poolSize)){}
+
+	explicit msg_map(AlNod& al)
+		:base_map(Tcmp(), al) {}
+
+	msg_map(const msg_map& s)
+		:base_map(s) {}
+
+	msg_map(msg_map&& s)
+		:base_map(std::move((base_map&)s)) {}
+
+	template <typename Al>
+	msg_map(const std::map<Tkey, Tval, Tcmp, Al>& s, size_t poolSize = -1)
+		: base_map(Tcmp(), AlNod(-1 == poolSize ? s.size() : poolSize))
+	{
+		*this = s;
+	}
+public:
+	msg_map& operator=(const msg_map& s)
+	{
+		(base_map&)*this = (const base_map&)s;
+		return *this;
+	}
+
+	msg_map& operator=(msg_map&& s)
+	{
+		(base_map&)*this = std::move((base_map&)s);
+		return *this;
+	}
+
+	template <typename Al>
+	msg_map& operator=(const std::map<Tkey, Tval, Tcmp, Al>& s)
+	{
+		clear();
+		for (auto it = s.begin(); s.end() != it; it++)
+		{
+			insert(make_pair((const Tkey&)it->first, (const Tval&)it->second));
+		}
+		return *this;
+	}
+
+	template <typename Al>
+	void copy_to(std::map<Tkey, Tval, Tcmp, Al>& d)
+	{
+		for (auto it = begin(); end() != it; it++)
+		{
+			d.insert(make_pair((const Tkey&)it->first, (const Tval&)it->second));
+		}
+	}
 };
 
-template <typename Tkey, typename Tcmp = std::less<Tkey>>
-class msg_set : public std::set<Tkey, std::less<Tkey>, pool_alloc<Tkey> >
+template <typename Tkey, typename AlNod = pool_alloc<Tkey> >
+class msg_set : public std::set<Tkey, std::less<Tkey>, AlNod>
 {
+	typedef std::less<Tkey> Tcmp;
 public:
-	msg_set(size_t poolSize)
-		:std::set<Tkey, Tcmp, pool_alloc<Tkey> >(Tcmp(), pool_alloc<Tkey>(poolSize)){}
+#if _MSC_VER == 1600
+	typedef typename std::_Tree_nod<std::_Tset_traits<Tkey, Tcmp, AlNod, false>>::_Node node_type;
+#elif _MSC_VER > 1600
+	typedef std::_Tree_node<Tkey, typename AlNod::pointer> node_type;
+#endif
+	typedef pool_alloc<node_type> node_alloc;
+	typedef pool_alloc_mt<node_type> shared_node_alloc;
+public:
+	typedef std::set<Tkey, Tcmp, AlNod> base_set;
+public:
+	explicit msg_set(size_t poolSize = sizeof(void*))
+		:base_set(Tcmp(), AlNod(poolSize)){}
+
+	explicit msg_set(AlNod& al)
+		:base_set(Tcmp(), al) {}
+
+	msg_set(const msg_set& s)
+		:base_set(s) {}
+
+	msg_set(msg_set&& s)
+		:base_set(std::move((base_set&)s)) {}
+
+	template <typename Al>
+	msg_set(const std::set<Tkey, Tcmp, Al>& s, size_t poolSize = -1)
+		: base_set(Tcmp(), AlNod(-1 == poolSize ? s.size() : poolSize))
+	{
+		*this = s;
+	}
+public:
+	msg_set& operator=(const msg_set& s)
+	{
+		(base_set&)*this = (const base_set&)s;
+		return *this;
+	}
+
+	msg_set& operator=(msg_set&& s)
+	{
+		(base_set&)*this = std::move((base_set&)s);
+		return *this;
+	}
+
+	template <typename Al>
+	msg_set& operator=(const std::set<Tkey, Tcmp, Al>& s)
+	{
+		clear();
+		for (auto it = s.begin(); s.end() != it; it++)
+		{
+			insert(*it);
+		}
+		return *this;
+	}
+
+	template <typename Al>
+	void copy_to(std::set<Tkey, Tcmp, Al>& d)
+	{
+		for (auto it = begin(); end() != it; it++)
+		{
+			d.insert(*it);
+		}
+	}
 };
 
 #endif

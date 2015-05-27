@@ -1679,7 +1679,7 @@ private:
 		bool _isCopy;
 #endif
 		actor_handle _actor;///<本Actor
-		list<actor_handle>::iterator _actorIt;///<保存在父Actor集合中的节点
+		msg_list<actor_handle>::iterator _actorIt;///<保存在父Actor集合中的节点
 	};
 private:
 	child_actor_handle(child_actor_handle&);
@@ -1983,7 +1983,7 @@ public:
 	/*!
 	@brief 获取子Actor
 	*/
-	const list<actor_handle>& child_actors();
+	const msg_list<actor_handle>& child_actors();
 public:
 	typedef list<std::function<void ()> >::iterator quit_iterator;
 
@@ -3910,16 +3910,16 @@ private:
 	std::weak_ptr<my_actor> _parentActor;///<父Actor
 	main_func _mainFunc;///<Actor入口
 	list<suspend_resume_option> _suspendResumeQueue;///<挂起/恢复操作队列
-	list<actor_handle> _childActorList;///<子Actor集合
 	list<std::function<void (bool)> > _exitCallback;///<Actor结束后的回调函数，强制退出返回false，正常退出返回true
 	list<std::function<void ()> > _quitHandlerList;///<Actor退出时强制调用的函数，后注册的先执行
+	msg_list<actor_handle> _childActorList;///<子Actor集合
 	msg_pool_status _msgPoolStatus;//消息池列表
 	timer_pck* _timer;///<定时器
 	std::weak_ptr<my_actor> _weakThis;
 	static std::shared_ptr<shared_obj_pool_base<bool>> _sharedBoolPool;
 #ifdef CHECK_SELF
-	map<void*, my_actor*>::iterator _btIt;
-	map<void*, my_actor*>::iterator _topIt;
+	msg_map<void*, my_actor*>::iterator _btIt;
+	msg_map<void*, my_actor*>::iterator _topIt;
 #endif
 };
 
