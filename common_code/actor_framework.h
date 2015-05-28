@@ -21,6 +21,7 @@
 #include "msg_queue.h"
 #include "actor_mutex.h"
 #include "scattered.h"
+#include "stack_object.h"
 
 class my_actor;
 typedef std::shared_ptr<my_actor> actor_handle;//Actor句柄
@@ -377,7 +378,7 @@ struct dst_receiver_buff : public dst_receiver_base<T0, T1, T2, T3>
 		}
 
 		bool _has;
-		BYTE _buff[sizeof(param_type)];
+		unsigned char _buff[sizeof(param_type)];
 	};
 
 	dst_receiver_buff(dst_buff& dstBuff)
@@ -928,7 +929,7 @@ public:
 private:
 	dst_receiver* _dstRec;
 	bool _hasMsg;
-	BYTE _msgBuff[sizeof(msg_type)];
+	unsigned char _msgBuff[sizeof(msg_type)];
 };
 
 template <>
@@ -1190,11 +1191,11 @@ private:
 	}
 private:
 	std::weak_ptr<msg_pump> _weakThis;
-	BYTE _msgSpace[sizeof(msg_type)];
+	unsigned char _msgSpace[sizeof(msg_type)];
 	pump_handler _pumpHandler;
 	shared_strand _strand;
 	dst_receiver* _dstRec;
-	BYTE _pumpCount;
+	unsigned char _pumpCount;
 	bool _hasMsg;
 	bool _waiting;
 	bool _checkDis;
@@ -1211,7 +1212,7 @@ class msg_pool : public msg_pool_base
 
 	struct pump_handler
 	{
-		void operator()(BYTE pumpID)
+		void operator()(unsigned char pumpID)
 		{
 			assert(_thisPool);
 			if (_thisPool->_strand->running_in_this_thread())
@@ -1246,7 +1247,7 @@ class msg_pool : public msg_pool_base
 			}
 		}
 
-		void post_pump(BYTE pumpID)
+		void post_pump(unsigned char pumpID)
 		{
 			assert(!empty());
 			auto& refThis_ = *this;
@@ -1392,7 +1393,7 @@ private:
 	std::shared_ptr<msg_pump_type> _msgPump;
 	msg_queue<msg_type> _msgBuff;
 	shared_strand _strand;
-	BYTE _sendCount;
+	unsigned char _sendCount;
 	bool _waiting;
 };
 
@@ -1405,8 +1406,8 @@ class msg_pool_void : public msg_pool_base
 
 	struct pump_handler
 	{
-		void operator()(BYTE pumpID);
-		void post_pump(BYTE pumpID);
+		void operator()(unsigned char pumpID);
+		void post_pump(unsigned char pumpID);
 		bool empty();
 		bool same_strand();
 		void clear();
@@ -1434,7 +1435,7 @@ protected:
 	std::shared_ptr<msg_pump_type> _msgPump;
 	size_t _msgBuff;
 	shared_strand _strand;
-	BYTE _sendCount;
+	unsigned char _sendCount;
 	bool _waiting;
 };
 
@@ -1463,7 +1464,7 @@ protected:
 	std::weak_ptr<msg_pump_void> _weakThis;
 	pump_handler _pumpHandler;
 	shared_strand _strand;
-	BYTE _pumpCount;
+	unsigned char _pumpCount;
 	bool _waiting;
 	bool _hasMsg;
 	bool _checkDis;
@@ -1698,7 +1699,7 @@ private:
 public:
 	void operator delete(void* p);
 private:
-	DEBUG_OPERATION(list<std::function<void ()> >::iterator _qh);
+	DEBUG_OPERATION(msg_list_shared_alloc<std::function<void()> >::iterator _qh);
 	bool _norQuit;///<是否正常退出
 	bool _quited;///<检测是否已经关闭
 	child_actor_param _param;
@@ -1727,6 +1728,22 @@ class my_actor
 
 	struct msg_pool_status 
 	{
+		msg_pool_status()
+		{
+			for (int i = 0; i < 5; i++)
+			{
+				_msgPumpList[i].create(_msgPumpListAll);
+			}
+		}
+
+		~msg_pool_status()
+		{
+			for (int i = 0; i < 5; i++)
+			{
+				_msgPumpList[i].destroy();
+			}
+		}
+
 		struct pck_base 
 		{
 			pck_base(my_actor* hostActor)
@@ -1788,13 +1805,14 @@ class my_actor
 		{
 			for (int i = 0; i < 5; i++)
 			{
-				for_each(_msgPumpList[i].begin(), _msgPumpList[i].end(), [&](const std::shared_ptr<pck_base>& p){p->_amutex.quited_lock(self); });
-				for_each(_msgPumpList[i].begin(), _msgPumpList[i].end(), [](const std::shared_ptr<pck_base>& p){p->close(); });
-				for_each(_msgPumpList[i].begin(), _msgPumpList[i].end(), [&](const std::shared_ptr<pck_base>& p){p->_amutex.quited_unlock(self); });
+				for_each(_msgPumpList[i]->begin(), _msgPumpList[i]->end(), [&](const std::shared_ptr<pck_base>& p){p->_amutex.quited_lock(self); });
+				for_each(_msgPumpList[i]->begin(), _msgPumpList[i]->end(), [](const std::shared_ptr<pck_base>& p){p->close(); });
+				for_each(_msgPumpList[i]->begin(), _msgPumpList[i]->end(), [&](const std::shared_ptr<pck_base>& p){p->_amutex.quited_unlock(self); });
 			}
 		}
 
-		list<std::shared_ptr<pck_base> > _msgPumpList[5];
+		stack_obj<msg_list_shared_alloc<std::shared_ptr<pck_base> > > _msgPumpList[5];
+		static msg_list<std::shared_ptr<pck_base> >::shared_node_alloc _msgPumpListAll;
 	};
 
 	struct timer_pck;
@@ -1959,11 +1977,13 @@ public:
 	@param ms 等待毫秒数，等于0时暂时放弃Actor执行，直到下次被调度器触发
 	*/
 	__yield_interrupt void sleep(int ms);
+	__yield_interrupt void sleep_guard(int ms);
 
 	/*!
 	@brief 中断当前时间片，等到下次被调度(因为Actor是非抢占式调度，当有占用时间片较长的逻辑时，适当使用yield分割时间片)
 	*/
 	__yield_interrupt void yield();
+	__yield_interrupt void yield_guard();
 
 	/*!
 	@brief 调用disable_auto_make_timer后，使用这个打开当前Actor定时器
@@ -1983,9 +2003,9 @@ public:
 	/*!
 	@brief 获取子Actor
 	*/
-	const msg_list<actor_handle>& child_actors();
+	const msg_list_shared_alloc<actor_handle>& child_actors();
 public:
-	typedef list<std::function<void ()> >::iterator quit_iterator;
+	typedef msg_list_shared_alloc<std::function<void()> >::iterator quit_iterator;
 
 	/*!
 	@brief 注册一个资源释放函数，在强制退出Actor时调用
@@ -2726,7 +2746,7 @@ private:
 	{
 		typedef msg_pool_status::pck<T0, T1, T2, T3> pck_type;
 
-		auto& msgPumpList = _msgPoolStatus._msgPumpList[func_type<T0, T1, T2, T2>::number];
+		auto& msgPumpList = _msgPoolStatus._msgPumpList[func_type<T0, T1, T2, T2>::number].get();
 		if (0 == func_type<T0, T1, T2, T2>::number)
 		{
 			if (!msgPumpList.empty())
@@ -3909,18 +3929,21 @@ private:
 	size_t _timerCount;//定时器计数
 	std::weak_ptr<my_actor> _parentActor;///<父Actor
 	main_func _mainFunc;///<Actor入口
-	list<suspend_resume_option> _suspendResumeQueue;///<挂起/恢复操作队列
-	list<std::function<void (bool)> > _exitCallback;///<Actor结束后的回调函数，强制退出返回false，正常退出返回true
-	list<std::function<void ()> > _quitHandlerList;///<Actor退出时强制调用的函数，后注册的先执行
-	msg_list<actor_handle> _childActorList;///<子Actor集合
+	msg_list_shared_alloc<suspend_resume_option> _suspendResumeQueue;///<挂起/恢复操作队列
+	msg_list_shared_alloc<std::function<void(bool)> > _exitCallback;///<Actor结束后的回调函数，强制退出返回false，正常退出返回true
+	msg_list_shared_alloc<std::function<void()> > _quitHandlerList;///<Actor退出时强制调用的函数，后注册的先执行
+	msg_list_shared_alloc<actor_handle> _childActorList;///<子Actor集合
 	msg_pool_status _msgPoolStatus;//消息池列表
 	timer_pck* _timer;///<定时器
 	std::weak_ptr<my_actor> _weakThis;
-	static std::shared_ptr<shared_obj_pool_base<bool>> _sharedBoolPool;
 #ifdef CHECK_SELF
 	msg_map<void*, my_actor*>::iterator _btIt;
 	msg_map<void*, my_actor*>::iterator _topIt;
 #endif
+	static msg_list<my_actor::suspend_resume_option>::shared_node_alloc _suspendResumeQueueAll;
+	static msg_list<std::function<void(bool)> >::shared_node_alloc _exitCallbackAll;
+	static msg_list<std::function<void()> >::shared_node_alloc _quitHandlerListAll;
+	static msg_list<actor_handle>::shared_node_alloc _childActorListAll;
 };
 
 #endif

@@ -75,6 +75,12 @@ public:
 		((OBJ*)_buff)->~OBJ();
 	}
 
+	OBJ& get()
+	{
+		assert(!_null);
+		return *(OBJ*)_buff;
+	}
+
 	/*!
 	@brief 调用该临时对象方法
 	*/
@@ -84,7 +90,7 @@ public:
 		return (OBJ*)_buff;
 	}
 private:
-	BYTE _buff[sizeof(OBJ)];
+	unsigned char _buff[sizeof(OBJ)];
 	DEBUG_OPERATION(bool _null);
 };
 

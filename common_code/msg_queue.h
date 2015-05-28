@@ -315,4 +315,88 @@ public:
 	}
 };
 
+template <typename T>
+class msg_list_shared_alloc: public msg_list<T, typename msg_list<T>::shared_node_alloc>
+{
+	typedef typename msg_list<T>::shared_node_alloc AlNod;
+public:
+	explicit msg_list_shared_alloc(size_t poolSize = sizeof(void*))
+	:msg_list(poolSize) {}
+
+	explicit msg_list_shared_alloc(AlNod& Al)
+		: msg_list(Al) {}
+
+	msg_list_shared_alloc(const msg_list& s)
+		:msg_list(s) {}
+
+	msg_list_shared_alloc(msg_list_shared_alloc&& s)
+		:msg_list(std::move((msg_list&)s)) {}
+
+	template <typename Al>
+	msg_list_shared_alloc(const std::list<T, Al>& s, size_t poolSize = -1)
+		: msg_list(s, poolSize) {}
+
+	msg_list_shared_alloc& operator=(msg_list_shared_alloc&& s)
+	{
+		(msg_list&)*this = std::move((msg_list&)s);
+		return *this;
+	}
+};
+
+template <typename Tkey, typename Tval>
+class msg_map_shared_alloc : public msg_map<Tkey, Tval, typename msg_map<Tkey, Tval>::shared_node_alloc>
+{
+	typedef typename msg_map<Tkey, Tval>::shared_node_alloc AlNod;
+public:
+	explicit msg_map_shared_alloc(size_t poolSize = sizeof(void*))
+		:msg_map(poolSize){}
+
+	explicit msg_map_shared_alloc(AlNod& al)
+		:msg_map(al) {}
+
+	msg_map_shared_alloc(const msg_map& s)
+		:msg_map(s) {}
+
+	msg_map_shared_alloc(msg_map_shared_alloc&& s)
+		:msg_map(std::move((msg_map&)s)) {}
+
+	template <typename Al>
+	msg_map_shared_alloc(const std::map<Tkey, Tval, Tcmp, Al>& s, size_t poolSize = -1)
+		: msg_map(s, poolSize) {}
+
+	msg_map_shared_alloc& operator=(msg_map_shared_alloc&& s)
+	{
+		(msg_map&)*this = std::move((msg_map&)s);
+		return *this;
+	}
+};
+
+template <typename Tkey>
+class msg_set_shared_alloc : public msg_set<Tkey, typename msg_set<Tkey>::shared_node_alloc>
+{
+	typedef typename msg_set<Tkey>::shared_node_alloc AlNod;
+public:
+	explicit msg_set_shared_alloc(size_t poolSize = sizeof(void*))
+		:msg_set(poolSize){}
+
+	explicit msg_set_shared_alloc(AlNod& al)
+		:msg_set(al) {}
+
+	msg_set_shared_alloc(const msg_set& s)
+		:msg_set(s) {}
+
+	msg_set_shared_alloc(msg_set_shared_alloc&& s)
+		:msg_set(std::move((msg_set&)s)) {}
+
+	template <typename Al>
+	msg_set_shared_alloc(const std::set<Tkey, Tcmp, Al>& s, size_t poolSize = -1)
+		: msg_set(s, poolSize) {}
+
+	msg_set_shared_alloc& operator=(msg_set_shared_alloc&& s)
+	{
+		(msg_set&)*this = std::move((msg_set&)s);
+		return *this;
+	}
+};
+
 #endif

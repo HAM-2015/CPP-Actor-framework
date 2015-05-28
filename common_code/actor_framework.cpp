@@ -31,6 +31,28 @@ typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> 
 //内存边界对齐
 #define MEM_ALIGN(__o, __a) (((__o) + ((__a)-1)) & (((__a)-1) ^ -1))
 
+boost::atomic<my_actor::id> s_actorIDCount(0);//ID计数
+bool s_autoMakeTimer = true;
+std::shared_ptr<shared_obj_pool_base<bool>> s_sharedBoolPool;
+#ifdef CHECK_SELF
+msg_map<void*, my_actor*> s_stackLine(100000);
+boost::mutex s_stackLineMutex;
+struct initStackLine
+{
+	initStackLine()
+	{
+		s_stackLine.insert(make_pair((void*)NULL, (my_actor*)NULL));
+		s_stackLine.insert(make_pair((void*)-1, (my_actor*)NULL));
+	}
+} s_initStackLine;
+#endif
+
+msg_list<actor_handle>::shared_node_alloc my_actor::_childActorListAll(4, false);
+msg_list<std::function<void()> >::shared_node_alloc my_actor::_quitHandlerListAll(4, false);
+msg_list<std::function<void(bool)> >::shared_node_alloc my_actor::_exitCallbackAll(4, false);
+msg_list<my_actor::suspend_resume_option>::shared_node_alloc my_actor::_suspendResumeQueueAll(4, false);
+msg_list<std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc my_actor::msg_pool_status::_msgPumpListAll(4, false);
+
 /*!
 @brief Actor栈分配器
 */
@@ -225,9 +247,9 @@ bool actor_msg_handle_base::is_quited()
 
 std::shared_ptr<bool> actor_msg_handle_base::new_bool()
 {
-	if (my_actor::_sharedBoolPool)
+	if (s_sharedBoolPool)
 	{
-		std::shared_ptr<bool> r = my_actor::_sharedBoolPool->new_();
+		std::shared_ptr<bool> r = s_sharedBoolPool->new_();
 		*r = false;
 		return r;
 	} 
@@ -339,7 +361,7 @@ bool msg_pool_void::pump_handler::empty()
 	return !_thisPool;
 }
 
-void msg_pool_void::pump_handler::post_pump(BYTE pumpID)
+void msg_pool_void::pump_handler::post_pump(unsigned char pumpID)
 {
 	assert(!empty());
 	auto& refThis_ = *this;
@@ -351,7 +373,7 @@ void msg_pool_void::pump_handler::post_pump(BYTE pumpID)
 	});
 }
 
-void msg_pool_void::pump_handler::operator()(BYTE pumpID)
+void msg_pool_void::pump_handler::operator()(unsigned char pumpID)
 {
 	assert(_thisPool);
 	if (_thisPool->_strand->running_in_this_thread())
@@ -549,7 +571,7 @@ struct actor_ref_count_alloc
 	T* allocate(size_t count)
 	{
 		assert(1 == count);
-		*_ptr = (BYTE*)*_ptr - MEM_ALIGN(sizeof(T), sizeof(void*));
+		*_ptr = (unsigned char*)*_ptr - MEM_ALIGN(sizeof(T), sizeof(void*));
 		return (T*)*_ptr;
 	}
 
@@ -590,19 +612,6 @@ struct my_actor::timer_pck
 	boost::posix_time::ptime _timerStampEnd;
 	std::function<void ()> _h;
 };
-
-boost::atomic<my_actor::id> _actorIDCount(0);//ID计数
-bool _autoMakeTimer = true;
-#ifdef CHECK_SELF
-msg_map<void*, my_actor*> _stackLine(100000);
-boost::mutex _stackLineMutex;
-struct initStackLine
-{
-	initStackLine()	{ _stackLine.insert(make_pair((void*)NULL, (my_actor*)NULL)); }
-} _initStackLine;
-#endif
-
-std::shared_ptr<shared_obj_pool_base<bool>> my_actor::_sharedBoolPool;
 
 class my_actor::boost_actor_run
 {
@@ -673,6 +682,10 @@ private:
 };
 
 my_actor::my_actor()
+:_suspendResumeQueue(_suspendResumeQueueAll),
+_exitCallback(_exitCallbackAll),
+_quitHandlerList(_quitHandlerListAll),
+_childActorList(_childActorListAll)
 {
 	_actorPull = NULL;
 	_actorPush = NULL;
@@ -692,7 +705,7 @@ my_actor::my_actor()
 	_timerCount = 0;
 	_childOverCount = 0;
 	_childSuspendResumeCount = 0;
-	_selfID = ++_actorIDCount;
+	_selfID = ++s_actorIDCount;
 }
 
 my_actor::my_actor(const my_actor&)
@@ -725,13 +738,13 @@ my_actor::~my_actor()
 		}
 	}
 #ifdef CHECK_SELF
-	_stackLineMutex.lock();
-	_stackLine.erase(_btIt);
-	_stackLine.erase(_topIt);
-	_stackLineMutex.unlock();
+	s_stackLineMutex.lock();
+	s_stackLine.erase(_btIt);
+	s_stackLine.erase(_topIt);
+	s_stackLineMutex.unlock();
 #endif
 #if (CHECK_ACTOR_STACK) || (_DEBUG)
-	if (*(long long*)((BYTE*)_stackTop-_stackSize+STACK_RESERVED_SPACE_SIZE-sizeof(long long)) != 0xFEFEFEFEFEFEFEFE)
+	if (*(long long*)((unsigned char*)_stackTop-_stackSize+STACK_RESERVED_SPACE_SIZE-sizeof(long long)) != 0xFEFEFEFEFEFEFEFE)
 	{
 		assert(false);
 		char buf[48];
@@ -757,14 +770,14 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 		const size_t actorSize = MEM_ALIGN(sizeof(my_actor), sizeof(void*));
 		const size_t timerSize = MEM_ALIGN(sizeof(timer_pck), sizeof(void*));
 		stack_pck stackMem = actor_stack_pool::getStack(stackSize);
-		BYTE* refTop = (BYTE*)stackMem._stack.sp - actorSize;
+		unsigned char* refTop = (unsigned char*)stackMem._stack.sp - actorSize;
 		newActor = actor_handle(new(refTop)my_actor, [stackMem](my_actor* p){p->~my_actor(); },
 			actor_ref_count_alloc<void>(stackMem, (void**)&refTop));
 		newActor->_stackTop = refTop - timerSize;
 		newActor->_stackSize = stackMem._stack.size - ((size_t)stackMem._stack.sp - (size_t)newActor->_stackTop);
 		newActor->_strand = actorStrand;
 		newActor->_mainFunc = mainFunc;
-		if (_autoMakeTimer)
+		if (s_autoMakeTimer)
 		{
 			newActor->_timer = new(newActor->_stackTop) timer_pck(actorStrand->get_ios_proxy());
 		}
@@ -774,7 +787,7 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 	else
 	{
 		newActor = actor_handle(new my_actor, [](my_actor* p){delete p; });
-		if (_autoMakeTimer)
+		if (s_autoMakeTimer)
 		{
 			newActor->_timer = new timer_pck(actorStrand->get_ios_proxy());
 		}
@@ -785,13 +798,13 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 	}
 	newActor->_weakThis = newActor;
 #ifdef CHECK_SELF
-	_stackLineMutex.lock();
-	newActor->_btIt = _stackLine.insert(make_pair((BYTE*)newActor->_stackTop-newActor->_stackSize, newActor.get())).first;
-	newActor->_topIt = _stackLine.insert(make_pair(newActor->_stackTop, (my_actor*)NULL)).first;
-	_stackLineMutex.unlock();
+	s_stackLineMutex.lock();
+	newActor->_btIt = s_stackLine.insert(make_pair((unsigned char*)newActor->_stackTop-newActor->_stackSize, newActor.get())).first;
+	newActor->_topIt = s_stackLine.insert(make_pair((unsigned char*)newActor->_stackTop - 1, (my_actor*)NULL)).first;
+	s_stackLineMutex.unlock();
 #endif
 #if (CHECK_ACTOR_STACK) || (_DEBUG)
-	*(long long*)((BYTE*)newActor->_stackTop-newActor->_stackSize+STACK_RESERVED_SPACE_SIZE-sizeof(long long)) = 0xFEFEFEFEFEFEFEFE;
+	*(long long*)((unsigned char*)newActor->_stackTop-newActor->_stackSize+STACK_RESERVED_SPACE_SIZE-sizeof(long long)) = 0xFEFEFEFEFEFEFEFE;
 #endif
 #ifdef _DEBUG
 	newActor->_createStack = get_stack_list(8);
@@ -1065,6 +1078,15 @@ void my_actor::sleep( int ms )
 	push_yield();
 }
 
+void my_actor::sleep_guard(int ms)
+{
+	assert_enter();
+	quit_guard qg(this);
+	actor_handle lock_this = shared_from_this();
+	delay_trig(ms, [this]{run_one(); });
+	push_yield();
+}
+
 void my_actor::yield()
 {
 	assert_enter();
@@ -1073,12 +1095,21 @@ void my_actor::yield()
 	push_yield();
 }
 
+void my_actor::yield_guard()
+{
+	assert_enter();
+	quit_guard qg(this);
+	actor_handle lock_this = shared_from_this();
+	_strand->post([this]{run_one(); });
+	push_yield();
+}
+
 actor_handle my_actor::parent_actor()
 {
 	return _parentActor.lock();
 }
 
-const msg_list<actor_handle>& my_actor::child_actors()
+const msg_list_shared_alloc<actor_handle>& my_actor::child_actors()
 {
 	return _childActorList;
 }
@@ -1147,6 +1178,7 @@ void my_actor::assert_enter()
 	assert(!_quited);
 	assert(_inActor);
 	assert((size_t)get_sp() >= (size_t)_stackTop-_stackSize+1024);
+	check_self();
 }
 
 void my_actor::start_run()
@@ -1777,9 +1809,14 @@ void my_actor::exit_callback()
 
 void my_actor::enable_stack_pool()
 {
-	assert(0 == _actorIDCount);
+	assert(0 == s_actorIDCount);
 	actor_stack_pool::enable();
-	_sharedBoolPool = std::shared_ptr<shared_obj_pool_base<bool>>(create_shared_pool<bool>(4096, [](void*){}));
+	s_sharedBoolPool = std::shared_ptr<shared_obj_pool_base<bool>>(create_shared_pool<bool>(4096, [](void*){}));
+	_suspendResumeQueueAll.enable_shared(100000);
+	_exitCallbackAll.enable_shared(100000);
+	_quitHandlerListAll.enable_shared(100000);
+	_childActorListAll.enable_shared(100000);
+	msg_pool_status::_msgPumpListAll.enable_shared(100000);
 }
 
 void my_actor::expires_timer()
@@ -1871,8 +1908,8 @@ void my_actor::resume_timer()
 
 void my_actor::disable_auto_make_timer()
 {
-	assert(0 == _actorIDCount);
-	_autoMakeTimer = false;
+	assert(0 == s_actorIDCount);
+	s_autoMakeTimer = false;
 }
 
 void my_actor::check_stack()
@@ -1890,12 +1927,12 @@ void my_actor::check_stack()
 my_actor* my_actor::self_actor()
 {
 #ifdef CHECK_SELF
-	boost::lock_guard<boost::mutex> lg(_stackLineMutex);
-	auto eit = _stackLine.insert(make_pair(get_sp(), (my_actor*)NULL));
+	boost::lock_guard<boost::mutex> lg(s_stackLineMutex);
+	auto eit = s_stackLine.insert(make_pair(get_sp(), (my_actor*)NULL));
 	if (eit.second)
 	{
-		_stackLine.erase(eit.first--);
-		assert(eit.first != _stackLine.end());
+		s_stackLine.erase(eit.first--);
+		assert(eit.first != s_stackLine.end());
 		return eit.first->second;
 	}
 #endif

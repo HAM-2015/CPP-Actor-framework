@@ -80,6 +80,14 @@ int get_tick_s();
 #ifdef _DEBUG
 struct stack_line_info 
 {
+	stack_line_info(){}
+
+	stack_line_info(stack_line_info&& s)
+		:symbolName(std::move(s.symbolName)),
+		module(std::move(s.module)),
+		file(std::move(s.file)),
+		line(s.line) {}
+
 	string symbolName;
 	string module;
 	string file;

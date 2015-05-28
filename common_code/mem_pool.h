@@ -26,17 +26,60 @@ private:
 template <typename DATA>
 struct mem_alloc : public mem_alloc_base
 {
-	union node_space
+	struct node_space;
+
+	union BUFFER
 	{
-		void set_ef()
+		unsigned char _space[sizeof(DATA)];
+		node_space* _link;
+	};
+
+	struct node_space
+	{
+		void set_df()
 		{
 #ifdef _DEBUG
-			memset(this, 0xEF, sizeof(*this));
+			memset(get_ptr(), 0xDF, sizeof(DATA));
 #endif
 		}
 
-		char _node[sizeof(DATA)];
-		node_space* _link;
+		void set_cf()
+		{
+#ifdef _DEBUG
+			memset(get_ptr(), 0xCF, sizeof(DATA));
+#endif
+		}
+
+		void* get_ptr()
+		{
+			return _buff._space;
+		}
+
+		void set_head()
+		{
+#ifdef _DEBUG
+			_size = sizeof(DATA);
+#endif
+		}
+
+		void check_head()
+		{
+			assert(sizeof(DATA) <= _size);
+		}
+
+		static node_space* get_node(void* p)
+		{
+#ifdef _DEBUG
+			return (node_space*)((unsigned char*)p - sizeof(size_t));
+#else
+			return (node_space*)p;
+#endif
+		}
+
+#ifdef _DEBUG
+		size_t _size;
+#endif
+		BUFFER _buff;
 	};
 
 	mem_alloc(size_t poolSize)
@@ -57,7 +100,7 @@ struct mem_alloc : public mem_alloc_base
 		{
 			_poolSize--;
 			node_space* t = pIt;
-			pIt = pIt->_link;
+			pIt = pIt->_buff._link;
 			free(t);
 		}
 		assert(0 == _poolSize);
@@ -72,10 +115,13 @@ struct mem_alloc : public mem_alloc_base
 		{
 			_poolSize--;
 			node_space* fixedSpace = _pool;
-			_pool = fixedSpace->_link;
-			return fixedSpace;
+			_pool = fixedSpace->_buff._link;
+			fixedSpace->set_cf();
+			return fixedSpace->get_ptr();
 		}
-		return malloc(sizeof(node_space));
+		node_space* p = (node_space*)malloc(sizeof(node_space));
+		p->set_head();
+		return p->get_ptr();
 	}
 
 	void deallocate(void* p)
@@ -83,12 +129,13 @@ struct mem_alloc : public mem_alloc_base
 #ifdef _DEBUG
 		_nodeNumber--;
 #endif
-		node_space* space = (node_space*)p;
+		node_space* space = node_space::get_node(p);
+		space->check_head();
 		if (_poolSize < _poolMaxSize)
 		{
 			_poolSize++;
-			space->set_ef();
-			space->_link = _pool;
+			space->set_df();
+			space->_buff._link = _pool;
 			_pool = space;
 			return;
 		}
@@ -119,17 +166,60 @@ struct mem_alloc : public mem_alloc_base
 template <typename DATA>
 struct mem_alloc_mt: mem_alloc_base
 {
-	union node_space
+	struct node_space;
+
+	union BUFFER
 	{
-		void set_ef()
+		unsigned char _space[sizeof(DATA)];
+		node_space* _link;
+	};
+
+	struct node_space
+	{
+		void set_bf()
 		{
 #ifdef _DEBUG
-			memset(this, 0xEF, sizeof(*this));
+			memset(get_ptr(), 0xBF, sizeof(DATA));
 #endif
 		}
 
-		char _node[sizeof(DATA)];
-		node_space* _link;
+		void set_af()
+		{
+#ifdef _DEBUG
+			memset(get_ptr(), 0xAF, sizeof(DATA));
+#endif
+		}
+
+		void* get_ptr()
+		{
+			return _buff._space;
+		}
+
+		void set_head()
+		{
+#ifdef _DEBUG
+			_size = sizeof(DATA);
+#endif
+		}
+
+		void check_head()
+		{
+			assert(sizeof(DATA) <= _size);
+		}
+
+		static node_space* get_node(void* p)
+		{
+#ifdef _DEBUG
+			return (node_space*)((unsigned char*)p - sizeof(size_t));
+#else
+			return (node_space*)p;
+#endif
+		}
+
+#ifdef _DEBUG
+		size_t _size;
+#endif
+		BUFFER _buff;
 	};
 
 	mem_alloc_mt(size_t poolSize)
@@ -151,7 +241,7 @@ struct mem_alloc_mt: mem_alloc_base
 		{
 			_poolSize--;
 			node_space* t = pIt;
-			pIt = pIt->_link;
+			pIt = pIt->_buff._link;
 			free(t);
 		}
 		assert(0 == _poolSize);
@@ -168,16 +258,20 @@ struct mem_alloc_mt: mem_alloc_base
 			{
 				_poolSize--;
 				node_space* fixedSpace = _pool;
-				_pool = fixedSpace->_link;
-				return fixedSpace;
+				_pool = fixedSpace->_buff._link;
+				fixedSpace->set_af();
+				return fixedSpace->get_ptr();
 			}
 		}
-		return malloc(sizeof(node_space));
+		node_space* p = (node_space*)malloc(sizeof(node_space));
+		p->set_head();
+		return p->get_ptr();
 	}
 
 	void deallocate(void* p)
 	{
-		node_space* space = (node_space*)p;
+		node_space* space = node_space::get_node(p);
+		space->check_head();
 		{
 			boost::lock_guard<boost::mutex> lg(_mutex);
 #ifdef _DEBUG
@@ -186,8 +280,8 @@ struct mem_alloc_mt: mem_alloc_base
 			if (_poolSize < _poolMaxSize)
 			{
 				_poolSize++;
-				space->set_ef();
-				space->_link = _pool;
+				space->set_bf();
+				space->_buff._link = _pool;
 				_pool = space;
 				return;
 			}
@@ -252,7 +346,7 @@ public:
 
 	~pool_alloc_mt()
 	{
-
+		_memAlloc->reCount();
 	}
 
 	pool_alloc_mt(const pool_alloc_mt& s)
@@ -270,10 +364,17 @@ public:
 	template<class _Other>
 	pool_alloc_mt(const pool_alloc_mt<_Other>& s)
 	{
-		//if (sizeof(_Ty) <= sizeof(_Other) && s.is_shared())
-		if (s.is_shared() && sizeof(_Ty) <= s._memAlloc->alloc_size())
+		if (s.is_shared())
 		{
-			_memAlloc = s._memAlloc;
+// 			if (sizeof(_Ty) > s._memAlloc->alloc_size())
+// 			{
+// 				_memAlloc = std::shared_ptr<mem_alloc_base>(new mem_alloc_mt_type(s._memAlloc->_poolMaxSize));
+// 			} 
+// 			else
+			{
+				assert(sizeof(_Ty) <= s._memAlloc->alloc_size());
+				_memAlloc = s._memAlloc;
+			}
 		}
 		else
 		{
@@ -334,6 +435,14 @@ public:
 	bool is_shared() const
 	{
 		return _memAlloc->shared();
+	}
+
+	void enable_shared(size_t poolSize = -1)
+	{
+		if (!_memAlloc->shared())
+		{
+			_memAlloc = std::shared_ptr<mem_alloc_base>(new mem_alloc_mt_type(-1 == poolSize ? _memAlloc->_poolMaxSize : poolSize));
+		}
 	}
 
 	std::shared_ptr<mem_alloc_base> _memAlloc;
@@ -477,7 +586,7 @@ class obj_pool: public obj_pool_base<T>
 {
 	struct node 
 	{
-		char _data[sizeof(T)];
+		unsigned char _data[sizeof(T)];
 		node* _link;
 	};
 
