@@ -189,7 +189,6 @@ actor_handle child_actor_handle::peel()
 		_quited = true;
 		DEBUG_OPERATION(_param._actor->parent_actor()->_quitHandlerList.erase(_qh));
 		_param._actor->parent_actor()->_childActorList.erase(_param._actorIt);
-		_param._actor->_parentActor.reset();
 		_param._actor.reset();
 	}
 	return r;
@@ -858,12 +857,13 @@ void my_actor::child_actor_run(const list<std::shared_ptr<child_actor_handle> >&
 bool my_actor::child_actor_force_quit( child_actor_handle& actorHandle )
 {
 	assert_enter();
+	my_actor::quit_guard qg(this);
 	if (!actorHandle._quited)
 	{
 		assert(actorHandle.get_actor());
 		assert(actorHandle.get_actor()->parent_actor()->self_id() == self_id());
 
-		actor_handle actor = actorHandle.peel();
+		actor_handle actor = actorHandle._param._actor;
 		if (actor->self_strand() == _strand)
 		{
 			actorHandle._norQuit = trig<bool>([actor](const trig_once_notifer<bool>& h){actor->force_quit(h); });
@@ -872,6 +872,7 @@ bool my_actor::child_actor_force_quit( child_actor_handle& actorHandle )
 		{
 			actorHandle._norQuit = trig<bool>([actor](const trig_once_notifer<bool>& h){actor->notify_quit(h); });
 		}
+		actorHandle.peel();
 	}
 	return actorHandle._norQuit;
 }
@@ -879,26 +880,27 @@ bool my_actor::child_actor_force_quit( child_actor_handle& actorHandle )
 void my_actor::child_actors_force_quit(const list<child_actor_handle::ptr>& actorHandles)
 {
 	assert_enter();
-	actor_msg_handle<> amh;
+	my_actor::quit_guard qg(this);
+	actor_msg_handle<child_actor_handle::ptr> amh;
 	auto h = make_msg_notifer(amh);
 	for (auto it = actorHandles.begin(); it != actorHandles.end(); it++)
 	{
 		child_actor_handle::ptr actorHandle = *it;
 		assert(actorHandle->get_actor());
 		assert(actorHandle->get_actor()->parent_actor()->self_id() == self_id());
-		actor_handle actor = actorHandle->peel();
+		actor_handle actor = actorHandle->_param._actor;
 		if (actor->self_strand() == _strand)
 		{
-			actor->force_quit(wrap_no_params(h));
+			actor->force_quit([h, actorHandle](bool){h(actorHandle); });
 		} 
 		else
 		{
-			actor->notify_quit(wrap_no_params(h));
+			actor->notify_quit([h, actorHandle](bool){h(actorHandle); });
 		}
 	}
 	for (size_t i = actorHandles.size(); i > 0; i--)
 	{
-		wait_msg(amh);
+		wait_msg(amh)->peel();
 	}
 	close_msg_notifer(amh);
 }
