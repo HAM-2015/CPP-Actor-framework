@@ -653,6 +653,14 @@ public:
 		{
 			assert(false);
 		}
+		catch (actor_shared_mutex::close_exception&)
+		{
+			assert(false);
+		}
+		catch (actor_condition_variable::close_exception&)
+		{
+			assert(false);
+		}
 		catch (...)
 		{
 			assert(false);

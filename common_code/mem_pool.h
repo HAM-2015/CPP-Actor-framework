@@ -10,14 +10,11 @@ struct mem_alloc_base
 	virtual ~mem_alloc_base(){}
 	virtual void* allocate() = 0;
 	virtual void deallocate(void* p) = 0;
-	virtual void reCount() = 0;
 	virtual bool shared() const = 0;
 	virtual size_t alloc_size() const = 0;
-	size_t _poolSize;
+	size_t _nodeCount;
 	size_t _poolMaxSize;
-#ifdef _DEBUG
-	size_t _nodeNumber;
-#endif
+	size_t _blockNumber;
 private:
 	mem_alloc_base(const mem_alloc_base&){}
 	void operator=(const mem_alloc_base&){}
@@ -84,36 +81,31 @@ struct mem_alloc : public mem_alloc_base
 
 	mem_alloc(size_t poolSize)
 	{
-		_poolSize = 0;
+		_nodeCount = 0;
 		_poolMaxSize = poolSize;
 		_pool = NULL;
-#ifdef _DEBUG
-		_nodeNumber = 0;
-#endif
+		_blockNumber = 0;
 	}
 
 	~mem_alloc()
 	{
-		assert(0 == _nodeNumber);
 		node_space* pIt = _pool;
 		while (pIt)
 		{
-			_poolSize--;
+			_nodeCount--;
 			node_space* t = pIt;
 			pIt = pIt->_buff._link;
 			free(t);
 		}
-		assert(0 == _poolSize);
+		assert(0 == _nodeCount);
 	}
 
 	void* allocate()
 	{
-#ifdef _DEBUG
-		_nodeNumber++;
-#endif
+		_blockNumber++;
 		if (_pool)
 		{
-			_poolSize--;
+			_nodeCount--;
 			node_space* fixedSpace = _pool;
 			_pool = fixedSpace->_buff._link;
 			fixedSpace->set_cf();
@@ -126,27 +118,18 @@ struct mem_alloc : public mem_alloc_base
 
 	void deallocate(void* p)
 	{
-#ifdef _DEBUG
-		_nodeNumber--;
-#endif
+		_blockNumber--;
 		node_space* space = node_space::get_node(p);
 		space->check_head();
-		if (_poolSize < _poolMaxSize)
+		if (_nodeCount < _poolMaxSize)
 		{
-			_poolSize++;
+			_nodeCount++;
 			space->set_df();
 			space->_buff._link = _pool;
 			_pool = space;
 			return;
 		}
 		free(space);
-	}
-
-	void reCount()
-	{
-#ifdef _DEBUG
-		_nodeNumber = 0;
-#endif
 	}
 
 	size_t alloc_size() const
@@ -224,39 +207,34 @@ struct mem_alloc_mt: mem_alloc_base
 
 	mem_alloc_mt(size_t poolSize)
 	{
-		_poolSize = 0;
+		_nodeCount = 0;
 		_poolMaxSize = poolSize;
 		_pool = NULL;
-#ifdef _DEBUG
-		_nodeNumber = 0;
-#endif
+		_blockNumber = 0;
 	}
 
 	~mem_alloc_mt()
 	{
 		boost::lock_guard<boost::mutex> lg(_mutex);
-		assert(0 == _nodeNumber);
 		node_space* pIt = _pool;
 		while (pIt)
 		{
-			_poolSize--;
+			_nodeCount--;
 			node_space* t = pIt;
 			pIt = pIt->_buff._link;
 			free(t);
 		}
-		assert(0 == _poolSize);
+		assert(0 == _nodeCount);
 	}
 
 	void* allocate()
 	{
 		{
 			boost::lock_guard<boost::mutex> lg(_mutex);
-#ifdef _DEBUG
-			_nodeNumber++;
-#endif
+			_blockNumber++;
 			if (_pool)
 			{
-				_poolSize--;
+				_nodeCount--;
 				node_space* fixedSpace = _pool;
 				_pool = fixedSpace->_buff._link;
 				fixedSpace->set_af();
@@ -274,12 +252,10 @@ struct mem_alloc_mt: mem_alloc_base
 		space->check_head();
 		{
 			boost::lock_guard<boost::mutex> lg(_mutex);
-#ifdef _DEBUG
-			_nodeNumber--;
-#endif
-			if (_poolSize < _poolMaxSize)
+			_blockNumber--;
+			if (_nodeCount < _poolMaxSize)
 			{
-				_poolSize++;
+				_nodeCount++;
 				space->set_bf();
 				space->_buff._link = _pool;
 				_pool = space;
@@ -287,13 +263,6 @@ struct mem_alloc_mt: mem_alloc_base
 			}
 		}
 		free(space);
-	}
-
-	void reCount()
-	{
-#ifdef _DEBUG
-		_nodeNumber = 0;
-#endif
 	}
 
 	size_t alloc_size() const
@@ -346,7 +315,6 @@ public:
 
 	~pool_alloc_mt()
 	{
-		_memAlloc->reCount();
 	}
 
 	pool_alloc_mt(const pool_alloc_mt& s)
@@ -475,7 +443,6 @@ public:
 
 	~pool_alloc()
 	{
-		_memAlloc.reCount();
 	}
 
 	pool_alloc(const pool_alloc& s)
@@ -594,27 +561,27 @@ class obj_pool: public obj_pool_base<T>
 	friend shared_obj_pool<T, CREATER, DESTORY>;
 private:
 	obj_pool(size_t poolSize, const CREATER& creater, const DESTORY& destory)
-		:_creater(creater), _destory(destory), _poolSize(poolSize), _size(0), _link(NULL)
+		:_creater(creater), _destory(destory), _poolMaxSize(poolSize), _nodeCount(0), _link(NULL)
 	{
 #ifdef _DEBUG
-		_nodeNumber = 0;
+		_blockNumber = 0;
 #endif
 	}
 public:
 	~obj_pool()
 	{
 		boost::lock_guard<boost::mutex> lg(_mutex);
-		assert(0 == _nodeNumber);
+		assert(0 == _blockNumber);
 		node* it = _link;
 		while (it)
 		{
-			_size--;
+			_nodeCount--;
 			node* t = it;
 			it = it->_link;
 			_destory((T*)t->_data);
 			free(t);
 		}
-		assert(0 == _size);
+		assert(0 == _nodeCount);
 	}
 public:
 	T* new_()
@@ -622,11 +589,11 @@ public:
 		{
 			boost::lock_guard<boost::mutex> lg(_mutex);
 #ifdef _DEBUG
-			_nodeNumber++;
+			_blockNumber++;
 #endif
 			if (_link)
 			{
-				_size--;
+				_nodeCount--;
 				node* r = _link;
 				_link = _link->_link;
 				return (T*)r->_data;
@@ -643,11 +610,11 @@ public:
 		{
 			boost::lock_guard<boost::mutex> lg(_mutex);
 #ifdef _DEBUG
-			_nodeNumber--;
+			_blockNumber--;
 #endif
-			if (_size < _poolSize)
+			if (_nodeCount < _poolMaxSize)
 			{
-				_size++;
+				_nodeCount++;
 				((node*)p)->_link = _link;
 				_link = (node*)p;
 				return;
@@ -660,10 +627,10 @@ private:
 	CREATER _creater;
 	DESTORY _destory;
 	node* _link;
-	size_t _poolSize;
-	size_t _size;
+	size_t _poolMaxSize;
+	size_t _nodeCount;
 #ifdef _DEBUG
-	size_t _nodeNumber;
+	size_t _blockNumber;
 #endif
 };
 //////////////////////////////////////////////////////////////////////////
@@ -705,19 +672,19 @@ class shared_obj_pool: public shared_obj_pool_base<T>
 		};
 
 		create_alloc(void*& refCountAlloc, size_t poolSize)
-			:_refCountAlloc(refCountAlloc), _poolSize(poolSize) {}
+			:_refCountAlloc(refCountAlloc), _nodeCount(poolSize) {}
 
 		create_alloc(const create_alloc<RC>& s)
-			:_refCountAlloc(s._refCountAlloc), _poolSize(s._poolSize) {}
+			:_refCountAlloc(s._refCountAlloc), _nodeCount(s._nodeCount) {}
 
 		template<class Other>
 		create_alloc(const create_alloc<Other>& s)
-			: _refCountAlloc(s._refCountAlloc), _poolSize(s._poolSize) {}
+			: _refCountAlloc(s._refCountAlloc), _nodeCount(s._nodeCount) {}
 
 		RC* allocate(size_t count)
 		{
 			assert(1 == count);
-			_refCountAlloc = new mem_alloc_mt<RC>(_poolSize);
+			_refCountAlloc = new mem_alloc_mt<RC>(_nodeCount);
 			return (RC*)malloc(sizeof(RC));
 		}
 
@@ -735,7 +702,7 @@ class shared_obj_pool: public shared_obj_pool_base<T>
 		}
 
 		void*& _refCountAlloc;
-		size_t _poolSize;
+		size_t _nodeCount;
 	};
 
 	template <typename RC>

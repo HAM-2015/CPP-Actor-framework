@@ -83,22 +83,22 @@ struct stack_line_info
 	stack_line_info(){}
 
 	stack_line_info(stack_line_info&& s)
-		:symbolName(std::move(s.symbolName)),
-		module(std::move(s.module)),
+		:line(s.line),
 		file(std::move(s.file)),
-		line(s.line) {}
+		module(std::move(s.module)),
+		symbolName(std::move(s.symbolName)) {}
 
-	string symbolName;
-	string module;
-	string file;
 	int line;
+	string file;
+	string module;
+	string symbolName;
 };
 
 /*!
 @brief 获取当前调用堆栈信息
 @param maxDepth 获取当前堆栈向下最高层次，最大32层
 */
-list<stack_line_info> get_stack_list(size_t maxDepth = 32);
+list<stack_line_info> get_stack_list(size_t maxDepth = 32, bool module = false, bool symbolName = false);
 #endif
 
 /*!

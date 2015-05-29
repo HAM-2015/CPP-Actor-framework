@@ -299,7 +299,19 @@ size_t _stackwalk(QWORD *pTrace, size_t maxDepth, CONTEXT *pContext)
 	return depth;
 }
 
-list<stack_line_info> get_stack_list(size_t maxDepth)
+size_t check_file_name(char* name)
+{
+	size_t length = strlen(name);
+	if (length)
+	{
+		name[length++] = '.';
+		size_t l = strlen(name + length);
+		length += l ? l : -1;
+	}
+	return length;
+}
+
+list<stack_line_info> get_stack_list(size_t maxDepth, bool module, bool symbolName)
 {
 	assert(maxDepth <= 32);
 
@@ -319,58 +331,58 @@ list<stack_line_info> get_stack_list(size_t maxDepth)
 	HANDLE hProcess = ::GetCurrentProcess();
 	for (size_t i = 1; i < depths; i++)
 	{
-		static const int maxNameLength = 256;
-		char symbolBf[sizeof(IMAGEHLP_SYMBOL64)+maxNameLength] = { 0 };
-		PIMAGEHLP_SYMBOL64 symbol;
-		DWORD symbolDisplacement = 0;
-		DWORD64 symbolDisplacement64 = 0;
-
-		symbol = (PIMAGEHLP_SYMBOL64)symbolBf;
-		symbol->SizeOfStruct = sizeof(symbolBf);
-		symbol->MaxNameLength = maxNameLength;
-
 		stack_line_info stackResult;
 
-		if (::SymGetSymFromAddr64(
-			hProcess,
-			trace[i],
-			&symbolDisplacement64,
-			symbol)
-			)
 		{
-			stackResult.symbolName = symbol->Name;
-		}
-		else
-		{
-			stackResult.symbolName = "unknow...";
-		}
+			DWORD symbolDisplacement = 0;
+			IMAGEHLP_LINE64 imageHelpLine;
+			imageHelpLine.SizeOfStruct = sizeof(imageHelpLine);
 
-		IMAGEHLP_LINE64 imageHelpLine;
-		imageHelpLine.SizeOfStruct = sizeof(imageHelpLine);
-
-		if (::SymGetLineFromAddr64(hProcess, trace[i], &symbolDisplacement, &imageHelpLine))
-		{
-			stackResult.file = imageHelpLine.FileName;
-			if (*(imageHelpLine.FileName + stackResult.file.size() + 1))
+			if (::SymGetLineFromAddr64(hProcess, trace[i], &symbolDisplacement, &imageHelpLine))
 			{
-				stackResult.file += string(".") + (imageHelpLine.FileName + stackResult.file.size() + 1);
+				stackResult.file = string(imageHelpLine.FileName, check_file_name(imageHelpLine.FileName));
+				memset(imageHelpLine.FileName, 0, stackResult.file.size() + 1);
+				stackResult.line = (int)imageHelpLine.LineNumber;
 			}
-			stackResult.line = (int)imageHelpLine.LineNumber;
-		}
-		else
-		{
-			stackResult.line = -1;
-		}
-
-		IMAGEHLP_MODULE64 imageHelpModule;
-		imageHelpModule.SizeOfStruct = sizeof(imageHelpModule);
-
-		if (::SymGetModuleInfo64(hProcess, trace[i], &imageHelpModule))
-		{
-			stackResult.module = imageHelpModule.ImageName;
-			if (*(imageHelpModule.ImageName + stackResult.module.size() + 1))
+			else
 			{
-				stackResult.module += string(".") + (imageHelpModule.ImageName + stackResult.module.size() + 1);
+				stackResult.line = -1;
+			}
+		}
+		if (symbolName)
+		{
+			static const int maxNameLength = 1024;
+			char symbolBf[sizeof(IMAGEHLP_SYMBOL64)+maxNameLength] = { 0 };
+			PIMAGEHLP_SYMBOL64 symbol;
+			DWORD64 symbolDisplacement64 = 0;
+
+			symbol = (PIMAGEHLP_SYMBOL64)symbolBf;
+			symbol->SizeOfStruct = sizeof(symbolBf);
+			symbol->MaxNameLength = maxNameLength;
+
+			if (::SymGetSymFromAddr64(
+				hProcess,
+				trace[i],
+				&symbolDisplacement64,
+				symbol)
+				)
+			{
+				stackResult.symbolName = symbol->Name;
+			}
+			else
+			{
+				stackResult.symbolName = "unknow...";
+			}
+		}
+		if (module)
+		{
+			IMAGEHLP_MODULE64 imageHelpModule;
+			imageHelpModule.SizeOfStruct = sizeof(imageHelpModule);
+
+			if (::SymGetModuleInfo64(hProcess, trace[i], &imageHelpModule))
+			{
+				stackResult.module = string(imageHelpModule.ImageName, check_file_name(imageHelpModule.ImageName));
+				memset(imageHelpModule.ImageName, 0, stackResult.module.size() + 1);
 			}
 		}
 		imageList.push_back(std::move(stackResult));
