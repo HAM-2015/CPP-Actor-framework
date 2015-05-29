@@ -4,7 +4,6 @@
 #include <boost/asio/high_resolution_timer.hpp>
 #include "actor_framework.h"
 #include "actor_stack.h"
-#include "wrapped_no_params_handler.h"
 
 typedef boost::coroutines::coroutine<void>::pull_type actor_pull_type;
 typedef boost::coroutines::coroutine<void>::push_type actor_push_type;
@@ -179,9 +178,8 @@ actor_handle child_actor_handle::get_actor()
 	return _param._actor;
 }
 
-actor_handle child_actor_handle::peel()
+void child_actor_handle::peel()
 {
-	actor_handle r = _param._actor;
 	if (_param._actor)
 	{
 		assert(_param._actor->parent_actor()->_strand->running_in_this_thread());
@@ -191,7 +189,6 @@ actor_handle child_actor_handle::peel()
 		_param._actor->parent_actor()->_childActorList.erase(_param._actorIt);
 		_param._actor.reset();
 	}
-	return r;
 }
 
 child_actor_handle::ptr child_actor_handle::make_ptr()
@@ -881,7 +878,7 @@ void my_actor::child_actors_force_quit(const list<child_actor_handle::ptr>& acto
 {
 	assert_enter();
 	my_actor::quit_guard qg(this);
-	actor_msg_handle<child_actor_handle::ptr> amh;
+	actor_msg_handle<> amh;
 	auto h = make_msg_notifer(amh);
 	for (auto it = actorHandles.begin(); it != actorHandles.end(); it++)
 	{
@@ -891,16 +888,20 @@ void my_actor::child_actors_force_quit(const list<child_actor_handle::ptr>& acto
 		actor_handle actor = actorHandle->_param._actor;
 		if (actor->self_strand() == _strand)
 		{
-			actor->force_quit([h, actorHandle](bool){h(actorHandle); });
+			actor->force_quit([h](bool){h(); });
 		} 
 		else
 		{
-			actor->notify_quit([h, actorHandle](bool){h(actorHandle); });
+			actor->notify_quit([h](bool){h(); });
 		}
 	}
 	for (size_t i = actorHandles.size(); i > 0; i--)
 	{
-		wait_msg(amh)->peel();
+		wait_msg(amh);
+	}
+	for (auto it = actorHandles.begin(); it != actorHandles.end(); it++)
+	{
+		(*it)->peel();
 	}
 	close_msg_notifer(amh);
 }
@@ -1572,7 +1573,7 @@ void my_actor::actors_force_quit(const list<actor_handle>& anotherActors)
 	auto h = make_msg_notifer(amh);
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
 	{
-		(*it)->notify_quit(wrap_no_params(h));
+		(*it)->notify_quit([h](bool){h(); });
 	}
 	for (size_t i = anotherActors.size(); i > 0; i--)
 	{
@@ -1602,7 +1603,8 @@ bool my_actor::timed_actor_wait_quit(int tm, actor_handle anotherActor)
 	assert_enter();
 	assert(anotherActor);
 	actor_trig_handle<> ath;
-	anotherActor->append_quit_callback(wrap_no_params(make_trig_notifer(ath)));
+	auto h = make_trig_notifer(ath);
+	anotherActor->append_quit_callback([h](bool){h(); });
 	return timed_wait_trig(tm, ath);
 }
 

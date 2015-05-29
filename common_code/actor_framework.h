@@ -1694,7 +1694,7 @@ public:
 	static ptr make_ptr();
 	bool empty();
 private:
-	actor_handle peel();
+	void peel();
 	void* operator new(size_t s);
 public:
 	void operator delete(void* p);
