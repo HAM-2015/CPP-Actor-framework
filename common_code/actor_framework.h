@@ -1808,6 +1808,7 @@ class my_actor
 				for_each(_msgPumpList[i]->begin(), _msgPumpList[i]->end(), [&](const std::shared_ptr<pck_base>& p){p->_amutex.quited_lock(self); });
 				for_each(_msgPumpList[i]->begin(), _msgPumpList[i]->end(), [](const std::shared_ptr<pck_base>& p){p->close(); });
 				for_each(_msgPumpList[i]->begin(), _msgPumpList[i]->end(), [&](const std::shared_ptr<pck_base>& p){p->_amutex.quited_unlock(self); });
+				_msgPumpList[i]->clear();
 			}
 		}
 
@@ -1983,7 +1984,6 @@ public:
 	@brief 中断当前时间片，等到下次被调度(因为Actor是非抢占式调度，当有占用时间片较长的逻辑时，适当使用yield分割时间片)
 	*/
 	__yield_interrupt void yield();
-	__yield_interrupt void yield_guard();
 
 	/*!
 	@brief 调用disable_auto_make_timer后，使用这个打开当前Actor定时器
@@ -3927,14 +3927,14 @@ private:
 	size_t _childOverCount;///<子Actor退出时计数
 	size_t _childSuspendResumeCount;///<子Actor挂起/恢复计数
 	size_t _timerCount;//定时器计数
-	std::weak_ptr<my_actor> _parentActor;///<父Actor
 	main_func _mainFunc;///<Actor入口
 	msg_list_shared_alloc<suspend_resume_option> _suspendResumeQueue;///<挂起/恢复操作队列
 	msg_list_shared_alloc<std::function<void(bool)> > _exitCallback;///<Actor结束后的回调函数，强制退出返回false，正常退出返回true
 	msg_list_shared_alloc<std::function<void()> > _quitHandlerList;///<Actor退出时强制调用的函数，后注册的先执行
-	msg_list_shared_alloc<actor_handle> _childActorList;///<子Actor集合
+	msg_list_shared_alloc<actor_handle> _childActorList;///<子Actor集合，子Actor都退出后，父Actor才能退出
 	msg_pool_status _msgPoolStatus;//消息池列表
 	timer_pck* _timer;///<定时器
+	actor_handle _parentActor;///<父Actor，子Actor都析构后，父Actor才能析构
 	std::weak_ptr<my_actor> _weakThis;
 #ifdef CHECK_SELF
 	msg_map<void*, my_actor*>::iterator _btIt;

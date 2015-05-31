@@ -1101,14 +1101,6 @@ void my_actor::sleep_guard(int ms)
 void my_actor::yield()
 {
 	assert_enter();
-	actor_handle shared_this = shared_from_this();
-	_strand->post([shared_this]{shared_this->run_one(); });
-	push_yield();
-}
-
-void my_actor::yield_guard()
-{
-	assert_enter();
 	quit_guard qg(this);
 	actor_handle lock_this = shared_from_this();
 	_strand->post([this]{run_one(); });
@@ -1117,7 +1109,7 @@ void my_actor::yield_guard()
 
 actor_handle my_actor::parent_actor()
 {
-	return _parentActor.lock();
+	return _parentActor;
 }
 
 const msg_list_shared_alloc<actor_handle>& my_actor::child_actors()

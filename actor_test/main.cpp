@@ -244,7 +244,7 @@ void perfor_test(my_actor* self, ios_proxy& ios)
 				while (true)
 				{
 					count[i]++;
-					self->sleep(0);
+					self->yield();
 				}
 			}, stackSize);
 			childList.push_front(newactor);
