@@ -926,13 +926,12 @@ bool my_actor::timed_child_actor_wait_quit(int tm, child_actor_handle& actorHand
 	{
 		assert(actorHandle.get_actor());
 		assert(actorHandle.get_actor()->parent_actor()->self_id() == self_id());
-		if (timed_actor_wait_quit(tm, actorHandle.get_actor()))
+		if (!timed_actor_wait_quit(tm, actorHandle.get_actor()))
 		{
-			actorHandle._norQuit = !actorHandle.get_actor()->_isForce;
-			actorHandle.peel();
-			return true;
-		} 
-		return false;
+			return false;
+		}
+		actorHandle._norQuit = !actorHandle.get_actor()->_isForce;
+		actorHandle.peel();
 	}
 	return true;
 }
