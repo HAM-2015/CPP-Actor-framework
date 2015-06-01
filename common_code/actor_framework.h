@@ -66,34 +66,26 @@ struct msg_param
 	typedef ref_ex<T0, T1, T2, T3> ref_type;
 	typedef const_ref_ex<T0, T1, T2, T3> const_ref_type;
 
-	msg_param()
-	{
-
-	}
-
 	msg_param(const T0& p0, const T1& p1, const T2& p2, const T3& p3)
 		:_res0(p0), _res1(p1), _res2(p2), _res3(p3)
 	{
 
 	}
 
-	msg_param(const const_ref_type& rp)
+	msg_param(const_ref_type& rp)
 		:_res0(rp._p0), _res1(rp._p1), _res2(rp._p2), _res3(rp._p3)
 	{
 
 	}
 
 	msg_param(ref_type& s)
+		:_res0(std::move(s._p0)), _res1(std::move(s._p1)), _res2(std::move(s._p2)), _res3(std::move(s._p3))
 	{
-		move_from(s);
 	}
 
 	msg_param(msg_param&& s)
+		:_res0(std::move(s._res0)), _res1(std::move(s._res1)), _res2(std::move(s._res2)), _res3(std::move(s._res3))
 	{
-		_res0 = std::move(s._res0);
-		_res1 = std::move(s._res1);
-		_res2 = std::move(s._res2);
-		_res3 = std::move(s._res3);
 	}
 
 	void operator =(msg_param&& s)
@@ -112,7 +104,7 @@ struct msg_param
 		dst._p3 = std::move(_res3);
 	}
 
-	void save_from(const const_ref_type& rp)
+	void save_from(const_ref_type& rp)
 	{
 		_res0 = rp._p0;
 		_res1 = rp._p1;
@@ -140,33 +132,26 @@ struct msg_param<T0, T1, T2, void>
 	typedef ref_ex<T0, T1, T2> ref_type;
 	typedef const_ref_ex<T0, T1, T2> const_ref_type;
 
-	msg_param()
-	{
-
-	}
-
 	msg_param(const T0& p0, const T1& p1, const T2& p2)
 		:_res0(p0), _res1(p1), _res2(p2)
 	{
 
 	}
 
-	msg_param(const const_ref_type& rp)
+	msg_param(const_ref_type& rp)
 		:_res0(rp._p0), _res1(rp._p1), _res2(rp._p2)
 	{
 
 	}
 
-	msg_param(msg_param&& s)
+	msg_param(ref_type& s)
+		:_res0(std::move(s._p0)), _res1(std::move(s._p1)), _res2(std::move(s._p2))
 	{
-		_res0 = std::move(s._res0);
-		_res1 = std::move(s._res1);
-		_res2 = std::move(s._res2);
 	}
 
-	msg_param(ref_type& s)
+	msg_param(msg_param&& s)
+		:_res0(std::move(s._res0)), _res1(std::move(s._res1)), _res2(std::move(s._res2))
 	{
-		move_from(s);
 	}
 
 	void operator =(msg_param&& s)
@@ -183,7 +168,7 @@ struct msg_param<T0, T1, T2, void>
 		dst._p2 = std::move(_res2);
 	}
 
-	void save_from(const const_ref_type& rp)
+	void save_from(const_ref_type& rp)
 	{
 		_res0 = rp._p0;
 		_res1 = rp._p1;
@@ -208,32 +193,26 @@ struct msg_param<T0, T1, void, void>
 	typedef ref_ex<T0, T1> ref_type;
 	typedef const_ref_ex<T0, T1> const_ref_type;
 
-	msg_param()
-	{
-
-	}
-
 	msg_param(const T0& p0, const T1& p1)
 		:_res0(p0), _res1(p1)
 	{
 
 	}
 
-	msg_param(const const_ref_type& rp)
+	msg_param(const_ref_type& rp)
 		:_res0(rp._p0), _res1(rp._p1)
 	{
 
 	}
 
-	msg_param(msg_param&& s)
+	msg_param(ref_type& s)
+		:_res0(std::move(s._p0)), _res1(std::move(s._p1))
 	{
-		_res0 = std::move(s._res0);
-		_res1 = std::move(s._res1);
 	}
 
-	msg_param(ref_type& s)
+	msg_param(msg_param&& s)
+		:_res0(std::move(s._res0)), _res1(std::move(s._res1))
 	{
-		move_from(s);
 	}
 
 	void operator =(msg_param&& s)
@@ -248,7 +227,7 @@ struct msg_param<T0, T1, void, void>
 		dst._p1 = std::move(_res1);
 	}
 
-	void save_from(const const_ref_type& rp)
+	void save_from(const_ref_type& rp)
 	{
 		_res0 = rp._p0;
 		_res1 = rp._p1;
@@ -270,31 +249,26 @@ struct msg_param<T0, void, void, void>
 	typedef ref_ex<T0> ref_type;
 	typedef const_ref_ex<T0> const_ref_type;
 
-	msg_param()
-	{
-
-	}
-
 	msg_param(const T0& p0)
 		:_res0(p0)
 	{
 
 	}
 
-	msg_param(const const_ref_type& rp)
+	msg_param(const_ref_type& rp)
 		:_res0(rp._p0)
 	{
 
 	}
 
-	msg_param(msg_param&& s)
+	msg_param(ref_type& s)
+		:_res0(std::move(s._p0))
 	{
-		_res0 = std::move(s._res0);
 	}
 
-	msg_param(ref_type& s)
+	msg_param(msg_param&& s)
+		:_res0(std::move(s._res0))
 	{
-		move_from(s);
 	}
 
 	void operator =(msg_param&& s)
@@ -307,7 +281,7 @@ struct msg_param<T0, void, void, void>
 		dst._p0 = std::move(_res0);
 	}
 
-	void save_from(const const_ref_type& rp)
+	void save_from(const_ref_type& rp)
 	{
 		_res0 = rp._p0;
 	}
@@ -510,6 +484,22 @@ public:
 		});
 	}
 
+	template <typename PT0>
+	void operator()(PT0&& p0) const
+	{
+		auto& msgHandle_ = _msgHandle;
+		auto& hostActor_ = _hostActor;
+		auto& closed_ = _closed;
+		_hostActor->self_strand()->post([=]
+		{
+			if (!(*closed_))
+			{
+				auto lockActor = hostActor_;
+				msgHandle_->push_msg(ref_ex<PT0>((PT0&)p0));
+			}
+		});
+	}
+
 	void operator()() const
 	{
 		auto& msgHandle_ = _msgHandle;
@@ -607,6 +597,8 @@ private:
 	bool read_msg(dst_receiver& dst)
 	{
 		assert(_strand->running_in_this_thread());
+		assert(_closed);
+		assert(!*_closed);
 		if (!_msgBuff.empty())
 		{
 			dst.move_from(_msgBuff.front());
@@ -683,6 +675,8 @@ private:
 	bool read_msg()
 	{
 		assert(_strand->running_in_this_thread());
+		assert(_closed);
+		assert(!*_closed);
 		if (_msgCount)
 		{
 			_msgCount--;
@@ -797,6 +791,22 @@ public:
 		});
 	}
 
+	template <typename PT0>
+	void operator()(PT0&& p0) const
+	{
+		auto& trigHandle_ = _trigHandle;
+		auto& hostActor_ = _hostActor;
+		auto& closed_ = _closed;
+		_hostActor->self_strand()->post([=]
+		{
+			if (!(*closed_))
+			{
+				auto lockActor = hostActor_;
+				trigHandle_->push_msg(ref_ex<PT0>((PT0&)p0));
+			}
+		});
+	}
+
 	void operator()() const
 	{
 		auto& trigHandle_ = _trigHandle;
@@ -891,6 +901,7 @@ private:
 	bool read_msg(dst_receiver& dst)
 	{
 		assert(_strand->running_in_this_thread());
+		assert(_closed);
 		if (_hasMsg)
 		{
 			_hasMsg = false;
@@ -898,6 +909,7 @@ private:
 			((msg_type*)_msgBuff)->~msg_type();
 			return true;
 		}
+		assert(!*_closed);
 		_dstRec = &dst;
 		_waiting = true;
 		return false;
@@ -977,11 +989,13 @@ private:
 	bool read_msg()
 	{
 		assert(_strand->running_in_this_thread());
+		assert(_closed);
 		if (_hasMsg)
 		{
 			_hasMsg = false;
 			return true;
 		}
+		assert(!*_closed);
 		_waiting = true;
 		return false;
 	}
@@ -1547,6 +1561,13 @@ public:
 		_msgPool->push_msg(std::move(msg_param<PT0>(p0)), _hostActor);
 	}
 
+	template <typename PT0>
+	void operator()(PT0&& p0) const
+	{
+		assert(!empty());
+		_msgPool->push_msg(std::move(msg_param<PT0>(ref_ex<PT0>(p0))), _hostActor);
+	}
+
 	void operator()() const
 	{
 		assert(!empty());
@@ -1680,7 +1701,7 @@ private:
 		bool _isCopy;
 #endif
 		actor_handle _actor;///<本Actor
-		msg_list<actor_handle>::iterator _actorIt;///<保存在父Actor集合中的节点
+		msg_list_shared_alloc<actor_handle>::iterator _actorIt;///<保存在父Actor集合中的节点
 	};
 private:
 	child_actor_handle(child_actor_handle&);
@@ -1700,8 +1721,8 @@ public:
 	void operator delete(void* p);
 private:
 	DEBUG_OPERATION(msg_list_shared_alloc<std::function<void()> >::iterator _qh);
-	bool _norQuit;///<是否正常退出
 	bool _quited;///<检测是否已经关闭
+	actor_trig_handle<> _quiteAth;
 	child_actor_param _param;
 };
 //////////////////////////////////////////////////////////////////////////
@@ -1828,7 +1849,7 @@ class my_actor
 	friend _actor_mutex;
 public:
 	/*!
-	@brief 在{}一定范围内锁定当前Actor不被强制退出
+	@brief 在{}一定范围内锁定当前Actor不被强制退出，如果锁定期间被挂起，将无法等待其退出
 	*/
 	class quit_guard
 	{
@@ -1930,14 +1951,14 @@ public:
 	/*!
 	@brief 强制终止一个子Actor
 	*/
-	__yield_interrupt bool child_actor_force_quit(child_actor_handle& actorHandle);
+	__yield_interrupt void child_actor_force_quit(child_actor_handle& actorHandle);
 	__yield_interrupt void child_actors_force_quit(const list<child_actor_handle::ptr>& actorHandles);
 
 	/*!
 	@brief 等待一个子Actor完成后返回
 	@return 正常退出的返回true，否则false
 	*/
-	__yield_interrupt bool child_actor_wait_quit(child_actor_handle& actorHandle);
+	__yield_interrupt void child_actor_wait_quit(child_actor_handle& actorHandle);
 
 	__yield_interrupt bool timed_child_actor_wait_quit(int tm, child_actor_handle& actorHandle);
 
@@ -1970,8 +1991,8 @@ public:
 	/*!
 	@brief 创建另一个Actor，Actor执行完成后返回
 	*/
-	__yield_interrupt bool run_child_actor_complete(shared_strand actorStrand, const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
-	__yield_interrupt bool run_child_actor_complete(const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
+	__yield_interrupt void run_child_actor_complete(shared_strand actorStrand, const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
+	__yield_interrupt void run_child_actor_complete(const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
 
 	/*!
 	@brief 延时等待，Actor内部禁止使用操作系统API Sleep()
@@ -1984,6 +2005,7 @@ public:
 	@brief 中断当前时间片，等到下次被调度(因为Actor是非抢占式调度，当有占用时间片较长的逻辑时，适当使用yield分割时间片)
 	*/
 	__yield_interrupt void yield();
+	__yield_interrupt void yield_guard();
 
 	/*!
 	@brief 调用disable_auto_make_timer后，使用这个打开当前Actor定时器
@@ -2320,6 +2342,16 @@ private:
 		}
 		return true;
 	}
+
+	template <typename AMH, typename DST>
+	void _wait_msg(AMH& amh, DST& dstRec)
+	{
+		assert(amh._hostActor && amh._hostActor->self_id() == self_id());
+		if (!amh.read_msg(dstRec))
+		{
+			push_yield();
+		}
+	}
 public:
 	/*!
 	@brief 从消息句柄中提取消息
@@ -2330,7 +2362,6 @@ public:
 	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1, T2, T3>& amh, T0& r0, T1& r1, T2& r2, T3& r3)
 	{
 		assert_enter();
-		assert(amh._closed && !(*amh._closed));
 		ref_ex<T0, T1, T2, T3> dstRef(r0, r1, r2, r3);
 		dst_receiver_ref<T0, T1, T2, T3> dstRec(dstRef);
 		return _timed_wait_msg(amh, dstRec, tm);
@@ -2340,7 +2371,6 @@ public:
 	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1, T2>& amh, T0& r0, T1& r1, T2& r2)
 	{
 		assert_enter();
-		assert(amh._closed && !(*amh._closed));
 		ref_ex<T0, T1, T2> dstRef(r0, r1, r2);
 		dst_receiver_ref<T0, T1, T2> dstRec(dstRef);
 		return _timed_wait_msg(amh, dstRec, tm);
@@ -2350,7 +2380,6 @@ public:
 	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1>& amh, T0& r0, T1& r1)
 	{
 		assert_enter();
-		assert(amh._closed && !(*amh._closed));
 		ref_ex<T0, T1> dstRef(r0, r1);
 		dst_receiver_ref<T0, T1> dstRec(dstRef);
 		return _timed_wait_msg(amh, dstRec, tm);
@@ -2360,7 +2389,6 @@ public:
 	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0>& amh, T0& r0)
 	{
 		assert_enter();
-		assert(amh._closed && !(*amh._closed));
 		ref_ex<T0> dstRef(r0);
 		dst_receiver_ref<T0> dstRec(dstRef);
 		return _timed_wait_msg(amh, dstRec, tm);
@@ -2372,7 +2400,6 @@ public:
 	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1, T2, T3>& amh, const Handler& h)
 	{
 		assert_enter();
-		assert(amh._closed && !(*amh._closed));
 		dst_receiver_buff<T0, T1, T2, T3>::dst_buff dstBuff;
 		dst_receiver_buff<T0, T1, T2, T3> dstRec(dstBuff);
 		if (_timed_wait_msg(amh, dstRec, tm))
@@ -2388,7 +2415,6 @@ public:
 	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1, T2>& amh, const Handler& h)
 	{
 		assert_enter();
-		assert(amh._closed && !(*amh._closed));
 		dst_receiver_buff<T0, T1, T2>::dst_buff dstBuff;
 		dst_receiver_buff<T0, T1, T2> dstRec(dstBuff);
 		if (_timed_wait_msg(amh, dstRec, tm))
@@ -2404,7 +2430,6 @@ public:
 	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1>& amh, const Handler& h)
 	{
 		assert_enter();
-		assert(amh._closed && !(*amh._closed));
 		dst_receiver_buff<T0, T1>::dst_buff dstBuff;
 		dst_receiver_buff<T0, T1> dstRec(dstBuff);
 		if (_timed_wait_msg(amh, dstRec, tm))
@@ -2420,7 +2445,6 @@ public:
 	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0>& amh, const Handler& h)
 	{
 		assert_enter();
-		assert(amh._closed && !(*amh._closed));
 		dst_receiver_buff<T0>::dst_buff dstBuff;
 		dst_receiver_buff<T0> dstRec(dstBuff);
 		if (_timed_wait_msg(amh, dstRec, tm))
@@ -2436,7 +2460,6 @@ public:
 	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<>& amh, const Handler& h)
 	{
 		assert_enter();
-		assert(amh._closed && !(*amh._closed));
 		if (timed_wait_msg(tm, amh))
 		{
 			h();
@@ -2476,9 +2499,11 @@ public:
 	template <typename T0>
 	__yield_interrupt T0 wait_msg(actor_msg_handle<T0>& amh)
 	{
-		T0 r0;
-		timed_wait_msg(-1, amh, r0);
-		return r0;
+		assert_enter();
+		dst_receiver_buff<T0>::dst_buff dstBuff;
+		dst_receiver_buff<T0> dstRec(dstBuff);
+		_wait_msg(amh, dstRec);
+		return std::move((T0&)dstBuff.get()._res0);
 	}
 
 	__yield_interrupt void wait_msg(actor_msg_handle<>& amh);
@@ -2556,7 +2581,6 @@ public:
 	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0, T1, T2, T3>& ath, T0& r0, T1& r1, T2& r2, T3& r3)
 	{
 		assert_enter();
-		assert(ath._closed && !(*ath._closed));
 		ref_ex<T0, T1, T2, T3> dstRef(r0, r1, r2, r3);
 		dst_receiver_ref<T0, T1, T2, T3> dstRec(dstRef);
 		return _timed_wait_msg(ath, dstRec, tm);
@@ -2566,7 +2590,6 @@ public:
 	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0, T1, T2>& ath, T0& r0, T1& r1, T2& r2)
 	{
 		assert_enter();
-		assert(ath._closed && !(*ath._closed));
 		ref_ex<T0, T1, T2> dstRef(r0, r1, r2);
 		dst_receiver_ref<T0, T1, T2> dstRec(dstRef);
 		return _timed_wait_msg(ath, dstRec, tm);
@@ -2576,7 +2599,6 @@ public:
 	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0, T1>& ath, T0& r0, T1& r1)
 	{
 		assert_enter();
-		assert(ath._closed && !(*ath._closed));
 		ref_ex<T0, T1> dstRef(r0, r1);
 		dst_receiver_ref<T0, T1> dstRec(dstRef);
 		return _timed_wait_msg(ath, dstRec, tm);
@@ -2586,7 +2608,6 @@ public:
 	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0>& ath, T0& r0)
 	{
 		assert_enter();
-		assert(ath._closed && !(*ath._closed));
 		ref_ex<T0> dstRef(r0);
 		dst_receiver_ref<T0> dstRec(dstRef);
 		return _timed_wait_msg(ath, dstRec, tm);
@@ -2598,7 +2619,6 @@ public:
 	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0, T1, T2, T3>& ath, const Handler& h)
 	{
 		assert_enter();
-		assert(ath._closed && !(*ath._closed));
 		dst_receiver_buff<T0, T1, T2, T3>::dst_buff dstBuff;
 		dst_receiver_buff<T0, T1, T2, T3> dstRec(dstBuff);
 		if (_timed_wait_msg(ath, dstRec, tm))
@@ -2614,7 +2634,6 @@ public:
 	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0, T1, T2>& ath, const Handler& h)
 	{
 		assert_enter();
-		assert(ath._closed && !(*ath._closed));
 		dst_receiver_buff<T0, T1, T2>::dst_buff dstBuff;
 		dst_receiver_buff<T0, T1, T2> dstRec(dstBuff);
 		if (_timed_wait_msg(ath, dstRec, tm))
@@ -2630,7 +2649,6 @@ public:
 	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0, T1>& ath, const Handler& h)
 	{
 		assert_enter();
-		assert(ath._closed && !(*ath._closed));
 		dst_receiver_buff<T0, T1>::dst_buff dstBuff;
 		dst_receiver_buff<T0, T1> dstRec(dstBuff);
 		if (_timed_wait_msg(ath, dstRec, tm))
@@ -2646,7 +2664,6 @@ public:
 	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0>& ath, const Handler& h)
 	{
 		assert_enter();
-		assert(ath._closed && !(*ath._closed));
 		dst_receiver_buff<T0>::dst_buff dstBuff;
 		dst_receiver_buff<T0> dstRec(dstBuff);
 		if (_timed_wait_msg(ath, dstRec, tm))
@@ -2662,7 +2679,6 @@ public:
 	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<>& ath, const Handler& h)
 	{
 		assert_enter();
-		assert(ath._closed && !(*ath._closed));
 		if (timed_wait_trig(tm, ath))
 		{
 			h();
@@ -2701,9 +2717,11 @@ public:
 	template <typename T0>
 	__yield_interrupt T0 wait_trig(actor_trig_handle<T0>& ath)
 	{
-		T0 r0;
-		timed_wait_trig(-1, ath, r0);
-		return r0;
+		assert_enter();
+		dst_receiver_buff<T0>::dst_buff dstBuff;
+		dst_receiver_buff<T0> dstRec(dstBuff);
+		_wait_msg(ath, dstRec);
+		return std::move((T0&)dstBuff.get()._res0);
 	}
 
 	__yield_interrupt void wait_trig(actor_trig_handle<>& ath);
@@ -3470,6 +3488,29 @@ private:
 		}
 		return true;
 	}
+
+	template <typename PUMP, typename DST>
+	void _pump_msg(const PUMP& pump, DST& dstRec, bool checkDis)
+	{
+		assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
+		if (!pump->read_msg(dstRec))
+		{
+			if (checkDis && pump->isDisconnected())
+			{
+				pump->_waiting = false;
+				pump->_dstRec = NULL;
+				throw pump_disconnected_exception();
+			}
+			pump->_checkDis = checkDis;
+			push_yield();
+			if (pump->_checkDis)
+			{
+				assert(checkDis);
+				pump->_checkDis = false;
+				throw pump_disconnected_exception();
+			}
+		}
+	}
 public:
 
 	/*!
@@ -3618,9 +3659,11 @@ public:
 	template <typename T0>
 	__yield_interrupt T0 pump_msg(msg_pump<T0>& pump, bool checkDis = false)
 	{
-		T0 r0;
-		timed_pump_msg(-1, &pump, r0, checkDis);
-		return r0;
+		assert_enter();
+		dst_receiver_buff<T0>::dst_buff dstBuff;
+		dst_receiver_buff<T0> dstRec(dstBuff);
+		_pump_msg(&pump, dstRec, checkDis);
+		return std::move((T0&)dstBuff.get()._res0);
 	}
 
 	__yield_interrupt void pump_msg(const msg_pump<>::handle& pump, bool checkDis = false);
@@ -3785,7 +3828,7 @@ public:
 	/*!
 	@brief 强制退出该Actor，完成后回调
 	*/
-	void notify_quit(const std::function<void (bool)>& h);
+	void notify_quit(const std::function<void ()>& h);
 
 	/*!
 	@brief Actor是否已经开始运行
@@ -3796,6 +3839,11 @@ public:
 	@brief Actor是否已经退出
 	*/
 	bool is_quited();
+
+	/*!
+	@brief 是否是强制退出（在Actor确认退出后调用）
+	*/
+	bool is_force();
 
 	/*!
 	@brief 是否在Actor中
@@ -3838,12 +3886,12 @@ public:
 	/*!
 	@brief 等待Actor退出，在Actor所依赖的ios无关线程中使用
 	*/
-	bool outside_wait_quit();
+	void outside_wait_quit();
 
 	/*!
 	@brief 添加一个Actor结束回调
 	*/
-	void append_quit_callback(const std::function<void (bool)>& h);
+	void append_quit_callback(const std::function<void ()>& h);
 
 	/*!
 	@brief 启动一堆Actor
@@ -3853,13 +3901,13 @@ public:
 	/*!
 	@brief 强制退出另一个Actor，并且等待完成
 	*/
-	__yield_interrupt bool actor_force_quit(actor_handle anotherActor);
+	__yield_interrupt void actor_force_quit(actor_handle anotherActor);
 	__yield_interrupt void actors_force_quit(const list<actor_handle>& anotherActors);
 
 	/*!
 	@brief 等待另一个Actor结束后返回
 	*/
-	__yield_interrupt bool actor_wait_quit(actor_handle anotherActor);
+	__yield_interrupt void actor_wait_quit(actor_handle anotherActor);
 	__yield_interrupt void actors_wait_quit(const list<actor_handle>& anotherActors);
 	__yield_interrupt bool timed_actor_wait_quit(int tm, actor_handle anotherActor);
 
@@ -3890,7 +3938,7 @@ private:
 	void suspend_timer();
 	void resume_timer();
 	void start_run();
-	void force_quit(const std::function<void (bool)>& h);
+	void force_quit(const std::function<void ()>& h);
 	void suspend(const std::function<void ()>& h);
 	void resume(const std::function<void ()>& h);
 	void suspend();
@@ -3929,7 +3977,7 @@ private:
 	size_t _timerCount;//定时器计数
 	main_func _mainFunc;///<Actor入口
 	msg_list_shared_alloc<suspend_resume_option> _suspendResumeQueue;///<挂起/恢复操作队列
-	msg_list_shared_alloc<std::function<void(bool)> > _exitCallback;///<Actor结束后的回调函数，强制退出返回false，正常退出返回true
+	msg_list_shared_alloc<std::function<void()> > _exitCallback;///<Actor结束后的回调函数，强制退出返回false，正常退出返回true
 	msg_list_shared_alloc<std::function<void()> > _quitHandlerList;///<Actor退出时强制调用的函数，后注册的先执行
 	msg_list_shared_alloc<actor_handle> _childActorList;///<子Actor集合，子Actor都退出后，父Actor才能退出
 	msg_pool_status _msgPoolStatus;//消息池列表
@@ -3941,8 +3989,7 @@ private:
 	msg_map<void*, my_actor*>::iterator _topIt;
 #endif
 	static msg_list<my_actor::suspend_resume_option>::shared_node_alloc _suspendResumeQueueAll;
-	static msg_list<std::function<void(bool)> >::shared_node_alloc _exitCallbackAll;
-	static msg_list<std::function<void()> >::shared_node_alloc _quitHandlerListAll;
+	static msg_list<std::function<void()> >::shared_node_alloc _quitExitCallbackAll;
 	static msg_list<actor_handle>::shared_node_alloc _childActorListAll;
 };
 

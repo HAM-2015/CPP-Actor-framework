@@ -123,7 +123,7 @@ struct passing_test
 		std::function<void(std::shared_ptr<count>)> _cb;
 	};
 
-	passing_test(int id);
+	explicit passing_test(int id);
 	~passing_test();
 	passing_test(int id, const std::function<void(std::shared_ptr<count>)>& cb);
 	passing_test(const passing_test& s);

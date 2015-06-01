@@ -67,7 +67,6 @@ void ios_proxy::run(size_t threadNum)
 						}
 					}
 					_runCount += _ios.run();
-					assert(!_runLock);
 				}
 				catch (msg_data::pool_memory_exception&)
 				{

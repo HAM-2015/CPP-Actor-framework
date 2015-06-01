@@ -31,7 +31,7 @@ void check_key_test(my_actor* self, int id)
 	while (true)
 	{//按键按下后，检测弹起，1000ms内没有弹起就是超时错误
 		check_key_down(self, id);//检测按下
-		child_actor_handle checkUp = self->create_child_actor([&](my_actor* self){check_key_up(self, id); }, 24 kB);//创建一个检测弹起的子Actor
+		child_actor_handle checkUp = self->create_child_actor([&](my_actor* self){check_key_up(self, id); });//创建一个检测弹起的子Actor
 		self->child_actor_run(checkUp);//开始运行子Actor
 		if (self->timed_child_actor_wait_quit(1000, checkUp))//正常完成返回true，超时返回false
 		{
@@ -110,18 +110,18 @@ void check_two_down(my_actor* self, int dt, int id1, int id2)
 			bool st2 = false;
 			child_actor_handle up1 = self->create_child_actor([&](my_actor* self){check_both_up(self, id1, st1, st2); });
 			child_actor_handle up2 = self->create_child_actor([&](my_actor* self){check_both_up(self, id2, st2, st1); });
-			actor_trig_handle<bool> ath;
+			actor_trig_handle<> ath;
 			auto nh = self->make_trig_notifer(ath);
 			up1.get_actor()->append_quit_callback(nh);
 			up2.get_actor()->append_quit_callback(nh);
 			self->child_actor_run(up1);
 			self->child_actor_run(up2);
-			LAMBDA_REF3(ref3, self, up1, up2);
-			if (!self->timed_wait_trig(3000, ath, [&ref3](bool)
+			if (self->timed_wait_trig(3000, ath))
 			{
-				ref3.self->child_actor_force_quit(ref3.up1);
-				ref3.self->child_actor_force_quit(ref3.up2);
-			}))
+				self->child_actor_force_quit(up1);
+				self->child_actor_force_quit(up2);
+			}
+			else
 			{
 				printf("退出 check_two_down\n");
 				self->child_actor_force_quit(up1);
@@ -133,25 +133,20 @@ void check_two_down(my_actor* self, int dt, int id1, int id2)
 		{
 			child_actor_handle check1 = self->create_child_actor([&](my_actor* self){check_key_down(self, id1); });
 			child_actor_handle check2 = self->create_child_actor([&](my_actor* self){check_key_down(self, id2); });
-			actor_trig_handle<actor_handle, bool> ath;
+			actor_trig_handle<child_actor_handle*> ath;
 			auto nh = self->make_trig_notifer(ath);
-			check1.get_actor()->append_quit_callback([&](bool ok){nh(check2.get_actor(), ok); });
-			check2.get_actor()->append_quit_callback([&](bool ok){nh(check1.get_actor(), ok); });
+			check1.get_actor()->append_quit_callback([&]{nh(&check2); });
+			check2.get_actor()->append_quit_callback([&]{nh(&check1); });
 			self->child_actor_run(check1);
 			self->child_actor_run(check2);
-			actor_handle ah;
-			bool ok = false;
-			self->wait_trig(ath, ah, ok);
-			self->delay_trig(dt, [&]{ah->notify_quit(); });
-			if (self->actor_wait_quit(ah))
+			if (self->timed_child_actor_wait_quit(dt, *(self->wait_trig(ath))))
 			{
 				printf("*success*\n");
-			} 
+			}
 			else
 			{
 				printf("*failure*\n");
 			}
-			self->cancel_delay_trig();
 			self->child_actor_force_quit(check1);
 			self->child_actor_force_quit(check2);
 		}
@@ -325,23 +320,21 @@ void actor_test(my_actor* self)
 		{//消费者
 			auto agentRun = [](my_actor* self)
 			{
-				auto conCmh = self->connect_msg_pump<int, int>();
-				int p0;
-				int id;
-				self->pump_msg(conCmh, p0, id);
-				printf("数据:%d 发送者:%d 接收者:%d\n", p0, id, (int)self->self_id());
+				auto conCmh = self->connect_msg_pump<passing_test>();
+				passing_test msg = self->pump_msg(*conCmh);
+				printf("数据:%d 发送者:%d 接收者:%d\n", msg._count->_id / 10000, msg._count->_id % 10000, (int)self->self_id());
 				while (true)
 				{
 					BEGIN_TRY_
 					{
-						self->pump_msg(conCmh, p0, id, true);
-						printf("数据:%d 发送者:%d 接收者:%d\n", p0, id, (int)self->self_id());
+						msg = self->pump_msg(*conCmh, true);
+						printf("数据:%d 发送者:%d 接收者:%d\n", msg._count->_id / 10000, msg._count->_id % 10000, (int)self->self_id());
 					}
 					CATCH_PUMP_DISCONNECTED
 					{
 						printf("接收者:%d 被断开\n", (int)self->self_id());//消息泵被父关闭，抛出异常
-						self->pump_msg(conCmh, p0, id);
-						printf("数据:%d 发送者:%d 接收者:%d\n", p0, id, (int)self->self_id());
+						msg = self->pump_msg(*conCmh);
+						printf("数据:%d 发送者:%d 接收者:%d\n", msg._count->_id / 10000, msg._count->_id % 10000, (int)self->self_id());
 					}
 					END_TRY_;
 				}
@@ -353,36 +346,34 @@ void actor_test(my_actor* self)
 			self->child_actor_run(agent2);
 			while (true)
 			{
-				self->msg_agent_to<int, int>(agent1);//消息由agent1代理
+				self->msg_agent_to<passing_test>(agent1);//消息由agent1代理
 				self->sleep(5000);
-				self->msg_agent_to<int, int>(agent2);//断开agent1代理，切换到agent2代理
+				self->msg_agent_to<passing_test>(agent2);//断开agent1代理，切换到agent2代理
 				self->sleep(2000);
-				//self->msg_agent_off<int, int>();//断开agent2代理
-				//self->sleep(200);
-				auto conCmh = self->connect_msg_pump<int, int>();//停止消息代理，由自己处理
+				auto conCmh = self->connect_msg_pump<passing_test>();//停止消息代理，由自己处理
 				for (int i = 0; i < 3; i++)
 				{
-					self->pump_msg<int, int>(conCmh, [self](int p0, int id)
+					self->pump_msg<passing_test>(conCmh, [self](const passing_test& msg)
 					{
-						printf("数据:%d 发送者:%d 接收者:%d\n", p0, id, (int)self->self_id());
+						printf("数据:%d 发送者:%d 接收者:%d\n", msg._count->_id / 10000, msg._count->_id % 10000, (int)self->self_id());
 					});
 				}
 			}
 		});
 		self->child_actor_run(actorConsumer);
-		auto writer = self->connect_msg_notifer_to<int, int>(actorConsumer);//连接消息到actorConsumer
+		auto writer = self->connect_msg_notifer_to<passing_test>(actorConsumer);//连接消息到actorConsumer
 		auto test_producer = [writer](my_actor* self)
 		{//生产者
 			for (int i = 0; true; i++)
 			{
-				writer(i, (int)self->self_id());
+				writer(passing_test(i*10000 + self->self_id()));
 				self->sleep(2000);
 			}
 		};
 		actorProducer1 = self->create_child_actor(test_producer);
 		actorProducer2 = self->create_child_actor(test_producer);
-//		self->child_actor_run(actorProducer1);
-//		self->child_actor_run(actorProducer2);
+		self->child_actor_run(actorProducer1);
+		self->child_actor_run(actorProducer2);
 	}
 	{
 		actor_mutex amutex(self->self_strand());

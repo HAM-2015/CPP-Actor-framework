@@ -335,7 +335,7 @@ void Csocket_testDlg::serverActor(my_actor* self, std::shared_ptr<server_param> 
 			newSess->_sessionDlg = create_mfc_actor(boost::bind(&Csocket_testDlg::newSession, this, _1, newSess));
 			newSess->_closeNtf = self->connect_msg_notifer_to(newSess->_sessionDlg);
 			auto nit = sessList.begin();
-			newSess->_sessionDlg->append_quit_callback([&sessDissonnNtf, nit](bool)
+			newSess->_sessionDlg->append_quit_callback([&sessDissonnNtf, nit]()
 			{
 				sessDissonnNtf(nit);
 			});
