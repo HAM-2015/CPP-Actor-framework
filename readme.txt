@@ -13,8 +13,11 @@ oschina url
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
+2015-06-01
+优化等待子Actor结束的性能，取消等待返回bool值.
+
 2015-05-29
-添加actor_shared_mutex，在Actor下运行的“互斥锁(可递归)”、“条件变量”、“读写锁”已备齐.
+添加actor_shared_mutex，在Actor下运行的“互斥锁(可递归)”、“条件变量”、“读写锁”已备齐，用于业务逻辑之间的同步.
 
 2015-05-25
 添加能在Actor下运行的条件变量actor_condition_variable.
