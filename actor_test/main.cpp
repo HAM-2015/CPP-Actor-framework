@@ -372,8 +372,8 @@ void actor_test(my_actor* self)
 		};
 		actorProducer1 = self->create_child_actor(test_producer);
 		actorProducer2 = self->create_child_actor(test_producer);
-		self->child_actor_run(actorProducer1);
-		self->child_actor_run(actorProducer2);
+		//self->child_actor_run(actorProducer1);
+		//self->child_actor_run(actorProducer2);
 	}
 	{
 		actor_mutex amutex(self->self_strand());

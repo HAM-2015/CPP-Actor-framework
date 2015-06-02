@@ -1037,8 +1037,6 @@ class msg_pump_base
 	friend my_actor;
 public:
 	virtual ~msg_pump_base() {};
-	virtual void clear() = 0;
-	virtual void close() = 0;
 protected:
 	bool is_quited();
 	void run_one();
@@ -1727,6 +1725,9 @@ private:
 };
 //////////////////////////////////////////////////////////////////////////
 
+/*!
+@brief Actor¶ÔÏó
+*/
 class my_actor
 {
 	struct suspend_resume_option 
@@ -2315,26 +2316,29 @@ private:
 		assert(amh._hostActor && amh._hostActor->self_id() == self_id());
 		if (!amh.read_msg(dstRec))
 		{
-			bool timeout = false;
-			if (tm >= 0)
+			if (0 != tm)
 			{
-				delay_trig(tm, [this, &timeout]
+				bool timeout = false;
+				if (tm > 0)
 				{
-					if (!_quited)
+					delay_trig(tm, [this, &timeout]
 					{
-						timeout = true;
-						pull_yield();
-					}
-				});
-			}
-			push_yield();
-			if (!timeout)
-			{
-				if (tm >= 0)
-				{
-					cancel_delay_trig();
+						if (!_quited)
+						{
+							timeout = true;
+							pull_yield();
+						}
+					});
 				}
-				return true;
+				push_yield();
+				if (!timeout)
+				{
+					if (tm > 0)
+					{
+						cancel_delay_trig();
+					}
+					return true;
+				}
 			}
 			amh._dstRec = NULL;
 			amh._waiting = false;
@@ -3453,33 +3457,36 @@ private:
 				pump->_dstRec = NULL;
 				throw pump_disconnected_exception();
 			}
-			pump->_checkDis = checkDis;
-			bool timeout = false;
-			if (tm >= 0)
+			if (0 != tm)
 			{
-				delay_trig(tm, [this, &timeout]
+				pump->_checkDis = checkDis;
+				bool timeout = false;
+				if (tm > 0)
 				{
-					if (!_quited)
+					delay_trig(tm, [this, &timeout]
 					{
-						timeout = true;
-						pull_yield();
+						if (!_quited)
+						{
+							timeout = true;
+							pull_yield();
+						}
+					});
+				}
+				push_yield();
+				if (!timeout)
+				{
+					if (tm > 0)
+					{
+						cancel_delay_trig();
 					}
-				});
-			}
-			push_yield();
-			if (!timeout)
-			{
-				if (tm >= 0)
-				{
-					cancel_delay_trig();
+					if (pump->_checkDis)
+					{
+						assert(checkDis);
+						pump->_checkDis = false;
+						throw pump_disconnected_exception();
+					}
+					return true;
 				}
-				if (pump->_checkDis)
-				{
-					assert(checkDis);
-					pump->_checkDis = false;
-					throw pump_disconnected_exception();
-				}
-				return true;
 			}
 			pump->_checkDis = false;
 			pump->_waiting = false;

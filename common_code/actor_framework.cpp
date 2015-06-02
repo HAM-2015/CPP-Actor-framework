@@ -2051,33 +2051,36 @@ bool my_actor::timed_pump_msg(int tm, const msg_pump<>::handle& pump, bool check
 			pump->_waiting = false;
 			throw pump_disconnected_exception();
 		}
-		pump->_checkDis = checkDis;
-		bool timeout = false;
-		if (tm >= 0)
+		if (0 != tm)
 		{
-			delay_trig(tm, [this, &timeout]
+			pump->_checkDis = checkDis;
+			bool timeout = false;
+			if (tm > 0)
 			{
-				if (!_quited)
+				delay_trig(tm, [this, &timeout]
 				{
-					timeout = true;
-					pull_yield();
+					if (!_quited)
+					{
+						timeout = true;
+						pull_yield();
+					}
+				});
+			}
+			push_yield();
+			if (!timeout)
+			{
+				if (tm > 0)
+				{
+					cancel_delay_trig();
 				}
-			});
-		}
-		push_yield();
-		if (!timeout)
-		{
-			if (tm >= 0)
-			{
-				cancel_delay_trig();
+				if (pump->_checkDis)
+				{
+					assert(checkDis);
+					pump->_checkDis = false;
+					throw pump_disconnected_exception();
+				}
+				return true;
 			}
-			if (pump->_checkDis)
-			{
-				assert(checkDis);
-				pump->_checkDis = false;
-				throw pump_disconnected_exception();
-			}
-			return true;
 		}
 		pump->_checkDis = false;
 		pump->_waiting = false;
@@ -2113,26 +2116,29 @@ bool my_actor::timed_wait_trig(int tm, actor_trig_handle<>& ath)
 	assert(ath._hostActor && ath._hostActor->self_id() == self_id());
 	if (!ath.read_msg())
 	{
-		bool timeout = false;
-		if (tm >= 0)
+		if (0 != tm)
 		{
-			delay_trig(tm, [this, &timeout]
+			bool timeout = false;
+			if (tm > 0)
 			{
-				if (!_quited)
+				delay_trig(tm, [this, &timeout]
 				{
-					timeout = true;
-					pull_yield();
-				}
-			});
-		}
-		push_yield();
-		if (!timeout)
-		{
-			if (tm >= 0)
-			{
-				cancel_delay_trig();
+					if (!_quited)
+					{
+						timeout = true;
+						pull_yield();
+					}
+				});
 			}
-			return true;
+			push_yield();
+			if (!timeout)
+			{
+				if (tm > 0)
+				{
+					cancel_delay_trig();
+				}
+				return true;
+			}
 		}
 		ath._waiting = false;
 		return false;
