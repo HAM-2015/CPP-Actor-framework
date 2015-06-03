@@ -25,8 +25,13 @@ typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> 
 
 #endif //end _DEBUG
 
-//∂—’ªµ◊‘§¡Ùø’º‰£¨∑¿÷π±¨’ª
-#define STACK_RESERVED_SPACE_SIZE		64
+//∂—’ªµ◊‘§¡Ùø’º‰£¨ºÏ≤‚∂—’ª“Á≥ˆ
+#if (CHECK_ACTOR_STACK) || (_DEBUG)
+#define STACK_RESERVED_SPACE_SIZE		16 kB
+#else
+#define STACK_RESERVED_SPACE_SIZE		0
+#endif
+
 //ƒ⁄¥Ê±ﬂΩÁ∂‘∆Î
 #define MEM_ALIGN(__o, __a) (((__o) + ((__a)-1)) & (((__a)-1) ^ -1))
 
@@ -623,8 +628,16 @@ public:
 		_actor._actorPush = &actorPush;
 		try
 		{
-			_actor._inActor = true;
-			_actor.push_yield();
+			{
+				_actor._yieldCount++;
+				_actor._inActor = false;
+				(*(actor_push_type*)_actor._actorPush)();
+				if (_actor._quited)
+				{
+					throw force_quit_exception();
+				}
+				_actor._inActor = true;
+			}
 			assert(_actor._strand->running_in_this_thread());
 			_actor._mainFunc(&_actor);
 			_actor._quited = true;
@@ -746,12 +759,12 @@ my_actor::~my_actor()
 	s_stackLineMutex.unlock();
 #endif
 #if (CHECK_ACTOR_STACK) || (_DEBUG)
-	if (*(long long*)((unsigned char*)_stackTop-_stackSize+STACK_RESERVED_SPACE_SIZE-sizeof(long long)) != 0xFEFEFEFEFEFEFEFE)
+	unsigned char* bt = (unsigned char*)_stackTop - _stackSize - STACK_RESERVED_SPACE_SIZE;
+	size_t i = 0;
+	for (; i < STACK_RESERVED_SPACE_SIZE && bt[i] == 0xFE; i++) {}
+	if (i != STACK_RESERVED_SPACE_SIZE)
 	{
-		assert(false);
-		char buf[48];
-		sprintf_s(buf, "%llu Actor∂—’ª“Á≥ˆ", _selfID);
-		throw std::shared_ptr<string>(new string(buf));
+		stack_overflow_format(i, _createStack);
 	}
 #endif
 	delete (actor_pull_type*)_actorPull;
@@ -771,7 +784,7 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 		/*ƒ⁄¥ÊΩ·ππ:|------Actor Stack------|----timer_type----|---shared_ptr_ref_count---|--Actor Obj--|*/
 		const size_t actorSize = MEM_ALIGN(sizeof(my_actor), sizeof(void*));
 		const size_t timerSize = MEM_ALIGN(sizeof(timer_pck), sizeof(void*));
-		stack_pck stackMem = actor_stack_pool::getStack(stackSize);
+		stack_pck stackMem = actor_stack_pool::getStack(stackSize + STACK_RESERVED_SPACE_SIZE);
 		unsigned char* refTop = (unsigned char*)stackMem._stack.sp - actorSize;
 		newActor = actor_handle(new(refTop)my_actor, [stackMem](my_actor* p){p->~my_actor(); },
 			actor_ref_count_alloc<void>(stackMem, (void**)&refTop));
@@ -796,8 +809,9 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 		newActor->_strand = actorStrand;
 		newActor->_mainFunc = mainFunc;
 		newActor->_actorPull = new actor_pull_type(boost_actor_run(*newActor),
-			boost::coroutines::attributes(stackSize), actor_stack_allocate(&newActor->_stackTop, &newActor->_stackSize));
+			boost::coroutines::attributes(stackSize + STACK_RESERVED_SPACE_SIZE), actor_stack_allocate(&newActor->_stackTop, &newActor->_stackSize));
 	}
+	newActor->_stackSize -= STACK_RESERVED_SPACE_SIZE;
 	newActor->_weakThis = newActor;
 #ifdef CHECK_SELF
 	s_stackLineMutex.lock();
@@ -805,10 +819,9 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 	newActor->_topIt = s_stackLine.insert(make_pair((unsigned char*)newActor->_stackTop - 1, (my_actor*)NULL)).first;
 	s_stackLineMutex.unlock();
 #endif
+
 #if (CHECK_ACTOR_STACK) || (_DEBUG)
-	*(long long*)((unsigned char*)newActor->_stackTop-newActor->_stackSize+STACK_RESERVED_SPACE_SIZE-sizeof(long long)) = 0xFEFEFEFEFEFEFEFE;
-#endif
-#ifdef _DEBUG
+	memset((unsigned char*)newActor->_stackTop - newActor->_stackSize - STACK_RESERVED_SPACE_SIZE, 0xFE, STACK_RESERVED_SPACE_SIZE);
 	newActor->_createStack = get_stack_list(8);
 #endif
 	return newActor;
@@ -1706,6 +1719,7 @@ void my_actor::push_yield()
 {
 	assert(!_quited);
 	assert(_inActor);
+	check_stack();
 	_yieldCount++;
 	_inActor = false;
 	(*(actor_push_type*)_actorPush)();
@@ -1719,6 +1733,7 @@ void my_actor::push_yield()
 
 void my_actor::push_yield_as_mutex()
 {
+	check_stack();
 	(*(actor_push_type*)_actorPush)();
 }
 
@@ -1920,10 +1935,9 @@ void my_actor::disable_auto_make_timer()
 void my_actor::check_stack()
 {
 #if (CHECK_ACTOR_STACK) || (_DEBUG)
-	if ((size_t)get_sp() < (size_t)_stackTop-_stackSize+STACK_RESERVED_SPACE_SIZE)
+	if ((size_t)get_sp() < (size_t)_stackTop-_stackSize)
 	{
-		assert(false);
-		throw std::shared_ptr<string>(new string("Actor∂—’ª“Ï≥£"));
+		stack_overflow_format((size_t)get_sp() - (size_t)_stackTop - _stackSize, _createStack);
 	}
 #endif
 	check_self();
@@ -1953,7 +1967,7 @@ void my_actor::check_self()
 
 size_t my_actor::stack_free_space()
 {
-	int s = (int)((size_t)get_sp() - ((size_t)_stackTop-_stackSize+STACK_RESERVED_SPACE_SIZE));
+	int s = (int)((size_t)get_sp() - ((size_t)_stackTop-_stackSize));
 	if (s < 0)
 	{
 		return 0;

@@ -353,10 +353,8 @@ void actor_test(my_actor* self)
 				auto conCmh = self->connect_msg_pump<passing_test>();//停止消息代理，由自己处理
 				for (int i = 0; i < 3; i++)
 				{
-					self->pump_msg<passing_test>(conCmh, [self](const passing_test& msg)
-					{
-						printf("数据:%d 发送者:%d 接收者:%d\n", msg._count->_id / 10000, msg._count->_id % 10000, (int)self->self_id());
-					});
+					passing_test msg = self->pump_msg(*conCmh);
+					printf("数据:%d 发送者:%d 接收者:%d\n", msg._count->_id / 10000, msg._count->_id % 10000, (int)self->self_id());
 				}
 			}
 		});

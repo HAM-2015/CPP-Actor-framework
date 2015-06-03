@@ -1,11 +1,15 @@
 #include "scattered.h"
 #include <assert.h>
+#include <winsock2.h>
 #include <Windows.h>
-#ifdef _DEBUG
+#if (CHECK_ACTOR_STACK) || (_DEBUG)
 #include <WinDNS.h>
 #include <DbgHelp.h>
 #include <Psapi.h>
+#include <fstream>
 #include <boost/lexical_cast.hpp>
+#include <boost/asio/io_service.hpp>
+#include <boost/thread.hpp>
 #pragma comment( lib, "Dbghelp.lib" )
 #pragma comment( lib, "Psapi.lib" )
 #endif
@@ -116,7 +120,6 @@ void* get_sp()
 	get_bp_sp_ip(&bp, &sp, &ip);
 	return sp;
 }
-
 //////////////////////////////////////////////////////////////////////////
 
 void passing_test::operator=(passing_test&& s)
@@ -175,7 +178,27 @@ passing_test::~passing_test()
 }
 //////////////////////////////////////////////////////////////////////////
 
-#ifdef _DEBUG
+#if (CHECK_ACTOR_STACK) || (_DEBUG)
+
+boost::asio::io_service* _stackLogIos;
+std::ofstream _stackLogFile;
+
+void stack_overflow_format(size_t size, const list<stack_line_info>& createInfo)
+{
+	std::shared_ptr<list<stack_line_info>> info(new list<stack_line_info>(createInfo));
+	_stackLogIos->post([size, info]
+	{
+		_stackLogFile << "overflow size:" << boost::lexical_cast<string>(size) << "\r\n";
+		for (auto it = info->begin(); it != info->end(); it++)
+		{
+			_stackLogFile << "file:" << it->file << "\r\n";
+			_stackLogFile << "line:" << it->line << "\r\n";
+			_stackLogFile << "module:" << it->module << "\r\n";
+			_stackLogFile << "symbolName:" << it->symbolName << "\r\n\r\n";
+		}
+		_stackLogFile << "-------------------------------------------------------------------------------\r\n\r\n";
+	});
+}
 
 bool _loadAllModules()
 {
@@ -396,6 +419,26 @@ struct init_mod
 	{
 		bool ok = _initialize();
 		assert(ok);
+		_stackLogFile.open(L"stack_log.log");
+		_stackLogIos = new boost::asio::io_service;
+		_stackLogWork = new boost::asio::io_service::work(*_stackLogIos);
+		_thread = new boost::thread([&]
+		{
+			boost::system::error_code ec;
+			_stackLogIos->run(ec);
+		});
 	}
+
+	~init_mod()
+	{
+		delete _stackLogWork;
+		_thread->join();
+		delete _thread;
+		delete _stackLogIos;
+		_stackLogFile.close();
+	}
+
+	boost::thread* _thread;
+	boost::asio::io_service::work* _stackLogWork;
 } _init;
 #endif

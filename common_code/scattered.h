@@ -77,7 +77,7 @@ long long get_tick_us();
 long long get_tick_ms();
 int get_tick_s();
 
-#ifdef _DEBUG
+#if (CHECK_ACTOR_STACK) || (_DEBUG)
 struct stack_line_info 
 {
 	stack_line_info(){}
@@ -99,6 +99,11 @@ struct stack_line_info
 @param maxDepth 获取当前堆栈向下最高层次，最大32层
 */
 list<stack_line_info> get_stack_list(size_t maxDepth = 32, bool module = false, bool symbolName = false);
+
+/*!
+@brief 堆栈溢出弹出消息
+*/
+void stack_overflow_format(size_t size, const list<stack_line_info>& createInfo);
 #endif
 
 /*!
@@ -132,6 +137,29 @@ struct passing_test
 	void operator=(passing_test&& s);
 	std::shared_ptr<count> _count;
 };
+
+template <typename bool is_rval_ref = true>
+struct check_move
+{
+	template <typename T>
+	static auto move(T&& p0)->decltype(std::move(p0))
+	{
+		return std::move(p0);
+	}
+};
+
+template <>
+struct check_move<false>
+{
+	template <typename T>
+	static T& move(T& p0)
+	{
+		return p0;
+	}
+};
+
+//检测当前参数是否是右值，是就执行std::move
+#define CHECK_MOVE(__P__) check_move<boost::is_rvalue_reference<decltype(__P__)>::value>::move(__P__)
 
 #ifdef _DEBUG
 #define DEBUG_OPERATION(__exp__)	__exp__

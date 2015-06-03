@@ -66,8 +66,9 @@ struct msg_param
 	typedef ref_ex<T0, T1, T2, T3> ref_type;
 	typedef const_ref_ex<T0, T1, T2, T3> const_ref_type;
 
-	msg_param(const T0& p0, const T1& p1, const T2& p2, const T3& p3)
-		:_res0(p0), _res1(p1), _res2(p2), _res3(p3)
+	template <typename PT0, typename PT1, typename PT2, typename PT3>
+	msg_param(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3)
+		:_res0(CHECK_MOVE(p0)), _res1(CHECK_MOVE(p1)), _res2(CHECK_MOVE(p2)), _res3(CHECK_MOVE(p3))
 	{
 
 	}
@@ -132,8 +133,9 @@ struct msg_param<T0, T1, T2, void>
 	typedef ref_ex<T0, T1, T2> ref_type;
 	typedef const_ref_ex<T0, T1, T2> const_ref_type;
 
-	msg_param(const T0& p0, const T1& p1, const T2& p2)
-		:_res0(p0), _res1(p1), _res2(p2)
+	template <typename PT0, typename PT1, typename PT2>
+	msg_param(PT0&& p0, PT1&& p1, PT2&& p2)
+		:_res0(CHECK_MOVE(p0)), _res1(CHECK_MOVE(p1)), _res2(CHECK_MOVE(p2))
 	{
 
 	}
@@ -193,8 +195,9 @@ struct msg_param<T0, T1, void, void>
 	typedef ref_ex<T0, T1> ref_type;
 	typedef const_ref_ex<T0, T1> const_ref_type;
 
-	msg_param(const T0& p0, const T1& p1)
-		:_res0(p0), _res1(p1)
+	template <typename PT0, typename PT1>
+	msg_param(PT0&& p0, PT1&& p1)
+		:_res0(CHECK_MOVE(p0)), _res1(CHECK_MOVE(p1))
 	{
 
 	}
@@ -249,8 +252,9 @@ struct msg_param<T0, void, void, void>
 	typedef ref_ex<T0> ref_type;
 	typedef const_ref_ex<T0> const_ref_type;
 
-	msg_param(const T0& p0)
-		:_res0(p0)
+	template <typename PT0>
+	msg_param(PT0&& p0)
+		:_res0(CHECK_MOVE(p0))
 	{
 
 	}
@@ -421,7 +425,7 @@ private:
 	}
 public:
 	template <typename PT0, typename PT1, typename PT2, typename PT3>
-	void operator()(const PT0& p0, const PT1& p1, const PT2& p2, const PT3& p3) const
+	void operator()(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3) const
 	{
 		auto& msgHandle_ = _msgHandle;
 		auto& hostActor_ = _hostActor;
@@ -431,13 +435,13 @@ public:
 			if (!(*closed_))
 			{
 				auto lockActor = hostActor_;
-				msgHandle_->push_msg(ref_ex<PT0, PT1, PT2, PT3>((PT0&)p0, (PT1&)p1, (PT2&)p2, (PT3&)p3));
+				msgHandle_->push_msg(ref_ex<T0, T1, T2, T3>((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3));
 			}
 		});
 	}
 
 	template <typename PT0, typename PT1, typename PT2>
-	void operator()(const PT0& p0, const PT1& p1, const PT2& p2) const
+	void operator()(PT0&& p0, PT1&& p1, PT2&& p2) const
 	{
 		auto& msgHandle_ = _msgHandle;
 		auto& hostActor_ = _hostActor;
@@ -447,13 +451,13 @@ public:
 			if (!(*closed_))
 			{
 				auto lockActor = hostActor_;
-				msgHandle_->push_msg(ref_ex<PT0, PT1, PT2>((PT0&)p0, (PT1&)p1, (PT2&)p2));
+				msgHandle_->push_msg(ref_ex<T0, T1, T2>((T0&)p0, (T1&)p1, (T2&)p2));
 			}
 		});
 	}
 
 	template <typename PT0, typename PT1>
-	void operator()(const PT0& p0, const PT1& p1) const
+	void operator()(PT0&& p0, PT1&& p1) const
 	{
 		auto& msgHandle_ = _msgHandle;
 		auto& hostActor_ = _hostActor;
@@ -463,23 +467,7 @@ public:
 			if (!(*closed_))
 			{
 				auto lockActor = hostActor_;
-				msgHandle_->push_msg(ref_ex<PT0, PT1>((PT0&)p0, (PT1&)p1));
-			}
-		});
-	}
-
-	template <typename PT0>
-	void operator()(const PT0& p0) const
-	{
-		auto& msgHandle_ = _msgHandle;
-		auto& hostActor_ = _hostActor;
-		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]
-		{
-			if (!(*closed_))
-			{
-				auto lockActor = hostActor_;
-				msgHandle_->push_msg(ref_ex<PT0>((PT0&)p0));
+				msgHandle_->push_msg(ref_ex<T0, T1>((T0&)p0, (T1&)p1));
 			}
 		});
 	}
@@ -495,7 +483,7 @@ public:
 			if (!(*closed_))
 			{
 				auto lockActor = hostActor_;
-				msgHandle_->push_msg(ref_ex<PT0>((PT0&)p0));
+				msgHandle_->push_msg(ref_ex<T0>((T0&)p0));
 			}
 		});
 	}
@@ -728,7 +716,7 @@ private:
 	}
 public:
 	template <typename PT0, typename PT1, typename PT2, typename PT3>
-	void operator()(const PT0& p0, const PT1& p1, const PT2& p2, const PT3& p3) const
+	void operator()(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3) const
 	{
 		auto& trigHandle_ = _trigHandle;
 		auto& hostActor_ = _hostActor;
@@ -738,13 +726,13 @@ public:
 			if (!(*closed_))
 			{
 				auto lockActor = hostActor_;
-				trigHandle_->push_msg(ref_ex<PT0, PT1, PT2, PT3>((PT0&)p0, (PT1&)p1, (PT2&)p2, (PT3&)p3));
+				trigHandle_->push_msg(ref_ex<T0, T1, T2, T3>((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3));
 			}
 		});
 	}
 
 	template <typename PT0, typename PT1, typename PT2>
-	void operator()(const PT0& p0, const PT1& p1, const PT2& p2) const
+	void operator()(PT0&& p0, PT1&& p1, PT2&& p2) const
 	{
 		auto& trigHandle_ = _trigHandle;
 		auto& hostActor_ = _hostActor;
@@ -754,13 +742,13 @@ public:
 			if (!(*closed_))
 			{
 				auto lockActor = hostActor_;
-				trigHandle_->push_msg(ref_ex<PT0, PT1, PT2>((PT0&)p0, (PT1&)p1, (PT2&)p2));
+				trigHandle_->push_msg(ref_ex<T0, T1, T2>((T0&)p0, (T1&)p1, (T2&)p2));
 			}
 		});
 	}
 
 	template <typename PT0, typename PT1>
-	void operator()(const PT0& p0, const PT1& p1) const
+	void operator()(PT0&& p0, PT1&& p1) const
 	{
 		auto& trigHandle_ = _trigHandle;
 		auto& hostActor_ = _hostActor;
@@ -770,23 +758,7 @@ public:
 			if (!(*closed_))
 			{
 				auto lockActor = hostActor_;
-				trigHandle_->push_msg(ref_ex<PT0, PT1>((PT0&)p0, (PT1&)p1));
-			}
-		});
-	}
-
-	template <typename PT0>
-	void operator()(const PT0& p0) const
-	{
-		auto& trigHandle_ = _trigHandle;
-		auto& hostActor_ = _hostActor;
-		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]
-		{
-			if (!(*closed_))
-			{
-				auto lockActor = hostActor_;
-				trigHandle_->push_msg(ref_ex<PT0>((PT0&)p0));
+				trigHandle_->push_msg(ref_ex<T0, T1>((T0&)p0, (T1&)p1));
 			}
 		});
 	}
@@ -802,7 +774,7 @@ public:
 			if (!(*closed_))
 			{
 				auto lockActor = hostActor_;
-				trigHandle_->push_msg(ref_ex<PT0>((PT0&)p0));
+				trigHandle_->push_msg(ref_ex<T0>((T0&)p0));
 			}
 		});
 	}
@@ -1532,38 +1504,31 @@ public:
 		:_msgPool(msgPool), _hostActor(hostActor){}
 public:
 	template <typename PT0, typename PT1, typename PT2, typename PT3>
-	void operator()(const PT0& p0, const PT1& p1, const PT2& p2, const PT3& p3) const
+	void operator()(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3) const
 	{
 		assert(!empty());
-		_msgPool->push_msg(std::move(msg_param<PT0, PT1, PT2, PT3>(p0, p1, p2, p3)), _hostActor);
+		_msgPool->push_msg(std::move(msg_param<T0, T1, T2, T3>(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2), CHECK_MOVE(p3))), _hostActor);
 	}
 
 	template <typename PT0, typename PT1, typename PT2>
-	void operator()(const PT0& p0, const PT1& p1, const PT2& p2) const
+	void operator()(PT0&& p0, PT1&& p1, PT2&& p2) const
 	{
 		assert(!empty());
-		_msgPool->push_msg(std::move(msg_param<PT0, PT1, PT2>(p0, p1, p2)), _hostActor);
+		_msgPool->push_msg(std::move(msg_param<T0, T1, T2>(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2))), _hostActor);
 	}
 
 	template <typename PT0, typename PT1>
-	void operator()(const PT0& p0, const PT1& p1) const
+	void operator()(PT0&& p0, PT1&& p1) const
 	{
 		assert(!empty());
-		_msgPool->push_msg(std::move(msg_param<PT0, PT1>(p0, p1)), _hostActor);
-	}
-
-	template <typename PT0>
-	void operator()(const PT0& p0) const
-	{
-		assert(!empty());
-		_msgPool->push_msg(std::move(msg_param<PT0>(p0)), _hostActor);
+		_msgPool->push_msg(std::move(msg_param<T0, T1>(CHECK_MOVE(p0), CHECK_MOVE(p1))), _hostActor);
 	}
 
 	template <typename PT0>
 	void operator()(PT0&& p0) const
 	{
 		assert(!empty());
-		_msgPool->push_msg(std::move(msg_param<PT0>(ref_ex<PT0>(p0))), _hostActor);
+		_msgPool->push_msg(std::move(msg_param<T0>(CHECK_MOVE(p0))), _hostActor);
 	}
 
 	void operator()() const
@@ -3960,7 +3925,7 @@ private:
 	void child_suspend_cb_handler();
 	void child_resume_cb_handler();
 private:
-#ifdef _DEBUG
+#if (CHECK_ACTOR_STACK) || (_DEBUG)
 	list<stack_line_info> _createStack;//当前Actor创建时的调用堆栈
 #endif
 	void* _actorPull;///<Actor中断点恢复

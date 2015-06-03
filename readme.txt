@@ -13,6 +13,9 @@ oschina url
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
+2015-06-03
+优化检测堆栈溢出功能，输出具体哪个Actor溢出日志.
+
 2015-06-01
 优化等待子Actor结束的性能，取消等待返回bool值.
 
