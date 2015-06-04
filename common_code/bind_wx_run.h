@@ -245,44 +245,44 @@ template <typename FRAME>
 class bind_wx_run: public FRAME, public bind_wx_run_base
 {
 protected:
-	template <typename T0, typename T1, typename T2, typename T3, typename T4, typename T5>
-	bind_wx_run(const T0& p0, const T1& p1, const T2& p2, const T3& p3, const T4& p4, const T5& p5)
-		: FRAME((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3, (T4&)p4, (T5&)p5)
+	template <typename PT0, typename PT1, typename PT2, typename PT3, typename PT4, typename PT5>
+	bind_wx_run(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3, PT4&& p4, PT5&& p5)
+		: FRAME(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2), CHECK_MOVE(p3), CHECK_MOVE(p4), CHECK_MOVE(p5))
 	{
 		connect();
 	}
 
-	template <typename T0, typename T1, typename T2, typename T3, typename T4>
-	bind_wx_run(const T0& p0, const T1& p1, const T2& p2, const T3& p3, const T4& p4)
-		: FRAME((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3, (T4&)p4)
+	template <typename PT0, typename PT1, typename PT2, typename PT3, typename PT4>
+	bind_wx_run(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3, PT4&& p4)
+		: FRAME(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2), CHECK_MOVE(p3), CHECK_MOVE(p4))
 	{
 		connect();
 	}
 
-	template <typename T0, typename T1, typename T2, typename T3>
-	bind_wx_run(const T0& p0, const T1& p1, const T2& p2, const T3& p3)
-		: FRAME((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3)
+	template <typename PT0, typename PT1, typename PT2, typename PT3>
+	bind_wx_run(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3)
+		: FRAME(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2), CHECK_MOVE(p3))
 	{
 		connect();
 	}
 
-	template <typename T0, typename T1, typename T2>
-	bind_wx_run(const T0& p0, const T1& p1, const T2& p2)
-		: FRAME((T0&)p0, (T1&)p1, (T2&)p2)
+	template <typename PT0, typename PT1, typename PT2>
+	bind_wx_run(PT0&& p0, PT1&& p1, PT2&& p2)
+		: FRAME(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2))
 	{
 		connect();
 	}
 
-	template <typename T0, typename T1>
-	bind_wx_run(const T0& p0, const T1& p1)
-		: FRAME((T0&)p0, (T1&)p1)
+	template <typename PT0, typename PT1>
+	bind_wx_run(PT0&& p0, PT1&& p1)
+		: FRAME(CHECK_MOVE(p0), CHECK_MOVE(p1))
 	{
 		connect();
 	}
 
-	template <typename T0>
-	bind_wx_run(const T0& p0)
-		: FRAME((T0&)p0)
+	template <typename PT0>
+	bind_wx_run(PT0&& p0)
+		: FRAME(CHECK_MOVE(p0))
 	{
 		connect();
 	}

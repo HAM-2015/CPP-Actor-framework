@@ -1,14 +1,29 @@
 #ifndef __WRAPPED_POST_HANDLER_H
 #define __WRAPPED_POST_HANDLER_H
 
+#include "check_move.h"
+
 template <typename Poster, typename Handler>
 class wrapped_post_handler
 {
 public:
-	wrapped_post_handler(Poster* poster, const Handler& handler)
+	template <typename H>
+	wrapped_post_handler(Poster* poster, H&& handler)
 		: _poster(poster),
-		_handler(handler)
+		_handler(CHECK_MOVE(handler))
 	{
+	}
+
+	wrapped_post_handler(wrapped_post_handler&& sp)
+		:_poster(sp._poster),
+		_handler(std::move(sp._handler))
+	{
+	}
+
+	wrapped_post_handler& operator=(wrapped_post_handler&& sp)
+	{
+		_poster = sp._poster;
+		_handler = std::move(sp._handler);
 	}
 
 	void operator()()

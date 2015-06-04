@@ -140,7 +140,7 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_WIN32_WINNT=0x0501;CHECK_ACTOR_STACK;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_WIN32_WINNT=0x0501;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>..\common_code\</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
@@ -170,6 +170,7 @@
     <ClInclude Include="..\common_code\async_buffer.h" />
     <ClInclude Include="..\common_code\actor_framework.h" />
     <ClInclude Include="..\common_code\actor_stack.h" />
+    <ClInclude Include="..\common_code\check_move.h" />
     <ClInclude Include="..\common_code\function_type.h" />
     <ClInclude Include="..\common_code\ios_proxy.h" />
     <ClInclude Include="..\common_code\msg_queue.h" />

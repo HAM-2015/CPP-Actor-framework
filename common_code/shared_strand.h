@@ -25,7 +25,7 @@ typedef std::shared_ptr<boost_strand> shared_strand;
 #define UI_STRAND()\
 if (_strand)\
 {\
-	_strand->post(handler);\
+	_strand->post(CHECK_MOVE(handler)); \
 }\
 else\
 {\
@@ -53,7 +53,7 @@ public:
 	@param handler 被调用函数
 	*/
 	template <typename Handler>
-	void dispatch(const Handler& handler)
+	void dispatch(BOOST_ASIO_MOVE_ARG(Handler) handler)
 	{
 		if (running_in_this_thread())
 		{
@@ -61,7 +61,7 @@ public:
 		} 
 		else
 		{
-			post(handler);
+			post(CHECK_MOVE(handler));
 		}
 	}
 
@@ -69,14 +69,14 @@ public:
 	@brief 添加一个任务到strand队列
 	*/
 	template <typename Handler>
-	void post(const Handler& handler)
+	void post(BOOST_ASIO_MOVE_ARG(Handler) handler)
 	{
 #ifdef ENABLE_MFC_ACTOR
 		UI_STRAND()
 #elif ENABLE_WX_ACTOR
 		UI_STRAND()
 #else
-		_strand->post(handler);
+		_strand->post(CHECK_MOVE(handler));
 #endif
 	}
 
@@ -84,18 +84,18 @@ public:
 	@brief 把被调用函数包装到dispatch中，用于不同strand间消息传递
 	*/
 	template <typename Handler>
-	wrapped_dispatch_handler<boost_strand, Handler> wrap(const Handler& handler)
+	wrapped_dispatch_handler<boost_strand, Handler> wrap(BOOST_ASIO_MOVE_ARG(Handler) handler)
 	{
-		return wrapped_dispatch_handler<boost_strand, Handler>(this, handler);
+		return wrapped_dispatch_handler<boost_strand, Handler>(this, CHECK_MOVE(handler));
 	}
 	
 	/*!
 	@brief 把被调用函数包装到post中
 	*/
 	template <typename Handler>
-	wrapped_post_handler<boost_strand, Handler> wrap_post(const Handler& handler)
+	wrapped_post_handler<boost_strand, Handler> wrap_post(BOOST_ASIO_MOVE_ARG(Handler) handler)
 	{
-		return wrapped_post_handler<boost_strand, Handler>(this, handler);
+		return wrapped_post_handler<boost_strand, Handler>(this, CHECK_MOVE(handler));
 	}
 
 	/*!
@@ -141,7 +141,7 @@ public:
 	@warning 此函数有可能使整个程序陷入死锁，只能在与strand所依赖的ios无关线程中调用
 	*/
 	template <typename H>
-	void syncInvoke(const H& h)
+	void syncInvoke(H&& h)
 	{
 		assert(!in_this_ios());
 		boost::mutex mutex;
@@ -161,7 +161,7 @@ public:
 	@brief 同上，带返回值
 	*/
 	template <typename R, typename H>
-	R syncInvoke(const H& h)
+	R syncInvoke(H&& h)
 	{
 		assert(!in_this_ios());
 		R r;
@@ -184,7 +184,7 @@ public:
 	@param cb 传出参数的函数
 	*/
 	template <typename H, typename CB>
-	void asyncInvoke(const H& h, const CB& cb)
+	void asyncInvoke(H&& h, CB&& cb)
 	{
 		post([=]
 		{
@@ -193,7 +193,7 @@ public:
 	}
 
 	template <typename H, typename CB>
-	void asyncInvokeVoid(const H& h, const CB& cb)
+	void asyncInvokeVoid(H&& h, CB&& cb)
 	{
 		post([=]
 		{

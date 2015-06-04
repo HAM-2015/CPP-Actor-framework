@@ -22,6 +22,7 @@
 #include "actor_mutex.h"
 #include "scattered.h"
 #include "stack_object.h"
+#include "check_actor_stack.h"
 
 class my_actor;
 typedef std::shared_ptr<my_actor> actor_handle;//Actor句柄
@@ -52,10 +53,6 @@ catch (my_actor::force_quit_exception& e)\
 {\
 	throw e;\
 }
-
-//默认堆栈大小64k
-#define kB	*1024
-#define DEFAULT_STACKSIZE	64 kB
 
 //检测 pump_msg 是否有 pump_disconnected_exception 异常抛出，因为在 catch 内部不能安全的进行coro切换
 #define CATCH_PUMP_DISCONNECTED CATCH_FOR(my_actor::pump_disconnected_exception)
@@ -2011,17 +2008,17 @@ public:
 	@param h 触发函数
 	*/
 	template <typename H>
-	void delay_trig(int ms, const H& h)
+	void delay_trig(int ms, H&& h)
 	{
 		assert_enter();
 		if (ms > 0)
 		{
 			assert(_timer);
-			time_out(ms, h);
+			time_out(ms, CHECK_MOVE(h));
 		} 
 		else if (0 == ms)
 		{
-			_strand->post(h);
+			_strand->post(CHECK_MOVE(h));
 		}
 		else
 		{
@@ -2038,13 +2035,13 @@ public:
 	@brief 发送一个异步函数到shared_strand中执行，完成后返回
 	*/
 	template <typename H>
-	__yield_interrupt void send(shared_strand exeStrand, const H& h)
+	__yield_interrupt void send(shared_strand exeStrand, H&& h)
 	{
 		assert_enter();
 		if (exeStrand != _strand)
 		{
 			actor_handle shared_this = shared_from_this();
-			exeStrand->asyncInvokeVoid(h, [shared_this]{shared_this->trig_handler(); });
+			exeStrand->asyncInvokeVoid(CHECK_MOVE(h), [shared_this]{shared_this->trig_handler(); });
 			push_yield();
 			return;
 		}
@@ -2052,7 +2049,7 @@ public:
 	}
 
 	template <typename T0, typename H>
-	__yield_interrupt T0 send(shared_strand exeStrand, const H& h)
+	__yield_interrupt T0 send(shared_strand exeStrand, H&& h)
 	{
 		assert_enter();
 		if (exeStrand != _strand)
@@ -2060,7 +2057,7 @@ public:
 			dst_receiver_buff<T0>::dst_buff dstBuff;
 			dst_receiver_buff<T0> dstRec(dstBuff);
 			actor_handle shared_this = shared_from_this();
-			exeStrand->asyncInvoke(h, [shared_this, &dstRec](const T0& p0){shared_this->_trig_handler(dstRec, std::move(msg_param<T0>(p0))); });
+			exeStrand->asyncInvoke(CHECK_MOVE(h), [shared_this, &dstRec](const T0& p0){shared_this->_trig_handler(dstRec, std::move(msg_param<T0>(p0))); });
 			push_yield();
 			return dstBuff.get()._res0;
 		} 
@@ -2068,22 +2065,22 @@ public:
 	}
 
 	template <typename H>
-	__yield_interrupt void async_send(shared_strand exeStrand, const H& h)
+	__yield_interrupt void async_send(shared_strand exeStrand, H&& h)
 	{
 		assert_enter();
 		actor_handle shared_this = shared_from_this();
-		exeStrand->asyncInvokeVoid(h, [shared_this]{shared_this->trig_handler(); });
+		exeStrand->asyncInvokeVoid(CHECK_MOVE(h), [shared_this]{shared_this->trig_handler(); });
 		push_yield();
 	}
 
 	template <typename T0, typename H>
-	__yield_interrupt T0 async_send(shared_strand exeStrand, const H& h)
+	__yield_interrupt T0 async_send(shared_strand exeStrand, H&& h)
 	{
 		assert_enter();
 		dst_receiver_buff<T0>::dst_buff dstBuff;
 		dst_receiver_buff<T0> dstRec(dstBuff);
 		actor_handle shared_this = shared_from_this();
-		exeStrand->asyncInvoke(h, [shared_this, &dstRec](const T0& p0){shared_this->_trig_handler(dstRec, std::move(msg_param<T0>(p0))); });
+		exeStrand->asyncInvoke(CHECK_MOVE(h), [shared_this, &dstRec](const T0& p0){shared_this->_trig_handler(dstRec, std::move(msg_param<T0>(p0))); });
 		push_yield();
 		return dstBuff.get()._res0;
 	}
@@ -3925,8 +3922,8 @@ private:
 	void child_suspend_cb_handler();
 	void child_resume_cb_handler();
 private:
-#if (CHECK_ACTOR_STACK) || (_DEBUG)
-	list<stack_line_info> _createStack;//当前Actor创建时的调用堆栈
+#ifdef CHECK_ACTOR_STACK
+	std::shared_ptr<list<stack_line_info>> _createStack;//当前Actor创建时的调用堆栈
 #endif
 	void* _actorPull;///<Actor中断点恢复
 	void* _actorPush;///<Actor中断点

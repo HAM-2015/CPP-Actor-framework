@@ -237,7 +237,7 @@ void perfor_test(my_actor* self, ios_proxy& ios)
 				while (true)
 				{
 					count[i]++;
-					self->yield();
+					self->yield_guard();
 				}
 			}, stackSize);
 			childList.push_front(newactor);
@@ -364,7 +364,7 @@ void actor_test(my_actor* self)
 		{//Éú²úÕß
 			for (int i = 0; true; i++)
 			{
-				writer(passing_test(i*10000 + self->self_id()));
+				writer(passing_test(i*10000 + (int)self->self_id()));
 				self->sleep(2000);
 			}
 		};
@@ -515,6 +515,7 @@ void actor_test(my_actor* self)
 	self->child_actor_force_quit(actorPrint);
 	self->child_actor_force_quit(actorShift);
 	self->child_actor_force_quit(actorTwo);
+	self->child_actor_resume(actorPerfor);
 	self->child_actor_force_quit(actorPerfor);
 	self->child_actor_force_quit(actorConsumer);
 	self->child_actor_force_quit(actorProducer1);

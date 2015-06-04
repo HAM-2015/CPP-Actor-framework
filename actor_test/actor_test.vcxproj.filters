@@ -95,5 +95,8 @@
     <ClInclude Include="..\common_code\stack_object.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
+    <ClInclude Include="..\common_code\check_move.h">
+      <Filter>头文件\common_code</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -32,6 +32,14 @@ extern "C" void __fastcall get_bp_sp_ip(void** pbp, void** psp, void** pip);
 */
 extern "C" unsigned long long __fastcall cpu_tick();
 
+/*!
+@brief 获取时间字符串
+*/
+string get_time_string_us();
+string get_time_string_ms();
+string get_time_string_s();
+string get_time_string_s_file();
+
 #ifndef _WIN64
 
 /*!
@@ -77,7 +85,7 @@ long long get_tick_us();
 long long get_tick_ms();
 int get_tick_s();
 
-#if (CHECK_ACTOR_STACK) || (_DEBUG)
+#ifdef CHECK_ACTOR_STACK
 struct stack_line_info 
 {
 	stack_line_info(){}
@@ -103,7 +111,7 @@ list<stack_line_info> get_stack_list(size_t maxDepth = 32, bool module = false, 
 /*!
 @brief 堆栈溢出弹出消息
 */
-void stack_overflow_format(size_t size, const list<stack_line_info>& createInfo);
+void stack_overflow_format(size_t size, std::shared_ptr<list<stack_line_info>> createStack);
 #endif
 
 /*!
@@ -137,29 +145,6 @@ struct passing_test
 	void operator=(passing_test&& s);
 	std::shared_ptr<count> _count;
 };
-
-template <typename bool is_rval_ref = true>
-struct check_move
-{
-	template <typename T>
-	static auto move(T&& p0)->decltype(std::move(p0))
-	{
-		return std::move(p0);
-	}
-};
-
-template <>
-struct check_move<false>
-{
-	template <typename T>
-	static T& move(T& p0)
-	{
-		return p0;
-	}
-};
-
-//检测当前参数是否是右值，是就执行std::move
-#define CHECK_MOVE(__P__) check_move<boost::is_rvalue_reference<decltype(__P__)>::value>::move(__P__)
 
 #ifdef _DEBUG
 #define DEBUG_OPERATION(__exp__)	__exp__

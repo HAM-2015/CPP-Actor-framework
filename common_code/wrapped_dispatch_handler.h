@@ -1,14 +1,29 @@
 #ifndef __WRAPPED_DISPATCH_HANDLER_H
 #define __WRAPPED_DISPATCH_HANDLER_H
 
+#include "check_move.h"
+
 template <typename Dispatcher, typename Handler>
 class wrapped_dispatch_handler
 {
 public:
-	wrapped_dispatch_handler(Dispatcher* dispatcher, const Handler& handler)
+	template <typename H>
+	wrapped_dispatch_handler(Dispatcher* dispatcher, H&& handler)
 		: _dispatcher(dispatcher),
-		_handler(handler)
+		_handler(CHECK_MOVE(handler))
 	{
+	}
+
+	wrapped_dispatch_handler(wrapped_dispatch_handler&& sd)
+		:_dispatcher(sd._dispatcher),
+		_handler(std::move(sd._handler))
+	{
+	}
+
+	wrapped_dispatch_handler& operator=(wrapped_dispatch_handler&& sd)
+	{
+		_dispatcher = sd._dispatcher;
+		_handler = std::move(sd._handler);
 	}
 
 	void operator()()

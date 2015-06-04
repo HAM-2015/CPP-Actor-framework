@@ -25,13 +25,6 @@ typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> 
 
 #endif //end _DEBUG
 
-//¶ÑÕ»µ×Ô¤Áô¿Õ¼ä£¬¼ì²â¶ÑÕ»Òç³ö
-#if (CHECK_ACTOR_STACK) || (_DEBUG)
-#define STACK_RESERVED_SPACE_SIZE		16 kB
-#else
-#define STACK_RESERVED_SPACE_SIZE		0
-#endif
-
 //ÄÚ´æ±ß½ç¶ÔÆë
 #define MEM_ALIGN(__o, __a) (((__o) + ((__a)-1)) & (((__a)-1) ^ -1))
 
@@ -758,7 +751,7 @@ my_actor::~my_actor()
 	s_stackLine.erase(_topIt);
 	s_stackLineMutex.unlock();
 #endif
-#if (CHECK_ACTOR_STACK) || (_DEBUG)
+#ifdef CHECK_ACTOR_STACK
 	unsigned char* bt = (unsigned char*)_stackTop - _stackSize - STACK_RESERVED_SPACE_SIZE;
 	size_t i = 0;
 	for (; i < STACK_RESERVED_SPACE_SIZE && bt[i] == 0xFE; i++) {}
@@ -820,9 +813,9 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 	s_stackLineMutex.unlock();
 #endif
 
-#if (CHECK_ACTOR_STACK) || (_DEBUG)
+#ifdef CHECK_ACTOR_STACK
 	memset((unsigned char*)newActor->_stackTop - newActor->_stackSize - STACK_RESERVED_SPACE_SIZE, 0xFE, STACK_RESERVED_SPACE_SIZE);
-	newActor->_createStack = get_stack_list(8);
+	newActor->_createStack = std::shared_ptr<list<stack_line_info>>(new list<stack_line_info>(get_stack_list(8)));
 #endif
 	return newActor;
 }
@@ -1854,8 +1847,8 @@ void my_actor::expires_timer()
 			assert(timer);
 			assert(!timer->_timerSuspend && !timer->_timerCompleted);
 			timer->_timerCompleted = true;
-			std::function<void()> h;
-			timer->_h.swap(h);
+			auto h = std::move(timer->_h);
+			assert(!timer->_h);
 			h();
 		}
 	}));
@@ -1934,7 +1927,7 @@ void my_actor::disable_auto_make_timer()
 
 void my_actor::check_stack()
 {
-#if (CHECK_ACTOR_STACK) || (_DEBUG)
+#ifdef CHECK_ACTOR_STACK
 	if ((size_t)get_sp() < (size_t)_stackTop-_stackSize)
 	{
 		stack_overflow_format((size_t)get_sp() - (size_t)_stackTop - _stackSize, _createStack);

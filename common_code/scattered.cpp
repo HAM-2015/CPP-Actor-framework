@@ -2,11 +2,13 @@
 #include <assert.h>
 #include <winsock2.h>
 #include <Windows.h>
-#if (CHECK_ACTOR_STACK) || (_DEBUG)
+#include <boost/date_time/posix_time/posix_time.hpp>
+#ifdef CHECK_ACTOR_STACK
 #include <WinDNS.h>
 #include <DbgHelp.h>
 #include <Psapi.h>
 #include <fstream>
+#include <direct.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/asio/io_service.hpp>
 #include <boost/thread.hpp>
@@ -109,6 +111,50 @@ int get_tick_s()
 	QueryPerformanceCounter(&quadPart);
 	return (int)((double)quadPart.QuadPart*_pcCycle._sCycle);
 }
+
+string get_time_string_us()
+{
+	auto tm = boost::posix_time::microsec_clock::local_time();
+	auto date = tm.date();
+	auto time = tm.time_of_day();
+	char buff[32];
+	sprintf_s(buff, "%u-%02u-%02u %02u:%02u:%02u.%06u", (int)date.year(), (int)date.month(), (int)date.day(), \
+		(int)time.hours(), (int)time.minutes(), (int)time.seconds(), (int)time.fractional_seconds());
+	return buff;
+}
+
+string get_time_string_ms()
+{
+	auto tm = boost::posix_time::microsec_clock::local_time();
+	auto date = tm.date();
+	auto time = tm.time_of_day();
+	char buff[32];
+	sprintf_s(buff, "%u-%02u-%02u %02u:%02u:%02u.%03u", (int)date.year(), (int)date.month(), (int)date.day(), \
+		(int)time.hours(), (int)time.minutes(), (int)time.seconds(), (int)time.fractional_seconds()/1000);
+	return buff;
+}
+
+string get_time_string_s()
+{
+	auto tm = boost::posix_time::microsec_clock::local_time();
+	auto date = tm.date();
+	auto time = tm.time_of_day();
+	char buff[32];
+	sprintf_s(buff, "%u-%02u-%02u %02u:%02u:%02u", (int)date.year(), (int)date.month(), (int)date.day(), \
+		(int)time.hours(), (int)time.minutes(), (int)time.seconds());
+	return buff;
+}
+
+string get_time_string_s_file()
+{
+	auto tm = boost::posix_time::microsec_clock::local_time();
+	auto date = tm.date();
+	auto time = tm.time_of_day();
+	char buff[32];
+	sprintf_s(buff, "%u-%02u-%02u %02u.%02u.%02u", (int)date.year(), (int)date.month(), (int)date.day(), \
+		(int)time.hours(), (int)time.minutes(), (int)time.seconds());
+	return buff;
+}
 //////////////////////////////////////////////////////////////////////////
 
 void* get_sp()
@@ -178,26 +224,29 @@ passing_test::~passing_test()
 }
 //////////////////////////////////////////////////////////////////////////
 
-#if (CHECK_ACTOR_STACK) || (_DEBUG)
+#ifdef CHECK_ACTOR_STACK
 
 boost::asio::io_service* _stackLogIos;
 std::ofstream _stackLogFile;
 
-void stack_overflow_format(size_t size, const list<stack_line_info>& createInfo)
+void stack_overflow_format(size_t size, std::shared_ptr<list<stack_line_info>> createStack)
 {
-	std::shared_ptr<list<stack_line_info>> info(new list<stack_line_info>(createInfo));
-	_stackLogIos->post([size, info]
+	if (_stackLogIos)
 	{
-		_stackLogFile << "overflow size:" << boost::lexical_cast<string>(size) << "\r\n";
-		for (auto it = info->begin(); it != info->end(); it++)
+		_stackLogIos->post([size, createStack]
 		{
-			_stackLogFile << "file:" << it->file << "\r\n";
-			_stackLogFile << "line:" << it->line << "\r\n";
-			_stackLogFile << "module:" << it->module << "\r\n";
-			_stackLogFile << "symbolName:" << it->symbolName << "\r\n\r\n";
-		}
-		_stackLogFile << "-------------------------------------------------------------------------------\r\n\r\n";
-	});
+			_stackLogFile << "---------------------------";
+			_stackLogFile << get_time_string_ms() << "---------------------------\r\n\r\n";
+			_stackLogFile << "overflow size: " << size << "\r\n";
+			for (auto it = createStack->begin(); it != createStack->end(); it++)
+			{
+				_stackLogFile << "file: " << it->file << "\r\n";
+				_stackLogFile << "line: " << it->line << "\r\n";
+				_stackLogFile << "module: " << it->module << "\r\n";
+				_stackLogFile << "symbolName: " << it->symbolName << "\r\n\r\n";
+			}
+		});
+	}
 }
 
 bool _loadAllModules()
@@ -419,23 +468,42 @@ struct init_mod
 	{
 		bool ok = _initialize();
 		assert(ok);
-		_stackLogFile.open(L"stack_log.log");
-		_stackLogIos = new boost::asio::io_service;
-		_stackLogWork = new boost::asio::io_service::work(*_stackLogIos);
-		_thread = new boost::thread([&]
+		auto stk = get_stack_list(1, true, true);
+		string moduleName;
+		if (!stk.empty())
 		{
-			boost::system::error_code ec;
-			_stackLogIos->run(ec);
-		});
+			moduleName = &stk.front().module[stk.front().module.find_last_of('\\') + 1];
+		}
+		_mkdir((moduleName + " stack_log\\").c_str());
+		_stackLogFile.open(moduleName + " stack_log\\" + get_time_string_s_file() + ".log");
+		if (_stackLogFile.good())
+		{
+			_stackLogIos = new boost::asio::io_service;
+			_stackLogWork = new boost::asio::io_service::work(*_stackLogIos);
+			_thread = new boost::thread([&]
+			{
+				boost::system::error_code ec;
+				_stackLogIos->run(ec);
+			});
+		}
+		else
+		{
+			_stackLogIos = NULL;
+			_stackLogWork = NULL;
+			_thread = NULL;
+		}
 	}
 
 	~init_mod()
 	{
-		delete _stackLogWork;
-		_thread->join();
-		delete _thread;
-		delete _stackLogIos;
-		_stackLogFile.close();
+		if (_stackLogIos)
+		{
+			delete _stackLogWork;
+			_thread->join();
+			delete _thread;
+			delete _stackLogIos;
+			_stackLogFile.close();
+		}
 	}
 
 	boost::thread* _thread;

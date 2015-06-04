@@ -1,6 +1,8 @@
 #ifndef __STACK_OBJECT_H
 #define __STACK_OBJECT_H
 
+#include "scattered.h"
+
 /*!
 @brief 在栈上分配一段临时空间用于构造临时对象
 */
@@ -26,36 +28,36 @@ public:
 	/*!
 	@brief 构造一个临时对象
 	*/
-	template <typename T0, typename T1, typename T2, typename T3>
-	void create(const T0& p0, const T1& p1, const T2& p2, const T3& p3)
+	template <typename PT0, typename PT1, typename PT2, typename PT3>
+	void create(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3)
 	{
 		assert(_null);
 		DEBUG_OPERATION(_null = false);
-		new(_buff)OBJ((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3);
+		new(_buff)OBJ(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2), CHECK_MOVE(p3));
 	}
 
-	template <typename T0, typename T1, typename T2>
-	void create(const T0& p0, const T1& p1, const T2& p2)
+	template <typename PT0, typename PT1, typename PT2>
+	void create(PT0&& p0, PT1&& p1, PT2&& p2)
 	{
 		assert(_null);
 		DEBUG_OPERATION(_null = false);
-		new(_buff)OBJ((T0&)p0, (T1&)p1, (T2&)p2);
+		new(_buff)OBJ(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2));
 	}
 
-	template <typename T0, typename T1>
-	void create(const T0& p0, const T1& p1)
+	template <typename PT0, typename PT1>
+	void create(PT0&& p0, PT1&& p1)
 	{
 		assert(_null);
 		DEBUG_OPERATION(_null = false);
-		new(_buff)OBJ((T0&)p0, (T1&)p1);
+		new(_buff)OBJ(CHECK_MOVE(p0), CHECK_MOVE(p1));
 	}
 
-	template <typename T0>
-	void create(const T0& p0)
+	template <typename PT0>
+	void create(PT0&& p0)
 	{
 		assert(_null);
 		DEBUG_OPERATION(_null = false);
-		new(_buff)OBJ((T0&)p0);
+		new(_buff)OBJ(CHECK_MOVE(p0));
 	}
 
 	void create()
