@@ -1607,27 +1607,27 @@ private:
 	}
 public:
 	template <typename PT0, typename PT1, typename PT2, typename PT3>
-	void operator()(const PT0& p0, const PT1& p1, const PT2& p2, const PT3& p3) const
+	void operator()(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3) const
 	{
-		_trig_handler(*_dstRec, std::move(msg_param<PT0, PT1, PT2, PT3>(p0, p1, p2, p3)));
+		_trig_handler(*_dstRec, std::move(msg_param<PT0, PT1, PT2, PT3>(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2), CHECK_MOVE(p3))));
 	}
 
 	template <typename PT0, typename PT1, typename PT2>
-	void operator()(const PT0& p0, const PT1& p1, const PT2& p2) const
+	void operator()(PT0&& p0, PT1&& p1, PT2&& p2) const
 	{
-		_trig_handler(*_dstRec, std::move(msg_param<PT0, PT1, PT2>(p0, p1, p2)));
+		_trig_handler(*_dstRec, std::move(msg_param<PT0, PT1, PT2>(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2))));
 	}
 
 	template <typename PT0, typename PT1>
-	void operator()(const PT0& p0, const PT1& p1) const
+	void operator()(PT0&& p0, PT1&& p1) const
 	{
-		_trig_handler(*_dstRec, std::move(msg_param<PT0, PT1>(p0, p1)));
+		_trig_handler(*_dstRec, std::move(msg_param<PT0, PT1>(CHECK_MOVE(p0), CHECK_MOVE(p1))));
 	}
 
 	template <typename PT0>
-	void operator()(const PT0& p0) const
+	void operator()(PT0&& p0) const
 	{
-		_trig_handler(*_dstRec, std::move(msg_param<PT0>(p0)));
+		_trig_handler(*_dstRec, std::move(msg_param<PT0>(CHECK_MOVE(p0))));
 	}
 
 	void operator()() const
@@ -2032,7 +2032,7 @@ public:
 	void cancel_delay_trig();
 public:
 	/*!
-	@brief 发送一个异步函数到shared_strand中执行，完成后返回
+	@brief 发送一个异步函数到shared_strand中执行（如果是和self一样的shared_strand直接执行），配合quit_guard使用防止引用失效，完成后返回
 	*/
 	template <typename H>
 	__yield_interrupt void send(shared_strand exeStrand, H&& h)
@@ -2064,6 +2064,10 @@ public:
 		return h();
 	}
 
+	/*!
+	@brief 强制将一个函数发送到一个shared_strand中执行（比如某个API会进行很多层次的堆栈调用，而当前Actor堆栈不够，可以用此切换到线程堆栈中直接执行），
+		配合quit_guard使用防止引用失效，完成后返回
+	*/
 	template <typename H>
 	__yield_interrupt void async_send(shared_strand exeStrand, H&& h)
 	{
@@ -2083,6 +2087,18 @@ public:
 		exeStrand->asyncInvoke(CHECK_MOVE(h), [shared_this, &dstRec](const T0& p0){shared_this->_trig_handler(dstRec, std::move(msg_param<T0>(p0))); });
 		push_yield();
 		return dstBuff.get()._res0;
+	}
+
+	template <typename H>
+	__yield_interrupt void async_send_self(H&& h)
+	{
+		async_send(_strand, CHECK_MOVE(h));
+	}
+
+	template <typename T0, typename H>
+	__yield_interrupt T0 async_send_self(H&& h)
+	{
+		return async_send<T0>(_strand, CHECK_MOVE(h));
 	}
 
 	/*!
