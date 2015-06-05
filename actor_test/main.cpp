@@ -223,11 +223,6 @@ void perfor_test(my_actor* self, ios_proxy& ios)
 		list<child_actor_handle::ptr> childList;
 		vector<int> count;
 		count.resize(num);
-#ifdef _DEBUG
-		size_t stackSize = DEFAULT_STACKSIZE;
-#else
-		size_t stackSize = 12 kB;
-#endif
 		for (int i = 0; i < num; i++)
 		{
 			count[i] = 0;
@@ -239,7 +234,7 @@ void perfor_test(my_actor* self, ios_proxy& ios)
 					count[i]++;
 					self->yield_guard();
 				}
-			}, stackSize);
+			}, STACK_SIZE_REL(12 kB));
 			childList.push_front(newactor);
 			self->child_actor_run(*childList.front());
 		}
@@ -256,40 +251,6 @@ void perfor_test(my_actor* self, ios_proxy& ios)
 	printf("性能测试结束\n");
 }
 
-void create_null_actor(my_actor* self, int* count)
-{
-	while (true)
-	{
-		size_t yieldTick = self->yield_count();
-		list<child_actor_handle::ptr> childList;
-		for (int i = 0; i < 100; i++)
-		{
-			(*count)++;
-			auto newactor = child_actor_handle::make_ptr();
-			*newactor = self->create_child_actor([](my_actor*){});
-			childList.push_back(newactor);
-		}
-		self->child_actors_force_quit(childList);
-		if (self->yield_count() == yieldTick)
-		{
-			self->yield();
-		}
-	}
-}
-
-void create_actor_test(my_actor* self)
-{
-	while (true)
-	{
-		int count = 0;
-		child_actor_handle createactor = self->create_child_actor(boost::bind(&create_null_actor, _1, &count));
-		self->child_actor_run(createactor);
-		self->sleep(1000);
-		self->child_actor_force_quit(createactor);
-		printf("1秒创建Actor数=%d\n", count);
-	}
-}
-
 void actor_test(my_actor* self)
 {
 	ios_proxy perforIos;//用于测试多线程下的Actor切换性能
@@ -302,7 +263,6 @@ void actor_test(my_actor* self)
 	child_actor_handle actorPrint = self->create_child_actor(boost::bind(&actor_test_print, _1, VK_SPACE));//检测空格键
 	child_actor_handle actorTwo = self->create_child_actor(boost::bind(&check_two_down, _1, 10, 'D', 'F'));//检测D,F键是否同时按下(设置间隔误差10ms)
 	child_actor_handle actorPerfor = self->create_child_actor(boost::bind(&perfor_test, _1, boost::ref(perforIos)));//Actor切换性能测试
-	child_actor_handle actorCreate = self->create_child_actor(boost::bind(&create_actor_test, _1));//Actor创建性能测试
 	child_actor_handle actorShift = self->create_child_actor(boost::bind(&test_shift, _1, actorPerfor.get_actor()));//shift+字母检测
 	child_actor_handle actorProducer1;
 	child_actor_handle actorProducer2;
@@ -492,7 +452,6 @@ void actor_test(my_actor* self)
 //	chs.push_back(actorPerfor.get_actor());
 	chs.push_back(actorProducer1.get_actor());
 	chs.push_back(actorProducer2.get_actor());
-	chs.push_back(actorCreate.get_actor());
 	child_actor_handle actorSuspend = self->create_child_actor(boost::bind(&actor_suspend, _1, boost::ref(chs)), 32 kB);//点击鼠标右键暂停按键检测
 	child_actor_handle actorResume = self->create_child_actor(boost::bind(&actor_resume, _1, boost::ref(chs)), 32 kB);//点击鼠标左键恢复按键检测
 	self->child_actor_run(actorLeft);
@@ -503,7 +462,6 @@ void actor_test(my_actor* self)
 	self->child_actor_run(actorShift);
 	self->child_actor_run(actorTwo);
 	self->child_actor_run(actorPerfor);
-//	self->child_actor_run(actorCreate);
 	self->child_actor_run(actorSuspend);
 	self->child_actor_run(actorResume);
 	self->child_actor_suspend(actorPerfor);
@@ -520,7 +478,6 @@ void actor_test(my_actor* self)
 	self->child_actor_force_quit(actorConsumer);
 	self->child_actor_force_quit(actorProducer1);
 	self->child_actor_force_quit(actorProducer2);
-	self->child_actor_force_quit(actorCreate);
 	self->child_actor_force_quit(actorSuspend);
 	self->child_actor_force_quit(actorResume);
 	actorMutex1.get_actor()->notify_quit();
