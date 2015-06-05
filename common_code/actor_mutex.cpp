@@ -218,7 +218,7 @@ public:
 					auto& ntf_ = ref4.ntf;
 					ntf_ = ref4.ath.make_notifer();
 					wait_node wn = { ntf_, host_->self_id() };
-					ref4->_waitQueue.push_back(wn);
+					ref4->_waitQueue.push_front(wn);
 					ref4.complete = false;
 				}
 			}

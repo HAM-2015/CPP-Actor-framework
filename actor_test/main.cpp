@@ -341,19 +341,13 @@ void actor_test(my_actor* self)
 			{
 				my_actor::quit_guard qg(self);//保护上锁期间不让Actor强制退出
 				//actor_lock_guard lg(amutex, self);
-				if (amutex.timed_lock(800, self))
+				amutex.lock(self);
+				for (int i = 0; i < 10 && !self->quit_msg(); i++)
 				{
-					for (int i = 0; i < 10 && !self->quit_msg(); i++)
-					{
-						printf("%d--%d\n", i, (int)self->self_id());
-						self->sleep(100);
-					}
-					amutex.unlock(self);
+					printf("%d--%d\n", i, (int)self->self_id());
+					self->sleep(100);
 				}
-				else
-				{
-					printf("---\n");
-				}
+				amutex.unlock(self);
 			}
 		};
 		actorMutex1 = self->create_child_actor(actorMutexH);
