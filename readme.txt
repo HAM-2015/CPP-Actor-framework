@@ -13,6 +13,9 @@ oschina url
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
+2015-06-06
+添加直接产生上下文的回调函数，可以不用显示使用await操作等待回调完成.
+
 2015-06-03
 优化检测堆栈溢出功能，输出具体哪个Actor溢出日志.
 

@@ -533,6 +533,11 @@ void trig_once_base::trig_handler() const
 	_hostActor->trig_handler();
 #endif
 }
+
+void trig_once_base::push_yield() const
+{
+	_hostActor->push_yield();
+}
 //////////////////////////////////////////////////////////////////////////
 
 template <typename T>
@@ -754,7 +759,7 @@ my_actor::~my_actor()
 #ifdef CHECK_ACTOR_STACK
 	unsigned char* bt = (unsigned char*)_stackTop - _stackSize - STACK_RESERVED_SPACE_SIZE;
 	size_t i = 0;
-	for (; i < STACK_RESERVED_SPACE_SIZE && bt[i] == 0xFE; i++) {}
+	for (; i < STACK_RESERVED_SPACE_SIZE && bt[i] == 0xFD; i++) {}
 	if (i != STACK_RESERVED_SPACE_SIZE)
 	{
 		stack_overflow_format(i, _createStack);
@@ -814,7 +819,7 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 #endif
 
 #ifdef CHECK_ACTOR_STACK
-	memset((unsigned char*)newActor->_stackTop - newActor->_stackSize - STACK_RESERVED_SPACE_SIZE, 0xFE, STACK_RESERVED_SPACE_SIZE);
+	memset((unsigned char*)newActor->_stackTop - newActor->_stackSize - STACK_RESERVED_SPACE_SIZE, 0xFD, STACK_RESERVED_SPACE_SIZE);
 	newActor->_createStack = std::shared_ptr<list<stack_line_info>>(new list<stack_line_info>(get_stack_list(8)));
 #endif
 	return newActor;
@@ -1459,7 +1464,7 @@ void my_actor::switch_pause_play()
 	switch_pause_play(std::function<void (bool isPaused)>());
 }
 
-void my_actor::switch_pause_play(const std::function<void (bool isPaused)>& h)
+void my_actor::switch_pause_play(const std::function<void (bool)>& h)
 {
 	actor_handle shared_this = shared_from_this();
 	_strand->post([shared_this, h]
@@ -2115,6 +2120,12 @@ void my_actor::close_trig_notifer(actor_msg_handle_base& ath)
 {
 	assert_enter();
 	ath.close();
+}
+
+callback_handler<> my_actor::make_callback()
+{
+	assert_enter();
+	return callback_handler<>(this);
 }
 
 bool my_actor::timed_wait_trig(int tm, actor_trig_handle<>& ath)

@@ -237,4 +237,9 @@ struct ref_ex<T0, void, void, void>
 	T0& _p0;
 };
 
+template <>
+struct ref_ex<void, void, void, void>
+{
+};
+
 #endif

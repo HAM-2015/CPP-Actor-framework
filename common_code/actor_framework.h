@@ -294,6 +294,11 @@ struct msg_param<T0, void, void, void>
 
 	T0 _res0;
 };
+
+template <>
+struct msg_param<void, void, void, void>
+{
+};
 //////////////////////////////////////////////////////////////////////////
 
 template <typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
@@ -324,7 +329,7 @@ struct dst_receiver_ref : public dst_receiver_base<T0, T1, T2, T3>
 		s.move_out(_dstRef);
 	}
 
-	ref_type& _dstRef;
+	ref_type _dstRef;
 };
 
 template <typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
@@ -403,17 +408,15 @@ class actor_msg_handle;
 template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
 class actor_trig_handle;
 
-template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
-class actor_msg_notifer
+template <typename msg_handle, typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
+class msg_notifer_base
 {
-	typedef actor_msg_handle<T0, T1, T2, T3> msg_handle;
-
 	friend msg_handle;
-public:
-	actor_msg_notifer()
+protected:
+	msg_notifer_base()
 		:_msgHandle(NULL){}
-private:
-	actor_msg_notifer(msg_handle* msgHandle)
+
+	msg_notifer_base(msg_handle* msgHandle)
 		:_msgHandle(msgHandle),
 		_hostActor(_msgHandle->_hostActor->shared_from_this()),
 		_closed(msgHandle->_closed)
@@ -500,7 +503,7 @@ public:
 		});
 	}
 
-	typename func_type<T0, T1, T2, T3>::result case_func()
+	typename func_type<T0, T1, T2, T3>::result case_func() const
 	{
 		return typename func_type<T0, T1, T2, T3>::result(*this);
 	}
@@ -532,6 +535,28 @@ private:
 	std::shared_ptr<bool> _closed;
 };
 
+template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
+class actor_msg_notifer: public msg_notifer_base<actor_msg_handle<T0, T1, T2, T3>, T0, T1, T2, T3>
+{
+	friend actor_msg_handle<T0, T1, T2, T3>;
+public:
+	actor_msg_notifer()	{}
+private:
+	actor_msg_notifer(actor_msg_handle<T0, T1, T2, T3>* msgHandle)
+		:msg_notifer_base(msgHandle) {}
+};
+
+template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
+class actor_trig_notifer : public msg_notifer_base<actor_trig_handle<T0, T1, T2, T3>, T0, T1, T2, T3>
+{
+	friend actor_trig_handle<T0, T1, T2, T3>;
+public:
+	actor_trig_notifer() {}
+private:
+	actor_trig_notifer(actor_trig_handle<T0, T1, T2, T3>* msgHandle)
+		:msg_notifer_base(msgHandle) {}
+};
+
 template <typename T0, typename T1, typename T2, typename T3>
 class actor_msg_handle: public actor_msg_handle_base
 {
@@ -540,7 +565,7 @@ class actor_msg_handle: public actor_msg_handle_base
 	typedef dst_receiver_base<T0, T1, T2, T3> dst_receiver;
 	typedef actor_msg_notifer<T0, T1, T2, T3> msg_notifer;
 
-	friend msg_notifer;
+	friend msg_notifer_base<actor_msg_handle<T0, T1, T2, T3>, T0, T1, T2, T2>;
 	friend my_actor;
 public:
 	actor_msg_handle(size_t fixedSize = 16)
@@ -625,7 +650,7 @@ class actor_msg_handle<void, void, void, void> : public actor_msg_handle_base
 {
 	typedef actor_msg_notifer<> msg_notifer;
 
-	friend msg_notifer;
+	friend msg_notifer_base<actor_msg_handle<>>;
 	friend my_actor;
 public:
 	~actor_msg_handle()
@@ -694,130 +719,6 @@ private:
 };
 //////////////////////////////////////////////////////////////////////////
 
-template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
-class actor_trig_notifer
-{
-	typedef actor_trig_handle<T0, T1, T2, T3> trig_handle;
-
-	friend trig_handle;
-public:
-	actor_trig_notifer()
-		:_trigHandle(NULL){}
-private:
-	actor_trig_notifer(trig_handle* trigHandle)
-		:_trigHandle(trigHandle),
-		_hostActor(trigHandle->_hostActor->shared_from_this()),
-		_closed(trigHandle->_closed)
-	{
-		assert(_trigHandle->_strand == _hostActor->self_strand());
-	}
-public:
-	template <typename PT0, typename PT1, typename PT2, typename PT3>
-	void operator()(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3) const
-	{
-		auto& trigHandle_ = _trigHandle;
-		auto& hostActor_ = _hostActor;
-		auto& closed_ = _closed;
-		_strand->post([=]
-		{
-			if (!(*closed_))
-			{
-				auto lockActor = hostActor_;
-				trigHandle_->push_msg(ref_ex<T0, T1, T2, T3>((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3));
-			}
-		});
-	}
-
-	template <typename PT0, typename PT1, typename PT2>
-	void operator()(PT0&& p0, PT1&& p1, PT2&& p2) const
-	{
-		auto& trigHandle_ = _trigHandle;
-		auto& hostActor_ = _hostActor;
-		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]
-		{
-			if (!(*closed_))
-			{
-				auto lockActor = hostActor_;
-				trigHandle_->push_msg(ref_ex<T0, T1, T2>((T0&)p0, (T1&)p1, (T2&)p2));
-			}
-		});
-	}
-
-	template <typename PT0, typename PT1>
-	void operator()(PT0&& p0, PT1&& p1) const
-	{
-		auto& trigHandle_ = _trigHandle;
-		auto& hostActor_ = _hostActor;
-		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]
-		{
-			if (!(*closed_))
-			{
-				auto lockActor = hostActor_;
-				trigHandle_->push_msg(ref_ex<T0, T1>((T0&)p0, (T1&)p1));
-			}
-		});
-	}
-
-	template <typename PT0>
-	void operator()(PT0&& p0) const
-	{
-		auto& trigHandle_ = _trigHandle;
-		auto& hostActor_ = _hostActor;
-		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]
-		{
-			if (!(*closed_))
-			{
-				auto lockActor = hostActor_;
-				trigHandle_->push_msg(ref_ex<T0>((T0&)p0));
-			}
-		});
-	}
-
-	void operator()() const
-	{
-		auto& trigHandle_ = _trigHandle;
-		auto& hostActor_ = _hostActor;
-		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]
-		{
-			if (!(*closed_))
-			{
-				auto lockActor = hostActor_;
-				trigHandle_->push_msg();
-			}
-		});
-	}
-
-	typename func_type<T0, T1, T2, T3>::result case_func()
-	{
-		return typename func_type<T0, T1, T2, T3>::result(*this);
-	}
-
-	bool empty() const
-	{
-		return !_trigHandle;
-	}
-
-	void clear()
-	{
-		_trigHandle = NULL;
-		_hostActor.reset();
-		_closed.reset();
-	}
-
-	operator bool() const
-	{
-		return !empty();
-	}
-private:
-	trig_handle* _trigHandle;
-	actor_handle _hostActor;
-	std::shared_ptr<bool> _closed;
-};
-
 template <typename T0, typename T1, typename T2, typename T3>
 class actor_trig_handle : public actor_msg_handle_base
 {
@@ -826,7 +727,7 @@ class actor_trig_handle : public actor_msg_handle_base
 	typedef dst_receiver_base<T0, T1, T2, T3> dst_receiver;
 	typedef actor_trig_notifer<T0, T1, T2, T3> msg_notifer;
 
-	friend msg_notifer;
+	friend msg_notifer_base<actor_trig_handle<T0, T1, T2, T3>, T0, T1, T2, T3>;
 	friend my_actor;
 public:
 	actor_trig_handle()
@@ -918,7 +819,7 @@ class actor_trig_handle<void, void, void, void> : public actor_msg_handle_base
 {
 	typedef actor_trig_notifer<> msg_notifer;
 
-	friend msg_notifer;
+	friend msg_notifer_base<actor_trig_handle<>>;
 	friend my_actor;
 public:
 	actor_trig_handle()
@@ -1534,7 +1435,7 @@ public:
 		_msgPool->push_msg(_hostActor);
 	}
 
-	typename func_type<T0, T1, T2, T3>::result case_func()
+	typename func_type<T0, T1, T2, T3>::result case_func() const
 	{
 		return typename func_type<T0, T1, T2, T3>::result(*this);
 	}
@@ -1563,7 +1464,15 @@ private:
 class trig_once_base
 {
 protected:
-	DEBUG_OPERATION(trig_once_base() :_pIsTrig(new boost::atomic<bool>(false)){})
+	trig_once_base()
+		DEBUG_OPERATION(:_pIsTrig(new boost::atomic<bool>(false)))
+	{
+	}
+	trig_once_base(const trig_once_base& s)
+		:_hostActor(s._hostActor)
+	{
+		DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
+	}
 public:
 	virtual ~trig_once_base(){};
 protected:
@@ -1586,7 +1495,29 @@ protected:
 #endif
 	}
 
+	template <typename DST /*ref_ex*/, typename SRC /*msg_param*/>
+	void _trig_handler_ref(DST dstRef, SRC&& src) const
+	{
+#ifdef _DEBUG
+		if (!_pIsTrig->exchange(true))
+		{
+			assert(_hostActor);
+			_hostActor->_trig_handler_ref(dstRef, std::move(src));
+		}
+		else
+		{
+			assert(false);
+		}
+#else
+		assert(_hostActor);
+		_hostActor->_trig_handler_ref(dstRef, std::move(src));
+#endif
+	}
+
+
 	void trig_handler() const;
+
+	void push_yield() const;
 protected:
 	actor_handle _hostActor;
 	DEBUG_OPERATION(std::shared_ptr<boost::atomic<bool> > _pIsTrig);
@@ -1609,25 +1540,132 @@ public:
 	template <typename PT0, typename PT1, typename PT2, typename PT3>
 	void operator()(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3) const
 	{
-		_trig_handler(*_dstRec, std::move(msg_param<PT0, PT1, PT2, PT3>(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2), CHECK_MOVE(p3))));
+		_trig_handler(*_dstRec, std::move(msg_param<T0, T1, T2, T3>(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2), CHECK_MOVE(p3))));
 	}
 
 	template <typename PT0, typename PT1, typename PT2>
 	void operator()(PT0&& p0, PT1&& p1, PT2&& p2) const
 	{
-		_trig_handler(*_dstRec, std::move(msg_param<PT0, PT1, PT2>(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2))));
+		_trig_handler(*_dstRec, std::move(msg_param<T0, T1, T2>(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2))));
 	}
 
 	template <typename PT0, typename PT1>
 	void operator()(PT0&& p0, PT1&& p1) const
 	{
-		_trig_handler(*_dstRec, std::move(msg_param<PT0, PT1>(CHECK_MOVE(p0), CHECK_MOVE(p1))));
+		_trig_handler(*_dstRec, std::move(msg_param<T0, T1>(CHECK_MOVE(p0), CHECK_MOVE(p1))));
 	}
 
 	template <typename PT0>
 	void operator()(PT0&& p0) const
 	{
-		_trig_handler(*_dstRec, std::move(msg_param<PT0>(CHECK_MOVE(p0))));
+		_trig_handler(*_dstRec, std::move(msg_param<T0>(CHECK_MOVE(p0))));
+	}
+
+	void operator()() const
+	{
+		trig_handler();
+	}
+
+	typename func_type<T0, T1, T2, T3>::result case_func() const
+	{
+		return typename func_type<T0, T1, T2, T3>::result(*this);
+	}
+private:
+	dst_receiver* _dstRec;
+};
+//////////////////////////////////////////////////////////////////////////
+/*!
+@brief 异步回调器，作为回调函数参数传入，回调后，自动返回到下一行语句继续执行，如需要之间用 quit_guard 锁住不让强制退出，否则之间抛出退出异常时会崩溃
+*/
+template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
+class callback_handler: public trig_once_base
+{
+	typedef msg_param<T0, T1, T2, T3> msg_type;
+	typedef ref_ex<T0, T1, T2, T3> ref_type;
+	typedef dst_receiver_ref<T0, T1, T2, T3> dst_receiver;
+
+	friend my_actor;
+public:
+	template <typename PT0, typename PT1, typename PT2, typename PT3>
+	callback_handler(my_actor* host, PT0& r0, PT1& r1, PT2& r2, PT3& r3)
+		:_early(true), _dstRef(r0, r1, r2, r3)
+	{
+		_hostActor = host->shared_from_this();
+	}
+
+	template <typename PT0, typename PT1, typename PT2>
+	callback_handler(my_actor* host, PT0& r0, PT1& r1, PT2& r2)
+		: _early(true), _dstRef(r0, r1, r2)
+	{
+		_hostActor = host->shared_from_this();
+	}
+
+	template <typename PT0, typename PT1>
+	callback_handler(my_actor* host, PT0& r0, PT1& r1)
+		: _early(true), _dstRef(r0, r1)
+	{
+		_hostActor = host->shared_from_this();
+	}
+
+	template <typename PT0>
+	callback_handler(my_actor* host, PT0& r0)
+		: _early(true), _dstRef(r0)
+	{
+		_hostActor = host->shared_from_this();
+	}
+
+	callback_handler(my_actor* host)
+		:_early(true)
+	{
+		_hostActor = host->shared_from_this();
+	}
+
+	~callback_handler()
+	{
+		if (_early)
+		{
+#ifdef _DEBUG
+			try
+			{
+				push_yield();
+			}
+			catch (...)
+			{
+				assert(false);
+			}
+#else
+			push_yield();
+#endif
+		}
+	}
+
+	callback_handler(const callback_handler& s)
+		:trig_once_base(s), _early(false), _dstRef(s._dstRef)
+	{
+	}
+public:
+	template <typename PT0, typename PT1, typename PT2, typename PT3>
+	void operator()(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3) const
+	{
+		_trig_handler_ref(_dstRef, std::move(msg_param<T0, T1, T2, T3>(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2), CHECK_MOVE(p3))));
+	}
+
+	template <typename PT0, typename PT1, typename PT2>
+	void operator()(PT0&& p0, PT1&& p1, PT2&& p2) const
+	{
+		_trig_handler_ref(_dstRef, std::move(msg_param<T0, T1, T2>(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2))));
+	}
+
+	template <typename PT0, typename PT1>
+	void operator()(PT0&& p0, PT1&& p1) const
+	{
+		_trig_handler_ref(_dstRef, std::move(msg_param<T0, T1>(CHECK_MOVE(p0), CHECK_MOVE(p1))));
+	}
+
+	template <typename PT0>
+	void operator()(PT0&& p0) const
+	{
+		_trig_handler_ref(_dstRef, std::move(msg_param<T0>(CHECK_MOVE(p0))));
 	}
 
 	void operator()() const
@@ -1635,7 +1673,13 @@ public:
 		trig_handler();
 	}
 private:
-	dst_receiver* _dstRec;
+	callback_handler& operator=(const callback_handler&)
+	{
+		return *this;
+	}
+private:
+	bool _early;
+	ref_type _dstRef;
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -2186,6 +2230,31 @@ private:
 			});
 		}
 	}
+
+	template <typename DST /*ref_ex*/, typename SRC /*msg_param*/>
+	void _trig_handler_ref(DST dstRef, SRC&& src)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			if (!_quited)
+			{
+				src.move_out(dstRef);
+				trig_handler();
+			}
+		}
+		else
+		{
+			actor_handle shared_this = shared_from_this();
+			_strand->post([=]
+			{
+				if (!shared_this->_quited)
+				{
+					((SRC&)src).move_out((DST&)dstRef);
+					shared_this->pull_yield();
+				}
+			});
+		}
+	}
 public:
 	/*!
 	@brief 创建一个消息通知函数
@@ -2553,6 +2622,39 @@ public:
 	@brief 关闭消息触发句柄
 	*/
 	void close_trig_notifer(actor_msg_handle_base& ath);
+
+	/*!
+	@brief 创建回调出发函数，直接作为回调参数使用，async_func(..., Handler self->make_callback())
+	*/
+	template <typename T0, typename T1, typename T2, typename T3>
+	callback_handler<T0, T1, T2, T3> make_callback(T0& r0, T1& r1, T2& r2, T3& r3)
+	{
+		assert_enter();
+		return callback_handler<T0, T1, T2, T3>(this, r0, r1, r2, r3);
+	}
+
+	template <typename T0, typename T1, typename T2>
+	callback_handler<T0, T1, T2> make_callback(T0& r0, T1& r1, T2& r2)
+	{
+		assert_enter();
+		return callback_handler<T0, T1, T2>(this, r0, r1, r2);
+	}
+
+	template <typename T0, typename T1>
+	callback_handler<T0, T1> make_callback(T0& r0, T1& r1)
+	{
+		assert_enter();
+		return callback_handler<T0, T1>(this, r0, r1);
+	}
+
+	template <typename T0>
+	callback_handler<T0> make_callback(T0& r0)
+	{
+		assert_enter();
+		return callback_handler<T0>(this, r0);
+	}
+
+	callback_handler<> make_callback();
 public:
 	/*!
 	@brief 从触发句柄中提取消息
@@ -3866,7 +3968,7 @@ public:
 	@brief 切换挂起/非挂起状态
 	*/
 	void switch_pause_play();
-	void switch_pause_play(const std::function<void (bool isPaused)>& h);
+	void switch_pause_play(const std::function<void (bool)>& h);
 
 	/*!
 	@brief 等待Actor退出，在Actor所依赖的ios无关线程中使用
