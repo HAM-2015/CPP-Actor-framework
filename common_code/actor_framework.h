@@ -47,13 +47,6 @@ using namespace std;
 #define END_CHECK_FORCE_QUIT
 #endif
 
-// Actor内使用，在使用了Actor函数的异常捕捉 catch (...) 之前用于过滤Actor退出异常并继续抛出，不然可能导致程序崩溃
-#define CATCH_ACTOR_QUIT()\
-catch (my_actor::force_quit_exception& e)\
-{\
-	throw e;\
-}
-
 //检测 pump_msg 是否有 pump_disconnected_exception 异常抛出，因为在 catch 内部不能安全的进行coro切换
 #define CATCH_PUMP_DISCONNECTED CATCH_FOR(my_actor::pump_disconnected_exception)
 
@@ -1468,13 +1461,14 @@ protected:
 		DEBUG_OPERATION(:_pIsTrig(new boost::atomic<bool>(false)))
 	{
 	}
+
 	trig_once_base(const trig_once_base& s)
 		:_hostActor(s._hostActor)
 	{
 		DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
 	}
 public:
-	virtual ~trig_once_base(){};
+	virtual ~trig_once_base() {};
 protected:
 	template <typename DST /*dst_receiver*/, typename SRC /*msg_param*/>
 	void _trig_handler(DST& dstRec, SRC&& src) const
@@ -1575,7 +1569,7 @@ private:
 };
 //////////////////////////////////////////////////////////////////////////
 /*!
-@brief 异步回调器，作为回调函数参数传入，回调后，自动返回到下一行语句继续执行，如需要之间用 quit_guard 锁住不让强制退出，否则之间抛出退出异常时会崩溃
+@brief 异步回调器，作为回调函数参数传入，回调后，自动返回到下一行语句继续执行
 */
 template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
 class callback_handler: public trig_once_base
@@ -1624,18 +1618,8 @@ public:
 	{
 		if (_early)
 		{
-#ifdef _DEBUG
-			try
-			{
-				push_yield();
-			}
-			catch (...)
-			{
-				assert(false);
-			}
-#else
+			//可能在此析构函数内抛出 force_quit_exception 异常，但在 push_yield 已经切换出堆栈，在切换回来后会安全的释放资源
 			push_yield();
-#endif
 		}
 	}
 
@@ -1710,6 +1694,7 @@ private:
 private:
 	child_actor_handle(child_actor_handle&);
 	child_actor_handle& operator =(child_actor_handle&);
+	void peel();
 public:
 	child_actor_handle();
 	child_actor_handle(child_actor_param& s);
@@ -1718,11 +1703,6 @@ public:
 	actor_handle get_actor();
 	static ptr make_ptr();
 	bool empty();
-private:
-	void peel();
-	void* operator new(size_t s);
-public:
-	void operator delete(void* p);
 private:
 	DEBUG_OPERATION(msg_list_shared_alloc<std::function<void()> >::iterator _qh);
 	bool _quited;///<检测是否已经关闭
@@ -1872,6 +1852,7 @@ public:
 		{
 			if (_locked)
 			{
+				//可能在此析构函数内抛出 force_quit_exception 异常，但在 unlock_quit 已经切换出堆栈，在切换回来后会安全的释放资源
 				_self->unlock_quit();
 			}
 		}

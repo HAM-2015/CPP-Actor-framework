@@ -197,21 +197,6 @@ bool child_actor_handle::empty()
 	return !_param._actor;
 }
 
-void* child_actor_handle::operator new(size_t s)
-{
-	void* p = malloc(s);
-	assert(p);
-	return p;
-}
-
-void child_actor_handle::operator delete(void* p)
-{
-	if (p)
-	{
-		free(p);
-	}
-}
-
 //////////////////////////////////////////////////////////////////////////
 
 void actor_msg_handle_base::run_one()
