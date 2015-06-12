@@ -182,6 +182,7 @@
     <ClInclude Include="..\common_code\stack_object.h" />
     <ClInclude Include="..\common_code\strand_ex.h" />
     <ClInclude Include="..\common_code\scattered.h" />
+    <ClInclude Include="..\common_code\sync_msg.h" />
     <ClInclude Include="..\common_code\wrapped_dispatch_handler.h" />
     <ClInclude Include="..\common_code\wrapped_post_handler.h" />
   </ItemGroup>

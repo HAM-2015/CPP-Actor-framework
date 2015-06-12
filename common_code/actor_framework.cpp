@@ -9,22 +9,6 @@ typedef boost::coroutines::coroutine<void>::pull_type actor_pull_type;
 typedef boost::coroutines::coroutine<void>::push_type actor_push_type;
 typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> timer_type;
 
-#ifdef _DEBUG
-
-#define CHECK_EXCEPTION(__h) try { (__h)(); } catch (...) { assert(false); }
-#define CHECK_EXCEPTION1(__h, __p0) try { (__h)(__p0); } catch (...) { assert(false); }
-#define CHECK_EXCEPTION2(__h, __p0, __p1) try { (__h)(__p0, __p1); } catch (...) { assert(false); }
-#define CHECK_EXCEPTION3(__h, __p0, __p1, __p2) try { (__h)(__p0, __p1, __p2); } catch (...) { assert(false); }
-
-#else
-
-#define CHECK_EXCEPTION(__h) (__h)()
-#define CHECK_EXCEPTION1(__h, __p0) (__h)(__p0)
-#define CHECK_EXCEPTION2(__h, __p0, __p1) (__h)(__p0, __p1)
-#define CHECK_EXCEPTION3(__h, __p0, __p1, __p2) (__h)(__p0, __p1, __p2)
-
-#endif //end _DEBUG
-
 //ÄÚ´æ±ß½ç¶ÔÆë
 #define MEM_ALIGN(__o, __a) (((__o) + ((__a)-1)) & (((__a)-1) ^ -1))
 
@@ -639,18 +623,6 @@ public:
 		{
 			assert(false);
 		}
-		catch (actor_mutex::close_exception&)
-		{
-			assert(false);
-		}
-		catch (actor_shared_mutex::close_exception&)
-		{
-			assert(false);
-		}
-		catch (actor_condition_variable::close_exception&)
-		{
-			assert(false);
-		}
 		catch (...)
 		{
 			assert(false);
@@ -1043,7 +1015,6 @@ void my_actor::open_timer()
 	{
 		if (actor_stack_pool::isEnable())
 		{
-			size_t timerSize = MEM_ALIGN(sizeof(timer_pck), sizeof(void*));
 			_timer = new(_stackTop) timer_pck(_strand->get_ios_proxy());
 		}
 		else

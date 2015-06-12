@@ -29,13 +29,8 @@ public:
 
 	}
 public:
-	void push(my_actor* host, const T& msg)
-	{
-		T t = msg;
-		push(host, std::move(t));
-	}
-
-	void push(my_actor* host, T&& msg)
+	template <typename TM>
+	void push(my_actor* host, TM&& msg)
 	{
 		my_actor::quit_guard qg(host);
 		while (true)
@@ -51,7 +46,7 @@ public:
 					isFull = _buffer.full();
 					if (!isFull)
 					{
-						_buffer.push_back(std::move(msg));
+						_buffer.push_back(check_move<TM&&>::move(msg));
 						if (!_popWait.empty())
 						{
 							_popWait.front()(true);
@@ -81,13 +76,8 @@ public:
 		}
 	}
 
-	bool try_push(my_actor* host, const T& msg)
-	{
-		T t = msg;
-		return try_push(host, std::move(t));
-	}
-
-	bool try_push(my_actor* host, T&& msg)
+	template <typename TM>
+	bool try_push(my_actor* host, TM&& msg)
 	{
 		my_actor::quit_guard qg(host);
 		bool isFull = false;
@@ -100,7 +90,7 @@ public:
 				isFull = _buffer.full();
 				if (!isFull)
 				{
-					_buffer.push_back(std::move(msg));
+					_buffer.push_back(check_move<TM&&>::move(msg));
 					if (!_popWait.empty())
 					{
 						_popWait.front()(true);
@@ -155,14 +145,7 @@ public:
 			}
 			if (!isEmpty)
 			{
-				struct destory_t 
-				{
-					~destory_t()
-					{
-						_p->~T();
-					}
-					T* _p;
-				} ad = { (T*)resBuf };
+				AUTO_CALL({ ((T*)resBuf)->~T(); });
 				return std::move(*(T*)resBuf);
 			}
 			if (!host->wait_trig(ath))
@@ -231,6 +214,9 @@ public:
 		_pushWait.clear();
 		_popWait.clear();
 	}
+private:
+	async_buffer(const async_buffer&){};
+	void operator=(const async_buffer&){};
 private:
 	bool _closed;
 	shared_strand _strand;

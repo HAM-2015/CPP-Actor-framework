@@ -13,6 +13,12 @@ oschina url
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
+2015-06-12
+添加同步消息(sync_msg)和CSP模型消息(csp_channel)
+
+2015-06-09
+去掉“actor_mutex”、“actor_condition_variable”、“actor_shared_mutex”不必要的 close 功能。
+
 2015-06-06
 添加直接产生上下文的回调函数，可以不用显示使用await操作等待回调完成.
 

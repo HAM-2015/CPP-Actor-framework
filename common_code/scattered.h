@@ -7,15 +7,14 @@
 
 using namespace std;
 
-#define   LIBPATH(p, f)   p##f 
+
+#define NAME_BOND(__NAMEL__, __NAMER__) __NAMEL__ ## __NAMER__
 
 #ifdef _WIN64
-#pragma comment(lib, LIBPATH(__FILE__, "./../asm_lib_x64.lib"))
+#pragma comment(lib, NAME_BOND(__FILE__, "./../asm_lib_x64.lib"))
 #else
-#pragma comment(lib, LIBPATH(__FILE__, "./../asm_lib_x86.lib"))
+#pragma comment(lib, NAME_BOND(__FILE__, "./../asm_lib_x86.lib"))
 #endif // _WIN64
-
-#undef LIBPATH
 
 /*!
 @brief 获取当前esp/rsp栈顶寄存器值
@@ -123,6 +122,31 @@ inline void clear_function(F& f)
 	f = F();
 }
 
+template <typename CL>
+struct auto_call 
+{
+	template <typename TC>
+	auto_call(TC&& cl)
+		:_cl(CHECK_MOVE(cl)) {}
+
+	~auto_call()
+	{
+		_cl();
+	}
+
+	CL _cl;
+private:
+	auto_call(const auto_call&){};
+	void operator =(const auto_call&){}
+};
+
+#define BOND_LINE(__P__, __L__) NAME_BOND(__P__, __L__)
+
+//作用域退出时自动调用某个函数
+#define AUTO_CALL(__CL__) \
+	auto BOND_LINE(__t, __LINE__) = [&]__CL__; \
+	auto_call<decltype(BOND_LINE(__t, __LINE__))> BOND_LINE(__cl, __LINE__)(BOND_LINE(__t, __LINE__));
+
 /*!
 @brief 这个类在测试消息传递时使用
 */
@@ -152,8 +176,21 @@ struct passing_test
 #define DEBUG_OPERATION(__exp__)
 #endif
 
-#define NAME_BOND(__NAMEL__, __NAMER__) __NAMEL__##__NAMER__
+#ifdef _DEBUG
 
+#define CHECK_EXCEPTION(__h) try { (__h)(); } catch (...) { assert(false); }
+#define CHECK_EXCEPTION1(__h, __p0) try { (__h)(__p0); } catch (...) { assert(false); }
+#define CHECK_EXCEPTION2(__h, __p0, __p1) try { (__h)(__p0, __p1); } catch (...) { assert(false); }
+#define CHECK_EXCEPTION3(__h, __p0, __p1, __p2) try { (__h)(__p0, __p1, __p2); } catch (...) { assert(false); }
+
+#else
+
+#define CHECK_EXCEPTION(__h) (__h)()
+#define CHECK_EXCEPTION1(__h, __p0) (__h)(__p0)
+#define CHECK_EXCEPTION2(__h, __p0, __p1) (__h)(__p0, __p1)
+#define CHECK_EXCEPTION3(__h, __p0, __p1, __p2) (__h)(__p0, __p1, __p2)
+
+#endif //end _DEBUG
 #define REF_STRUCT_NAME(__NAME__) __ref_##__NAME__
 
 //用户内嵌lambda的外部变量引用捕获，可以减小直接"&捕获"sizeof(lambda)的大小，提高调度效率

@@ -15,11 +15,6 @@ class actor_mutex
 {
 	friend my_actor;
 public:
-	/*!
-	@brief mutex被关闭后 lock 函数抛出的异常
-	*/
-	struct close_exception {};
-public:
 	actor_mutex(shared_strand strand);
 	~actor_mutex();
 public:
@@ -45,16 +40,6 @@ public:
 	@brief 解除当前Actor对其持有，递归 lock 几次，就需要 unlock 几次
 	*/
 	void unlock(my_actor* host) const;
-
-	/*!
-	@brief 关闭mutex，所有等待 lock 将抛出close_exception
-	*/
-	void close(my_actor* host) const;
-
-	/*!
-	@brief close后重置，确保没有任何Actor占用后再调用
-	*/
-	void reset() const;
 private:
 	void quited_lock(my_actor* host) const;
 	void quited_unlock(my_actor* host) const;
@@ -91,10 +76,6 @@ private:
 class actor_condition_variable
 {
 public:
-	struct close_exception 
-	{
-	};
-public:
 	actor_condition_variable(shared_strand strand);
 	~actor_condition_variable();
 public:
@@ -117,16 +98,6 @@ public:
 	@brief 通知所有等待
 	*/
 	size_t notify_all(my_actor* host) const;
-
-	/*!
-	@brief 关闭对象，所有wait的将抛出close_exception异常
-	*/
-	void close(my_actor* host) const;
-
-	/*!
-	@brief close后重置，确保没有任何Actor占用后再调用
-	*/
-	void reset() const;
 private:
 	std::shared_ptr<_actor_condition_variable> _aconVar;
 };
@@ -137,8 +108,6 @@ private:
 */
 class actor_shared_mutex
 {
-public:
-	struct close_exception {};
 public:
 	actor_shared_mutex(shared_strand strand);
 	~actor_shared_mutex();
@@ -179,17 +148,50 @@ public:
 	@brief 解除独占锁定，恢复为共享锁定
 	*/
 	void unlock_upgrade(my_actor* host) const;
-
-	/*!
-	@brief 关闭对象，所有wait的将抛出close_exception异常
-	*/
-	void close(my_actor* host) const;
-
-	/*!
-	@brief close后重置，确保没有任何Actor占用后再调用
-	*/
-	void reset() const;
 private:
 	std::shared_ptr<_actor_shared_mutex> _amutex;
+};
+//////////////////////////////////////////////////////////////////////////
+
+/*!
+@brief 在一定范围内锁定shared_mutex私有锁，同时运行的Actor也会被锁定强制退出
+*/
+class actor_unique_lock
+{
+	friend _actor_condition_variable;
+public:
+	actor_unique_lock(const actor_shared_mutex& amutex, my_actor* host);
+	~actor_unique_lock();
+private:
+	actor_unique_lock(const actor_unique_lock&);
+	void operator=(const actor_unique_lock&);
+public:
+	void unlock();
+	void lock();
+private:
+	actor_shared_mutex _amutex;
+	my_actor* _host;
+	bool _isUnlock;
+};
+
+/*!
+@brief 在一定范围内锁定shared_mutex共享锁，同时运行的Actor也会被锁定强制退出
+*/
+class actor_shared_lock
+{
+	friend _actor_condition_variable;
+public:
+	actor_shared_lock(const actor_shared_mutex& amutex, my_actor* host);
+	~actor_shared_lock();
+private:
+	actor_shared_lock(const actor_shared_lock&);
+	void operator=(const actor_shared_lock&);
+public:
+	void unlock_shared();
+	void lock_shared();
+private:
+	actor_shared_mutex _amutex;
+	my_actor* _host;
+	bool _isUnlock;
 };
 #endif

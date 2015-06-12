@@ -4,6 +4,7 @@
 #include "ios_proxy.h"
 #include "actor_framework.h"
 #include "async_buffer.h"
+#include "sync_msg.h"
 #include "scattered.h"
 #include <list>
 #include <Windows.h>
@@ -274,6 +275,9 @@ void actor_test(my_actor* self)
 	child_actor_handle actorConVarNtf;
 	child_actor_handle buffPush;
 	child_actor_handle buffPop;
+	child_actor_handle syncPush;
+	child_actor_handle syncPop1;
+	child_actor_handle syncPop2;
 	//创建生产者/消费者模型测试
 	{//模拟消息转发，转发切换
 		actorConsumer = self->create_child_actor(self->self_strand()->clone(), [](my_actor* self)
@@ -432,6 +436,62 @@ void actor_test(my_actor* self)
 		//self->child_actor_run(buffPush);
 		//self->child_actor_run(buffPop);
 	}
+	sync_msg<passing_test> syncMsg(self->self_strand());
+	csp_channel<passing_test, passing_test> cspMsg(self->self_strand());
+	{//模拟同步消息发送，CSP模型消息发送
+		syncPush = self->create_child_actor(self->self_strand(), [&](my_actor* self)
+		{
+			try
+			{
+				int i = 0;
+				while (true)
+				{
+					syncMsg.send(self, passing_test(i++));
+					passing_test r = cspMsg.send(self, passing_test(i++));
+					printf("csp return %d\n", r._count->_id);
+				}
+			}
+			catch (sync_msg<passing_test>::close_exception)
+			{
+				
+			}
+			catch (csp_channel<passing_test, passing_test>::close_exception)
+			{
+
+			}
+		});
+		auto h = [&](my_actor* self)
+		{
+			try
+			{
+				int i = 0;
+				while (true)
+				{
+					passing_test id = syncMsg.take(self);
+					printf("sync %d\n", id._count->_id);
+					cspMsg.take(self, [&](const passing_test& id)->passing_test
+					{
+						printf("csp %d\n", id._count->_id);
+						self->sleep(1000);
+						return passing_test(id._count->_id*10000);
+					});
+				}
+			}
+			catch (sync_msg<passing_test>::close_exception)
+			{
+				
+			}
+			catch (csp_channel<passing_test, passing_test>::close_exception)
+			{
+
+			}
+		};
+		syncPop1 = self->create_child_actor(self->self_strand(), h);
+		syncPop2 = self->create_child_actor(self->self_strand(), h);
+// 		self->child_actor_run(syncPush);
+// 		self->child_actor_run(syncPop1);
+// 		self->child_actor_run(syncPop2);
+	}
 	list<actor_handle> chs;//需要被挂起的Actor对象，可以从下方注释几个测试
 	chs.push_back(actorLeft.get_actor());
 	chs.push_back(actorRight.get_actor());
@@ -483,6 +543,11 @@ void actor_test(my_actor* self)
 	abuff.close(self);
 	self->child_actor_force_quit(buffPush);
 	self->child_actor_force_quit(buffPop);
+	syncMsg.close(self);
+	cspMsg.close(self);
+	self->child_actor_force_quit(syncPush);
+	self->child_actor_force_quit(syncPop1);
+	self->child_actor_force_quit(syncPop2);
 	perforIos.stop();
 }
 
