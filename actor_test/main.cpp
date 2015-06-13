@@ -457,6 +457,10 @@ void actor_test(my_actor* self)
 			{
 				
 			}
+			catch (csp_channel<passing_test>::close_exception)
+			{
+
+			}
 			catch (csp_channel<passing_test, passing_test>::close_exception)
 			{
 
@@ -487,6 +491,10 @@ void actor_test(my_actor* self)
 			catch (sync_msg<passing_test>::close_exception)
 			{
 				
+			}
+			catch (csp_channel<passing_test>::close_exception)
+			{
+
 			}
 			catch (csp_channel<passing_test, passing_test>::close_exception)
 			{

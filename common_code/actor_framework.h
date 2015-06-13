@@ -903,6 +903,7 @@ public:
 protected:
 	bool is_quited();
 	void run_one();
+	void push_yield();
 protected:
 	my_actor* _hostActor;
 };
@@ -1019,6 +1020,39 @@ private:
 		return false;
 	}
 
+	bool try_read(dst_receiver& dst)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(!_dstRec);
+		assert(!_waiting);
+		if (_hasMsg)
+		{
+			_hasMsg = false;
+			dst.move_from(*(msg_type*)_msgSpace);
+			((msg_type*)_msgSpace)->~msg_type();
+			return true;
+		}
+		if (!_pumpHandler.empty())
+		{
+			bool wait = false;
+			if (_pumpHandler.try_pump(_hostActor, dst, _pumpCount, wait))
+			{
+				return true;
+			}
+			if (wait)
+			{
+				_dstRec = &dst;
+				push_yield();
+				assert(_hasMsg);
+				_hasMsg = false;
+				dst.move_from(*(msg_type*)_msgSpace);
+				((msg_type*)_msgSpace)->~msg_type();
+				return true;
+			}
+		}
+		return false;
+	}
+
 	void connect(const pump_handler& pumpHandler)
 	{
 		assert(_strand->running_in_this_thread());
@@ -1084,9 +1118,35 @@ class msg_pool : public msg_pool_base
 	typedef ref_ex<T0, T1, T2, T3> ref_type;
 	typedef msg_pump<T0, T1, T2, T3> msg_pump_type;
 	typedef post_actor_msg<T0, T1, T2, T3> post_type;
+	typedef dst_receiver_base<T0, T1, T2, T3> dst_receiver;
 
 	struct pump_handler
 	{
+		void pump_msg(unsigned char pumpID, const actor_handle& hostActor)
+		{
+			assert(_msgPump == _thisPool->_msgPump);
+			auto& msgBuff = _thisPool->_msgBuff;
+			if (pumpID == _thisPool->_sendCount)
+			{
+				if (!msgBuff.empty())
+				{
+					msg_type mt_ = std::move(msgBuff.front());
+					msgBuff.pop_front();
+					_thisPool->_sendCount++;
+					_msgPump->receive_msg(std::move(mt_), hostActor);
+				}
+				else
+				{
+					_thisPool->_waiting = true;
+				}
+			}
+			else
+			{//上次消息没取到，重新取，但实际中间已经post出去了
+				assert(!_thisPool->_waiting);
+				assert(pumpID + 1 == _thisPool->_sendCount);
+			}
+		}
+
 		void operator()(unsigned char pumpID)
 		{
 			assert(_thisPool);
@@ -1094,32 +1154,44 @@ class msg_pool : public msg_pool_base
 			{
 				if (_msgPump == _thisPool->_msgPump)
 				{
-					auto& msgBuff = _thisPool->_msgBuff;
-					if (pumpID == _thisPool->_sendCount)
-					{
-						if (!msgBuff.empty())
-						{
-							msg_type mt_ = std::move(msgBuff.front());
-							msgBuff.pop_front();
-							_thisPool->_sendCount++;
-							_thisPool->_msgPump->receive_msg(std::move(mt_), _msgPump->_hostActor->shared_from_this());
-						}
-						else
-						{
-							_thisPool->_waiting = true;
-						}
-					}
-					else
-					{//上次消息没取到，重新取，但实际中间已经post出去了
-						assert(!_thisPool->_waiting);
-						assert(pumpID + 1 == _thisPool->_sendCount);
-					}
+					pump_msg(pumpID, _msgPump->_hostActor->shared_from_this());
 				}
 			}
 			else
 			{
 				post_pump(pumpID);
 			}
+		}
+
+		bool try_pump(my_actor* host, dst_receiver&dst, unsigned char pumpID, bool& wait)
+		{
+			assert(_thisPool);
+			auto& refThis_ = *this;
+			my_actor::quit_guard qg(host);
+			return host->send<bool>(_thisPool->_strand, [&, refThis_]()->bool
+			{
+				auto lockThis = refThis_;
+				if (_msgPump == _thisPool->_msgPump)
+				{
+					auto& msgBuff = _thisPool->_msgBuff;
+					if (pumpID == _thisPool->_sendCount)
+					{
+						if (!msgBuff.empty())
+						{
+							dst.move_from(msgBuff.front());
+							msgBuff.pop_front();
+							return true;
+						}
+					}
+					else
+					{//上次消息没取到，重新取，但实际中间已经post出去了
+						assert(!_thisPool->_waiting);
+						assert(pumpID + 1 == _thisPool->_sendCount);
+						wait = true;
+					}
+				}
+				return false;
+			});
 		}
 
 		void post_pump(unsigned char pumpID)
@@ -1129,8 +1201,10 @@ class msg_pool : public msg_pool_base
 			auto hostActor = _msgPump->_hostActor->shared_from_this();
 			_thisPool->_strand->post([=]
 			{
-				actor_handle lockActor = hostActor;
-				((pump_handler&)refThis_)(pumpID);
+				if (refThis_._msgPump == refThis_._thisPool->_msgPump)
+				{
+					((pump_handler&)refThis_).pump_msg(pumpID, hostActor);
+				}
 			});
 		}
 
@@ -1282,6 +1356,8 @@ class msg_pool_void : public msg_pool_base
 	struct pump_handler
 	{
 		void operator()(unsigned char pumpID);
+		void pump_msg(unsigned char pumpID, const actor_handle& hostActor);
+		bool try_pump(my_actor* host, unsigned char pumpID, bool& wait);
 		void post_pump(unsigned char pumpID);
 		bool empty();
 		bool same_strand();
@@ -1331,6 +1407,7 @@ protected:
 	void receive_msg_post(const actor_handle& hostActor);
 	void receive_msg(const actor_handle& hostActor);
 	bool read_msg();
+	bool try_read();
 	void connect(const pump_handler& pumpHandler);
 	void clear();
 	void close();
@@ -3558,6 +3635,21 @@ private:
 	}
 
 	template <typename PUMP, typename DST>
+	bool _try_pump_msg(const PUMP& pump, DST& dstRec, bool checkDis)
+	{
+		assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
+		if (!pump->try_read(dstRec))
+		{
+			if (checkDis && pump->isDisconnected())
+			{
+				throw pump_disconnected_exception();
+			}
+			return false;
+		}
+		return true;
+	}
+
+	template <typename PUMP, typename DST>
 	void _pump_msg(const PUMP& pump, DST& dstRec, bool checkDis)
 	{
 		assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
@@ -3765,6 +3857,47 @@ public:
 	{
 		timed_pump_msg(-1, pump, h, checkDis);
 	}
+
+	/*!
+	@brief 尝试从消息泵中提取消息
+	*/
+	template <typename T0, typename T1, typename T2, typename T3>
+	__yield_interrupt bool try_pump_msg(const typename msg_pump<T0, T1, T2, T3>::handle& pump, T0& r0, T1& r1, T2& r2, T3& r3, bool checkDis = false)
+	{
+		assert_enter();
+		ref_ex<T0, T1, T2, T3> dstRef(r0, r1, r2, r3);
+		dst_receiver_ref<T0, T1, T2, T3> dstRec(dstRef);
+		return _try_pump_msg(pump, dstRec, checkDis);
+	}
+
+	template <typename T0, typename T1, typename T2>
+	__yield_interrupt bool try_pump_msg(const typename msg_pump<T0, T1, T2>::handle& pump, T0& r0, T1& r1, T2& r2, bool checkDis = false)
+	{
+		assert_enter();
+		ref_ex<T0, T1, T2> dstRef(r0, r1, r2);
+		dst_receiver_ref<T0, T1, T2> dstRec(dstRef);
+		return _try_pump_msg(pump, dstRec, checkDis);
+	}
+
+	template <typename T0, typename T1>
+	__yield_interrupt bool try_pump_msg(const typename msg_pump<T0, T1>::handle& pump, T0& r0, T1& r1, bool checkDis = false)
+	{
+		assert_enter();
+		ref_ex<T0, T1> dstRef(r0, r1);
+		dst_receiver_ref<T0, T1> dstRec(dstRef);
+		return _try_pump_msg(pump, dstRec, checkDis);
+	}
+
+	template <typename T0>
+	__yield_interrupt bool try_pump_msg(const typename msg_pump<T0>::handle& pump, T0& r0, bool checkDis = false)
+	{
+		assert_enter();
+		ref_ex<T0> dstRef(r0);
+		dst_receiver_ref<T0> dstRec(dstRef);
+		return _try_pump_msg(pump, dstRec, checkDis);
+	}
+
+	__yield_interrupt bool try_pump_msg(const msg_pump<>::handle& pump, bool checkDis = false);
 public:
 	/*!
 	@brief 查询当前消息由谁代理

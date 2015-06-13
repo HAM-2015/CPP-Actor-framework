@@ -222,6 +222,12 @@ void msg_pump_base::run_one()
 	_hostActor->pull_yield();
 }
 
+void msg_pump_base::push_yield()
+{
+	assert(!_hostActor->is_quited());
+	_hostActor->push_yield();
+}
+
 bool msg_pump_base::is_quited()
 {
 	return !_hostActor || _hostActor->is_quited();
@@ -319,6 +325,56 @@ bool msg_pool_void::pump_handler::empty()
 	return !_thisPool;
 }
 
+void msg_pool_void::pump_handler::pump_msg(unsigned char pumpID, const actor_handle& hostActor)
+{
+	assert(_msgPump == _thisPool->_msgPump);
+	assert(!_thisPool->_waiting);
+	if (pumpID == _thisPool->_sendCount)
+	{
+		if (_thisPool->_msgBuff)
+		{
+			_thisPool->_msgBuff--;
+			_thisPool->_sendCount++;
+			_msgPump->receive_msg(hostActor);
+		}
+		else
+		{
+			_thisPool->_waiting = true;
+		}
+	}
+	else
+	{//上次消息没取到，重新取，但实际中间已经post出去了
+		assert(!_thisPool->_waiting);
+		assert(pumpID + 1 == _thisPool->_sendCount);
+	}
+}
+
+bool msg_pool_void::pump_handler::try_pump(my_actor* host, unsigned char pumpID, bool& wait)
+{
+	assert(_thisPool);
+	auto& refThis_ = *this;
+	my_actor::quit_guard qg(host);
+	return host->send<bool>(_thisPool->_strand, [&, refThis_]()->bool
+	{
+		auto lockThis = refThis_;
+		if (_msgPump == _thisPool->_msgPump)
+		{
+			if (_thisPool->_msgBuff)
+			{
+				_thisPool->_msgBuff--;
+				return true;
+			}
+		}
+		else
+		{//上次消息没取到，重新取，但实际中间已经post出去了
+			assert(!_thisPool->_waiting);
+			assert(pumpID + 1 == _thisPool->_sendCount);
+			wait = true;
+		}
+		return false;
+	});
+}
+
 void msg_pool_void::pump_handler::post_pump(unsigned char pumpID)
 {
 	assert(!empty());
@@ -326,8 +382,10 @@ void msg_pool_void::pump_handler::post_pump(unsigned char pumpID)
 	auto hostActor = _msgPump->_hostActor->shared_from_this();
 	_thisPool->_strand->post([=]
 	{
-		actor_handle lockActor = hostActor;
-		((pump_handler&)refThis_)(pumpID);
+		if (refThis_._msgPump == refThis_._thisPool->_msgPump)
+		{
+			((pump_handler&)refThis_).pump_msg(pumpID, hostActor);
+		}
 	});
 }
 
@@ -338,25 +396,7 @@ void msg_pool_void::pump_handler::operator()(unsigned char pumpID)
 	{
 		if (_msgPump == _thisPool->_msgPump)
 		{
-			assert(!_thisPool->_waiting);
-			if (pumpID == _thisPool->_sendCount)
-			{
-				if (_thisPool->_msgBuff)
-				{
-					_thisPool->_msgBuff--;
-					_thisPool->_sendCount++;
-					_thisPool->_msgPump->receive_msg(_msgPump->_hostActor->shared_from_this());
-				} 
-				else
-				{
-					_thisPool->_waiting = true;
-				}
-			}
-			else
-			{//上次消息没取到，重新取，但实际中间已经post出去了
-				assert(!_thisPool->_waiting);
-				assert(pumpID + 1 == _thisPool->_sendCount);
-			}
+			pump_msg(pumpID, _msgPump->_hostActor->shared_from_this());
 		}
 	}
 	else
@@ -451,6 +491,33 @@ bool msg_pump_void::read_msg()
 		return !_waiting;
 	}
 	_waiting = true;
+	return false;
+}
+
+bool msg_pump_void::try_read()
+{
+	assert(_strand->running_in_this_thread());
+	assert(!_waiting);
+	if (_hasMsg)
+	{
+		_hasMsg = false;
+		return true;
+	}
+	if (!_pumpHandler.empty())
+	{
+		bool wait = false;
+		if (_pumpHandler.try_pump(_hostActor, _pumpCount, wait))
+		{
+			return true;
+		}
+		if (wait)
+		{
+			push_yield();
+			assert(_hasMsg);
+			_hasMsg = false;
+			return true;
+		}
+	}
 	return false;
 }
 
@@ -2055,6 +2122,22 @@ bool my_actor::timed_pump_msg(int tm, const msg_pump<>::handle& pump, bool check
 		}
 		pump->_checkDis = false;
 		pump->_waiting = false;
+		return false;
+	}
+	return true;
+}
+
+bool my_actor::try_pump_msg(const msg_pump<>::handle& pump, bool checkDis)
+{
+	assert_enter();
+	assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
+	if (!pump->try_read())
+	{
+		if (checkDis && pump->isDisconnected())
+		{
+			pump->_waiting = false;
+			throw pump_disconnected_exception();
+		}
 		return false;
 	}
 	return true;

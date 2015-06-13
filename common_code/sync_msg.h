@@ -472,7 +472,7 @@ public:
 		if (closed)
 		{
 			qg.unlock();
-			throw close_exception();
+			throw_close_exception();
 		}
 		AUTO_CALL({ ((R*)resBuf)->~R(); });
 		return std::move(*(R*)resBuf);
@@ -530,14 +530,14 @@ public:
 			CATCH_FOR(close_exception)
 			{
 				qg.unlock();
-				throw close_exception();
+				throw_close_exception();
 			}
 			END_TRY_;
 			ok = true;
 			return;
 		}
 		qg.unlock();
-		throw close_exception();
+		throw_close_exception();
 	}
 
 	void close(my_actor* host)
@@ -575,6 +575,11 @@ public:
 private:
 	csp_channel(const csp_channel&){};
 	void operator=(const csp_channel&){};
+
+	virtual void throw_close_exception()
+	{
+		throw close_exception();
+	}
 private:
 	bool _closed;
 	shared_strand _strand;
@@ -620,6 +625,11 @@ public:
 			h(msg);
 			return void_return();
 		});
+	}
+private:
+	void throw_close_exception()
+	{
+		throw close_exception();
 	}
 };
 
