@@ -145,7 +145,11 @@ private:
 //作用域退出时自动调用某个函数
 #define AUTO_CALL(__CL__) \
 	auto BOND_LINE(__t, __LINE__) = [&]__CL__; \
-	auto_call<decltype(BOND_LINE(__t, __LINE__))> BOND_LINE(__cl, __LINE__)(BOND_LINE(__t, __LINE__));
+	auto_call<decltype(BOND_LINE(__t, __LINE__))> BOND_LINE(__cl, __LINE__)(BOND_LINE(__t, __LINE__))
+
+
+//内存边界对齐
+#define MEM_ALIGN(__o, __a) (((__o) + ((__a)-1)) & (((__a)-1) ^ -1))
 
 /*!
 @brief 这个类在测试消息传递时使用

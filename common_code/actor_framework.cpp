@@ -9,9 +9,6 @@ typedef boost::coroutines::coroutine<void>::pull_type actor_pull_type;
 typedef boost::coroutines::coroutine<void>::push_type actor_push_type;
 typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> timer_type;
 
-//内存边界对齐
-#define MEM_ALIGN(__o, __a) (((__o) + ((__a)-1)) & (((__a)-1) ^ -1))
-
 boost::atomic<my_actor::id> s_actorIDCount(0);//ID计数
 bool s_autoMakeTimer = true;
 std::shared_ptr<shared_obj_pool_base<bool>> s_sharedBoolPool;
@@ -1285,6 +1282,12 @@ void my_actor::unlock_quit()
 		notify_quit();
 		push_yield();
 	}
+}
+
+bool my_actor::is_locked_quit()
+{
+	assert_enter();
+	return 0 != _lockQuit;
 }
 
 void my_actor::notify_suspend()

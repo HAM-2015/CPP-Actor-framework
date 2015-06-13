@@ -3934,6 +3934,11 @@ public:
 	void unlock_quit();
 
 	/*!
+	@brief 是否锁定了退出
+	*/
+	bool is_locked_quit();
+
+	/*!
 	@brief 暂停Actor
 	*/
 	void notify_suspend();

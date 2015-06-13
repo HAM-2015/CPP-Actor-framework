@@ -438,6 +438,7 @@ void actor_test(my_actor* self)
 	}
 	sync_msg<passing_test> syncMsg(self->self_strand());
 	csp_channel<passing_test, passing_test> cspMsg(self->self_strand());
+	csp_channel<passing_test> cspMsgV(self->self_strand());
 	{//模拟同步消息发送，CSP模型消息发送
 		syncPush = self->create_child_actor(self->self_strand(), [&](my_actor* self)
 		{
@@ -449,6 +450,7 @@ void actor_test(my_actor* self)
 					syncMsg.send(self, passing_test(i++));
 					passing_test r = cspMsg.send(self, passing_test(i++));
 					printf("csp return %d\n", r._count->_id);
+					cspMsgV.send(self, passing_test(i++));
 				}
 			}
 			catch (sync_msg<passing_test>::close_exception)
@@ -468,12 +470,17 @@ void actor_test(my_actor* self)
 				while (true)
 				{
 					passing_test id = syncMsg.take(self);
-					printf("sync %d\n", id._count->_id);
+					printf("sync %d %d\n", id._count->_id, (int)self->self_id());
 					cspMsg.take(self, [&](const passing_test& id)->passing_test
 					{
 						printf("csp %d\n", id._count->_id);
 						self->sleep(1000);
 						return passing_test(id._count->_id*10000);
+					});
+					cspMsgV.take(self, [&](const passing_test& id)
+					{
+						printf("cspv %d\n", id._count->_id);
+						self->sleep(1000);
 					});
 				}
 			}
@@ -545,6 +552,7 @@ void actor_test(my_actor* self)
 	self->child_actor_force_quit(buffPop);
 	syncMsg.close(self);
 	cspMsg.close(self);
+	cspMsgV.close(self);
 	self->child_actor_force_quit(syncPush);
 	self->child_actor_force_quit(syncPop1);
 	self->child_actor_force_quit(syncPop2);

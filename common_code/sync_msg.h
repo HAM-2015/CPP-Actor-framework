@@ -427,7 +427,7 @@ public:
 
 	}
 
-	~csp_channel()
+	virtual ~csp_channel()
 	{
 
 	}
@@ -523,7 +523,16 @@ public:
 			bool ok = false;
 			AUTO_CALL({ ((T*)msgBuf)->~T(); });
 			AUTO_CALL({ ntfSend(!ok); });
-			new(res)R(h(*(T*)msgBuf));
+			BEGIN_TRY_
+			{
+				new(res)R(h(*(T*)msgBuf));
+			}
+			CATCH_FOR(close_exception)
+			{
+				qg.unlock();
+				throw close_exception();
+			}
+			END_TRY_;
 			ok = true;
 			return;
 		}
@@ -573,31 +582,21 @@ private:
 	msg_list<send_wait> _sendWait;
 };
 
-template <typename T>
-class csp_channel<T, void>
+struct void_return
 {
-	struct send_wait
-	{
-		bool is_rvalue;
-		bool& notified;
-		T& src_msg;
-		actor_trig_notifer<bool> ntf;
-	};
+};
 
-	struct take_wait
-	{
-		bool& notified;
-		unsigned char* dst;
-		actor_trig_notifer<bool> ntf;
-		actor_trig_notifer<bool>& ntfSend;
-	};
+template <typename T>
+class csp_channel<T, void>: public csp_channel<T, void_return>
+{
+	typedef csp_channel<T, void_return> base_csp_channel;
 public:
 	struct close_exception
 	{
 	};
 public:
 	csp_channel(shared_strand strand)
-		:_closed(false), _strand(strand), _takeWait(4), _sendWait(4)
+		:base_csp_channel(strand)
 	{
 
 	}
@@ -610,136 +609,18 @@ public:
 	template <typename TM>
 	void send(my_actor* host, TM&& msg)
 	{
-		my_actor::quit_guard qg(host);
-		actor_trig_handle<bool> ath;
-		bool closed = false;
-		bool notified = false;
-		host->send(_strand, [&]
-		{
-			if (_closed)
-			{
-				closed = true;
-			}
-			else
-			{
-				if (_takeWait.empty())
-				{
-					send_wait pw = { check_move<TM&&>::is_rvalue, notified, msg, host->make_trig_notifer(ath) };
-					_sendWait.push_front(pw);
-				}
-				else
-				{
-					take_wait& wt = _takeWait.back();
-					new(wt.dst)T(check_move<TM&&>::move(msg));
-					wt.notified = true;
-					wt.ntf(false);
-					wt.ntfSend = host->make_trig_notifer(ath);
-					_takeWait.pop_back();
-				}
-			}
-		});
-		if (!closed)
-		{
-			closed = host->wait_trig(ath);
-		}
-		if (closed)
-		{
-			qg.unlock();
-			throw close_exception();
-		}
+		base_csp_channel::send(host, CHECK_MOVE(msg));
 	}
 
 	template <typename H>
 	void take(my_actor* host, const H& h)
 	{
-		my_actor::quit_guard qg(host);
-		actor_trig_handle<bool> ath;
-		actor_trig_notifer<bool> ntfSend;
-		unsigned char msgBuf[sizeof(T)];
-		bool wait = false;
-		bool closed = false;
-		bool notified = false;
-		host->send(_strand, [&]
+		base_csp_channel::take(host, [&](T& msg)->void_return
 		{
-			if (_closed)
-			{
-				closed = true;
-			}
-			else
-			{
-				if (_sendWait.empty())
-				{
-					wait = true;
-					take_wait pw = { notified, msgBuf, host->make_trig_notifer(ath), ntfSend };
-					_takeWait.push_front(pw);
-				}
-				else
-				{
-					send_wait& wt = _sendWait.back();
-					new(msgBuf)T(wt.is_rvalue ? std::move(wt.src_msg) : wt.src_msg);
-					wt.notified = true;
-					ntfSend = wt.ntf;
-					_sendWait.pop_back();
-				}
-			}
-		});
-		if (wait)
-		{
-			closed = host->wait_trig(ath);
-		}
-		if (!closed)
-		{
-			bool ok = false;
-			AUTO_CALL({ ((T*)msgBuf)->~T(); });
-			AUTO_CALL({ ntfSend(!ok); });
-			h(*(T*)msgBuf);
-			ok = true;
-			return;
-		}
-		qg.unlock();
-		throw close_exception();
-	}
-
-	void close(my_actor* host)
-	{
-		my_actor::quit_guard qg(host);
-		host->send(_strand, [&]
-		{
-			_closed = true;
-			while (!_takeWait.empty())
-			{
-				auto& wt = _takeWait.front();
-				wt.notified = true;
-				wt.ntf(true);
-				if (!wt.ntfSend.empty())
-				{
-					wt.ntfSend(true);
-				}
-				_takeWait.pop_front();
-			}
-			while (!_sendWait.empty())
-			{
-				auto& st = _sendWait.front();
-				st.notified = true;
-				st.ntf(true);
-				_sendWait.pop_front();
-			}
+			h(msg);
+			return void_return();
 		});
 	}
-
-	void reset()
-	{
-		assert(_closed);
-		_closed = false;
-	}
-private:
-	csp_channel(const csp_channel&){};
-	void operator=(const csp_channel&){};
-private:
-	bool _closed;
-	shared_strand _strand;
-	msg_list<take_wait> _takeWait;
-	msg_list<send_wait> _sendWait;
 };
 
 #endif
