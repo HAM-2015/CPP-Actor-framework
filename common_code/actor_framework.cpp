@@ -357,21 +357,25 @@ bool msg_pool_void::pump_handler::try_pump(my_actor* host, unsigned char pumpID,
 	return host->send<bool>(_thisPool->_strand, [&, refThis_]()->bool
 	{
 		auto lockThis = refThis_;
+		bool ok = false;
 		if (_msgPump == _thisPool->_msgPump)
 		{
-			if (_thisPool->_msgBuff)
+			if (pumpID == _thisPool->_sendCount)
 			{
-				_thisPool->_msgBuff--;
-				return true;
+				if (_thisPool->_msgBuff)
+				{
+					_thisPool->_msgBuff--;
+					ok = true;
+				}
+			}
+			else
+			{//上次消息没取到，重新取，但实际中间已经post出去了
+				assert(!_thisPool->_waiting);
+				assert(pumpID + 1 == _thisPool->_sendCount);
+				ok = true;
 			}
 		}
-		else
-		{//上次消息没取到，重新取，但实际中间已经post出去了
-			assert(!_thisPool->_waiting);
-			assert(pumpID + 1 == _thisPool->_sendCount);
-			wait = true;
-		}
-		return false;
+		return ok;
 	});
 }
 
@@ -508,13 +512,16 @@ bool msg_pump_void::try_read()
 		bool wait = false;
 		if (_pumpHandler.try_pump(_hostActor, _pumpCount, wait))
 		{
-			return true;
-		}
-		if (wait)
-		{
-			push_yield();
-			assert(_hasMsg);
-			_hasMsg = false;
+			if (wait)
+			{
+				if (!_hasMsg)
+				{
+					_waiting = true;
+					push_yield();
+					assert(_hasMsg);
+				}
+				_hasMsg = false;
+			}
 			return true;
 		}
 	}

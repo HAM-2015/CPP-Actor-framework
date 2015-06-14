@@ -374,6 +374,41 @@ struct dst_receiver_buff : public dst_receiver_base<T0, T1, T2, T3>
 	dst_buff& _dstBuff;
 };
 
+template <typename T0>
+struct stack_dst_receiver : public dst_receiver_base<T0>
+{
+	typedef ref_ex<T0> ref_type;
+	typedef msg_param<T0> param_type;
+
+	stack_dst_receiver(stack_obj<T0>& dstBuff)
+		:_has(false), _dstBuff(dstBuff){}
+
+	~stack_dst_receiver()
+	{
+		if (_has)
+		{
+			_dstBuff.destroy();
+		}
+	}
+
+	void move_from(ref_type& s)
+	{
+		assert(!_has);
+		_has = true;
+		_dstBuff.create(std::move(s._p0));
+	}
+
+	void move_from(param_type& s)
+	{
+		assert(!_has);
+		_has = true;
+		_dstBuff.create(std::move(s._res0));
+	}
+
+	bool _has;
+	stack_obj<T0>& _dstBuff;
+};
+
 //////////////////////////////////////////////////////////////////////////
 
 class actor_msg_handle_base
@@ -1037,16 +1072,18 @@ private:
 			bool wait = false;
 			if (_pumpHandler.try_pump(_hostActor, dst, _pumpCount, wait))
 			{
-				return true;
-			}
-			if (wait)
-			{
-				_dstRec = &dst;
-				push_yield();
-				assert(_hasMsg);
-				_hasMsg = false;
-				dst.move_from(*(msg_type*)_msgSpace);
-				((msg_type*)_msgSpace)->~msg_type();
+				if (wait)
+				{
+					if (!_hasMsg)
+					{
+						_dstRec = &dst;
+						push_yield();
+						assert(_hasMsg);
+					}
+					_hasMsg = false;
+					dst.move_from(*(msg_type*)_msgSpace);
+					((msg_type*)_msgSpace)->~msg_type();
+				}
 				return true;
 			}
 		}
@@ -1171,6 +1208,7 @@ class msg_pool : public msg_pool_base
 			return host->send<bool>(_thisPool->_strand, [&, refThis_]()->bool
 			{
 				auto lockThis = refThis_;
+				bool ok = false;
 				if (_msgPump == _thisPool->_msgPump)
 				{
 					auto& msgBuff = _thisPool->_msgBuff;
@@ -1180,7 +1218,7 @@ class msg_pool : public msg_pool_base
 						{
 							dst.move_from(msgBuff.front());
 							msgBuff.pop_front();
-							return true;
+							ok = true;
 						}
 					}
 					else
@@ -1188,9 +1226,10 @@ class msg_pool : public msg_pool_base
 						assert(!_thisPool->_waiting);
 						assert(pumpID + 1 == _thisPool->_sendCount);
 						wait = true;
+						ok = true;
 					}
 				}
-				return false;
+				return ok;
 			});
 		}
 
@@ -2161,7 +2200,7 @@ public:
 			actor_handle shared_this = shared_from_this();
 			exeStrand->asyncInvoke(CHECK_MOVE(h), [shared_this, &dstRec](const T0& p0){shared_this->_trig_handler(dstRec, std::move(msg_param<T0>(p0))); });
 			push_yield();
-			return dstBuff.get()._res0;
+			return std::move((T0&)dstBuff.get()._res0);
 		} 
 		return h();
 	}
@@ -2188,7 +2227,7 @@ public:
 		actor_handle shared_this = shared_from_this();
 		exeStrand->asyncInvoke(CHECK_MOVE(h), [shared_this, &dstRec](const T0& p0){shared_this->_trig_handler(dstRec, std::move(msg_param<T0>(p0))); });
 		push_yield();
-		return dstBuff.get()._res0;
+		return std::move((T0&)dstBuff.get()._res0);
 	}
 
 	template <typename H>
@@ -2503,6 +2542,19 @@ public:
 		return _timed_wait_msg(amh, dstRec, tm);
 	}
 
+	template <typename T0>
+	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0>& ath, stack_obj<T0>& r0)
+	{
+		assert_enter();
+		stack_dst_receiver<T0> dstRec(r0);
+		if (_timed_wait_msg(ath, dstRec, tm))
+		{
+			dstRec._has = false;
+			return true;
+		}
+		return false;
+	}
+
 	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<>& amh);
 
 	template <typename T0, typename T1, typename T2, typename T3, typename Handler>
@@ -2753,6 +2805,19 @@ public:
 		ref_ex<T0> dstRef(r0);
 		dst_receiver_ref<T0> dstRec(dstRef);
 		return _timed_wait_msg(ath, dstRec, tm);
+	}
+
+	template <typename T0>
+	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0>& ath, stack_obj<T0>& r0)
+	{
+		assert_enter();
+		stack_dst_receiver<T0> dstRec(r0);
+		if (_timed_wait_msg(ath, dstRec, tm))
+		{
+			dstRec._has = false;
+			return true;
+		}
+		return false;
 	}
 
 	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<>& ath);
@@ -3715,6 +3780,19 @@ public:
 		return _timed_pump_msg(pump, dstRec, tm, checkDis);
 	}
 
+	template <typename T0>
+	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0>::handle& pump, stack_obj<T0>& r0, bool checkDis = false)
+	{
+		assert_enter();
+		stack_dst_receiver<T0> dstRec(r0);
+		if (_timed_pump_msg(pump, dstRec, tm, checkDis))
+		{
+			dstRec._has = false;
+			return true;
+		}
+		return false;
+	}
+
 	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump<>::handle& pump, bool checkDis = false);
 
 	template <typename T0, typename T1, typename T2, typename T3, typename Handler>
@@ -3897,7 +3975,80 @@ public:
 		return _try_pump_msg(pump, dstRec, checkDis);
 	}
 
+	template <typename T0>
+	__yield_interrupt bool try_pump_msg(const typename msg_pump<T0>::handle& pump, stack_obj<T0>& r0, bool checkDis = false)
+	{
+		assert_enter();
+		stack_dst_receiver<T0> dstRec(r0);
+		if (_try_pump_msg(pump, dstRec, checkDis))
+		{
+			dstRec._has = false;
+			return true;
+		}
+		return false;
+	}
+
 	__yield_interrupt bool try_pump_msg(const msg_pump<>::handle& pump, bool checkDis = false);
+
+	template <typename T0, typename T1, typename T2, typename T3, typename Handler>
+	__yield_interrupt bool try_pump_msg(const typename msg_pump<T0, T1, T2, T3>::handle& pump, const Handler& h, bool checkDis = false)
+	{
+		assert_enter();
+		dst_receiver_buff<T0, T1, T2, T3>::dst_buff dstBuff;
+		dst_receiver_buff<T0, T1, T2, T3> dstRec(dstBuff);
+		if (_try_pump_msg(pump, dstRec, checkDis))
+		{
+			msg_param<T0, T1, T2, T3>& msg = dstBuff.get();
+			h(msg._res0, msg._res1, msg._res2, msg._res3);
+			return true;
+		}
+		return false;
+	}
+
+	template <typename T0, typename T1, typename T2, typename Handler>
+	__yield_interrupt bool try_pump_msg(const typename msg_pump<T0, T1, T2>::handle& pump, const Handler& h, bool checkDis = false)
+	{
+		assert_enter();
+		dst_receiver_buff<T0, T1, T2>::dst_buff dstBuff;
+		dst_receiver_buff<T0, T1, T2> dstRec(dstBuff);
+		if (_try_pump_msg(pump, dstRec, checkDis))
+		{
+			msg_param<T0, T1, T2>& msg = dstBuff.get();
+			h(msg._res0, msg._res1, msg._res2);
+			return true;
+		}
+		return false;
+	}
+
+	template <typename T0, typename T1, typename Handler>
+	__yield_interrupt bool try_pump_msg(const typename msg_pump<T0, T1>::handle& pump, const Handler& h, bool checkDis = false)
+	{
+		assert_enter();
+		dst_receiver_buff<T0, T1>::dst_buff dstBuff;
+		dst_receiver_buff<T0, T1> dstRec(dstBuff);
+		if (_try_pump_msg(pump, dstRec, checkDis))
+		{
+			msg_param<T0, T1>& msg = dstBuff.get();
+			h(msg._res0, msg._res1);
+			return true;
+		}
+		return false;
+	}
+
+	template <typename T0, typename Handler>
+	__yield_interrupt bool try_pump_msg(const typename msg_pump<T0>::handle& pump, const Handler& h, bool checkDis = false)
+	{
+		assert_enter();
+		dst_receiver_buff<T0>::dst_buff dstBuff;
+		dst_receiver_buff<T0> dstRec(dstBuff);
+		if (_try_pump_msg(pump, dstRec, checkDis))
+		{
+			msg_param<T0>& msg = dstBuff.get();
+			h(msg._res0);
+			return true;
+		}
+		return false;
+	}
 public:
 	/*!
 	@brief 查询当前消息由谁代理

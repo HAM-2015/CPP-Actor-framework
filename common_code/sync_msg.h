@@ -5,6 +5,12 @@
 #include "msg_queue.h"
 #include "check_move.h"
 
+struct sync_csp_close_exception {};
+
+struct sync_msg_close_exception : public sync_csp_close_exception {};
+
+struct csp_channel_close_exception : public sync_csp_close_exception {};
+
 /*!
 @brief 同步发送消息（多读多写，角色可转换），发送方等到消息取出才返回
 */
@@ -26,7 +32,7 @@ class sync_msg
 		actor_trig_notifer<bool> ntf;
 	};
 public:
-	struct close_exception
+	struct close_exception : public sync_msg_close_exception
 	{
 	};
 public:
@@ -417,7 +423,7 @@ class csp_channel
 		actor_trig_notifer<bool>& ntfSend;
 	};
 public:
-	struct close_exception
+	struct close_exception : public csp_channel_close_exception
 	{
 	};
 public:
@@ -596,7 +602,7 @@ class csp_channel<T, void>: public csp_channel<T, void_return>
 {
 	typedef csp_channel<T, void_return> base_csp_channel;
 public:
-	struct close_exception
+	struct close_exception : public csp_channel_close_exception
 	{
 	};
 public:

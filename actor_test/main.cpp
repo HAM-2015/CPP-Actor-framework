@@ -453,17 +453,9 @@ void actor_test(my_actor* self)
 					cspMsgV.send(self, passing_test(i++));
 				}
 			}
-			catch (sync_msg<passing_test>::close_exception)
+			catch (sync_csp_close_exception)
 			{
 				
-			}
-			catch (csp_channel<passing_test>::close_exception)
-			{
-
-			}
-			catch (csp_channel<passing_test, passing_test>::close_exception)
-			{
-
 			}
 		});
 		auto h = [&](my_actor* self)
@@ -488,15 +480,7 @@ void actor_test(my_actor* self)
 					});
 				}
 			}
-			catch (sync_msg<passing_test>::close_exception)
-			{
-				
-			}
-			catch (csp_channel<passing_test>::close_exception)
-			{
-
-			}
-			catch (csp_channel<passing_test, passing_test>::close_exception)
+			catch (sync_csp_close_exception)
 			{
 
 			}
