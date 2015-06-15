@@ -2058,26 +2058,29 @@ bool my_actor::timed_wait_msg(int tm, actor_msg_handle<>& amh)
 	assert(amh._hostActor && amh._hostActor->self_id() == self_id());
 	if (!amh.read_msg())
 	{
-		bool timeout = false;
-		if (tm >= 0)
+		if (0 != tm)
 		{
-			delay_trig(tm, [this, &timeout]
+			bool timeout = false;
+			if (tm > 0)
 			{
-				if (!_quited)
+				delay_trig(tm, [this, &timeout]
 				{
-					timeout = true;
-					pull_yield();
-				}
-			});
-		}
-		push_yield();
-		if (!timeout)
-		{
-			if (tm >= 0)
-			{
-				cancel_delay_trig();
+					if (!_quited)
+					{
+						timeout = true;
+						pull_yield();
+					}
+				});
 			}
-			return true;
+			push_yield();
+			if (!timeout)
+			{
+				if (tm > 0)
+				{
+					cancel_delay_trig();
+				}
+				return true;
+			}
 		}
 		amh._waiting = false;
 		return false;
