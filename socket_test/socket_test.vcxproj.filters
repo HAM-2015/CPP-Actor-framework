@@ -47,9 +47,6 @@
     <ClInclude Include="dlg_session.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="..\common_code\acceptor_socket.h">
-      <Filter>头文件\common_code</Filter>
-    </ClInclude>
     <ClInclude Include="..\common_code\ios_proxy.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
@@ -57,18 +54,6 @@
       <Filter>头文件\common_code</Filter>
     </ClInclude>
     <ClInclude Include="..\common_code\shared_strand.h">
-      <Filter>头文件\common_code</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common_code\socket_io.h">
-      <Filter>头文件\common_code</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common_code\strand_ex.h">
-      <Filter>头文件\common_code</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common_code\stream_io_base.h">
-      <Filter>头文件\common_code</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common_code\text_stream_io.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
     <ClInclude Include="..\common_code\actor_framework.h">
@@ -86,6 +71,18 @@
     <ClInclude Include="..\common_code\actor_mutex.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
+    <ClInclude Include="socket_io.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="stream_io_base.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="text_stream_io.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="acceptor_socket.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="socket_test.cpp">
@@ -100,19 +97,10 @@
     <ClCompile Include="dlg_session.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="..\common_code\acceptor_socket.cpp">
-      <Filter>源文件\common_code</Filter>
-    </ClCompile>
     <ClCompile Include="..\common_code\ios_proxy.cpp">
       <Filter>源文件\common_code</Filter>
     </ClCompile>
     <ClCompile Include="..\common_code\shared_data.cpp">
-      <Filter>源文件\common_code</Filter>
-    </ClCompile>
-    <ClCompile Include="..\common_code\socket_io.cpp">
-      <Filter>源文件\common_code</Filter>
-    </ClCompile>
-    <ClCompile Include="..\common_code\text_stream_io.cpp">
       <Filter>源文件\common_code</Filter>
     </ClCompile>
     <ClCompile Include="..\common_code\shared_strand.cpp">
@@ -132,6 +120,15 @@
     </ClCompile>
     <ClCompile Include="..\common_code\actor_mutex.cpp">
       <Filter>源文件\common_code</Filter>
+    </ClCompile>
+    <ClCompile Include="socket_io.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="text_stream_io.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="acceptor_socket.cpp">
+      <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

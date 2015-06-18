@@ -113,7 +113,6 @@
     <None Include="res\socket_test.rc2" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\common_code\acceptor_socket.h" />
     <ClInclude Include="..\common_code\actor_framework.h" />
     <ClInclude Include="..\common_code\actor_mutex.h" />
     <ClInclude Include="..\common_code\actor_stack.h" />
@@ -122,19 +121,18 @@
     <ClInclude Include="..\common_code\scattered.h" />
     <ClInclude Include="..\common_code\shared_data.h" />
     <ClInclude Include="..\common_code\shared_strand.h" />
-    <ClInclude Include="..\common_code\socket_io.h" />
-    <ClInclude Include="..\common_code\strand_ex.h" />
-    <ClInclude Include="..\common_code\stream_io_base.h" />
-    <ClInclude Include="..\common_code\text_stream_io.h" />
+    <ClInclude Include="acceptor_socket.h" />
     <ClInclude Include="dlg_session.h" />
     <ClInclude Include="Resource.h" />
+    <ClInclude Include="socket_io.h" />
     <ClInclude Include="socket_test.h" />
     <ClInclude Include="socket_testDlg.h" />
     <ClInclude Include="stdafx.h" />
+    <ClInclude Include="stream_io_base.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="text_stream_io.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\common_code\acceptor_socket.cpp" />
     <ClCompile Include="..\common_code\actor_framework.cpp" />
     <ClCompile Include="..\common_code\actor_mutex.cpp" />
     <ClCompile Include="..\common_code\actor_stack.cpp" />
@@ -143,15 +141,16 @@
     <ClCompile Include="..\common_code\scattered.cpp" />
     <ClCompile Include="..\common_code\shared_data.cpp" />
     <ClCompile Include="..\common_code\shared_strand.cpp" />
-    <ClCompile Include="..\common_code\socket_io.cpp" />
-    <ClCompile Include="..\common_code\text_stream_io.cpp" />
+    <ClCompile Include="acceptor_socket.cpp" />
     <ClCompile Include="dlg_session.cpp" />
+    <ClCompile Include="socket_io.cpp" />
     <ClCompile Include="socket_test.cpp" />
     <ClCompile Include="socket_testDlg.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="text_stream_io.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="socket_test.rc" />
