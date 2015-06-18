@@ -55,24 +55,26 @@ public:
 		bool wait = false;
 		bool closed = false;
 		bool notified = false;
-		host->send(_strand, [&]
+		LAMBDA_THIS_REF6(ref6, host, msg, ath, wait, closed, notified);
+		host->send(_strand, [&ref6]
 		{
-			if (_closed)
+			if (ref6->_closed)
 			{
-				closed = true;
+				ref6.closed = true;
 			} 
 			else
 			{
+				auto& _takeWait = ref6->_takeWait;
 				if (_takeWait.empty())
 				{
-					wait = true;
-					send_wait pw = { check_move<TM&&>::is_rvalue, notified, msg, host->make_trig_notifer(ath) };
-					_sendWait.push_front(pw);
+					ref6.wait = true;
+					send_wait pw = { check_move<TM&&>::is_rvalue, ref6.notified, ref6.msg, ref6.host->make_trig_notifer(ref6.ath) };
+					ref6->_sendWait.push_front(pw);
 				}
 				else
 				{
 					take_wait& wt = _takeWait.back();
-					new(wt.dst)T(check_move<TM&&>::move(msg));
+					new(wt.dst)T(check_move<TM&&>::move(ref6.msg));
 					wt.notified = true;
 					wt.ntf(false);
 					_takeWait.pop_back();
@@ -96,19 +98,21 @@ public:
 		my_actor::quit_guard qg(host);
 		bool ok = false;
 		bool closed = false;
-		host->send(_strand, [&]
+		LAMBDA_THIS_REF4(ref4, host, msg, ok, closed);
+		host->send(_strand, [&ref4]
 		{
-			if (_closed)
+			if (ref4->_closed)
 			{
-				closed = true;
+				ref4.closed = true;
 			} 
 			else
 			{
+				auto& _takeWait = ref4->_takeWait;
 				if (!_takeWait.empty())
 				{
-					ok = true;
+					ref4.ok = true;
 					take_wait& wt = _takeWait.back();
-					new(wt.dst)T(check_move<TM&&>::move(msg));
+					new(wt.dst)T(check_move<TM&&>::move(ref4.msg));
 					wt.ntf(false);
 					_takeWait.pop_back();
 				}
@@ -131,25 +135,29 @@ public:
 		bool wait = false;
 		bool closed = false;
 		bool notified = false;
-		host->send(_strand, [&]
+		LAMBDA_REF3(ref3, wait, closed, notified);
+		LAMBDA_THIS_REF5(ref5, ref3, host, msg, ath, mit);
+		host->send(_strand, [&ref5]
 		{
-			if (_closed)
+			auto& ref3 = ref5.ref3;
+			if (ref5->_closed)
 			{
-				closed = true;
+				ref3.closed = true;
 			} 
 			else
 			{
+				auto& _takeWait = ref5->_takeWait;
 				if (_takeWait.empty())
 				{
-					wait = true;
-					send_wait pw = { check_move<TM&&>::is_rvalue, notified, msg, host->make_trig_notifer(ath) };
-					_sendWait.push_front(pw);
-					mit = _sendWait.begin();
+					ref3.wait = true;
+					send_wait pw = { check_move<TM&&>::is_rvalue, ref3.notified, ref5.msg, ref5.host->make_trig_notifer(ref5.ath) };
+					ref5->_sendWait.push_front(pw);
+					ref5.mit = ref5->_sendWait.begin();
 				}
 				else
 				{
 					take_wait& wt = _takeWait.back();
-					new(wt.dst)T(check_move<TM&&>::move(msg));
+					new(wt.dst)T(check_move<TM&&>::move(ref5.msg));
 					wt.notified = true;
 					wt.ntf(false);
 					_takeWait.pop_back();
@@ -160,12 +168,12 @@ public:
 		{
 			if (!host->timed_wait_trig(tm, ath, closed))
 			{
-				host->send(_strand, [&]
+				host->send(_strand, [&ref5]
 				{
-					if (!notified)
+					if (!ref5.ref3.notified)
 					{
-						wait = false;
-						_sendWait.erase(mit);
+						ref5.ref3.wait = false;
+						ref5->_sendWait.erase(ref5.mit);
 					}
 				});
 				if (wait)
@@ -190,24 +198,26 @@ public:
 		bool wait = false;
 		bool closed = false;
 		bool notified = false;
-		host->send(_strand, [&]
+		LAMBDA_THIS_REF6(ref6, host, ath, msgBuf, wait, closed, notified);
+		host->send(_strand, [&ref6]
 		{
-			if (_closed)
+			if (ref6->_closed)
 			{
-				closed = true;
+				ref6.closed = true;
 			} 
 			else
 			{
+				auto& _sendWait = ref6->_sendWait;
 				if (_sendWait.empty())
 				{
-					wait = true;
-					take_wait pw = { notified, msgBuf, host->make_trig_notifer(ath) };
-					_takeWait.push_front(pw);
+					ref6.wait = true;
+					take_wait pw = { ref6.notified, ref6.msgBuf, ref6.host->make_trig_notifer(ref6.ath) };
+					ref6->_takeWait.push_front(pw);
 				}
 				else
 				{
 					send_wait& wt = _sendWait.back();
-					new(msgBuf)T(wt.is_rvalue ? std::move(wt.src_msg) : wt.src_msg);
+					new(ref6.msgBuf)T(wt.is_rvalue ? std::move(wt.src_msg) : wt.src_msg);
 					wt.notified = true;
 					wt.ntf(false);
 					_sendWait.pop_back();
@@ -220,7 +230,11 @@ public:
 		}
 		if (!closed)
 		{
-			AUTO_CALL({ ((T*)msgBuf)->~T(); });
+			AUTO_CALL(
+			{
+				typedef T TP_;
+				((TP_*)msgBuf)->~TP_();
+			});
 			return std::move(*(T*)msgBuf);
 		}
 		qg.unlock();
@@ -262,7 +276,7 @@ public:
 	void close(my_actor* host)
 	{
 		my_actor::quit_guard qg(host);
-		host->send(_strand, [&]
+		host->send(_strand, [this]
 		{
 			_closed = true;
 			while (!_takeWait.empty())
@@ -295,19 +309,21 @@ private:
 		actor_trig_handle<bool> ath;
 		bool ok = false;
 		bool closed = false;
-		host->send(_strand, [&]
+		LAMBDA_THIS_REF5(ref5, host, ct, ath, ok, closed);
+		host->send(_strand, [&ref5]
 		{
-			if (_closed)
+			if (ref5->_closed)
 			{
-				closed = true;
+				ref5.closed = true;
 			}
 			else
 			{
+				auto& _sendWait = ref5->_sendWait;
 				if (!_sendWait.empty())
 				{
-					ok = true;
+					ref5.ok = true;
 					send_wait& wt = _sendWait.back();
-					ct(wt.is_rvalue, wt.src_msg);
+					ref5.ct(wt.is_rvalue, wt.src_msg);
 					wt.notified = true;
 					wt.ntf(false);
 					_sendWait.pop_back();
@@ -332,25 +348,29 @@ private:
 		bool wait = false;
 		bool closed = false;
 		bool notified = false;
-		host->send(_strand, [&]
+		LAMBDA_REF3(ref3, wait, closed, notified);
+		LAMBDA_THIS_REF6(ref6, ref3, host, ct, ath, mit, msgBuf);
+		host->send(_strand, [&ref6]
 		{
-			if (_closed)
+			auto& ref3 = ref6.ref3;
+			if (ref6->_closed)
 			{
-				closed = true;
+				ref3.closed = true;
 			}
 			else
 			{
+				auto& _sendWait = ref6->_sendWait;
 				if (_sendWait.empty())
 				{
-					wait = true;
-					take_wait pw = { notified, msgBuf, host->make_trig_notifer(ath) };
-					_takeWait.push_front(pw);
-					mit = _takeWait.begin();
+					ref3.wait = true;
+					take_wait pw = { ref3.notified, ref6.msgBuf, ref6.host->make_trig_notifer(ref6.ath) };
+					ref6->_takeWait.push_front(pw);
+					ref6.mit = ref6->_takeWait.begin();
 				}
 				else
 				{
 					send_wait& wt = _sendWait.back();
-					ct(wt.is_rvalue, wt.src_msg);
+					ref6.ct(wt.is_rvalue, wt.src_msg);
 					wt.notified = true;
 					wt.ntf(false);
 					_sendWait.pop_back();
@@ -362,12 +382,12 @@ private:
 		{
 			if (!host->timed_wait_trig(tm, ath, closed))
 			{
-				host->send(_strand, [&]
+				host->send(_strand, [&ref6]
 				{
-					if (!notified)
+					if (!ref6.ref3.notified)
 					{
-						wait = false;
-						_takeWait.erase(mit);
+						ref6.ref3.wait = false;
+						ref6->_takeWait.erase(ref6.mit);
 					}
 				});
 				ok = wait;
@@ -399,17 +419,13 @@ private:
 	msg_list<send_wait> _sendWait;
 };
 
-/*!
-@brief CSP模型消息（多读多写，角色可转换，可递归），发送方等消息取出并处理完成后才返回
-*/
-template <typename T, typename R = void>
+template <typename T, typename R>
 class csp_channel
 {
 	struct send_wait
 	{
-		bool is_rvalue;
 		bool& notified;
-		T& src_msg;
+		T& srcMsg;
 		unsigned char* res;
 		actor_trig_notifer<bool> ntf;
 	};
@@ -417,26 +433,15 @@ class csp_channel
 	struct take_wait
 	{
 		bool& notified;
-		unsigned char* dst;
+		T*& srcMsg;
 		unsigned char*& res;
 		actor_trig_notifer<bool> ntf;
 		actor_trig_notifer<bool>& ntfSend;
 	};
-public:
-	struct close_exception : public csp_channel_close_exception
-	{
-	};
-public:
+protected:
 	csp_channel(shared_strand strand)
-		:_closed(false), _strand(strand), _takeWait(4), _sendWait(4)
-	{
-
-	}
-
-	virtual ~csp_channel()
-	{
-
-	}
+		:_closed(false), _strand(strand), _takeWait(4), _sendWait(4) {}
+	~csp_channel() {}
 public:
 	template <typename TM>
 	R send(my_actor* host, TM&& msg)
@@ -446,27 +451,29 @@ public:
 		unsigned char resBuf[sizeof(R)];
 		bool closed = false;
 		bool notified = false;
-		host->send(_strand, [&]
+		LAMBDA_THIS_REF6(ref6, host, msg, ath, resBuf, closed, notified);
+		host->send(_strand, [&ref6]
 		{
-			if (_closed)
+			if (ref6->_closed)
 			{
-				closed = true;
+				ref6.closed = true;
 			}
 			else
 			{
+				auto& _takeWait = ref6->_takeWait;
 				if (_takeWait.empty())
 				{
-					send_wait pw = { check_move<TM&&>::is_rvalue, notified, msg, resBuf, host->make_trig_notifer(ath) };
-					_sendWait.push_front(pw);
+					send_wait pw = { ref6.notified, ref6.msg, ref6.resBuf, ref6.host->make_trig_notifer(ref6.ath) };
+					ref6->_sendWait.push_front(pw);
 				}
 				else
 				{
 					take_wait& wt = _takeWait.back();
-					new(wt.dst)T(check_move<TM&&>::move(msg));
+					wt.srcMsg = &ref6.msg;
 					wt.notified = true;
 					wt.ntf(false);
-					wt.res = resBuf;
-					wt.ntfSend = host->make_trig_notifer(ath);
+					wt.res = ref6.resBuf;
+					wt.ntfSend = ref6.host->make_trig_notifer(ref6.ath);
 					_takeWait.pop_back();
 				}
 			}
@@ -480,7 +487,11 @@ public:
 			qg.unlock();
 			throw_close_exception();
 		}
-		AUTO_CALL({ ((R*)resBuf)->~R(); });
+		AUTO_CALL(
+		{
+			typedef R TP_;
+			((TP_*)resBuf)->~TP_();
+		});
 		return std::move(*(R*)resBuf);
 	}
 
@@ -490,32 +501,36 @@ public:
 		my_actor::quit_guard qg(host);
 		actor_trig_handle<bool> ath;
 		actor_trig_notifer<bool> ntfSend;
-		unsigned char msgBuf[sizeof(T)];
+		T* srcMsg = NULL;
 		unsigned char* res = NULL;
 		bool wait = false;
 		bool closed = false;
 		bool notified = false;
-		host->send(_strand, [&]
+		LAMBDA_REF3(ref3, wait, closed, notified);
+		LAMBDA_THIS_REF6(ref6, ref3, host, ath, ntfSend, srcMsg, res);
+		host->send(_strand, [&ref6]
 		{
-			if (_closed)
+			auto& ref3 = ref6.ref3;
+			if (ref6->_closed)
 			{
-				closed = true;
+				ref3.closed = true;
 			}
 			else
 			{
+				auto& _sendWait = ref6->_sendWait;
 				if (_sendWait.empty())
 				{
-					wait = true;
-					take_wait pw = { notified, msgBuf, res, host->make_trig_notifer(ath), ntfSend };
-					_takeWait.push_front(pw);
+					ref3.wait = true;
+					take_wait pw = { ref3.notified, ref6.srcMsg, ref6.res, ref6.host->make_trig_notifer(ref6.ath), ref6.ntfSend };
+					ref6->_takeWait.push_front(pw);
 				}
 				else
 				{
 					send_wait& wt = _sendWait.back();
-					new(msgBuf)T(wt.is_rvalue ? std::move(wt.src_msg) : wt.src_msg);
+					ref6.srcMsg = &wt.srcMsg;
 					wt.notified = true;
-					ntfSend = wt.ntf;
-					res = wt.res;
+					ref6.ntfSend = wt.ntf;
+					ref6.res = wt.res;
 					_sendWait.pop_back();
 				}
 			}
@@ -527,13 +542,12 @@ public:
 		if (!closed)
 		{
 			bool ok = false;
-			AUTO_CALL({ ((T*)msgBuf)->~T(); });
 			AUTO_CALL({ ntfSend(!ok); });
 			BEGIN_TRY_
 			{
-				new(res)R(h(*(T*)msgBuf));
+				new(res)R(h(*srcMsg));
 			}
-			CATCH_FOR(close_exception)
+			CATCH_FOR(sync_csp_close_exception)
 			{
 				qg.unlock();
 				throw_close_exception();
@@ -549,7 +563,7 @@ public:
 	void close(my_actor* host)
 	{
 		my_actor::quit_guard qg(host);
-		host->send(_strand, [&]
+		host->send(_strand, [this]
 		{
 			_closed = true;
 			while (!_takeWait.empty())
@@ -557,10 +571,10 @@ public:
 				auto& wt = _takeWait.front();
 				wt.notified = true;
 				wt.ntf(true);
-				if (!wt.ntfSend.empty())
-				{
-					wt.ntfSend(true);
-				}
+// 				if (!wt.ntfSend.empty())
+// 				{
+// 					wt.ntfSend(true);
+// 				}
 				_takeWait.pop_front();
 			}
 			while (!_sendWait.empty())
@@ -582,10 +596,7 @@ private:
 	csp_channel(const csp_channel&){};
 	void operator=(const csp_channel&){};
 
-	virtual void throw_close_exception()
-	{
-		throw close_exception();
-	}
+	virtual void throw_close_exception() = 0;
 private:
 	bool _closed;
 	shared_strand _strand;
@@ -593,45 +604,354 @@ private:
 	msg_list<send_wait> _sendWait;
 };
 
+//////////////////////////////////////////////////////////////////////////
+
+template <typename T0, typename T1, typename T2, typename T3, typename R = void>
+class csp_invoke_base4 : public csp_channel<ref_ex<T0, T1, T2, T3>, R>
+{
+	typedef ref_ex<T0, T1, T2, T3> msg_type;
+	typedef csp_channel<msg_type, R> base_csp_channel;
+protected:
+	csp_invoke_base4(shared_strand strand)
+		:base_csp_channel(strand) {}
+	~csp_invoke_base4() {}
+public:
+	template <typename H>
+	void wait(my_actor* host, const H& h)
+	{
+		base_csp_channel::take(host, [&](msg_type& msg)->R
+		{
+			return h(msg._p0, msg._p1, msg._p2, msg._p3);
+		});
+	}
+
+	template <typename TM0, typename TM1, typename TM2, typename TM3>
+	R invoke(my_actor* host, TM0&& p0, TM1&& p1, TM2&& p2, TM3&& p3)
+	{
+		return base_csp_channel::send(host, bind_ref(p0, p1, p2, p3));
+	}
+};
+
+template <typename T0, typename T1, typename T2, typename R = void>
+class csp_invoke_base3 : public csp_channel<ref_ex<T0, T1, T2>, R>
+{
+	typedef ref_ex<T0, T1, T2> msg_type;
+	typedef csp_channel<msg_type, R> base_csp_channel;
+protected:
+	csp_invoke_base3(shared_strand strand)
+		:base_csp_channel(strand) {}
+	~csp_invoke_base3() {}
+public:
+	template <typename H>
+	void wait(my_actor* host, const H& h)
+	{
+		base_csp_channel::take(host, [&](msg_type& msg)->R
+		{
+			return h(msg._p0, msg._p1, msg._p2);
+		});
+	}
+
+	template <typename TM0, typename TM1, typename TM2>
+	R invoke(my_actor* host, TM0&& p0, TM1&& p1, TM2&& p2)
+	{
+		return base_csp_channel::send(host, bind_ref(p0, p1, p2));
+	}
+};
+
+template <typename T0, typename T1, typename R = void>
+class csp_invoke_base2 : public csp_channel<ref_ex<T0, T1>, R>
+{
+	typedef ref_ex<T0, T1> msg_type;
+	typedef csp_channel<msg_type, R> base_csp_channel;
+protected:
+	csp_invoke_base2(shared_strand strand)
+		:base_csp_channel(strand) {}
+	~csp_invoke_base2() {}
+public:
+	template <typename H>
+	void wait(my_actor* host, const H& h)
+	{
+		base_csp_channel::take(host, [&](msg_type& msg)->R
+		{
+			return h(msg._p0, msg._p1);
+		});
+	}
+
+	template <typename TM0, typename TM1>
+	R invoke(my_actor* host, TM0&& p0, TM1&& p1)
+	{
+		return base_csp_channel::send(host, bind_ref(p0, p1));
+	}
+};
+
+template <typename T0, typename R = void>
+class csp_invoke_base1 : public csp_channel<ref_ex<T0>, R>
+{
+	typedef ref_ex<T0> msg_type;
+	typedef csp_channel<msg_type, R> base_csp_channel;
+protected:
+	csp_invoke_base1(shared_strand strand)
+		:base_csp_channel(strand) {}
+	~csp_invoke_base1() {}
+public:
+	template <typename H>
+	void wait(my_actor* host, const H& h)
+	{
+		base_csp_channel::take(host, [&](msg_type& msg)->R
+		{
+			return h(msg._p0);
+		});
+	}
+
+	template <typename TM0>
+	R invoke(my_actor* host, TM0&& p0)
+	{
+		return base_csp_channel::send(host, bind_ref(p0));
+	}
+};
+
+template <typename R = void>
+class csp_invoke_base0 : public csp_channel<ref_ex<>, R>
+{
+	typedef ref_ex<> msg_type;
+	typedef csp_channel<msg_type, R> base_csp_channel;
+protected:
+	csp_invoke_base0(shared_strand strand)
+		:base_csp_channel(strand) {}
+	~csp_invoke_base0() {}
+public:
+	template <typename H>
+	void wait(my_actor* host, const H& h)
+	{
+		base_csp_channel::take(host, [&](msg_type& msg)->R
+		{
+			return h();
+		});
+	}
+
+	R invoke(my_actor* host)
+	{
+		return base_csp_channel::send(host, msg_type());
+	}
+};
+
 struct void_return
 {
 };
 
-template <typename T>
-class csp_channel<T, void>: public csp_channel<T, void_return>
+template <typename T0, typename T1, typename T2, typename T3>
+class csp_invoke_base4<T0, T1, T2, T3, void> : public csp_channel<ref_ex<T0, T1, T2, T3>, void_return>
 {
-	typedef csp_channel<T, void_return> base_csp_channel;
+	typedef ref_ex<T0, T1, T2, T3> msg_type;
+	typedef csp_channel<msg_type, void_return> base_csp_channel;
+protected:
+	csp_invoke_base4(shared_strand strand)
+		:base_csp_channel(strand) {}
+	~csp_invoke_base4() {}
 public:
-	struct close_exception : public csp_channel_close_exception
-	{
-	};
-public:
-	csp_channel(shared_strand strand)
-		:base_csp_channel(strand)
-	{
-
-	}
-
-	~csp_channel()
-	{
-
-	}
-public:
-	template <typename TM>
-	void send(my_actor* host, TM&& msg)
-	{
-		base_csp_channel::send(host, CHECK_MOVE(msg));
-	}
-
 	template <typename H>
-	void take(my_actor* host, const H& h)
+	void wait(my_actor* host, const H& h)
 	{
-		base_csp_channel::take(host, [&](T& msg)->void_return
+		base_csp_channel::take(host, [&](msg_type& msg)->void_return
 		{
-			h(msg);
+			h(msg._p0, msg._p1, msg._p2, msg._p3);
 			return void_return();
 		});
 	}
+
+	template <typename TM0, typename TM1, typename TM2, typename TM3>
+	void invoke(my_actor* host, TM0&& p0, TM1&& p1, TM2&& p2, TM3&& p3)
+	{
+		base_csp_channel::send(host, bind_ref(p0, p1, p2, p3));
+	}
+};
+
+template <typename T0, typename T1, typename T2>
+class csp_invoke_base3<T0, T1, T2, void> : public csp_channel<ref_ex<T0, T1, T2>, void_return>
+{
+	typedef ref_ex<T0, T1, T2> msg_type;
+	typedef csp_channel<msg_type, void_return> base_csp_channel;
+protected:
+	csp_invoke_base3(shared_strand strand)
+		:base_csp_channel(strand) {}
+	~csp_invoke_base3() {}
+public:
+	template <typename H>
+	void wait(my_actor* host, const H& h)
+	{
+		base_csp_channel::take(host, [&](msg_type& msg)->void_return
+		{
+			h(msg._p0, msg._p1, msg._p2);
+			return void_return();
+		});
+	}
+
+	template <typename TM0, typename TM1, typename TM2>
+	void invoke(my_actor* host, TM0&& p0, TM1&& p1, TM2&& p2)
+	{
+		base_csp_channel::send(host, bind_ref(p0, p1, p2));
+	}
+};
+
+template <typename T0, typename T1>
+class csp_invoke_base2<T0, T1, void> : public csp_channel<ref_ex<T0, T1>, void_return>
+{
+	typedef ref_ex<T0, T1> msg_type;
+	typedef csp_channel<msg_type, void_return> base_csp_channel;
+protected:
+	csp_invoke_base2(shared_strand strand)
+		:base_csp_channel(strand) {}
+	~csp_invoke_base2() {}
+public:
+	template <typename H>
+	void wait(my_actor* host, const H& h)
+	{
+		base_csp_channel::take(host, [&](msg_type& msg)->void_return
+		{
+			h(msg._p0, msg._p1);
+			return void_return();
+		});
+	}
+
+	template <typename TM0, typename TM1>
+	void invoke(my_actor* host, TM0&& p0, TM1&& p1)
+	{
+		base_csp_channel::send(host, bind_ref(p0, p1));
+	}
+};
+
+template <typename T0>
+class csp_invoke_base1<T0, void> : public csp_channel<ref_ex<T0>, void_return>
+{
+	typedef ref_ex<T0> msg_type;
+	typedef csp_channel<msg_type, void_return> base_csp_channel;
+protected:
+	csp_invoke_base1(shared_strand strand)
+		:base_csp_channel(strand) {}
+	~csp_invoke_base1() {}
+public:
+	template <typename H>
+	void wait(my_actor* host, const H& h)
+	{
+		base_csp_channel::take(host, [&](msg_type& msg)->void_return
+		{
+			h(msg._p0);
+			return void_return();
+		});
+	}
+
+	template <typename TM0>
+	void invoke(my_actor* host, TM0&& p0)
+	{
+		base_csp_channel::send(host, bind_ref(p0));
+	}
+};
+
+template <>
+class csp_invoke_base0<void> : public csp_channel<ref_ex<>, void_return>
+{
+	typedef ref_ex<> msg_type;
+	typedef csp_channel<msg_type, void_return> base_csp_channel;
+protected:
+	csp_invoke_base0(shared_strand strand)
+		:base_csp_channel(strand) {}
+	~csp_invoke_base0() {}
+public:
+	template <typename H>
+	void wait(my_actor* host, const H& h)
+	{
+		base_csp_channel::take(host, [&](msg_type& msg)->void_return
+		{
+			h();
+			return void_return();
+		});
+	}
+
+	void invoke(my_actor* host)
+	{
+		base_csp_channel::send(host, msg_type());
+	}
+};
+
+template <typename R, typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
+class csp_invoke;
+
+/*!
+@brief CSP模型消息（多读多写，角色可转换，可递归），发送方等消息取出并处理完成后才返回
+*/
+template <typename R, typename T0, typename T1, typename T2, typename T3>
+class csp_invoke
+	<R(T0, T1, T2, T3)> : public csp_invoke_base4<T0, T1, T2, T3, R>
+{
+public:
+	struct close_exception : public csp_channel_close_exception {};
+public:
+	csp_invoke(shared_strand strand)
+		:csp_invoke_base4(strand) {}
+private:
+	void throw_close_exception()
+	{
+		throw close_exception();
+	}
+};
+
+template <typename R, typename T0, typename T1, typename T2>
+class csp_invoke
+	<R(T0, T1, T2)> : public csp_invoke_base3<T0, T1, T2, R>
+{
+public:
+	struct close_exception : public csp_channel_close_exception {};
+public:
+	csp_invoke(shared_strand strand)
+		:csp_invoke_base3(strand) {}
+private:
+	void throw_close_exception()
+	{
+		throw close_exception();
+	}
+};
+
+template <typename R, typename T0, typename T1>
+class csp_invoke
+	<R(T0, T1)> : public csp_invoke_base2<T0, T1, R>
+{
+public:
+	struct close_exception : public csp_channel_close_exception {};
+public:
+	csp_invoke(shared_strand strand)
+		:csp_invoke_base2(strand) {}
+private:
+	void throw_close_exception()
+	{
+		throw close_exception();
+	}
+};
+
+template <typename R, typename T0>
+class csp_invoke
+	<R(T0)> : public csp_invoke_base1<T0, R>
+{
+public:
+	struct close_exception : public csp_channel_close_exception {};
+public:
+	csp_invoke(shared_strand strand)
+		:csp_invoke_base1(strand) {}
+private:
+	void throw_close_exception()
+	{
+		throw close_exception();
+	}
+};
+
+template <typename R>
+class csp_invoke
+	<R()> : public csp_invoke_base0<R>
+{
+public:
+	struct close_exception : public csp_channel_close_exception {};
+public:
+	csp_invoke(shared_strand strand)
+		:csp_invoke_base0(strand) {}
 private:
 	void throw_close_exception()
 	{

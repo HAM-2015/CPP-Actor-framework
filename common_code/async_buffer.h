@@ -145,7 +145,11 @@ public:
 			}
 			if (!isEmpty)
 			{
-				AUTO_CALL({ ((T*)resBuf)->~T(); });
+				AUTO_CALL(
+				{
+					typedef T TP_;
+					((TP_*)resBuf)->~TP_();
+				});
 				return std::move(*(T*)resBuf);
 			}
 			if (!host->wait_trig(ath))

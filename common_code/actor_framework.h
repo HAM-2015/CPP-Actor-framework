@@ -58,26 +58,16 @@ struct msg_param
 
 	template <typename PT0, typename PT1, typename PT2, typename PT3>
 	msg_param(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3)
-		:_res0(CHECK_MOVE(p0)), _res1(CHECK_MOVE(p1)), _res2(CHECK_MOVE(p2)), _res3(CHECK_MOVE(p3))
-	{
-
-	}
+		:_res0(CHECK_MOVE(p0)), _res1(CHECK_MOVE(p1)), _res2(CHECK_MOVE(p2)), _res3(CHECK_MOVE(p3)) {}
 
 	msg_param(const_ref_type& rp)
-		:_res0(rp._p0), _res1(rp._p1), _res2(rp._p2), _res3(rp._p3)
-	{
-
-	}
+		:_res0(rp._p0), _res1(rp._p1), _res2(rp._p2), _res3(rp._p3) {}
 
 	msg_param(ref_type& s)
-		:_res0(std::move(s._p0)), _res1(std::move(s._p1)), _res2(std::move(s._p2)), _res3(std::move(s._p3))
-	{
-	}
+		:_res0(std::move(s._p0)), _res1(std::move(s._p1)), _res2(std::move(s._p2)), _res3(std::move(s._p3)) {}
 
 	msg_param(msg_param&& s)
-		:_res0(std::move(s._res0)), _res1(std::move(s._res1)), _res2(std::move(s._res2)), _res3(std::move(s._res3))
-	{
-	}
+		:_res0(std::move(s._res0)), _res1(std::move(s._res1)), _res2(std::move(s._res2)), _res3(std::move(s._res3)) {}
 
 	void operator =(msg_param&& s)
 	{
@@ -125,26 +115,16 @@ struct msg_param<T0, T1, T2, void>
 
 	template <typename PT0, typename PT1, typename PT2>
 	msg_param(PT0&& p0, PT1&& p1, PT2&& p2)
-		:_res0(CHECK_MOVE(p0)), _res1(CHECK_MOVE(p1)), _res2(CHECK_MOVE(p2))
-	{
-
-	}
+		:_res0(CHECK_MOVE(p0)), _res1(CHECK_MOVE(p1)), _res2(CHECK_MOVE(p2)) {}
 
 	msg_param(const_ref_type& rp)
-		:_res0(rp._p0), _res1(rp._p1), _res2(rp._p2)
-	{
-
-	}
+		:_res0(rp._p0), _res1(rp._p1), _res2(rp._p2) {}
 
 	msg_param(ref_type& s)
-		:_res0(std::move(s._p0)), _res1(std::move(s._p1)), _res2(std::move(s._p2))
-	{
-	}
+		:_res0(std::move(s._p0)), _res1(std::move(s._p1)), _res2(std::move(s._p2)) {}
 
 	msg_param(msg_param&& s)
-		:_res0(std::move(s._res0)), _res1(std::move(s._res1)), _res2(std::move(s._res2))
-	{
-	}
+		:_res0(std::move(s._res0)), _res1(std::move(s._res1)), _res2(std::move(s._res2)) {}
 
 	void operator =(msg_param&& s)
 	{
@@ -187,26 +167,16 @@ struct msg_param<T0, T1, void, void>
 
 	template <typename PT0, typename PT1>
 	msg_param(PT0&& p0, PT1&& p1)
-		:_res0(CHECK_MOVE(p0)), _res1(CHECK_MOVE(p1))
-	{
-
-	}
+		:_res0(CHECK_MOVE(p0)), _res1(CHECK_MOVE(p1)) {}
 
 	msg_param(const_ref_type& rp)
-		:_res0(rp._p0), _res1(rp._p1)
-	{
-
-	}
+		:_res0(rp._p0), _res1(rp._p1) {}
 
 	msg_param(ref_type& s)
-		:_res0(std::move(s._p0)), _res1(std::move(s._p1))
-	{
-	}
+		:_res0(std::move(s._p0)), _res1(std::move(s._p1)) {}
 
 	msg_param(msg_param&& s)
-		:_res0(std::move(s._res0)), _res1(std::move(s._res1))
-	{
-	}
+		:_res0(std::move(s._res0)), _res1(std::move(s._res1)) {}
 
 	void operator =(msg_param&& s)
 	{
@@ -242,28 +212,20 @@ struct msg_param<T0, void, void, void>
 	typedef ref_ex<T0> ref_type;
 	typedef const_ref_ex<T0> const_ref_type;
 
-	template <typename PT0>
-	msg_param(PT0&& p0)
-		:_res0(CHECK_MOVE(p0))
-	{
+	msg_param(T0&& p0)
+		:_res0(std::move(p0)) {}
 
-	}
+	msg_param(const T0& p0)
+		:_res0(p0) {}
 
 	msg_param(const_ref_type& rp)
-		:_res0(rp._p0)
-	{
-
-	}
+		:_res0(rp._p0) {}
 
 	msg_param(ref_type& s)
-		:_res0(std::move(s._p0))
-	{
-	}
+		:_res0(std::move(s._p0)) {}
 
 	msg_param(msg_param&& s)
-		:_res0(std::move(s._res0))
-	{
-	}
+		:_res0(std::move(s._res0)) {}
 
 	void operator =(msg_param&& s)
 	{

@@ -437,8 +437,7 @@ void actor_test(my_actor* self)
 		//self->child_actor_run(buffPop);
 	}
 	sync_msg<passing_test> syncMsg(self->self_strand());
-	csp_channel<passing_test, passing_test> cspMsg(self->self_strand());
-	csp_channel<passing_test> cspMsgV(self->self_strand());
+	csp_invoke<int (passing_test, int)> cspMsg(self->self_strand());
 	{//模拟同步消息发送，CSP模型消息发送
 		syncPush = self->create_child_actor(self->self_strand(), [&](my_actor* self)
 		{
@@ -448,9 +447,8 @@ void actor_test(my_actor* self)
 				while (true)
 				{
 					syncMsg.send(self, passing_test(i++));
-					passing_test r = cspMsg.send(self, passing_test(i++));
-					printf("csp return %d\n", r._count->_id);
-					cspMsgV.send(self, passing_test(i++));
+					int r = cspMsg.invoke(self, passing_test(i++), i);
+					printf("csp return %d\n", r);
 				}
 			}
 			catch (sync_csp_close_exception)
@@ -467,16 +465,11 @@ void actor_test(my_actor* self)
 				{
 					passing_test id = syncMsg.take(self);
 					printf("sync %d %d\n", id._count->_id, (int)self->self_id());
-					cspMsg.take(self, [&](const passing_test& id)->passing_test
+					cspMsg.wait(self, [&](const passing_test& id, int i)->int
 					{
 						printf("csp %d\n", id._count->_id);
 						self->sleep(1000);
-						return passing_test(id._count->_id*10000);
-					});
-					cspMsgV.take(self, [&](const passing_test& id)
-					{
-						printf("cspv %d\n", id._count->_id);
-						self->sleep(1000);
+						return id._count->_id*10000;
 					});
 				}
 			}
@@ -487,9 +480,9 @@ void actor_test(my_actor* self)
 		};
 		syncPop1 = self->create_child_actor(self->self_strand(), h);
 		syncPop2 = self->create_child_actor(self->self_strand(), h);
-// 		self->child_actor_run(syncPush);
-// 		self->child_actor_run(syncPop1);
-// 		self->child_actor_run(syncPop2);
+		self->child_actor_run(syncPush);
+		self->child_actor_run(syncPop1);
+		self->child_actor_run(syncPop2);
 	}
 	list<actor_handle> chs;//需要被挂起的Actor对象，可以从下方注释几个测试
 	chs.push_back(actorLeft.get_actor());
@@ -544,7 +537,6 @@ void actor_test(my_actor* self)
 	self->child_actor_force_quit(buffPop);
 	syncMsg.close(self);
 	cspMsg.close(self);
-	cspMsgV.close(self);
 	self->child_actor_force_quit(syncPush);
 	self->child_actor_force_quit(syncPop1);
 	self->child_actor_force_quit(syncPop2);

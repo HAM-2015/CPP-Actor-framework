@@ -1,7 +1,7 @@
 #ifndef __REF_EX_H
 #define __REF_EX_H
 
-template <typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
+template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
 struct ref_ex;
 
 template <typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
@@ -234,6 +234,11 @@ struct ref_ex<T0, void, void, void>
 		_p0 = std::move(s._p0);
 	}
 
+	operator T0&()
+	{
+		return _p0;
+	}
+
 	T0& _p0;
 };
 
@@ -241,5 +246,31 @@ template <>
 struct ref_ex<void, void, void, void>
 {
 };
+
+//////////////////////////////////////////////////////////////////////////
+
+template <typename T0, typename T1, typename T2, typename T3>
+auto bind_ref(T0& p0, T1& p1, T2& p2, T3& p3)->ref_ex<T0, T1, T2, T3>
+{
+	return ref_ex<T0, T1, T2, T3>(p0, p1, p2, p3);
+}
+
+template <typename T0, typename T1, typename T2>
+auto bind_ref(T0& p0, T1& p1, T2& p2)->ref_ex<T0, T1, T2>
+{
+	return ref_ex<T0, T1, T2>(p0, p1, p2);
+}
+
+template <typename T0, typename T1>
+auto bind_ref(T0& p0, T1& p1)->ref_ex<T0, T1>
+{
+	return ref_ex<T0, T1>(p0, p1);
+}
+
+template <typename T0>
+auto bind_ref(T0& p0)->ref_ex<T0>
+{
+	return ref_ex<T0>(p0);
+}
 
 #endif

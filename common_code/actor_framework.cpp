@@ -1885,7 +1885,12 @@ void my_actor::expires_timer()
 			assert(timer);
 			assert(!timer->_timerSuspend && !timer->_timerCompleted);
 			timer->_timerCompleted = true;
+#if _MSC_VER == 1600
+			std::function<void()> h;
+			timer->_h.swap(h);
+#elif _MSC_VER > 1600
 			auto h = std::move(timer->_h);
+#endif
 			assert(!timer->_h);
 			h();
 		}
