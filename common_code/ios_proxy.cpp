@@ -27,8 +27,8 @@ ios_proxy::ios_proxy()
 ios_proxy::~ios_proxy()
 {
 	assert(!_opend);
-	delete (obj_pool_base<impl_type>*)_implPool;
-	delete (obj_pool_base<timer_type>*)_timerPool;
+	delete (obj_pool<impl_type>*)_implPool;
+	delete (obj_pool<timer_type>*)_timerPool;
 }
 
 void ios_proxy::run(size_t threadNum)
@@ -195,20 +195,20 @@ ios_proxy::operator boost::asio::io_service&() const
 
 void* ios_proxy::getImpl()
 {
-	return ((obj_pool_base<impl_type>*)_implPool)->new_();
+	return ((obj_pool<impl_type>*)_implPool)->new_();
 }
 
 void ios_proxy::freeImpl(void* impl)
 {
-	((obj_pool_base<impl_type>*)_implPool)->delete_(impl);
+	((obj_pool<impl_type>*)_implPool)->delete_(impl);
 }
 
 void* ios_proxy::getTimer()
 {
-	return ((obj_pool_base<timer_type>*)_timerPool)->new_();
+	return ((obj_pool<timer_type>*)_timerPool)->new_();
 }
 
 void ios_proxy::freeTimer(void* timer)
 {
-	((obj_pool_base<timer_type>*)_timerPool)->delete_(timer);
+	((obj_pool<timer_type>*)_timerPool)->delete_(timer);
 }

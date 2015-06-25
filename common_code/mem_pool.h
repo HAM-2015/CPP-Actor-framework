@@ -519,13 +519,13 @@ template <typename T, typename CREATER, typename DESTORY>
 class shared_obj_pool;
 
 template <typename T, typename CREATER, typename DESTORY>
-class obj_pool;
+class obj_pool_;
 
 template <typename T>
-class obj_pool_base
+class obj_pool
 {
 public:
-	virtual ~obj_pool_base(){};
+	virtual ~obj_pool(){};
 	virtual	T* new_() = 0;
 	virtual void delete_(void* p) = 0;
 protected:
@@ -533,13 +533,13 @@ protected:
 };
 
 template <typename T, typename CREATER, typename DESTORY>
-static obj_pool_base<T>* create_pool(size_t poolSize, const CREATER& creater, const DESTORY& destory)
+static obj_pool<T>* create_pool(size_t poolSize, const CREATER& creater, const DESTORY& destory)
 {
-	return new obj_pool<T, CREATER, DESTORY>(poolSize, creater, destory);
+	return new obj_pool_<T, CREATER, DESTORY>(poolSize, creater, destory);
 }
 
 template <typename T, typename CREATER>
-static obj_pool_base<T>* create_pool(size_t poolSize, const CREATER& creater)
+static obj_pool<T>* create_pool(size_t poolSize, const CREATER& creater)
 {
 	return create_pool<T>(poolSize, creater, [](T* p)
 	{
@@ -549,7 +549,7 @@ static obj_pool_base<T>* create_pool(size_t poolSize, const CREATER& creater)
 }
 
 template <typename T, typename CREATER, typename DESTORY>
-class obj_pool: public obj_pool_base<T>
+class obj_pool_: public obj_pool<T>
 {
 	struct node 
 	{
@@ -557,10 +557,10 @@ class obj_pool: public obj_pool_base<T>
 		node* _link;
 	};
 
-	friend static obj_pool_base<T>* create_pool<T, CREATER, DESTORY>(size_t, const CREATER&, const DESTORY&);
+	friend static obj_pool<T>* create_pool<T, CREATER, DESTORY>(size_t, const CREATER&, const DESTORY&);
 	friend shared_obj_pool<T, CREATER, DESTORY>;
 private:
-	obj_pool(size_t poolSize, const CREATER& creater, const DESTORY& destory)
+	obj_pool_(size_t poolSize, const CREATER& creater, const DESTORY& destory)
 		:_creater(creater), _destory(destory), _poolMaxSize(poolSize), _nodeCount(0), _link(NULL)
 	{
 #ifdef _DEBUG
@@ -568,7 +568,7 @@ private:
 #endif
 	}
 public:
-	~obj_pool()
+	~obj_pool_()
 	{
 		boost::lock_guard<boost::mutex> lg(_mutex);
 		assert(0 == _blockNumber);
@@ -742,7 +742,6 @@ class shared_obj_pool: public shared_obj_pool_base<T>
 		}
 
 		void* _refCountAlloc;
-		boost::mutex* _mutex;
 	};
 
 	friend static shared_obj_pool_base<T>* create_shared_pool<T, CREATER, DESTORY>(size_t, const CREATER&, const DESTORY&);
@@ -764,7 +763,7 @@ public:
 		return std::shared_ptr<T>(_dataAlloc.new_(), [this](T* p){_dataAlloc.delete_(p); }, ref_count_alloc<void>(_refCountAlloc));
 	}
 private:
-	obj_pool<T, CREATER, DESTORY> _dataAlloc;
+	obj_pool_<T, CREATER, DESTORY> _dataAlloc;
 	std::shared_ptr<T> _lockAlloc;
 	void* _refCountAlloc;
 };

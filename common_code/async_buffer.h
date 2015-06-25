@@ -6,6 +6,10 @@
 #include <memory>
 #include "actor_framework.h"
 
+struct async_buffer_close_exception
+{
+};
+
 /*!
 @brief 异步缓冲队列，多写/多读
 */
@@ -13,7 +17,7 @@ template <typename T>
 class async_buffer
 {
 public:
-	struct close_exception 
+	struct close_exception : public async_buffer_close_exception
 	{
 	};
 public:
@@ -22,11 +26,6 @@ public:
 	{
 		_closed = false;
 		_strand = strand;
-	}
-
-	~async_buffer()
-	{
-
 	}
 public:
 	template <typename TM>

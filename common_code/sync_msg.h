@@ -32,20 +32,10 @@ class sync_msg
 		actor_trig_notifer<bool> ntf;
 	};
 public:
-	struct close_exception : public sync_msg_close_exception
-	{
-	};
+	struct close_exception : public sync_msg_close_exception {};
 public:
 	sync_msg(shared_strand strand)
-		:_closed(false), _strand(strand), _sendWait(4), _takeWait(4)
-	{
-
-	}
-
-	~sync_msg()
-	{
-
-	}
+		:_closed(false), _strand(strand), _sendWait(4), _takeWait(4) {}
 public:
 	template <typename TM>
 	void send(my_actor* host, TM&& msg)
