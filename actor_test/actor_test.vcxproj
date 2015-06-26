@@ -92,6 +92,8 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_WIN32_WINNT=0x0501;ENABLE_STRAND_IMPL_POOL;CHECK_ACTOR_STACK;CHECK_SELF;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>..\common_code\</AdditionalIncludeDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <MinimalRebuild>false</MinimalRebuild>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -106,6 +108,8 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_WIN32_WINNT=0x0501;ENABLE_STRAND_IMPL_POOL;CHECK_ACTOR_STACK;CHECK_SELF;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>..\common_code\</AdditionalIncludeDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <MinimalRebuild>false</MinimalRebuild>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -159,6 +163,7 @@
     <ClCompile Include="..\common_code\actor_framework.cpp" />
     <ClCompile Include="..\common_code\actor_mutex.cpp" />
     <ClCompile Include="..\common_code\actor_stack.cpp" />
+    <ClCompile Include="..\common_code\actor_timer.cpp" />
     <ClCompile Include="..\common_code\ios_proxy.cpp" />
     <ClCompile Include="..\common_code\shared_data.cpp" />
     <ClCompile Include="..\common_code\shared_strand.cpp" />
@@ -167,6 +172,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common_code\actor_mutex.h" />
+    <ClInclude Include="..\common_code\actor_timer.h" />
     <ClInclude Include="..\common_code\async_buffer.h" />
     <ClInclude Include="..\common_code\actor_framework.h" />
     <ClInclude Include="..\common_code\actor_stack.h" />

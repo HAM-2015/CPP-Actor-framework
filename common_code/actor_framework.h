@@ -23,6 +23,7 @@
 #include "scattered.h"
 #include "stack_object.h"
 #include "check_actor_stack.h"
+#include "actor_timer.h"
 
 class my_actor;
 typedef std::shared_ptr<my_actor> actor_handle;//Actor句柄
@@ -1902,7 +1903,17 @@ class my_actor
 		static msg_list<std::shared_ptr<pck_base> >::shared_node_alloc _msgPumpListAll;
 	};
 
-	struct timer_pck;
+	struct timer_state 
+	{
+		bool _timerSuspend;
+		bool _timerCompleted;
+		long long _timerTime;
+		long long _timerStampBegin;
+		long long _timerStampEnd;
+		std::function<void()> _timerCb;
+		actor_timer::timer_handle _timerHandle;
+	};
+
 	class boost_actor_run;
 	friend boost_actor_run;
 	friend child_actor_handle;
@@ -1992,11 +2003,6 @@ public:
 	@brief 启用堆栈内存池
 	*/
 	static void enable_stack_pool();
-
-	/*!
-	@brief 禁用创建Actor时自动构造定时器
-	*/
-	static void disable_auto_make_timer();
 public:
 	/*!
 	@brief 创建一个子Actor，父Actor终止时，子Actor也终止（在子Actor都完全退出后，父Actor才结束）
@@ -2072,16 +2078,6 @@ public:
 	*/
 	__yield_interrupt void yield();
 	__yield_interrupt void yield_guard();
-
-	/*!
-	@brief 调用disable_auto_make_timer后，使用这个打开当前Actor定时器
-	*/
-	void open_timer();
-
-	/*!
-	@brief 关闭内部定时器
-	*/
-	void close_timer();
 
 	/*!
 	@brief 获取父Actor
@@ -4293,15 +4289,15 @@ private:
 	size_t _yieldCount;//yield计数
 	size_t _childOverCount;///<子Actor退出时计数
 	size_t _childSuspendResumeCount;///<子Actor挂起/恢复计数
-	size_t _timerCount;//定时器计数
 	main_func _mainFunc;///<Actor入口
 	msg_list_shared_alloc<suspend_resume_option> _suspendResumeQueue;///<挂起/恢复操作队列
 	msg_list_shared_alloc<std::function<void()> > _exitCallback;///<Actor结束后的回调函数，强制退出返回false，正常退出返回true
 	msg_list_shared_alloc<std::function<void()> > _quitHandlerList;///<Actor退出时强制调用的函数，后注册的先执行
 	msg_list_shared_alloc<actor_handle> _childActorList;///<子Actor集合，子Actor都退出后，父Actor才能退出
 	msg_pool_status _msgPoolStatus;//消息池列表
-	timer_pck* _timer;///<定时器
 	actor_handle _parentActor;///<父Actor，子Actor都析构后，父Actor才能析构
+	timer_state _timerState;///<定时器状态
+	actor_timer* _timer;///<定时器
 	std::weak_ptr<my_actor> _weakThis;
 #ifdef CHECK_SELF
 	msg_map<void*, my_actor*>::iterator _btIt;

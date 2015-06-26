@@ -19,6 +19,8 @@
 #include "wrapped_post_handler.h"
 #include "wrapped_dispatch_handler.h"
 
+class actor_timer;
+
 class boost_strand;
 typedef std::shared_ptr<boost_strand> shared_strand;
 
@@ -46,7 +48,7 @@ protected:
 	boost_strand();
 	virtual ~boost_strand();
 public:
-	static shared_strand create(ios_proxy& iosProxy);
+	static shared_strand create(ios_proxy& iosProxy, bool makeTimer = true);
 public:
 	/*!
 	@brief 如果在本strand中调用则直接执行，否则添加到队列中等待执行
@@ -129,10 +131,16 @@ public:
 	*/
 	boost::asio::io_service& get_io_service();
 
+	/*!
+	@brief 获取定时器
+	*/
+	actor_timer* get_timer();
+
 #if (defined ENABLE_MFC_ACTOR || defined ENABLE_WX_ACTOR)
 	virtual void _post(const std::function<void ()>& h);
 #endif
 protected:
+	actor_timer* _timer;
 	ios_proxy* _iosProxy;
 	strand_type* _strand;
 public:

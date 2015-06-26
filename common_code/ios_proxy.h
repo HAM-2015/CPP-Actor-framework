@@ -8,7 +8,7 @@
 #include <vector>
 
 class strand_ex;
-class my_actor;
+class actor_timer;
 
 /*!
 @brief io_serviceµ÷¶ÈÆ÷·â×°
@@ -16,7 +16,7 @@ class my_actor;
 class ios_proxy
 {
 	friend strand_ex;
-	friend my_actor;
+	friend actor_timer;
 public:
 	enum priority
 	{

@@ -54,6 +54,8 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0501;ENABLE_WX_ACTOR;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>..\common_code\</AdditionalIncludeDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <MinimalRebuild>false</MinimalRebuild>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -85,6 +87,7 @@
     <ClCompile Include="..\common_code\actor_framework.cpp" />
     <ClCompile Include="..\common_code\actor_mutex.cpp" />
     <ClCompile Include="..\common_code\actor_stack.cpp" />
+    <ClCompile Include="..\common_code\actor_timer.cpp" />
     <ClCompile Include="..\common_code\bind_wx_run.cpp" />
     <ClCompile Include="..\common_code\ios_proxy.cpp" />
     <ClCompile Include="..\common_code\scattered.cpp" />
@@ -99,6 +102,7 @@
     <ClInclude Include="..\common_code\actor_framework.h" />
     <ClInclude Include="..\common_code\actor_mutex.h" />
     <ClInclude Include="..\common_code\actor_stack.h" />
+    <ClInclude Include="..\common_code\actor_timer.h" />
     <ClInclude Include="..\common_code\bind_wx_run.h" />
     <ClInclude Include="..\common_code\ios_proxy.h" />
     <ClInclude Include="..\common_code\msg_pipe.h" />

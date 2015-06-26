@@ -45,6 +45,9 @@
     <ClCompile Include="..\common_code\shared_strand.cpp">
       <Filter>源文件\common_code</Filter>
     </ClCompile>
+    <ClCompile Include="..\common_code\actor_timer.cpp">
+      <Filter>源文件\common_code</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common_code\actor_framework.h">
@@ -102,6 +105,9 @@
       <Filter>头文件\common_code</Filter>
     </ClInclude>
     <ClInclude Include="..\common_code\sync_msg.h">
+      <Filter>头文件\common_code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common_code\actor_timer.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
   </ItemGroup>

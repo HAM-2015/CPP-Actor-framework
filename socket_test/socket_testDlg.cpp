@@ -112,7 +112,6 @@ BOOL Csocket_testDlg::OnInitDialog()
 	_maxSessionEdit.SetWindowText("3");
 
 	my_actor::enable_stack_pool();
-	my_actor::disable_auto_make_timer();
 	_ios.run();
 	_strand = boost_strand::create(_ios);
 	actor_handle mainActor = my_actor::create(_strand, boost::bind(&Csocket_testDlg::mainActor, this, _1));
@@ -176,7 +175,6 @@ void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param>
 	param->_clientSocket->async_connect(param->_ip.c_str(), param->_port, self->make_trig_notifer(ath));
 	actor_handle connecting = create_mfc_actor(_ios, [this](my_actor* self)
 	{//让“连接”按钮在连接中闪烁
-		self->open_timer();
 		this->GetDlgItem(IDC_BUTTON1)->EnableWindow(TRUE);
 		while (true)
 		{
@@ -191,11 +189,9 @@ void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param>
 		}
 	});
 	connecting->notify_run();
-	self->open_timer();
 	boost::system::error_code err;
 	if (self->timed_wait_trig(param->_tm, ath, err) && !err && param->_clientSocket->no_delay())
 	{
-		self->close_timer();
 		self->actor_force_quit(connecting);
 		send(self, [this]
 		{

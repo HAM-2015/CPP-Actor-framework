@@ -516,7 +516,7 @@ public:
 //////////////////////////////////////////////////////////////////////////
 
 template <typename T, typename CREATER, typename DESTORY>
-class shared_obj_pool;
+class shared_obj_pool_;
 
 template <typename T, typename CREATER, typename DESTORY>
 class obj_pool_;
@@ -558,7 +558,7 @@ class obj_pool_: public obj_pool<T>
 	};
 
 	friend static obj_pool<T>* create_pool<T, CREATER, DESTORY>(size_t, const CREATER&, const DESTORY&);
-	friend shared_obj_pool<T, CREATER, DESTORY>;
+	friend shared_obj_pool_<T, CREATER, DESTORY>;
 private:
 	obj_pool_(size_t poolSize, const CREATER& creater, const DESTORY& destory)
 		:_creater(creater), _destory(destory), _poolMaxSize(poolSize), _nodeCount(0), _link(NULL)
@@ -636,21 +636,21 @@ private:
 //////////////////////////////////////////////////////////////////////////
 
 template <typename T>
-class shared_obj_pool_base
+class shared_obj_pool
 {
 public:
-	virtual ~shared_obj_pool_base(){};
+	virtual ~shared_obj_pool(){};
 	virtual	std::shared_ptr<T> new_() = 0;
 };
 
 template <typename T, typename CREATER, typename DESTORY>
-static shared_obj_pool_base<T>* create_shared_pool(size_t poolSize, const CREATER& creater, const DESTORY& destory)
+static shared_obj_pool<T>* create_shared_pool(size_t poolSize, const CREATER& creater, const DESTORY& destory)
 {
-	return new shared_obj_pool<T, CREATER, DESTORY>(poolSize, creater, destory);
+	return new shared_obj_pool_<T, CREATER, DESTORY>(poolSize, creater, destory);
 }
 
 template <typename T, typename CREATER>
-static shared_obj_pool_base<T>* create_shared_pool(size_t poolSize, const CREATER& creater)
+static shared_obj_pool<T>* create_shared_pool(size_t poolSize, const CREATER& creater)
 {
 	return create_shared_pool<T>(poolSize, creater, [](T* p)
 	{
@@ -660,7 +660,7 @@ static shared_obj_pool_base<T>* create_shared_pool(size_t poolSize, const CREATE
 }
 
 template <typename T, typename CREATER, typename DESTORY>
-class shared_obj_pool: public shared_obj_pool_base<T>
+class shared_obj_pool_: public shared_obj_pool<T>
 {
 	template <typename RC>
 	struct create_alloc 
@@ -744,15 +744,15 @@ class shared_obj_pool: public shared_obj_pool_base<T>
 		void* _refCountAlloc;
 	};
 
-	friend static shared_obj_pool_base<T>* create_shared_pool<T, CREATER, DESTORY>(size_t, const CREATER&, const DESTORY&);
+	friend static shared_obj_pool<T>* create_shared_pool<T, CREATER, DESTORY>(size_t, const CREATER&, const DESTORY&);
 private:
-	shared_obj_pool(size_t poolSize, const CREATER& creater, const DESTORY& destory)
+	shared_obj_pool_(size_t poolSize, const CREATER& creater, const DESTORY& destory)
 		:_dataAlloc(poolSize, creater, destory)
 	{
 		_lockAlloc = std::shared_ptr<T>(NULL, [](T*){}, create_alloc<void>(_refCountAlloc, poolSize));
 	}
 public:
-	~shared_obj_pool()
+	~shared_obj_pool_()
 	{
 		_lockAlloc.reset();
 		assert(!_refCountAlloc);

@@ -1,24 +1,28 @@
 #include "shared_strand.h"
+#include "actor_timer.h"
 
 boost_strand::boost_strand()
 {
 	_iosProxy = NULL;
 	_strand = NULL;
+	_timer = NULL;
 }
 
 boost_strand::~boost_strand()
 {
-	if (_strand)
-	{
-		delete _strand;
-	}
+	delete _strand;
+	delete _timer;
 }
 
-shared_strand boost_strand::create( ios_proxy& iosProxy )
+shared_strand boost_strand::create(ios_proxy& iosProxy, bool makeTimer /* = true */)
 {
 	shared_strand res(new boost_strand, [](boost_strand* p){delete p; });
 	res->_iosProxy = &iosProxy;
 	res->_strand = new strand_type(iosProxy);
+	if (makeTimer)
+	{
+		res->_timer = new actor_timer(res);
+	}
 	return res;
 }
 
@@ -55,6 +59,11 @@ boost::asio::io_service& boost_strand::get_io_service()
 {
 	assert(_iosProxy);
 	return *_iosProxy;
+}
+
+actor_timer* boost_strand::get_timer()
+{
+	return _timer;
 }
 
 #if (defined ENABLE_MFC_ACTOR || defined ENABLE_WX_ACTOR)

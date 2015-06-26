@@ -1,17 +1,14 @@
 #define WIN32_LEAN_AND_MEAN
 
 #include <boost/coroutine/all.hpp>
-#include <boost/asio/high_resolution_timer.hpp>
 #include "actor_framework.h"
 #include "actor_stack.h"
 
 typedef boost::coroutines::coroutine<void>::pull_type actor_pull_type;
 typedef boost::coroutines::coroutine<void>::push_type actor_push_type;
-typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> timer_type;
 
 boost::atomic<my_actor::id> s_actorIDCount(0);//ID计数
-bool s_autoMakeTimer = true;
-std::shared_ptr<shared_obj_pool_base<bool>> s_sharedBoolPool;
+std::shared_ptr<shared_obj_pool<bool>> s_sharedBoolPool;
 #ifdef CHECK_SELF
 msg_map<void*, my_actor*> s_stackLine(100000);
 boost::mutex s_stackLineMutex;
@@ -628,28 +625,6 @@ struct actor_ref_count_alloc
 };
 //////////////////////////////////////////////////////////////////////////
 
-struct my_actor::timer_pck
-{
-	timer_pck(ios_proxy& ios)
-		:_ios(ios), _timer((timer_type*)ios.getTimer()), _timerTime(0), _timerSuspend(false), _timerCompleted(true) {}
-
-	~timer_pck()
-	{
-		boost::system::error_code ec;
-		_timer->cancel(ec);
-		_ios.freeTimer(_timer);
-	}
-
-	ios_proxy& _ios;
-	timer_type* _timer;
-	bool _timerSuspend;
-	bool _timerCompleted;
-	boost::posix_time::microsec _timerTime;
-	boost::posix_time::ptime _timerStampBegin;
-	boost::posix_time::ptime _timerStampEnd;
-	std::function<void ()> _h;
-};
-
 class my_actor::boost_actor_run
 {
 public:
@@ -701,10 +676,11 @@ public:
 #endif
 		assert(_actor._quited);
 		clear_function(_actor._mainFunc);
-		if (_actor._timer)
+		clear_function(_actor._timerState._timerCb);
+		if (_actor._timer && !_actor._timerState._timerCompleted)
 		{
-			_actor._timerCount++;
-			_actor.cancel_timer();
+			_actor._timerState._timerCompleted = true;
+			_actor._timer->cancel(_actor._timerState._timerHandle);
 		}
 		_actor._msgPoolStatus.clear(&_actor);
 		_actor._inActor = false;
@@ -739,13 +715,17 @@ _childActorList(_childActorListAll)
 	_hasNotify = false;
 	_isForce = false;
 	_notifyQuited = false;
+	_timerState._timerSuspend = false;
+	_timerState._timerCompleted = true;
 	_lockQuit = 0;
 	_stackTop = NULL;
 	_stackSize = 0;
 	_yieldCount = 0;
-	_timerCount = 0;
 	_childOverCount = 0;
 	_childSuspendResumeCount = 0;
+	_timerState._timerTime = 0;
+	_timerState._timerStampBegin = 0;
+	_timerState._timerStampEnd = 0;
 	_selfID = ++s_actorIDCount;
 }
 
@@ -767,17 +747,6 @@ my_actor::~my_actor()
 	assert(_suspendResumeQueue.empty());
 	assert(_exitCallback.empty());
 	assert(_childActorList.empty());
-	if (_timer)
-	{
-		if (actor_stack_pool::isEnable())
-		{
-			_timer->~timer_pck();
-		}
-		else
-		{
-			delete _timer;
-		}
-	}
 #ifdef CHECK_SELF
 	s_stackLineMutex.lock();
 	s_stackLine.erase(_btIt);
@@ -809,29 +778,22 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 	{
 		/*内存结构:|------Actor Stack------|----timer_type----|---shared_ptr_ref_count---|--Actor Obj--|*/
 		const size_t actorSize = MEM_ALIGN(sizeof(my_actor), sizeof(void*));
-		const size_t timerSize = MEM_ALIGN(sizeof(timer_pck), sizeof(void*));
 		stack_pck stackMem = actor_stack_pool::getStack(stackSize + STACK_RESERVED_SPACE_SIZE);
 		unsigned char* refTop = (unsigned char*)stackMem._stack.sp - actorSize;
 		newActor = actor_handle(new(refTop)my_actor, [stackMem](my_actor* p){p->~my_actor(); },
 			actor_ref_count_alloc<void>(stackMem, (void**)&refTop));
-		newActor->_stackTop = refTop - timerSize;
+		newActor->_stackTop = refTop;
 		newActor->_stackSize = stackMem._stack.size - ((size_t)stackMem._stack.sp - (size_t)newActor->_stackTop);
 		newActor->_strand = actorStrand;
 		newActor->_mainFunc = mainFunc;
-		if (s_autoMakeTimer)
-		{
-			newActor->_timer = new(newActor->_stackTop) timer_pck(actorStrand->get_ios_proxy());
-		}
+		newActor->_timer = actorStrand->get_timer();
 		newActor->_actorPull = new actor_pull_type(boost_actor_run(*newActor),
 			boost::coroutines::attributes(newActor->_stackSize), actor_stack_pool_allocate(newActor->_stackTop, newActor->_stackSize));
 	} 
 	else
 	{
 		newActor = actor_handle(new my_actor, [](my_actor* p){delete p; });
-		if (s_autoMakeTimer)
-		{
-			newActor->_timer = new timer_pck(actorStrand->get_ios_proxy());
-		}
+		newActor->_timer = actorStrand->get_timer();
 		newActor->_strand = actorStrand;
 		newActor->_mainFunc = mainFunc;
 		newActor->_actorPull = new actor_pull_type(boost_actor_run(*newActor),
@@ -1077,40 +1039,6 @@ void my_actor::run_child_actor_complete(shared_strand actorStrand, const main_fu
 void my_actor::run_child_actor_complete(const main_func& h, size_t stackSize)
 {
 	run_child_actor_complete(self_strand(), h, stackSize);
-}
-
-void my_actor::open_timer()
-{
-	assert_enter();
-	if (!_timer)
-	{
-		if (actor_stack_pool::isEnable())
-		{
-			_timer = new(_stackTop) timer_pck(_strand->get_ios_proxy());
-		}
-		else
-		{
-			_timer = new timer_pck(_strand->get_ios_proxy());
-		}
-	}
-}
-
-void my_actor::close_timer()
-{
-	assert_enter();
-	if (_timer)
-	{
-		_timerCount++;
-		if (actor_stack_pool::isEnable())
-		{
-			_timer->~timer_pck();
-		} 
-		else
-		{
-			delete _timer;
-		}
-		_timer = NULL;
-	}
 }
 
 void my_actor::sleep( int ms )
@@ -1863,7 +1791,7 @@ void my_actor::enable_stack_pool()
 {
 	assert(0 == s_actorIDCount);
 	actor_stack_pool::enable();
-	s_sharedBoolPool = std::shared_ptr<shared_obj_pool_base<bool>>(create_shared_pool<bool>(4096, [](void*){}));
+	s_sharedBoolPool = std::shared_ptr<shared_obj_pool<bool>>(create_shared_pool<bool>(4096, [](void*){}));
 	_suspendResumeQueueAll.enable_shared(100000);
 	_quitExitCallbackAll.enable_shared(100000);
 	_childActorListAll.enable_shared(100000);
@@ -1872,75 +1800,59 @@ void my_actor::enable_stack_pool()
 
 void my_actor::expires_timer()
 {
-	size_t tid = ++_timerCount;
 	actor_handle shared_this = shared_from_this();
-	boost::system::error_code ec;
-	_timer->_timer->expires_from_now(boost::chrono::microseconds(_timer->_timerTime.total_microseconds()), ec);
-	_timer->_timer->async_wait(_strand->wrap_post([shared_this, tid](const boost::system::error_code& err)
+	_timerState._timerHandle = _timer->time_out(_timerState._timerTime, [shared_this]
 	{
-		if (tid == shared_this->_timerCount)
-		{
-			timer_pck* timer = shared_this->_timer;
-			assert(!err);
-			assert(timer);
-			assert(!timer->_timerSuspend && !timer->_timerCompleted);
-			timer->_timerCompleted = true;
+		assert(shared_this->_timerState._timerCb);
+		shared_this->_timerState._timerCompleted = true;
 #if _MSC_VER == 1600
-			std::function<void()> h;
-			timer->_h.swap(h);
+		std::function<void()> h;
+		shared_this->_timerState._timerCb.swap(h);
 #elif _MSC_VER > 1600
-			auto h = std::move(timer->_h);
+		auto h = std::move(shared_this->_timerState._timerCb);
 #endif
-			assert(!timer->_h);
-			h();
-		}
-	}));
+		assert(!shared_this->_timerState._timerCb);
+		h();
+	});
 }
 
 void my_actor::time_out(int ms, const std::function<void ()>& h)
 {
 	assert_enter();
-	assert(_timer);
-	assert(_timer->_timerCompleted);
-	assert(!_timer->_timerSuspend);
-	assert(_timer->_h._Empty());
+	assert(h);
 	assert(ms > 0);
-	_timer->_timerCompleted = false;
-	_timer->_h = h;
-	_timer->_timerTime = boost::posix_time::microsec((unsigned long long)ms * 1000);
-	_timer->_timerStampBegin = boost::posix_time::microsec_clock::universal_time();
+	assert(_timerState._timerCompleted);
+	_timerState._timerTime = (long long)ms * 1000;
+	_timerState._timerCb = h;
+	_timerState._timerStampBegin = get_tick_us();
+	_timerState._timerCompleted = false;
 	expires_timer();
 }
 
 void my_actor::cancel_timer()
 {
 	assert(_timer);
-	if (!_timer->_timerCompleted)
+	if (!_timerState._timerCompleted)
 	{
-		_timerCount++;
-		_timer->_timerCompleted = true;
-		clear_function(_timer->_h);
-		boost::system::error_code ec;
-		_timer->_timer->cancel(ec);
+		_timerState._timerCompleted = true;
+		_timer->cancel(_timerState._timerHandle);
+		clear_function(_timerState._timerCb);
 	}
 }
 
 void my_actor::suspend_timer()
 {
-	assert(_timer);
-	if (!_timer->_timerSuspend)
+	if (!_timerState._timerSuspend)
 	{
-		_timer->_timerSuspend = true;
-		if (!_timer->_timerCompleted)
+		_timerState._timerSuspend = true;
+		if (!_timerState._timerCompleted)
 		{
-			_timerCount++;
-			boost::system::error_code ec;
-			_timer->_timer->cancel(ec);
-			_timer->_timerStampEnd = boost::posix_time::microsec_clock::universal_time();
-			auto tt = _timer->_timerStampBegin+_timer->_timerTime;
-			if (_timer->_timerStampEnd > tt)
+			_timer->cancel(_timerState._timerHandle);
+			_timerState._timerStampEnd = get_tick_us();
+			auto tt = _timerState._timerStampBegin + _timerState._timerTime;
+			if (_timerState._timerStampEnd > tt)
 			{
-				_timer->_timerStampEnd = tt;
+				_timerState._timerStampEnd = tt;
 			}
 		}
 	}
@@ -1948,24 +1860,17 @@ void my_actor::suspend_timer()
 
 void my_actor::resume_timer()
 {
-	assert(_timer);
-	if (_timer->_timerSuspend)
+	if (_timerState._timerSuspend)
 	{
-		_timer->_timerSuspend = false;
-		if (!_timer->_timerCompleted)
+		_timerState._timerSuspend = false;
+		if (!_timerState._timerCompleted)
 		{
-			assert(_timer->_timerTime >= _timer->_timerStampEnd-_timer->_timerStampBegin);
-			_timer->_timerTime -= _timer->_timerStampEnd-_timer->_timerStampBegin;
-			_timer->_timerStampBegin = boost::posix_time::microsec_clock::universal_time();
+			assert(_timerState._timerTime >= _timerState._timerStampEnd - _timerState._timerStampBegin);
+			_timerState._timerTime -= _timerState._timerStampEnd - _timerState._timerStampBegin;
+			_timerState._timerStampBegin = get_tick_us();
 			expires_timer();
 		}
 	}
-}
-
-void my_actor::disable_auto_make_timer()
-{
-	assert(0 == s_actorIDCount);
-	s_autoMakeTimer = false;
 }
 
 void my_actor::check_stack()
