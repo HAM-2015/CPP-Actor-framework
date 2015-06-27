@@ -11,7 +11,11 @@ typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> 
 class boost_strand;
 class mfc_strand;
 class wx_strand;
+class my_actor;
 
+/*!
+@brief Actor 内部使用的定时器
+*/
 class actor_timer
 {
 	typedef std::function<void()> call_back;
@@ -19,11 +23,13 @@ class actor_timer
 	typedef std::shared_ptr<msg_list<call_back, list_alloc> > handler_list;
 	typedef msg_map<unsigned long long, handler_list>::node_alloc map_alloc;
 	typedef msg_map<unsigned long long, handler_list, map_alloc> handler_table;
+	typedef shared_obj_pool<msg_list<call_back, list_alloc> > handler_list_pool;
 
 	friend boost_strand;
 	friend mfc_strand;
 	friend wx_strand;
-public:
+	friend my_actor;
+
 	class timer_handle 
 	{
 		friend actor_timer;
@@ -35,20 +41,20 @@ public:
 private:
 	actor_timer(shared_strand strand);
 	~actor_timer();
-public:
+private:
 	timer_handle time_out(unsigned long long us, const std::function<void()>& h);
 	void cancel(timer_handle& th);
-private:
 	void timer_loop(unsigned long long us);
 private:
 	ios_proxy& _ios;
 	bool _looping;
-	size_t _timerCount;
+	int _timerCount;
 	timer_type* _timer;
 	list_alloc _listAlloc;
 	shared_strand _strand;
 	handler_table _handlerTable;
-	unsigned long long _extTimerFinish;
+	handler_list_pool* _listPool;
+	unsigned long long _extFinishTime;
 	std::weak_ptr<boost_strand> _weakStrand;
 };
 

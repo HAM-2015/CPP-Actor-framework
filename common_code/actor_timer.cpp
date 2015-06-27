@@ -3,9 +3,12 @@
 
 actor_timer::actor_timer(shared_strand strand)
 :_ios(strand->get_ios_proxy()), _looping(false), _weakStrand(strand), _timerCount(0),
-_extTimerFinish(-1), _timer((timer_type*)_ios.getTimer()), _listAlloc(4096), _handlerTable(4096)
+_extFinishTime(-1), _timer((timer_type*)_ios.getTimer()), _listAlloc(8192), _handlerTable(4096)
 {
-
+	_listPool = create_shared_pool<msg_list<call_back, list_alloc>>(4096, [this](void* p)
+	{
+		new(p)msg_list<call_back, list_alloc>(_listAlloc);
+	});
 }
 
 actor_timer::~actor_timer()
@@ -13,6 +16,7 @@ actor_timer::~actor_timer()
 	assert(_handlerTable.empty());
 	assert(!_strand);
 	_ios.freeTimer(_timer);
+	delete _listPool;
 }
 
 actor_timer::timer_handle actor_timer::time_out(unsigned long long us, const std::function<void()>& h)
@@ -22,12 +26,14 @@ actor_timer::timer_handle actor_timer::time_out(unsigned long long us, const std
 		_strand = _weakStrand.lock();
 	}
 	assert(_strand->running_in_this_thread());
+	assert(us < 0x80000000LL * 1000);
 	unsigned long long et = get_tick_us() + us;
 	auto node = _handlerTable.insert(make_pair(et, handler_list()));
 	auto& nl = node.first->second;
 	if (!nl)
 	{
-		nl = handler_list(new msg_list<call_back, list_alloc>(_listAlloc));
+		nl = _listPool->new_();
+		assert(nl->empty());
 	}
 
 	nl->push_front(h);
@@ -40,15 +46,15 @@ actor_timer::timer_handle actor_timer::time_out(unsigned long long us, const std
 	{
 		_looping = true;
 		assert(_handlerTable.size() == 1);
-		_extTimerFinish = et;
+		_extFinishTime = et;
 		timer_loop(us);
 	}
-	else if (et < _extTimerFinish)
+	else if (et < _extFinishTime)
 	{
 		boost::system::error_code ec;
 		_timer->cancel(ec);
 		_timerCount++;
-		_extTimerFinish = et;
+		_extFinishTime = et;
 		timer_loop(us);
 	}
 	return timerHandle;
@@ -77,21 +83,21 @@ void actor_timer::cancel(timer_handle& th)
 
 void actor_timer::timer_loop(unsigned long long us)
 {
+	int tc = ++_timerCount;
 	boost::system::error_code ec;
 	_timer->expires_from_now(boost::chrono::microseconds(us), ec);
-	size_t tc = ++_timerCount;
 	_timer->async_wait(_strand->wrap_post([this, tc](const boost::system::error_code&)
 	{
 		if (tc == _timerCount)
 		{
-			_extTimerFinish = 0;
+			_extFinishTime = 0;
 			unsigned long long nt = get_tick_us();
 			while (!_handlerTable.empty())
 			{
 				auto iter = _handlerTable.begin();
 				if (iter->first > nt + 500)
 				{
-					_extTimerFinish = iter->first;
+					_extFinishTime = iter->first;
 					timer_loop(iter->first - nt);
 					return;
 				}
@@ -104,6 +110,7 @@ void actor_timer::timer_loop(unsigned long long us)
 					{
 						(*it)();
 					}
+					hl->clear();
 				}
 			}
 			_looping = false;

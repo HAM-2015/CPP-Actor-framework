@@ -776,7 +776,7 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 	actor_handle newActor;
 	if (actor_stack_pool::isEnable())
 	{
-		/*内存结构:|------Actor Stack------|----timer_type----|---shared_ptr_ref_count---|--Actor Obj--|*/
+		/*内存结构(L:H):|------Actor Stack------|---shared_ptr_ref_count---|--Actor Obj--|*/
 		const size_t actorSize = MEM_ALIGN(sizeof(my_actor), sizeof(void*));
 		stack_pck stackMem = actor_stack_pool::getStack(stackSize + STACK_RESERVED_SPACE_SIZE);
 		unsigned char* refTop = (unsigned char*)stackMem._stack.sp - actorSize;
@@ -1849,7 +1849,7 @@ void my_actor::suspend_timer()
 		{
 			_timer->cancel(_timerState._timerHandle);
 			_timerState._timerStampEnd = get_tick_us();
-			auto tt = _timerState._timerStampBegin + _timerState._timerTime;
+			long long tt = _timerState._timerStampBegin + _timerState._timerTime;
 			if (_timerState._timerStampEnd > tt)
 			{
 				_timerState._timerStampEnd = tt;
