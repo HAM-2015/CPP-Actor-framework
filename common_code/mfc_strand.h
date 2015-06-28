@@ -13,7 +13,7 @@ private:
 	mfc_strand();
 	~mfc_strand();
 public:
-	static shared_strand create(ios_proxy& iosProxy, bind_mfc_run* mfc, bool makeTimer = true);
+	static shared_strand create(ios_proxy& iosProxy, bind_mfc_run* mfc);
 	static shared_strand create(bind_mfc_run* mfc);
 private:
 	shared_strand clone();

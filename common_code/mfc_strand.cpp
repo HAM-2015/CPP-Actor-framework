@@ -13,16 +13,13 @@ mfc_strand::~mfc_strand()
 
 }
 
-shared_strand mfc_strand::create(ios_proxy& iosProxy, bind_mfc_run* mfc, bool makeTimer)
+shared_strand mfc_strand::create(ios_proxy& iosProxy, bind_mfc_run* mfc)
 {
 	std::shared_ptr<mfc_strand> res(new mfc_strand, [](mfc_strand* p){delete p; });
 	res->_iosProxy = &iosProxy;
 	res->_mfc = mfc;
 	res->_mfcThreadID = mfc->thread_id();
-	if (makeTimer)
-	{
-		res->_timer = new actor_timer(res);
-	}
+	res->_timer = new actor_timer(res);
 	return res;
 }
 

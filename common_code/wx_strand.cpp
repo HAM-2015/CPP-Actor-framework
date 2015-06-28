@@ -12,16 +12,13 @@ wx_strand::~wx_strand()
 
 }
 
-shared_wx_strand wx_strand::create(ios_proxy& iosProxy, bind_wx_run_base* wx, bool makeTimer)
+shared_wx_strand wx_strand::create(ios_proxy& iosProxy, bind_wx_run_base* wx)
 {
 	shared_wx_strand res(new wx_strand, [](wx_strand* p){delete p; });
 	res->_iosProxy = &iosProxy;
 	res->_wx = wx;
 	res->_wxThreadID = wx->thread_id();
-	if (makeTimer)
-	{
-		res->_timer = new actor_timer(res);
-	}
+	res->_timer = new actor_timer(res);
 	return res;
 }
 
