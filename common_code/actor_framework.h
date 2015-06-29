@@ -1922,6 +1922,7 @@ class my_actor
 	friend trig_once_base;
 	friend mutex_trig_notifer;
 	friend mutex_trig_handle;
+	friend actor_timer;
 	friend _actor_mutex;
 public:
 	/*!
@@ -2077,6 +2078,10 @@ public:
 	@brief 中断当前时间片，等到下次被调度(因为Actor是非抢占式调度，当有占用时间片较长的逻辑时，适当使用yield分割时间片)
 	*/
 	__yield_interrupt void yield();
+
+	/*!
+	@brief 中断时间片，当前Actor句柄在别的地方必须被持有
+	*/
 	__yield_interrupt void yield_guard();
 
 	/*!
@@ -4247,8 +4252,20 @@ public:
 
 	void assert_enter();
 private:
-	void time_out(int ms, const std::function<void ()>& h);
-	void expires_timer();
+	template <typename H>
+	void time_out(int ms, H&& h)
+	{
+		assert_enter();
+		assert(ms > 0);
+		assert(_timerState._timerCompleted);
+		_timerState._timerTime = (long long)ms * 1000;
+		_timerState._timerCb = CHECK_MOVE(h);
+		_timerState._timerStampBegin = get_tick_us();
+		_timerState._timerCompleted = false;
+		_timerState._timerHandle = _timer->time_out(_timerState._timerTime, shared_from_this());
+	}
+
+	void time_out_handler();
 	void cancel_timer();
 	void suspend_timer();
 	void resume_timer();

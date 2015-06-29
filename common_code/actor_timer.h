@@ -18,12 +18,12 @@ class my_actor;
 */
 class actor_timer
 {
-	typedef std::function<void()> call_back;
-	typedef msg_list<call_back>::shared_node_alloc list_alloc;
-	typedef std::shared_ptr<msg_list<call_back, list_alloc> > handler_list;
+	typedef std::shared_ptr<my_actor> actor_handle;
+	typedef msg_list<actor_handle>::shared_node_alloc list_alloc;
+	typedef std::shared_ptr<msg_list<actor_handle, list_alloc> > handler_list;
 	typedef msg_map<unsigned long long, handler_list>::node_alloc map_alloc;
 	typedef msg_map<unsigned long long, handler_list, map_alloc> handler_table;
-	typedef shared_obj_pool<msg_list<call_back, list_alloc> > handler_list_pool;
+	typedef shared_obj_pool<msg_list<actor_handle, list_alloc> > handler_list_pool;
 
 	friend boost_strand;
 	friend mfc_strand;
@@ -34,15 +34,15 @@ class actor_timer
 	{
 		friend actor_timer;
 
-		std::weak_ptr<msg_list<call_back, list_alloc> > _handlerList;
-		msg_list<call_back, list_alloc>::iterator _handlerNode;
+		std::weak_ptr<msg_list<actor_handle, list_alloc> > _handlerList;
+		msg_list<actor_handle, list_alloc>::iterator _handlerNode;
 		handler_table::iterator _tableNode;
 	};
 private:
 	actor_timer(shared_strand strand);
 	~actor_timer();
 private:
-	timer_handle time_out(unsigned long long us, const std::function<void()>& h);
+	timer_handle time_out(unsigned long long us, const actor_handle& host);
 	void cancel(timer_handle& th);
 	void timer_loop(unsigned long long us);
 private:

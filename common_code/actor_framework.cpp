@@ -1044,18 +1044,28 @@ void my_actor::run_child_actor_complete(const main_func& h, size_t stackSize)
 void my_actor::sleep( int ms )
 {
 	assert_enter();
-	actor_handle shared_this = shared_from_this();
-	delay_trig(ms, [shared_this]{shared_this->run_one(); });
-	push_yield();
+	if (ms > 0)
+	{
+		assert(_timer);
+		time_out(ms, [this]{run_one(); });
+		push_yield();
+	}
+	else
+	{
+		actor_handle shared_this = shared_from_this();
+		if (0 == ms)
+		{
+			_strand->post([shared_this]{shared_this->run_one(); });
+		}
+		push_yield();
+	}
 }
 
 void my_actor::sleep_guard(int ms)
 {
 	assert_enter();
 	quit_guard qg(this);
-	actor_handle lock_this = shared_from_this();
-	delay_trig(ms, [this]{run_one(); });
-	push_yield();
+	sleep(ms);
 }
 
 void my_actor::yield()
@@ -1070,7 +1080,6 @@ void my_actor::yield_guard()
 {
 	assert_enter();
 	quit_guard qg(this);
-	actor_handle lock_this = shared_from_this();
 	_strand->post([this]{run_one(); });
 	push_yield();
 }
@@ -1798,35 +1807,18 @@ void my_actor::enable_stack_pool()
 	msg_pool_status::_msgPumpListAll.enable_shared(100000);
 }
 
-void my_actor::expires_timer()
+void my_actor::time_out_handler()
 {
-	actor_handle shared_this = shared_from_this();
-	_timerState._timerHandle = _timer->time_out(_timerState._timerTime, [shared_this]
-	{
-		assert(shared_this->_timerState._timerCb);
-		shared_this->_timerState._timerCompleted = true;
+	assert(_timerState._timerCb);
+	_timerState._timerCompleted = true;
 #if _MSC_VER == 1600
-		std::function<void()> h;
-		shared_this->_timerState._timerCb.swap(h);
+	std::function<void()> h;
+	_timerState._timerCb.swap(h);
 #elif _MSC_VER > 1600
-		auto h = std::move(shared_this->_timerState._timerCb);
+	auto h = std::move(_timerState._timerCb);
 #endif
-		assert(!shared_this->_timerState._timerCb);
-		h();
-	});
-}
-
-void my_actor::time_out(int ms, const std::function<void ()>& h)
-{
-	assert_enter();
-	assert(h);
-	assert(ms > 0);
-	assert(_timerState._timerCompleted);
-	_timerState._timerTime = (long long)ms * 1000;
-	_timerState._timerCb = h;
-	_timerState._timerStampBegin = get_tick_us();
-	_timerState._timerCompleted = false;
-	expires_timer();
+	assert(!_timerState._timerCb);
+	h();
 }
 
 void my_actor::cancel_timer()
@@ -1868,7 +1860,7 @@ void my_actor::resume_timer()
 			assert(_timerState._timerTime >= _timerState._timerStampEnd - _timerState._timerStampBegin);
 			_timerState._timerTime -= _timerState._timerStampEnd - _timerState._timerStampBegin;
 			_timerState._timerStampBegin = get_tick_us();
-			expires_timer();
+			_timerState._timerHandle = _timer->time_out(_timerState._timerTime, shared_from_this());
 		}
 	}
 }

@@ -480,9 +480,9 @@ void actor_test(my_actor* self)
 		};
 		syncPop1 = self->create_child_actor(self->self_strand(), h);
 		syncPop2 = self->create_child_actor(self->self_strand(), h);
-		self->child_actor_run(syncPush);
-		self->child_actor_run(syncPop1);
-		self->child_actor_run(syncPop2);
+// 		self->child_actor_run(syncPush);
+// 		self->child_actor_run(syncPop1);
+// 		self->child_actor_run(syncPop2);
 	}
 	list<actor_handle> chs;//需要被挂起的Actor对象，可以从下方注释几个测试
 	chs.push_back(actorLeft.get_actor());

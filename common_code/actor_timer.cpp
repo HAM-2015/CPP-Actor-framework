@@ -1,13 +1,14 @@
 #include "actor_timer.h"
 #include "scattered.h"
+#include "actor_framework.h"
 
 actor_timer::actor_timer(shared_strand strand)
 :_ios(strand->get_ios_proxy()), _looping(false), _weakStrand(strand), _timerCount(0),
 _extFinishTime(-1), _timer((timer_type*)_ios.getTimer()), _listAlloc(8192), _handlerTable(4096)
 {
-	_listPool = create_shared_pool<msg_list<call_back, list_alloc>>(4096, [this](void* p)
+	_listPool = create_shared_pool<msg_list<actor_handle, list_alloc>>(4096, [this](void* p)
 	{
-		new(p)msg_list<call_back, list_alloc>(_listAlloc);
+		new(p)msg_list<actor_handle, list_alloc>(_listAlloc);
 	});
 }
 
@@ -19,7 +20,7 @@ actor_timer::~actor_timer()
 	delete _listPool;
 }
 
-actor_timer::timer_handle actor_timer::time_out(unsigned long long us, const std::function<void()>& h)
+actor_timer::timer_handle actor_timer::time_out(unsigned long long us, const actor_handle& host)
 {
 	if (!_strand)
 	{
@@ -27,7 +28,7 @@ actor_timer::timer_handle actor_timer::time_out(unsigned long long us, const std
 	}
 	assert(_strand->running_in_this_thread());
 	assert(us < 0x80000000LL * 1000);
-	unsigned long long et = get_tick_us() + us;
+	unsigned long long et = (get_tick_us() + us) & -256;
 	auto node = _handlerTable.insert(make_pair(et, handler_list()));
 	auto& nl = node.first->second;
 	if (!nl)
@@ -36,7 +37,7 @@ actor_timer::timer_handle actor_timer::time_out(unsigned long long us, const std
 		assert(nl->empty());
 	}
 
-	nl->push_front(h);
+	nl->push_front(host);
 	timer_handle timerHandle;
 	timerHandle._handlerList = nl;
 	timerHandle._handlerNode = nl->begin();
@@ -108,7 +109,7 @@ void actor_timer::timer_loop(unsigned long long us)
 					_handlerTable.erase(iter);
 					for (auto it = hl->begin(); it != hl->end(); it++)
 					{
-						(*it)();
+						(*it)->time_out_handler();
 					}
 					hl->clear();
 				}
