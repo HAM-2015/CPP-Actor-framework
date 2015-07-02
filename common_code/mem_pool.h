@@ -146,7 +146,7 @@ struct mem_alloc : public mem_alloc_base
 };
 //////////////////////////////////////////////////////////////////////////
 
-template <typename DATA>
+template <typename DATA, typename MUTEX = boost::mutex>
 struct mem_alloc_mt: mem_alloc_base
 {
 	struct node_space;
@@ -215,7 +215,7 @@ struct mem_alloc_mt: mem_alloc_base
 
 	~mem_alloc_mt()
 	{
-		boost::lock_guard<boost::mutex> lg(_mutex);
+		boost::lock_guard<MUTEX> lg(_mutex);
 		node_space* pIt = _pool;
 		while (pIt)
 		{
@@ -230,7 +230,7 @@ struct mem_alloc_mt: mem_alloc_base
 	void* allocate()
 	{
 		{
-			boost::lock_guard<boost::mutex> lg(_mutex);
+			boost::lock_guard<MUTEX> lg(_mutex);
 			_blockNumber++;
 			if (_pool)
 			{
@@ -251,7 +251,7 @@ struct mem_alloc_mt: mem_alloc_base
 		node_space* space = node_space::get_node(p);
 		space->check_head();
 		{
-			boost::lock_guard<boost::mutex> lg(_mutex);
+			boost::lock_guard<MUTEX> lg(_mutex);
 			_blockNumber--;
 			if (_nodeCount < _poolMaxSize)
 			{
@@ -276,17 +276,17 @@ struct mem_alloc_mt: mem_alloc_base
 	}
 
 	node_space* _pool;
-	boost::mutex _mutex;
+	MUTEX _mutex;
 };
 
 //////////////////////////////////////////////////////////////////////////
-template<class _Ty>
+template<class _Ty, class _Mtx = boost::mutex>
 class pool_alloc_mt
 {
 public:
 	typedef _Ty node_type;
 	typedef typename mem_alloc<_Ty> mem_alloc_type;
-	typedef typename mem_alloc_mt<_Ty> mem_alloc_mt_type;
+	typedef typename mem_alloc_mt<_Ty, _Mtx> mem_alloc_mt_type;
 	typedef typename std::allocator<_Ty>::pointer pointer;
 	typedef typename std::allocator<_Ty>::difference_type difference_type;
 	typedef typename std::allocator<_Ty>::reference reference;
@@ -298,7 +298,7 @@ public:
 	template<class _Other>
 	struct rebind
 	{
-		typedef pool_alloc_mt<_Other> other;
+		typedef pool_alloc_mt<_Other, typename _Mtx> other;
 	};
 
 	pool_alloc_mt(size_t poolSize, bool shared = true)
@@ -330,7 +330,7 @@ public:
 	}
 
 	template<class _Other>
-	pool_alloc_mt(const pool_alloc_mt<_Other>& s)
+	pool_alloc_mt(const pool_alloc_mt<_Other, _Mtx>& s)
 	{
 		if (s.is_shared())
 		{
@@ -357,7 +357,7 @@ public:
 	}
 
 	template<class _Other>
-	pool_alloc_mt& operator=(const pool_alloc_mt<_Other>& s)
+	pool_alloc_mt& operator=(const pool_alloc_mt<_Other, _Mtx>& s)
 	{
 		assert(false);
 		return *this;

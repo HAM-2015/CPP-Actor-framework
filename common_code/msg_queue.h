@@ -125,7 +125,6 @@ public:
 	typedef std::_List_node<T, typename AlNod::pointer> node_type;
 #endif
 	typedef pool_alloc<node_type> node_alloc;
-	typedef pool_alloc_mt<node_type> shared_node_alloc;
 public:
 	typedef std::list<T, AlNod> base_list;
 public:
@@ -192,7 +191,6 @@ public:
 	typedef std::_Tree_node<std::pair<Tkey const, Tval>, typename AlNod::pointer> node_type;
 #endif
 	typedef pool_alloc<node_type> node_alloc;
-	typedef pool_alloc_mt<node_type> shared_node_alloc;
 public:
 	typedef std::map<Tkey, Tval, Tcmp, AlNod> base_map;
 public:
@@ -259,7 +257,6 @@ public:
 	typedef std::_Tree_node<Tkey, typename AlNod::pointer> node_type;
 #endif
 	typedef pool_alloc<node_type> node_alloc;
-	typedef pool_alloc_mt<node_type> shared_node_alloc;
 public:
 	typedef std::set<Tkey, Tcmp, AlNod> base_set;
 public:
@@ -315,10 +312,12 @@ public:
 	}
 };
 
-template <typename T>
-class msg_list_shared_alloc: public msg_list<T, typename msg_list<T>::shared_node_alloc>
+template <typename T, typename TMtx = boost::mutex>
+class msg_list_shared_alloc : public msg_list<T, pool_alloc_mt<typename msg_list<T>::node_type, TMtx>>
 {
-	typedef typename msg_list<T>::shared_node_alloc AlNod;
+	typedef pool_alloc_mt<typename msg_list<T>::node_type, TMtx> AlNod;
+public:
+	typedef AlNod shared_node_alloc;
 public:
 	explicit msg_list_shared_alloc(size_t poolSize = sizeof(void*))
 	:msg_list(poolSize) {}
@@ -343,10 +342,12 @@ public:
 	}
 };
 
-template <typename Tkey, typename Tval>
-class msg_map_shared_alloc : public msg_map<Tkey, Tval, typename msg_map<Tkey, Tval>::shared_node_alloc>
+template <typename Tkey, typename Tval, typename TMtx = boost::mutex>
+class msg_map_shared_alloc : public msg_map<Tkey, Tval, pool_alloc_mt<typename msg_map<Tkey, Tval>::node_type, TMtx>>
 {
-	typedef typename msg_map<Tkey, Tval>::shared_node_alloc AlNod;
+	typedef pool_alloc_mt<typename msg_map<Tkey, Tval>::node_type, TMtx> AlNod;
+public:
+	typedef AlNod shared_node_alloc;
 public:
 	explicit msg_map_shared_alloc(size_t poolSize = sizeof(void*))
 		:msg_map(poolSize){}
@@ -371,10 +372,12 @@ public:
 	}
 };
 
-template <typename Tkey>
-class msg_set_shared_alloc : public msg_set<Tkey, typename msg_set<Tkey>::shared_node_alloc>
+template <typename Tkey, typename TMtx = boost::mutex>
+class msg_set_shared_alloc : public msg_set<Tkey, pool_alloc_mt<typename msg_set<Tkey>::node_type, TMtx>>
 {
-	typedef typename msg_set<Tkey>::shared_node_alloc AlNod;
+	typedef pool_alloc_mt<typename msg_set<Tkey>::node_type, TMtx> AlNod;
+public:
+	typedef AlNod shared_node_alloc;
 public:
 	explicit msg_set_shared_alloc(size_t poolSize = sizeof(void*))
 		:msg_set(poolSize){}

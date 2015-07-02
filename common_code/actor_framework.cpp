@@ -22,10 +22,10 @@ struct initStackLine
 } s_initStackLine;
 #endif
 
-msg_list<actor_handle>::shared_node_alloc my_actor::_childActorListAll(sizeof(void*), false);
-msg_list<std::function<void()> >::shared_node_alloc my_actor::_quitExitCallbackAll(sizeof(void*), false);
-msg_list<my_actor::suspend_resume_option>::shared_node_alloc my_actor::_suspendResumeQueueAll(sizeof(void*), false);
-msg_list<std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc my_actor::msg_pool_status::_msgPumpListAll(sizeof(void*), false);
+msg_list_shared_alloc<actor_handle>::shared_node_alloc my_actor::_childActorListAll(sizeof(void*), false);
+msg_list_shared_alloc<std::function<void()> >::shared_node_alloc my_actor::_quitExitCallbackAll(sizeof(void*), false);
+msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc my_actor::_suspendResumeQueueAll(sizeof(void*), false);
+msg_map_shared_alloc<size_t, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc my_actor::msg_pool_status::_msgTypeMapAll(sizeof(void*), false);
 
 /*!
 @brief Actor’ª∑÷≈‰∆˜
@@ -1804,7 +1804,7 @@ void my_actor::enable_stack_pool()
 	_suspendResumeQueueAll.enable_shared(100000);
 	_quitExitCallbackAll.enable_shared(100000);
 	_childActorListAll.enable_shared(100000);
-	msg_pool_status::_msgPumpListAll.enable_shared(100000);
+	msg_pool_status::_msgTypeMapAll.enable_shared(100000);
 }
 
 void my_actor::time_out_handler()

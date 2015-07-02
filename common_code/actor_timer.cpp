@@ -1,12 +1,15 @@
 #include "actor_timer.h"
 #include "scattered.h"
 #include "actor_framework.h"
+#include <boost/asio/high_resolution_timer.hpp>
+
+typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> timer_type;
 
 actor_timer::actor_timer(shared_strand strand)
 :_ios(strand->get_ios_proxy()), _looping(false), _weakStrand(strand), _timerCount(0),
-_extFinishTime(-1), _timer((timer_type*)_ios.getTimer()), _listAlloc(8192), _handlerTable(4096)
+_extFinishTime(-1), _timer(_ios.getTimer()), _listAlloc(8192), _handlerTable(4096)
 {
-	_listPool = create_shared_pool<msg_list<actor_handle, list_alloc>>(4096, [this](void* p)
+	_listPool = create_shared_pool<msg_list_shared_alloc<actor_handle, null_mutex>>(4096, [this](void* p)
 	{
 		new(p)msg_list<actor_handle, list_alloc>(_listAlloc);
 	});
@@ -44,16 +47,16 @@ actor_timer::timer_handle actor_timer::time_out(unsigned long long us, const act
 	timerHandle._tableNode = node.first;
 	
 	if (!_looping)
-	{
+	{//定时器已经退出循环，重新启动定时器
 		_looping = true;
 		assert(_handlerTable.size() == 1);
 		_extFinishTime = et;
 		timer_loop(us);
 	}
 	else if (et < _extFinishTime)
-	{
+	{//定时期限前于当前定时器期限，取消后重新计时
 		boost::system::error_code ec;
-		_timer->cancel(ec);
+		((timer_type*)_timer)->cancel(ec);
 		_timerCount++;
 		_extFinishTime = et;
 		timer_loop(us);
@@ -66,15 +69,15 @@ void actor_timer::cancel(timer_handle& th)
 	assert(_strand->running_in_this_thread());
 	auto hl = th._handlerList.lock();
 	if (hl)
-	{
+	{//删除当前定时器节点
 		hl->erase(th._handlerNode);
 		if (hl->empty())
 		{
 			_handlerTable.erase(th._tableNode);
 			if (_handlerTable.empty())
-			{
+			{//如果没有定时任务就退出定时循环
 				boost::system::error_code ec;
-				_timer->cancel(ec);
+				((timer_type*)_timer)->cancel(ec);
 				_timerCount++;
 				_looping = false;
 			}
@@ -86,8 +89,8 @@ void actor_timer::timer_loop(unsigned long long us)
 {
 	int tc = ++_timerCount;
 	boost::system::error_code ec;
-	_timer->expires_from_now(boost::chrono::microseconds(us), ec);
-	_timer->async_wait(_strand->wrap_post([this, tc](const boost::system::error_code&)
+	((timer_type*)_timer)->expires_from_now(boost::chrono::microseconds(us), ec);
+	((timer_type*)_timer)->async_wait(_strand->wrap_post([this, tc](const boost::system::error_code&)
 	{
 		if (tc == _timerCount)
 		{

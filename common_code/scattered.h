@@ -174,6 +174,16 @@ struct passing_test
 	std::shared_ptr<count> _count;
 };
 
+/*!
+@brief ¿ÕËø
+*/
+class null_mutex
+{
+public:
+	void lock() const{};
+	void unlock() const{};
+};
+
 #ifdef _DEBUG
 #define DEBUG_OPERATION(__exp__)	__exp__
 #else

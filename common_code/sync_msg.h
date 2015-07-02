@@ -485,6 +485,142 @@ public:
 		return std::move(*(R*)resBuf);
 	}
 
+	template <typename TM>
+	R try_send(my_actor* host, TM&& msg)
+	{
+		my_actor::quit_guard qg(host);
+		actor_trig_handle<bool> ath;
+		unsigned char resBuf[sizeof(R)];
+		bool closed = false;
+		bool has = false;
+		LAMBDA_THIS_REF6(ref6, host, msg, ath, resBuf, closed, has);
+		host->send(_strand, [&ref6]
+		{
+			if (ref6->_closed)
+			{
+				ref6.closed = true;
+			}
+			else
+			{
+				auto& _takeWait = ref6->_takeWait;
+				if (!_takeWait.empty())
+				{
+					ref6.has = true;
+					take_wait& wt = _takeWait.back();
+					wt.srcMsg = &ref6.msg;
+					wt.notified = true;
+					wt.ntf(false);
+					wt.res = ref6.resBuf;
+					wt.ntfSend = ref6.host->make_trig_notifer(ref6.ath);
+					_takeWait.pop_back();
+				}
+			}
+		});
+		if (!closed)
+		{
+			if (!has)
+			{
+				qg.unlock();
+				throw_try_send_exception();
+			}
+			closed = host->wait_trig(ath);
+		}
+		if (closed)
+		{
+			qg.unlock();
+			throw_close_exception();
+		}
+		AUTO_CALL(
+		{
+			typedef R TP_;
+			((TP_*)resBuf)->~TP_();
+		});
+		return std::move(*(R*)resBuf);
+	}
+
+	template <typename TM>
+	R timed_send(int tm, my_actor* host, TM&& msg)
+	{
+		my_actor::quit_guard qg(host);
+		actor_trig_handle<bool> ath;
+		unsigned char resBuf[sizeof(R)];
+		msg_list<send_wait>::iterator nit;
+		bool closed = false;
+		bool notified = false;
+		bool has = false;
+		LAMBDA_THIS_REF3(ref3, closed, notified, has);
+		LAMBDA_THIS_REF6(ref6, ref3, host, msg, ath, resBuf, nit);
+		host->send(_strand, [&ref6]
+		{
+			auto& ref3 = ref6.ref3;
+			if (ref3->_closed)
+			{
+				ref3.closed = true;
+			}
+			else
+			{
+				auto& _takeWait = ref6->_takeWait;
+				if (_takeWait.empty())
+				{
+					send_wait pw = { ref3.notified, ref6.msg, ref6.resBuf, ref6.host->make_trig_notifer(ref6.ath) };
+					ref6->_sendWait.push_front(pw);
+					ref6.nit = ref6->_sendWait.begin();
+				}
+				else
+				{
+					ref3.has = true;
+					take_wait& wt = _takeWait.back();
+					wt.srcMsg = &ref6.msg;
+					wt.notified = true;
+					wt.ntf(false);
+					wt.res = ref6.resBuf;
+					wt.ntfSend = ref6.host->make_trig_notifer(ref6.ath);
+					_takeWait.pop_back();
+				}
+			}
+		});
+		if (!closed)
+		{
+			if (!has)
+			{
+				if (!host->timed_wait_trig(tm, ath, closed))
+				{
+					host->send(_strand, [&ref6]
+					{
+						if (ref6.ref3.notified)
+						{
+							ref6.ref3.has = true;
+						}
+						else
+						{
+							ref6->_sendWait.erase(ref6.nit);
+						}
+					});
+					if (!has)
+					{
+						qg.unlock();
+						throw_timed_send_exception();
+					}
+				}
+			}
+			if (has)
+			{
+				closed = host->wait_trig(ath);
+			}
+		}
+		if (closed)
+		{
+			qg.unlock();
+			throw_close_exception();
+		}
+		AUTO_CALL(
+		{
+			typedef R TP_;
+			((TP_*)resBuf)->~TP_();
+		});
+		return std::move(*(R*)resBuf);
+	}
+
 	template <typename H>
 	void take(my_actor* host, const H& h)
 	{
@@ -550,6 +686,153 @@ public:
 		throw_close_exception();
 	}
 
+	template <typename H>
+	void try_take(my_actor* host, const H& h)
+	{
+		my_actor::quit_guard qg(host);
+		actor_trig_notifer<bool> ntfSend;
+		T* srcMsg = NULL;
+		unsigned char* res = NULL;
+		bool closed = false;
+		bool has = false;
+		LAMBDA_REF2(ref2, closed, has);
+		LAMBDA_THIS_REF5(ref5, ref2, host, ntfSend, srcMsg, res);
+		host->send(_strand, [&ref5]
+		{
+			auto& ref2 = ref5.ref2;
+			if (ref5->_closed)
+			{
+				ref2.closed = true;
+			}
+			else
+			{
+				auto& _sendWait = ref5->_sendWait;
+				if (!_sendWait.empty())
+				{
+					ref2.has = true;
+					send_wait& wt = _sendWait.back();
+					ref5.srcMsg = &wt.srcMsg;
+					wt.notified = true;
+					ref5.ntfSend = wt.ntf;
+					ref5.res = wt.res;
+					_sendWait.pop_back();
+				}
+			}
+		});
+		if (closed)
+		{
+			qg.unlock();
+			throw_close_exception();
+		}
+		if (!has)
+		{
+			qg.unlock();
+			throw_try_take_exception();
+		}
+		bool ok = false;
+		AUTO_CALL({ ntfSend(!ok); });
+		BEGIN_TRY_
+		{
+			new(res)R(h(*srcMsg));
+		}
+		CATCH_FOR(sync_csp_close_exception)
+		{
+			qg.unlock();
+			throw_close_exception();
+		}
+		END_TRY_;
+		ok = true;
+	}
+
+	template <typename H>
+	void timed_take(int tm, my_actor* host, const H& h)
+	{
+		my_actor::quit_guard qg(host);
+		actor_trig_handle<bool> ath;
+		actor_trig_notifer<bool> ntfSend;
+		msg_list<take_wait>::iterator wit;
+		T* srcMsg = NULL;
+		unsigned char* res = NULL;
+		bool wait = false;
+		bool closed = false;
+		bool notified = false;
+		LAMBDA_REF4(ref4, wait, closed, notified, wit);
+		LAMBDA_THIS_REF6(ref6, ref4, host, ath, ntfSend, srcMsg, res);
+		host->send(_strand, [&ref6]
+		{
+			auto& ref4 = ref6.ref4;
+			if (ref6->_closed)
+			{
+				ref4.closed = true;
+			}
+			else
+			{
+				auto& _sendWait = ref6->_sendWait;
+				if (_sendWait.empty())
+				{
+					ref4.wait = true;
+					take_wait pw = { ref4.notified, ref6.srcMsg, ref6.res, ref6.host->make_trig_notifer(ref6.ath), ref6.ntfSend };
+					ref6->_takeWait.push_front(pw);
+					ref4.wit = ref6->_takeWait.begin();
+				}
+				else
+				{
+					send_wait& wt = _sendWait.back();
+					ref6.srcMsg = &wt.srcMsg;
+					wt.notified = true;
+					ref6.ntfSend = wt.ntf;
+					ref6.res = wt.res;
+					_sendWait.pop_back();
+				}
+			}
+		});
+		if (!closed)
+		{
+			if (wait)
+			{
+				if (!host->timed_wait_trig(tm, ath, closed))
+				{
+					host->send(_strand, [&ref6]
+					{
+						auto& ref4 = ref6.ref4;
+						ref4.wait = ref4.notified;
+						if (!ref4.notified)
+						{
+							ref6->_takeWait.erase(ref4.wit);
+						}
+					});
+					if (wait)
+					{
+						closed = host->wait_trig(ath);
+					}
+					if (!wait && !closed)
+					{
+						qg.unlock();
+						throw_timed_take_exception();
+					}
+				}
+			}
+		}
+		if (closed)
+		{
+			qg.unlock();
+			throw_close_exception();
+		}
+		bool ok = false;
+		AUTO_CALL({ ntfSend(!ok); });
+		BEGIN_TRY_
+		{
+			new(res)R(h(*srcMsg));
+		}
+		CATCH_FOR(sync_csp_close_exception)
+		{
+			qg.unlock();
+			throw_close_exception();
+		}
+		END_TRY_;
+		ok = true;
+	}
+
 	void close(my_actor* host)
 	{
 		my_actor::quit_guard qg(host);
@@ -587,6 +870,10 @@ private:
 	void operator=(const csp_channel&){};
 
 	virtual void throw_close_exception() = 0;
+	virtual void throw_try_send_exception() = 0;
+	virtual void throw_timed_send_exception() = 0;
+	virtual void throw_try_take_exception() = 0;
+	virtual void throw_timed_take_exception() = 0;
 private:
 	bool _closed;
 	shared_strand _strand;
@@ -607,9 +894,27 @@ protected:
 	~csp_invoke_base4() {}
 public:
 	template <typename H>
-	void wait(my_actor* host, const H& h)
+	void wait_invoke(my_actor* host, const H& h)
 	{
 		base_csp_channel::take(host, [&](msg_type& msg)->R
+		{
+			return h(msg._p0, msg._p1, msg._p2, msg._p3);
+		});
+	}
+
+	template <typename H>
+	void try_wait_invoke(my_actor* host, const H& h)
+	{
+		base_csp_channel::try_take(host, [&](msg_type& msg)->R
+		{
+			return h(msg._p0, msg._p1, msg._p2, msg._p3);
+		});
+	}
+
+	template <typename H>
+	void timed_wait_invoke(int tm, my_actor* host, const H& h)
+	{
+		base_csp_channel::timed_take(tm, host, [&](msg_type& msg)->R
 		{
 			return h(msg._p0, msg._p1, msg._p2, msg._p3);
 		});
@@ -619,6 +924,18 @@ public:
 	R invoke(my_actor* host, TM0&& p0, TM1&& p1, TM2&& p2, TM3&& p3)
 	{
 		return base_csp_channel::send(host, bind_ref(p0, p1, p2, p3));
+	}
+
+	template <typename TM0, typename TM1, typename TM2, typename TM3>
+	R try_invoke(my_actor* host, TM0&& p0, TM1&& p1, TM2&& p2, TM3&& p3)
+	{
+		return base_csp_channel::try_send(host, bind_ref(p0, p1, p2, p3));
+	}
+
+	template <typename TM0, typename TM1, typename TM2, typename TM3>
+	R timed_invoke(int tm, my_actor* host, TM0&& p0, TM1&& p1, TM2&& p2, TM3&& p3)
+	{
+		return base_csp_channel::timed_send(tm, host, bind_ref(p0, p1, p2, p3));
 	}
 };
 
@@ -633,9 +950,27 @@ protected:
 	~csp_invoke_base3() {}
 public:
 	template <typename H>
-	void wait(my_actor* host, const H& h)
+	void wait_invoke(my_actor* host, const H& h)
 	{
 		base_csp_channel::take(host, [&](msg_type& msg)->R
+		{
+			return h(msg._p0, msg._p1, msg._p2);
+		});
+	}
+
+	template <typename H>
+	void try_wait_invoke(my_actor* host, const H& h)
+	{
+		base_csp_channel::try_take(host, [&](msg_type& msg)->R
+		{
+			return h(msg._p0, msg._p1, msg._p2);
+		});
+	}
+
+	template <typename H>
+	void timed_wait_invoke(int tm, my_actor* host, const H& h)
+	{
+		base_csp_channel::timed_take(tm, host, [&](msg_type& msg)->R
 		{
 			return h(msg._p0, msg._p1, msg._p2);
 		});
@@ -645,6 +980,18 @@ public:
 	R invoke(my_actor* host, TM0&& p0, TM1&& p1, TM2&& p2)
 	{
 		return base_csp_channel::send(host, bind_ref(p0, p1, p2));
+	}
+
+	template <typename TM0, typename TM1, typename TM2>
+	R try_invoke(my_actor* host, TM0&& p0, TM1&& p1, TM2&& p2)
+	{
+		return base_csp_channel::try_send(host, bind_ref(p0, p1, p2));
+	}
+
+	template <typename TM0, typename TM1, typename TM2>
+	R timed_invoke(int tm, my_actor* host, TM0&& p0, TM1&& p1, TM2&& p2)
+	{
+		return base_csp_channel::timed_send(tm, host, bind_ref(p0, p1, p2));
 	}
 };
 
@@ -659,9 +1006,27 @@ protected:
 	~csp_invoke_base2() {}
 public:
 	template <typename H>
-	void wait(my_actor* host, const H& h)
+	void wait_invoke(my_actor* host, const H& h)
 	{
 		base_csp_channel::take(host, [&](msg_type& msg)->R
+		{
+			return h(msg._p0, msg._p1);
+		});
+	}
+
+	template <typename H>
+	void try_wait_invoke(my_actor* host, const H& h)
+	{
+		base_csp_channel::try_take(host, [&](msg_type& msg)->R
+		{
+			return h(msg._p0, msg._p1);
+		});
+	}
+
+	template <typename H>
+	void timed_wait_invoke(int tm, my_actor* host, const H& h)
+	{
+		base_csp_channel::timed_take(tm, host, [&](msg_type& msg)->R
 		{
 			return h(msg._p0, msg._p1);
 		});
@@ -671,6 +1036,18 @@ public:
 	R invoke(my_actor* host, TM0&& p0, TM1&& p1)
 	{
 		return base_csp_channel::send(host, bind_ref(p0, p1));
+	}
+
+	template <typename TM0, typename TM1>
+	R try_invoke(my_actor* host, TM0&& p0, TM1&& p1)
+	{
+		return base_csp_channel::try_send(host, bind_ref(p0, p1));
+	}
+
+	template <typename TM0, typename TM1>
+	R timed_invoke(int tm, my_actor* host, TM0&& p0, TM1&& p1)
+	{
+		return base_csp_channel::timed_send(tm, host, bind_ref(p0, p1));
 	}
 };
 
@@ -685,9 +1062,27 @@ protected:
 	~csp_invoke_base1() {}
 public:
 	template <typename H>
-	void wait(my_actor* host, const H& h)
+	void wait_invoke(my_actor* host, const H& h)
 	{
 		base_csp_channel::take(host, [&](msg_type& msg)->R
+		{
+			return h(msg._p0);
+		});
+	}
+
+	template <typename H>
+	void try_wait_invoke(my_actor* host, const H& h)
+	{
+		base_csp_channel::try_take(host, [&](msg_type& msg)->R
+		{
+			return h(msg._p0);
+		});
+	}
+
+	template <typename H>
+	void timed_wait_invoke(int tm, my_actor* host, const H& h)
+	{
+		base_csp_channel::timed_take(tm, host, [&](msg_type& msg)->R
 		{
 			return h(msg._p0);
 		});
@@ -697,6 +1092,18 @@ public:
 	R invoke(my_actor* host, TM0&& p0)
 	{
 		return base_csp_channel::send(host, bind_ref(p0));
+	}
+
+	template <typename TM0>
+	R try_invoke(my_actor* host, TM0&& p0)
+	{
+		return base_csp_channel::try_send(host, bind_ref(p0));
+	}
+
+	template <typename TM0>
+	R timed_invoke(int tm, my_actor* host, TM0&& p0)
+	{
+		return base_csp_channel::timed_send(tm, host, bind_ref(p0));
 	}
 };
 
@@ -711,9 +1118,27 @@ protected:
 	~csp_invoke_base0() {}
 public:
 	template <typename H>
-	void wait(my_actor* host, const H& h)
+	void wait_invoke(my_actor* host, const H& h)
 	{
 		base_csp_channel::take(host, [&](msg_type& msg)->R
+		{
+			return h();
+		});
+	}
+
+	template <typename H>
+	void try_wait_invoke(my_actor* host, const H& h)
+	{
+		base_csp_channel::try_take(host, [&](msg_type& msg)->R
+		{
+			return h();
+		});
+	}
+
+	template <typename H>
+	void timed_wait_invoke(int tm, my_actor* host, const H& h)
+	{
+		base_csp_channel::timed_take(tm, host, [&](msg_type& msg)->R
 		{
 			return h();
 		});
@@ -722,6 +1147,16 @@ public:
 	R invoke(my_actor* host)
 	{
 		return base_csp_channel::send(host, msg_type());
+	}
+
+	R try_invoke(my_actor* host)
+	{
+		return base_csp_channel::try_send(host, msg_type());
+	}
+
+	R timed_invoke(int tm, my_actor* host)
+	{
+		return base_csp_channel::timed_send(tm, host, msg_type());
 	}
 };
 
@@ -740,9 +1175,29 @@ protected:
 	~csp_invoke_base4() {}
 public:
 	template <typename H>
-	void wait(my_actor* host, const H& h)
+	void wait_invoke(my_actor* host, const H& h)
 	{
 		base_csp_channel::take(host, [&](msg_type& msg)->void_return
+		{
+			h(msg._p0, msg._p1, msg._p2, msg._p3);
+			return void_return();
+		});
+	}
+
+	template <typename H>
+	void try_wait_invoke(my_actor* host, const H& h)
+	{
+		base_csp_channel::try_take(host, [&](msg_type& msg)->void_return
+		{
+			h(msg._p0, msg._p1, msg._p2, msg._p3);
+			return void_return();
+		});
+	}
+
+	template <typename H>
+	void timed_wait_invoke(int tm, my_actor* host, const H& h)
+	{
+		base_csp_channel::timed_take(tm, host, [&](msg_type& msg)->void_return
 		{
 			h(msg._p0, msg._p1, msg._p2, msg._p3);
 			return void_return();
@@ -753,6 +1208,18 @@ public:
 	void invoke(my_actor* host, TM0&& p0, TM1&& p1, TM2&& p2, TM3&& p3)
 	{
 		base_csp_channel::send(host, bind_ref(p0, p1, p2, p3));
+	}
+
+	template <typename TM0, typename TM1, typename TM2, typename TM3>
+	void try_invoke(my_actor* host, TM0&& p0, TM1&& p1, TM2&& p2, TM3&& p3)
+	{
+		base_csp_channel::try_send(host, bind_ref(p0, p1, p2, p3));
+	}
+
+	template <typename TM0, typename TM1, typename TM2, typename TM3>
+	void timed_invoke(int tm, my_actor* host, TM0&& p0, TM1&& p1, TM2&& p2, TM3&& p3)
+	{
+		base_csp_channel::timed_send(tm, host, bind_ref(p0, p1, p2, p3));
 	}
 };
 
@@ -767,9 +1234,29 @@ protected:
 	~csp_invoke_base3() {}
 public:
 	template <typename H>
-	void wait(my_actor* host, const H& h)
+	void wait_invoke(my_actor* host, const H& h)
 	{
 		base_csp_channel::take(host, [&](msg_type& msg)->void_return
+		{
+			h(msg._p0, msg._p1, msg._p2);
+			return void_return();
+		});
+	}
+
+	template <typename H>
+	void try_wait_invoke(my_actor* host, const H& h)
+	{
+		base_csp_channel::try_take(host, [&](msg_type& msg)->void_return
+		{
+			h(msg._p0, msg._p1, msg._p2);
+			return void_return();
+		});
+	}
+
+	template <typename H>
+	void timed_wait_invoke(int tm, my_actor* host, const H& h)
+	{
+		base_csp_channel::timed_take(tm, host, [&](msg_type& msg)->void_return
 		{
 			h(msg._p0, msg._p1, msg._p2);
 			return void_return();
@@ -780,6 +1267,18 @@ public:
 	void invoke(my_actor* host, TM0&& p0, TM1&& p1, TM2&& p2)
 	{
 		base_csp_channel::send(host, bind_ref(p0, p1, p2));
+	}
+
+	template <typename TM0, typename TM1, typename TM2>
+	void try_invoke(my_actor* host, TM0&& p0, TM1&& p1, TM2&& p2)
+	{
+		base_csp_channel::try_send(host, bind_ref(p0, p1, p2));
+	}
+
+	template <typename TM0, typename TM1, typename TM2>
+	void timed_invoke(int tm, my_actor* host, TM0&& p0, TM1&& p1, TM2&& p2)
+	{
+		base_csp_channel::timed_send(tm, host, bind_ref(p0, p1, p2));
 	}
 };
 
@@ -794,9 +1293,29 @@ protected:
 	~csp_invoke_base2() {}
 public:
 	template <typename H>
-	void wait(my_actor* host, const H& h)
+	void wait_invoke(my_actor* host, const H& h)
 	{
 		base_csp_channel::take(host, [&](msg_type& msg)->void_return
+		{
+			h(msg._p0, msg._p1);
+			return void_return();
+		});
+	}
+
+	template <typename H>
+	void try_wait_invoke(my_actor* host, const H& h)
+	{
+		base_csp_channel::try_take(host, [&](msg_type& msg)->void_return
+		{
+			h(msg._p0, msg._p1);
+			return void_return();
+		});
+	}
+
+	template <typename H>
+	void timed_wait_invoke(int tm, my_actor* host, const H& h)
+	{
+		base_csp_channel::timed_take(tm, host, [&](msg_type& msg)->void_return
 		{
 			h(msg._p0, msg._p1);
 			return void_return();
@@ -807,6 +1326,18 @@ public:
 	void invoke(my_actor* host, TM0&& p0, TM1&& p1)
 	{
 		base_csp_channel::send(host, bind_ref(p0, p1));
+	}
+
+	template <typename TM0, typename TM1>
+	void try_invoke(my_actor* host, TM0&& p0, TM1&& p1)
+	{
+		base_csp_channel::try_send(host, bind_ref(p0, p1));
+	}
+
+	template <typename TM0, typename TM1>
+	void timed_invoke(int tm, my_actor* host, TM0&& p0, TM1&& p1)
+	{
+		base_csp_channel::timed_send(tm, host, bind_ref(p0, p1));
 	}
 };
 
@@ -821,9 +1352,29 @@ protected:
 	~csp_invoke_base1() {}
 public:
 	template <typename H>
-	void wait(my_actor* host, const H& h)
+	void wait_invoke(my_actor* host, const H& h)
 	{
 		base_csp_channel::take(host, [&](msg_type& msg)->void_return
+		{
+			h(msg._p0);
+			return void_return();
+		});
+	}
+
+	template <typename H>
+	void try_wait_invoke(my_actor* host, const H& h)
+	{
+		base_csp_channel::try_take(host, [&](msg_type& msg)->void_return
+		{
+			h(msg._p0);
+			return void_return();
+		});
+	}
+
+	template <typename H>
+	void timed_wait_invoke(int tm, my_actor* host, const H& h)
+	{
+		base_csp_channel::timed_take(tm, host, [&](msg_type& msg)->void_return
 		{
 			h(msg._p0);
 			return void_return();
@@ -834,6 +1385,18 @@ public:
 	void invoke(my_actor* host, TM0&& p0)
 	{
 		base_csp_channel::send(host, bind_ref(p0));
+	}
+
+	template <typename TM0>
+	void try_invoke(my_actor* host, TM0&& p0)
+	{
+		base_csp_channel::try_send(host, bind_ref(p0));
+	}
+
+	template <typename TM0>
+	void timed_invoke(int tm, my_actor* host, TM0&& p0)
+	{
+		base_csp_channel::timed_send(tm, host, bind_ref(p0));
 	}
 };
 
@@ -848,9 +1411,29 @@ protected:
 	~csp_invoke_base0() {}
 public:
 	template <typename H>
-	void wait(my_actor* host, const H& h)
+	void wait_invoke(my_actor* host, const H& h)
 	{
 		base_csp_channel::take(host, [&](msg_type& msg)->void_return
+		{
+			h();
+			return void_return();
+		});
+	}
+
+	template <typename H>
+	void try_wait_invoke(my_actor* host, const H& h)
+	{
+		base_csp_channel::try_take(host, [&](msg_type& msg)->void_return
+		{
+			h();
+			return void_return();
+		});
+	}
+
+	template <typename H>
+	void timed_wait_invoke(int tm, my_actor* host, const H& h)
+	{
+		base_csp_channel::timed_take(tm, host, [&](msg_type& msg)->void_return
 		{
 			h();
 			return void_return();
@@ -861,10 +1444,36 @@ public:
 	{
 		base_csp_channel::send(host, msg_type());
 	}
+
+	void try_invoke(my_actor* host)
+	{
+		base_csp_channel::try_send(host, msg_type());
+	}
+
+	void timed_invoke(int tm, my_actor* host)
+	{
+		base_csp_channel::timed_send(tm, host, msg_type());
+	}
 };
 
 template <typename R, typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
 class csp_invoke;
+
+struct csp_try_invoke_exception 
+{
+};
+
+struct csp_timed_invoke_exception
+{
+};
+
+struct csp_try_wait_exception
+{
+};
+
+struct csp_timed_wait_exception
+{
+};
 
 /*!
 @brief CSP模型消息（多读多写，角色可转换，可递归），发送方等消息取出并处理完成后才返回
@@ -875,6 +1484,10 @@ class csp_invoke
 {
 public:
 	struct close_exception : public csp_channel_close_exception {};
+	struct try_invoke_exception : public csp_try_invoke_exception {};
+	struct timed_invoke_exception : public csp_timed_invoke_exception {};
+	struct try_wait_exception : public csp_try_wait_exception {};
+	struct timed_wait_exception : public csp_timed_wait_exception {};
 public:
 	csp_invoke(shared_strand strand)
 		:csp_invoke_base4(strand) {}
@@ -882,6 +1495,26 @@ private:
 	void throw_close_exception()
 	{
 		throw close_exception();
+	}
+
+	void throw_try_send_exception()
+	{
+		throw try_invoke_exception();
+	}
+
+	void throw_timed_send_exception()
+	{
+		throw timed_invoke_exception();
+	}
+
+	void throw_try_take_exception()
+	{
+		throw try_wait_exception();
+	}
+
+	void throw_timed_take_exception()
+	{
+		throw timed_wait_exception();
 	}
 };
 
@@ -891,6 +1524,10 @@ class csp_invoke
 {
 public:
 	struct close_exception : public csp_channel_close_exception {};
+	struct try_invoke_exception : public csp_try_invoke_exception {};
+	struct timed_invoke_exception : public csp_timed_invoke_exception {};
+	struct try_wait_exception : public csp_try_wait_exception {};
+	struct timed_wait_exception : public csp_timed_wait_exception {};
 public:
 	csp_invoke(shared_strand strand)
 		:csp_invoke_base3(strand) {}
@@ -898,6 +1535,26 @@ private:
 	void throw_close_exception()
 	{
 		throw close_exception();
+	}
+
+	void throw_try_send_exception()
+	{
+		throw try_invoke_exception();
+	}
+
+	void throw_timed_send_exception()
+	{
+		throw timed_invoke_exception();
+	}
+
+	void throw_try_take_exception()
+	{
+		throw try_wait_exception();
+	}
+
+	void throw_timed_take_exception()
+	{
+		throw timed_wait_exception();
 	}
 };
 
@@ -907,6 +1564,10 @@ class csp_invoke
 {
 public:
 	struct close_exception : public csp_channel_close_exception {};
+	struct try_invoke_exception : public csp_try_invoke_exception {};
+	struct timed_invoke_exception : public csp_timed_invoke_exception {};
+	struct try_wait_exception : public csp_try_wait_exception {};
+	struct timed_wait_exception : public csp_timed_wait_exception {};
 public:
 	csp_invoke(shared_strand strand)
 		:csp_invoke_base2(strand) {}
@@ -914,6 +1575,26 @@ private:
 	void throw_close_exception()
 	{
 		throw close_exception();
+	}
+
+	void throw_try_send_exception()
+	{
+		throw try_invoke_exception();
+	}
+
+	void throw_timed_send_exception()
+	{
+		throw timed_invoke_exception();
+	}
+
+	void throw_try_take_exception()
+	{
+		throw try_wait_exception();
+	}
+
+	void throw_timed_take_exception()
+	{
+		throw timed_wait_exception();
 	}
 };
 
@@ -923,6 +1604,10 @@ class csp_invoke
 {
 public:
 	struct close_exception : public csp_channel_close_exception {};
+	struct try_invoke_exception : public csp_try_invoke_exception {};
+	struct timed_invoke_exception : public csp_timed_invoke_exception {};
+	struct try_wait_exception : public csp_try_wait_exception {};
+	struct timed_wait_exception : public csp_timed_wait_exception {};
 public:
 	csp_invoke(shared_strand strand)
 		:csp_invoke_base1(strand) {}
@@ -930,6 +1615,26 @@ private:
 	void throw_close_exception()
 	{
 		throw close_exception();
+	}
+
+	void throw_try_send_exception()
+	{
+		throw try_invoke_exception();
+	}
+
+	void throw_timed_send_exception()
+	{
+		throw timed_invoke_exception();
+	}
+
+	void throw_try_take_exception()
+	{
+		throw try_wait_exception();
+	}
+
+	void throw_timed_take_exception()
+	{
+		throw timed_wait_exception();
 	}
 };
 
@@ -939,6 +1644,10 @@ class csp_invoke
 {
 public:
 	struct close_exception : public csp_channel_close_exception {};
+	struct try_invoke_exception : public csp_try_invoke_exception {};
+	struct timed_invoke_exception : public csp_timed_invoke_exception {};
+	struct try_wait_exception : public csp_try_wait_exception {};
+	struct timed_wait_exception : public csp_timed_wait_exception {};
 public:
 	csp_invoke(shared_strand strand)
 		:csp_invoke_base0(strand) {}
@@ -946,6 +1655,26 @@ private:
 	void throw_close_exception()
 	{
 		throw close_exception();
+	}
+
+	void throw_try_send_exception()
+	{
+		throw try_invoke_exception();
+	}
+
+	void throw_timed_send_exception()
+	{
+		throw timed_invoke_exception();
+	}
+
+	void throw_try_take_exception()
+	{
+		throw try_wait_exception();
+	}
+
+	void throw_timed_take_exception()
+	{
+		throw timed_wait_exception();
 	}
 };
 

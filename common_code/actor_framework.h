@@ -1801,46 +1801,23 @@ class my_actor
 		std::function<void ()> _h;
 	};
 
-	template <typename T = void>
-	struct my_size_of
-	{
-		enum{ size = sizeof(T) };
-	};
-
-	template <>
-	struct my_size_of<void>
-	{
-		enum{ size = -1 };
-	};
-
 	struct msg_pool_status 
 	{
 		msg_pool_status()
-		{
-			for (int i = 0; i < 5; i++)
-			{
-				_msgPumpList[i].create(_msgPumpListAll);
-			}
-		}
+		:_msgTypeMap(_msgTypeMapAll) {}
 
-		~msg_pool_status()
-		{
-			for (int i = 0; i < 5; i++)
-			{
-				_msgPumpList[i].destroy();
-			}
-		}
+		~msg_pool_status() {}
 
 		struct pck_base 
 		{
+			pck_base() :_amutex(_strand) { assert(false); }
+
 			pck_base(my_actor* hostActor)
 			:_strand(hostActor->_strand), _amutex(_strand), _isHead(true), _hostActor(hostActor){}
 
 			virtual ~pck_base(){};
 
 			virtual void close() = 0;
-
-			virtual bool cmp_size(const size_t s0, const size_t s1, const size_t s2, const size_t s3) = 0;
 
 			bool is_closed()
 			{
@@ -1878,11 +1855,6 @@ class my_actor
 				_hostActor = NULL;
 			}
 
-			bool cmp_size(const size_t s0, const size_t s1, const size_t s2, const size_t s3)
-			{
-				return 0 == (((my_size_of<T0>::size ^ s0) | (my_size_of<T1>::size ^ s1)) | ((my_size_of<T2>::size ^ s2) | (my_size_of<T3>::size ^ s3)));
-			}
-
 			std::shared_ptr<msg_pool<T0, T1, T2, T3> > _msgPool;
 			std::shared_ptr<msg_pump<T0, T1, T2, T3> > _msgPump;
 			std::shared_ptr<pck> _next;
@@ -1890,17 +1862,14 @@ class my_actor
 
 		void clear(my_actor* self)
 		{
-			for (int i = 0; i < 5; i++)
-			{
-				for_each(_msgPumpList[i]->begin(), _msgPumpList[i]->end(), [&](const std::shared_ptr<pck_base>& p){p->_amutex.quited_lock(self); });
-				for_each(_msgPumpList[i]->begin(), _msgPumpList[i]->end(), [](const std::shared_ptr<pck_base>& p){p->close(); });
-				for_each(_msgPumpList[i]->begin(), _msgPumpList[i]->end(), [&](const std::shared_ptr<pck_base>& p){p->_amutex.quited_unlock(self); });
-				_msgPumpList[i]->clear();
-			}
+			for (auto it = _msgTypeMap.begin(); it != _msgTypeMap.end(); it++) { it->second->_amutex.quited_lock(self); }
+			for (auto it = _msgTypeMap.begin(); it != _msgTypeMap.end(); it++) { it->second->close(); }
+			for (auto it = _msgTypeMap.begin(); it != _msgTypeMap.end(); it++) { it->second->_amutex.quited_unlock(self); }
+			_msgTypeMap.clear();
 		}
 
-		stack_obj<msg_list_shared_alloc<std::shared_ptr<pck_base> > > _msgPumpList[5];
-		static msg_list<std::shared_ptr<pck_base> >::shared_node_alloc _msgPumpListAll;
+		msg_map_shared_alloc<size_t, std::shared_ptr<pck_base> > _msgTypeMap;
+		static msg_map_shared_alloc<size_t, std::shared_ptr<pck_base> >::shared_node_alloc _msgTypeMapAll;
 	};
 
 	struct timer_state 
@@ -2933,37 +2902,22 @@ private:
 	std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3> > msg_pool_pck(bool make = true)
 	{
 		typedef msg_pool_status::pck<T0, T1, T2, T3> pck_type;
-
-		auto& msgPumpList = _msgPoolStatus._msgPumpList[func_type<T0, T1, T2, T2>::number].get();
-		if (0 == func_type<T0, T1, T2, T2>::number)
-		{
-			if (!msgPumpList.empty())
-			{
-				//没有参数的消息，不需要匹配类型
-				return std::static_pointer_cast<pck_type>(msgPumpList.front());
-			}
-		}
-		else
-		{
-			for (auto it = msgPumpList.begin(); it != msgPumpList.end(); it++)
-			{
-				//先匹配参数类型大小是否一样
-				if ((*it)->cmp_size(my_size_of<T0>::size, my_size_of<T1>::size, my_size_of<T2>::size, my_size_of<T3>::size))
-				{
-					//然后动态类型测试
-					auto pool = std::dynamic_pointer_cast<pck_type>(*it);
-					if (pool)
-					{
-						return pool;
-					}
-				}
-			}
-		}
+		size_t typeID = func_type<T0, T1, T2, T3>::number != 0 ? typeid(pck_type).hash_code() : 0;
 		if (make)
 		{
-			std::shared_ptr<pck_type> newPck(new pck_type(this));
-			msgPumpList.push_back(newPck);
-			return newPck;
+			auto& res = _msgPoolStatus._msgTypeMap.insert(make_pair(typeID, std::shared_ptr<pck_type>())).first->second;
+			if (!res)
+			{
+				res = std::shared_ptr<pck_type>(new pck_type(this));
+			}
+			//assert(std::dynamic_pointer_cast<pck_type>(res));
+			return std::static_pointer_cast<pck_type>(res);
+		}
+		auto it = _msgPoolStatus._msgTypeMap.find(typeID);
+		if (it != _msgPoolStatus._msgTypeMap.end())
+		{
+			//assert(std::dynamic_pointer_cast<pck_type>(it->second));
+			return std::static_pointer_cast<pck_type>(it->second);
 		}
 		return std::shared_ptr<pck_type>();
 	}
@@ -4320,9 +4274,9 @@ private:
 	msg_map<void*, my_actor*>::iterator _btIt;
 	msg_map<void*, my_actor*>::iterator _topIt;
 #endif
-	static msg_list<my_actor::suspend_resume_option>::shared_node_alloc _suspendResumeQueueAll;
-	static msg_list<std::function<void()> >::shared_node_alloc _quitExitCallbackAll;
-	static msg_list<actor_handle>::shared_node_alloc _childActorListAll;
+	static msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc _suspendResumeQueueAll;
+	static msg_list_shared_alloc<std::function<void()> >::shared_node_alloc _quitExitCallbackAll;
+	static msg_list_shared_alloc<actor_handle>::shared_node_alloc _childActorListAll;
 };
 
 #endif

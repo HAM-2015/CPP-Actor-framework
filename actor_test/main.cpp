@@ -465,7 +465,7 @@ void actor_test(my_actor* self)
 				{
 					passing_test id = syncMsg.take(self);
 					printf("sync %d %d\n", id._count->_id, (int)self->self_id());
-					cspMsg.wait(self, [&](const passing_test& id, int i)->int
+					cspMsg.wait_invoke(self, [&](const passing_test& id, int i)->int
 					{
 						printf("csp %d\n", id._count->_id);
 						self->sleep(1000);
