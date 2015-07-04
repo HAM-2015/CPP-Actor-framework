@@ -5,11 +5,21 @@
 #include "msg_queue.h"
 #include "check_move.h"
 
-struct sync_csp_close_exception {};
+struct sync_csp_exception {};
+
+struct sync_csp_close_exception : public sync_csp_exception {};
 
 struct sync_msg_close_exception : public sync_csp_close_exception {};
 
 struct csp_channel_close_exception : public sync_csp_close_exception {};
+
+struct csp_try_invoke_exception : public sync_csp_exception {};
+
+struct csp_timed_invoke_exception : public sync_csp_exception {};
+
+struct csp_try_wait_exception : public sync_csp_exception {};
+
+struct csp_timed_wait_exception : public sync_csp_exception {};
 
 /*!
 @brief 同步发送消息（多读多写，角色可转换），发送方等到消息取出才返回
@@ -430,7 +440,10 @@ class csp_channel
 	};
 protected:
 	csp_channel(shared_strand strand)
-		:_closed(false), _strand(strand), _takeWait(4), _sendWait(4) {}
+		:_closed(false), _strand(strand), _takeWait(4), _sendWait(4)
+	{
+		DEBUG_OPERATION(_thrownCloseExp = false);
+	}
 	~csp_channel() {}
 public:
 	template <typename TM>
@@ -675,6 +688,8 @@ public:
 			}
 			CATCH_FOR(sync_csp_close_exception)
 			{
+				assert(_thrownCloseExp);
+				DEBUG_OPERATION(_thrownCloseExp = false);
 				qg.unlock();
 				throw_close_exception();
 			}
@@ -737,6 +752,8 @@ public:
 		}
 		CATCH_FOR(sync_csp_close_exception)
 		{
+			assert(_thrownCloseExp);
+			DEBUG_OPERATION(_thrownCloseExp = false);
 			qg.unlock();
 			throw_close_exception();
 		}
@@ -826,6 +843,8 @@ public:
 		}
 		CATCH_FOR(sync_csp_close_exception)
 		{
+			assert(_thrownCloseExp);
+			DEBUG_OPERATION(_thrownCloseExp = false);
 			qg.unlock();
 			throw_close_exception();
 		}
@@ -864,6 +883,7 @@ public:
 	{
 		assert(_closed);
 		_closed = false;
+		DEBUG_OPERATION(_thrownCloseExp = false);
 	}
 private:
 	csp_channel(const csp_channel&){};
@@ -879,6 +899,8 @@ private:
 	shared_strand _strand;
 	msg_list<take_wait> _takeWait;
 	msg_list<send_wait> _sendWait;
+protected:
+	DEBUG_OPERATION(bool _thrownCloseExp);
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -1459,22 +1481,6 @@ public:
 template <typename R, typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
 class csp_invoke;
 
-struct csp_try_invoke_exception 
-{
-};
-
-struct csp_timed_invoke_exception
-{
-};
-
-struct csp_try_wait_exception
-{
-};
-
-struct csp_timed_wait_exception
-{
-};
-
 /*!
 @brief CSP模型消息（多读多写，角色可转换，可递归），发送方等消息取出并处理完成后才返回
 */
@@ -1494,6 +1500,8 @@ public:
 private:
 	void throw_close_exception()
 	{
+		assert(!_thrownCloseExp);
+		DEBUG_OPERATION(_thrownCloseExp = true);
 		throw close_exception();
 	}
 
@@ -1534,6 +1542,8 @@ public:
 private:
 	void throw_close_exception()
 	{
+		assert(!_thrownCloseExp);
+		DEBUG_OPERATION(_thrownCloseExp = true);
 		throw close_exception();
 	}
 
@@ -1574,6 +1584,8 @@ public:
 private:
 	void throw_close_exception()
 	{
+		assert(!_thrownCloseExp);
+		DEBUG_OPERATION(_thrownCloseExp = true);
 		throw close_exception();
 	}
 
@@ -1614,6 +1626,8 @@ public:
 private:
 	void throw_close_exception()
 	{
+		assert(!_thrownCloseExp);
+		DEBUG_OPERATION(_thrownCloseExp = true);
 		throw close_exception();
 	}
 
@@ -1654,6 +1668,8 @@ public:
 private:
 	void throw_close_exception()
 	{
+		assert(!_thrownCloseExp);
+		DEBUG_OPERATION(_thrownCloseExp = true);
 		throw close_exception();
 	}
 
