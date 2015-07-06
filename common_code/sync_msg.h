@@ -68,7 +68,7 @@ public:
 				if (_takeWait.empty())
 				{
 					ref6.wait = true;
-					send_wait pw = { check_move<TM&&>::is_rvalue, ref6.notified, ref6.msg, ref6.host->make_trig_notifer(ref6.ath) };
+					send_wait pw = { check_move<TM&&>::is_rvalue, ref6.notified, (T&)ref6.msg, ref6.host->make_trig_notifer(ref6.ath) };
 					ref6->_sendWait.push_front(pw);
 				}
 				else
@@ -150,7 +150,7 @@ public:
 				if (_takeWait.empty())
 				{
 					ref3.wait = true;
-					send_wait pw = { check_move<TM&&>::is_rvalue, ref3.notified, ref5.msg, ref5.host->make_trig_notifer(ref5.ath) };
+					send_wait pw = { check_move<TM&&>::is_rvalue, ref3.notified, (T&)ref5.msg, ref5.host->make_trig_notifer(ref5.ath) };
 					ref5->_sendWait.push_front(pw);
 					ref5.mit = ref5->_sendWait.begin();
 				}

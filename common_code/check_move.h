@@ -7,10 +7,20 @@
 template <typename T>
 struct check_move
 {
-	static const bool is_rvalue = false;
+	enum { is_rvalue = false };
 
-	template <typename PT>
-	static PT& move(PT& p0)
+	static T& move(T& p0)
+	{
+		return p0;
+	}
+};
+
+template <typename T>
+struct check_move<const T&&>
+{
+	enum { is_rvalue = false };
+
+	static const T& move(const T& p0)
 	{
 		return p0;
 	}
@@ -19,17 +29,17 @@ struct check_move
 template <typename T>
 struct check_move<T&&>
 {
-	static const bool is_rvalue = true;
+	enum { is_rvalue = true };
 
-	template <typename PT>
-	static auto move(PT&& p0)->decltype(std::move(p0))
+	static T&& move(T& p0)
 	{
-		return std::move(p0);
+		return (T&&)p0;
 	}
 };
 
-//检测当前参数是否是右值，是就执行std::move
+//检测一个参数是否是右值，是就执行右值传递
 #define CHECK_MOVE(__P__) check_move<decltype(__P__)>::move(__P__)
+//检测一个参数是否是右值
 #define IS_RVALUE(__P__) check_move<decltype(__P__)>::is_rvalue;
 
 //移除const和&

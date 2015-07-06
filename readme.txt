@@ -9,7 +9,7 @@
 github url:
 https://github.com/HAM-2015/CPP-Actor-framework
 
-oschina url:
+oschina url
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
