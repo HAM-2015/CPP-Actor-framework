@@ -3,6 +3,8 @@
 #include <boost/coroutine/all.hpp>
 #include "actor_framework.h"
 #include "actor_stack.h"
+#include "async_buffer.h"
+#include "sync_msg.h"
 
 typedef boost::coroutines::coroutine<void>::pull_type actor_pull_type;
 typedef boost::coroutines::coroutine<void>::push_type actor_push_type;
@@ -669,6 +671,14 @@ public:
 		{
 			assert(false);
 		}
+		catch (async_buffer_close_exception&)
+		{
+			assert(false);
+		}
+		catch (sync_csp_exception&)
+		{
+			assert(false);
+		}
 		catch (...)
 		{
 			assert(false);
@@ -1047,7 +1057,7 @@ void my_actor::sleep( int ms )
 	if (ms > 0)
 	{
 		assert(_timer);
-		time_out(ms, [this]{run_one(); });
+		timeout(ms, [this]{run_one(); });
 		push_yield();
 	}
 	else
@@ -1807,7 +1817,7 @@ void my_actor::enable_stack_pool()
 	msg_pool_status::_msgTypeMapAll.enable_shared(100000);
 }
 
-void my_actor::time_out_handler()
+void my_actor::timeout_handler()
 {
 	assert(_timerState._timerCb);
 	_timerState._timerCompleted = true;
@@ -1860,7 +1870,7 @@ void my_actor::resume_timer()
 			assert(_timerState._timerTime >= _timerState._timerStampEnd - _timerState._timerStampBegin);
 			_timerState._timerTime -= _timerState._timerStampEnd - _timerState._timerStampBegin;
 			_timerState._timerStampBegin = get_tick_us();
-			_timerState._timerHandle = _timer->time_out(_timerState._timerTime, shared_from_this());
+			_timerState._timerHandle = _timer->timeout(_timerState._timerTime, shared_from_this());
 		}
 	}
 }
@@ -1962,20 +1972,20 @@ bool my_actor::timed_wait_msg(int tm, actor_msg_handle<>& amh)
 	{
 		if (0 != tm)
 		{
-			bool timeout = false;
+			bool timed = false;
 			if (tm > 0)
 			{
-				delay_trig(tm, [this, &timeout]
+				delay_trig(tm, [this, &timed]
 				{
 					if (!_quited)
 					{
-						timeout = true;
+						timed = true;
 						pull_yield();
 					}
 				});
 			}
 			push_yield();
-			if (!timeout)
+			if (!timed)
 			{
 				if (tm > 0)
 				{
@@ -2004,20 +2014,20 @@ bool my_actor::timed_pump_msg(int tm, const msg_pump<>::handle& pump, bool check
 		if (0 != tm)
 		{
 			pump->_checkDis = checkDis;
-			bool timeout = false;
+			bool timed = false;
 			if (tm > 0)
 			{
-				delay_trig(tm, [this, &timeout]
+				delay_trig(tm, [this, &timed]
 				{
 					if (!_quited)
 					{
-						timeout = true;
+						timed = true;
 						pull_yield();
 					}
 				});
 			}
 			push_yield();
-			if (!timeout)
+			if (!timed)
 			{
 				if (tm > 0)
 				{
@@ -2090,20 +2100,20 @@ bool my_actor::timed_wait_trig(int tm, actor_trig_handle<>& ath)
 	{
 		if (0 != tm)
 		{
-			bool timeout = false;
+			bool timed = false;
 			if (tm > 0)
 			{
-				delay_trig(tm, [this, &timeout]
+				delay_trig(tm, [this, &timed]
 				{
 					if (!_quited)
 					{
-						timeout = true;
+						timed = true;
 						pull_yield();
 					}
 				});
 			}
 			push_yield();
-			if (!timeout)
+			if (!timed)
 			{
 				if (tm > 0)
 				{

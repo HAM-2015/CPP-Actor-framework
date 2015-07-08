@@ -45,7 +45,7 @@ public:
 					isFull = _buffer.full();
 					if (!isFull)
 					{
-						_buffer.push_back(check_move<TM&&>::move(msg));
+						_buffer.push_back(try_move<TM&&>::move(msg));
 						if (!_popWait.empty())
 						{
 							_popWait.front()(true);
@@ -89,7 +89,7 @@ public:
 				isFull = _buffer.full();
 				if (!isFull)
 				{
-					_buffer.push_back(check_move<TM&&>::move(msg));
+					_buffer.push_back(try_move<TM&&>::move(msg));
 					if (!_popWait.empty())
 					{
 						_popWait.front()(true);

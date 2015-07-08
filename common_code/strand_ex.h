@@ -9,7 +9,7 @@
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/detail/push_options.hpp>
 #include "ios_proxy.h"
-#include "check_move.h"
+#include "try_move.h"
 
 /*!
 @brief 修改标准boost strand，impl_改为独占
@@ -37,7 +37,7 @@ public:
 	template <typename Handler>
 	void post(BOOST_ASIO_MOVE_ARG(Handler) handler)
 	{
-		_service.post(_impl, CHECK_MOVE(handler));
+		_service.post(_impl, TRY_MOVE(handler));
 	}
 
 	bool running_in_this_thread() const

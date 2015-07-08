@@ -59,7 +59,7 @@ struct msg_param
 
 	template <typename PT0, typename PT1, typename PT2, typename PT3>
 	msg_param(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3)
-		:_res0(CHECK_MOVE(p0)), _res1(CHECK_MOVE(p1)), _res2(CHECK_MOVE(p2)), _res3(CHECK_MOVE(p3)) {}
+		:_res0(TRY_MOVE(p0)), _res1(TRY_MOVE(p1)), _res2(TRY_MOVE(p2)), _res3(TRY_MOVE(p3)) {}
 
 	msg_param(const_ref_type& rp)
 		:_res0(rp._p0), _res1(rp._p1), _res2(rp._p2), _res3(rp._p3) {}
@@ -116,7 +116,7 @@ struct msg_param<T0, T1, T2, void>
 
 	template <typename PT0, typename PT1, typename PT2>
 	msg_param(PT0&& p0, PT1&& p1, PT2&& p2)
-		:_res0(CHECK_MOVE(p0)), _res1(CHECK_MOVE(p1)), _res2(CHECK_MOVE(p2)) {}
+		:_res0(TRY_MOVE(p0)), _res1(TRY_MOVE(p1)), _res2(TRY_MOVE(p2)) {}
 
 	msg_param(const_ref_type& rp)
 		:_res0(rp._p0), _res1(rp._p1), _res2(rp._p2) {}
@@ -168,7 +168,7 @@ struct msg_param<T0, T1, void, void>
 
 	template <typename PT0, typename PT1>
 	msg_param(PT0&& p0, PT1&& p1)
-		:_res0(CHECK_MOVE(p0)), _res1(CHECK_MOVE(p1)) {}
+		:_res0(TRY_MOVE(p0)), _res1(TRY_MOVE(p1)) {}
 
 	msg_param(const_ref_type& rp)
 		:_res0(rp._p0), _res1(rp._p1) {}
@@ -1477,28 +1477,28 @@ public:
 	void operator()(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3) const
 	{
 		assert(!empty());
-		_msgPool->push_msg(std::move(msg_param<T0, T1, T2, T3>(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2), CHECK_MOVE(p3))), _hostActor);
+		_msgPool->push_msg(std::move(msg_param<T0, T1, T2, T3>(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2), TRY_MOVE(p3))), _hostActor);
 	}
 
 	template <typename PT0, typename PT1, typename PT2>
 	void operator()(PT0&& p0, PT1&& p1, PT2&& p2) const
 	{
 		assert(!empty());
-		_msgPool->push_msg(std::move(msg_param<T0, T1, T2>(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2))), _hostActor);
+		_msgPool->push_msg(std::move(msg_param<T0, T1, T2>(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2))), _hostActor);
 	}
 
 	template <typename PT0, typename PT1>
 	void operator()(PT0&& p0, PT1&& p1) const
 	{
 		assert(!empty());
-		_msgPool->push_msg(std::move(msg_param<T0, T1>(CHECK_MOVE(p0), CHECK_MOVE(p1))), _hostActor);
+		_msgPool->push_msg(std::move(msg_param<T0, T1>(TRY_MOVE(p0), TRY_MOVE(p1))), _hostActor);
 	}
 
 	template <typename PT0>
 	void operator()(PT0&& p0) const
 	{
 		assert(!empty());
-		_msgPool->push_msg(std::move(msg_param<T0>(CHECK_MOVE(p0))), _hostActor);
+		_msgPool->push_msg(std::move(msg_param<T0>(TRY_MOVE(p0))), _hostActor);
 	}
 
 	void operator()() const
@@ -1613,25 +1613,25 @@ public:
 	template <typename PT0, typename PT1, typename PT2, typename PT3>
 	void operator()(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3) const
 	{
-		_trig_handler(*_dstRec, std::move(msg_param<T0, T1, T2, T3>(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2), CHECK_MOVE(p3))));
+		_trig_handler(*_dstRec, std::move(msg_param<T0, T1, T2, T3>(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2), TRY_MOVE(p3))));
 	}
 
 	template <typename PT0, typename PT1, typename PT2>
 	void operator()(PT0&& p0, PT1&& p1, PT2&& p2) const
 	{
-		_trig_handler(*_dstRec, std::move(msg_param<T0, T1, T2>(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2))));
+		_trig_handler(*_dstRec, std::move(msg_param<T0, T1, T2>(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2))));
 	}
 
 	template <typename PT0, typename PT1>
 	void operator()(PT0&& p0, PT1&& p1) const
 	{
-		_trig_handler(*_dstRec, std::move(msg_param<T0, T1>(CHECK_MOVE(p0), CHECK_MOVE(p1))));
+		_trig_handler(*_dstRec, std::move(msg_param<T0, T1>(TRY_MOVE(p0), TRY_MOVE(p1))));
 	}
 
 	template <typename PT0>
 	void operator()(PT0&& p0) const
 	{
-		_trig_handler(*_dstRec, std::move(msg_param<T0>(CHECK_MOVE(p0))));
+		_trig_handler(*_dstRec, std::move(msg_param<T0>(TRY_MOVE(p0))));
 	}
 
 	void operator()() const
@@ -1710,25 +1710,25 @@ public:
 	template <typename PT0, typename PT1, typename PT2, typename PT3>
 	void operator()(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3) const
 	{
-		_trig_handler_ref(_dstRef, std::move(msg_param<T0, T1, T2, T3>(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2), CHECK_MOVE(p3))));
+		_trig_handler_ref(_dstRef, std::move(msg_param<T0, T1, T2, T3>(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2), TRY_MOVE(p3))));
 	}
 
 	template <typename PT0, typename PT1, typename PT2>
 	void operator()(PT0&& p0, PT1&& p1, PT2&& p2) const
 	{
-		_trig_handler_ref(_dstRef, std::move(msg_param<T0, T1, T2>(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2))));
+		_trig_handler_ref(_dstRef, std::move(msg_param<T0, T1, T2>(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2))));
 	}
 
 	template <typename PT0, typename PT1>
 	void operator()(PT0&& p0, PT1&& p1) const
 	{
-		_trig_handler_ref(_dstRef, std::move(msg_param<T0, T1>(CHECK_MOVE(p0), CHECK_MOVE(p1))));
+		_trig_handler_ref(_dstRef, std::move(msg_param<T0, T1>(TRY_MOVE(p0), TRY_MOVE(p1))));
 	}
 
 	template <typename PT0>
 	void operator()(PT0&& p0) const
 	{
-		_trig_handler_ref(_dstRef, std::move(msg_param<T0>(CHECK_MOVE(p0))));
+		_trig_handler_ref(_dstRef, std::move(msg_param<T0>(TRY_MOVE(p0))));
 	}
 
 	void operator()() const
@@ -2087,11 +2087,11 @@ public:
 		if (ms > 0)
 		{
 			assert(_timer);
-			time_out(ms, CHECK_MOVE(h));
+			timeout(ms, TRY_MOVE(h));
 		} 
 		else if (0 == ms)
 		{
-			_strand->post(CHECK_MOVE(h));
+			_strand->post(TRY_MOVE(h));
 		}
 		else
 		{
@@ -2114,7 +2114,7 @@ public:
 		if (exeStrand != _strand)
 		{
 			actor_handle shared_this = shared_from_this();
-			exeStrand->asyncInvokeVoid(CHECK_MOVE(h), [shared_this]{shared_this->trig_handler(); });
+			exeStrand->asyncInvokeVoid(TRY_MOVE(h), [shared_this]{shared_this->trig_handler(); });
 			push_yield();
 			return;
 		}
@@ -2130,7 +2130,7 @@ public:
 			dst_receiver_buff<T0>::dst_buff dstBuff;
 			dst_receiver_buff<T0> dstRec(dstBuff);
 			actor_handle shared_this = shared_from_this();
-			exeStrand->asyncInvoke(CHECK_MOVE(h), [shared_this, &dstRec](const T0& p0){shared_this->_trig_handler(dstRec, std::move(msg_param<T0>(p0))); });
+			exeStrand->asyncInvoke(TRY_MOVE(h), [shared_this, &dstRec](const T0& p0){shared_this->_trig_handler(dstRec, std::move(msg_param<T0>(p0))); });
 			push_yield();
 			return std::move((T0&)dstBuff.get()._res0);
 		} 
@@ -2146,7 +2146,7 @@ public:
 	{
 		assert_enter();
 		actor_handle shared_this = shared_from_this();
-		exeStrand->asyncInvokeVoid(CHECK_MOVE(h), [shared_this]{shared_this->trig_handler(); });
+		exeStrand->asyncInvokeVoid(TRY_MOVE(h), [shared_this]{shared_this->trig_handler(); });
 		push_yield();
 	}
 
@@ -2157,7 +2157,7 @@ public:
 		dst_receiver_buff<T0>::dst_buff dstBuff;
 		dst_receiver_buff<T0> dstRec(dstBuff);
 		actor_handle shared_this = shared_from_this();
-		exeStrand->asyncInvoke(CHECK_MOVE(h), [shared_this, &dstRec](const T0& p0){shared_this->_trig_handler(dstRec, std::move(msg_param<T0>(p0))); });
+		exeStrand->asyncInvoke(TRY_MOVE(h), [shared_this, &dstRec](const T0& p0){shared_this->_trig_handler(dstRec, std::move(msg_param<T0>(p0))); });
 		push_yield();
 		return std::move((T0&)dstBuff.get()._res0);
 	}
@@ -2165,13 +2165,13 @@ public:
 	template <typename H>
 	__yield_interrupt void async_send_self(H&& h)
 	{
-		async_send(_strand, CHECK_MOVE(h));
+		async_send(_strand, TRY_MOVE(h));
 	}
 
 	template <typename T0, typename H>
 	__yield_interrupt T0 async_send_self(H&& h)
 	{
-		return async_send<T0>(_strand, CHECK_MOVE(h));
+		return async_send<T0>(_strand, TRY_MOVE(h));
 	}
 
 	/*!
@@ -2394,20 +2394,20 @@ private:
 		{
 			if (0 != tm)
 			{
-				bool timeout = false;
+				bool timed = false;
 				if (tm > 0)
 				{
-					delay_trig(tm, [this, &timeout]
+					delay_trig(tm, [this, &timed]
 					{
 						if (!_quited)
 						{
-							timeout = true;
+							timed = true;
 							pull_yield();
 						}
 					});
 				}
 				push_yield();
-				if (!timeout)
+				if (!timed)
 				{
 					if (tm > 0)
 					{
@@ -3580,20 +3580,20 @@ private:
 			if (0 != tm)
 			{
 				pump->_checkDis = checkDis;
-				bool timeout = false;
+				bool timed = false;
 				if (tm > 0)
 				{
-					delay_trig(tm, [this, &timeout]
+					delay_trig(tm, [this, &timed]
 					{
 						if (!_quited)
 						{
-							timeout = true;
+							timed = true;
 							pull_yield();
 						}
 					});
 				}
 				push_yield();
-				if (!timeout)
+				if (!timed)
 				{
 					if (tm > 0)
 					{
@@ -4207,19 +4207,19 @@ public:
 	void assert_enter();
 private:
 	template <typename H>
-	void time_out(int ms, H&& h)
+	void timeout(int ms, H&& h)
 	{
 		assert_enter();
 		assert(ms > 0);
 		assert(_timerState._timerCompleted);
 		_timerState._timerTime = (long long)ms * 1000;
-		_timerState._timerCb = CHECK_MOVE(h);
+		_timerState._timerCb = TRY_MOVE(h);
 		_timerState._timerStampBegin = get_tick_us();
 		_timerState._timerCompleted = false;
-		_timerState._timerHandle = _timer->time_out(_timerState._timerTime, shared_from_this());
+		_timerState._timerHandle = _timer->timeout(_timerState._timerTime, shared_from_this());
 	}
 
-	void time_out_handler();
+	void timeout_handler();
 	void cancel_timer();
 	void suspend_timer();
 	void resume_timer();

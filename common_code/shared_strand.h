@@ -27,7 +27,7 @@ typedef std::shared_ptr<boost_strand> shared_strand;
 #define UI_STRAND()\
 if (_strand)\
 {\
-	_strand->post(CHECK_MOVE(handler)); \
+	_strand->post(TRY_MOVE(handler)); \
 }\
 else\
 {\
@@ -63,7 +63,7 @@ public:
 		} 
 		else
 		{
-			post(CHECK_MOVE(handler));
+			post(TRY_MOVE(handler));
 		}
 	}
 
@@ -78,7 +78,7 @@ public:
 #elif ENABLE_WX_ACTOR
 		UI_STRAND()
 #else
-		_strand->post(CHECK_MOVE(handler));
+		_strand->post(TRY_MOVE(handler));
 #endif
 	}
 
@@ -88,7 +88,7 @@ public:
 	template <typename Handler>
 	wrapped_dispatch_handler<boost_strand, Handler> wrap(BOOST_ASIO_MOVE_ARG(Handler) handler)
 	{
-		return wrapped_dispatch_handler<boost_strand, Handler>(this, CHECK_MOVE(handler));
+		return wrapped_dispatch_handler<boost_strand, Handler>(this, TRY_MOVE(handler));
 	}
 	
 	/*!
@@ -97,7 +97,7 @@ public:
 	template <typename Handler>
 	wrapped_post_handler<boost_strand, Handler> wrap_post(BOOST_ASIO_MOVE_ARG(Handler) handler)
 	{
-		return wrapped_post_handler<boost_strand, Handler>(this, CHECK_MOVE(handler));
+		return wrapped_post_handler<boost_strand, Handler>(this, TRY_MOVE(handler));
 	}
 
 	/*!

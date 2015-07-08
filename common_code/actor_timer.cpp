@@ -23,7 +23,7 @@ actor_timer::~actor_timer()
 	delete _listPool;
 }
 
-actor_timer::timer_handle actor_timer::time_out(unsigned long long us, const actor_handle& host)
+actor_timer::timer_handle actor_timer::timeout(unsigned long long us, const actor_handle& host)
 {
 	if (!_strand)
 	{
@@ -112,7 +112,7 @@ void actor_timer::timer_loop(unsigned long long us)
 					_handlerTable.erase(iter);
 					for (auto it = hl->begin(); it != hl->end(); it++)
 					{
-						(*it)->time_out_handler();
+						(*it)->timeout_handler();
 					}
 					hl->clear();
 				}

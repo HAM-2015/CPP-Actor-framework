@@ -62,7 +62,7 @@ void actor_test_print(my_actor* self, int id)
 	while (true)
 	{
 		check_key_down(self, id);//检测按下
-		child_actor_handle ch = self->create_child_actor(boost::bind(&actor_print, _1, id));
+		child_actor_handle ch = self->create_child_actor(std::bind(&actor_print, ph::_1, id));
 		self->child_actor_run(ch);
 		check_key_up(self, id);//检测弹起
 		self->child_actor_force_quit(ch);
@@ -173,7 +173,7 @@ void shift_key(my_actor* self, actor_handle pauseactor)
 	for (int i = 'A'; i <= 'Z'; i++)
 	{
 		auto tp = child_actor_handle::make_ptr();
-		*tp = self->create_child_actor(boost::bind(&wait_key, _1, i, h));
+		*tp = self->create_child_actor(std::bind(&wait_key, ph::_1, i, h));
 		self->child_actor_run(*tp);
 		childs.push_back(tp);
 	}
@@ -200,7 +200,7 @@ void test_shift(my_actor* self, actor_handle pauseactor)
 	while (true)
 	{
 		check_key_down(self, VK_SHIFT);
-		ch = self->create_child_actor(boost::bind(&shift_key, _1, pauseactor));
+		ch = self->create_child_actor(std::bind(&shift_key, ph::_1, pauseactor));
 		self->child_actor_run(ch);
 		check_key_up(self, VK_SHIFT);
 		self->child_actor_force_quit(ch);
@@ -257,14 +257,14 @@ void actor_test(my_actor* self)
 	ios_proxy perforIos;//用于测试多线程下的Actor切换性能
 	perforIos.run(ios_proxy::hardwareConcurrency());//调度器线程设置为CPU线程数
 	perforIos.runPriority(ios_proxy::idle);//调度器优先级设置为最低
-	child_actor_handle actorLeft = self->create_child_actor(boost::bind(&check_key_test, _1, VK_LEFT));
-	child_actor_handle actorRight = self->create_child_actor(boost::bind(&check_key_test, _1, VK_RIGHT));
-	child_actor_handle actorUp = self->create_child_actor(boost::bind(&check_key_test, _1, VK_UP));
-	child_actor_handle actorDown = self->create_child_actor(boost::bind(&check_key_test, _1, VK_DOWN));
-	child_actor_handle actorPrint = self->create_child_actor(boost::bind(&actor_test_print, _1, VK_SPACE));//检测空格键
-	child_actor_handle actorTwo = self->create_child_actor(boost::bind(&check_two_down, _1, 10, 'D', 'F'));//检测D,F键是否同时按下(设置间隔误差10ms)
-	child_actor_handle actorPerfor = self->create_child_actor(boost::bind(&perfor_test, _1, boost::ref(perforIos)));//Actor切换性能测试
-	child_actor_handle actorShift = self->create_child_actor(boost::bind(&test_shift, _1, actorPerfor.get_actor()));//shift+字母检测
+	child_actor_handle actorLeft = self->create_child_actor(std::bind(&check_key_test, ph::_1, VK_LEFT));
+	child_actor_handle actorRight = self->create_child_actor(std::bind(&check_key_test, ph::_1, VK_RIGHT));
+	child_actor_handle actorUp = self->create_child_actor(std::bind(&check_key_test, ph::_1, VK_UP));
+	child_actor_handle actorDown = self->create_child_actor(std::bind(&check_key_test, ph::_1, VK_DOWN));
+	child_actor_handle actorPrint = self->create_child_actor(std::bind(&actor_test_print, ph::_1, VK_SPACE));//检测空格键
+	child_actor_handle actorTwo = self->create_child_actor(std::bind(&check_two_down, ph::_1, 10, 'D', 'F'));//检测D,F键是否同时按下(设置间隔误差10ms)
+	child_actor_handle actorPerfor = self->create_child_actor(std::bind(&perfor_test, ph::_1, std::ref(perforIos)));//Actor切换性能测试
+	child_actor_handle actorShift = self->create_child_actor(std::bind(&test_shift, ph::_1, actorPerfor.get_actor()));//shift+字母检测
 	child_actor_handle actorProducer1;
 	child_actor_handle actorProducer2;
 	child_actor_handle actorConsumer;
@@ -496,8 +496,8 @@ void actor_test(my_actor* self)
 //	chs.push_back(actorPerfor.get_actor());
 	chs.push_back(actorProducer1.get_actor());
 	chs.push_back(actorProducer2.get_actor());
-	child_actor_handle actorSuspend = self->create_child_actor(boost::bind(&actor_suspend, _1, boost::ref(chs)), 32 kB);//点击鼠标右键暂停按键检测
-	child_actor_handle actorResume = self->create_child_actor(boost::bind(&actor_resume, _1, boost::ref(chs)), 32 kB);//点击鼠标左键恢复按键检测
+	child_actor_handle actorSuspend = self->create_child_actor(std::bind(&actor_suspend, ph::_1, std::ref(chs)), 32 kB);//点击鼠标右键暂停按键检测
+	child_actor_handle actorResume = self->create_child_actor(std::bind(&actor_resume, ph::_1, std::ref(chs)), 32 kB);//点击鼠标左键恢复按键检测
 	self->child_actor_run(actorLeft);
 	self->child_actor_run(actorRight);
 	self->child_actor_run(actorUp);
@@ -561,7 +561,7 @@ int main(int argc, char* argv[])
 	ios_proxy ios;
 	ios.run();
 	{
-		actor_handle actorTest = my_actor::create(boost_strand::create(ios), boost::bind(&actor_test, _1));
+		actor_handle actorTest = my_actor::create(boost_strand::create(ios), std::bind(&actor_test, ph::_1));
 		actorTest->notify_run();
 		actorTest->outside_wait_quit();
 	}

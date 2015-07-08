@@ -1,7 +1,7 @@
 #ifndef __WRAPPED_POST_HANDLER_H
 #define __WRAPPED_POST_HANDLER_H
 
-#include "check_move.h"
+#include "try_move.h"
 
 template <typename Poster, typename Handler>
 class wrapped_post_handler
@@ -10,7 +10,7 @@ public:
 	template <typename H>
 	wrapped_post_handler(Poster* poster, H&& handler)
 		: _poster(poster),
-		_handler(CHECK_MOVE(handler))
+		_handler(TRY_MOVE(handler))
 	{
 	}
 

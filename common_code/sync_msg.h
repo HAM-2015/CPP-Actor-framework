@@ -3,7 +3,7 @@
 
 #include "actor_framework.h"
 #include "msg_queue.h"
-#include "check_move.h"
+#include "try_move.h"
 
 struct sync_csp_exception {};
 
@@ -29,7 +29,7 @@ class sync_msg
 {
 	struct send_wait 
 	{
-		bool is_rvalue;
+		bool can_move;
 		bool& notified;
 		T& src_msg;
 		actor_trig_notifer<bool> ntf;
@@ -47,6 +47,9 @@ public:
 	sync_msg(shared_strand strand)
 		:_closed(false), _strand(strand), _sendWait(4), _takeWait(4) {}
 public:
+	/*!
+	@brief 同步发送一条消息，直到对方取出后返回
+	*/
 	template <typename TM>
 	void send(my_actor* host, TM&& msg)
 	{
@@ -68,13 +71,13 @@ public:
 				if (_takeWait.empty())
 				{
 					ref6.wait = true;
-					send_wait pw = { check_move<TM&&>::is_rvalue, ref6.notified, (T&)ref6.msg, ref6.host->make_trig_notifer(ref6.ath) };
+					send_wait pw = { try_move<TM&&>::can_move, ref6.notified, (T&)ref6.msg, ref6.host->make_trig_notifer(ref6.ath) };
 					ref6->_sendWait.push_front(pw);
 				}
 				else
 				{
 					take_wait& wt = _takeWait.back();
-					new(wt.dst)T(check_move<TM&&>::move(ref6.msg));
+					new(wt.dst)T(try_move<TM&&>::move(ref6.msg));
 					wt.notified = true;
 					wt.ntf(false);
 					_takeWait.pop_back();
@@ -92,6 +95,10 @@ public:
 		}
 	}
 
+	/*!
+	@brief 尝试同步发送一条消息，如果对方在等待消息则成功
+	@return 成功返回true
+	*/
 	template <typename TM>
 	bool try_send(my_actor* host, TM&& msg)
 	{
@@ -112,7 +119,7 @@ public:
 				{
 					ref4.ok = true;
 					take_wait& wt = _takeWait.back();
-					new(wt.dst)T(check_move<TM&&>::move(ref4.msg));
+					new(wt.dst)T(try_move<TM&&>::move(ref4.msg));
 					wt.ntf(false);
 					_takeWait.pop_back();
 				}
@@ -126,6 +133,10 @@ public:
 		return ok;
 	}
 
+	/*!
+	@brief 尝试同步发送一条消息，对方在一定时间内取出则成功
+	@return 成功返回true
+	*/
 	template <typename TM>
 	bool timed_send(int tm, my_actor* host, TM&& msg)
 	{
@@ -150,14 +161,14 @@ public:
 				if (_takeWait.empty())
 				{
 					ref3.wait = true;
-					send_wait pw = { check_move<TM&&>::is_rvalue, ref3.notified, (T&)ref5.msg, ref5.host->make_trig_notifer(ref5.ath) };
+					send_wait pw = { try_move<TM&&>::can_move, ref3.notified, (T&)ref5.msg, ref5.host->make_trig_notifer(ref5.ath) };
 					ref5->_sendWait.push_front(pw);
 					ref5.mit = ref5->_sendWait.begin();
 				}
 				else
 				{
 					take_wait& wt = _takeWait.back();
-					new(wt.dst)T(check_move<TM&&>::move(ref5.msg));
+					new(wt.dst)T(try_move<TM&&>::move(ref5.msg));
 					wt.notified = true;
 					wt.ntf(false);
 					_takeWait.pop_back();
@@ -190,6 +201,9 @@ public:
 		return !wait || notified;
 	}
 
+	/*!
+	@brief 取出一条消息，直到有消息过来才返回
+	*/
 	T take(my_actor* host)
 	{
 		my_actor::quit_guard qg(host);
@@ -217,7 +231,7 @@ public:
 				else
 				{
 					send_wait& wt = _sendWait.back();
-					new(ref6.msgBuf)T(wt.is_rvalue ? std::move(wt.src_msg) : wt.src_msg);
+					new(ref6.msgBuf)T(wt.can_move ? std::move(wt.src_msg) : wt.src_msg);
 					wt.notified = true;
 					wt.ntf(false);
 					_sendWait.pop_back();
@@ -241,6 +255,10 @@ public:
 		throw close_exception();
 	}
 
+	/*!
+	@brief 尝试取出一条消息，如果有就成功
+	@return 成功返回true
+	*/
 	bool try_take(my_actor* host, T& out)
 	{
 		return try_take_ct(host, [&](bool rval, T& msg)
@@ -257,6 +275,10 @@ public:
 		});
 	}
 
+	/*!
+	@brief 尝试取出一条消息，在一定时间内取到就成功
+	@return 成功返回true
+	*/
 	bool timed_take(int tm, my_actor* host, T& out)
 	{
 		return timed_take_ct(tm, host, [&](bool rval, T& msg)
@@ -273,6 +295,9 @@ public:
 		});
 	}
 
+	/*!
+	@brief 关闭消息通道，所有执行者将抛出 close_exception 异常
+	*/
 	void close(my_actor* host)
 	{
 		my_actor::quit_guard qg(host);
@@ -296,6 +321,9 @@ public:
 		});
 	}
 
+	/*!
+	@brief close 后重置
+	*/
 	void reset()
 	{
 		assert(_closed);
@@ -323,7 +351,7 @@ private:
 				{
 					ref5.ok = true;
 					send_wait& wt = _sendWait.back();
-					ref5.ct(wt.is_rvalue, wt.src_msg);
+					ref5.ct(wt.can_move, wt.src_msg);
 					wt.notified = true;
 					wt.ntf(false);
 					_sendWait.pop_back();
@@ -370,7 +398,7 @@ private:
 				else
 				{
 					send_wait& wt = _sendWait.back();
-					ref6.ct(wt.is_rvalue, wt.src_msg);
+					ref6.ct(wt.can_move, wt.src_msg);
 					wt.notified = true;
 					wt.ntf(false);
 					_sendWait.pop_back();
@@ -419,6 +447,9 @@ private:
 	msg_list<send_wait> _sendWait;
 };
 
+/*!
+@brief csp函数调用，不直接使用
+*/
 template <typename T, typename R>
 class csp_channel
 {
@@ -446,6 +477,10 @@ protected:
 	}
 	~csp_channel() {}
 public:
+	/*!
+	@brief 开始准备执行对方的一个函数，执行完毕后返回结果
+	@return 返回结果
+	*/
 	template <typename TM>
 	R send(my_actor* host, TM&& msg)
 	{
@@ -498,6 +533,10 @@ public:
 		return std::move(*(R*)resBuf);
 	}
 
+	/*!
+	@brief 尝试执行对方的一个函数，如果对方在等待执行就成功，失败抛出 try_invoke_exception 异常
+	@return 成功返回结果
+	*/
 	template <typename TM>
 	R try_send(my_actor* host, TM&& msg)
 	{
@@ -551,6 +590,10 @@ public:
 		return std::move(*(R*)resBuf);
 	}
 
+	/*!
+	@brief 尝试执行对方的一个函数，如果对方在一定时间内提供函数就成功，失败抛出 timed_invoke_exception 异常
+	@return 成功返回结果
+	*/
 	template <typename TM>
 	R timed_send(int tm, my_actor* host, TM&& msg)
 	{
@@ -634,6 +677,9 @@ public:
 		return std::move(*(R*)resBuf);
 	}
 
+	/*!
+	@brief 等待对方执行一个函数体，函数体内返回对方需要的执行结果
+	*/
 	template <typename H>
 	void take(my_actor* host, const H& h)
 	{
@@ -701,6 +747,9 @@ public:
 		throw_close_exception();
 	}
 
+	/*!
+	@brief 尝试执行一个函数体，如果对方在准备执行则成功，否则抛出 try_wait_exception 异常
+	*/
 	template <typename H>
 	void try_take(my_actor* host, const H& h)
 	{
@@ -761,6 +810,9 @@ public:
 		ok = true;
 	}
 
+	/*!
+	@brief 尝试执行一个函数体，如果对方在一定时间内执行则成功，否则抛出 timed_wait_exception 异常
+	*/
 	template <typename H>
 	void timed_take(int tm, my_actor* host, const H& h)
 	{
@@ -852,6 +904,9 @@ public:
 		ok = true;
 	}
 
+	/*!
+	@brief 关闭执行通道，所有执行抛出 close_exception 异常
+	*/
 	void close(my_actor* host)
 	{
 		my_actor::quit_guard qg(host);
@@ -879,6 +934,9 @@ public:
 		});
 	}
 
+	/*!
+	@brief close 后重置
+	*/
 	void reset()
 	{
 		assert(_closed);

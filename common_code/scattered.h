@@ -127,7 +127,7 @@ struct auto_call
 {
 	template <typename TC>
 	auto_call(TC&& cl)
-		:_cl(CHECK_MOVE(cl)) {}
+		:_cl(TRY_MOVE(cl)) {}
 
 	~auto_call()
 	{

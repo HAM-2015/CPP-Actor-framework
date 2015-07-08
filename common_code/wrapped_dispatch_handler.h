@@ -1,7 +1,7 @@
 #ifndef __WRAPPED_DISPATCH_HANDLER_H
 #define __WRAPPED_DISPATCH_HANDLER_H
 
-#include "check_move.h"
+#include "try_move.h"
 
 template <typename Dispatcher, typename Handler>
 class wrapped_dispatch_handler
@@ -10,7 +10,7 @@ public:
 	template <typename H>
 	wrapped_dispatch_handler(Dispatcher* dispatcher, H&& handler)
 		: _dispatcher(dispatcher),
-		_handler(CHECK_MOVE(handler))
+		_handler(TRY_MOVE(handler))
 	{
 	}
 

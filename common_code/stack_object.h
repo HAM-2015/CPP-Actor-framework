@@ -33,7 +33,7 @@ public:
 	{
 		assert(_null);
 		DEBUG_OPERATION(_null = false);
-		new(_buff)OBJ(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2), CHECK_MOVE(p3));
+		new(_buff)OBJ(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2), TRY_MOVE(p3));
 	}
 
 	template <typename PT0, typename PT1, typename PT2>
@@ -41,7 +41,7 @@ public:
 	{
 		assert(_null);
 		DEBUG_OPERATION(_null = false);
-		new(_buff)OBJ(CHECK_MOVE(p0), CHECK_MOVE(p1), CHECK_MOVE(p2));
+		new(_buff)OBJ(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2));
 	}
 
 	template <typename PT0, typename PT1>
@@ -49,7 +49,7 @@ public:
 	{
 		assert(_null);
 		DEBUG_OPERATION(_null = false);
-		new(_buff)OBJ(CHECK_MOVE(p0), CHECK_MOVE(p1));
+		new(_buff)OBJ(TRY_MOVE(p0), TRY_MOVE(p1));
 	}
 
 	template <typename PT0>
@@ -57,7 +57,7 @@ public:
 	{
 		assert(_null);
 		DEBUG_OPERATION(_null = false);
-		new(_buff)OBJ(CHECK_MOVE(p0));
+		new(_buff)OBJ(TRY_MOVE(p0));
 	}
 
 	void create()

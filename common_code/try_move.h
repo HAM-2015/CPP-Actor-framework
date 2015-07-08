@@ -1,49 +1,76 @@
-#ifndef __CHECK_MOVE_H
-#define __CHECK_MOVE_H
+#ifndef __TRY_MOVE_H
+#define __TRY_MOVE_H
 
 #include <type_traits>
 #include <assert.h>
 
 template <typename T>
-struct check_move
+struct try_move
 {
-	enum { is_rvalue = false };
+	//不正确参数，无法检测是否可移动
 
-	static T& move(T& p0)
+	static inline T& move(T& p0)
 	{
-		return p0;
+		return (T&)p0;
 	}
-};
 
-template <typename T>
-struct check_move<const T&&>
-{
-	enum { is_rvalue = false };
-
-	static const T& move(const T& p0)
-	{
-		return p0;
-	}
-};
-
-template <typename T>
-struct check_move<T&&>
-{
-	enum { is_rvalue = true };
-
-	static T&& move(T& p0)
+	static inline T&& move(T&& p0)
 	{
 		return (T&&)p0;
 	}
 };
 
-//检测一个参数是否是右值，是就执行右值传递
-#define CHECK_MOVE(__P__) check_move<decltype(__P__)>::move(__P__)
-//检测一个参数是否是右值
-#define IS_RVALUE(__P__) check_move<decltype(__P__)>::is_rvalue;
+template <typename T>
+struct try_move<const T&>
+{
+	enum { can_move = false };
+
+	static inline const T& move(const T& p0)
+	{
+		return p0;
+	}
+};
+
+template <typename T>
+struct try_move<T&>
+{
+	enum { can_move = false };
+
+	static inline T& move(T& p0)
+	{
+		return p0;
+	}
+};
+
+template <typename T>
+struct try_move<const T&&>
+{
+	enum { can_move = false };
+
+	static inline const T& move(const T& p0)
+	{
+		return p0;
+	}
+};
+
+template <typename T>
+struct try_move<T&&>
+{
+	enum { can_move = true };
+
+	static inline T&& move(T& p0)
+	{
+		return (T&&)p0;
+	}
+};
+
+//检测一个参数是否是右值传递，是就继续进行右值传递
+#define TRY_MOVE(__P__) try_move<decltype(__P__)>::move(__P__)
+//检测一个参数是否是右值传递
+#define CAN_MOVE(__P__) try_move<decltype(__P__)>::can_move
 
 //移除const和&
-#define RM_CREF(__P__) std::remove_reference<std::remove_const<decltype(__P__)>::type>::type
+#define RM_CREF(__P__) typename std::remove_const<typename std::remove_reference<decltype(__P__)>::type>::type
 
 /*!
 @brief 对象拷贝链测试
@@ -77,7 +104,7 @@ struct post_lambda
 {
 	template <typename TP0, typename TP1, typename TP2, typename TP3>
 	post_lambda(TP0&& p0, TP1&& p1, TP2&& p2, TP3&& p3)
-		:_p0(CHECK_MOVE(p0)), _p1(CHECK_MOVE(p1)), _p2(CHECK_MOVE(p2)), _p3(CHECK_MOVE(p3)) {}
+		:_p0(TRY_MOVE(p0)), _p1(TRY_MOVE(p1)), _p2(TRY_MOVE(p2)), _p3(TRY_MOVE(p3)) {}
 
 	post_lambda(const post_lambda& s)
 		:_p0(std::move((T0&)s._p0)), _p1(std::move((T1&)s._p1)), _p2(std::move((T2&)s._p2)), _p3(std::move((T3&)s._p3)), _ct(s._ct) {}
@@ -94,7 +121,7 @@ struct post_lambda<T0, T1, T2, void>
 {
 	template <typename TP0, typename TP1, typename TP2>
 	post_lambda(TP0&& p0, TP1&& p1, TP2&& p2)
-		:_p0(CHECK_MOVE(p0)), _p1(CHECK_MOVE(p1)), _p2(CHECK_MOVE(p2)) {}
+		:_p0(TRY_MOVE(p0)), _p1(TRY_MOVE(p1)), _p2(TRY_MOVE(p2)) {}
 
 	post_lambda(const post_lambda& s)
 		:_p0(std::move((T0&)s._p0)), _p1(std::move((T1&)s._p1)), _p2(std::move((T2&)s._p2)), _ct(s._ct) {}
@@ -110,7 +137,7 @@ struct post_lambda<T0, T1, void, void>
 {
 	template <typename TP0, typename TP1>
 	post_lambda(TP0&& p0, TP1&& p1)
-		:_p0(CHECK_MOVE(p0)), _p1(CHECK_MOVE(p1)) {}
+		:_p0(TRY_MOVE(p0)), _p1(TRY_MOVE(p1)) {}
 
 	post_lambda(const post_lambda& s)
 		:_p0(std::move((T0&)s._p0)), _p1(std::move((T1&)s._p1)), _ct(s._ct) {}

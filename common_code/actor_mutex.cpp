@@ -84,18 +84,18 @@ bool mutex_trig_handle::timed_wait(int tm)
 	assert(!_outActor);
 	if (!read_msg())
 	{
-		bool timeout = false;
-		LAMBDA_REF2(ref2, _hostActor, timeout);
+		bool timed = false;
+		LAMBDA_REF2(ref2, _hostActor, timed);
 		if (tm >= 0)
 		{
 			_hostActor->delay_trig(tm, [&ref2]
 			{
-				ref2.timeout = true;
+				ref2.timed = true;
 				ref2._hostActor->pull_yield();
 			});
 		}
 		_hostActor->push_yield();
-		if (!timeout)
+		if (!timed)
 		{
 			if (tm >= 0)
 			{
