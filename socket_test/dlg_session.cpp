@@ -147,4 +147,5 @@ void dlg_session::OnBnClickedSendMsg()
 void dlg_session::OnBnClickedClear()
 {
 	_outputEdit.SetWindowText("");
+	_msgEdit.SetWindowText("");
 }

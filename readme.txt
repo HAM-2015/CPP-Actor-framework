@@ -13,6 +13,9 @@ oschina url
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
+2015-07-10
+二级调度器shared_strand添加next_tick功能，提高消息传递性能.
+
 2015-06-26
 优化Actor的内部定时器.
 

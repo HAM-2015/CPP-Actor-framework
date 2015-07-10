@@ -43,7 +43,7 @@ void mutex_trig_notifer::operator()()
 	assert(!_notified);
 	auto& trigHandle_ = _trigHandle;
 	_notified = true;
-	_strand->post([=]
+	_strand->try_tick([=]
 	{
 		trigHandle_->push_msg();
 	});
@@ -223,50 +223,22 @@ public:
 	void quited_lock(my_actor* host)
 	{
 		assert(host->self_strand()->running_in_this_thread());
+		assert(_strand->running_in_this_thread());
 		assert(host->in_actor());
 		assert(host->is_quited());
 		host->check_stack();
-		bool complete = false;
-		mutex_trig_handle ath(host);
-		mutex_trig_notifer ntf;
-		LAMBDA_THIS_REF4(ref4, host, complete, ath, ntf);
-		auto h = [&ref4]
-		{
-			if (!ref4->_lockActorID || ref4.host->self_id() == ref4->_lockActorID)
-			{
-				ref4->_lockActorID = ref4.host->self_id();
-				ref4->_recCount++;
-				ref4.complete = true;
-			}
-			else
-			{
-				ref4.ntf = ref4.ath.make_notifer();
-				wait_node wn = { ref4.ntf, ref4.host->self_id() };
-				ref4->_waitQueue.push_back(wn);
-				ref4.complete = false;
-			}
-		};
 
-		if (_strand != host->self_strand())
+		if (!_lockActorID || host->self_id() == _lockActorID)
 		{
-			actor_handle shared_host = host->shared_from_this();
-			_strand->asyncInvokeVoid(h, [shared_host]
-			{
-				auto& shared_host_ = shared_host;
-				shared_host->self_strand()->post([=]
-				{
-					shared_host_->pull_yield_as_mutex();
-				});
-			});
-			host->push_yield_as_mutex();
+			_lockActorID = host->self_id();
+			_recCount++;
 		}
 		else
 		{
-			h();
-		}
-
-		if (!complete)
-		{
+			mutex_trig_handle ath(host);
+			mutex_trig_notifer ntf = ath.make_notifer();
+			wait_node wn = { ntf, host->self_id() };
+			_waitQueue.push_back(wn);
 			ath.wait();
 		}
 	}
@@ -377,44 +349,25 @@ public:
 	void quited_unlock(my_actor* host)
 	{
 		assert(host->self_strand()->running_in_this_thread());
+		assert(_strand->running_in_this_thread());
 		assert(host->in_actor());
 		assert(host->is_quited());
 		host->check_stack();
-		auto h = [&]
-		{
-			assert(host->self_id() == _lockActorID);
-			if (0 == --_recCount)
-			{
-				if (!_waitQueue.empty())
-				{
-					_recCount = 1;
-					_lockActorID = _waitQueue.back()._waitHostID;
-					_waitQueue.back().ntf();
-					_waitQueue.pop_back();
-				}
-				else
-				{
-					_lockActorID = 0;
-				}
-			}
-		};
 
-		if (_strand != host->self_strand())
+		assert(host->self_id() == _lockActorID);
+		if (0 == --_recCount)
 		{
-			actor_handle shared_host = host->shared_from_this();
-			_strand->asyncInvokeVoid(h, [shared_host]
+			if (!_waitQueue.empty())
 			{
-				auto& shared_host_ = shared_host;
-				shared_host->self_strand()->post([=]
-				{
-					shared_host_->pull_yield_as_mutex();
-				});
-			});
-			host->push_yield_as_mutex();
-		}
-		else
-		{
-			h();
+				_recCount = 1;
+				_lockActorID = _waitQueue.back()._waitHostID;
+				_waitQueue.back().ntf();
+				_waitQueue.pop_back();
+			}
+			else
+			{
+				_lockActorID = 0;
+			}
 		}
 	}
 private:

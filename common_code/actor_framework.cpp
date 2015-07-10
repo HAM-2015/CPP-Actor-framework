@@ -24,6 +24,8 @@ struct initStackLine
 } s_initStackLine;
 #endif
 
+#define CORO_CONTEXT_STATE_SPACE	(4 kB)
+
 msg_list_shared_alloc<actor_handle>::shared_node_alloc my_actor::_childActorListAll(sizeof(void*), false);
 msg_list_shared_alloc<std::function<void()> >::shared_node_alloc my_actor::_quitExitCallbackAll(sizeof(void*), false);
 msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc my_actor::_suspendResumeQueueAll(sizeof(void*), false);
@@ -282,6 +284,7 @@ void msg_pool_void::send_msg(const actor_handle& hostActor)
 	{
 		_waiting = false;
 		assert(_msgPump);
+		assert(0 == _msgBuff);
 		_sendCount++;
 		_msgPump->receive_msg(hostActor);
 	}
@@ -297,8 +300,9 @@ void msg_pool_void::post_msg(const actor_handle& hostActor)
 	{
 		_waiting = false;
 		assert(_msgPump);
+		assert(0 == _msgBuff);
 		_sendCount++;
-		_msgPump->receive_msg_post(hostActor);
+		_msgPump->receive_msg_tick(hostActor);
 	}
 	else
 	{
@@ -535,14 +539,19 @@ void msg_pump_void::receive_msg(const actor_handle& hostActor)
 	}
 	else
 	{
-		receive_msg_post(hostActor);
+		auto shared_this = _weakThis.lock();
+		_strand->post([=]
+		{
+			actor_handle lockActor = hostActor;
+			shared_this->receiver();
+		});
 	}
 }
 
-void msg_pump_void::receive_msg_post(const actor_handle& hostActor)
+void msg_pump_void::receive_msg_tick(const actor_handle& hostActor)
 {
 	auto shared_this = _weakThis.lock();
-	_strand->post([=]
+	_strand->try_tick([=]
 	{
 		actor_handle lockActor = hostActor;
 		shared_this->receiver();
@@ -555,13 +564,13 @@ bool msg_pump_void::isDisconnected()
 }
 //////////////////////////////////////////////////////////////////////////
 
-void trig_once_base::trig_handler() const
+void trig_once_base::tick_handler() const
 {
 #ifdef _DEBUG
 	if (!_pIsTrig->exchange(true))
 	{
 		assert(_hostActor);
-		_hostActor->trig_handler();
+		_hostActor->tick_handler();
 	}
 	else
 	{
@@ -569,7 +578,7 @@ void trig_once_base::trig_handler() const
 	}
 #else
 	assert(_hostActor);
-	_hostActor->trig_handler();
+	_hostActor->tick_handler();
 #endif
 }
 
@@ -766,10 +775,10 @@ my_actor::~my_actor()
 #ifdef CHECK_ACTOR_STACK
 	unsigned char* bt = (unsigned char*)_stackTop - _stackSize - STACK_RESERVED_SPACE_SIZE;
 	size_t i = 0;
-	for (; i < STACK_RESERVED_SPACE_SIZE && bt[i] == 0xFD; i++) {}
-	if (i != STACK_RESERVED_SPACE_SIZE)
+	for (; i < _stackSize + STACK_RESERVED_SPACE_SIZE - CORO_CONTEXT_STATE_SPACE && bt[i] == 0xFD; i++) {}
+	if (_checkStackFree || STACK_RESERVED_SPACE_SIZE >= i)
 	{
-		stack_overflow_format(i, _createStack);
+		stack_overflow_format(STACK_RESERVED_SPACE_SIZE - (int)i, _createStack);
 	}
 #endif
 	delete (actor_pull_type*)_actorPull;
@@ -819,8 +828,9 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 #endif
 
 #ifdef CHECK_ACTOR_STACK
-	memset((unsigned char*)newActor->_stackTop - newActor->_stackSize - STACK_RESERVED_SPACE_SIZE, 0xFD, STACK_RESERVED_SPACE_SIZE);
-	newActor->_createStack = std::shared_ptr<list<stack_line_info>>(new list<stack_line_info>(get_stack_list(8)));
+	newActor->_checkStackFree = false;
+	memset((unsigned char*)newActor->_stackTop - newActor->_stackSize - STACK_RESERVED_SPACE_SIZE, 0xFD, newActor->_stackSize + STACK_RESERVED_SPACE_SIZE - CORO_CONTEXT_STATE_SPACE);
+	newActor->_createStack = std::shared_ptr<list<stack_line_info>>(new list<stack_line_info>(get_stack_list(8, 1)));
 #endif
 	return newActor;
 }
@@ -1123,10 +1133,22 @@ void my_actor::cancel_delay_trig()
 	cancel_timer();
 }
 
-void my_actor::trig_handler()
+void my_actor::post_handler()
 {
 	actor_handle shared_this = shared_from_this();
 	_strand->post([shared_this]{shared_this->run_one(); });
+}
+
+void my_actor::tick_handler()
+{
+	actor_handle shared_this = shared_from_this();
+	_strand->try_tick([shared_this]{shared_this->run_one(); });
+}
+
+void my_actor::next_tick_handler()
+{
+	actor_handle shared_this = shared_from_this();
+	_strand->next_tick([shared_this]{shared_this->run_one(); });
 }
 
 shared_strand my_actor::self_strand()
@@ -1880,7 +1902,7 @@ void my_actor::check_stack()
 #ifdef CHECK_ACTOR_STACK
 	if ((size_t)get_sp() < (size_t)_stackTop-_stackSize)
 	{
-		stack_overflow_format((size_t)get_sp() - (size_t)_stackTop - _stackSize, _createStack);
+		stack_overflow_format((int)((size_t)get_sp() - (size_t)_stackTop - _stackSize), _createStack);
 	}
 #endif
 	check_self();

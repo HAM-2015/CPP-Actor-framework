@@ -2,6 +2,7 @@
 #include "actor_timer.h"
 
 boost_strand::boost_strand()
+:_pCheckDestroy(NULL), _nextTickAll(64), _nextTickQueue(64)
 {
 	_iosProxy = NULL;
 	_strand = NULL;
@@ -10,8 +11,13 @@ boost_strand::boost_strand()
 
 boost_strand::~boost_strand()
 {
+	assert(_nextTickQueue.empty());
 	delete _strand;
 	delete _timer;
+	if (_pCheckDestroy)
+	{
+		*_pCheckDestroy = true;
+	}
 }
 
 shared_strand boost_strand::create(ios_proxy& iosProxy, bool makeTimer /* = true */)
@@ -23,6 +29,7 @@ shared_strand boost_strand::create(ios_proxy& iosProxy, bool makeTimer /* = true
 	{
 		res->_timer = new actor_timer(res);
 	}
+	res->_weakThis = res;
 	return res;
 }
 
@@ -64,6 +71,27 @@ boost::asio::io_service& boost_strand::get_io_service()
 actor_timer* boost_strand::get_timer()
 {
 	return _timer;
+}
+
+void boost_strand::run_tick()
+{
+	assert(!_nextTickQueue.empty());
+	shared_strand lockThis = _weakThis.lock();
+	int tickCount = 0;
+	do
+	{
+		if (++tickCount == 64)
+		{
+			struct null_invoke { void operator()()const {}; };
+			post(null_invoke());
+			break;
+		}
+		wrap_next_tick_base* tick = _nextTickQueue.front();
+		_nextTickQueue.pop_front();
+		tick->invoke();
+		tick->~wrap_next_tick_base();
+		_nextTickAll.deallocate(tick);
+	} while (!_nextTickQueue.empty());
 }
 
 #if (defined ENABLE_MFC_ACTOR || defined ENABLE_WX_ACTOR)

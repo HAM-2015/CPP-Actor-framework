@@ -110,5 +110,11 @@
     <ClInclude Include="..\common_code\try_move.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
+    <ClInclude Include="..\common_code\wrapped_next_tick_handler.h">
+      <Filter>头文件\common_code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common_code\wrapped_tick_handler.h">
+      <Filter>头文件\common_code</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

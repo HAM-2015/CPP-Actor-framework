@@ -167,6 +167,7 @@ void Csocket_testDlg::OnBnClickedSendClientMsg()
 void Csocket_testDlg::OnBnClickedClear()
 {
 	_outputEdit.SetWindowText("");
+	_msgEdit.SetWindowText("");
 }
 
 void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param> param)

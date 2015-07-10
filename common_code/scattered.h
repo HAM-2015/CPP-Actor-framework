@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <list>
+#include "try_move.h"
 
 using namespace std;
 
@@ -101,17 +102,38 @@ struct stack_line_info
 	string symbolName;
 };
 
+//记录当前Actor入口信息
+#define ACTOR_POSITION(__host__) \
+{\
+	__host__->_checkStackFree = true; \
+	stack_line_info __line; \
+	__line.line = __LINE__; \
+	__line.file = __FILE__; \
+	__line.module = "actor position"; \
+	__host__->_createStack->push_front(__line); \
+}
+
+//记录当前Actor入口信息
+#define SELF_POSITION ACTOR_POSITION(self)
+
 /*!
 @brief 获取当前调用堆栈信息
 @param maxDepth 获取当前堆栈向下最高层次，最大32层
 */
-list<stack_line_info> get_stack_list(size_t maxDepth = 32, bool module = false, bool symbolName = false);
+list<stack_line_info> get_stack_list(size_t maxDepth = 32, size_t offset = 0, bool module = false, bool symbolName = false);
 
 /*!
 @brief 堆栈溢出弹出消息
 */
-void stack_overflow_format(size_t size, std::shared_ptr<list<stack_line_info>> createStack);
-#endif
+void stack_overflow_format(int size, std::shared_ptr<list<stack_line_info>> createStack);
+
+#else //CHECK_ACTOR_STACK
+
+//记录当前Actor入口信息
+#define ACTOR_POSITION(__host__)
+#define SELF_POSITION
+
+#endif //CHECK_ACTOR_STACK
 
 /*!
 @brief 清空std::function

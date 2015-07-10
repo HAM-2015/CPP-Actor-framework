@@ -229,7 +229,7 @@ passing_test::~passing_test()
 boost::asio::io_service* _stackLogIos;
 std::ofstream _stackLogFile;
 
-void stack_overflow_format(size_t size, std::shared_ptr<list<stack_line_info>> createStack)
+void stack_overflow_format(int size, std::shared_ptr<list<stack_line_info>> createStack)
 {
 	if (_stackLogIos)
 	{
@@ -237,7 +237,7 @@ void stack_overflow_format(size_t size, std::shared_ptr<list<stack_line_info>> c
 		{
 			_stackLogFile << "---------------------------";
 			_stackLogFile << get_time_string_ms() << "---------------------------\r\n\r\n";
-			_stackLogFile << "overflow size: " << size << "\r\n";
+			_stackLogFile << "overflow size: " << size << "\r\n\r\n";
 			for (auto it = createStack->begin(); it != createStack->end(); it++)
 			{
 				_stackLogFile << "file: " << it->file << "\r\n";
@@ -383,7 +383,7 @@ size_t check_file_name(char* name)
 	return length;
 }
 
-list<stack_line_info> get_stack_list(size_t maxDepth, bool module, bool symbolName)
+list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool module, bool symbolName)
 {
 	assert(maxDepth <= 32);
 
@@ -401,7 +401,7 @@ list<stack_line_info> get_stack_list(size_t maxDepth, bool module, bool symbolNa
 
 	list<stack_line_info> imageList;
 	HANDLE hProcess = ::GetCurrentProcess();
-	for (size_t i = 1; i < depths; i++)
+	for (size_t i = 1 + offset; i < depths; i++)
 	{
 		stack_line_info stackResult;
 
@@ -468,7 +468,7 @@ struct init_mod
 	{
 		bool ok = _initialize();
 		assert(ok);
-		auto stk = get_stack_list(1, true, true);
+		auto stk = get_stack_list(1, 0, true, true);
 		string moduleName;
 		if (!stk.empty())
 		{

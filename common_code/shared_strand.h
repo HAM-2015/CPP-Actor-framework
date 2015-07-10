@@ -16,23 +16,51 @@
 #include <functional>
 #include <memory>
 #include "ios_proxy.h"
+#include "msg_queue.h"
 #include "wrapped_post_handler.h"
+#include "wrapped_tick_handler.h"
 #include "wrapped_dispatch_handler.h"
+#include "wrapped_next_tick_handler.h"
 
 class actor_timer;
 
 class boost_strand;
 typedef std::shared_ptr<boost_strand> shared_strand;
 
+#define RUN_HANDLER [this, handler]\
+{\
+	bool checkDestroy = false;\
+	_pCheckDestroy = &checkDestroy;\
+	handler();\
+	if (!checkDestroy)\
+	{\
+		_pCheckDestroy = NULL;\
+		if (!_nextTickQueue.empty())\
+		{\
+			run_tick(); \
+		}\
+	}\
+}
+
 #define UI_STRAND()\
 if (_strand)\
 {\
-	_strand->post(TRY_MOVE(handler)); \
+	_strand->post(RUN_HANDLER); \
 }\
 else\
 {\
-	_post(handler);\
+	_post(handler); \
 };
+
+#define UI_NEXT_TICK()\
+if (_strand)\
+{\
+	_nextTickQueue.push_back(new(_nextTickAll.allocate())wrap_next_tick_handler<RM_CREF(handler)>(TRY_MOVE(handler))); \
+}\
+else\
+{\
+	_post(handler); \
+}
 
 /*!
 @brief 重新定义dispatch实现，所有不同strand中以消息方式进行函数调用
@@ -44,6 +72,62 @@ class boost_strand
 #else
 	typedef boost::asio::strand strand_type;
 #endif
+
+	struct wrap_next_tick_base
+	{
+		virtual ~wrap_next_tick_base() {};
+		virtual void invoke() const = 0;
+
+		void* pH;
+		unsigned char* buf[sizeof(void*)*16];
+	};
+
+	template <typename H>
+	struct wrap_next_tick_handler : public wrap_next_tick_base
+	{
+		wrap_next_tick_handler(const H& h)
+		{
+			if (sizeof(H) <= sizeof(buf))
+			{
+				pH = buf;
+				new(pH)H(h);
+			} 
+			else
+			{
+				pH = new H(h);
+			}
+		}
+
+		wrap_next_tick_handler(H&& h)
+		{
+			if (sizeof(H) <= sizeof(buf))
+			{
+				pH = buf;
+				new(pH)H((H&&)h);
+			}
+			else
+			{
+				pH = new H((H&&)h);
+			}
+		}
+
+		~wrap_next_tick_handler()
+		{
+			if (pH == (void*)buf)
+			{
+				((H*)pH)->~H();
+			} 
+			else
+			{
+				delete (H*)pH;
+			}
+		}
+
+		void invoke() const
+		{
+			(*(H*)pH)();
+		}
+	};
 protected:
 	boost_strand();
 	virtual ~boost_strand();
@@ -68,18 +152,51 @@ public:
 	}
 
 	/*!
-	@brief 添加一个任务到strand队列
+	@brief 添加一个任务到 strand 队列
 	*/
 	template <typename Handler>
 	void post(BOOST_ASIO_MOVE_ARG(Handler) handler)
 	{
 #ifdef ENABLE_MFC_ACTOR
-		UI_STRAND()
+		UI_STRAND();
 #elif ENABLE_WX_ACTOR
-		UI_STRAND()
+		UI_STRAND();
 #else
-		_strand->post(TRY_MOVE(handler));
+		_strand->post(RUN_HANDLER);
 #endif
+	}
+
+	/*!
+	@brief 添加一个任务到 next_tick 队列
+	*/
+	template <typename Handler>
+	void next_tick(BOOST_ASIO_MOVE_ARG(Handler) handler)
+	{
+		assert(running_in_this_thread());
+		assert(sizeof(wrap_next_tick_base) == sizeof(wrap_next_tick_handler<RM_CREF(handler)>));
+#ifdef ENABLE_MFC_ACTOR
+		UI_NEXT_TICK();
+#elif ENABLE_WX_ACTOR
+		UI_NEXT_TICK();
+#else
+		_nextTickQueue.push_back(new(_nextTickAll.allocate())wrap_next_tick_handler<RM_CREF(handler)>(TRY_MOVE(handler)));
+#endif
+	}
+
+	/*!
+	@brief 尝试添加一个任务到 next_tick 队列
+	*/
+	template <typename Handler>
+	void try_tick(BOOST_ASIO_MOVE_ARG(Handler) handler)
+	{
+		if (running_in_this_thread())
+		{
+			next_tick(TRY_MOVE(handler));
+		} 
+		else
+		{
+			post(TRY_MOVE(handler));
+		}
 	}
 
 	/*!
@@ -98,6 +215,24 @@ public:
 	wrapped_post_handler<boost_strand, Handler> wrap_post(BOOST_ASIO_MOVE_ARG(Handler) handler)
 	{
 		return wrapped_post_handler<boost_strand, Handler>(this, TRY_MOVE(handler));
+	}
+
+	/*!
+	@brief 把被调用函数包装到next_tick中
+	*/
+	template <typename Handler>
+	wrapped_next_tick_handler<boost_strand, Handler> wrap_next_tick(BOOST_ASIO_MOVE_ARG(Handler) handler)
+	{
+		return wrapped_next_tick_handler<boost_strand, Handler>(this, TRY_MOVE(handler));
+	}
+
+	/*!
+	@brief 把被调用函数包装到tick中
+	*/
+	template <typename Handler>
+	wrapped_tick_handler<boost_strand, Handler> wrap_tick(BOOST_ASIO_MOVE_ARG(Handler) handler)
+	{
+		return wrapped_tick_handler<boost_strand, Handler>(this, TRY_MOVE(handler));
 	}
 
 	/*!
@@ -135,14 +270,19 @@ public:
 	@brief 获取定时器
 	*/
 	actor_timer* get_timer();
-
+private:
+	void run_tick();
+protected:
 #if (defined ENABLE_MFC_ACTOR || defined ENABLE_WX_ACTOR)
 	virtual void _post(const std::function<void ()>& h);
 #endif
-protected:
+	bool* _pCheckDestroy;
 	actor_timer* _timer;
 	ios_proxy* _iosProxy;
 	strand_type* _strand;
+	std::weak_ptr<boost_strand> _weakThis;
+	mem_alloc<wrap_next_tick_base> _nextTickAll;
+	msg_queue<wrap_next_tick_base*> _nextTickQueue;
 public:
 	/*!
 	@brief 在一个strand中调用某个函数，直到这个函数被执行完成后才返回

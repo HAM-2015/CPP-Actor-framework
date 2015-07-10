@@ -254,6 +254,7 @@ void perfor_test(my_actor* self, ios_proxy& ios)
 
 void actor_test(my_actor* self)
 {
+	SELF_POSITION;
 	ios_proxy perforIos;//用于测试多线程下的Actor切换性能
 	perforIos.run(ios_proxy::hardwareConcurrency());//调度器线程设置为CPU线程数
 	perforIos.runPriority(ios_proxy::idle);//调度器优先级设置为最低
@@ -334,8 +335,8 @@ void actor_test(my_actor* self)
 		};
 		actorProducer1 = self->create_child_actor(test_producer);
 		actorProducer2 = self->create_child_actor(test_producer);
-		//self->child_actor_run(actorProducer1);
-		//self->child_actor_run(actorProducer2);
+// 		self->child_actor_run(actorProducer1);
+// 		self->child_actor_run(actorProducer2);
 	}
 	{
 		actor_mutex amutex(self->self_strand());
@@ -355,9 +356,9 @@ void actor_test(my_actor* self)
 		actorMutex1 = self->create_child_actor(actorMutexH);
 		actorMutex2 = self->create_child_actor(actorMutexH);
 		actorMutex3 = self->create_child_actor(actorMutexH);
-		//self->child_actor_run(actorMutex1);//模拟actor_mutex互斥特性
-		//self->child_actor_run(actorMutex2);
-		//self->child_actor_run(actorMutex3);
+// 		self->child_actor_run(actorMutex1);//模拟actor_mutex互斥特性
+// 		self->child_actor_run(actorMutex2);
+// 		self->child_actor_run(actorMutex3);
 	}
 	{//条件变量测试
 		std::shared_ptr<bool> waiting(new bool(false));
@@ -396,8 +397,8 @@ void actor_test(my_actor* self)
 				self->sleep(100);
 			}
 		});
-		//self->child_actor_run(actorConVarWait);
-		//self->child_actor_run(actorConVarNtf);
+// 		self->child_actor_run(actorConVarWait);
+// 		self->child_actor_run(actorConVarNtf);
 	}
 	async_buffer<passing_test> abuff(2, self->self_strand());
 	{//异步队列测试
@@ -411,7 +412,7 @@ void actor_test(my_actor* self)
 					abuff.push(self, passing_test(i++));
 				}
 			}
-			catch (async_buffer<int>::close_exception)
+			catch (async_buffer_close_exception)
 			{
 				printf("--\n");
 			}
@@ -428,13 +429,13 @@ void actor_test(my_actor* self)
 					self->sleep(1000);
 				}
 			}
-			catch (async_buffer<int>::close_exception)
+			catch (async_buffer_close_exception)
 			{
 				printf("!--\n");
 			}
 		});
-		//self->child_actor_run(buffPush);
-		//self->child_actor_run(buffPop);
+// 		self->child_actor_run(buffPush);
+// 		self->child_actor_run(buffPop);
 	}
 	sync_msg<passing_test> syncMsg(self->self_strand());
 	csp_invoke<int (passing_test, int)> cspMsg(self->self_strand());

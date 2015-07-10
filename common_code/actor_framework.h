@@ -421,7 +421,7 @@ public:
 		auto& msgHandle_ = _msgHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]
+		_hostActor->self_strand()->try_tick([=]
 		{
 			if (!(*closed_))
 			{
@@ -437,7 +437,7 @@ public:
 		auto& msgHandle_ = _msgHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]
+		_hostActor->self_strand()->try_tick([=]
 		{
 			if (!(*closed_))
 			{
@@ -453,7 +453,7 @@ public:
 		auto& msgHandle_ = _msgHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]
+		_hostActor->self_strand()->try_tick([=]
 		{
 			if (!(*closed_))
 			{
@@ -469,7 +469,7 @@ public:
 		auto& msgHandle_ = _msgHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]
+		_hostActor->self_strand()->try_tick([=]
 		{
 			if (!(*closed_))
 			{
@@ -484,7 +484,7 @@ public:
 		auto& msgHandle_ = _msgHandle;
 		auto& hostActor_ = _hostActor;
 		auto& closed_ = _closed;
-		_hostActor->self_strand()->post([=]
+		_hostActor->self_strand()->try_tick([=]
 		{
 			if (!(*closed_))
 			{
@@ -973,10 +973,10 @@ private:
 		}
 	}
 
-	void receive_msg_post(msg_type&& msg, const actor_handle& hostActor)
+	void receive_msg_tick(msg_type&& msg, const actor_handle& hostActor)
 	{
 		auto shared_this = _weakThis.lock();
-		_strand->post([=]
+		_strand->try_tick([=]
 		{
 			actor_handle lockActor = hostActor;
 			shared_this->receiver(std::move((msg_type&)msg));
@@ -987,11 +987,16 @@ private:
 	{
 		if (_strand->running_in_this_thread())
 		{
-			receiver(std::move((msg_type&)msg));
+			receiver((msg_type&&)msg);
 		} 
 		else
 		{
-			receive_msg_post(std::move(msg), hostActor);
+			auto shared_this = _weakThis.lock();
+			_strand->post([=]
+			{
+				actor_handle lockActor = hostActor;
+				shared_this->receiver(std::move((msg_type&)msg));
+			});
 		}
 	}
 
@@ -1255,18 +1260,20 @@ private:
 		{
 			_waiting = false;
 			assert(_msgPump);
+			assert(_msgBuff.empty());
 			_sendCount++;
-			if (_msgBuff.empty())
-			{
-				_msgPump->receive_msg(std::move(mt), hostActor);
-			}
-			else
-			{
-				_msgBuff.push_back(std::move(mt));
-				msg_type mt_ = std::move(_msgBuff.front());
-				_msgBuff.pop_front();
-				_msgPump->receive_msg(std::move(mt_), hostActor);
-			}
+			_msgPump->receive_msg(std::move(mt), hostActor);
+// 			if (_msgBuff.empty())
+// 			{
+// 				_msgPump->receive_msg(std::move(mt), hostActor);
+// 			}
+// 			else
+// 			{
+// 				msg_type mt_ = std::move(_msgBuff.front());
+// 				_msgBuff.pop_front();
+// 				_msgBuff.push_back(std::move(mt));
+// 				_msgPump->receive_msg(std::move(mt_), hostActor);
+// 			}
 		}
 		else
 		{
@@ -1280,17 +1287,19 @@ private:
 		{
 			_waiting = false;
 			assert(_msgPump);
+			assert(_msgBuff.empty());
 			_sendCount++;
-			if (_msgBuff.empty())
-			{
-				_msgPump->receive_msg_post(std::move(mt), hostActor);
-			}
-			else
-			{
-				_msgBuff.push_back(std::move(mt));
-				_msgPump->receive_msg_post(std::move(_msgBuff.front()), hostActor);
-				_msgBuff.pop_front();
-			}
+			_msgPump->receive_msg_tick(std::move(mt), hostActor);
+// 			if (_msgBuff.empty())
+// 			{
+// 				_msgPump->receive_msg_tick(std::move(mt), hostActor);
+// 			}
+// 			else
+// 			{
+// 				_msgPump->receive_msg_tick(std::move(_msgBuff.front()), hostActor);
+// 				_msgBuff.pop_front();
+// 				_msgBuff.push_back(std::move(mt));
+// 			}
 		}
 		else
 		{
@@ -1406,7 +1415,7 @@ public:
 	virtual ~msg_pump_void();
 protected:
 	void receiver();
-	void receive_msg_post(const actor_handle& hostActor);
+	void receive_msg_tick(const actor_handle& hostActor);
 	void receive_msg(const actor_handle& hostActor);
 	bool read_msg();
 	bool try_read();
@@ -1588,7 +1597,7 @@ protected:
 	}
 
 
-	void trig_handler() const;
+	void tick_handler() const;
 
 	void push_yield() const;
 protected:
@@ -1636,7 +1645,7 @@ public:
 
 	void operator()() const
 	{
-		trig_handler();
+		tick_handler();
 	}
 
 	typename func_type<T0, T1, T2, T3>::result case_func() const
@@ -1733,7 +1742,7 @@ public:
 
 	void operator()() const
 	{
-		trig_handler();
+		tick_handler();
 	}
 private:
 	callback_handler& operator=(const callback_handler&)
@@ -2114,7 +2123,7 @@ public:
 		if (exeStrand != _strand)
 		{
 			actor_handle shared_this = shared_from_this();
-			exeStrand->asyncInvokeVoid(TRY_MOVE(h), [shared_this]{shared_this->trig_handler(); });
+			exeStrand->asyncInvokeVoid(TRY_MOVE(h), [shared_this]{shared_this->post_handler(); });
 			push_yield();
 			return;
 		}
@@ -2146,7 +2155,7 @@ public:
 	{
 		assert_enter();
 		actor_handle shared_this = shared_from_this();
-		exeStrand->asyncInvokeVoid(TRY_MOVE(h), [shared_this]{shared_this->trig_handler(); });
+		exeStrand->asyncInvokeVoid(TRY_MOVE(h), [shared_this]{shared_this->post_handler(); });
 		push_yield();
 	}
 
@@ -2233,7 +2242,9 @@ public:
 		push_yield();
 	}
 private:
-	void trig_handler();
+	void post_handler();
+	void tick_handler();
+	void next_tick_handler();
 
 	template <typename DST /*dst_receiver*/, typename SRC /*msg_param*/>
 	void _trig_handler(DST& dstRec, SRC&& src)
@@ -2243,7 +2254,7 @@ private:
 			if (!_quited)
 			{
 				dstRec.move_from(src);
-				trig_handler();
+				next_tick_handler();
 			}
 		} 
 		else
@@ -2268,7 +2279,7 @@ private:
 			if (!_quited)
 			{
 				src.move_out(dstRef);
-				trig_handler();
+				next_tick_handler();
 			}
 		}
 		else
@@ -4238,10 +4249,12 @@ private:
 	void exit_callback();
 	void child_suspend_cb_handler();
 	void child_resume_cb_handler();
-private:
+public:
 #ifdef CHECK_ACTOR_STACK
+	bool _checkStackFree;//是否检测堆栈过多
 	std::shared_ptr<list<stack_line_info>> _createStack;//当前Actor创建时的调用堆栈
 #endif
+private:
 	void* _actorPull;///<Actor中断点恢复
 	void* _actorPush;///<Actor中断点
 	void* _stackTop;///<Actor栈顶
