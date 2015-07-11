@@ -1970,7 +1970,7 @@ post_actor_msg<> my_actor::connect_msg_notifer_to_self(bool makeNew)
 	return connect_msg_notifer_to_self<void, void, void, void>(makeNew, 0);
 }
 
-msg_pump<>::handle my_actor::connect_msg_pump()
+msg_pump_handle<> my_actor::connect_msg_pump()
 {
 	return connect_msg_pump<void, void, void, void>();
 }
@@ -2022,7 +2022,7 @@ bool my_actor::timed_wait_msg(int tm, actor_msg_handle<>& amh)
 	return true;
 }
 
-bool my_actor::timed_pump_msg(int tm, const msg_pump<>::handle& pump, bool checkDis)
+bool my_actor::timed_pump_msg(int tm, const msg_pump_handle<>& pump, bool checkDis)
 {
 	assert_enter();
 	assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
@@ -2071,7 +2071,7 @@ bool my_actor::timed_pump_msg(int tm, const msg_pump<>::handle& pump, bool check
 	return true;
 }
 
-bool my_actor::try_pump_msg(const msg_pump<>::handle& pump, bool checkDis)
+bool my_actor::try_pump_msg(const msg_pump_handle<>& pump, bool checkDis)
 {
 	assert_enter();
 	assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
@@ -2092,7 +2092,7 @@ void my_actor::wait_msg(actor_msg_handle<>& amh)
 	timed_wait_msg(-1, amh);
 }
 
-void my_actor::pump_msg(const msg_pump<>::handle& pump, bool checkDis)
+void my_actor::pump_msg(const msg_pump_handle<>& pump, bool checkDis)
 {
 	timed_pump_msg(-1, pump, checkDis);
 }

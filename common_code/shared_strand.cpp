@@ -2,7 +2,7 @@
 #include "actor_timer.h"
 
 boost_strand::boost_strand()
-:_pCheckDestroy(NULL), _nextTickAll(64), _nextTickQueue(64)
+:_pCheckDestroy(NULL), _nextTickAlloc(64), _nextTickQueue(64)
 {
 	_iosProxy = NULL;
 	_strand = NULL;
@@ -89,8 +89,10 @@ void boost_strand::run_tick()
 		wrap_next_tick_base* tick = _nextTickQueue.front();
 		_nextTickQueue.pop_front();
 		tick->invoke();
-		tick->~wrap_next_tick_base();
-		_nextTickAll.deallocate(tick);
+		if (void* tp = tick->destroy())
+		{
+			_nextTickAlloc.deallocate(tp);
+		}
 	} while (!_nextTickQueue.empty());
 }
 

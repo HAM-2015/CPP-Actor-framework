@@ -219,12 +219,12 @@ void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param>
 		self->child_actor_run(readActor);
 		auto textio = text_stream_io::create(self->self_strand(), param->_clientSocket, readActor.get_actor()->make_msg_notifer(amh));
 		child_actor_handle writerActor = self->msg_agent_to_actor<shared_data>(true, 
-			[&textio, &param](my_actor* self, msg_pump<shared_data>::handle amh)
+			[&textio, &param](my_actor* self, msg_pump_handle<shared_data> amh)
 		{
 			while (true)
 			{
 				//接收对话框给的消息，然后发送给服务器
-				textio->write(self->pump_msg(*amh));
+				textio->write(self->pump_msg(amh));
 			}
 		});
 		send(self, [this]
@@ -278,7 +278,7 @@ void Csocket_testDlg::serverActor(my_actor* self, std::shared_ptr<server_param> 
 	}
 	bool norClosed = false;
 	//创建侦听服务器关闭
-	child_actor_handle lstCloseProxyActor = self->msg_agent_to_actor(true, [&](my_actor* self, msg_pump<>::handle amh)//侦听服务器关闭
+	child_actor_handle lstCloseProxyActor = self->msg_agent_to_actor(true, [&](my_actor* self, msg_pump_handle<> amh)//侦听服务器关闭
 	{
 		self->pump_msg(amh);
 		//得到服务器关闭消息，关闭连接侦听器
@@ -397,12 +397,12 @@ void Csocket_testDlg::mainActor(my_actor* self)
 		}
 	};
 
-	msg_pump<ui_cmd>::handle lstCMD = self->connect_msg_pump<ui_cmd>();
+	msg_pump_handle<ui_cmd> lstCMD = self->connect_msg_pump<ui_cmd>();
 	while (true)
 	{
-		send(self, [this]{this->EnableWindow(TRUE);});
-		ui_cmd cmd = self->pump_msg(*lstCMD);
-		send(self, [this]{this->EnableWindow(FALSE);});
+		send(self, [this]{this->EnableWindow(TRUE); });
+		ui_cmd cmd = self->pump_msg(lstCMD);
+		send(self, [this]{this->EnableWindow(FALSE); });
 		switch (cmd)
 		{
 		case ui_connect:

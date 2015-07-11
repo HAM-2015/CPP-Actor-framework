@@ -30,7 +30,7 @@ wx_ui::wx_ui(ios_proxy& ios)
 		while (true)
 		{
 			RUN_IN_WX(Enable());
-			switch (self->pump_msg(*cmd_pump))
+			switch (self->pump_msg(cmd_pump))
 			{
 			case ui_run:
 				if (!runActor)
@@ -40,7 +40,7 @@ wx_ui::wx_ui(ios_proxy& ios)
 						bool taskCompleted = false;
 						child_actor_handle actionActor = self->create_child_actor(make_wx_strand(_ios), [&](my_actor* self)
 						{
-							child_actor_handle lstCancel = self->msg_agent_to_actor(true, [](my_actor* self, msg_pump<>::handle mh)
+							child_actor_handle lstCancel = self->msg_agent_to_actor(true, [](my_actor* self, msg_pump_handle<> mh)
 							{//侦听任务是否要取消
 								self->pump_msg(mh);
 								self->parent_actor()->notify_quit();

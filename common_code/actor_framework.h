@@ -927,8 +927,6 @@ class msg_pump : public msg_pump_base
 	friend my_actor;
 	friend msg_pool<T0, T1, T2, T3>;
 	friend pump_handler;
-public:
-	typedef msg_pump* handle;
 private:
 	msg_pump(){}
 	~msg_pump(){}
@@ -1471,6 +1469,20 @@ private:
 		res->_weakThis = res;
 		return res;
 	}
+};
+
+template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
+class msg_pump_handle
+{
+	friend my_actor;
+	typedef msg_pump<T0, T1, T2, T3> pump;
+
+	pump* operator ->() const
+	{
+		return _handle;
+	}
+
+	pump* _handle;
 };
 
 template <typename T0, typename T1, typename T2, typename T3>
@@ -3518,7 +3530,7 @@ public:
 	@return 返回消息泵句柄
 	*/
 	template <typename T0, typename T1, typename T2, typename T3>
-	typename msg_pump<T0, T1, T2, T3>::handle connect_msg_pump()
+	msg_pump_handle<T0, T1, T2, T3> connect_msg_pump()
 	{
 		typedef msg_pump<T0, T1, T2, T3> pump_type;
 		typedef msg_pool<T0, T1, T2, T3> pool_type;
@@ -3553,28 +3565,30 @@ public:
 			msgPump->clear();
 		}
 		msgPck->unlock(this);
-		return msgPump.get();
+		msg_pump_handle<T0, T1, T2, T3> mh;
+		mh._handle = msgPump.get();
+		return mh;
 	}
 
 	template <typename T0, typename T1, typename T2>
-	typename msg_pump<T0, T1, T2>::handle connect_msg_pump()
+	msg_pump_handle<T0, T1, T2> connect_msg_pump()
 	{
 		return connect_msg_pump<T0, T1, T2, void>();
 	}
 
 	template <typename T0, typename T1>
-	typename msg_pump<T0, T1>::handle connect_msg_pump()
+	msg_pump_handle<T0, T1> connect_msg_pump()
 	{
 		return connect_msg_pump<T0, T1, void, void>();
 	}
 
 	template <typename T0>
-	typename msg_pump<T0>::handle connect_msg_pump()
+	msg_pump_handle<T0> connect_msg_pump()
 	{
 		return connect_msg_pump<T0, void, void, void>();
 	}
 
-	msg_pump<>::handle connect_msg_pump();
+	msg_pump_handle<> connect_msg_pump();
 private:
 	template <typename PUMP, typename DST>
 	bool _timed_pump_msg(const PUMP& pump, DST& dstRec, int tm, bool checkDis)
@@ -3673,7 +3687,7 @@ public:
 	@return 超时完成返回false，成功取到消息返回true
 	*/
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0, T1, T2, T3>::handle& pump, T0& r0, T1& r1, T2& r2, T3& r3, bool checkDis = false)
+	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0, T1, T2, T3>& pump, T0& r0, T1& r1, T2& r2, T3& r3, bool checkDis = false)
 	{
 		assert_enter();
 		ref_ex<T0, T1, T2, T3> dstRef(r0, r1, r2, r3);
@@ -3682,7 +3696,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0, T1, T2>::handle& pump, T0& r0, T1& r1, T2& r2, bool checkDis = false)
+	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0, T1, T2>& pump, T0& r0, T1& r1, T2& r2, bool checkDis = false)
 	{
 		assert_enter();
 		ref_ex<T0, T1, T2> dstRef(r0, r1, r2);
@@ -3691,7 +3705,7 @@ public:
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0, T1>::handle& pump, T0& r0, T1& r1, bool checkDis = false)
+	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0, T1>& pump, T0& r0, T1& r1, bool checkDis = false)
 	{
 		assert_enter();
 		ref_ex<T0, T1> dstRef(r0, r1);
@@ -3700,7 +3714,7 @@ public:
 	}
 
 	template <typename T0>
-	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0>::handle& pump, T0& r0, bool checkDis = false)
+	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0>& pump, T0& r0, bool checkDis = false)
 	{
 		assert_enter();
 		ref_ex<T0> dstRef(r0);
@@ -3709,7 +3723,7 @@ public:
 	}
 
 	template <typename T0>
-	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0>::handle& pump, stack_obj<T0>& r0, bool checkDis = false)
+	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0>& pump, stack_obj<T0>& r0, bool checkDis = false)
 	{
 		assert_enter();
 		stack_dst_receiver<T0> dstRec(r0);
@@ -3721,10 +3735,10 @@ public:
 		return false;
 	}
 
-	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump<>::handle& pump, bool checkDis = false);
+	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<>& pump, bool checkDis = false);
 
 	template <typename T0, typename T1, typename T2, typename T3, typename Handler>
-	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0, T1, T2, T3>::handle& pump, const Handler& h, bool checkDis = false)
+	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0, T1, T2, T3>& pump, const Handler& h, bool checkDis = false)
 	{
 		assert_enter();
 		dst_receiver_buff<T0, T1, T2, T3>::dst_buff dstBuff;
@@ -3739,7 +3753,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename Handler>
-	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0, T1, T2>::handle& pump, const Handler& h, bool checkDis = false)
+	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0, T1, T2>& pump, const Handler& h, bool checkDis = false)
 	{
 		assert_enter();
 		dst_receiver_buff<T0, T1, T2>::dst_buff dstBuff;
@@ -3754,7 +3768,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename Handler>
-	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0, T1>::handle& pump, const Handler& h, bool checkDis = false)
+	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0, T1>& pump, const Handler& h, bool checkDis = false)
 	{
 		assert_enter();
 		dst_receiver_buff<T0, T1>::dst_buff dstBuff;
@@ -3769,7 +3783,7 @@ public:
 	}
 
 	template <typename T0, typename Handler>
-	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<T0>::handle& pump, const Handler& h, bool checkDis = false)
+	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0>& pump, const Handler& h, bool checkDis = false)
 	{
 		assert_enter();
 		dst_receiver_buff<T0>::dst_buff dstBuff;
@@ -3784,7 +3798,7 @@ public:
 	}
 
 	template <typename Handler>
-	__yield_interrupt bool timed_pump_msg(int tm, const typename msg_pump<>::handle& pump, const Handler& h, bool checkDis = false)
+	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<>& pump, const Handler& h, bool checkDis = false)
 	{
 		assert_enter();
 		if (timed_pump_msg(tm, pump, checkDis))
@@ -3799,67 +3813,67 @@ public:
 	@brief 从消息泵中提取消息
 	*/
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt void pump_msg(const typename msg_pump<T0, T1, T2, T3>::handle& pump, T0& r0, T1& r1, T2& r2, T3& r3, bool checkDis = false)
+	__yield_interrupt void pump_msg(const msg_pump_handle<T0, T1, T2, T3>& pump, T0& r0, T1& r1, T2& r2, T3& r3, bool checkDis = false)
 	{
 		timed_pump_msg(-1, pump, r0, r1, r2, r3, checkDis);
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt void pump_msg(const typename msg_pump<T0, T1, T2>::handle& pump, T0& r0, T1& r1, T2& r2, bool checkDis = false)
+	__yield_interrupt void pump_msg(const msg_pump_handle<T0, T1, T2>& pump, T0& r0, T1& r1, T2& r2, bool checkDis = false)
 	{
 		timed_pump_msg(-1, pump, r0, r1, r2, checkDis);
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt void pump_msg(const typename msg_pump<T0, T1>::handle& pump, T0& r0, T1& r1, bool checkDis = false)
+	__yield_interrupt void pump_msg(const msg_pump_handle<T0, T1>& pump, T0& r0, T1& r1, bool checkDis = false)
 	{
 		timed_pump_msg(-1, pump, r0, r1, checkDis);
 	}
 
 	template <typename T0>
-	__yield_interrupt void pump_msg(const typename msg_pump<T0>::handle& pump, T0& r0, bool checkDis = false)
+	__yield_interrupt void pump_msg(const msg_pump_handle<T0>& pump, T0& r0, bool checkDis = false)
 	{
 		timed_pump_msg(-1, pump, r0, checkDis);
 	}
 
 	template <typename T0>
-	__yield_interrupt T0 pump_msg(msg_pump<T0>& pump, bool checkDis = false)
+	__yield_interrupt T0 pump_msg(const msg_pump_handle<T0>& pump, bool checkDis = false)
 	{
 		assert_enter();
 		dst_receiver_buff<T0>::dst_buff dstBuff;
 		dst_receiver_buff<T0> dstRec(dstBuff);
-		_pump_msg(&pump, dstRec, checkDis);
+		_pump_msg(pump, dstRec, checkDis);
 		return std::move((T0&)dstBuff.get()._res0);
 	}
 
-	__yield_interrupt void pump_msg(const msg_pump<>::handle& pump, bool checkDis = false);
+	__yield_interrupt void pump_msg(const msg_pump_handle<>& pump, bool checkDis = false);
 
 	template <typename T0, typename T1, typename T2, typename T3, typename Handler>
-	__yield_interrupt void pump_msg(const typename msg_pump<T0, T1, T2, T3>::handle& pump, const Handler& h, bool checkDis = false)
+	__yield_interrupt void pump_msg(const msg_pump_handle<T0, T1, T2, T3>& pump, const Handler& h, bool checkDis = false)
 	{
 		timed_pump_msg<T0, T1, T2, T3>(-1, pump, h, checkDis);
 	}
 
 	template <typename T0, typename T1, typename T2, typename Handler>
-	__yield_interrupt void pump_msg(const typename msg_pump<T0, T1, T2>::handle& pump, const Handler& h, bool checkDis = false)
+	__yield_interrupt void pump_msg(const msg_pump_handle<T0, T1, T2>& pump, const Handler& h, bool checkDis = false)
 	{
 		timed_pump_msg<T0, T1, T2>(-1, pump, h, checkDis);
 	}
 
 	template <typename T0, typename T1, typename Handler>
-	__yield_interrupt void pump_msg(const typename msg_pump<T0, T1>::handle& pump, const Handler& h, bool checkDis = false)
+	__yield_interrupt void pump_msg(const msg_pump_handle<T0, T1>& pump, const Handler& h, bool checkDis = false)
 	{
 		timed_pump_msg<T0, T1>(-1, pump, h, checkDis);
 	}
 
 	template <typename T0, typename Handler>
-	__yield_interrupt void pump_msg(const typename msg_pump<T0>::handle& pump, const Handler& h, bool checkDis = false)
+	__yield_interrupt void pump_msg(const msg_pump_handle<T0>& pump, const Handler& h, bool checkDis = false)
 	{
 		timed_pump_msg<T0>(-1, pump, h, checkDis);
 	}
 
 	template <typename Handler>
-	__yield_interrupt void pump_msg(const typename msg_pump<>::handle& pump, const Handler& h, bool checkDis = false)
+	__yield_interrupt void pump_msg(const msg_pump_handle<>& pump, const Handler& h, bool checkDis = false)
 	{
 		timed_pump_msg(-1, pump, h, checkDis);
 	}
@@ -3868,7 +3882,7 @@ public:
 	@brief 尝试从消息泵中提取消息
 	*/
 	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt bool try_pump_msg(const typename msg_pump<T0, T1, T2, T3>::handle& pump, T0& r0, T1& r1, T2& r2, T3& r3, bool checkDis = false)
+	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0, T1, T2, T3>& pump, T0& r0, T1& r1, T2& r2, T3& r3, bool checkDis = false)
 	{
 		assert_enter();
 		ref_ex<T0, T1, T2, T3> dstRef(r0, r1, r2, r3);
@@ -3877,7 +3891,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2>
-	__yield_interrupt bool try_pump_msg(const typename msg_pump<T0, T1, T2>::handle& pump, T0& r0, T1& r1, T2& r2, bool checkDis = false)
+	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0, T1, T2>& pump, T0& r0, T1& r1, T2& r2, bool checkDis = false)
 	{
 		assert_enter();
 		ref_ex<T0, T1, T2> dstRef(r0, r1, r2);
@@ -3886,7 +3900,7 @@ public:
 	}
 
 	template <typename T0, typename T1>
-	__yield_interrupt bool try_pump_msg(const typename msg_pump<T0, T1>::handle& pump, T0& r0, T1& r1, bool checkDis = false)
+	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0, T1>& pump, T0& r0, T1& r1, bool checkDis = false)
 	{
 		assert_enter();
 		ref_ex<T0, T1> dstRef(r0, r1);
@@ -3895,7 +3909,7 @@ public:
 	}
 
 	template <typename T0>
-	__yield_interrupt bool try_pump_msg(const typename msg_pump<T0>::handle& pump, T0& r0, bool checkDis = false)
+	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0>& pump, T0& r0, bool checkDis = false)
 	{
 		assert_enter();
 		ref_ex<T0> dstRef(r0);
@@ -3904,7 +3918,7 @@ public:
 	}
 
 	template <typename T0>
-	__yield_interrupt bool try_pump_msg(const typename msg_pump<T0>::handle& pump, stack_obj<T0>& r0, bool checkDis = false)
+	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0>& pump, stack_obj<T0>& r0, bool checkDis = false)
 	{
 		assert_enter();
 		stack_dst_receiver<T0> dstRec(r0);
@@ -3916,10 +3930,10 @@ public:
 		return false;
 	}
 
-	__yield_interrupt bool try_pump_msg(const msg_pump<>::handle& pump, bool checkDis = false);
+	__yield_interrupt bool try_pump_msg(const msg_pump_handle<>& pump, bool checkDis = false);
 
 	template <typename T0, typename T1, typename T2, typename T3, typename Handler>
-	__yield_interrupt bool try_pump_msg(const typename msg_pump<T0, T1, T2, T3>::handle& pump, const Handler& h, bool checkDis = false)
+	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0, T1, T2, T3>& pump, const Handler& h, bool checkDis = false)
 	{
 		assert_enter();
 		dst_receiver_buff<T0, T1, T2, T3>::dst_buff dstBuff;
@@ -3934,7 +3948,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename Handler>
-	__yield_interrupt bool try_pump_msg(const typename msg_pump<T0, T1, T2>::handle& pump, const Handler& h, bool checkDis = false)
+	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0, T1, T2>& pump, const Handler& h, bool checkDis = false)
 	{
 		assert_enter();
 		dst_receiver_buff<T0, T1, T2>::dst_buff dstBuff;
@@ -3949,7 +3963,7 @@ public:
 	}
 
 	template <typename T0, typename T1, typename Handler>
-	__yield_interrupt bool try_pump_msg(const typename msg_pump<T0, T1>::handle& pump, const Handler& h, bool checkDis = false)
+	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0, T1>& pump, const Handler& h, bool checkDis = false)
 	{
 		assert_enter();
 		dst_receiver_buff<T0, T1>::dst_buff dstBuff;
@@ -3964,7 +3978,7 @@ public:
 	}
 
 	template <typename T0, typename Handler>
-	__yield_interrupt bool try_pump_msg(const typename msg_pump<T0>::handle& pump, const Handler& h, bool checkDis = false)
+	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0>& pump, const Handler& h, bool checkDis = false)
 	{
 		assert_enter();
 		dst_receiver_buff<T0>::dst_buff dstBuff;

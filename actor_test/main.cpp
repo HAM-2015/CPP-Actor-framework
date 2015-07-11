@@ -286,19 +286,19 @@ void actor_test(my_actor* self)
 			auto agentRun = [](my_actor* self)
 			{
 				auto conCmh = self->connect_msg_pump<passing_test>();
-				passing_test msg = self->pump_msg(*conCmh);
+				passing_test msg = self->pump_msg(conCmh);
 				printf("数据:%d 发送者:%d 接收者:%d\n", msg._count->_id / 10000, msg._count->_id % 10000, (int)self->self_id());
 				while (true)
 				{
 					BEGIN_TRY_
 					{
-						msg = self->pump_msg(*conCmh, true);
+						msg = self->pump_msg(conCmh, true);
 						printf("数据:%d 发送者:%d 接收者:%d\n", msg._count->_id / 10000, msg._count->_id % 10000, (int)self->self_id());
 					}
 					CATCH_PUMP_DISCONNECTED
 					{
 						printf("接收者:%d 被断开\n", (int)self->self_id());//消息泵被父关闭，抛出异常
-						msg = self->pump_msg(*conCmh);
+						msg = self->pump_msg(conCmh);
 						printf("数据:%d 发送者:%d 接收者:%d\n", msg._count->_id / 10000, msg._count->_id % 10000, (int)self->self_id());
 					}
 					END_TRY_;
@@ -318,7 +318,7 @@ void actor_test(my_actor* self)
 				auto conCmh = self->connect_msg_pump<passing_test>();//停止消息代理，由自己处理
 				for (int i = 0; i < 3; i++)
 				{
-					passing_test msg = self->pump_msg(*conCmh);
+					passing_test msg = self->pump_msg(conCmh);
 					printf("数据:%d 发送者:%d 接收者:%d\n", msg._count->_id / 10000, msg._count->_id % 10000, (int)self->self_id());
 				}
 			}

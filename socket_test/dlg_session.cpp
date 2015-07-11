@@ -97,7 +97,7 @@ void dlg_session::sessionActor(my_actor* self)
 		auto amh = self->connect_msg_pump<shared_data>();
 		while (true)
 		{
-			auto msg = self->pump_msg(*amh);
+			auto msg = self->pump_msg(amh);
 			if (!msg)
 			{
 				break;

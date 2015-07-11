@@ -27,6 +27,8 @@ class actor_timer;
 class boost_strand;
 typedef std::shared_ptr<boost_strand> shared_strand;
 
+#define SPACE_SIZE		(sizeof(void*)*16)
+
 #define RUN_HANDLER [this, handler]\
 {\
 	bool checkDestroy = false;\
@@ -42,7 +44,7 @@ typedef std::shared_ptr<boost_strand> shared_strand;
 	}\
 }
 
-#define UI_STRAND()\
+#define UI_POST()\
 if (_strand)\
 {\
 	_strand->post(RUN_HANDLER); \
@@ -55,7 +57,7 @@ else\
 #define UI_NEXT_TICK()\
 if (_strand)\
 {\
-	_nextTickQueue.push_back(new(_nextTickAll.allocate())wrap_next_tick_handler<RM_CREF(handler)>(TRY_MOVE(handler))); \
+	_nextTickQueue.push_back(wrap_tick_type::create(_nextTickAlloc, TRY_MOVE(handler)));\
 }\
 else\
 {\
@@ -75,58 +77,75 @@ class boost_strand
 
 	struct wrap_next_tick_base
 	{
-		virtual ~wrap_next_tick_base() {};
-		virtual void invoke() const = 0;
-
-		void* pH;
-		unsigned char* buf[sizeof(void*)*16];
+		virtual void invoke() = 0;
+		virtual void* destroy() = 0;
 	};
 
-	template <typename H>
-	struct wrap_next_tick_handler : public wrap_next_tick_base
+	struct wrap_next_tick_space : public wrap_next_tick_base
+	{
+		unsigned char space[SPACE_SIZE];
+	};
+
+	template <typename H, bool = true>
+	struct wrap_next_tick_handler : public wrap_next_tick_space
 	{
 		wrap_next_tick_handler(const H& h)
 		{
-			if (sizeof(H) <= sizeof(buf))
-			{
-				pH = buf;
-				new(pH)H(h);
-			} 
-			else
-			{
-				pH = new H(h);
-			}
+			assert(sizeof(H) <= sizeof(space));
+			new(space)H(h);
 		}
 
 		wrap_next_tick_handler(H&& h)
 		{
-			if (sizeof(H) <= sizeof(buf))
-			{
-				pH = buf;
-				new(pH)H((H&&)h);
-			}
-			else
-			{
-				pH = new H((H&&)h);
-			}
+			assert(sizeof(H) <= sizeof(space));
+			new(space)H((H&&)h);
 		}
 
-		~wrap_next_tick_handler()
+		template <typename Handler>
+		static inline wrap_next_tick_base* create(mem_alloc<wrap_next_tick_space>& alloc, BOOST_ASIO_MOVE_ARG(Handler) handler)
 		{
-			if (pH == (void*)buf)
-			{
-				((H*)pH)->~H();
-			} 
-			else
-			{
-				delete (H*)pH;
-			}
+			return new(alloc.allocate())wrap_next_tick_handler<RM_CREF(handler)>(TRY_MOVE(handler));
 		}
 
-		void invoke() const
+		void invoke()
 		{
-			(*(H*)pH)();
+			(*(H*)space)();
 		}
+
+		void* destroy()
+		{
+			((H*)space)->~H();
+			return this;
+		}
+	};
+
+	template <typename H>
+	struct wrap_next_tick_handler<H, false> : public wrap_next_tick_base
+	{
+		wrap_next_tick_handler(const H& h)
+			:_h(h) {}
+
+		wrap_next_tick_handler(H&& h)
+			:_h((H&&)h) {}
+
+		template <typename Handler>
+		static inline wrap_next_tick_base* create(mem_alloc<wrap_next_tick_space>& alloc, BOOST_ASIO_MOVE_ARG(Handler) handler)
+		{
+			return new wrap_next_tick_handler<RM_CREF(handler), false>(TRY_MOVE(handler));
+		}
+
+		void invoke()
+		{
+			_h();
+		}
+
+		void* destroy()
+		{
+			delete this;
+			return NULL;
+		}
+
+		H _h;
 	};
 protected:
 	boost_strand();
@@ -158,9 +177,9 @@ public:
 	void post(BOOST_ASIO_MOVE_ARG(Handler) handler)
 	{
 #ifdef ENABLE_MFC_ACTOR
-		UI_STRAND();
+		UI_POST();
 #elif ENABLE_WX_ACTOR
-		UI_STRAND();
+		UI_POST();
 #else
 		_strand->post(RUN_HANDLER);
 #endif
@@ -173,13 +192,14 @@ public:
 	void next_tick(BOOST_ASIO_MOVE_ARG(Handler) handler)
 	{
 		assert(running_in_this_thread());
-		assert(sizeof(wrap_next_tick_base) == sizeof(wrap_next_tick_handler<RM_CREF(handler)>));
+		assert(sizeof(wrap_next_tick_space) == sizeof(wrap_next_tick_handler<RM_CREF(handler)>));
+		typedef wrap_next_tick_handler<RM_CREF(handler), sizeof(RM_CREF(handler)) <= SPACE_SIZE> wrap_tick_type;
 #ifdef ENABLE_MFC_ACTOR
 		UI_NEXT_TICK();
 #elif ENABLE_WX_ACTOR
 		UI_NEXT_TICK();
 #else
-		_nextTickQueue.push_back(new(_nextTickAll.allocate())wrap_next_tick_handler<RM_CREF(handler)>(TRY_MOVE(handler)));
+		_nextTickQueue.push_back(wrap_tick_type::create(_nextTickAlloc, TRY_MOVE(handler)));
 #endif
 	}
 
@@ -281,7 +301,7 @@ protected:
 	ios_proxy* _iosProxy;
 	strand_type* _strand;
 	std::weak_ptr<boost_strand> _weakThis;
-	mem_alloc<wrap_next_tick_base> _nextTickAll;
+	mem_alloc<wrap_next_tick_space> _nextTickAlloc;
 	msg_queue<wrap_next_tick_base*> _nextTickQueue;
 public:
 	/*!
