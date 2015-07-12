@@ -1,26 +1,26 @@
-#ifndef __WRAPPED_TICK_HANDLER_H
-#define __WRAPPED_TICK_HANDLER_H
+#ifndef __WRAPPED_TRY_TICK_HANDLER_H
+#define __WRAPPED_TRY_TICK_HANDLER_H
 
 #include "wrapped_capture.h"
 
 template <typename Poster, typename Handler, bool = false>
-class wrapped_tick_handler
+class wrapped_try_tick_handler
 {
 public:
 	template <typename H>
-	wrapped_tick_handler(Poster* poster, H&& handler)
+	wrapped_try_tick_handler(Poster* poster, H&& handler)
 		: _poster(poster),
 		_handler(TRY_MOVE(handler))
 	{
 	}
 
-	wrapped_tick_handler(wrapped_tick_handler&& sp)
+	wrapped_try_tick_handler(wrapped_try_tick_handler&& sp)
 		:_poster(sp._poster),
 		_handler(std::move(sp._handler))
 	{
 	}
 
-	wrapped_tick_handler& operator=(wrapped_tick_handler&& sp)
+	wrapped_try_tick_handler& operator=(wrapped_try_tick_handler&& sp)
 	{
 		_poster = sp._poster;
 		_handler = std::move(sp._handler);
@@ -90,11 +90,11 @@ public:
 //////////////////////////////////////////////////////////////////////////
 
 template <typename Poster, typename Handler>
-class wrapped_tick_handler<Poster, Handler, true>
+class wrapped_try_tick_handler<Poster, Handler, true>
 {
 public:
 	template <typename H>
-	wrapped_tick_handler(Poster* poster, H&& handler)
+	wrapped_try_tick_handler(Poster* poster, H&& handler)
 		: _poster(poster),
 		_handler(TRY_MOVE(handler))
 #ifdef _DEBUG
@@ -103,7 +103,7 @@ public:
 	{
 	}
 
-	wrapped_tick_handler(wrapped_tick_handler&& sd)
+	wrapped_try_tick_handler(wrapped_try_tick_handler&& sd)
 		:_poster(sd._poster),
 		_handler(std::move(sd._handler))
 #ifdef _DEBUG
@@ -112,7 +112,7 @@ public:
 	{
 	}
 
-	wrapped_tick_handler& operator=(wrapped_tick_handler&& sd)
+	wrapped_try_tick_handler& operator=(wrapped_try_tick_handler&& sd)
 	{
 		_poster = sd._poster;
 		_handler = std::move(sd._handler);

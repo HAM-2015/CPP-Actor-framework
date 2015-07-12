@@ -18,7 +18,7 @@
 #include "ios_proxy.h"
 #include "msg_queue.h"
 #include "wrapped_post_handler.h"
-#include "wrapped_tick_handler.h"
+#include "wrapped_try_tick_handler.h"
 #include "wrapped_dispatch_handler.h"
 #include "wrapped_next_tick_handler.h"
 
@@ -327,18 +327,18 @@ public:
 	@brief 把被调用函数包装到tick中
 	*/
 	template <typename Handler>
-	wrapped_tick_handler<boost_strand, RM_CREF(Handler)> wrap_tick(Handler&& handler)
+	wrapped_try_tick_handler<boost_strand, RM_CREF(Handler)> wrap_try_tick(Handler&& handler)
 	{
-		return wrapped_tick_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_try_tick_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
 	}
 
 	/*!
 	@brief 把被调用函数包装到tick中，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_tick_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_tick(Handler&& handler)
+	wrapped_try_tick_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_try_tick(Handler&& handler)
 	{
-		return wrapped_tick_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+		return wrapped_try_tick_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
 	}
 
 	/*!
