@@ -64,13 +64,20 @@ struct try_move<T&&>
 	}
 };
 
+//移除const和&
+#define RM_CREF(__T__) typename std::remove_const<typename std::remove_reference<__T__>::type>::type
+//移除&
+#define RM_REF(__T__) typename std::remove_reference<__T__>::type
+//移除const
+#define RM_CONST(__T__) typename std::remove_const<__T__>::type
+
+
 //检测一个参数是否是右值传递，是就继续进行右值传递
 #define TRY_MOVE(__P__) try_move<decltype(__P__)>::move(__P__)
 //检测一个参数是否是右值传递
 #define CAN_MOVE(__P__) try_move<decltype(__P__)>::can_move
-
-//移除const和&
-#define RM_CREF(__P__) typename std::remove_const<typename std::remove_reference<decltype(__P__)>::type>::type
+//const属性强制转换为右值
+#define FORCE_MOVE(__P__) (RM_CREF(decltype(__P__))&&)__P__
 
 /*!
 @brief 对象拷贝链测试

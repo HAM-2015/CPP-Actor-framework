@@ -257,6 +257,39 @@ struct msg_param<void, void, void, void>
 };
 //////////////////////////////////////////////////////////////////////////
 
+template <typename T>
+struct type_move_pipe
+{
+	typedef T type;
+};
+
+template <typename T>
+struct type_move_pipe<const T&>
+{
+	typedef std::reference_wrapper<const T> type;
+};
+
+template <typename T>
+struct type_move_pipe<T&>
+{
+	typedef std::reference_wrapper<T> type;
+};
+
+template <typename T>
+struct type_move_pipe<const T&&>
+{
+	typedef const T&& type;
+};
+
+template <typename T>
+struct type_move_pipe<T&&>
+{
+	typedef T&& type;
+};
+
+#define TYPE_PIPE(__T__) typename type_move_pipe<__T__>::type
+//////////////////////////////////////////////////////////////////////////
+
 template <typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
 struct dst_receiver_base
 {
@@ -414,84 +447,197 @@ protected:
 	{
 		assert(msgHandle->_strand == _hostActor->self_strand());
 	}
+
+	template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
+	struct msg_capture
+	{
+		template <typename TP0, typename TP1, typename TP2, typename TP3>
+		msg_capture(msg_handle* msgHandle, const actor_handle& host, const std::shared_ptr<bool>& closed, TP0&& p0, TP1&& p1, TP2&& p2, TP3&& p3)
+			:_msgHandle(msgHandle), _hostActor(host), _closed(closed), _p0(TRY_MOVE(p0)), _p1(TRY_MOVE(p1)), _p2(TRY_MOVE(p2)), _p3(TRY_MOVE(p3)) {}
+
+		msg_capture(msg_capture&& s)
+			:_msgHandle(s._msgHandle), _hostActor(s._hostActor), _closed(s._closed), _p0(std::move(s._p0)), _p1(std::move(s._p1)), _p2(std::move(s._p2)), _p3(std::move(s._p3)) {}
+
+		void operator =(msg_capture&& s)
+		{
+			_msgHandle = s._msgHandle;
+			_hostActor = s._hostActor;
+			_closed = s._closed;
+			_p0 = std::move(s._p0);
+			_p1 = std::move(s._p1);
+			_p2 = std::move(s._p2);
+			_p3 = std::move(s._p3);
+		}
+
+		void operator ()()
+		{
+			if (!(*_closed))
+			{
+				_msgHandle->push_msg(ref_ex<T0, T1, T2, T3>(_p0, _p1, _p2, _p3));
+			}
+		}
+
+		T0 _p0;
+		T1 _p1;
+		T2 _p2;
+		T3 _p3;
+		msg_handle* _msgHandle;
+		actor_handle _hostActor;
+		std::shared_ptr<bool> _closed;
+	};
+
+	template <typename T0, typename T1, typename T2>
+	struct msg_capture<T0, T1, T2, void>
+	{
+		template <typename TP0, typename TP1, typename TP2>
+		msg_capture(msg_handle* msgHandle, const actor_handle& host, const std::shared_ptr<bool>& closed, TP0&& p0, TP1&& p1, TP2&& p2)
+			:_msgHandle(msgHandle), _hostActor(host), _closed(closed), _p0(TRY_MOVE(p0)), _p1(TRY_MOVE(p1)), _p2(TRY_MOVE(p2)) {}
+
+		msg_capture(msg_capture&& s)
+			:_msgHandle(s._msgHandle), _hostActor(s._hostActor), _closed(s._closed), _p0(std::move(s._p0)), _p1(std::move(s._p1)), _p2(std::move(s._p2)) {}
+
+		void operator =(msg_capture&& s)
+		{
+			_msgHandle = s._msgHandle;
+			_hostActor = s._hostActor;
+			_closed = s._closed;
+			_p0 = std::move(s._p0);
+			_p1 = std::move(s._p1);
+			_p2 = std::move(s._p2);
+		}
+
+		void operator ()()
+		{
+			if (!(*_closed))
+			{
+				_msgHandle->push_msg(ref_ex<T0, T1, T2>(_p0, _p1, _p2));
+			}
+		}
+
+		T0 _p0;
+		T1 _p1;
+		T2 _p2;
+		msg_handle* _msgHandle;
+		actor_handle _hostActor;
+		std::shared_ptr<bool> _closed;
+	};
+
+	template <typename T0, typename T1>
+	struct msg_capture<T0, T1, void, void>
+	{
+		template <typename TP0, typename TP1>
+		msg_capture(msg_handle* msgHandle, const actor_handle& host, const std::shared_ptr<bool>& closed, TP0&& p0, TP1&& p1)
+			:_msgHandle(msgHandle), _hostActor(host), _closed(closed), _p0(TRY_MOVE(p0)), _p1(TRY_MOVE(p1)) {}
+
+		msg_capture(msg_capture&& s)
+			:_msgHandle(s._msgHandle), _hostActor(s._hostActor), _closed(s._closed), _p0(std::move(s._p0)), _p1(std::move(s._p1)) {}
+
+		void operator =(msg_capture&& s)
+		{
+			_msgHandle = s._msgHandle;
+			_hostActor = s._hostActor;
+			_closed = s._closed;
+			_p0 = std::move(s._p0);
+			_p1 = std::move(s._p1);
+		}
+
+		void operator ()()
+		{
+			if (!(*_closed))
+			{
+				_msgHandle->push_msg(ref_ex<T0, T1>(_p0, _p1));
+			}
+		}
+
+		T0 _p0;
+		T1 _p1;
+		msg_handle* _msgHandle;
+		actor_handle _hostActor;
+		std::shared_ptr<bool> _closed;
+	};
+
+	template <typename T0>
+	struct msg_capture<T0, void, void, void>
+	{
+		template <typename TP0>
+		msg_capture(msg_handle* msgHandle, const actor_handle& host, const std::shared_ptr<bool>& closed, TP0&& p0)
+			:_msgHandle(msgHandle), _hostActor(host), _closed(closed), _p0(TRY_MOVE(p0)) {}
+
+		msg_capture(msg_capture&& s)
+			:_msgHandle(s._msgHandle), _hostActor(s._hostActor), _closed(s._closed), _p0(std::move(s._p0)) {}
+
+		void operator =(msg_capture&& s)
+		{
+			_msgHandle = s._msgHandle;
+			_hostActor = s._hostActor;
+			_closed = s._closed;
+			_p0 = std::move(s._p0);
+		}
+
+		void operator ()()
+		{
+			if (!(*_closed))
+			{
+				_msgHandle->push_msg(ref_ex<T0>(_p0));
+			}
+		}
+
+		T0 _p0;
+		msg_handle* _msgHandle;
+		actor_handle _hostActor;
+		std::shared_ptr<bool> _closed;
+	};
+
+	template <>
+	struct msg_capture<void, void, void, void>
+	{
+		msg_capture(msg_handle* msgHandle, const actor_handle& host, const std::shared_ptr<bool>& closed)
+		:_msgHandle(msgHandle), _hostActor(host), _closed(closed) {}
+
+		void operator ()()
+		{
+			if (!(*_closed))
+			{
+				_msgHandle->push_msg();
+			}
+		}
+
+		msg_handle* _msgHandle;
+		actor_handle _hostActor;
+		std::shared_ptr<bool> _closed;
+	};
 public:
 	template <typename PT0, typename PT1, typename PT2, typename PT3>
 	void operator()(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3) const
 	{
-		auto& msgHandle_ = _msgHandle;
-		auto& hostActor_ = _hostActor;
-		auto& closed_ = _closed;
-		_hostActor->self_strand()->try_tick([=]
-		{
-			if (!(*closed_))
-			{
-				auto lockActor = hostActor_;
-				msgHandle_->push_msg(ref_ex<T0, T1, T2, T3>((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3));
-			}
-		});
+		_hostActor->self_strand()->try_tick(msg_capture<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)>
+			(_msgHandle, _hostActor, _closed, TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2), TRY_MOVE(p3)));
 	}
 
 	template <typename PT0, typename PT1, typename PT2>
 	void operator()(PT0&& p0, PT1&& p1, PT2&& p2) const
 	{
-		auto& msgHandle_ = _msgHandle;
-		auto& hostActor_ = _hostActor;
-		auto& closed_ = _closed;
-		_hostActor->self_strand()->try_tick([=]
-		{
-			if (!(*closed_))
-			{
-				auto lockActor = hostActor_;
-				msgHandle_->push_msg(ref_ex<T0, T1, T2>((T0&)p0, (T1&)p1, (T2&)p2));
-			}
-		});
+		_hostActor->self_strand()->try_tick(msg_capture<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)>
+			(_msgHandle, _hostActor, _closed, TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2)));
 	}
 
 	template <typename PT0, typename PT1>
 	void operator()(PT0&& p0, PT1&& p1) const
 	{
-		auto& msgHandle_ = _msgHandle;
-		auto& hostActor_ = _hostActor;
-		auto& closed_ = _closed;
-		_hostActor->self_strand()->try_tick([=]
-		{
-			if (!(*closed_))
-			{
-				auto lockActor = hostActor_;
-				msgHandle_->push_msg(ref_ex<T0, T1>((T0&)p0, (T1&)p1));
-			}
-		});
+		_hostActor->self_strand()->try_tick(msg_capture<TYPE_PIPE(T0), TYPE_PIPE(T1)>
+			(_msgHandle, _hostActor, _closed, TRY_MOVE(p0), TRY_MOVE(p1)));
 	}
 
 	template <typename PT0>
 	void operator()(PT0&& p0) const
 	{
-		auto& msgHandle_ = _msgHandle;
-		auto& hostActor_ = _hostActor;
-		auto& closed_ = _closed;
-		_hostActor->self_strand()->try_tick([=]
-		{
-			if (!(*closed_))
-			{
-				auto lockActor = hostActor_;
-				msgHandle_->push_msg(ref_ex<T0>((T0&)p0));
-			}
-		});
+		_hostActor->self_strand()->try_tick(msg_capture<TYPE_PIPE(T0)>
+			(_msgHandle, _hostActor, _closed, TRY_MOVE(p0)));
 	}
 
 	void operator()() const
 	{
-		auto& msgHandle_ = _msgHandle;
-		auto& hostActor_ = _hostActor;
-		auto& closed_ = _closed;
-		_hostActor->self_strand()->try_tick([=]
-		{
-			if (!(*closed_))
-			{
-				auto lockActor = hostActor_;
-				msgHandle_->push_msg();
-			}
-		});
+		_hostActor->self_strand()->try_tick(msg_capture<>(_msgHandle, _hostActor, _closed));
 	}
 
 	typename func_type<T0, T1, T2, T3>::result case_func() const
@@ -551,9 +697,9 @@ private:
 template <typename T0, typename T1, typename T2, typename T3>
 class actor_msg_handle: public actor_msg_handle_base
 {
-	typedef msg_param<T0, T1, T2, T3> msg_type;
-	typedef ref_ex<T0, T1, T2, T3> ref_type;
-	typedef dst_receiver_base<T0, T1, T2, T3> dst_receiver;
+	typedef msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> msg_type;
+	typedef ref_ex<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> ref_type;
+	typedef dst_receiver_base<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> dst_receiver;
 	typedef actor_msg_notifer<T0, T1, T2, T3> msg_notifer;
 
 	friend msg_notifer_base<actor_msg_handle<T0, T1, T2, T3>, T0, T1, T2, T2>;
@@ -713,9 +859,9 @@ private:
 template <typename T0, typename T1, typename T2, typename T3>
 class actor_trig_handle : public actor_msg_handle_base
 {
-	typedef msg_param<T0, T1, T2, T3> msg_type;
-	typedef ref_ex<T0, T1, T2, T3> ref_type;
-	typedef dst_receiver_base<T0, T1, T2, T3> dst_receiver;
+	typedef msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> msg_type;
+	typedef ref_ex<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> ref_type;
+	typedef dst_receiver_base<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> dst_receiver;
 	typedef actor_trig_notifer<T0, T1, T2, T3> msg_notifer;
 
 	friend msg_notifer_base<actor_trig_handle<T0, T1, T2, T3>, T0, T1, T2, T3>;
@@ -917,12 +1063,36 @@ public:
 template <typename T0, typename T1, typename T2, typename T3>
 class msg_pump : public msg_pump_base
 {
-	typedef msg_param<T0, T1, T2, T3> msg_type;
-	typedef const_ref_ex<T0, T1, T2, T3> const_ref_type;
-	typedef ref_ex<T0, T1, T2, T3> ref_type;
+	typedef msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> msg_type;
+	typedef const_ref_ex<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> const_ref_type;
+	typedef dst_receiver_base<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> dst_receiver;
 	typedef msg_pool<T0, T1, T2, T3> msg_pool_type;
-	typedef dst_receiver_base<T0, T1, T2, T3> dst_receiver;
 	typedef typename msg_pool_type::pump_handler pump_handler;
+
+	struct msg_capture
+	{
+		msg_capture(const actor_handle& hostActor, const shared_ptr<msg_pump>& sharedThis, msg_type&& msg)
+		:_hostActor(hostActor), _sharedThis(sharedThis), _msg(std::move(msg)) {}
+
+		msg_capture(const msg_capture& s)
+			:_hostActor(s._hostActor), _sharedThis(s._sharedThis), _msg(std::move(s._msg)) {}
+
+		void operator =(const msg_capture& s)
+		{
+			_hostActor = s._hostActor;
+			_sharedThis = s._sharedThis;
+			_msg = std::move(s._msg);
+		}
+
+		void operator()()
+		{
+			_sharedThis->receiver(std::move(_msg));
+		}
+
+		mutable msg_type _msg;
+		actor_handle _hostActor;
+		shared_ptr<msg_pump> _sharedThis;
+	};
 
 	friend my_actor;
 	friend msg_pool<T0, T1, T2, T3>;
@@ -973,12 +1143,7 @@ private:
 
 	void receive_msg_tick(msg_type&& msg, const actor_handle& hostActor)
 	{
-		auto shared_this = _weakThis.lock();
-		_strand->try_tick([=]
-		{
-			actor_handle lockActor = hostActor;
-			shared_this->receiver(std::move((msg_type&)msg));
-		});
+		_strand->try_tick(msg_capture(hostActor, _weakThis.lock(), std::move(msg)));
 	}
 
 	void receive_msg(msg_type&& msg, const actor_handle& hostActor)
@@ -989,12 +1154,7 @@ private:
 		} 
 		else
 		{
-			auto shared_this = _weakThis.lock();
-			_strand->post([=]
-			{
-				actor_handle lockActor = hostActor;
-				shared_this->receiver(std::move((msg_type&)msg));
-			});
+			_strand->post(msg_capture(hostActor, _weakThis.lock(), std::move(msg)));
 		}
 	}
 
@@ -1116,12 +1276,11 @@ private:
 template <typename T0, typename T1, typename T2, typename T3>
 class msg_pool : public msg_pool_base
 {
-	typedef msg_param<T0, T1, T2, T3> msg_type;
-	typedef const_ref_ex<T0, T1, T2, T3> const_ref_type;
-	typedef ref_ex<T0, T1, T2, T3> ref_type;
+	typedef msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> msg_type;
+	typedef const_ref_ex<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> const_ref_type;
+	typedef dst_receiver_base<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> dst_receiver;
 	typedef msg_pump<T0, T1, T2, T3> msg_pump_type;
 	typedef post_actor_msg<T0, T1, T2, T3> post_type;
-	typedef dst_receiver_base<T0, T1, T2, T3> dst_receiver;
 
 	struct pump_handler
 	{
@@ -1228,6 +1387,31 @@ class msg_pool : public msg_pool_base
 		std::shared_ptr<msg_pump_type> _msgPump;
 	};
 
+	struct msg_capture
+	{
+		msg_capture(const actor_handle& hostActor, const shared_ptr<msg_pool>& sharedThis, msg_type&& msg)
+		:_hostActor(hostActor), _sharedThis(sharedThis), _msg(std::move(msg)) {}
+
+		msg_capture(const msg_capture& s)
+			:_hostActor(s._hostActor), _sharedThis(s._sharedThis), _msg(std::move(s._msg)) {}
+
+		void operator =(const msg_capture& s)
+		{
+			_hostActor = s._hostActor;
+			_sharedThis = s._sharedThis;
+			_msg = std::move(s._msg);
+		}
+
+		void operator()()
+		{
+			_sharedThis->send_msg(std::move(_msg), _hostActor);
+		}
+
+		mutable msg_type _msg;
+		actor_handle _hostActor;
+		shared_ptr<msg_pool> _sharedThis;
+	};
+
 	friend my_actor;
 	friend msg_pump_type;
 	friend post_type;
@@ -1313,11 +1497,7 @@ private:
 		}
 		else
 		{
-			auto shared_this = _weakThis.lock();
-			_strand->post([=]
-			{
-				shared_this->send_msg(std::move((msg_type&)mt), hostActor);
-			});
+			_strand->post(msg_capture(hostActor, _weakThis.lock(), std::move(mt)));
 		}
 	}
 
@@ -1498,28 +1678,28 @@ public:
 	void operator()(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3) const
 	{
 		assert(!empty());
-		_msgPool->push_msg(std::move(msg_param<T0, T1, T2, T3>(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2), TRY_MOVE(p3))), _hostActor);
+		_msgPool->push_msg(std::move(msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)>(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2), TRY_MOVE(p3))), _hostActor);
 	}
 
 	template <typename PT0, typename PT1, typename PT2>
 	void operator()(PT0&& p0, PT1&& p1, PT2&& p2) const
 	{
 		assert(!empty());
-		_msgPool->push_msg(std::move(msg_param<T0, T1, T2>(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2))), _hostActor);
+		_msgPool->push_msg(std::move(msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)>(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2))), _hostActor);
 	}
 
 	template <typename PT0, typename PT1>
 	void operator()(PT0&& p0, PT1&& p1) const
 	{
 		assert(!empty());
-		_msgPool->push_msg(std::move(msg_param<T0, T1>(TRY_MOVE(p0), TRY_MOVE(p1))), _hostActor);
+		_msgPool->push_msg(std::move(msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1)>(TRY_MOVE(p0), TRY_MOVE(p1))), _hostActor);
 	}
 
 	template <typename PT0>
 	void operator()(PT0&& p0) const
 	{
 		assert(!empty());
-		_msgPool->push_msg(std::move(msg_param<T0>(TRY_MOVE(p0))), _hostActor);
+		_msgPool->push_msg(std::move(msg_param<TYPE_PIPE(T0)>(TRY_MOVE(p0))), _hostActor);
 	}
 
 	void operator()() const
@@ -1620,7 +1800,8 @@ protected:
 template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
 class trig_once_notifer: public trig_once_base
 {
-	typedef dst_receiver_base<T0, T1, T2, T3> dst_receiver;
+	typedef msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> msg_type;
+	typedef dst_receiver_base<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> dst_receiver;
 
 	friend my_actor;
 public:
@@ -1634,25 +1815,25 @@ public:
 	template <typename PT0, typename PT1, typename PT2, typename PT3>
 	void operator()(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3) const
 	{
-		_trig_handler(*_dstRec, std::move(msg_param<T0, T1, T2, T3>(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2), TRY_MOVE(p3))));
+		_trig_handler(*_dstRec, std::move(msg_type(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2), TRY_MOVE(p3))));
 	}
 
 	template <typename PT0, typename PT1, typename PT2>
 	void operator()(PT0&& p0, PT1&& p1, PT2&& p2) const
 	{
-		_trig_handler(*_dstRec, std::move(msg_param<T0, T1, T2>(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2))));
+		_trig_handler(*_dstRec, std::move(msg_type(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2))));
 	}
 
 	template <typename PT0, typename PT1>
 	void operator()(PT0&& p0, PT1&& p1) const
 	{
-		_trig_handler(*_dstRec, std::move(msg_param<T0, T1>(TRY_MOVE(p0), TRY_MOVE(p1))));
+		_trig_handler(*_dstRec, std::move(msg_type(TRY_MOVE(p0), TRY_MOVE(p1))));
 	}
 
 	template <typename PT0>
 	void operator()(PT0&& p0) const
 	{
-		_trig_handler(*_dstRec, std::move(msg_param<T0>(TRY_MOVE(p0))));
+		_trig_handler(*_dstRec, std::move(msg_type(TRY_MOVE(p0))));
 	}
 
 	void operator()() const
@@ -1731,25 +1912,25 @@ public:
 	template <typename PT0, typename PT1, typename PT2, typename PT3>
 	void operator()(PT0&& p0, PT1&& p1, PT2&& p2, PT3&& p3) const
 	{
-		_trig_handler_ref(_dstRef, std::move(msg_param<T0, T1, T2, T3>(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2), TRY_MOVE(p3))));
+		_trig_handler_ref(_dstRef, std::move(msg_type(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2), TRY_MOVE(p3))));
 	}
 
 	template <typename PT0, typename PT1, typename PT2>
 	void operator()(PT0&& p0, PT1&& p1, PT2&& p2) const
 	{
-		_trig_handler_ref(_dstRef, std::move(msg_param<T0, T1, T2>(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2))));
+		_trig_handler_ref(_dstRef, std::move(msg_type(TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2))));
 	}
 
 	template <typename PT0, typename PT1>
 	void operator()(PT0&& p0, PT1&& p1) const
 	{
-		_trig_handler_ref(_dstRef, std::move(msg_param<T0, T1>(TRY_MOVE(p0), TRY_MOVE(p1))));
+		_trig_handler_ref(_dstRef, std::move(msg_type(TRY_MOVE(p0), TRY_MOVE(p1))));
 	}
 
 	template <typename PT0>
 	void operator()(PT0&& p0) const
 	{
-		_trig_handler_ref(_dstRef, std::move(msg_param<T0>(TRY_MOVE(p0))));
+		_trig_handler_ref(_dstRef, std::move(msg_type(TRY_MOVE(p0))));
 	}
 
 	void operator()() const
@@ -2148,12 +2329,12 @@ public:
 		assert_enter();
 		if (exeStrand != _strand)
 		{
-			dst_receiver_buff<T0>::dst_buff dstBuff;
-			dst_receiver_buff<T0> dstRec(dstBuff);
+			dst_receiver_buff<TYPE_PIPE(T0)>::dst_buff dstBuff;
+			dst_receiver_buff<TYPE_PIPE(T0)> dstRec(dstBuff);
 			actor_handle shared_this = shared_from_this();
-			exeStrand->asyncInvoke(TRY_MOVE(h), [shared_this, &dstRec](const T0& p0){shared_this->_trig_handler(dstRec, std::move(msg_param<T0>(p0))); });
+			exeStrand->asyncInvoke(TRY_MOVE(h), [shared_this, &dstRec](const T0& p0){shared_this->_trig_handler(dstRec, std::move(msg_param<TYPE_PIPE(T0)>(p0))); });
 			push_yield();
-			return std::move((T0&)dstBuff.get()._res0);
+			return std::move((RM_REF(T0)&)dstBuff.get()._res0);
 		} 
 		return h();
 	}
@@ -2175,12 +2356,12 @@ public:
 	__yield_interrupt T0 async_send(shared_strand exeStrand, H&& h)
 	{
 		assert_enter();
-		dst_receiver_buff<T0>::dst_buff dstBuff;
-		dst_receiver_buff<T0> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0)> dstRec(dstBuff);
 		actor_handle shared_this = shared_from_this();
-		exeStrand->asyncInvoke(TRY_MOVE(h), [shared_this, &dstRec](const T0& p0){shared_this->_trig_handler(dstRec, std::move(msg_param<T0>(p0))); });
+		exeStrand->asyncInvoke(TRY_MOVE(h), [shared_this, &dstRec](const T0& p0){shared_this->_trig_handler(dstRec, std::move(msg_param<TYPE_PIPE(T0)>(p0))); });
 		push_yield();
-		return std::move((T0&)dstBuff.get()._res0);
+		return std::move((RM_REF(T0)&)dstBuff.get()._res0);
 	}
 
 	template <typename H>
@@ -2341,73 +2522,6 @@ public:
 	@brief 关闭消息通知句柄
 	*/
 	void close_msg_notifer(actor_msg_handle_base& amh);
-public:
-	/*!
-	@brief 使用内部定时器延时触发某个句柄，之前必须调用过make_trig_notifer
-	*/
-	template <typename T0, typename T1, typename T2, typename T3>
-	void delay_trig(int ms, actor_trig_handle<T0, T1, T2, T3>& ath, const T0& p0, const T1& p1, const T2& p2, const T3& p3)
-	{
-		assert_enter();
-		assert(ath._hostActor && ath._hostActor->self_id() == self_id());
-		assert(ath._closed && !(*ath._closed));
-		auto& closed_ = ath._closed;
-		delay_trig(ms, [=, &ath]
-		{
-			if (!*(closed_))
-			{
-				ath.push_msg(ref_ex<T0, T1, T2, T3>((T0&)p0, (T1&)p1, (T2&)p2, (T3&)p3));
-			}
-		});
-	}
-
-	template <typename T0, typename T1, typename T2>
-	void delay_trig(int ms, actor_trig_handle<T0, T1, T2>& ath, const T0& p0, const T1& p1, const T2& p2)
-	{
-		assert_enter();
-		assert(ath._hostActor && ath._hostActor->self_id() == self_id());
-		assert(ath._closed && !(*ath._closed));
-		auto& closed_ = ath._closed;
-		delay_trig(ms, [=, &ath]
-		{
-			if (!*(closed_))
-			{
-				ath.push_msg(ref_ex<T0, T1, T2>((T0&)p0, (T1&)p1, (T2&)p2));
-			}
-		});
-	}
-
-	template <typename T0, typename T1>
-	void delay_trig(int ms, actor_trig_handle<T0, T1>& ath, const T0& p0, const T1& p1)
-	{
-		assert_enter();
-		assert(ath._hostActor && ath._hostActor->self_id() == self_id());
-		assert(ath._closed && !(*ath._closed));
-		auto& closed_ = ath._closed;
-		delay_trig(ms, [=, &ath]
-		{
-			if (!*(closed_))
-			{
-				ath.push_msg(ref_ex<T0, T1>((T0&)p0, (T1&)p1));
-			}
-		});
-	}
-
-	template <typename T0>
-	void delay_trig(int ms, actor_trig_handle<T0>& ath, const T0& p0)
-	{
-		assert_enter();
-		assert(ath._hostActor && ath._hostActor->self_id() == self_id());
-		assert(ath._closed && !(*ath._closed));
-		auto& closed_ = ath._closed;
-		delay_trig(ms, [=, &ath]
-		{
-			if (!*(closed_))
-			{
-				ath.push_msg(ref_ex<T0>((T0&)p0));
-			}
-		});
-	}
 private:
 	template <typename AMH, typename DST>
 	bool _timed_wait_msg(AMH& amh, DST& dstRec, int tm)
@@ -2461,40 +2575,70 @@ public:
 	@param tm 超时时间
 	@return 超时完成返回false，成功提取消息返回true
 	*/
-	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1, T2, T3>& amh, T0& r0, T1& r1, T2& r2, T3& r3)
+	template <typename T0, typename T1, typename T2, typename T3, typename DT0, typename DT1, typename DT2, typename DT3>
+	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1, T2, T3>& amh, DT0& r0, DT1& r1, DT2& r2, DT3& r3)
 	{
 		assert_enter();
-		ref_ex<T0, T1, T2, T3> dstRef(r0, r1, r2, r3);
-		dst_receiver_ref<T0, T1, T2, T3> dstRec(dstRef);
-		return _timed_wait_msg(amh, dstRec, tm);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> dstRec(dstBuff);
+		if (_timed_wait_msg(amh, dstRec, tm))
+		{
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)>& msg = dstBuff.get();
+			r0 = std::move(msg._res0);
+			r1 = std::move(msg._res1);
+			r2 = std::move(msg._res2);
+			r3 = std::move(msg._res3);
+			return true;
+		}
+		return false;
 	}
 
-	template <typename T0, typename T1, typename T2>
-	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1, T2>& amh, T0& r0, T1& r1, T2& r2)
+	template <typename T0, typename T1, typename T2, typename DT0, typename DT1, typename DT2>
+	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1, T2>& amh, DT0& r0, DT1& r1, DT2& r2)
 	{
 		assert_enter();
-		ref_ex<T0, T1, T2> dstRef(r0, r1, r2);
-		dst_receiver_ref<T0, T1, T2> dstRec(dstRef);
-		return _timed_wait_msg(amh, dstRec, tm);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)> dstRec(dstBuff);
+		if (_timed_wait_msg(amh, dstRec, tm))
+		{
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)>& msg = dstBuff.get();
+			r0 = std::move(msg._res0);
+			r1 = std::move(msg._res1);
+			r2 = std::move(msg._res2);
+			return true;
+		}
+		return false;
 	}
 
-	template <typename T0, typename T1>
-	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1>& amh, T0& r0, T1& r1)
+	template <typename T0, typename T1, typename DT0, typename DT1>
+	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1>& amh, DT0& r0, DT1& r1)
 	{
 		assert_enter();
-		ref_ex<T0, T1> dstRef(r0, r1);
-		dst_receiver_ref<T0, T1> dstRec(dstRef);
-		return _timed_wait_msg(amh, dstRec, tm);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1)> dstRec(dstBuff);
+		if (_timed_wait_msg(amh, dstRec, tm))
+		{
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1)>& msg = dstBuff.get();
+			r0 = std::move(msg._res0);
+			r1 = std::move(msg._res1);
+			return true;
+		}
+		return false;
 	}
 
-	template <typename T0>
-	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0>& amh, T0& r0)
+	template <typename T0, typename DT0>
+	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0>& amh, DT0& r0)
 	{
 		assert_enter();
-		ref_ex<T0> dstRef(r0);
-		dst_receiver_ref<T0> dstRec(dstRef);
-		return _timed_wait_msg(amh, dstRec, tm);
+		dst_receiver_buff<TYPE_PIPE(T0)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0)> dstRec(dstBuff);
+		if (_timed_wait_msg(amh, dstRec, tm))
+		{
+			msg_param<TYPE_PIPE(T0)>& msg = dstBuff.get();
+			r0 = std::move(msg._res0);
+			return true;
+		}
+		return false;
 	}
 
 	template <typename T0>
@@ -2516,11 +2660,11 @@ public:
 	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1, T2, T3>& amh, const Handler& h)
 	{
 		assert_enter();
-		dst_receiver_buff<T0, T1, T2, T3>::dst_buff dstBuff;
-		dst_receiver_buff<T0, T1, T2, T3> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> dstRec(dstBuff);
 		if (_timed_wait_msg(amh, dstRec, tm))
 		{
-			msg_param<T0, T1, T2, T3>& msg = dstBuff.get();
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)>& msg = dstBuff.get();
 			h(msg._res0, msg._res1, msg._res2, msg._res3);
 			return true;
 		}
@@ -2531,11 +2675,11 @@ public:
 	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1, T2>& amh, const Handler& h)
 	{
 		assert_enter();
-		dst_receiver_buff<T0, T1, T2>::dst_buff dstBuff;
-		dst_receiver_buff<T0, T1, T2> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)> dstRec(dstBuff);
 		if (_timed_wait_msg(amh, dstRec, tm))
 		{
-			msg_param<T0, T1, T2>& msg = dstBuff.get();
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)>& msg = dstBuff.get();
 			h(msg._res0, msg._res1, msg._res2);
 			return true;
 		}
@@ -2546,11 +2690,11 @@ public:
 	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0, T1>& amh, const Handler& h)
 	{
 		assert_enter();
-		dst_receiver_buff<T0, T1>::dst_buff dstBuff;
-		dst_receiver_buff<T0, T1> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1)> dstRec(dstBuff);
 		if (_timed_wait_msg(amh, dstRec, tm))
 		{
-			msg_param<T0, T1>& msg = dstBuff.get();
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1)>& msg = dstBuff.get();
 			h(msg._res0, msg._res1);
 			return true;
 		}
@@ -2561,11 +2705,11 @@ public:
 	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<T0>& amh, const Handler& h)
 	{
 		assert_enter();
-		dst_receiver_buff<T0>::dst_buff dstBuff;
-		dst_receiver_buff<T0> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0)> dstRec(dstBuff);
 		if (_timed_wait_msg(amh, dstRec, tm))
 		{
-			msg_param<T0>& msg = dstBuff.get();
+			msg_param<TYPE_PIPE(T0)>& msg = dstBuff.get();
 			h(msg._res0);
 			return true;
 		}
@@ -2588,26 +2732,26 @@ public:
 	/*!
 	@brief 从消息句柄中提取消息
 	*/
-	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt void wait_msg(actor_msg_handle<T0, T1, T2, T3>& amh, T0& r0, T1& r1, T2& r2, T3& r3)
+	template <typename T0, typename T1, typename T2, typename T3, typename DT0, typename DT1, typename DT2, typename DT3>
+	__yield_interrupt void wait_msg(actor_msg_handle<T0, T1, T2, T3>& amh, DT0& r0, DT1& r1, DT2& r2, DT3& r3)
 	{
 		timed_wait_msg(-1, amh, r0, r1, r2, r3);
 	}
 
-	template <typename T0, typename T1, typename T2>
-	__yield_interrupt void wait_msg(actor_msg_handle<T0, T1, T2>& amh, T0& r0, T1& r1, T2& r2)
+	template <typename T0, typename T1, typename T2, typename DT0, typename DT1, typename DT2>
+	__yield_interrupt void wait_msg(actor_msg_handle<T0, T1, T2>& amh, DT0& r0, DT1& r1, DT2& r2)
 	{
 		timed_wait_msg(-1, amh, r0, r1, r2);
 	}
 
-	template <typename T0, typename T1>
-	__yield_interrupt void wait_msg(actor_msg_handle<T0, T1>& amh, T0& r0, T1& r1)
+	template <typename T0, typename T1, typename DT0, typename DT1>
+	__yield_interrupt void wait_msg(actor_msg_handle<T0, T1>& amh, DT0& r0, DT1& r1)
 	{
 		timed_wait_msg(-1, amh, r0, r1);
 	}
 
-	template <typename T0>
-	__yield_interrupt void wait_msg(actor_msg_handle<T0>& amh, T0& r0)
+	template <typename T0, typename DT0>
+	__yield_interrupt void wait_msg(actor_msg_handle<T0>& amh, DT0& r0)
 	{
 		timed_wait_msg(-1, amh, r0);
 	}
@@ -2616,10 +2760,10 @@ public:
 	__yield_interrupt T0 wait_msg(actor_msg_handle<T0>& amh)
 	{
 		assert_enter();
-		dst_receiver_buff<T0>::dst_buff dstBuff;
-		dst_receiver_buff<T0> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0)> dstRec(dstBuff);
 		_wait_msg(amh, dstRec);
-		return std::move((T0&)dstBuff.get()._res0);
+		return std::move((RM_REF(T0)&)dstBuff.get()._res0);
 	}
 
 	__yield_interrupt void wait_msg(actor_msg_handle<>& amh);
@@ -2726,40 +2870,70 @@ public:
 	@param tm 超时时间
 	@return 超时完成返回false，成功提取消息返回true
 	*/
-	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0, T1, T2, T3>& ath, T0& r0, T1& r1, T2& r2, T3& r3)
+	template <typename T0, typename T1, typename T2, typename T3, typename DT0, typename DT1, typename DT2, typename DT3>
+	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0, T1, T2, T3>& ath, DT0& r0, DT1& r1, DT2& r2, DT3& r3)
 	{
 		assert_enter();
-		ref_ex<T0, T1, T2, T3> dstRef(r0, r1, r2, r3);
-		dst_receiver_ref<T0, T1, T2, T3> dstRec(dstRef);
-		return _timed_wait_msg(ath, dstRec, tm);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> dstRec(dstBuff);
+		if (_timed_wait_msg(ath, dstRec, tm))
+		{
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)>& msg = dstBuff.get();
+			r0 = std::move(msg._res0);
+			r1 = std::move(msg._res1);
+			r2 = std::move(msg._res2);
+			r3 = std::move(msg._res3);
+			return true;
+		}
+		return false;
 	}
 
-	template <typename T0, typename T1, typename T2>
-	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0, T1, T2>& ath, T0& r0, T1& r1, T2& r2)
+	template <typename T0, typename T1, typename T2, typename DT0, typename DT1, typename DT2>
+	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0, T1, T2>& ath, DT0& r0, DT1& r1, DT2& r2)
 	{
 		assert_enter();
-		ref_ex<T0, T1, T2> dstRef(r0, r1, r2);
-		dst_receiver_ref<T0, T1, T2> dstRec(dstRef);
-		return _timed_wait_msg(ath, dstRec, tm);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)> dstRec(dstBuff);
+		if (_timed_wait_msg(ath, dstRec, tm))
+		{
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)>& msg = dstBuff.get();
+			r0 = std::move(msg._res0);
+			r1 = std::move(msg._res1);
+			r2 = std::move(msg._res2);
+			return true;
+		}
+		return false;
 	}
 
-	template <typename T0, typename T1>
-	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0, T1>& ath, T0& r0, T1& r1)
+	template <typename T0, typename T1, typename DT0, typename DT1>
+	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0, T1>& ath, DT0& r0, DT1& r1)
 	{
 		assert_enter();
-		ref_ex<T0, T1> dstRef(r0, r1);
-		dst_receiver_ref<T0, T1> dstRec(dstRef);
-		return _timed_wait_msg(ath, dstRec, tm);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1)> dstRec(dstBuff);
+		if (_timed_wait_msg(ath, dstRec, tm))
+		{
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1)>& msg = dstBuff.get();
+			r0 = std::move(msg._res0);
+			r1 = std::move(msg._res1);
+			return true;
+		}
+		return false;
 	}
 
-	template <typename T0>
-	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0>& ath, T0& r0)
+	template <typename T0, typename DT0>
+	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0>& ath, DT0& r0)
 	{
 		assert_enter();
-		ref_ex<T0> dstRef(r0);
-		dst_receiver_ref<T0> dstRec(dstRef);
-		return _timed_wait_msg(ath, dstRec, tm);
+		dst_receiver_buff<TYPE_PIPE(T0)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0)> dstRec(dstBuff);
+		if (_timed_wait_msg(ath, dstRec, tm))
+		{
+			msg_param<TYPE_PIPE(T0)>& msg = dstBuff.get();
+			r0 = std::move(msg._res0);
+			return true;
+		}
+		return false;
 	}
 
 	template <typename T0>
@@ -2781,11 +2955,11 @@ public:
 	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0, T1, T2, T3>& ath, const Handler& h)
 	{
 		assert_enter();
-		dst_receiver_buff<T0, T1, T2, T3>::dst_buff dstBuff;
-		dst_receiver_buff<T0, T1, T2, T3> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> dstRec(dstBuff);
 		if (_timed_wait_msg(ath, dstRec, tm))
 		{
-			msg_param<T0, T1, T2, T3>& msg = dstBuff.get();
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)>& msg = dstBuff.get();
 			h(msg._res0, msg._res1, msg._res2, msg._res3);
 			return true;
 		}
@@ -2796,11 +2970,11 @@ public:
 	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0, T1, T2>& ath, const Handler& h)
 	{
 		assert_enter();
-		dst_receiver_buff<T0, T1, T2>::dst_buff dstBuff;
-		dst_receiver_buff<T0, T1, T2> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)> dstRec(dstBuff);
 		if (_timed_wait_msg(ath, dstRec, tm))
 		{
-			msg_param<T0, T1, T2>& msg = dstBuff.get();
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)>& msg = dstBuff.get();
 			h(msg._res0, msg._res1, msg._res2);
 			return true;
 		}
@@ -2811,11 +2985,11 @@ public:
 	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0, T1>& ath, const Handler& h)
 	{
 		assert_enter();
-		dst_receiver_buff<T0, T1>::dst_buff dstBuff;
-		dst_receiver_buff<T0, T1> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1)> dstRec(dstBuff);
 		if (_timed_wait_msg(ath, dstRec, tm))
 		{
-			msg_param<T0, T1>& msg = dstBuff.get();
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1)>& msg = dstBuff.get();
 			h(msg._res0, msg._res1);
 			return true;
 		}
@@ -2826,11 +3000,11 @@ public:
 	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<T0>& ath, const Handler& h)
 	{
 		assert_enter();
-		dst_receiver_buff<T0>::dst_buff dstBuff;
-		dst_receiver_buff<T0> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0)> dstRec(dstBuff);
 		if (_timed_wait_msg(ath, dstRec, tm))
 		{
-			msg_param<T0>& msg = dstBuff.get();
+			msg_param<TYPE_PIPE(T0)>& msg = dstBuff.get();
 			h(msg._res0);
 			return true;
 		}
@@ -2852,26 +3026,26 @@ public:
 	/*!
 	@brief 从触发句柄中提取消息
 	*/
-	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt void wait_trig(actor_trig_handle<T0, T1, T2, T3>& ath, T0& r0, T1& r1, T2& r2, T3& r3)
+	template <typename T0, typename T1, typename T2, typename T3, typename DT0, typename DT1, typename DT2, typename DT3>
+	__yield_interrupt void wait_trig(actor_trig_handle<T0, T1, T2, T3>& ath, DT0& r0, DT1& r1, DT2& r2, DT3& r3)
 	{
 		timed_wait_trig(-1, ath, r0, r1, r2, r3);
 	}
 
-	template <typename T0, typename T1, typename T2>
-	__yield_interrupt void wait_trig(actor_trig_handle<T0, T1, T2>& ath, T0& r0, T1& r1, T2& r2)
+	template <typename T0, typename T1, typename T2, typename DT0, typename DT1, typename DT2>
+	__yield_interrupt void wait_trig(actor_trig_handle<T0, T1, T2>& ath, DT0& r0, DT1& r1, DT2& r2)
 	{
 		timed_wait_trig(-1, ath, r0, r1, r2);
 	}
 
-	template <typename T0, typename T1>
-	__yield_interrupt void wait_trig(actor_trig_handle<T0, T1>& ath, T0& r0, T1& r1)
+	template <typename T0, typename T1, typename DT0, typename DT1>
+	__yield_interrupt void wait_trig(actor_trig_handle<T0, T1>& ath, DT0& r0, DT1& r1)
 	{
 		timed_wait_trig(-1, ath, r0, r1);
 	}
 
-	template <typename T0>
-	__yield_interrupt void wait_trig(actor_trig_handle<T0>& ath, T0& r0)
+	template <typename T0, typename DT0>
+	__yield_interrupt void wait_trig(actor_trig_handle<T0>& ath, DT0& r0)
 	{
 		timed_wait_trig(-1, ath, r0);
 	}
@@ -2880,10 +3054,10 @@ public:
 	__yield_interrupt T0 wait_trig(actor_trig_handle<T0>& ath)
 	{
 		assert_enter();
-		dst_receiver_buff<T0>::dst_buff dstBuff;
-		dst_receiver_buff<T0> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0)> dstRec(dstBuff);
 		_wait_msg(ath, dstRec);
-		return std::move((T0&)dstBuff.get()._res0);
+		return std::move((RM_REF(T0)&)dstBuff.get()._res0);
 	}
 
 	__yield_interrupt void wait_trig(actor_trig_handle<>& ath);
@@ -3686,40 +3860,70 @@ public:
 	@param checkDis 检测是否被断开连接，是就抛出 pump_disconnected_exception 异常
 	@return 超时完成返回false，成功取到消息返回true
 	*/
-	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0, T1, T2, T3>& pump, T0& r0, T1& r1, T2& r2, T3& r3, bool checkDis = false)
+	template <typename T0, typename T1, typename T2, typename T3, typename DT0, typename DT1, typename DT2, typename DT3>
+	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0, T1, T2, T3>& pump, DT0& r0, DT1& r1, DT2& r2, DT3& r3, bool checkDis = false)
 	{
 		assert_enter();
-		ref_ex<T0, T1, T2, T3> dstRef(r0, r1, r2, r3);
-		dst_receiver_ref<T0, T1, T2, T3> dstRec(dstRef);
-		return _timed_pump_msg(pump, dstRec, tm, checkDis);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> dstRec(dstBuff);
+		if (_timed_pump_msg(pump, dstRec, tm, checkDis))
+		{
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)>& msg = dstBuff.get();
+			r0 = std::move(msg._res0);
+			r1 = std::move(msg._res1);
+			r2 = std::move(msg._res2);
+			r3 = std::move(msg._res3);
+			return true;
+		}
+		return false;
 	}
 
-	template <typename T0, typename T1, typename T2>
-	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0, T1, T2>& pump, T0& r0, T1& r1, T2& r2, bool checkDis = false)
+	template <typename T0, typename T1, typename T2, typename DT0, typename DT1, typename DT2>
+	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0, T1, T2>& pump, DT0& r0, DT1& r1, DT2& r2, bool checkDis = false)
 	{
 		assert_enter();
-		ref_ex<T0, T1, T2> dstRef(r0, r1, r2);
-		dst_receiver_ref<T0, T1, T2> dstRec(dstRef);
-		return _timed_pump_msg(pump, dstRec, tm, checkDis);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)> dstRec(dstBuff);
+		if (_timed_pump_msg(pump, dstRec, tm, checkDis))
+		{
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)>& msg = dstBuff.get();
+			r0 = std::move(msg._res0);
+			r1 = std::move(msg._res1);
+			r2 = std::move(msg._res2);
+			return true;
+		}
+		return false;
 	}
 
-	template <typename T0, typename T1>
-	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0, T1>& pump, T0& r0, T1& r1, bool checkDis = false)
+	template <typename T0, typename T1, typename DT0, typename DT1>
+	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0, T1>& pump, DT0& r0, DT1& r1, bool checkDis = false)
 	{
 		assert_enter();
-		ref_ex<T0, T1> dstRef(r0, r1);
-		dst_receiver_ref<T0, T1> dstRec(dstRef);
-		return _timed_pump_msg(pump, dstRec, tm, checkDis);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1)> dstRec(dstBuff);
+		if (_timed_pump_msg(pump, dstRec, tm, checkDis))
+		{
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1)>& msg = dstBuff.get();
+			r0 = std::move(msg._res0);
+			r1 = std::move(msg._res1);
+			return true;
+		}
+		return false;
 	}
 
-	template <typename T0>
-	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0>& pump, T0& r0, bool checkDis = false)
+	template <typename T0, typename DT0>
+	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0>& pump, DT0& r0, bool checkDis = false)
 	{
 		assert_enter();
-		ref_ex<T0> dstRef(r0);
-		dst_receiver_ref<T0> dstRec(dstRef);
-		return _timed_pump_msg(pump, dstRec, tm, checkDis);
+		dst_receiver_buff<TYPE_PIPE(T0)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0)> dstRec(dstBuff);
+		if (_timed_pump_msg(pump, dstRec, tm, checkDis))
+		{
+			msg_param<TYPE_PIPE(T0)>& msg = dstBuff.get();
+			r0 = std::move(msg._res0);
+			return true;
+		}
+		return false;
 	}
 
 	template <typename T0>
@@ -3741,11 +3945,11 @@ public:
 	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0, T1, T2, T3>& pump, const Handler& h, bool checkDis = false)
 	{
 		assert_enter();
-		dst_receiver_buff<T0, T1, T2, T3>::dst_buff dstBuff;
-		dst_receiver_buff<T0, T1, T2, T3> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> dstRec(dstBuff);
 		if (_timed_pump_msg(pump, dstRec, tm, checkDis))
 		{
-			msg_param<T0, T1, T2, T3>& msg = dstBuff.get();
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)>& msg = dstBuff.get();
 			h(msg._res0, msg._res1, msg._res2, msg._res3);
 			return true;
 		}
@@ -3756,11 +3960,11 @@ public:
 	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0, T1, T2>& pump, const Handler& h, bool checkDis = false)
 	{
 		assert_enter();
-		dst_receiver_buff<T0, T1, T2>::dst_buff dstBuff;
-		dst_receiver_buff<T0, T1, T2> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)> dstRec(dstBuff);
 		if (_timed_pump_msg(pump, dstRec, tm, checkDis))
 		{
-			msg_param<T0, T1, T2>& msg = dstBuff.get();
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)>& msg = dstBuff.get();
 			h(msg._res0, msg._res1, msg._res2);
 			return true;
 		}
@@ -3771,11 +3975,11 @@ public:
 	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0, T1>& pump, const Handler& h, bool checkDis = false)
 	{
 		assert_enter();
-		dst_receiver_buff<T0, T1>::dst_buff dstBuff;
-		dst_receiver_buff<T0, T1> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1)> dstRec(dstBuff);
 		if (_timed_pump_msg(pump, dstRec, tm, checkDis))
 		{
-			msg_param<T0, T1>& msg = dstBuff.get();
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1)>& msg = dstBuff.get();
 			h(msg._res0, msg._res1);
 			return true;
 		}
@@ -3786,11 +3990,11 @@ public:
 	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<T0>& pump, const Handler& h, bool checkDis = false)
 	{
 		assert_enter();
-		dst_receiver_buff<T0>::dst_buff dstBuff;
-		dst_receiver_buff<T0> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0)> dstRec(dstBuff);
 		if (_timed_pump_msg(pump, dstRec, tm, checkDis))
 		{
-			msg_param<T0>& msg = dstBuff.get();
+			msg_param<TYPE_PIPE(T0)>& msg = dstBuff.get();
 			h(msg._res0);
 			return true;
 		}
@@ -3812,26 +4016,26 @@ public:
 	/*!
 	@brief 从消息泵中提取消息
 	*/
-	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt void pump_msg(const msg_pump_handle<T0, T1, T2, T3>& pump, T0& r0, T1& r1, T2& r2, T3& r3, bool checkDis = false)
+	template <typename T0, typename T1, typename T2, typename T3, typename DT0, typename DT1, typename DT2, typename DT3>
+	__yield_interrupt void pump_msg(const msg_pump_handle<T0, T1, T2, T3>& pump, DT0& r0, DT1& r1, DT2& r2, DT3& r3, bool checkDis = false)
 	{
 		timed_pump_msg(-1, pump, r0, r1, r2, r3, checkDis);
 	}
 
-	template <typename T0, typename T1, typename T2>
-	__yield_interrupt void pump_msg(const msg_pump_handle<T0, T1, T2>& pump, T0& r0, T1& r1, T2& r2, bool checkDis = false)
+	template <typename T0, typename T1, typename T2, typename DT0, typename DT1, typename DT2>
+	__yield_interrupt void pump_msg(const msg_pump_handle<T0, T1, T2>& pump, DT0& r0, DT1& r1, DT2& r2, bool checkDis = false)
 	{
 		timed_pump_msg(-1, pump, r0, r1, r2, checkDis);
 	}
 
-	template <typename T0, typename T1>
-	__yield_interrupt void pump_msg(const msg_pump_handle<T0, T1>& pump, T0& r0, T1& r1, bool checkDis = false)
+	template <typename T0, typename T1, typename DT0, typename DT1>
+	__yield_interrupt void pump_msg(const msg_pump_handle<T0, T1>& pump, DT0& r0, DT1& r1, bool checkDis = false)
 	{
 		timed_pump_msg(-1, pump, r0, r1, checkDis);
 	}
 
-	template <typename T0>
-	__yield_interrupt void pump_msg(const msg_pump_handle<T0>& pump, T0& r0, bool checkDis = false)
+	template <typename T0, typename DT0>
+	__yield_interrupt void pump_msg(const msg_pump_handle<T0>& pump, DT0& r0, bool checkDis = false)
 	{
 		timed_pump_msg(-1, pump, r0, checkDis);
 	}
@@ -3840,10 +4044,10 @@ public:
 	__yield_interrupt T0 pump_msg(const msg_pump_handle<T0>& pump, bool checkDis = false)
 	{
 		assert_enter();
-		dst_receiver_buff<T0>::dst_buff dstBuff;
-		dst_receiver_buff<T0> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0)> dstRec(dstBuff);
 		_pump_msg(pump, dstRec, checkDis);
-		return std::move((T0&)dstBuff.get()._res0);
+		return std::move((RM_REF(T0)&)dstBuff.get()._res0);
 	}
 
 	__yield_interrupt void pump_msg(const msg_pump_handle<>& pump, bool checkDis = false);
@@ -3881,40 +4085,70 @@ public:
 	/*!
 	@brief 尝试从消息泵中提取消息
 	*/
-	template <typename T0, typename T1, typename T2, typename T3>
-	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0, T1, T2, T3>& pump, T0& r0, T1& r1, T2& r2, T3& r3, bool checkDis = false)
+	template <typename T0, typename T1, typename T2, typename T3, typename DT0, typename DT1, typename DT2, typename DT3>
+	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0, T1, T2, T3>& pump, DT0& r0, DT1& r1, DT2& r2, DT3& r3, bool checkDis = false)
 	{
 		assert_enter();
-		ref_ex<T0, T1, T2, T3> dstRef(r0, r1, r2, r3);
-		dst_receiver_ref<T0, T1, T2, T3> dstRec(dstRef);
-		return _try_pump_msg(pump, dstRec, checkDis);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> dstRec(dstBuff);
+		if (_try_pump_msg(pump, dstRec, checkDis))
+		{
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)>& msg = dstBuff.get();
+			r0 = std::move(msg._res0);
+			r1 = std::move(msg._res1);
+			r2 = std::move(msg._res2);
+			r3 = std::move(msg._res3);
+			return true;
+		}
+		return false;
 	}
 
-	template <typename T0, typename T1, typename T2>
-	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0, T1, T2>& pump, T0& r0, T1& r1, T2& r2, bool checkDis = false)
+	template <typename T0, typename T1, typename T2, typename DT0, typename DT1, typename DT2>
+	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0, T1, T2>& pump, DT0& r0, DT1& r1, DT2& r2, bool checkDis = false)
 	{
 		assert_enter();
-		ref_ex<T0, T1, T2> dstRef(r0, r1, r2);
-		dst_receiver_ref<T0, T1, T2> dstRec(dstRef);
-		return _try_pump_msg(pump, dstRec, checkDis);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)> dstRec(dstBuff);
+		if (_try_pump_msg(pump, dstRec, checkDis))
+		{
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)>& msg = dstBuff.get();
+			r0 = std::move(msg._res0);
+			r1 = std::move(msg._res1);
+			r2 = std::move(msg._res2);
+			return true;
+		}
+		return false;
 	}
 
-	template <typename T0, typename T1>
-	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0, T1>& pump, T0& r0, T1& r1, bool checkDis = false)
+	template <typename T0, typename T1, typename DT0, typename DT1>
+	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0, T1>& pump, DT0& r0, DT1& r1, bool checkDis = false)
 	{
 		assert_enter();
-		ref_ex<T0, T1> dstRef(r0, r1);
-		dst_receiver_ref<T0, T1> dstRec(dstRef);
-		return _try_pump_msg(pump, dstRec, checkDis);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1)> dstRec(dstBuff);
+		if (_try_pump_msg(pump, dstRec, checkDis))
+		{
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1)>& msg = dstBuff.get();
+			r0 = std::move(msg._res0);
+			r1 = std::move(msg._res1);
+			return true;
+		}
+		return false;
 	}
 
-	template <typename T0>
-	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0>& pump, T0& r0, bool checkDis = false)
+	template <typename T0, typename DT0>
+	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0>& pump, DT0& r0, bool checkDis = false)
 	{
 		assert_enter();
-		ref_ex<T0> dstRef(r0);
-		dst_receiver_ref<T0> dstRec(dstRef);
-		return _try_pump_msg(pump, dstRec, checkDis);
+		dst_receiver_buff<TYPE_PIPE(T0)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0)> dstRec(dstBuff);
+		if (_try_pump_msg(pump, dstRec, checkDis))
+		{
+			msg_param<TYPE_PIPE(T0)>& msg = dstBuff.get();
+			r0 = std::move(msg._res0);
+			return true;
+		}
+		return false;
 	}
 
 	template <typename T0>
@@ -3936,11 +4170,11 @@ public:
 	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0, T1, T2, T3>& pump, const Handler& h, bool checkDis = false)
 	{
 		assert_enter();
-		dst_receiver_buff<T0, T1, T2, T3>::dst_buff dstBuff;
-		dst_receiver_buff<T0, T1, T2, T3> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> dstRec(dstBuff);
 		if (_try_pump_msg(pump, dstRec, checkDis))
 		{
-			msg_param<T0, T1, T2, T3>& msg = dstBuff.get();
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)>& msg = dstBuff.get();
 			h(msg._res0, msg._res1, msg._res2, msg._res3);
 			return true;
 		}
@@ -3951,11 +4185,11 @@ public:
 	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0, T1, T2>& pump, const Handler& h, bool checkDis = false)
 	{
 		assert_enter();
-		dst_receiver_buff<T0, T1, T2>::dst_buff dstBuff;
-		dst_receiver_buff<T0, T1, T2> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)> dstRec(dstBuff);
 		if (_try_pump_msg(pump, dstRec, checkDis))
 		{
-			msg_param<T0, T1, T2>& msg = dstBuff.get();
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2)>& msg = dstBuff.get();
 			h(msg._res0, msg._res1, msg._res2);
 			return true;
 		}
@@ -3966,11 +4200,11 @@ public:
 	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0, T1>& pump, const Handler& h, bool checkDis = false)
 	{
 		assert_enter();
-		dst_receiver_buff<T0, T1>::dst_buff dstBuff;
-		dst_receiver_buff<T0, T1> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0), TYPE_PIPE(T1)> dstRec(dstBuff);
 		if (_try_pump_msg(pump, dstRec, checkDis))
 		{
-			msg_param<T0, T1>& msg = dstBuff.get();
+			msg_param<TYPE_PIPE(T0), TYPE_PIPE(T1)>& msg = dstBuff.get();
 			h(msg._res0, msg._res1);
 			return true;
 		}
@@ -3981,11 +4215,11 @@ public:
 	__yield_interrupt bool try_pump_msg(const msg_pump_handle<T0>& pump, const Handler& h, bool checkDis = false)
 	{
 		assert_enter();
-		dst_receiver_buff<T0>::dst_buff dstBuff;
-		dst_receiver_buff<T0> dstRec(dstBuff);
+		dst_receiver_buff<TYPE_PIPE(T0)>::dst_buff dstBuff;
+		dst_receiver_buff<TYPE_PIPE(T0)> dstRec(dstBuff);
 		if (_try_pump_msg(pump, dstRec, checkDis))
 		{
-			msg_param<T0>& msg = dstBuff.get();
+			msg_param<TYPE_PIPE(T0)>& msg = dstBuff.get();
 			h(msg._res0);
 			return true;
 		}

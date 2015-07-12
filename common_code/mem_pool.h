@@ -12,6 +12,12 @@ struct mem_alloc_base
 	virtual void deallocate(void* p) = 0;
 	virtual bool shared() const = 0;
 	virtual size_t alloc_size() const = 0;
+
+	bool full() const
+	{
+		return _blockNumber >= _poolMaxSize;
+	}
+
 	size_t _nodeCount;
 	size_t _poolMaxSize;
 	size_t _blockNumber;

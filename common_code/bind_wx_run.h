@@ -3,16 +3,16 @@
 
 #ifdef ENABLE_WX_ACTOR
 
-#include "wrapped_post_handler.h"
-#include "actor_framework.h"
-#include "wx_strand.h"
-#include "msg_queue.h"
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/thread.hpp>
 #include <functional>
 #include <memory>
 #include <WinSock2.h>
 #include <wx/event.h>
+#include "wrapped_post_handler.h"
+#include "actor_framework.h"
+#include "wx_strand.h"
+#include "msg_queue.h"
 
 using namespace std;
 

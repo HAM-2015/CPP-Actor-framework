@@ -35,7 +35,7 @@ public:
 	}
 
 	template <typename Handler>
-	void post(BOOST_ASIO_MOVE_ARG(Handler) handler)
+	void post(Handler&& handler)
 	{
 		_service.post(_impl, TRY_MOVE(handler));
 	}

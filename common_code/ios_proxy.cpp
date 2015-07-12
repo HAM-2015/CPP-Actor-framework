@@ -94,7 +94,7 @@ void ios_proxy::run(size_t threadNum)
 					exit(-1);
 				}
 			});
-			_threadIDs.insert(newThread->get_id());
+			_threadsID.insert(newThread->get_id());
 			_runThreads.add_thread(newThread);
 		}
 		blockConVar->wait(ul);
@@ -111,7 +111,7 @@ void ios_proxy::stop()
 		_runLock = NULL;
 		_runThreads.join_all();
 		_ios.reset();
-		_threadIDs.clear();
+		_threadsID.clear();
 		_ctrlMutex.lock();
 		_handleList.clear();
 		_ctrlMutex.unlock();
@@ -140,13 +140,13 @@ void ios_proxy::resume()
 bool ios_proxy::runningInThisIos()
 {
 	assert(_opend);
-	return _threadIDs.find(boost::this_thread::get_id()) != _threadIDs.end();
+	return _threadsID.find(boost::this_thread::get_id()) != _threadsID.end();
 }
 
 size_t ios_proxy::threadNumber()
 {
 	assert(_opend);
-	return _threadIDs.size();
+	return _threadsID.size();
 }
 
 void ios_proxy::runPriority(priority pri)
@@ -186,6 +186,11 @@ void ios_proxy::cpuAffinity(unsigned mask)
 	{
 		SetThreadAffinityMask(*it, mask);
 	}
+}
+
+const std::set<boost::thread::id>& ios_proxy::threadsID()
+{
+	return _threadsID;
 }
 
 ios_proxy::operator boost::asio::io_service&() const

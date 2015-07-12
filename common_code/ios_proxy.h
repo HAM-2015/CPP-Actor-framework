@@ -94,6 +94,11 @@ public:
 	void cpuAffinity(unsigned mask);
 
 	/*!
+	@brief 运行线程ID
+	*/
+	const std::set<boost::thread::id>& threadsID();
+
+	/*!
 	@brief 调度器对象引用
 	*/
 	operator boost::asio::io_service& () const;
@@ -105,7 +110,7 @@ private:
 private:
 	bool _opend;
 	priority _priority;
-	std::set<boost::thread::id> _threadIDs;
+	std::set<boost::thread::id> _threadsID;
 	void* _implPool;
 	void* _timerPool;
 	std::vector<HANDLE> _handleList;

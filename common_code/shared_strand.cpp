@@ -2,7 +2,9 @@
 #include "actor_timer.h"
 
 boost_strand::boost_strand()
+#ifdef ENABLE_NEXT_TICK
 :_pCheckDestroy(NULL), _nextTickAlloc(64), _nextTickQueue(64)
+#endif //ENABLE_NEXT_TICK
 {
 	_iosProxy = NULL;
 	_strand = NULL;
@@ -11,13 +13,15 @@ boost_strand::boost_strand()
 
 boost_strand::~boost_strand()
 {
+#ifdef ENABLE_NEXT_TICK
 	assert(_nextTickQueue.empty());
-	delete _strand;
-	delete _timer;
 	if (_pCheckDestroy)
 	{
 		*_pCheckDestroy = true;
 	}
+#endif //ENABLE_NEXT_TICK
+	delete _strand;
+	delete _timer;
 }
 
 shared_strand boost_strand::create(ios_proxy& iosProxy, bool makeTimer /* = true */)
@@ -73,6 +77,7 @@ actor_timer* boost_strand::get_timer()
 	return _timer;
 }
 
+#ifdef ENABLE_NEXT_TICK
 void boost_strand::run_tick()
 {
 	assert(!_nextTickQueue.empty());
@@ -95,6 +100,7 @@ void boost_strand::run_tick()
 		}
 	} while (!_nextTickQueue.empty());
 }
+#endif //ENABLE_NEXT_TICK
 
 #if (defined ENABLE_MFC_ACTOR || defined ENABLE_WX_ACTOR)
 void boost_strand::_post( const std::function<void ()>& h )

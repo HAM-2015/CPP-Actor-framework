@@ -21,25 +21,102 @@ struct csp_try_wait_exception : public sync_csp_exception {};
 
 struct csp_timed_wait_exception : public sync_csp_exception {};
 
+
+//////////////////////////////////////////////////////////////////////////
+template <typename TP, typename TM>
+struct send_move : public try_move<TM>
+{
+};
+
+template <typename TP, typename TM>
+struct send_move<TP&, TM&&>
+{
+	static inline TM& move(TM& p0)
+	{
+		return p0;
+	}
+};
+
+template <typename TP, typename TM>
+struct send_move<TP&&, TM&&>
+{
+	static inline TM&& move(TM& p0)
+	{
+		return (TM&&)p0;
+	}
+};
+//////////////////////////////////////////////////////////////////////////
+template <typename TP>
+struct take_move
+{
+	static inline TP&& move(TP& p0)
+	{
+		return (TP&&)p0;
+	}
+};
+
+template <typename TP>
+struct take_move<TP&>
+{
+	static inline TP& move(TP& p0)
+	{
+		return p0;
+	}
+};
+
+template <typename TP>
+struct take_move<TP&&>
+{
+	static inline TP&& move(TP& p0)
+	{
+		return (TP&&)p0;
+	}
+};
+
 /*!
 @brief 同步发送消息（多读多写，角色可转换），发送方等到消息取出才返回
 */
 template <typename T>
 class sync_msg
 {
-	struct send_wait 
+	typedef RM_REF(T) ST;
+
+	template <typename T>
+	struct result_type
+	{
+		typedef T type;
+	};
+
+	template <typename T>
+	struct result_type<T&>
+	{
+		typedef std::reference_wrapper<T> type;
+	};
+
+	template <typename T>
+	struct result_type<T&&>
+	{
+		typedef T type;
+	};
+
+	typedef typename result_type<T>::type RT;
+
+	//////////////////////////////////////////////////////////////////////////
+	struct send_wait
 	{
 		bool can_move;
 		bool& notified;
-		T& src_msg;
+		ST& src_msg;
 		actor_trig_notifer<bool> ntf;
 	};
 
-	struct take_wait 
+	struct take_wait
 	{
+		bool* can_move;
 		bool& notified;
 		unsigned char* dst;
 		actor_trig_notifer<bool> ntf;
+		actor_trig_notifer<bool>& takeOk;
 	};
 public:
 	struct close_exception : public sync_msg_close_exception {};
@@ -55,36 +132,39 @@ public:
 	{
 		my_actor::quit_guard qg(host);
 		actor_trig_handle<bool> ath;
-		bool wait = false;
 		bool closed = false;
 		bool notified = false;
-		LAMBDA_THIS_REF6(ref6, host, msg, ath, wait, closed, notified);
-		host->send(_strand, [&ref6]
+		LAMBDA_THIS_REF5(ref5, host, msg, ath, closed, notified);
+		host->send(_strand, [&ref5]
 		{
-			if (ref6->_closed)
+			if (ref5->_closed)
 			{
-				ref6.closed = true;
+				ref5.closed = true;
 			} 
 			else
 			{
-				auto& _takeWait = ref6->_takeWait;
+				auto& _takeWait = ref5->_takeWait;
 				if (_takeWait.empty())
 				{
-					ref6.wait = true;
-					send_wait pw = { try_move<TM&&>::can_move, ref6.notified, (T&)ref6.msg, ref6.host->make_trig_notifer(ref6.ath) };
-					ref6->_sendWait.push_front(pw);
+					send_wait pw = { try_move<TM&&>::can_move, ref5.notified, (ST&)ref5.msg, ref5.host->make_trig_notifer(ref5.ath) };
+					ref5->_sendWait.push_front(pw);
 				}
 				else
 				{
 					take_wait& wt = _takeWait.back();
-					new(wt.dst)T(try_move<TM&&>::move(ref6.msg));
+					new(wt.dst)RT(send_move<T, TM&&>::move(ref5.msg));
+					if (wt.can_move)
+					{
+						*wt.can_move = try_move<TM&&>::can_move || !(std::is_reference<T>::value);
+					}
 					wt.notified = true;
+					wt.takeOk = ref5.host->make_trig_notifer(ref5.ath);
 					wt.ntf(false);
 					_takeWait.pop_back();
 				}
 			}
 		});
-		if (wait)
+		if (!closed)
 		{
 			closed = host->wait_trig(ath);
 		}
@@ -103,28 +183,38 @@ public:
 	bool try_send(my_actor* host, TM&& msg)
 	{
 		my_actor::quit_guard qg(host);
+		actor_trig_handle<bool> ath;
 		bool ok = false;
 		bool closed = false;
-		LAMBDA_THIS_REF4(ref4, host, msg, ok, closed);
-		host->send(_strand, [&ref4]
+		LAMBDA_THIS_REF5(ref5, host, msg, ath, ok, closed);
+		host->send(_strand, [&ref5]
 		{
-			if (ref4->_closed)
+			if (ref5->_closed)
 			{
-				ref4.closed = true;
+				ref5.closed = true;
 			} 
 			else
 			{
-				auto& _takeWait = ref4->_takeWait;
+				auto& _takeWait = ref5->_takeWait;
 				if (!_takeWait.empty())
 				{
-					ref4.ok = true;
+					ref5.ok = true;
 					take_wait& wt = _takeWait.back();
-					new(wt.dst)T(try_move<TM&&>::move(ref4.msg));
+					new(wt.dst)RT(send_move<T, TM&&>::move(ref5.msg));
+					if (wt.can_move)
+					{
+						*wt.can_move = try_move<TM&&>::can_move || !(std::is_reference<T>::value);
+					}
+					wt.takeOk = ref5.host->make_trig_notifer(ref5.ath);
 					wt.ntf(false);
 					_takeWait.pop_back();
 				}
 			}
 		});
+		if (!closed && ok)
+		{
+			closed = host->wait_trig(ath);
+		}
 		if (closed)
 		{
 			qg.unlock();
@@ -143,51 +233,51 @@ public:
 		my_actor::quit_guard qg(host);
 		actor_trig_handle<bool> ath;
 		msg_list<send_wait>::iterator mit;
-		bool wait = false;
 		bool closed = false;
 		bool notified = false;
-		LAMBDA_REF3(ref3, wait, closed, notified);
-		LAMBDA_THIS_REF5(ref5, ref3, host, msg, ath, mit);
-		host->send(_strand, [&ref5]
+		LAMBDA_THIS_REF6(ref6, host, msg, ath, mit, closed, notified);
+		host->send(_strand, [&ref6]
 		{
-			auto& ref3 = ref5.ref3;
-			if (ref5->_closed)
+			if (ref6->_closed)
 			{
-				ref3.closed = true;
+				ref6.closed = true;
 			} 
 			else
 			{
-				auto& _takeWait = ref5->_takeWait;
+				auto& _takeWait = ref6->_takeWait;
 				if (_takeWait.empty())
 				{
-					ref3.wait = true;
-					send_wait pw = { try_move<TM&&>::can_move, ref3.notified, (T&)ref5.msg, ref5.host->make_trig_notifer(ref5.ath) };
-					ref5->_sendWait.push_front(pw);
-					ref5.mit = ref5->_sendWait.begin();
+					send_wait pw = { try_move<TM&&>::can_move, ref6.notified, (T&)ref6.msg, ref6.host->make_trig_notifer(ref6.ath) };
+					ref6->_sendWait.push_front(pw);
+					ref6.mit = ref6->_sendWait.begin();
 				}
 				else
 				{
 					take_wait& wt = _takeWait.back();
-					new(wt.dst)T(try_move<TM&&>::move(ref5.msg));
+					new(wt.dst)RT(send_move<T, TM&&>::move(ref6.msg));
+					if (wt.can_move)
+					{
+						*wt.can_move = try_move<TM&&>::can_move || !(std::is_reference<T>::value);
+					}
 					wt.notified = true;
+					wt.takeOk = ref6.host->make_trig_notifer(ref6.ath);
 					wt.ntf(false);
 					_takeWait.pop_back();
 				}
 			}
 		});
-		if (wait)
+		if (!closed)
 		{
 			if (!host->timed_wait_trig(tm, ath, closed))
 			{
-				host->send(_strand, [&ref5]
+				host->send(_strand, [&ref6]
 				{
-					if (!ref5.ref3.notified)
+					if (!ref6.notified)
 					{
-						ref5.ref3.wait = false;
-						ref5->_sendWait.erase(ref5.mit);
+						ref6->_sendWait.erase(ref6.mit);
 					}
 				});
-				if (wait)
+				if (notified)
 				{
 					closed = host->wait_trig(ath);
 				}
@@ -198,21 +288,22 @@ public:
 			qg.unlock();
 			throw close_exception();
 		}
-		return !wait || notified;
+		return notified;
 	}
 
 	/*!
 	@brief 取出一条消息，直到有消息过来才返回
 	*/
-	T take(my_actor* host)
+	RT take(my_actor* host)
 	{
 		my_actor::quit_guard qg(host);
 		actor_trig_handle<bool> ath;
-		unsigned char msgBuf[sizeof(T)];
+		actor_trig_notifer<bool> ntf;
+		unsigned char msgBuf[sizeof(RT)];
 		bool wait = false;
 		bool closed = false;
 		bool notified = false;
-		LAMBDA_THIS_REF6(ref6, host, ath, msgBuf, wait, closed, notified);
+		LAMBDA_THIS_REF7(ref6, host, ath, ntf, msgBuf, wait, closed, notified);
 		host->send(_strand, [&ref6]
 		{
 			if (ref6->_closed)
@@ -225,15 +316,15 @@ public:
 				if (_sendWait.empty())
 				{
 					ref6.wait = true;
-					take_wait pw = { ref6.notified, ref6.msgBuf, ref6.host->make_trig_notifer(ref6.ath) };
+					take_wait pw = { NULL, ref6.notified, ref6.msgBuf, ref6.host->make_trig_notifer(ref6.ath), ref6.ntf };
 					ref6->_takeWait.push_front(pw);
 				}
 				else
 				{
 					send_wait& wt = _sendWait.back();
-					new(ref6.msgBuf)T(wt.can_move ? std::move(wt.src_msg) : wt.src_msg);
+					new(ref6.msgBuf)RT(wt.can_move ? take_move<T>::move(wt.src_msg) : wt.src_msg);
 					wt.notified = true;
-					wt.ntf(false);
+					ref6.ntf = wt.ntf;
 					_sendWait.pop_back();
 				}
 			}
@@ -246,10 +337,11 @@ public:
 		{
 			AUTO_CALL(
 			{
-				typedef T TP_;
+				typedef RT TP_;
 				((TP_*)msgBuf)->~TP_();
+				ntf(false);
 			});
-			return std::move(*(T*)msgBuf);
+			return std::move((RM_REF(RT)&)*(RT*)msgBuf);
 		}
 		qg.unlock();
 		throw close_exception();
@@ -259,9 +351,10 @@ public:
 	@brief 尝试取出一条消息，如果有就成功
 	@return 成功返回true
 	*/
-	bool try_take(my_actor* host, T& out)
+	template <typename TM>
+	bool try_take(my_actor* host, TM& out)
 	{
-		return try_take_ct(host, [&](bool rval, T& msg)
+		return try_take_ct(host, [&](bool rval, ST& msg)
 		{
 			out = rval ? std::move(msg) : msg;
 		});
@@ -269,7 +362,7 @@ public:
 
 	bool try_take(my_actor* host, stack_obj<T>& out)
 	{
-		return try_take_ct(host, [&](bool rval, T& msg)
+		return try_take_ct(host, [&](bool rval, ST& msg)
 		{
 			out.create(rval ? std::move(msg) : msg);
 		});
@@ -279,9 +372,10 @@ public:
 	@brief 尝试取出一条消息，在一定时间内取到就成功
 	@return 成功返回true
 	*/
-	bool timed_take(int tm, my_actor* host, T& out)
+	template <typename TM>
+	bool timed_take(int tm, my_actor* host, TM& out)
 	{
-		return timed_take_ct(tm, host, [&](bool rval, T& msg)
+		return timed_take_ct(tm, host, [&](bool rval, ST& msg)
 		{
 			out = rval ? std::move(msg) : msg;
 		});
@@ -289,7 +383,7 @@ public:
 
 	bool timed_take(int tm, my_actor* host, stack_obj<T>& out)
 	{
-		return timed_take_ct(tm, host, [&](bool rval, T& msg)
+		return timed_take_ct(tm, host, [&](bool rval, ST& msg)
 		{
 			out.create(rval ? std::move(msg) : msg);
 		});
@@ -371,27 +465,29 @@ private:
 	{
 		my_actor::quit_guard qg(host);
 		actor_trig_handle<bool> ath;
+		actor_trig_notifer<bool> ntf;
 		msg_list<take_wait>::iterator mit;
-		unsigned char msgBuf[sizeof(T)];
+		unsigned char msgBuf[sizeof(RT)];
 		bool wait = false;
 		bool closed = false;
 		bool notified = false;
-		LAMBDA_REF3(ref3, wait, closed, notified);
-		LAMBDA_THIS_REF6(ref6, ref3, host, ct, ath, mit, msgBuf);
+		bool can_move = false;
+		LAMBDA_REF5(ref4, wait, closed, notified, can_move, ntf);
+		LAMBDA_THIS_REF6(ref6, ref4, host, ct, ath, mit, msgBuf);
 		host->send(_strand, [&ref6]
 		{
-			auto& ref3 = ref6.ref3;
+			auto& ref4 = ref6.ref4;
 			if (ref6->_closed)
 			{
-				ref3.closed = true;
+				ref4.closed = true;
 			}
 			else
 			{
 				auto& _sendWait = ref6->_sendWait;
 				if (_sendWait.empty())
 				{
-					ref3.wait = true;
-					take_wait pw = { ref3.notified, ref6.msgBuf, ref6.host->make_trig_notifer(ref6.ath) };
+					ref4.wait = true;
+					take_wait pw = { &ref4.can_move, ref4.notified, ref6.msgBuf, ref6.host->make_trig_notifer(ref6.ath), ref4.ntf };
 					ref6->_takeWait.push_front(pw);
 					ref6.mit = ref6->_takeWait.begin();
 				}
@@ -412,22 +508,22 @@ private:
 			{
 				host->send(_strand, [&ref6]
 				{
-					if (!ref6.ref3.notified)
+					if (!ref6.ref4.notified)
 					{
-						ref6.ref3.wait = false;
 						ref6->_takeWait.erase(ref6.mit);
 					}
 				});
-				ok = wait;
-				if (wait)
+				ok = notified;
+				if (notified)
 				{
 					closed = host->wait_trig(ath);
 				}
 			}
-			if (wait && !closed)
+			if (notified && !closed)
 			{
-				ct(true, *(T*)msgBuf);
-				((T*)msgBuf)->~T();
+				ct(can_move, *(RT*)msgBuf);
+				((RT*)msgBuf)->~RT();
+				ntf(false);
 			}
 		}
 		if (closed)
