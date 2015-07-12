@@ -26,6 +26,7 @@ public:
 		_handler = std::move(sp._handler);
 	}
 
+#if _MSC_VER == 1600
 	void operator()()
 	{
 		_poster->post(_handler);
@@ -39,50 +40,64 @@ public:
 	template <typename Arg1>
 	void operator()(Arg1&& arg1)
 	{
-		_poster->post(wrap_capture(_handler, arg1));
+		_poster->post(wrap_capture(_handler, TRY_MOVE(arg1)));
 	}
 
 	template <typename Arg1>
 	void operator()(Arg1&& arg1) const
 	{
-		_poster->post(wrap_capture(_handler, arg1));
+		_poster->post(wrap_capture(_handler, TRY_MOVE(arg1)));
 	}
 
 	template <typename Arg1, typename Arg2>
 	void operator()(Arg1&& arg1, Arg2&& arg2)
 	{
-		_poster->post(wrap_capture(_handler, arg1, arg2));
+		_poster->post(wrap_capture(_handler, TRY_MOVE(arg1), TRY_MOVE(arg2)));
 	}
 
 	template <typename Arg1, typename Arg2>
 	void operator()(Arg1&& arg1, Arg2&& arg2) const
 	{
-		_poster->post(wrap_capture(_handler, arg1, arg2));
+		_poster->post(wrap_capture(_handler, TRY_MOVE(arg1), TRY_MOVE(arg2)));
 	}
 
 	template <typename Arg1, typename Arg2, typename Arg3>
 	void operator()(Arg1&& arg1, Arg2&& arg2, Arg3&& arg3)
 	{
-		_poster->post(wrap_capture(_handler, arg1, arg2, arg3));
+		_poster->post(wrap_capture(_handler, TRY_MOVE(arg1), TRY_MOVE(arg2), TRY_MOVE(arg3)));
 	}
 
 	template <typename Arg1, typename Arg2, typename Arg3>
 	void operator()(Arg1&& arg1, Arg2&& arg2, Arg3&& arg3) const
 	{
-		_poster->post(wrap_capture(_handler, arg1, arg2, arg3));
+		_poster->post(wrap_capture(_handler, TRY_MOVE(arg1), TRY_MOVE(arg2), TRY_MOVE(arg3)));
 	}
 
 	template <typename Arg1, typename Arg2, typename Arg3, typename Arg4>
 	void operator()(Arg1&& arg1, Arg2&& arg2, Arg3&& arg3, Arg4&& arg4)
 	{
-		_poster->post(wrap_capture(_handler, arg1, arg2, arg3, arg4));
+		_poster->post(wrap_capture(_handler, TRY_MOVE(arg1), TRY_MOVE(arg2), TRY_MOVE(arg3), TRY_MOVE(arg4)));
 	}
 
 	template <typename Arg1, typename Arg2, typename Arg3, typename Arg4>
 	void operator()(Arg1&& arg1, Arg2&& arg2, Arg3&& arg3, Arg4&& arg4) const
 	{
-		_poster->post(wrap_capture(_handler, arg1, arg2, arg3, arg4));
+		_poster->post(wrap_capture(_handler, TRY_MOVE(arg1), TRY_MOVE(arg2), TRY_MOVE(arg3), TRY_MOVE(arg4)));
 	}
+
+#elif _MSC_VER > 1600
+	template <typename... Args>
+	void operator()(Args&&... args)
+	{
+		_poster->post(wrap_capture(_handler, TRY_MOVE(args)...));
+	}
+
+	template <typename... Args>
+	void operator()(Args&&... args) const
+	{
+		_poster->post(wrap_capture(_handler, TRY_MOVE(args)...));
+	}
+#endif
 
 	Poster* _poster;
 	Handler _handler;
@@ -121,73 +136,48 @@ public:
 #endif
 	}
 
+#if _MSC_VER == 1600
 	void operator()()
 	{
 		assert(!_checkOnce->exchange(true));
-		_poster->post(_handler);
-	}
-
-	void operator()() const
-	{
-		assert(!_checkOnce->exchange(true));
-		_poster->post(_handler);
+		_poster->post(FORCE_MOVE(_handler));
 	}
 
 	template <typename Arg1>
 	void operator()(Arg1&& arg1)
 	{
 		assert(!_checkOnce->exchange(true));
-		_poster->post(wrap_capture(std::move(_handler), FORCE_MOVE(arg1)));
-	}
-
-	template <typename Arg1>
-	void operator()(Arg1&& arg1) const
-	{
-		assert(!_checkOnce->exchange(true));
-		_poster->post(wrap_capture(std::move(_handler), FORCE_MOVE(arg1)));
+		_poster->post(wrap_capture(FORCE_MOVE(_handler), FORCE_MOVE(arg1)));
 	}
 
 	template <typename Arg1, typename Arg2>
 	void operator()(Arg1&& arg1, Arg2&& arg2)
 	{
 		assert(!_checkOnce->exchange(true));
-		_poster->post(wrap_capture(std::move(_handler), FORCE_MOVE(arg1), FORCE_MOVE(arg2)));
-	}
-
-	template <typename Arg1, typename Arg2>
-	void operator()(Arg1&& arg1, Arg2&& arg2) const
-	{
-		assert(!_checkOnce->exchange(true));
-		_poster->post(wrap_capture(std::move(_handler), FORCE_MOVE(arg1), FORCE_MOVE(arg2)));
+		_poster->post(wrap_capture(FORCE_MOVE(_handler), FORCE_MOVE(arg1), FORCE_MOVE(arg2)));
 	}
 
 	template <typename Arg1, typename Arg2, typename Arg3>
 	void operator()(Arg1&& arg1, Arg2&& arg2, Arg3&& arg3)
 	{
 		assert(!_checkOnce->exchange(true));
-		_poster->post(wrap_capture(std::move(_handler), FORCE_MOVE(arg1), FORCE_MOVE(arg2), FORCE_MOVE(arg3)));
-	}
-
-	template <typename Arg1, typename Arg2, typename Arg3>
-	void operator()(Arg1&& arg1, Arg2&& arg2, Arg3&& arg3) const
-	{
-		assert(!_checkOnce->exchange(true));
-		_poster->post(wrap_capture(std::move(_handler), FORCE_MOVE(arg1), FORCE_MOVE(arg2), FORCE_MOVE(arg3)));
+		_poster->post(wrap_capture(FORCE_MOVE(_handler), FORCE_MOVE(arg1), FORCE_MOVE(arg2), FORCE_MOVE(arg3)));
 	}
 
 	template <typename Arg1, typename Arg2, typename Arg3, typename Arg4>
 	void operator()(Arg1&& arg1, Arg2&& arg2, Arg3&& arg3, Arg4&& arg4)
 	{
 		assert(!_checkOnce->exchange(true));
-		_poster->post(wrap_capture(std::move(_handler), FORCE_MOVE(arg1), FORCE_MOVE(arg2), FORCE_MOVE(arg3), FORCE_MOVE(arg4)));
+		_poster->post(wrap_capture(FORCE_MOVE(_handler), FORCE_MOVE(arg1), FORCE_MOVE(arg2), FORCE_MOVE(arg3), FORCE_MOVE(arg4)));
 	}
 
-	template <typename Arg1, typename Arg2, typename Arg3, typename Arg4>
-	void operator()(Arg1&& arg1, Arg2&& arg2, Arg3&& arg3, Arg4&& arg4) const
+#elif _MSC_VER > 1600
+	template <typename... Args>
+	void operator()(Args&&... args)
 	{
-		assert(!_checkOnce->exchange(true));
-		_poster->post(wrap_capture(std::move(_handler), FORCE_MOVE(arg1), FORCE_MOVE(arg2), FORCE_MOVE(arg3), FORCE_MOVE(arg4)));
+		_poster->post(wrap_capture(FORCE_MOVE(_handler), FORCE_MOVE(args)...));
 	}
+#endif
 
 	Poster* _poster;
 	Handler _handler;

@@ -4,8 +4,10 @@
 #include "try_move.h"
 #include <boost/atomic/atomic.hpp>
 
+#if _MSC_VER == 1600
+
 template <typename H, typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
-struct wrapped_capture 
+struct wrapped_capture
 {
 	template <typename Handler, typename TP0, typename TP1, typename TP2, typename TP3>
 	wrapped_capture(Handler&& h, TP0&& p0, TP1&& p1, TP2&& p2, TP3&& p3)
@@ -117,27 +119,93 @@ struct wrapped_capture<H, T0, void, void, void>
 };
 
 template <typename Handler, typename TP0, typename TP1, typename TP2, typename TP3>
-wrapped_capture<RM_REF(Handler), TP0, TP1, TP2, TP3> wrap_capture(Handler&& h, TP0&& p0, TP1&& p1, TP2&& p2, TP3&& p3)
+wrapped_capture<RM_REF(Handler), RM_CREF(TP0), RM_CREF(TP1), RM_CREF(TP2), RM_CREF(TP3)>
+wrap_capture(Handler&& h, TP0&& p0, TP1&& p1, TP2&& p2, TP3&& p3)
 {
-	return wrapped_capture<RM_REF(Handler), TP0, TP1, TP2, TP3>(TRY_MOVE(h), TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2), TRY_MOVE(p3));
+	return wrapped_capture<RM_REF(Handler), RM_CREF(TP0), RM_CREF(TP1), RM_CREF(TP2), RM_CREF(TP3)>
+		(TRY_MOVE(h), TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2), TRY_MOVE(p3));
 }
 
 template <typename Handler, typename TP0, typename TP1, typename TP2>
-wrapped_capture<RM_REF(Handler), TP0, TP1, TP2> wrap_capture(Handler&& h, TP0&& p0, TP1&& p1, TP2&& p2)
+wrapped_capture<RM_REF(Handler), RM_CREF(TP0), RM_CREF(TP1), RM_CREF(TP2)> wrap_capture(Handler&& h, TP0&& p0, TP1&& p1, TP2&& p2)
 {
-	return wrapped_capture<RM_REF(Handler), TP0, TP1, TP2>(TRY_MOVE(h), TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2)());
+	return wrapped_capture<RM_REF(Handler), RM_CREF(TP0), RM_CREF(TP1), RM_CREF(TP2)>
+		(TRY_MOVE(h), TRY_MOVE(p0), TRY_MOVE(p1), TRY_MOVE(p2)());
 }
 
 template <typename Handler, typename TP0, typename TP1>
-wrapped_capture<RM_REF(Handler), TP0, TP1> wrap_capture(Handler&& h, TP0&& p0, TP1&& p1)
+wrapped_capture<RM_REF(Handler), RM_CREF(TP0), RM_CREF(TP1)> wrap_capture(Handler&& h, TP0&& p0, TP1&& p1)
 {
-	return wrapped_capture<RM_REF(Handler), TP0, TP1>(TRY_MOVE(h), TRY_MOVE(p0), TRY_MOVE(p1));
+	return wrapped_capture<RM_REF(Handler), RM_CREF(TP0), RM_CREF(TP1)>(TRY_MOVE(h), TRY_MOVE(p0), TRY_MOVE(p1));
 }
 
 template <typename Handler, typename TP0>
-wrapped_capture<RM_REF(Handler), TP0> wrap_capture(Handler&& h, TP0&& p0)
+wrapped_capture<RM_REF(Handler), RM_CREF(TP0)> wrap_capture(Handler&& h, TP0&& p0)
 {
-	return wrapped_capture<RM_REF(Handler), TP0>(TRY_MOVE(h), TRY_MOVE(p0));
+	return wrapped_capture<RM_REF(Handler), RM_CREF(TP0)>(TRY_MOVE(h), TRY_MOVE(p0));
 }
+
+#elif _MSC_VER > 1600
+
+#include <tuple>
+
+template <size_t N>
+struct apply_arg
+{
+	template <typename H, typename TUPLE, typename... Args>
+	static void append(H&& h, TUPLE&& tp, Args&&... args)
+	{
+		apply_arg<N - 1>::append(TRY_MOVE(h), TRY_MOVE(tp), std::get<N - 1>(tp), TRY_MOVE(args)...);
+	}
+};
+
+template <>
+struct apply_arg<0>
+{
+	template <typename H, typename TUPLE, typename... Args>
+	static void append(H&& h, TUPLE&&, Args&&... args)
+	{
+		h(args...);
+	}
+};
+
+template <typename H, typename TUPLE>
+void tuple_caller(H&& h, TUPLE&& t)
+{
+	apply_arg<std::tuple_size<RM_REF(TUPLE)>::value>::append(TRY_MOVE(h), TRY_MOVE(t));
+}
+
+template <typename H, typename... ARGS>
+struct wrapped_capture 
+{
+	template <typename Handler, typename... Args>
+	wrapped_capture(Handler&& h, Args&&... args)
+		:_h(TRY_MOVE(h)), _args(TRY_MOVE(args)...) {}
+
+	wrapped_capture(wrapped_capture&& s)
+		:_h(std::move(s._h)), _args(std::move(s._args)) {}
+
+	void operator =(wrapped_capture&& s)
+	{
+		_h = std::move(s._h);
+		_args = std::move(s._args);
+	}
+
+	void operator ()()
+	{
+		tuple_caller(_h, _args);
+	}
+
+	H _h;
+	std::tuple<ARGS...> _args;
+};
+
+template <typename Handler, typename... Args>
+wrapped_capture<RM_REF(Handler), RM_CREF(Args)...> wrap_capture(Handler&& h, Args&&... args)
+{
+	return wrapped_capture<RM_REF(Handler), RM_CREF(Args)...>(TRY_MOVE(h), TRY_MOVE(args)...);
+}
+
+#endif
 
 #endif

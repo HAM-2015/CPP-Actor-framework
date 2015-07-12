@@ -35,7 +35,7 @@ typedef std::shared_ptr<boost_strand> shared_strand;
 
 #else //ENABLE_NEXT_TICK
 
-#define RUN_HANDLER handler
+#define RUN_HANDLER TRY_MOVE(handler)
 
 #endif //ENABLE_NEXT_TICK
 
@@ -47,7 +47,7 @@ if (_strand)\
 }\
 else\
 {\
-	_post(handler); \
+	_post(TRY_MOVE(handler)); \
 };
 
 
@@ -72,7 +72,7 @@ if (_strand)\
 }\
 else\
 {\
-	_post(handler); \
+	_post(TRY_MOVE(handler)); \
 }
 
 /*!
