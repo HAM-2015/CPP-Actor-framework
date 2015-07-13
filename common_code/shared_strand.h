@@ -95,8 +95,18 @@ class boost_strand
 		handler_capture(Handler&& handler, boost_strand* strand)
 			:_handler(TRY_MOVE(handler)), _strand(strand) {}
 
+		handler_capture(const handler_capture& s)
+			:_handler(std::move(s._handler)), _strand(s._strand) {static_assert(false, "no copy"); }
+
 		handler_capture(handler_capture&& s)
 			:_handler(std::move(s._handler)), _strand(s._strand) {}
+
+		void operator =(const handler_capture& s)
+		{
+			static_assert(false, "no copy");
+			_handler = std::move(s._handler);
+			_strand = s._strand;
+		}
 
 		void operator =(handler_capture&& s)
 		{
@@ -119,7 +129,7 @@ class boost_strand
 			}
 		}
 
-		H _handler;
+		mutable H _handler;
 		boost_strand* _strand;
 	};
 
@@ -361,6 +371,12 @@ public:
 	@brief 判断是否在本strand中运行
 	*/
 	virtual bool running_in_this_thread();
+
+	/*!
+	@brief 当前任务队列是否为空(不算当前)
+	@param checkTick 是否计算tick任务
+	*/
+	virtual bool empty(bool checkTick = true);
 
 	/*!
 	@brief 获取当前调度器代理

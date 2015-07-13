@@ -168,6 +168,7 @@
     <ClCompile Include="..\common_code\shared_data.cpp" />
     <ClCompile Include="..\common_code\shared_strand.cpp" />
     <ClCompile Include="..\common_code\scattered.cpp" />
+    <ClCompile Include="..\common_code\strand_ex.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>

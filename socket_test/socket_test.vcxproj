@@ -145,6 +145,7 @@
     <ClCompile Include="..\common_code\scattered.cpp" />
     <ClCompile Include="..\common_code\shared_data.cpp" />
     <ClCompile Include="..\common_code\shared_strand.cpp" />
+    <ClCompile Include="..\common_code\strand_ex.cpp" />
     <ClCompile Include="acceptor_socket.cpp" />
     <ClCompile Include="dlg_session.cpp" />
     <ClCompile Include="socket_io.cpp" />

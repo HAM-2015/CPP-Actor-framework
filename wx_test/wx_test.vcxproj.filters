@@ -60,6 +60,9 @@
     <ClCompile Include="..\common_code\actor_timer.cpp">
       <Filter>源文件\common_code</Filter>
     </ClCompile>
+    <ClCompile Include="..\common_code\strand_ex.cpp">
+      <Filter>源文件\common_code</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common_code\bind_wx_run.h">

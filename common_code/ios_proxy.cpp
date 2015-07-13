@@ -18,7 +18,7 @@ ios_proxy::ios_proxy()
 	{
 		new(p)impl_type();
 	});
-	_timerPool = create_pool<timer_type>(4096, [this](void* p)
+	_timerPool = create_pool<timer_type>(64, [this](void* p)
 	{
 		new(p)timer_type(_ios);
 	});

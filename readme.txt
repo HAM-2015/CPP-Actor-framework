@@ -9,12 +9,12 @@
 github url:
 https://github.com/HAM-2015/CPP-Actor-framework
 
-oschina url
+oschina url:
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
 2015-07-12
-优化右值传递，使消息传递支持0拷贝;
+优化右值转移，使消息传递支持0拷贝;
 添加值引用消息.
 
 2015-07-10

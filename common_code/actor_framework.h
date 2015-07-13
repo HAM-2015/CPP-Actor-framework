@@ -51,7 +51,7 @@ using namespace std;
 //检测 pump_msg 是否有 pump_disconnected_exception 异常抛出，因为在 catch 内部不能安全的进行coro切换
 #define CATCH_PUMP_DISCONNECTED CATCH_FOR(my_actor::pump_disconnected_exception)
 
-template <typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
+template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
 struct msg_param
 {
 	typedef ref_ex<T0, T1, T2, T3> ref_type;
@@ -455,8 +455,23 @@ protected:
 		msg_capture(msg_handle* msgHandle, const actor_handle& host, const std::shared_ptr<bool>& closed, TP0&& p0, TP1&& p1, TP2&& p2, TP3&& p3)
 			:_msgHandle(msgHandle), _hostActor(host), _closed(closed), _p0(TRY_MOVE(p0)), _p1(TRY_MOVE(p1)), _p2(TRY_MOVE(p2)), _p3(TRY_MOVE(p3)) {}
 
+		msg_capture(const msg_capture& s)
+			:_msgHandle(s._msgHandle), _hostActor(s._hostActor), _closed(s._closed), _p0(std::move(s._p0)), _p1(std::move(s._p1)), _p2(std::move(s._p2)), _p3(std::move(s._p3)) {}
+
 		msg_capture(msg_capture&& s)
 			:_msgHandle(s._msgHandle), _hostActor(s._hostActor), _closed(s._closed), _p0(std::move(s._p0)), _p1(std::move(s._p1)), _p2(std::move(s._p2)), _p3(std::move(s._p3)) {}
+
+		void operator =(const msg_capture& s)
+		{
+			static_assert(false, "no copy");
+			_msgHandle = s._msgHandle;
+			_hostActor = s._hostActor;
+			_closed = s._closed;
+			_p0 = std::move(s._p0);
+			_p1 = std::move(s._p1);
+			_p2 = std::move(s._p2);
+			_p3 = std::move(s._p3);
+		}
 
 		void operator =(msg_capture&& s)
 		{
@@ -477,10 +492,10 @@ protected:
 			}
 		}
 
-		T0 _p0;
-		T1 _p1;
-		T2 _p2;
-		T3 _p3;
+		mutable T0 _p0;
+		mutable T1 _p1;
+		mutable T2 _p2;
+		mutable T3 _p3;
 		msg_handle* _msgHandle;
 		actor_handle _hostActor;
 		std::shared_ptr<bool> _closed;
@@ -493,8 +508,22 @@ protected:
 		msg_capture(msg_handle* msgHandle, const actor_handle& host, const std::shared_ptr<bool>& closed, TP0&& p0, TP1&& p1, TP2&& p2)
 			:_msgHandle(msgHandle), _hostActor(host), _closed(closed), _p0(TRY_MOVE(p0)), _p1(TRY_MOVE(p1)), _p2(TRY_MOVE(p2)) {}
 
+		msg_capture(const msg_capture& s)
+			:_msgHandle(s._msgHandle), _hostActor(s._hostActor), _closed(s._closed), _p0(std::move(s._p0)), _p1(std::move(s._p1)), _p2(std::move(s._p2)) {}
+
 		msg_capture(msg_capture&& s)
 			:_msgHandle(s._msgHandle), _hostActor(s._hostActor), _closed(s._closed), _p0(std::move(s._p0)), _p1(std::move(s._p1)), _p2(std::move(s._p2)) {}
+
+		void operator =(const msg_capture& s)
+		{
+			static_assert(false, "no copy");
+			_msgHandle = s._msgHandle;
+			_hostActor = s._hostActor;
+			_closed = s._closed;
+			_p0 = std::move(s._p0);
+			_p1 = std::move(s._p1);
+			_p2 = std::move(s._p2);
+		}
 
 		void operator =(msg_capture&& s)
 		{
@@ -514,9 +543,9 @@ protected:
 			}
 		}
 
-		T0 _p0;
-		T1 _p1;
-		T2 _p2;
+		mutable T0 _p0;
+		mutable T1 _p1;
+		mutable T2 _p2;
 		msg_handle* _msgHandle;
 		actor_handle _hostActor;
 		std::shared_ptr<bool> _closed;
@@ -529,8 +558,21 @@ protected:
 		msg_capture(msg_handle* msgHandle, const actor_handle& host, const std::shared_ptr<bool>& closed, TP0&& p0, TP1&& p1)
 			:_msgHandle(msgHandle), _hostActor(host), _closed(closed), _p0(TRY_MOVE(p0)), _p1(TRY_MOVE(p1)) {}
 
+		msg_capture(const msg_capture& s)
+			:_msgHandle(s._msgHandle), _hostActor(s._hostActor), _closed(s._closed), _p0(std::move(s._p0)), _p1(std::move(s._p1)) {}
+
 		msg_capture(msg_capture&& s)
 			:_msgHandle(s._msgHandle), _hostActor(s._hostActor), _closed(s._closed), _p0(std::move(s._p0)), _p1(std::move(s._p1)) {}
+
+		void operator =(const msg_capture& s)
+		{
+			static_assert(false, "no copy");
+			_msgHandle = s._msgHandle;
+			_hostActor = s._hostActor;
+			_closed = s._closed;
+			_p0 = std::move(s._p0);
+			_p1 = std::move(s._p1);
+		}
 
 		void operator =(msg_capture&& s)
 		{
@@ -549,8 +591,8 @@ protected:
 			}
 		}
 
-		T0 _p0;
-		T1 _p1;
+		mutable T0 _p0;
+		mutable T1 _p1;
 		msg_handle* _msgHandle;
 		actor_handle _hostActor;
 		std::shared_ptr<bool> _closed;
@@ -563,8 +605,20 @@ protected:
 		msg_capture(msg_handle* msgHandle, const actor_handle& host, const std::shared_ptr<bool>& closed, TP0&& p0)
 			:_msgHandle(msgHandle), _hostActor(host), _closed(closed), _p0(TRY_MOVE(p0)) {}
 
+		msg_capture(const msg_capture& s)
+			:_msgHandle(s._msgHandle), _hostActor(s._hostActor), _closed(s._closed), _p0(std::move(s._p0)) {}
+
 		msg_capture(msg_capture&& s)
 			:_msgHandle(s._msgHandle), _hostActor(s._hostActor), _closed(s._closed), _p0(std::move(s._p0)) {}
+
+		void operator =(const msg_capture s)
+		{
+			static_assert(false, "no copy");
+			_msgHandle = s._msgHandle;
+			_hostActor = s._hostActor;
+			_closed = s._closed;
+			_p0 = std::move(s._p0);
+		}
 
 		void operator =(msg_capture&& s)
 		{
@@ -582,7 +636,7 @@ protected:
 			}
 		}
 
-		T0 _p0;
+		mutable T0 _p0;
 		msg_handle* _msgHandle;
 		actor_handle _hostActor;
 		std::shared_ptr<bool> _closed;
@@ -1077,7 +1131,18 @@ class msg_pump : public msg_pump_base
 		msg_capture(const msg_capture& s)
 			:_hostActor(s._hostActor), _sharedThis(s._sharedThis), _msg(std::move(s._msg)) {}
 
+		msg_capture(msg_capture&& s)
+			:_hostActor(s._hostActor), _sharedThis(s._sharedThis), _msg(std::move(s._msg)) {}
+
 		void operator =(const msg_capture& s)
+		{
+			static_assert(false, "no copy");
+			_hostActor = s._hostActor;
+			_sharedThis = s._sharedThis;
+			_msg = std::move(s._msg);
+		}
+
+		void operator =(msg_capture&& s)
 		{
 			_hostActor = s._hostActor;
 			_sharedThis = s._sharedThis;
@@ -1150,7 +1215,7 @@ private:
 	{
 		if (_strand->running_in_this_thread())
 		{
-			receiver((msg_type&&)msg);
+			receiver(std::move(msg));
 		} 
 		else
 		{
@@ -1395,7 +1460,18 @@ class msg_pool : public msg_pool_base
 		msg_capture(const msg_capture& s)
 			:_hostActor(s._hostActor), _sharedThis(s._sharedThis), _msg(std::move(s._msg)) {}
 
+		msg_capture(msg_capture&& s)
+			:_hostActor(s._hostActor), _sharedThis(s._sharedThis), _msg(std::move(s._msg)) {}
+
 		void operator =(const msg_capture& s)
+		{
+			static_assert(false, "no copy");
+			_hostActor = s._hostActor;
+			_sharedThis = s._sharedThis;
+			_msg = std::move(s._msg);
+		}
+
+		void operator =(msg_capture&& s)
 		{
 			_hostActor = s._hostActor;
 			_sharedThis = s._sharedThis;

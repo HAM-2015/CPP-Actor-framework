@@ -93,6 +93,7 @@
     <ClCompile Include="..\common_code\scattered.cpp" />
     <ClCompile Include="..\common_code\shared_data.cpp" />
     <ClCompile Include="..\common_code\shared_strand.cpp" />
+    <ClCompile Include="..\common_code\strand_ex.cpp" />
     <ClCompile Include="..\common_code\wx_strand.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="wx_ui.cpp" />
