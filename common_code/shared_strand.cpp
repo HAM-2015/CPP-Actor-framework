@@ -4,8 +4,8 @@
 #ifndef ENABLE_STRAND_IMPL_POOL
 struct get_impl
 {
-	mutable boost::asio::detail::strand_service* service_;
-	mutable boost::asio::detail::strand_service::implementation_type impl_;
+	boost::asio::detail::strand_service* service_;
+	boost::asio::detail::strand_service::implementation_type impl_;
 };
 
 template <>

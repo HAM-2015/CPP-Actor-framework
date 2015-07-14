@@ -1829,47 +1829,26 @@ protected:
 	template <typename DST /*dst_receiver*/, typename SRC /*msg_param*/>
 	void _trig_handler(DST& dstRec, SRC&& src) const
 	{
-#ifdef _DEBUG
-		if (!_pIsTrig->exchange(true))
-		{
-			assert(_hostActor);
-			_hostActor->_trig_handler(dstRec, std::move(src));
-		}
-		else
-		{
-			assert(false);
-		}
-#else
+		assert(!_pIsTrig->exchange(true));
 		assert(_hostActor);
 		_hostActor->_trig_handler(dstRec, std::move(src));
-#endif
+		_hostActor.reset();
 	}
 
 	template <typename DST /*ref_ex*/, typename SRC /*msg_param*/>
 	void _trig_handler_ref(DST dstRef, SRC&& src) const
 	{
-#ifdef _DEBUG
-		if (!_pIsTrig->exchange(true))
-		{
-			assert(_hostActor);
-			_hostActor->_trig_handler_ref(dstRef, std::move(src));
-		}
-		else
-		{
-			assert(false);
-		}
-#else
+		assert(!_pIsTrig->exchange(true));
 		assert(_hostActor);
 		_hostActor->_trig_handler_ref(dstRef, std::move(src));
-#endif
+		_hostActor.reset();
 	}
-
 
 	void tick_handler() const;
 
 	void push_yield() const;
 protected:
-	actor_handle _hostActor;
+	mutable actor_handle _hostActor;
 	DEBUG_OPERATION(std::shared_ptr<boost::atomic<bool> > _pIsTrig);
 };
 
@@ -2416,6 +2395,24 @@ public:
 	}
 
 	/*!
+	@brief 往当前"系统线程"堆栈中抛出一个任务，完成后返回，（用于消耗堆栈高的函数）
+	*/
+	template <typename H>
+	__yield_interrupt void run_in_thread_stack(H&& h)
+	{
+		assert_enter();
+		actor_handle shared_this = shared_from_this();
+		_strand->asyncInvokeVoid(TRY_MOVE(h), [shared_this]{shared_this->next_tick_handler(); });
+		push_yield();
+	}
+
+	template <typename T0, typename H>
+	__yield_interrupt T0 run_in_thread_stack(H&& h)
+	{
+		return async_send<T0>(_strand, TRY_MOVE(h));
+	}
+
+	/*!
 	@brief 强制将一个函数发送到一个shared_strand中执行（比如某个API会进行很多层次的堆栈调用，而当前Actor堆栈不够，可以用此切换到线程堆栈中直接执行），
 		配合quit_guard使用防止引用失效，完成后返回
 	*/
@@ -2424,7 +2421,7 @@ public:
 	{
 		assert_enter();
 		actor_handle shared_this = shared_from_this();
-		exeStrand->asyncInvokeVoid(TRY_MOVE(h), [shared_this]{shared_this->post_handler(); });
+		exeStrand->asyncInvokeVoid(TRY_MOVE(h), [shared_this]{shared_this->tick_handler(); });
 		push_yield();
 	}
 

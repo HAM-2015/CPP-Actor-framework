@@ -207,6 +207,73 @@ class boost_strand
 	};
 #endif //ENABLE_NEXT_TICK
 
+	template <typename H, typename CB>
+	struct wrap_async_invoke
+	{
+		template <typename H1, typename CB1>
+		wrap_async_invoke(H1&& h, CB1&& cb)
+			:_h(TRY_MOVE(h)), _cb(TRY_MOVE(cb)) {}
+
+		wrap_async_invoke(wrap_async_invoke&& s)
+			:_h(std::move(s._h)), _cb(std::move(s._cb)) {}
+
+		wrap_async_invoke(const wrap_async_invoke& s)
+			:_h(s._h), _cb(s._cb) {}
+
+		void operator=(wrap_async_invoke&& s)
+		{
+			_h = std::move(s._h);
+			_cb = std::move(s._cb);
+		}
+
+		void operator=(const wrap_async_invoke&)
+		{
+			static_assert(false, "no copy");
+		}
+
+		void operator()()
+		{
+			_cb(_h());
+		}
+
+		H _h;
+		CB _cb;
+	};
+
+	template <typename H, typename CB>
+	struct wrap_async_invoke_void
+	{
+		template <typename H1, typename CB1>
+		wrap_async_invoke_void(H1&& h, CB1&& cb)
+			:_h(TRY_MOVE(h)), _cb(TRY_MOVE(cb)) {}
+
+		wrap_async_invoke_void(wrap_async_invoke_void&& s)
+			:_h(std::move(s._h)), _cb(std::move(s._cb)) {}
+
+		wrap_async_invoke_void(const wrap_async_invoke_void& s)
+			:_h(s._h), _cb(s._cb) {}
+
+		void operator=(wrap_async_invoke_void&& s)
+		{
+			_h = std::move(s._h);
+			_cb = std::move(s._cb);
+		}
+
+		void operator=(const wrap_async_invoke_void&)
+		{
+			static_assert(false, "no copy");
+		}
+
+		void operator()()
+		{
+			_h();
+			_cb();
+		}
+
+		H _h;
+		CB _cb;
+	};
+
 protected:
 	boost_strand();
 	virtual ~boost_strand();
@@ -419,7 +486,7 @@ public:
 		boost::mutex mutex;
 		boost::condition_variable con;
 		boost::unique_lock<boost::mutex> ul(mutex);
-		post([&]
+		try_tick([&]
 		{
 			h();
 			mutex.lock();
@@ -440,7 +507,7 @@ public:
 		boost::mutex mutex;
 		boost::condition_variable con;
 		boost::unique_lock<boost::mutex> ul(mutex);
-		post([&]
+		try_tick([&]
 		{
 			r = h();
 			mutex.lock();
@@ -458,20 +525,13 @@ public:
 	template <typename H, typename CB>
 	void asyncInvoke(H&& h, CB&& cb)
 	{
-		post([=]
-		{
-			cb(h());
-		});
+		try_tick(wrap_async_invoke<RM_CREF(H), RM_CREF(CB)>(TRY_MOVE(h), TRY_MOVE(cb)));
 	}
 
 	template <typename H, typename CB>
 	void asyncInvokeVoid(H&& h, CB&& cb)
 	{
-		post([=]
-		{
-			h();
-			cb();
-		});
+		try_tick(wrap_async_invoke_void<RM_CREF(H), RM_CREF(CB)>(TRY_MOVE(h), TRY_MOVE(cb)));
 	}
 };
 

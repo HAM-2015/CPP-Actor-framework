@@ -566,20 +566,10 @@ bool msg_pump_void::isDisconnected()
 
 void trig_once_base::tick_handler() const
 {
-#ifdef _DEBUG
-	if (!_pIsTrig->exchange(true))
-	{
-		assert(_hostActor);
-		_hostActor->tick_handler();
-	}
-	else
-	{
-		assert(false);
-	}
-#else
+	assert(!_pIsTrig->exchange(true));
 	assert(_hostActor);
 	_hostActor->tick_handler();
-#endif
+	_hostActor.reset();
 }
 
 void trig_once_base::push_yield() const
@@ -1181,7 +1171,7 @@ void my_actor::reset_yield()
 void my_actor::notify_run()
 {
 	actor_handle shared_this = shared_from_this();
-	_strand->post([shared_this]{shared_this->start_run(); });
+	_strand->try_tick([shared_this]{shared_this->start_run(); });
 }
 
 void my_actor::assert_enter()
@@ -1214,13 +1204,13 @@ void my_actor::start_run()
 void my_actor::notify_quit()
 {
 	actor_handle shared_this = shared_from_this();
-	_strand->post([shared_this]{shared_this->force_quit(std::function<void()>()); });
+	_strand->try_tick([shared_this]{shared_this->force_quit(std::function<void()>()); });
 }
 
 void my_actor::notify_quit(const std::function<void ()>& h)
 {
 	actor_handle shared_this = shared_from_this();
-	_strand->post([=]{shared_this->force_quit(h); });
+	_strand->try_tick([=]{shared_this->force_quit(h); });
 }
 
 void my_actor::force_quit( const std::function<void ()>& h )
@@ -1341,7 +1331,7 @@ void my_actor::notify_suspend()
 void my_actor::notify_suspend(const std::function<void ()>& h)
 {
 	actor_handle shared_this = shared_from_this();
-	_strand->post([=]{shared_this->suspend(h); });
+	_strand->try_tick([=]{shared_this->suspend(h); });
 }
 
 void my_actor::suspend(const std::function<void ()>& h)
@@ -1405,7 +1395,7 @@ void my_actor::notify_resume()
 void my_actor::notify_resume(const std::function<void ()>& h)
 {
 	actor_handle shared_this = shared_from_this();
-	_strand->post([=]{shared_this->resume(h); });
+	_strand->try_tick([=]{shared_this->resume(h); });
 }
 
 void my_actor::resume(const std::function<void ()>& h)
@@ -1469,7 +1459,7 @@ void my_actor::switch_pause_play()
 void my_actor::switch_pause_play(const std::function<void (bool)>& h)
 {
 	actor_handle shared_this = shared_from_this();
-	_strand->post([shared_this, h]
+	_strand->try_tick([shared_this, h]
 	{
 		assert(shared_this->_strand->running_in_this_thread());
 		if (!shared_this->_quited)
@@ -1772,7 +1762,7 @@ void my_actor::child_suspend_cb_handler()
 			else
 			{
 				actor_handle shared_this = shared_from_this();
-				_strand->post([shared_this]{shared_this->resume(); });
+				_strand->next_tick([shared_this]{shared_this->resume(); });
 				return;
 			}
 		}
@@ -1802,7 +1792,7 @@ void my_actor::child_resume_cb_handler()
 			else
 			{
 				actor_handle shared_this = shared_from_this();
-				_strand->post([shared_this]{shared_this->suspend(); });
+				_strand->next_tick([shared_this]{shared_this->suspend(); });
 				return;
 			}
 		}

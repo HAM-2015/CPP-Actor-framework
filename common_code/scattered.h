@@ -474,7 +474,7 @@ if (__catched){
 
 #define END_TRY_ }}
 
-#define RUN_IN_STRAND(__host__, __strand__, __exp__) __host__->send(__strand__, [&]() {__exp__;})
+#define RUN_IN_STRAND(__host__, __strand__, __exp__) __host__->send(__strand__, [&] {__exp__;})
 
 #define begin_RUN_IN_STRAND(__host__, __strand__) __host__->send(__strand__, [&] {
 
@@ -488,5 +488,11 @@ if (__catched){
 	___actor->notify_run();\
 	___host->actor_wait_quit(___actor); \
 }
+
+#define RUN_IN_TRHEAD_STACK(__host__, __exp__) __host__->run_in_thread_stack([&] {__exp__;})
+
+#define begin_RUN_IN_TRHEAD_STACK(__host__)  __host__->run_in_thread_stack([&] {
+
+#define end_RUN_IN_TRHEAD_STACK() })
 
 #endif
