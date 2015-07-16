@@ -4,12 +4,12 @@
 #ifndef ENABLE_STRAND_IMPL_POOL
 struct get_impl
 {
-	boost::asio::detail::strand_service* service_;
-	boost::asio::detail::strand_service::implementation_type impl_;
+	mutable boost::asio::detail::strand_service* service_;
+	mutable boost::asio::detail::strand_service::implementation_type impl_;
 };
 
 template <>
-inline void boost::asio::io_service::strand::post(get_impl&& out)
+inline void boost::asio::io_service::strand::post(BOOST_ASIO_MOVE_ARG(get_impl) out)
 {
 	out.service_ = &service_;
 	out.impl_ = impl_;
