@@ -605,9 +605,9 @@ public:
 					take_wait& wt = _takeWait.back();
 					wt.srcMsg = &ref6.msg;
 					wt.notified = true;
-					wt.ntf(false);
 					wt.res = ref6.resBuf;
 					wt.ntfSend = ref6.host->make_trig_notifer(ref6.ath);
+					wt.ntf(false);
 					_takeWait.pop_back();
 				}
 			}
@@ -657,9 +657,9 @@ public:
 					take_wait& wt = _takeWait.back();
 					wt.srcMsg = &ref6.msg;
 					wt.notified = true;
-					wt.ntf(false);
 					wt.res = ref6.resBuf;
 					wt.ntfSend = ref6.host->make_trig_notifer(ref6.ath);
+					wt.ntf(false);
 					_takeWait.pop_back();
 				}
 			}
@@ -724,9 +724,9 @@ public:
 					take_wait& wt = _takeWait.back();
 					wt.srcMsg = &ref6.msg;
 					wt.notified = true;
-					wt.ntf(false);
 					wt.res = ref6.resBuf;
 					wt.ntfSend = ref6.host->make_trig_notifer(ref6.ath);
+					wt.ntf(false);
 					_takeWait.pop_back();
 				}
 			}
@@ -1014,10 +1014,10 @@ public:
 				auto& wt = _takeWait.front();
 				wt.notified = true;
 				wt.ntf(true);
-// 				if (!wt.ntfSend.empty())
-// 				{
-// 					wt.ntfSend(true);
-// 				}
+				if (!wt.ntfSend.empty())
+				{
+					wt.ntfSend(true);
+				}
 				_takeWait.pop_front();
 			}
 			while (!_sendWait.empty())

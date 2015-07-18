@@ -96,7 +96,7 @@ class boost_strand
 			:_handler(TRY_MOVE(handler)), _strand(strand) {}
 
 		handler_capture(const handler_capture& s)
-			:_handler(std::move(s._handler)), _strand(s._strand) {static_assert(false, "no copy"); }
+			:_handler(std::move(s._handler)), _strand(s._strand) {}
 
 		handler_capture(handler_capture&& s)
 			:_handler(std::move(s._handler)), _strand(s._strand) {}
