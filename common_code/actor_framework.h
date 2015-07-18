@@ -2906,37 +2906,37 @@ public:
 	void close_trig_notifer(actor_msg_handle_base& ath);
 
 	/*!
-	@brief 创建回调出发函数，直接作为回调参数使用，async_func(..., Handler self->make_callback())
+	@brief 创建上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_context())
 	*/
 	template <typename T0, typename T1, typename T2, typename T3>
-	callback_handler<T0, T1, T2, T3> make_callback(T0& r0, T1& r1, T2& r2, T3& r3)
+	callback_handler<T0, T1, T2, T3> make_context(T0& r0, T1& r1, T2& r2, T3& r3)
 	{
 		assert_enter();
 		return callback_handler<T0, T1, T2, T3>(this, r0, r1, r2, r3);
 	}
 
 	template <typename T0, typename T1, typename T2>
-	callback_handler<T0, T1, T2> make_callback(T0& r0, T1& r1, T2& r2)
+	callback_handler<T0, T1, T2> make_context(T0& r0, T1& r1, T2& r2)
 	{
 		assert_enter();
 		return callback_handler<T0, T1, T2>(this, r0, r1, r2);
 	}
 
 	template <typename T0, typename T1>
-	callback_handler<T0, T1> make_callback(T0& r0, T1& r1)
+	callback_handler<T0, T1> make_context(T0& r0, T1& r1)
 	{
 		assert_enter();
 		return callback_handler<T0, T1>(this, r0, r1);
 	}
 
 	template <typename T0>
-	callback_handler<T0> make_callback(T0& r0)
+	callback_handler<T0> make_context(T0& r0)
 	{
 		assert_enter();
 		return callback_handler<T0>(this, r0);
 	}
 
-	callback_handler<> make_callback();
+	callback_handler<> make_context();
 public:
 	/*!
 	@brief 从触发句柄中提取消息
@@ -4397,6 +4397,11 @@ public:
 	shared_strand self_strand();
 
 	/*!
+	@brief 获取io_service调度器
+	*/
+	boost::asio::io_service& self_io_service();
+
+	/*!
 	@brief 返回本对象的智能指针
 	*/
 	actor_handle shared_from_this();
@@ -4555,7 +4560,6 @@ private:
 	void cancel_timer();
 	void suspend_timer();
 	void resume_timer();
-	void start_run();
 	void force_quit(const std::function<void ()>& h);
 	void suspend(const std::function<void ()>& h);
 	void resume(const std::function<void ()>& h);

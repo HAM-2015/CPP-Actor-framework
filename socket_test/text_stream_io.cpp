@@ -47,7 +47,7 @@ void text_stream_io::readActor( my_actor* self )
 	{
 		boost::system::error_code ec;
 		size_t length;
-		_ioObj->async_read_some(buff + msgLength, sizeof(buff)-msgLength, self->make_callback(ec, length));
+		_ioObj->async_read_some(buff + msgLength, sizeof(buff)-msgLength, self->make_context(ec, length));
 		if (ec || 0 == length)
 		{
 			_msgNotify(shared_data());
@@ -96,7 +96,7 @@ void text_stream_io::writeActor( my_actor* self )
 		{
 			boost::system::error_code ec;
 			size_t length;
-			_ioObj->async_write((unsigned char*)msg->data(), msg->size(), self->make_callback(ec, length));
+			_ioObj->async_write((unsigned char*)msg->data(), msg->size(), self->make_context(ec, length));
 			if (ec)
 			{
 				break;
@@ -105,7 +105,7 @@ void text_stream_io::writeActor( my_actor* self )
 		{
 			boost::system::error_code ec;
 			size_t length;
-			_ioObj->async_write((unsigned char*)textTail.c_str(), textTail.size(), self->make_callback(ec, length));
+			_ioObj->async_write((unsigned char*)textTail.c_str(), textTail.size(), self->make_context(ec, length));
 			if (ec)
 			{
 				break;

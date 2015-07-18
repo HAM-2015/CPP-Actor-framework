@@ -1146,6 +1146,11 @@ shared_strand my_actor::self_strand()
 	return _strand;
 }
 
+boost::asio::io_service& my_actor::self_io_service()
+{
+	return _strand->get_io_service();
+}
+
 actor_handle my_actor::shared_from_this()
 {
 	return _weakThis.lock();
@@ -1171,7 +1176,15 @@ void my_actor::reset_yield()
 void my_actor::notify_run()
 {
 	actor_handle shared_this = shared_from_this();
-	_strand->try_tick([shared_this]{shared_this->start_run(); });
+	_strand->try_tick([shared_this]
+	{
+		my_actor* self = shared_this.get();
+		if (!self->_quited && !self->_started)
+		{
+			self->_started = true;
+			self->pull_yield();
+		}
+	});
 }
 
 void my_actor::assert_enter()
@@ -1181,24 +1194,6 @@ void my_actor::assert_enter()
 	assert(_inActor);
 	assert((size_t)get_sp() >= (size_t)_stackTop-_stackSize+1024);
 	check_self();
-}
-
-void my_actor::start_run()
-{
-	if (_strand->running_in_this_thread())
-	{
-		assert(!_inActor);
-		assert(!_started);
-		if (!_quited && !_started)
-		{
-			_started = true;
-			pull_yield();
-		}
-	} 
-	else
-	{
-		notify_run();
-	}
 }
 
 void my_actor::notify_quit()
@@ -2098,7 +2093,7 @@ void my_actor::close_trig_notifer(actor_msg_handle_base& ath)
 	ath.close();
 }
 
-callback_handler<> my_actor::make_callback()
+callback_handler<> my_actor::make_context()
 {
 	assert_enter();
 	return callback_handler<>(this);
