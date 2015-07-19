@@ -36,7 +36,7 @@ class actor_timer
 		handler_table::iterator _tableNode;
 	};
 private:
-	actor_timer(shared_strand strand);
+	actor_timer(const shared_strand& strand);
 	~actor_timer();
 private:
 	/*!

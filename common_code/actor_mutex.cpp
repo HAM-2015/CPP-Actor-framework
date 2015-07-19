@@ -175,7 +175,7 @@ class _actor_mutex
 		my_actor::id _waitHostID;
 	};
 public:
-	_actor_mutex(shared_strand strand)
+	_actor_mutex(const shared_strand& strand)
 		:_strand(strand), _waitQueue(4), _lockActorID(0), _recCount(0)
 	{
 
@@ -378,7 +378,7 @@ private:
 };
 //////////////////////////////////////////////////////////////////////////
 
-actor_mutex::actor_mutex(shared_strand strand)
+actor_mutex::actor_mutex(const shared_strand& strand)
 :_amutex(new _actor_mutex(strand))
 {
 
@@ -468,7 +468,7 @@ class _actor_condition_variable
 		mutex_trig_notifer& ntf;
 	};
 public:
-	_actor_condition_variable(shared_strand strand)
+	_actor_condition_variable(const shared_strand& strand)
 		:_strand(strand), _waitQueue(4)
 	{
 
@@ -579,7 +579,7 @@ private:
 };
 //////////////////////////////////////////////////////////////////////////
 
-actor_condition_variable::actor_condition_variable(shared_strand strand)
+actor_condition_variable::actor_condition_variable(const shared_strand& strand)
 :_aconVar(new _actor_condition_variable(strand))
 {
 
@@ -620,7 +620,7 @@ class _actor_shared_mutex
 		bool _isShared;
 	};
 public:
-	_actor_shared_mutex(shared_strand strand)
+	_actor_shared_mutex(const shared_strand& strand)
 		:_strand(strand), _waitQueue(4), _inSet(4), _shared(true)
 	{
 
@@ -1019,7 +1019,7 @@ private:
 };
 //////////////////////////////////////////////////////////////////////////
 
-actor_shared_mutex::actor_shared_mutex(shared_strand strand)
+actor_shared_mutex::actor_shared_mutex(const shared_strand& strand)
 :_amutex(new _actor_shared_mutex(strand))
 {
 

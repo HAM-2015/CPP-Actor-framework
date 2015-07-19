@@ -1502,7 +1502,7 @@ private:
 
 	}
 private:
-	static std::shared_ptr<msg_pool> make(shared_strand strand, size_t fixedSize)
+	static std::shared_ptr<msg_pool> make(const shared_strand& strand, size_t fixedSize)
 	{
 		std::shared_ptr<msg_pool> res(new msg_pool(fixedSize), [](msg_pool* p){delete p; });
 		res->_weakThis = res;
@@ -1636,7 +1636,7 @@ class msg_pool_void : public msg_pool_base
 	friend msg_pump_void;
 	friend post_type;
 protected:
-	msg_pool_void(shared_strand strand);
+	msg_pool_void(const shared_strand& strand);
 public:
 	virtual ~msg_pool_void();
 protected:
@@ -1694,12 +1694,12 @@ class msg_pool<void, void, void, void> : public msg_pool_void
 private:
 	typedef std::shared_ptr<msg_pool> handle;
 
-	msg_pool(shared_strand strand)
+	msg_pool(const shared_strand& strand)
 		:msg_pool_void(strand){}
 
 	~msg_pool(){}
 
-	static handle make(shared_strand strand, size_t fixedSize)
+	static handle make(const shared_strand& strand, size_t fixedSize)
 	{
 		handle res(new msg_pool(strand), [](msg_pool* p){delete p; });
 		res->_weakThis = res;
@@ -2224,7 +2224,7 @@ public:
 	@param mainFunc Actor执行入口
 	@param stackSize Actor栈大小，默认64k字节，必须是4k的整数倍，最小4k，最大1M
 	*/
-	static actor_handle create(shared_strand actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	static actor_handle create(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 
 	/*!
 	@brief 启用堆栈内存池
@@ -2238,7 +2238,7 @@ public:
 	@param stackSize Actor栈大小，4k的整数倍（最大1MB）
 	@return 子Actor句柄，使用 child_actor_handle 接收返回值
 	*/
-	child_actor_handle::child_actor_param create_child_actor(shared_strand actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_actor_handle::child_actor_param create_child_actor(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 	child_actor_handle::child_actor_param create_child_actor(const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 
 	/*!
@@ -2290,7 +2290,7 @@ public:
 	/*!
 	@brief 创建另一个Actor，Actor执行完成后返回
 	*/
-	__yield_interrupt void run_child_actor_complete(shared_strand actorStrand, const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
+	__yield_interrupt void run_child_actor_complete(const shared_strand& actorStrand, const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
 	__yield_interrupt void run_child_actor_complete(const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
 
 	/*!
@@ -2365,7 +2365,7 @@ public:
 	@brief 发送一个异步函数到shared_strand中执行（如果是和self一样的shared_strand直接执行），配合quit_guard使用防止引用失效，完成后返回
 	*/
 	template <typename H>
-	__yield_interrupt void send(shared_strand exeStrand, H&& h)
+	__yield_interrupt void send(const shared_strand& exeStrand, H&& h)
 	{
 		assert_enter();
 		if (exeStrand != _strand)
@@ -2379,7 +2379,7 @@ public:
 	}
 
 	template <typename T0, typename H>
-	__yield_interrupt T0 send(shared_strand exeStrand, H&& h)
+	__yield_interrupt T0 send(const shared_strand& exeStrand, H&& h)
 	{
 		assert_enter();
 		if (exeStrand != _strand)
@@ -2417,7 +2417,7 @@ public:
 		配合quit_guard使用防止引用失效，完成后返回
 	*/
 	template <typename H>
-	__yield_interrupt void async_send(shared_strand exeStrand, H&& h)
+	__yield_interrupt void async_send(const shared_strand& exeStrand, H&& h)
 	{
 		assert_enter();
 		actor_handle shared_this = shared_from_this();
@@ -2426,7 +2426,7 @@ public:
 	}
 
 	template <typename T0, typename H>
-	__yield_interrupt T0 async_send(shared_strand exeStrand, H&& h)
+	__yield_interrupt T0 async_send(const shared_strand& exeStrand, H&& h)
 	{
 		assert_enter();
 		dst_receiver_buff<TYPE_PIPE(T0)>::dst_buff dstBuff;
@@ -3403,7 +3403,7 @@ public:
 	@return 返回处理该消息的子Actor句柄
 	*/
 	template <typename T0, typename T1, typename T2, typename T3, typename Handler>
-	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(shared_strand strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(const shared_strand& strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		child_actor_handle::child_actor_param childActor = create_child_actor(strand, [agentActor](my_actor* self)
 		{
@@ -3418,25 +3418,25 @@ public:
 	}
 
 	template <typename T0, typename T1, typename T2, typename Handler>
-	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(shared_strand strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(const shared_strand& strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return msg_agent_to_actor<T0, T1, T2, void>(strand, autoRun, agentActor, stackSize);
 	}
 
 	template <typename T0, typename T1, typename Handler>
-	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(shared_strand strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(const shared_strand& strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return msg_agent_to_actor<T0, T1, void, void>(strand, autoRun, agentActor, stackSize);
 	}
 
 	template <typename T0, typename Handler>
-	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(shared_strand strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(const shared_strand& strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return msg_agent_to_actor<T0, void, void, void>(strand, autoRun, agentActor, stackSize);
 	}
 
 	template <typename Handler>
-	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(shared_strand strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(const shared_strand& strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return msg_agent_to_actor<void, void, void, void>(strand, autoRun, agentActor, stackSize);
 	}

@@ -121,7 +121,7 @@ class sync_msg
 public:
 	struct close_exception : public sync_msg_close_exception {};
 public:
-	sync_msg(shared_strand strand)
+	sync_msg(const shared_strand& strand)
 		:_closed(false), _strand(strand), _sendWait(4), _takeWait(4) {}
 public:
 	/*!
@@ -476,7 +476,7 @@ private:
 		LAMBDA_THIS_REF6(ref6, ref4, host, ct, ath, mit, msgBuf);
 		host->send(_strand, [&ref6]
 		{
-			auto& ref4 = ref6.ref4;
+			auto& ref4 = ref6.ref9;
 			if (ref6->_closed)
 			{
 				ref4.closed = true;
@@ -508,7 +508,7 @@ private:
 			{
 				host->send(_strand, [&ref6]
 				{
-					if (!ref6.ref4.notified)
+					if (!ref6.ref9.notified)
 					{
 						ref6->_takeWait.erase(ref6.mit);
 					}
@@ -566,7 +566,7 @@ class csp_channel
 		actor_trig_notifer<bool>& ntfSend;
 	};
 protected:
-	csp_channel(shared_strand strand)
+	csp_channel(const shared_strand& strand)
 		:_closed(false), _strand(strand), _takeWait(4), _sendWait(4)
 	{
 		DEBUG_OPERATION(_thrownCloseExp = false);
@@ -700,32 +700,30 @@ public:
 		bool closed = false;
 		bool notified = false;
 		bool has = false;
-		LAMBDA_THIS_REF3(ref3, closed, notified, has);
-		LAMBDA_THIS_REF6(ref6, ref3, host, msg, ath, resBuf, nit);
-		host->send(_strand, [&ref6]
+		LAMBDA_THIS_REF8(ref8, host, msg, ath, resBuf, nit, closed, notified, has);
+		host->send(_strand, [&ref8]
 		{
-			auto& ref3 = ref6.ref3;
-			if (ref3->_closed)
+			if (ref8->_closed)
 			{
-				ref3.closed = true;
+				ref8.closed = true;
 			}
 			else
 			{
-				auto& _takeWait = ref6->_takeWait;
+				auto& _takeWait = ref8->_takeWait;
 				if (_takeWait.empty())
 				{
-					send_wait pw = { ref3.notified, ref6.msg, ref6.resBuf, ref6.host->make_trig_notifer(ref6.ath) };
-					ref6->_sendWait.push_front(pw);
-					ref6.nit = ref6->_sendWait.begin();
+					send_wait pw = { ref8.notified, ref8.msg, ref8.resBuf, ref8.host->make_trig_notifer(ref8.ath) };
+					ref8->_sendWait.push_front(pw);
+					ref8.nit = ref8->_sendWait.begin();
 				}
 				else
 				{
-					ref3.has = true;
+					ref8.has = true;
 					take_wait& wt = _takeWait.back();
-					wt.srcMsg = &ref6.msg;
+					wt.srcMsg = &ref8.msg;
 					wt.notified = true;
-					wt.res = ref6.resBuf;
-					wt.ntfSend = ref6.host->make_trig_notifer(ref6.ath);
+					wt.res = ref8.resBuf;
+					wt.ntfSend = ref8.host->make_trig_notifer(ref8.ath);
 					wt.ntf(false);
 					_takeWait.pop_back();
 				}
@@ -737,15 +735,15 @@ public:
 			{
 				if (!host->timed_wait_trig(tm, ath, closed))
 				{
-					host->send(_strand, [&ref6]
+					host->send(_strand, [&ref8]
 					{
-						if (ref6.ref3.notified)
+						if (ref8.notified)
 						{
-							ref6.ref3.has = true;
+							ref8.has = true;
 						}
 						else
 						{
-							ref6->_sendWait.erase(ref6.nit);
+							ref8->_sendWait.erase(ref8.nit);
 						}
 					});
 					if (!has)
@@ -787,31 +785,29 @@ public:
 		bool wait = false;
 		bool closed = false;
 		bool notified = false;
-		LAMBDA_REF3(ref3, wait, closed, notified);
-		LAMBDA_THIS_REF6(ref6, ref3, host, ath, ntfSend, srcMsg, res);
-		host->send(_strand, [&ref6]
+		LAMBDA_THIS_REF8(ref8, host, ath, ntfSend, srcMsg, res, wait, closed, notified);
+		host->send(_strand, [&ref8]
 		{
-			auto& ref3 = ref6.ref3;
-			if (ref6->_closed)
+			if (ref8->_closed)
 			{
-				ref3.closed = true;
+				ref8.closed = true;
 			}
 			else
 			{
-				auto& _sendWait = ref6->_sendWait;
+				auto& _sendWait = ref8->_sendWait;
 				if (_sendWait.empty())
 				{
-					ref3.wait = true;
-					take_wait pw = { ref3.notified, ref6.srcMsg, ref6.res, ref6.host->make_trig_notifer(ref6.ath), ref6.ntfSend };
-					ref6->_takeWait.push_front(pw);
+					ref8.wait = true;
+					take_wait pw = { ref8.notified, ref8.srcMsg, ref8.res, ref8.host->make_trig_notifer(ref8.ath), ref8.ntfSend };
+					ref8->_takeWait.push_front(pw);
 				}
 				else
 				{
 					send_wait& wt = _sendWait.back();
-					ref6.srcMsg = &wt.srcMsg;
+					ref8.srcMsg = &wt.srcMsg;
 					wt.notified = true;
-					ref6.ntfSend = wt.ntf;
-					ref6.res = wt.res;
+					ref8.ntfSend = wt.ntf;
+					ref8.res = wt.res;
 					_sendWait.pop_back();
 				}
 			}
@@ -921,32 +917,30 @@ public:
 		bool wait = false;
 		bool closed = false;
 		bool notified = false;
-		LAMBDA_REF4(ref4, wait, closed, notified, wit);
-		LAMBDA_THIS_REF6(ref6, ref4, host, ath, ntfSend, srcMsg, res);
-		host->send(_strand, [&ref6]
+		LAMBDA_THIS_REF9(ref9, wait, closed, notified, wit, host, ath, ntfSend, srcMsg, res);
+		host->send(_strand, [&ref9]
 		{
-			auto& ref4 = ref6.ref4;
-			if (ref6->_closed)
+			if (ref9->_closed)
 			{
-				ref4.closed = true;
+				ref9.closed = true;
 			}
 			else
 			{
-				auto& _sendWait = ref6->_sendWait;
+				auto& _sendWait = ref9->_sendWait;
 				if (_sendWait.empty())
 				{
-					ref4.wait = true;
-					take_wait pw = { ref4.notified, ref6.srcMsg, ref6.res, ref6.host->make_trig_notifer(ref6.ath), ref6.ntfSend };
-					ref6->_takeWait.push_front(pw);
-					ref4.wit = ref6->_takeWait.begin();
+					ref9.wait = true;
+					take_wait pw = { ref9.notified, ref9.srcMsg, ref9.res, ref9.host->make_trig_notifer(ref9.ath), ref9.ntfSend };
+					ref9->_takeWait.push_front(pw);
+					ref9.wit = ref9->_takeWait.begin();
 				}
 				else
 				{
 					send_wait& wt = _sendWait.back();
-					ref6.srcMsg = &wt.srcMsg;
+					ref9.srcMsg = &wt.srcMsg;
 					wt.notified = true;
-					ref6.ntfSend = wt.ntf;
-					ref6.res = wt.res;
+					ref9.ntfSend = wt.ntf;
+					ref9.res = wt.res;
 					_sendWait.pop_back();
 				}
 			}
@@ -957,13 +951,12 @@ public:
 			{
 				if (!host->timed_wait_trig(tm, ath, closed))
 				{
-					host->send(_strand, [&ref6]
+					host->send(_strand, [&ref9]
 					{
-						auto& ref4 = ref6.ref4;
-						ref4.wait = ref4.notified;
-						if (!ref4.notified)
+						ref9.wait = ref9.notified;
+						if (!ref9.notified)
 						{
-							ref6->_takeWait.erase(ref4.wit);
+							ref9->_takeWait.erase(ref9.wit);
 						}
 					});
 					if (wait)
@@ -1014,10 +1007,7 @@ public:
 				auto& wt = _takeWait.front();
 				wt.notified = true;
 				wt.ntf(true);
-				if (!wt.ntfSend.empty())
-				{
-					wt.ntfSend(true);
-				}
+				assert(wt.ntfSend.empty());
 				_takeWait.pop_front();
 			}
 			while (!_sendWait.empty())
@@ -1065,7 +1055,7 @@ class csp_invoke_base4 : public csp_channel<ref_ex<T0, T1, T2, T3>, R>
 	typedef ref_ex<T0, T1, T2, T3> msg_type;
 	typedef csp_channel<msg_type, R> base_csp_channel;
 protected:
-	csp_invoke_base4(shared_strand strand)
+	csp_invoke_base4(const shared_strand& strand)
 		:base_csp_channel(strand) {}
 	~csp_invoke_base4() {}
 public:
@@ -1121,7 +1111,7 @@ class csp_invoke_base3 : public csp_channel<ref_ex<T0, T1, T2>, R>
 	typedef ref_ex<T0, T1, T2> msg_type;
 	typedef csp_channel<msg_type, R> base_csp_channel;
 protected:
-	csp_invoke_base3(shared_strand strand)
+	csp_invoke_base3(const shared_strand& strand)
 		:base_csp_channel(strand) {}
 	~csp_invoke_base3() {}
 public:
@@ -1177,7 +1167,7 @@ class csp_invoke_base2 : public csp_channel<ref_ex<T0, T1>, R>
 	typedef ref_ex<T0, T1> msg_type;
 	typedef csp_channel<msg_type, R> base_csp_channel;
 protected:
-	csp_invoke_base2(shared_strand strand)
+	csp_invoke_base2(const shared_strand& strand)
 		:base_csp_channel(strand) {}
 	~csp_invoke_base2() {}
 public:
@@ -1233,7 +1223,7 @@ class csp_invoke_base1 : public csp_channel<ref_ex<T0>, R>
 	typedef ref_ex<T0> msg_type;
 	typedef csp_channel<msg_type, R> base_csp_channel;
 protected:
-	csp_invoke_base1(shared_strand strand)
+	csp_invoke_base1(const shared_strand& strand)
 		:base_csp_channel(strand) {}
 	~csp_invoke_base1() {}
 public:
@@ -1289,7 +1279,7 @@ class csp_invoke_base0 : public csp_channel<ref_ex<>, R>
 	typedef ref_ex<> msg_type;
 	typedef csp_channel<msg_type, R> base_csp_channel;
 protected:
-	csp_invoke_base0(shared_strand strand)
+	csp_invoke_base0(const shared_strand& strand)
 		:base_csp_channel(strand) {}
 	~csp_invoke_base0() {}
 public:
@@ -1346,7 +1336,7 @@ class csp_invoke_base4<T0, T1, T2, T3, void> : public csp_channel<ref_ex<T0, T1,
 	typedef ref_ex<T0, T1, T2, T3> msg_type;
 	typedef csp_channel<msg_type, void_return> base_csp_channel;
 protected:
-	csp_invoke_base4(shared_strand strand)
+	csp_invoke_base4(const shared_strand& strand)
 		:base_csp_channel(strand) {}
 	~csp_invoke_base4() {}
 public:
@@ -1405,7 +1395,7 @@ class csp_invoke_base3<T0, T1, T2, void> : public csp_channel<ref_ex<T0, T1, T2>
 	typedef ref_ex<T0, T1, T2> msg_type;
 	typedef csp_channel<msg_type, void_return> base_csp_channel;
 protected:
-	csp_invoke_base3(shared_strand strand)
+	csp_invoke_base3(const shared_strand& strand)
 		:base_csp_channel(strand) {}
 	~csp_invoke_base3() {}
 public:
@@ -1464,7 +1454,7 @@ class csp_invoke_base2<T0, T1, void> : public csp_channel<ref_ex<T0, T1>, void_r
 	typedef ref_ex<T0, T1> msg_type;
 	typedef csp_channel<msg_type, void_return> base_csp_channel;
 protected:
-	csp_invoke_base2(shared_strand strand)
+	csp_invoke_base2(const shared_strand& strand)
 		:base_csp_channel(strand) {}
 	~csp_invoke_base2() {}
 public:
@@ -1523,7 +1513,7 @@ class csp_invoke_base1<T0, void> : public csp_channel<ref_ex<T0>, void_return>
 	typedef ref_ex<T0> msg_type;
 	typedef csp_channel<msg_type, void_return> base_csp_channel;
 protected:
-	csp_invoke_base1(shared_strand strand)
+	csp_invoke_base1(const shared_strand& strand)
 		:base_csp_channel(strand) {}
 	~csp_invoke_base1() {}
 public:
@@ -1582,7 +1572,7 @@ class csp_invoke_base0<void> : public csp_channel<ref_ex<>, void_return>
 	typedef ref_ex<> msg_type;
 	typedef csp_channel<msg_type, void_return> base_csp_channel;
 protected:
-	csp_invoke_base0(shared_strand strand)
+	csp_invoke_base0(const shared_strand& strand)
 		:base_csp_channel(strand) {}
 	~csp_invoke_base0() {}
 public:
@@ -1649,7 +1639,7 @@ public:
 	struct try_wait_exception : public csp_try_wait_exception {};
 	struct timed_wait_exception : public csp_timed_wait_exception {};
 public:
-	csp_invoke(shared_strand strand)
+	csp_invoke(const shared_strand& strand)
 		:csp_invoke_base4(strand) {}
 private:
 	void throw_close_exception()
@@ -1691,7 +1681,7 @@ public:
 	struct try_wait_exception : public csp_try_wait_exception {};
 	struct timed_wait_exception : public csp_timed_wait_exception {};
 public:
-	csp_invoke(shared_strand strand)
+	csp_invoke(const shared_strand& strand)
 		:csp_invoke_base3(strand) {}
 private:
 	void throw_close_exception()
@@ -1733,7 +1723,7 @@ public:
 	struct try_wait_exception : public csp_try_wait_exception {};
 	struct timed_wait_exception : public csp_timed_wait_exception {};
 public:
-	csp_invoke(shared_strand strand)
+	csp_invoke(const shared_strand& strand)
 		:csp_invoke_base2(strand) {}
 private:
 	void throw_close_exception()
@@ -1775,7 +1765,7 @@ public:
 	struct try_wait_exception : public csp_try_wait_exception {};
 	struct timed_wait_exception : public csp_timed_wait_exception {};
 public:
-	csp_invoke(shared_strand strand)
+	csp_invoke(const shared_strand& strand)
 		:csp_invoke_base1(strand) {}
 private:
 	void throw_close_exception()
@@ -1817,7 +1807,7 @@ public:
 	struct try_wait_exception : public csp_try_wait_exception {};
 	struct timed_wait_exception : public csp_timed_wait_exception {};
 public:
-	csp_invoke(shared_strand strand)
+	csp_invoke(const shared_strand& strand)
 		:csp_invoke_base0(strand) {}
 private:
 	void throw_close_exception()

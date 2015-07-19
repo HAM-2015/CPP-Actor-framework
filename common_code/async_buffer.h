@@ -44,7 +44,7 @@ public:
 	{
 	};
 public:
-	async_buffer(size_t maxLength, shared_strand strand)
+	async_buffer(size_t maxLength, const shared_strand& strand)
 		:_buffer(maxLength)//, _pushWait(4), _popWait(4)
 	{
 		_closed = false;
@@ -147,19 +147,17 @@ public:
 			bool notified = false;
 			bool isFull = false;
 			bool closed = false;
-			LAMBDA_THIS_REF3(ref3, notified, isFull, closed);
-			LAMBDA_THIS_REF5(ref5, ref3, host, msg, ath, mit);
-			host->send(_strand, [&ref5]
+			LAMBDA_THIS_REF7(ref7, notified, isFull, closed, host, msg, ath, mit);
+			host->send(_strand, [&ref7]
 			{
-				auto& ref3 = ref5.ref3;
-				ref3.closed = ref5->_closed;
-				if (!ref5->_closed)
+				ref7.closed = ref7->_closed;
+				if (!ref7->_closed)
 				{
-					ref3.isFull = ref5->_buffer.full();
-					if (!ref3.isFull)
+					ref7.isFull = ref7->_buffer.full();
+					if (!ref7.isFull)
 					{
-						auto& _popWait = ref5->_popWait;
-						ref5->_buffer.push_back(try_move<TM&&>::move(ref5.msg));
+						auto& _popWait = ref7->_popWait;
+						ref7->_buffer.push_back(try_move<TM&&>::move(ref7.msg));
 						if (!_popWait.empty())
 						{
 							_popWait.back()(false);
@@ -168,9 +166,9 @@ public:
 					}
 					else
 					{
-						push_pck pck = { ref3.notified, ref5.host->make_trig_notifer(ref5.ath) };
-						ref5->_pushWait.push_front(pck);
-						ref5.mit = ref5->_pushWait.begin();
+						push_pck pck = { ref7.notified, ref7.host->make_trig_notifer(ref7.ath) };
+						ref7->_pushWait.push_front(pck);
+						ref7.mit = ref7->_pushWait.begin();
 					}
 				}
 			});
@@ -183,11 +181,11 @@ public:
 				long long bt = get_tick_us();
 				if (!host->timed_wait_trig(utm / 1000, ath, closed))
 				{
-					host->send(_strand, [&ref5]
+					host->send(_strand, [&ref7]
 					{
-						if (!ref5.ref3.notified)
+						if (!ref7.notified)
 						{
-							ref5->_pushWait.erase(ref5.mit);
+							ref7->_pushWait.erase(ref7.mit);
 						}
 					});
 					if (notified)
@@ -378,27 +376,25 @@ private:
 			bool notified = false;
 			bool isEmpty = false;
 			bool closed = false;
-			LAMBDA_THIS_REF3(ref3, notified, isEmpty, closed);
-			LAMBDA_THIS_REF5(ref5, ref3, host, out, ath, mit);
-			host->send(_strand, [&ref5]
+			LAMBDA_THIS_REF7(ref7, notified, isEmpty, closed, host, out, ath, mit);
+			host->send(_strand, [&ref7]
 			{
-				auto& ref3 = ref5.ref3;
-				ref3.closed = ref5->_closed;
-				if (!ref5->_closed)
+				ref7.closed = ref7->_closed;
+				if (!ref7->_closed)
 				{
-					auto& _buffer = ref5->_buffer;
-					auto& _pushWait = ref5->_pushWait;
-					ref3.isEmpty = _buffer.empty();
-					if (!ref3.isEmpty)
+					auto& _buffer = ref7->_buffer;
+					auto& _pushWait = ref7->_pushWait;
+					ref7.isEmpty = _buffer.empty();
+					if (!ref7.isEmpty)
 					{
-						ref5.out(_buffer.front());
+						ref7.out(_buffer.front());
 						_buffer.pop_front();
 					}
 					else
 					{
-						pop_pck pck = { ref3.notified, ref5.host->make_trig_notifer(ref5.ath) };
-						ref5->_popWait.push_front(pck);
-						ref5.mit = ref5->_popWait.begin();
+						pop_pck pck = { ref7.notified, ref7.host->make_trig_notifer(ref7.ath) };
+						ref7->_popWait.push_front(pck);
+						ref7.mit = ref7->_popWait.begin();
 					}
 					if (_buffer.size() <= _buffer.capacity() / 2 && !_pushWait.empty())
 					{
@@ -416,11 +412,11 @@ private:
 				long long bt = get_tick_us();
 				if (!host->timed_wait_trig(utm / 1000, ath, closed))
 				{
-					host->send(_strand, [&ref5]
+					host->send(_strand, [&ref7]
 					{
-						if (!ref5.ref3.notified)
+						if (!ref7.notified)
 						{
-							ref5->_popWait.erase(ref5.mit);
+							ref7->_popWait.erase(ref7.mit);
 						}
 					});
 					if (notified)

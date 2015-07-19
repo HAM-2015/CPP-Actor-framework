@@ -236,7 +236,7 @@ bool msg_pump_base::is_quited()
 
 //////////////////////////////////////////////////////////////////////////
 
-msg_pool_void::msg_pool_void(shared_strand strand)
+msg_pool_void::msg_pool_void(const shared_strand& strand)
 {
 	_strand = strand;
 	_waiting = false;
@@ -779,7 +779,7 @@ my_actor& my_actor::operator =(const my_actor&)
 	return *this;
 }
 
-actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainFunc, size_t stackSize )
+actor_handle my_actor::create(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize)
 {
 	assert(stackSize && stackSize <= 1024 kB && 0 == stackSize % (4 kB));
 	actor_handle newActor;
@@ -825,7 +825,7 @@ actor_handle my_actor::create( shared_strand actorStrand, const main_func& mainF
 	return newActor;
 }
 
-child_actor_handle::child_actor_param my_actor::create_child_actor( shared_strand actorStrand, const main_func& mainFunc, size_t stackSize )
+child_actor_handle::child_actor_param my_actor::create_child_actor(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize)
 {
 	assert_enter();
 	child_actor_handle::child_actor_param actorHandle;
@@ -1038,7 +1038,7 @@ void my_actor::child_actors_resume(const list<child_actor_handle::ptr>& actorHan
 	close_msg_notifer(amh);
 }
 
-void my_actor::run_child_actor_complete(shared_strand actorStrand, const main_func& h, size_t stackSize)
+void my_actor::run_child_actor_complete(const shared_strand& actorStrand, const main_func& h, size_t stackSize)
 {
 	assert_enter();
 	child_actor_handle actorHandle = create_child_actor(actorStrand, h, stackSize);

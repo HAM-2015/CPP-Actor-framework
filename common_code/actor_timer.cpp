@@ -5,7 +5,7 @@
 
 typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> timer_type;
 
-actor_timer::actor_timer(shared_strand strand)
+actor_timer::actor_timer(const shared_strand& strand)
 :_ios(strand->get_ios_proxy()), _looping(false), _weakStrand(strand), _timerCount(0),
 _extFinishTime(-1), _timer(_ios.getTimer()), _listAlloc(8192), _handlerTable(4096)
 {

@@ -15,7 +15,7 @@ class actor_mutex
 {
 	friend my_actor;
 public:
-	actor_mutex(shared_strand strand);
+	actor_mutex(const shared_strand& strand);
 	~actor_mutex();
 public:
 	/*!
@@ -76,7 +76,7 @@ private:
 class actor_condition_variable
 {
 public:
-	actor_condition_variable(shared_strand strand);
+	actor_condition_variable(const shared_strand& strand);
 	~actor_condition_variable();
 public:
 	/*!
@@ -109,7 +109,7 @@ private:
 class actor_shared_mutex
 {
 public:
-	actor_shared_mutex(shared_strand strand);
+	actor_shared_mutex(const shared_strand& strand);
 	~actor_shared_mutex();
 public:
 	/*!
