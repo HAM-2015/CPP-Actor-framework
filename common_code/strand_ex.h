@@ -25,6 +25,8 @@ public:
 	boost::asio::io_service& get_io_service();
 	bool running_in_this_thread() const;
 	bool empty();
+	bool ready_empty();
+	bool waiting_empty();
 
 	template <typename Handler>
 	void post(Handler&& handler)

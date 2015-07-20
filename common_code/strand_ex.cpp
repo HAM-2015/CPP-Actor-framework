@@ -1,15 +1,26 @@
 #include "strand_ex.h"
 
 #ifdef ENABLE_STRAND_IMPL_POOL
-struct get_impl_empty_strand_ex
+struct get_impl_ready_empty_strand_ex
+{
+	bool _empty;
+};
+
+struct get_impl_waiting_empty_strand_ex
 {
 	bool _empty;
 };
 
 template <>
-inline void boost::asio::detail::strand_service::post(boost::asio::detail::strand_service::implementation_type& impl, get_impl_empty_strand_ex& fh)
+inline void boost::asio::detail::strand_service::post(boost::asio::detail::strand_service::implementation_type& impl, get_impl_ready_empty_strand_ex& fh)
 {
-	fh._empty = impl->ready_queue_.empty() && impl->waiting_queue_.empty();
+	fh._empty = impl->ready_queue_.empty();
+}
+
+template <>
+inline void boost::asio::detail::strand_service::post(boost::asio::detail::strand_service::implementation_type& impl, get_impl_waiting_empty_strand_ex& fh)
+{
+	fh._empty = impl->waiting_queue_.empty();
 }
 //////////////////////////////////////////////////////////////////////////
 
@@ -35,7 +46,19 @@ bool strand_ex::running_in_this_thread() const
 
 bool strand_ex::empty()
 {
-	get_impl_empty_strand_ex t;
+	return ready_empty() && waiting_empty();
+}
+
+bool strand_ex::ready_empty()
+{
+	get_impl_ready_empty_strand_ex t;
+	_service.post(_impl, t);
+	return t._empty;
+}
+
+bool strand_ex::waiting_empty()
+{
+	get_impl_waiting_empty_strand_ex t;
 	_service.post(_impl, t);
 	return t._empty;
 }

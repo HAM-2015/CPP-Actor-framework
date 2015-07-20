@@ -15,15 +15,26 @@ inline void boost::asio::io_service::strand::post(BOOST_ASIO_MOVE_ARG(get_impl) 
 	out.impl_ = impl_;
 }
 
-struct get_impl_empty_shared_strand
+struct get_impl_ready_empty_shared_strand
+{
+	bool _empty;
+};
+
+struct get_impl_waiting_empty_shared_strand
 {
 	bool _empty;
 };
 
 template <>
-inline void boost::asio::detail::strand_service::post(boost::asio::detail::strand_service::implementation_type& impl, get_impl_empty_shared_strand& out)
+inline void boost::asio::detail::strand_service::post(boost::asio::detail::strand_service::implementation_type& impl, get_impl_ready_empty_shared_strand& out)
 {
-	out._empty = impl->ready_queue_.empty() && impl->waiting_queue_.empty();
+	out._empty = impl->ready_queue_.empty();
+}
+
+template <>
+inline void boost::asio::detail::strand_service::post(boost::asio::detail::strand_service::implementation_type& impl, get_impl_waiting_empty_shared_strand& out)
+{
+	out._empty = impl->waiting_queue_.empty();
 }
 #endif //ENABLE_STRAND_IMPL_POOL
 //////////////////////////////////////////////////////////////////////////
@@ -95,14 +106,16 @@ bool boost_strand::empty(bool checkTick)
 
 #else
 	get_impl t1;
-	get_impl_empty_shared_strand t2;
+	get_impl_ready_empty_shared_strand t2;
+	get_impl_waiting_empty_shared_strand t3;
 	_strand->post(std::move(t1));
 	t1.service_->post(t1.impl_, t2);
+	t1.service_->post(t1.impl_, t3);
 
 #ifdef ENABLE_NEXT_TICK
-	return t2._empty && (checkTick ? _nextTickQueue.empty() : true);
+	return t2._empty && t3._empty && (checkTick ? _nextTickQueue.empty() : true);
 #else
-	return t2._empty;
+	return t2._empty && t3._empty;
 #endif
 
 #endif //end ENABLE_SHARE_STRAND_IMPL
@@ -132,22 +145,39 @@ actor_timer* boost_strand::get_timer()
 }
 
 #ifdef ENABLE_NEXT_TICK
+bool boost_strand::ready_empty()
+{
+#ifdef ENABLE_STRAND_IMPL_POOL
+	return _strand->ready_empty();
+#else
+	get_impl t1;
+	get_impl_ready_empty_shared_strand t2;
+	_strand->post(std::move(t1));
+	t1.service_->post(t1.impl_, t2);
+	return t2._empty;
+#endif //end ENABLE_SHARE_STRAND_IMPL
+}
+
+bool boost_strand::waiting_empty()
+{
+#ifdef ENABLE_STRAND_IMPL_POOL
+	return _strand->waiting_empty();
+#else
+	get_impl t1;
+	get_impl_waiting_empty_shared_strand t2;
+	_strand->post(std::move(t1));
+	t1.service_->post(t1.impl_, t2);
+	return t2._empty;
+#endif //end ENABLE_SHARE_STRAND_IMPL
+}
+
 void boost_strand::run_tick()
 {
-	assert(!_nextTickQueue.empty());
+	assert(ready_empty() && !_nextTickQueue.empty());
 	shared_strand lockThis = _weakThis.lock();
 	int tickCount = 0;
 	do
 	{
-		if (++tickCount == 64)
-		{
-			if (empty(false))
-			{
-				struct null_invoke { void operator()()const {}; };
-				post(null_invoke());
-			}
-			break;
-		}
 		wrap_next_tick_base* tick = _nextTickQueue.front();
 		_nextTickQueue.pop_front();
 		tick->invoke();
@@ -155,7 +185,7 @@ void boost_strand::run_tick()
 		{
 			_nextTickAlloc.deallocate(tp);
 		}
-	} while (!_nextTickQueue.empty());
+	} while (!_nextTickQueue.empty() && (++tickCount <= 64 || waiting_empty()));
 }
 #endif //ENABLE_NEXT_TICK
 

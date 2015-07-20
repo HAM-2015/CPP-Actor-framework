@@ -122,7 +122,7 @@ class boost_strand
 			if (!checkDestroy)
 			{
 				_strand->_pCheckDestroy = NULL;
-				if (!_strand->_nextTickQueue.empty())
+				if (_strand->ready_empty() && !_strand->_nextTickQueue.empty())
 				{
 					_strand->run_tick();
 				}
@@ -461,6 +461,8 @@ public:
 	actor_timer* get_timer();
 private:
 #ifdef ENABLE_NEXT_TICK
+	bool ready_empty();
+	bool waiting_empty();
 	void run_tick();
 	bool* _pCheckDestroy;
 	mem_alloc<wrap_next_tick_space> _nextTickAlloc;
@@ -486,7 +488,7 @@ public:
 		boost::mutex mutex;
 		boost::condition_variable con;
 		boost::unique_lock<boost::mutex> ul(mutex);
-		try_tick([&]
+		post([&]
 		{
 			h();
 			mutex.lock();
@@ -503,19 +505,24 @@ public:
 	R syncInvoke(H&& h)
 	{
 		assert(!in_this_ios());
-		R r;
+		unsigned char r[sizeof(R)];
 		boost::mutex mutex;
 		boost::condition_variable con;
 		boost::unique_lock<boost::mutex> ul(mutex);
-		try_tick([&]
+		post([&]
 		{
-			r = h();
+			new(r)R(h());
 			mutex.lock();
 			con.notify_one();
 			mutex.unlock();
 		});
 		con.wait(ul);
-		return r;
+		AUTO_CALL(
+		{
+			typedef R T_;
+			((T_*)r)->~R();
+		});
+		return (R&&)(*(R*)r);
 	}
 
 	/*!
