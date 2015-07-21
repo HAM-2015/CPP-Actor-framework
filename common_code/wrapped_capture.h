@@ -149,30 +149,30 @@ wrapped_capture<RM_REF(Handler), RM_CREF(TP0)> wrap_capture(Handler&& h, TP0&& p
 
 #include <tuple>
 
-template <size_t N>
+template <typename R, size_t N>
 struct apply_arg
 {
 	template <typename H, typename TUPLE, typename... Args>
-	static void append(H&& h, TUPLE&& tp, Args&&... args)
+	static R append(H&& h, TUPLE&& tp, Args&&... args)
 	{
-		apply_arg<N - 1>::append(TRY_MOVE(h), TRY_MOVE(tp), std::get<N - 1>(tp), TRY_MOVE(args)...);
+		return apply_arg<R, N - 1>::append(TRY_MOVE(h), TRY_MOVE(tp), std::get<N - 1>(tp), TRY_MOVE(args)...);
 	}
 };
 
-template <>
-struct apply_arg<0>
+template <typename R>
+struct apply_arg<R, 0>
 {
 	template <typename H, typename TUPLE, typename... Args>
-	static void append(H&& h, TUPLE&&, Args&&... args)
+	static R append(H&& h, TUPLE&&, Args&&... args)
 	{
-		h(args...);
+		return h(args...);
 	}
 };
 
-template <typename H, typename TUPLE>
-void tuple_caller(H&& h, TUPLE&& t)
+template <typename R, typename H, typename TUPLE>
+R tuple_invoke(H&& h, TUPLE&& t)
 {
-	apply_arg<std::tuple_size<RM_REF(TUPLE)>::value>::append(TRY_MOVE(h), TRY_MOVE(t));
+	return apply_arg<R, std::tuple_size<RM_REF(TUPLE)>::value>::append(TRY_MOVE(h), TRY_MOVE(t));
 }
 
 template <typename H, typename... ARGS>
@@ -193,7 +193,7 @@ struct wrapped_capture
 
 	void operator ()()
 	{
-		tuple_caller(_h, _args);
+		tuple_invoke<void>(_h, _args);
 	}
 
 	H _h;

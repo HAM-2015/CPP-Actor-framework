@@ -56,7 +56,7 @@ else\
 #define APPEND_TICK()	\
 	static_assert(sizeof(wrap_next_tick_space) == sizeof(wrap_next_tick_handler<RM_REF(Handler)>), "next tick wrap error");\
 	typedef wrap_next_tick_handler<RM_REF(Handler), sizeof(RM_REF(Handler)) <= SPACE_SIZE> wrap_tick_type;\
-	_nextTickQueue.push_back(wrap_tick_type::create(TRY_MOVE(handler), _nextTickAlloc));
+	_backTickQueue->push_back(wrap_tick_type::create(TRY_MOVE(handler), _nextTickAlloc));
 
 #else //ENABLE_NEXT_TICK
 
@@ -116,15 +116,20 @@ class boost_strand
 
 		void operator ()()
 		{
+			if (_strand->_isReset)
+			{
+				_strand->run_tick_front();
+			}
 			bool checkDestroy = false;
 			_strand->_pCheckDestroy = &checkDestroy;
 			_handler();
 			if (!checkDestroy)
 			{
 				_strand->_pCheckDestroy = NULL;
-				if (_strand->ready_empty() && !_strand->_nextTickQueue.empty())
+				_strand->_isReset = _strand->ready_empty();
+				if (_strand->_isReset)
 				{
-					_strand->run_tick();
+					_strand->run_tick_back();
 				}
 			}
 		}
@@ -463,10 +468,15 @@ private:
 #ifdef ENABLE_NEXT_TICK
 	bool ready_empty();
 	bool waiting_empty();
-	void run_tick();
+	void run_tick_front();
+	void run_tick_back();
 	bool* _pCheckDestroy;
+	bool _isReset;
 	mem_alloc<wrap_next_tick_space> _nextTickAlloc;
-	msg_queue<wrap_next_tick_base*> _nextTickQueue;
+	msg_queue<wrap_next_tick_base*> _nextTickQueue1;
+	msg_queue<wrap_next_tick_base*> _nextTickQueue2;
+	msg_queue<wrap_next_tick_base*>* _backTickQueue;
+	msg_queue<wrap_next_tick_base*>* _frontTickQueue;
 #endif //ENABLE_NEXT_TICK
 protected:
 #if (defined ENABLE_MFC_ACTOR || defined ENABLE_WX_ACTOR)

@@ -250,27 +250,27 @@ struct ref_ex<void, void, void, void>
 //////////////////////////////////////////////////////////////////////////
 
 template <typename T0, typename T1, typename T2, typename T3>
-auto bind_ref(T0& p0, T1& p1, T2& p2, T3& p3)->ref_ex<T0, T1, T2, T3>
+auto bind_ref(RM_REF(T0)& p0, RM_REF(T1)& p1, RM_REF(T2)& p2, RM_REF(T3)& p3)->ref_ex<RM_REF(T0), RM_REF(T1), RM_REF(T2), RM_REF(T3)>
 {
-	return ref_ex<T0, T1, T2, T3>(p0, p1, p2, p3);
+	return ref_ex<RM_REF(T0), RM_REF(T1), RM_REF(T2), RM_REF(T3)>(p0, p1, p2, p3);
 }
 
 template <typename T0, typename T1, typename T2>
-auto bind_ref(T0& p0, T1& p1, T2& p2)->ref_ex<T0, T1, T2>
+auto bind_ref(RM_REF(T0)& p0, RM_REF(T1)& p1, RM_REF(T2)& p2)->ref_ex<RM_REF(T0), RM_REF(T1), RM_REF(T2)>
 {
-	return ref_ex<T0, T1, T2>(p0, p1, p2);
+	return ref_ex<RM_REF(T0), RM_REF(T1), RM_REF(T2)>(p0, p1, p2);
 }
 
 template <typename T0, typename T1>
-auto bind_ref(T0& p0, T1& p1)->ref_ex<T0, T1>
+auto bind_ref(RM_REF(T0)& p0, RM_REF(T1)& p1)->ref_ex<RM_REF(T0), RM_REF(T1)>
 {
-	return ref_ex<T0, T1>(p0, p1);
+	return ref_ex<RM_REF(T0), RM_REF(T1)>(p0, p1);
 }
 
 template <typename T0>
-auto bind_ref(T0& p0)->ref_ex<T0>
+auto bind_ref(RM_REF(T0)& p0)->ref_ex<RM_REF(T0)>
 {
-	return ref_ex<T0>(p0);
+	return ref_ex<RM_REF(T0)>(p0);
 }
 
 #endif

@@ -41,7 +41,7 @@ inline void boost::asio::detail::strand_service::post(boost::asio::detail::stran
 
 boost_strand::boost_strand()
 #ifdef ENABLE_NEXT_TICK
-:_pCheckDestroy(NULL), _nextTickAlloc(64), _nextTickQueue(64)
+:_pCheckDestroy(NULL), _isReset(true), _nextTickAlloc(128), _nextTickQueue1(128), _nextTickQueue2(128), _frontTickQueue(&_nextTickQueue1), _backTickQueue(&_nextTickQueue2)
 #endif //ENABLE_NEXT_TICK
 {
 	_iosProxy = NULL;
@@ -52,7 +52,8 @@ boost_strand::boost_strand()
 boost_strand::~boost_strand()
 {
 #ifdef ENABLE_NEXT_TICK
-	assert(_nextTickQueue.empty());
+	assert(_nextTickQueue1.empty());
+	assert(_nextTickQueue2.empty());
 	if (_pCheckDestroy)
 	{
 		*_pCheckDestroy = true;
@@ -99,7 +100,7 @@ bool boost_strand::empty(bool checkTick)
 #ifdef ENABLE_STRAND_IMPL_POOL
 
 #ifdef ENABLE_NEXT_TICK
-	return _strand->empty() && (checkTick ? _nextTickQueue.empty() : true);
+	return _strand->empty() && (checkTick ? _nextTickQueue1.empty() && _nextTickQueue2.empty() : true);
 #else
 	return _strand->empty();
 #endif
@@ -113,7 +114,7 @@ bool boost_strand::empty(bool checkTick)
 	t1.service_->post(t1.impl_, t3);
 
 #ifdef ENABLE_NEXT_TICK
-	return t2._empty && t3._empty && (checkTick ? _nextTickQueue.empty() : true);
+	return t2._empty && t3._empty && (checkTick ? _nextTickQueue1.empty() && _nextTickQueue2.empty() : true);
 #else
 	return t2._empty && t3._empty;
 #endif
@@ -171,21 +172,44 @@ bool boost_strand::waiting_empty()
 #endif //end ENABLE_SHARE_STRAND_IMPL
 }
 
-void boost_strand::run_tick()
+void boost_strand::run_tick_front()
 {
-	assert(ready_empty() && !_nextTickQueue.empty());
-	shared_strand lockThis = _weakThis.lock();
-	int tickCount = 0;
-	do
+	assert(_isReset);
+	while (!_frontTickQueue->empty())
 	{
-		wrap_next_tick_base* tick = _nextTickQueue.front();
-		_nextTickQueue.pop_front();
+		wrap_next_tick_base* tick = _frontTickQueue->front();
+		_frontTickQueue->pop_front();
 		tick->invoke();
 		if (void* tp = tick->destroy())
 		{
 			_nextTickAlloc.deallocate(tp);
 		}
-	} while (!_nextTickQueue.empty() && (++tickCount <= 64 || waiting_empty()));
+	}
+}
+
+void boost_strand::run_tick_back()
+{
+	assert(ready_empty());
+	if (!_backTickQueue->empty())
+	{
+		shared_strand lockThis = _weakThis.lock();
+		int tickCount = 0;
+		do
+		{
+			wrap_next_tick_base* tick = _backTickQueue->front();
+			_backTickQueue->pop_front();
+			tick->invoke();
+			if (void* tp = tick->destroy())
+			{
+				_nextTickAlloc.deallocate(tp);
+			}
+		} while (!_backTickQueue->empty() && ++tickCount <= 64);
+		std::swap(_frontTickQueue, _backTickQueue);
+		if (!_frontTickQueue->empty() && waiting_empty())
+		{
+			post([lockThis]{});
+		}
+	}
 }
 #endif //ENABLE_NEXT_TICK
 
