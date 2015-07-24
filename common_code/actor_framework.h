@@ -30,7 +30,7 @@ typedef std::shared_ptr<my_actor> actor_handle;//Actor句柄
 
 class mutex_trig_notifer;
 class mutex_trig_handle;
-class _actor_mutex;
+class ActorMutex_;
 
 using namespace std;
 
@@ -1088,16 +1088,16 @@ template <typename T0 = void, typename T1 = void, typename T2 = void, typename T
 class msg_pump;
 
 template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
-class msg_pool;
+class MsgPool_;
 
 template <typename T0 = void, typename T1 = void, typename T2 = void, typename T3 = void>
 class post_actor_msg;
 
-class msg_pump_base
+class MsgPumpBase_
 {
 	friend my_actor;
 public:
-	virtual ~msg_pump_base() {};
+	virtual ~MsgPumpBase_() {};
 protected:
 	bool is_quited();
 	void run_one();
@@ -1106,21 +1106,21 @@ protected:
 	my_actor* _hostActor;
 };
 
-class msg_pool_base
+class MsgPoolBase_
 {
 	friend msg_pump<>;
 	friend my_actor;
 public:
-	virtual ~msg_pool_base() {};
+	virtual ~MsgPoolBase_() {};
 };
 
 template <typename T0, typename T1, typename T2, typename T3>
-class msg_pump : public msg_pump_base
+class msg_pump : public MsgPumpBase_
 {
 	typedef MsgParam_<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> msg_type;
 	typedef const_ref_ex<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> const_ref_type;
 	typedef dst_receiver_base<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> dst_receiver;
-	typedef msg_pool<T0, T1, T2, T3> msg_pool_type;
+	typedef MsgPool_<T0, T1, T2, T3> msg_pool_type;
 	typedef typename msg_pool_type::pump_handler pump_handler;
 
 	struct msg_capture
@@ -1160,7 +1160,7 @@ class msg_pump : public msg_pump_base
 	};
 
 	friend my_actor;
-	friend msg_pool<T0, T1, T2, T3>;
+	friend MsgPool_<T0, T1, T2, T3>;
 	friend pump_handler;
 private:
 	msg_pump(){}
@@ -1339,7 +1339,7 @@ private:
 };
 
 template <typename T0, typename T1, typename T2, typename T3>
-class msg_pool : public msg_pool_base
+class MsgPool_ : public MsgPoolBase_
 {
 	typedef MsgParam_<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> msg_type;
 	typedef const_ref_ex<TYPE_PIPE(T0), TYPE_PIPE(T1), TYPE_PIPE(T2), TYPE_PIPE(T3)> const_ref_type;
@@ -1448,13 +1448,13 @@ class msg_pool : public msg_pool_base
 			_msgPump.reset();
 		}
 
-		std::shared_ptr<msg_pool> _thisPool;
+		std::shared_ptr<MsgPool_> _thisPool;
 		std::shared_ptr<msg_pump_type> _msgPump;
 	};
 
 	struct msg_capture
 	{
-		msg_capture(const actor_handle& hostActor, const shared_ptr<msg_pool>& sharedThis, msg_type&& msg)
+		msg_capture(const actor_handle& hostActor, const shared_ptr<MsgPool_>& sharedThis, msg_type&& msg)
 		:_hostActor(hostActor), _sharedThis(sharedThis), _msg(std::move(msg)) {}
 
 		msg_capture(const msg_capture& s)
@@ -1485,26 +1485,26 @@ class msg_pool : public msg_pool_base
 
 		mutable msg_type _msg;
 		actor_handle _hostActor;
-		shared_ptr<msg_pool> _sharedThis;
+		shared_ptr<MsgPool_> _sharedThis;
 	};
 
 	friend my_actor;
 	friend msg_pump_type;
 	friend post_type;
 private:
-	msg_pool(size_t fixedSize)
+	MsgPool_(size_t fixedSize)
 		:_msgBuff(fixedSize)
 	{
 
 	}
-	~msg_pool()
+	~MsgPool_()
 	{
 
 	}
 private:
-	static std::shared_ptr<msg_pool> make(const shared_strand& strand, size_t fixedSize)
+	static std::shared_ptr<MsgPool_> make(const shared_strand& strand, size_t fixedSize)
 	{
-		std::shared_ptr<msg_pool> res(new msg_pool(fixedSize), [](msg_pool* p){delete p; });
+		std::shared_ptr<MsgPool_> res(new MsgPool_(fixedSize), [](MsgPool_* p){delete p; });
 		res->_weakThis = res;
 		res->_strand = strand;
 		res->_waiting = false;
@@ -1603,7 +1603,7 @@ private:
 		_msgBuff.expand_fixed(fixedSize);
 	}
 private:
-	std::weak_ptr<msg_pool> _weakThis;
+	std::weak_ptr<MsgPool_> _weakThis;
 	std::shared_ptr<msg_pump_type> _msgPump;
 	msg_queue<msg_type> _msgBuff;
 	shared_strand _strand;
@@ -1611,12 +1611,12 @@ private:
 	bool _waiting;
 };
 
-class msg_pump_void;
+class MsgPumpVoid_;
 
-class msg_pool_void : public msg_pool_base
+class MsgPoolVoid_ : public MsgPoolBase_
 {
 	typedef post_actor_msg<> post_type;
-	typedef msg_pump_void msg_pump_type;
+	typedef MsgPumpVoid_ msg_pump_type;
 
 	struct pump_handler
 	{
@@ -1628,17 +1628,17 @@ class msg_pool_void : public msg_pool_base
 		bool same_strand();
 		void clear();
 
-		std::shared_ptr<msg_pool_void> _thisPool;
+		std::shared_ptr<MsgPoolVoid_> _thisPool;
 		std::shared_ptr<msg_pump_type> _msgPump;
 	};
 
 	friend my_actor;
-	friend msg_pump_void;
+	friend MsgPumpVoid_;
 	friend post_type;
 protected:
-	msg_pool_void(const shared_strand& strand);
+	MsgPoolVoid_(const shared_strand& strand);
 public:
-	virtual ~msg_pool_void();
+	virtual ~MsgPoolVoid_();
 protected:
 	void send_msg(const actor_handle& hostActor);
 	void post_msg(const actor_handle& hostActor);
@@ -1647,7 +1647,7 @@ protected:
 	void disconnect();
 	void expand_fixed(size_t fixedSize){};
 protected:
-	std::weak_ptr<msg_pool_void> _weakThis;
+	std::weak_ptr<MsgPoolVoid_> _weakThis;
 	std::shared_ptr<msg_pump_type> _msgPump;
 	size_t _msgBuff;
 	shared_strand _strand;
@@ -1655,18 +1655,18 @@ protected:
 	bool _waiting;
 };
 
-class msg_pump_void : public msg_pump_base
+class MsgPumpVoid_ : public MsgPumpBase_
 {
-	typedef msg_pool_void msg_pool_type;
-	typedef msg_pool_void::pump_handler pump_handler;
+	typedef MsgPoolVoid_ msg_pool_type;
+	typedef MsgPoolVoid_::pump_handler pump_handler;
 
 	friend my_actor;
-	friend msg_pool_void;
+	friend MsgPoolVoid_;
 	friend pump_handler;
 protected:
-	msg_pump_void(const actor_handle& hostActor);
+	MsgPumpVoid_(const actor_handle& hostActor);
 public:
-	virtual ~msg_pump_void();
+	virtual ~MsgPumpVoid_();
 protected:
 	void receiver();
 	void receive_msg_tick(const actor_handle& hostActor);
@@ -1678,7 +1678,7 @@ protected:
 	void close();
 	bool isDisconnected();
 protected:
-	std::weak_ptr<msg_pump_void> _weakThis;
+	std::weak_ptr<MsgPumpVoid_> _weakThis;
 	pump_handler _pumpHandler;
 	shared_strand _strand;
 	unsigned char _pumpCount;
@@ -1688,34 +1688,34 @@ protected:
 };
 
 template <>
-class msg_pool<void, void, void, void> : public msg_pool_void
+class MsgPool_<void, void, void, void> : public MsgPoolVoid_
 {
 	friend my_actor;
 private:
-	typedef std::shared_ptr<msg_pool> handle;
+	typedef std::shared_ptr<MsgPool_> handle;
 
-	msg_pool(const shared_strand& strand)
-		:msg_pool_void(strand){}
+	MsgPool_(const shared_strand& strand)
+		:MsgPoolVoid_(strand){}
 
-	~msg_pool(){}
+	~MsgPool_(){}
 
 	static handle make(const shared_strand& strand, size_t fixedSize)
 	{
-		handle res(new msg_pool(strand), [](msg_pool* p){delete p; });
+		handle res(new MsgPool_(strand), [](MsgPool_* p){delete p; });
 		res->_weakThis = res;
 		return res;
 	}
 };
 
 template <>
-class msg_pump<void, void, void, void> : public msg_pump_void
+class msg_pump<void, void, void, void> : public MsgPumpVoid_
 {
 	friend my_actor;
 public:
 	typedef msg_pump* handle;
 private:
 	msg_pump(const actor_handle& hostActor)
-		:msg_pump_void(hostActor){}
+		:MsgPumpVoid_(hostActor){}
 
 	~msg_pump(){}
 
@@ -1744,7 +1744,7 @@ class msg_pump_handle
 template <typename T0, typename T1, typename T2, typename T3>
 class post_actor_msg
 {
-	typedef msg_pool<T0, T1, T2, T3> msg_pool_type;
+	typedef MsgPool_<T0, T1, T2, T3> msg_pool_type;
 public:
 	post_actor_msg(){}
 	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool, const actor_handle& hostActor)
@@ -2112,7 +2112,7 @@ class my_actor
 				_hostActor = NULL;
 			}
 
-			std::shared_ptr<msg_pool<T0, T1, T2, T3> > _msgPool;
+			std::shared_ptr<MsgPool_<T0, T1, T2, T3> > _msgPool;
 			std::shared_ptr<msg_pump<T0, T1, T2, T3> > _msgPump;
 			std::shared_ptr<pck> _next;
 		};
@@ -2137,19 +2137,19 @@ class my_actor
 		long long _timerStampBegin;
 		long long _timerStampEnd;
 		std::function<void()> _timerCb;
-		actor_timer::timer_handle _timerHandle;
+		ActorTimer_::timer_handle _timerHandle;
 	};
 
 	class boost_actor_run;
 	friend boost_actor_run;
 	friend child_actor_handle;
-	friend msg_pump_base;
+	friend MsgPumpBase_;
 	friend actor_msg_handle_base;
 	friend trig_once_base;
 	friend mutex_trig_notifer;
 	friend mutex_trig_handle;
-	friend actor_timer;
-	friend _actor_mutex;
+	friend ActorTimer_;
+	friend ActorMutex_;
 public:
 	/*!
 	@brief 在{}一定范围内锁定当前Actor不被强制退出，如果锁定期间被挂起，将无法等待其退出
@@ -3251,9 +3251,9 @@ private:
 	@brief 更新消息代理链
 	*/
 	template <typename T0, typename T1, typename T2, typename T3>
-	actor_handle update_msg_list(const std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>>& msgPck, const std::shared_ptr<msg_pool<T0, T1, T2, T3>>& newPool)
+	actor_handle update_msg_list(const std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>>& msgPck, const std::shared_ptr<MsgPool_<T0, T1, T2, T3>>& newPool)
 	{
-		typedef typename msg_pool<T0, T1, T2, T3>::pump_handler pump_handler;
+		typedef typename MsgPool_<T0, T1, T2, T3>::pump_handler pump_handler;
 
 		std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>> uStack[16];
 		size_t stackl = 0;
@@ -3525,7 +3525,7 @@ public:
 	template <typename T0, typename T1, typename T2, typename T3>
 	__yield_interrupt post_actor_msg<T0, T1, T2, T3> connect_msg_notifer_to(actor_handle buddyActor, bool makeNew = false, size_t fixedSize = 16)
 	{
-		typedef msg_pool<T0, T1, T2, T3> pool_type;
+		typedef MsgPool_<T0, T1, T2, T3> pool_type;
 		typedef typename pool_type::pump_handler pump_handler;
 		typedef std::shared_ptr<msg_pool_status::pck<T0, T1, T2, T3>> pck_type;
 
@@ -3679,7 +3679,7 @@ public:
 	template <typename T0, typename T1, typename T2, typename T3>
 	__yield_interrupt post_actor_msg<T0, T1, T2, T3> connect_msg_notifer_to_self(bool makeNew = false, size_t fixedSize = 16)
 	{
-		typedef msg_pool<T0, T1, T2, T3> pool_type;
+		typedef MsgPool_<T0, T1, T2, T3> pool_type;
 
 		assert_enter();
 		auto msgPck = msg_pool_pck<T0, T1, T2, T3>();
@@ -3739,7 +3739,7 @@ public:
 
 		return _strand->syncInvoke<post_type>([this, fixedSize]()->post_type
 		{
-			typedef msg_pool<T0, T1, T2, T3> pool_type;
+			typedef MsgPool_<T0, T1, T2, T3> pool_type;
 			if (!this->parent_actor() && !this->is_started() && !this->is_quited())
 			{
 				auto msgPck = this->msg_pool_pck<T0, T1, T2, T3>();
@@ -3780,7 +3780,7 @@ public:
 	msg_pump_handle<T0, T1, T2, T3> connect_msg_pump()
 	{
 		typedef msg_pump<T0, T1, T2, T3> pump_type;
-		typedef msg_pool<T0, T1, T2, T3> pool_type;
+		typedef MsgPool_<T0, T1, T2, T3> pool_type;
 		typedef typename pool_type::pump_handler pump_handler;
 
 		assert_enter();
@@ -4606,7 +4606,7 @@ private:
 	msg_pool_status _msgPoolStatus;//消息池列表
 	actor_handle _parentActor;///<父Actor，子Actor都析构后，父Actor才能析构
 	timer_state _timerState;///<定时器状态
-	actor_timer* _timer;///<定时器
+	ActorTimer_* _timer;///<定时器
 	std::weak_ptr<my_actor> _weakThis;
 #ifdef CHECK_SELF
 	msg_map<void*, my_actor*>::iterator _btIt;

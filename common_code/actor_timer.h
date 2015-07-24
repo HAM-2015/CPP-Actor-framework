@@ -13,7 +13,7 @@ class my_actor;
 /*!
 @brief Actor 内部使用的定时器
 */
-class actor_timer
+class ActorTimer_
 {
 	typedef std::shared_ptr<my_actor> actor_handle;
 	typedef msg_list_shared_alloc<actor_handle, null_mutex>::shared_node_alloc list_alloc;
@@ -29,15 +29,15 @@ class actor_timer
 
 	class timer_handle 
 	{
-		friend actor_timer;
+		friend ActorTimer_;
 
 		std::weak_ptr<msg_list_shared_alloc<actor_handle, null_mutex> > _handlerList;
 		msg_list_shared_alloc<actor_handle, null_mutex>::iterator _handlerNode;
 		handler_table::iterator _tableNode;
 	};
 private:
-	actor_timer(const shared_strand& strand);
-	~actor_timer();
+	ActorTimer_(const shared_strand& strand);
+	~ActorTimer_();
 private:
 	/*!
 	@brief 开始计时

@@ -1921,18 +1921,21 @@ public:
 	template <typename... Args>
 	typename R invoke(my_actor* host, Args&&... args)
 	{
+		static_assert(sizeof...(Args) <= 4, "up to 4");
 		return (typename func<R>::type)base_csp_channel::send(host, std::tuple<RM_REF(Args)&...>(args...));
 	}
 
 	template <typename... Args>
 	typename R try_invoke(my_actor* host, Args&&... args)
 	{
+		static_assert(sizeof...(Args) <= 4, "up to 4");
 		return (typename func<R>::type)base_csp_channel::try_send(host, std::tuple<RM_REF(Args)&...>(args...));
 	}
 
 	template <typename... Args>
 	typename R timed_invoke(int tm, my_actor* host, Args&&... args)
 	{
+		static_assert(sizeof...(Args) <= 4, "up to 4");
 		return (typename func<R>::type)base_csp_channel::timed_send(tm, host, std::tuple<RM_REF(Args)&...>(args...));
 	}
 };

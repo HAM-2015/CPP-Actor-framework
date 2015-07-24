@@ -20,19 +20,19 @@
 #define CHECK_STACK(__st__)
 #endif
 
-std::shared_ptr<actor_stack_pool> actor_stack_pool::_actorStackPool;
+std::shared_ptr<ActorStackPool_> ActorStackPool_::_actorStackPool;
 
-actor_stack_pool::actor_stack_pool()
+ActorStackPool_::ActorStackPool_()
 {
 	_exit = false;
 	_clearWait = false;
 	_stackCount = 0;
 	_stackTotalSize = 0;
-	boost::thread rh(&actor_stack_pool::clearThread, this);
+	boost::thread rh(&ActorStackPool_::clearThread, this);
 	_clearThread.swap(rh);
 }
 
-actor_stack_pool::~actor_stack_pool()
+ActorStackPool_::~ActorStackPool_()
 {
 	{
 		boost::lock_guard<boost::mutex> lg(_clearMutex);
@@ -53,7 +53,7 @@ actor_stack_pool::~actor_stack_pool()
 		boost::lock_guard<boost::mutex> lg1(_stackPool[i]._mutex);
 		while (!_stackPool[i]._pool.empty())
 		{
-			stack_pck pck = _stackPool[i]._pool.back();
+			StackPck_ pck = _stackPool[i]._pool.back();
 			_stackPool[i]._pool.pop_back();
 			tempPool[ic++] = ((char*)pck._stack.sp) - pck._stack.size;
 			CHECK_STACK(pck);
@@ -68,17 +68,17 @@ actor_stack_pool::~actor_stack_pool()
 	}
 }
 
-void actor_stack_pool::enable()
+void ActorStackPool_::enable()
 {
-	_actorStackPool = std::shared_ptr<actor_stack_pool>(new actor_stack_pool());
+	_actorStackPool = std::shared_ptr<ActorStackPool_>(new ActorStackPool_());
 }
 
-bool actor_stack_pool::isEnable()
+bool ActorStackPool_::isEnable()
 {
 	return (bool)_actorStackPool;
 }
 
-stack_pck actor_stack_pool::getStack( size_t size )
+StackPck_ ActorStackPool_::getStack( size_t size )
 {
 	assert(size && size % 4096 == 0 && size <= 1024*1024);
 	{
@@ -86,7 +86,7 @@ stack_pck actor_stack_pool::getStack( size_t size )
 		pool._mutex.lock();
 		if (!pool._pool.empty())
 		{
-			stack_pck r = pool._pool.back();
+			StackPck_ r = pool._pool.back();
 			pool._pool.pop_back();
 			pool._mutex.unlock();
 			r._tick = 0;
@@ -97,7 +97,7 @@ stack_pck actor_stack_pool::getStack( size_t size )
 	}
 	_actorStackPool->_stackCount++;
 	_actorStackPool->_stackTotalSize += size;
-	stack_pck r;
+	StackPck_ r;
 	r._tick = 0;
 	r._stack.size = size;
 	r._stack.sp = ((char*)malloc(size))+size;
@@ -108,7 +108,7 @@ stack_pck actor_stack_pool::getStack( size_t size )
 	throw std::shared_ptr<string>(new string("ActorÕ»ÄÚ´æ²»×ã"));
 }
 
-void actor_stack_pool::recovery( stack_pck& stack )
+void ActorStackPool_::recovery( StackPck_& stack )
 {
 #ifdef _DEBUG
 	memset((char*)stack._stack.sp-stack._stack.size, 0xCD, stack._stack.size);
@@ -119,7 +119,7 @@ void actor_stack_pool::recovery( stack_pck& stack )
 	pool._pool.push_back(stack);
 }
 
-void actor_stack_pool::clearThread()
+void ActorStackPool_::clearThread()
 {
 	while (true)
 	{
@@ -161,7 +161,7 @@ void actor_stack_pool::clearThread()
 				_stackPool[i]._mutex.lock();
 				if (!_stackPool[i]._pool.empty() && extTick - _stackPool[i]._pool.front()._tick >= STACK_MIN_CLEAR_CYCLE)
 				{
-					stack_pck pck = _stackPool[i]._pool.front();
+					StackPck_ pck = _stackPool[i]._pool.front();
 					_stackPool[i]._pool.pop_front();
 					_stackPool[i]._mutex.unlock();
 

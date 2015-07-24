@@ -3,9 +3,9 @@
 
 #include "shared_strand.h"
 
-class _actor_mutex;
-class _actor_condition_variable;
-class _actor_shared_mutex;
+class ActorMutex_;
+class ActorConditionVariable_;
+class ActorSharedMutex;
 class my_actor;
 
 /*!
@@ -44,7 +44,7 @@ private:
 	void quited_lock(my_actor* host) const;
 	void quited_unlock(my_actor* host) const;
 private:
-	std::shared_ptr<_actor_mutex> _amutex;
+	std::shared_ptr<ActorMutex_> _amutex;
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -53,7 +53,7 @@ private:
 */
 class actor_lock_guard
 {
-	friend _actor_condition_variable;
+	friend ActorConditionVariable_;
 public:
 	actor_lock_guard(const actor_mutex& amutex, my_actor* host);
 	~actor_lock_guard();
@@ -99,7 +99,7 @@ public:
 	*/
 	size_t notify_all(my_actor* host) const;
 private:
-	std::shared_ptr<_actor_condition_variable> _aconVar;
+	std::shared_ptr<ActorConditionVariable_> _aconVar;
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -149,7 +149,7 @@ public:
 	*/
 	void unlock_upgrade(my_actor* host) const;
 private:
-	std::shared_ptr<_actor_shared_mutex> _amutex;
+	std::shared_ptr<ActorSharedMutex> _amutex;
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -158,7 +158,7 @@ private:
 */
 class actor_unique_lock
 {
-	friend _actor_condition_variable;
+	friend ActorConditionVariable_;
 public:
 	actor_unique_lock(const actor_shared_mutex& amutex, my_actor* host);
 	~actor_unique_lock();
@@ -179,7 +179,7 @@ private:
 */
 class actor_shared_lock
 {
-	friend _actor_condition_variable;
+	friend ActorConditionVariable_;
 public:
 	actor_shared_lock(const actor_shared_mutex& amutex, my_actor* host);
 	~actor_shared_lock();

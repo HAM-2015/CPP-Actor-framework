@@ -153,7 +153,7 @@ template <typename R, size_t N>
 struct apply_arg
 {
 	template <typename H, typename TUPLE, typename... Args>
-	static R append(H&& h, TUPLE&& tp, Args&&... args)
+	static inline R append(H&& h, TUPLE&& tp, Args&&... args)
 	{
 		return apply_arg<R, N - 1>::append(TRY_MOVE(h), TRY_MOVE(tp), std::get<N - 1>(tp), TRY_MOVE(args)...);
 	}
@@ -163,15 +163,16 @@ template <typename R>
 struct apply_arg<R, 0>
 {
 	template <typename H, typename TUPLE, typename... Args>
-	static R append(H&& h, TUPLE&&, Args&&... args)
+	static inline R append(H&& h, TUPLE&&, Args&&... args)
 	{
 		return h(args...);
 	}
 };
 
 template <typename R, typename H, typename TUPLE>
-R tuple_invoke(H&& h, TUPLE&& t)
+inline R tuple_invoke(H&& h, TUPLE&& t)
 {
+	static_assert(std::tuple_size<RM_REF(TUPLE)>::value <= 4, "up to 4");
 	return apply_arg<R, std::tuple_size<RM_REF(TUPLE)>::value>::append(TRY_MOVE(h), TRY_MOVE(t));
 }
 
@@ -203,6 +204,7 @@ struct wrapped_capture
 template <typename Handler, typename... Args>
 wrapped_capture<RM_REF(Handler), RM_CREF(Args)...> wrap_capture(Handler&& h, Args&&... args)
 {
+	static_assert(sizeof...(Args) <= 4, "up to 4");
 	return wrapped_capture<RM_REF(Handler), RM_CREF(Args)...>(TRY_MOVE(h), TRY_MOVE(args)...);
 }
 

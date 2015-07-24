@@ -286,6 +286,80 @@ struct mem_alloc_mt: mem_alloc_base
 };
 
 //////////////////////////////////////////////////////////////////////////
+class reusable_mem
+{
+	struct node 
+	{
+		unsigned _size;
+		node* _next;
+	};
+public:
+	reusable_mem()
+	{
+		_top = NULL;
+#ifdef _DEBUG
+		_nodeCount = 0;
+#endif
+	}
+
+	~reusable_mem()
+	{
+		while (_top)
+		{
+			void* t = _top;
+			_top = _top->_next;
+			free(t);
+#ifdef _DEBUG
+			_nodeCount--;
+#endif
+		}
+		assert(0 == _nodeCount);
+	}
+
+	void* allocate(size_t size)
+	{
+		if (_top)
+		{
+			node* res = _top;
+			_top = _top->_next;
+			if (res->_size >= size)
+			{
+				return res;
+			}
+			free(res);
+#ifdef _DEBUG
+			_nodeCount--;
+#endif
+		}
+#ifdef _DEBUG
+		_nodeCount++;
+#endif
+		return malloc(size < sizeof(node) ? sizeof(node) : size);
+	}
+
+// 	void deallocate(void* p)
+// 	{
+// 		node* dp = (node*)p;
+// 		dp->_size = dp->_size < sizeof(node) ? sizeof(node) : dp->_size;
+// 		dp->_next = _top;
+// 		_top = dp;
+// 	}
+
+	void deallocate(void* p, size_t size)
+	{
+		node* dp = (node*)p;
+		dp->_size = size < sizeof(node) ? sizeof(node) : (unsigned)size;
+		dp->_next = _top;
+		_top = dp;
+	}
+private:
+	node* _top;
+#ifdef _DEBUG
+	size_t _nodeCount;
+#endif
+};
+
+//////////////////////////////////////////////////////////////////////////
 template<class _Ty, class _Mtx = boost::mutex>
 class pool_alloc_mt
 {

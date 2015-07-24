@@ -217,26 +217,26 @@ std::shared_ptr<bool> actor_msg_handle_base::new_bool()
 
 //////////////////////////////////////////////////////////////////////////
 
-void msg_pump_base::run_one()
+void MsgPumpBase_::run_one()
 {
 	assert(!_hostActor->is_quited());
 	_hostActor->pull_yield();
 }
 
-void msg_pump_base::push_yield()
+void MsgPumpBase_::push_yield()
 {
 	assert(!_hostActor->is_quited());
 	_hostActor->push_yield();
 }
 
-bool msg_pump_base::is_quited()
+bool MsgPumpBase_::is_quited()
 {
 	return !_hostActor || _hostActor->is_quited();
 }
 
 //////////////////////////////////////////////////////////////////////////
 
-msg_pool_void::msg_pool_void(const shared_strand& strand)
+MsgPoolVoid_::MsgPoolVoid_(const shared_strand& strand)
 {
 	_strand = strand;
 	_waiting = false;
@@ -244,12 +244,12 @@ msg_pool_void::msg_pool_void(const shared_strand& strand)
 	_msgBuff = 0;
 }
 
-msg_pool_void::~msg_pool_void()
+MsgPoolVoid_::~MsgPoolVoid_()
 {
 
 }
 
-msg_pool_void::pump_handler msg_pool_void::connect_pump(const std::shared_ptr<msg_pump_type>& msgPump)
+MsgPoolVoid_::pump_handler MsgPoolVoid_::connect_pump(const std::shared_ptr<msg_pump_type>& msgPump)
 {
 	assert(msgPump);
 	assert(_strand->running_in_this_thread());
@@ -262,7 +262,7 @@ msg_pool_void::pump_handler msg_pool_void::connect_pump(const std::shared_ptr<ms
 	return compHandler;
 }
 
-void msg_pool_void::push_msg(const actor_handle& hostActor)
+void MsgPoolVoid_::push_msg(const actor_handle& hostActor)
 {
 	if (_strand->running_in_this_thread())
 	{
@@ -278,7 +278,7 @@ void msg_pool_void::push_msg(const actor_handle& hostActor)
 	}
 }
 
-void msg_pool_void::send_msg(const actor_handle& hostActor)
+void MsgPoolVoid_::send_msg(const actor_handle& hostActor)
 {
 	if (_waiting)
 	{
@@ -294,7 +294,7 @@ void msg_pool_void::send_msg(const actor_handle& hostActor)
 	}
 }
 
-void msg_pool_void::post_msg(const actor_handle& hostActor)
+void MsgPoolVoid_::post_msg(const actor_handle& hostActor)
 {
 	if (_waiting)
 	{
@@ -310,25 +310,25 @@ void msg_pool_void::post_msg(const actor_handle& hostActor)
 	}
 }
 
-void msg_pool_void::disconnect()
+void MsgPoolVoid_::disconnect()
 {
 	assert(_strand->running_in_this_thread());
 	_msgPump.reset();
 	_waiting = false;
 }
 
-void msg_pool_void::pump_handler::clear()
+void MsgPoolVoid_::pump_handler::clear()
 {
 	_thisPool.reset();
 	_msgPump.reset();
 }
 
-bool msg_pool_void::pump_handler::empty()
+bool MsgPoolVoid_::pump_handler::empty()
 {
 	return !_thisPool;
 }
 
-void msg_pool_void::pump_handler::pump_msg(unsigned char pumpID, const actor_handle& hostActor)
+void MsgPoolVoid_::pump_handler::pump_msg(unsigned char pumpID, const actor_handle& hostActor)
 {
 	assert(_msgPump == _thisPool->_msgPump);
 	assert(!_thisPool->_waiting);
@@ -352,7 +352,7 @@ void msg_pool_void::pump_handler::pump_msg(unsigned char pumpID, const actor_han
 	}
 }
 
-bool msg_pool_void::pump_handler::try_pump(my_actor* host, unsigned char pumpID, bool& wait)
+bool MsgPoolVoid_::pump_handler::try_pump(my_actor* host, unsigned char pumpID, bool& wait)
 {
 	assert(_thisPool);
 	auto& refThis_ = *this;
@@ -382,7 +382,7 @@ bool msg_pool_void::pump_handler::try_pump(my_actor* host, unsigned char pumpID,
 	});
 }
 
-void msg_pool_void::pump_handler::post_pump(unsigned char pumpID)
+void MsgPoolVoid_::pump_handler::post_pump(unsigned char pumpID)
 {
 	assert(!empty());
 	auto& refThis_ = *this;
@@ -396,7 +396,7 @@ void msg_pool_void::pump_handler::post_pump(unsigned char pumpID)
 	});
 }
 
-void msg_pool_void::pump_handler::operator()(unsigned char pumpID)
+void MsgPoolVoid_::pump_handler::operator()(unsigned char pumpID)
 {
 	assert(_thisPool);
 	if (_thisPool->_strand->running_in_this_thread())
@@ -413,7 +413,7 @@ void msg_pool_void::pump_handler::operator()(unsigned char pumpID)
 }
 //////////////////////////////////////////////////////////////////////////
 
-msg_pump_void::msg_pump_void(const actor_handle& hostActor)
+MsgPumpVoid_::MsgPumpVoid_(const actor_handle& hostActor)
 {
 	_waiting = false;
 	_hasMsg = false;
@@ -423,12 +423,12 @@ msg_pump_void::msg_pump_void(const actor_handle& hostActor)
 	_strand = hostActor->self_strand();
 }
 
-msg_pump_void::~msg_pump_void()
+MsgPumpVoid_::~MsgPumpVoid_()
 {
 
 }
 
-void msg_pump_void::clear()
+void MsgPumpVoid_::clear()
 {
 	assert(_strand->running_in_this_thread());
 	_pumpHandler.clear();
@@ -440,7 +440,7 @@ void msg_pump_void::clear()
 	}
 }
 
-void msg_pump_void::close()
+void MsgPumpVoid_::close()
 {
 	_hasMsg = false;
 	_waiting = false;
@@ -450,7 +450,7 @@ void msg_pump_void::close()
 	_hostActor = NULL;
 }
 
-void msg_pump_void::connect(const pump_handler& pumpHandler)
+void MsgPumpVoid_::connect(const pump_handler& pumpHandler)
 {
 	assert(_strand->running_in_this_thread());
 	assert(_hostActor);
@@ -462,7 +462,7 @@ void msg_pump_void::connect(const pump_handler& pumpHandler)
 	}
 }
 
-void msg_pump_void::receiver()
+void MsgPumpVoid_::receiver()
 {
 	if (!is_quited())
 	{
@@ -481,7 +481,7 @@ void msg_pump_void::receiver()
 	}
 }
 
-bool msg_pump_void::read_msg()
+bool MsgPumpVoid_::read_msg()
 {
 	assert(_strand->running_in_this_thread());
 	assert(!_waiting);
@@ -501,7 +501,7 @@ bool msg_pump_void::read_msg()
 	return false;
 }
 
-bool msg_pump_void::try_read()
+bool MsgPumpVoid_::try_read()
 {
 	assert(_strand->running_in_this_thread());
 	assert(!_waiting);
@@ -531,7 +531,7 @@ bool msg_pump_void::try_read()
 	return false;
 }
 
-void msg_pump_void::receive_msg(const actor_handle& hostActor)
+void MsgPumpVoid_::receive_msg(const actor_handle& hostActor)
 {
 	if (_strand->running_in_this_thread())
 	{
@@ -548,7 +548,7 @@ void msg_pump_void::receive_msg(const actor_handle& hostActor)
 	}
 }
 
-void msg_pump_void::receive_msg_tick(const actor_handle& hostActor)
+void MsgPumpVoid_::receive_msg_tick(const actor_handle& hostActor)
 {
 	auto shared_this = _weakThis.lock();
 	_strand->try_tick([=]
@@ -558,7 +558,7 @@ void msg_pump_void::receive_msg_tick(const actor_handle& hostActor)
 	});
 }
 
-bool msg_pump_void::isDisconnected()
+bool MsgPumpVoid_::isDisconnected()
 {
 	return _pumpHandler.empty();
 }
@@ -587,7 +587,7 @@ struct actor_ref_count_alloc
 		typedef actor_ref_count_alloc<Other> other;
 	};
 
-	actor_ref_count_alloc(stack_pck& stackMem, void** ptr)
+	actor_ref_count_alloc(StackPck_& stackMem, void** ptr)
 		:_stackMem(stackMem), _ptr(ptr)
 	{
 	}
@@ -613,7 +613,7 @@ struct actor_ref_count_alloc
 	void deallocate(T* ptr, size_t count)
 	{
 		assert(1 == count);
-		actor_stack_pool::recovery(_stackMem);
+		ActorStackPool_::recovery(_stackMem);
 	}
 
 	void destroy(T* ptr)
@@ -621,7 +621,7 @@ struct actor_ref_count_alloc
 		ptr->~T();
 	}
 
-	stack_pck _stackMem;
+	StackPck_ _stackMem;
 	void** _ptr;
 };
 //////////////////////////////////////////////////////////////////////////
@@ -783,11 +783,11 @@ actor_handle my_actor::create(const shared_strand& actorStrand, const main_func&
 {
 	assert(stackSize && stackSize <= 1024 kB && 0 == stackSize % (4 kB));
 	actor_handle newActor;
-	if (actor_stack_pool::isEnable())
+	if (ActorStackPool_::isEnable())
 	{
 		/*ÄÚ´æ½á¹¹(L:H):|------Actor Stack------|---shared_ptr_ref_count---|--Actor Obj--|*/
 		const size_t actorSize = MEM_ALIGN(sizeof(my_actor), sizeof(void*));
-		stack_pck stackMem = actor_stack_pool::getStack(stackSize + STACK_RESERVED_SPACE_SIZE);
+		StackPck_ stackMem = ActorStackPool_::getStack(stackSize + STACK_RESERVED_SPACE_SIZE);
 		unsigned char* refTop = (unsigned char*)stackMem._stack.sp - actorSize;
 		newActor = actor_handle(new(refTop)my_actor, [stackMem](my_actor* p){p->~my_actor(); },
 			actor_ref_count_alloc<void>(stackMem, (void**)&refTop));
@@ -1090,7 +1090,7 @@ void my_actor::yield_guard()
 {
 	assert_enter();
 	quit_guard qg(this);
-	_strand->post([this]{run_one(); });
+	_strand->next_tick([this]{run_one(); });
 	push_yield();
 }
 
@@ -1816,7 +1816,7 @@ void my_actor::exit_callback()
 void my_actor::enable_stack_pool()
 {
 	assert(0 == s_actorIDCount);
-	actor_stack_pool::enable();
+	ActorStackPool_::enable();
 	s_sharedBoolPool = std::shared_ptr<shared_obj_pool<bool>>(create_shared_pool<bool>(4096, [](void*){}));
 	_suspendResumeQueueAll.enable_shared(100000);
 	_quitExitCallbackAll.enable_shared(100000);

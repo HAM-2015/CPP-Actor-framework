@@ -18,7 +18,7 @@ shared_wx_strand wx_strand::create(ios_proxy& iosProxy, bind_wx_run_base* wx)
 	res->_iosProxy = &iosProxy;
 	res->_wx = wx;
 	res->_wxThreadID = wx->thread_id();
-	res->_timer = new actor_timer(res);
+	res->_timer = new ActorTimer_(res);
 	res->_weakThis = res;
 	return res;
 }

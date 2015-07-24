@@ -7,16 +7,16 @@
 #include <set>
 #include <vector>
 
-class strand_ex;
-class actor_timer;
+class StrandEx_;
+class ActorTimer_;
 
 /*!
 @brief io_serviceµ÷¶ÈÆ÷·â×°
 */
 class ios_proxy
 {
-	friend strand_ex;
-	friend actor_timer;
+	friend StrandEx_;
+	friend ActorTimer_;
 public:
 	enum priority
 	{

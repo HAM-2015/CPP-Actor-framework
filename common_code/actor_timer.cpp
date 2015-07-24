@@ -5,7 +5,7 @@
 
 typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> timer_type;
 
-actor_timer::actor_timer(const shared_strand& strand)
+ActorTimer_::ActorTimer_(const shared_strand& strand)
 :_ios(strand->get_ios_proxy()), _looping(false), _weakStrand(strand), _timerCount(0),
 _extFinishTime(-1), _timer(_ios.getTimer()), _listAlloc(8192), _handlerTable(4096)
 {
@@ -15,7 +15,7 @@ _extFinishTime(-1), _timer(_ios.getTimer()), _listAlloc(8192), _handlerTable(409
 	});
 }
 
-actor_timer::~actor_timer()
+ActorTimer_::~ActorTimer_()
 {
 	assert(_handlerTable.empty());
 	assert(!_strand);
@@ -23,7 +23,7 @@ actor_timer::~actor_timer()
 	delete _listPool;
 }
 
-actor_timer::timer_handle actor_timer::timeout(unsigned long long us, const actor_handle& host)
+ActorTimer_::timer_handle ActorTimer_::timeout(unsigned long long us, const actor_handle& host)
 {
 	if (!_strand)
 	{
@@ -64,7 +64,7 @@ actor_timer::timer_handle actor_timer::timeout(unsigned long long us, const acto
 	return timerHandle;
 }
 
-void actor_timer::cancel(timer_handle& th)
+void ActorTimer_::cancel(timer_handle& th)
 {
 	assert(_strand->running_in_this_thread());
 	auto hl = th._handlerList.lock();
@@ -85,7 +85,7 @@ void actor_timer::cancel(timer_handle& th)
 	}
 }
 
-void actor_timer::timer_loop(unsigned long long us)
+void ActorTimer_::timer_loop(unsigned long long us)
 {
 	int tc = ++_timerCount;
 	boost::system::error_code ec;

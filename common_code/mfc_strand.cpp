@@ -19,7 +19,7 @@ shared_strand mfc_strand::create(ios_proxy& iosProxy, bind_mfc_run* mfc)
 	res->_iosProxy = &iosProxy;
 	res->_mfc = mfc;
 	res->_mfcThreadID = mfc->thread_id();
-	res->_timer = new actor_timer(res);
+	res->_timer = new ActorTimer_(res);
 	res->_weakThis = res;
 	return res;
 }

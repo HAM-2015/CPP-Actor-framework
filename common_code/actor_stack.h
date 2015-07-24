@@ -10,7 +10,7 @@
 
 using namespace std;
 
-struct stack_pck 
+struct StackPck_ 
 {
 	boost::coroutines::stack_context _stack;
 	int _tick;
@@ -19,24 +19,24 @@ struct stack_pck
 /*!
 @brief Actor’ª≥ÿ
 */
-class actor_stack_pool
+class ActorStackPool_
 {
 	struct stack_pool_pck 
 	{
 		stack_pool_pck()
 		:_pool(100000){}
 		boost::mutex _mutex;
-		msg_list<stack_pck> _pool;
+		msg_list<StackPck_> _pool;
 	};
 private:
-	actor_stack_pool();
+	ActorStackPool_();
 public:
-	~actor_stack_pool();
+	~ActorStackPool_();
 	static void enable();
 	static bool isEnable();
 public:
-	static stack_pck getStack(size_t size);
-	static void recovery(stack_pck& stack);
+	static StackPck_ getStack(size_t size);
+	static void recovery(StackPck_& stack);
 private:
 	void clearThread();
 private:
@@ -48,7 +48,7 @@ private:
 	boost::condition_variable _clearVar;
 	boost::atomic<int> _stackCount;
 	boost::atomic<size_t> _stackTotalSize;
-	static std::shared_ptr<actor_stack_pool> _actorStackPool;
+	static std::shared_ptr<ActorStackPool_> _actorStackPool;
 };
 
 #endif

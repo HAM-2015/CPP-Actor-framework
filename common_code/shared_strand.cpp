@@ -70,7 +70,7 @@ shared_strand boost_strand::create(ios_proxy& iosProxy, bool makeTimer /* = true
 	res->_strand = new strand_type(iosProxy);
 	if (makeTimer)
 	{
-		res->_timer = new actor_timer(res);
+		res->_timer = new ActorTimer_(res);
 	}
 	res->_weakThis = res;
 	return res;
@@ -140,7 +140,7 @@ boost::asio::io_service& boost_strand::get_io_service()
 	return *_iosProxy;
 }
 
-actor_timer* boost_strand::get_timer()
+ActorTimer_* boost_strand::get_timer()
 {
 	return _timer;
 }
@@ -179,10 +179,14 @@ void boost_strand::run_tick_front()
 	{
 		wrap_next_tick_base* tick = _frontTickQueue->front();
 		_frontTickQueue->pop_front();
-		tick->invoke();
-		if (void* tp = tick->destroy())
+		auto res = tick->invoke();
+		if (-1 == res._size)
 		{
-			_nextTickAlloc.deallocate(tp);
+			_nextTickAlloc.deallocate(res._ptr);
+		}
+		else
+		{
+			_reuMemAlloc.deallocate(res._ptr, res._size);
 		}
 	}
 }
@@ -198,10 +202,14 @@ void boost_strand::run_tick_back()
 		{
 			wrap_next_tick_base* tick = _backTickQueue->front();
 			_backTickQueue->pop_front();
-			tick->invoke();
-			if (void* tp = tick->destroy())
+			auto res = tick->invoke();
+			if (-1 == res._size)
 			{
-				_nextTickAlloc.deallocate(tp);
+				_nextTickAlloc.deallocate(res._ptr);
+			}
+			else
+			{
+				_reuMemAlloc.deallocate(res._ptr, res._size);
 			}
 		} while (!_backTickQueue->empty() && ++tickCount <= 64);
 		std::swap(_frontTickQueue, _backTickQueue);

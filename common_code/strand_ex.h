@@ -15,12 +15,12 @@
 /*!
 @brief 修改标准boost strand，impl_改为独占
 */
-class strand_ex
+class StrandEx_
 {
 	friend ios_proxy;
 public:
-	strand_ex(ios_proxy& ios);
-	~strand_ex();
+	StrandEx_(ios_proxy& ios);
+	~StrandEx_();
 
 	boost::asio::io_service& get_io_service();
 	bool running_in_this_thread() const;

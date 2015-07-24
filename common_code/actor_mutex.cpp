@@ -167,7 +167,7 @@ mutex_trig_handle::mutex_trig_handle(my_actor* hostActor)
 }
 //////////////////////////////////////////////////////////////////////////
 
-class _actor_mutex
+class ActorMutex_
 {
 	struct wait_node
 	{
@@ -175,13 +175,13 @@ class _actor_mutex
 		my_actor::id _waitHostID;
 	};
 public:
-	_actor_mutex(const shared_strand& strand)
+	ActorMutex_(const shared_strand& strand)
 		:_strand(strand), _waitQueue(4), _lockActorID(0), _recCount(0)
 	{
 
 	}
 
-	~_actor_mutex()
+	~ActorMutex_()
 	{
 		assert(!_lockActorID);
 	}
@@ -379,7 +379,7 @@ private:
 //////////////////////////////////////////////////////////////////////////
 
 actor_mutex::actor_mutex(const shared_strand& strand)
-:_amutex(new _actor_mutex(strand))
+:_amutex(new ActorMutex_(strand))
 {
 
 }
@@ -461,20 +461,20 @@ void actor_lock_guard::lock()
 }
 //////////////////////////////////////////////////////////////////////////
 
-class _actor_condition_variable
+class ActorConditionVariable_
 {
 	struct wait_node 
 	{
 		mutex_trig_notifer& ntf;
 	};
 public:
-	_actor_condition_variable(const shared_strand& strand)
+	ActorConditionVariable_(const shared_strand& strand)
 		:_strand(strand), _waitQueue(4)
 	{
 
 	}
 
-	~_actor_condition_variable()
+	~ActorConditionVariable_()
 	{
 
 	}
@@ -580,7 +580,7 @@ private:
 //////////////////////////////////////////////////////////////////////////
 
 actor_condition_variable::actor_condition_variable(const shared_strand& strand)
-:_aconVar(new _actor_condition_variable(strand))
+:_aconVar(new ActorConditionVariable_(strand))
 {
 
 }
@@ -611,7 +611,7 @@ size_t actor_condition_variable::notify_all(my_actor* host) const
 }
 //////////////////////////////////////////////////////////////////////////
 
-class _actor_shared_mutex
+class ActorSharedMutex
 {
 	struct wait_node
 	{
@@ -620,13 +620,13 @@ class _actor_shared_mutex
 		bool _isShared;
 	};
 public:
-	_actor_shared_mutex(const shared_strand& strand)
+	ActorSharedMutex(const shared_strand& strand)
 		:_strand(strand), _waitQueue(4), _inSet(4), _shared(true)
 	{
 
 	}
 
-	~_actor_shared_mutex()
+	~ActorSharedMutex()
 	{
 
 	}
@@ -1020,7 +1020,7 @@ private:
 //////////////////////////////////////////////////////////////////////////
 
 actor_shared_mutex::actor_shared_mutex(const shared_strand& strand)
-:_amutex(new _actor_shared_mutex(strand))
+:_amutex(new ActorSharedMutex(strand))
 {
 
 }

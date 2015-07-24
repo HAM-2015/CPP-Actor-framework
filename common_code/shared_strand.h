@@ -22,7 +22,7 @@
 #include "wrapped_dispatch_handler.h"
 #include "wrapped_next_tick_handler.h"
 
-class actor_timer;
+class ActorTimer_;
 
 class boost_strand;
 typedef std::shared_ptr<boost_strand> shared_strand;
@@ -56,7 +56,7 @@ else\
 #define APPEND_TICK()	\
 	static_assert(sizeof(wrap_next_tick_space) == sizeof(wrap_next_tick_handler<RM_REF(Handler)>), "next tick wrap error");\
 	typedef wrap_next_tick_handler<RM_REF(Handler), sizeof(RM_REF(Handler)) <= SPACE_SIZE> wrap_tick_type;\
-	_backTickQueue->push_back(wrap_tick_type::create(TRY_MOVE(handler), _nextTickAlloc));
+	_backTickQueue->push_back(wrap_tick_type::create(TRY_MOVE(handler), _nextTickAlloc, _reuMemAlloc));
 
 #else //ENABLE_NEXT_TICK
 
@@ -81,7 +81,7 @@ else\
 class boost_strand
 {
 #ifdef ENABLE_STRAND_IMPL_POOL
-	typedef strand_ex strand_type;
+	typedef StrandEx_ strand_type;
 #else
 	typedef boost::asio::strand strand_type;
 #endif
@@ -140,8 +140,13 @@ class boost_strand
 
 	struct wrap_next_tick_base
 	{
-		virtual void invoke() = 0;
-		virtual void* destroy() = 0;
+		struct result 
+		{
+			void* _ptr;
+			unsigned _size;
+		};
+
+		virtual result invoke() = 0;
 	};
 
 	struct wrap_next_tick_space : public wrap_next_tick_base
@@ -159,8 +164,13 @@ class boost_strand
 			new(space)H(TRY_MOVE(h));
 		}
 
+		~wrap_next_tick_handler()
+		{
+			((H*)space)->~H();
+		}
+
 		template <typename Handler>
-		static inline wrap_next_tick_base* create(Handler&& handler, mem_alloc<wrap_next_tick_space>& alloc)
+		static inline wrap_next_tick_base* create(Handler&& handler, mem_alloc_base& alloc, reusable_mem& reuAlloc)
 		{
 			if (!alloc.full())
 			{
@@ -168,19 +178,16 @@ class boost_strand
 			}
 			else
 			{
-				return new wrap_next_tick_handler<RM_REF(Handler), false>(TRY_MOVE(handler));
+				return wrap_next_tick_handler<RM_REF(Handler), false>::create(TRY_MOVE(handler), alloc, reuAlloc);
 			}
 		}
 
-		void invoke()
+		result invoke()
 		{
 			(*(H*)space)();
-		}
-
-		void* destroy()
-		{
-			((H*)space)->~H();
-			return this;
+			this->~wrap_next_tick_handler();
+			result res = { this, -1 };
+			return res;
 		}
 	};
 
@@ -191,21 +198,22 @@ class boost_strand
 		wrap_next_tick_handler(Handler&& h)
 			:_h(TRY_MOVE(h)) {}
 
-		template <typename Handler>
-		static inline wrap_next_tick_base* create(Handler&& handler, mem_alloc<wrap_next_tick_space>& alloc)
+		~wrap_next_tick_handler()
 		{
-			return new wrap_next_tick_handler<RM_REF(Handler), false>(TRY_MOVE(handler));
 		}
 
-		void invoke()
+		template <typename Handler>
+		static inline wrap_next_tick_base* create(Handler&& handler, mem_alloc_base& alloc, reusable_mem& reuAlloc)
+		{
+			return new(reuAlloc.allocate(sizeof(wrap_next_tick_handler<RM_REF(Handler), false>)))wrap_next_tick_handler<RM_REF(Handler), false>(TRY_MOVE(handler));
+		}
+
+		result invoke()
 		{
 			_h();
-		}
-
-		void* destroy()
-		{
-			delete this;
-			return NULL;
+			this->~wrap_next_tick_handler();
+			result res = { this, sizeof(wrap_next_tick_handler) };
+			return res;
 		}
 
 		H _h;
@@ -463,7 +471,7 @@ public:
 	/*!
 	@brief 获取定时器
 	*/
-	actor_timer* get_timer();
+	ActorTimer_* get_timer();
 private:
 #ifdef ENABLE_NEXT_TICK
 	bool ready_empty();
@@ -472,6 +480,7 @@ private:
 	void run_tick_back();
 	bool* _pCheckDestroy;
 	bool _isReset;
+	reusable_mem _reuMemAlloc;
 	mem_alloc<wrap_next_tick_space> _nextTickAlloc;
 	msg_queue<wrap_next_tick_base*> _nextTickQueue1;
 	msg_queue<wrap_next_tick_base*> _nextTickQueue2;
@@ -482,7 +491,7 @@ protected:
 #if (defined ENABLE_MFC_ACTOR || defined ENABLE_WX_ACTOR)
 	virtual void _post(const std::function<void ()>& h);
 #endif
-	actor_timer* _timer;
+	ActorTimer_* _timer;
 	ios_proxy* _iosProxy;
 	strand_type* _strand;
 	std::weak_ptr<boost_strand> _weakThis;

@@ -89,12 +89,14 @@ public:
 	template <typename... Args>
 	void operator()(Args&&... args)
 	{
+		static_assert(sizeof...(Args) <= 4, "up to 4");
 		_poster->next_tick(wrap_capture(_handler, TRY_MOVE(args)...));
 	}
 
 	template <typename... Args>
 	void operator()(Args&&... args) const
 	{
+		static_assert(sizeof...(Args) <= 4, "up to 4");
 		_poster->next_tick(wrap_capture(_handler, TRY_MOVE(args)...));
 	}
 #endif
@@ -174,6 +176,7 @@ public:
 	template <typename... Args>
 	void operator()(Args&&... args)
 	{
+		static_assert(sizeof...(Args) <= 4, "up to 4");
 		_poster->next_tick(wrap_capture(FORCE_MOVE(_handler), FORCE_MOVE(args)...));
 	}
 #endif

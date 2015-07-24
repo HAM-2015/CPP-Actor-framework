@@ -64,9 +64,9 @@ struct try_move<T&&>
 	}
 };
 
-//ÒÆ³ýconstºÍ&
+//ÒÆ³ýconstºÍ&,&&
 #define RM_CREF(__T__) typename std::remove_const<typename std::remove_reference<__T__>::type>::type
-//ÒÆ³ý&
+//ÒÆ³ý&,&&
 #define RM_REF(__T__) typename std::remove_reference<__T__>::type
 //ÒÆ³ýconst
 #define RM_CONST(__T__) typename std::remove_const<__T__>::type
@@ -105,7 +105,7 @@ struct copy_chain_test
 	mutable bool _copied;
 #endif
 };
-
+/*
 template <typename T0, typename T1 = void, typename T2 = void, typename T3 = void>
 struct post_lambda
 {
@@ -169,5 +169,5 @@ struct post_lambda<T0, void, void, void>
 	T0 _p0;
 	copy_chain_test _ct;
 };
-
+*/
 #endif
