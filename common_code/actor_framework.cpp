@@ -569,12 +569,17 @@ void trig_once_base::tick_handler() const
 	assert(!_pIsTrig->exchange(true));
 	assert(_hostActor);
 	_hostActor->tick_handler();
-	_hostActor.reset();
+	reset();
 }
 
 void trig_once_base::push_yield() const
 {
 	_hostActor->push_yield();
+}
+
+void trig_once_base::operator =(const trig_once_base&)
+{
+	assert(false);
 }
 //////////////////////////////////////////////////////////////////////////
 

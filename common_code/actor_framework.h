@@ -1832,7 +1832,7 @@ protected:
 		assert(!_pIsTrig->exchange(true));
 		assert(_hostActor);
 		_hostActor->_trig_handler(dstRec, std::move(src));
-		_hostActor.reset();
+		reset();
 	}
 
 	template <typename DST /*ref_ex*/, typename SRC /*MsgParam_*/>
@@ -1841,12 +1841,16 @@ protected:
 		assert(!_pIsTrig->exchange(true));
 		assert(_hostActor);
 		_hostActor->_trig_handler_ref(dstRef, std::move(src));
-		_hostActor.reset();
+		reset();
 	}
 
 	void tick_handler() const;
 
 	void push_yield() const;
+
+	virtual void reset() const = 0;
+private:
+	void operator =(const trig_once_base&);
 protected:
 	mutable actor_handle _hostActor;
 	DEBUG_OPERATION(std::shared_ptr<boost::atomic<bool> > _pIsTrig);
@@ -1899,6 +1903,11 @@ public:
 	typename func_type<T0, T1, T2, T3>::result case_func() const
 	{
 		return typename func_type<T0, T1, T2, T3>::result(*this);
+	}
+private:
+	void reset() const
+	{
+		_hostActor.reset();
 	}
 private:
 	dst_receiver* _dstRec;
@@ -1956,6 +1965,7 @@ public:
 		{
 			//可能在此析构函数内抛出 force_quit_exception 异常，但在 push_yield 已经切换出堆栈，在切换回来后会安全的释放资源
 			push_yield();
+			_hostActor.reset();
 		}
 	}
 
@@ -1993,9 +2003,12 @@ public:
 		tick_handler();
 	}
 private:
-	callback_handler& operator=(const callback_handler&)
+	void reset() const
 	{
-		return *this;
+		if (!_early)
+		{
+			_hostActor.reset();
+		}
 	}
 private:
 	bool _early;

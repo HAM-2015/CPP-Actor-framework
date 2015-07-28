@@ -6,6 +6,7 @@
 #include "async_buffer.h"
 #include "sync_msg.h"
 #include "scattered.h"
+#include "trace.h"
 #include <list>
 #include <Windows.h>
 
@@ -36,11 +37,11 @@ void check_key_test(my_actor* self, int id)
 		self->child_actor_run(checkUp);//开始运行子Actor
 		if (self->timed_child_actor_wait_quit(1000, checkUp))//正常完成返回true，超时返回false
 		{
-			printf("ok %d\n", id);
+			trace_line("ok ", id);
 		} 
 		else
 		{//弹起超时
-			printf("timeout %d\n", id);
+			trace_line("timeout ", id);
 			self->child_actor_wait_quit(checkUp);//检测弹起
 		}
 	}
@@ -48,11 +49,11 @@ void check_key_test(my_actor* self, int id)
 
 void actor_print(my_actor* self, int id)
 {//按下后先打印一个字符，500ms后每隔50ms打印一次
-	printf("_");
+	trace("_");
 	self->sleep(500);
 	while (true)
 	{
-		printf("-");
+		trace("-");
 		self->sleep(50);
 	}
 }
@@ -183,11 +184,11 @@ void shift_key(my_actor* self, actor_handle pauseactor)
 		if ('P' == id)
 		{
 			bool isPause = self->actor_switch(pauseactor);
-			printf("%s性能测试\n", isPause? "暂停": "恢复");
+			trace_line(isPause? "暂停": "恢复", "性能测试");
 		}
 		else
 		{
-			printf("shift+%c\n", id);
+			trace_line("shift+", (char)id);
 		}
 	}
 	self->close_msg_notifer(amh);
@@ -247,9 +248,9 @@ void perfor_test(my_actor* self, ios_proxy& ios)
 			ct += count[i];
 		}
 		double f = (double)ct * 1000000 / (get_tick_us()-tk);
-		printf("Actor数=%d, 切换频率=%d\n", num, (int)f);
+		trace_line("Actor数=", num, ", ", "切换频率=", (int)f);
 	}
-	printf("性能测试结束\n");
+	trace_line("性能测试结束");
 }
 
 void actor_test(my_actor* self)
@@ -557,6 +558,7 @@ void actor_test(my_actor* self)
 	*/
 int main(int argc, char* argv[])
 {
+	trace_line("Hello Actor ", get_time_string_s());
 	enable_high_resolution();
 	my_actor::enable_stack_pool();
 	ios_proxy ios;
