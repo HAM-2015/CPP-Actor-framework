@@ -40,6 +40,16 @@ public:
 		new(_buff)type(TRY_MOVE(args)...);
 	}
 
+	void create()
+	{
+		if (!_null)
+		{
+			free();
+		}
+		_null = false;
+		new(_buff)type();
+	}
+
 	template <typename PT0>
 	void operator =(PT0&& p0)
 	{
@@ -51,14 +61,9 @@ public:
 		new(_buff)type(TRY_MOVE(p0));
 	}
 
-	void create()
+	bool has() const
 	{
-		if (!_null)
-		{
-			free();
-		}
-		_null = false;
-		new(_buff)type();
+		return !_null;
 	}
 
 	/*!
@@ -132,19 +137,19 @@ public:
 		new(_buff)type(TRY_MOVE(args)...);
 	}
 
+	void create()
+	{
+		assert(_null);
+		DEBUG_OPERATION(_null = false);
+		new(_buff)type();
+	}
+
 	template <typename PT0>
 	void operator =(PT0&& p0)
 	{
 		assert(_null);
 		DEBUG_OPERATION(_null = false);
 		new(_buff)type(TRY_MOVE(p0));
-	}
-
-	void create()
-	{
-		assert(_null);
-		DEBUG_OPERATION(_null = false);
-		new(_buff)type();
 	}
 
 	/*!

@@ -100,6 +100,8 @@ template <typename... ArgsPipe>
 struct DstReceiverBase_
 {
 	virtual void move_from(std::tuple<ArgsPipe...>& s) = 0;
+	virtual void clear() = 0;
+	virtual bool has() = 0;
 };
 
 template <typename... ARGS>
@@ -110,18 +112,54 @@ struct DstReceiverBuff_ : public DstReceiverBase_<TYPE_PIPE(ARGS)...>
 		_dstBuff.create(std::move(s));
 	}
 
+	void clear()
+	{
+		_dstBuff.destroy();
+	}
+
+	bool has()
+	{
+		return _dstBuff.has();
+	}
+
 	stack_obj<std::tuple<TYPE_PIPE(ARGS)...>> _dstBuff;
 };
 
 template <typename... ARGS>
 struct DstReceiverBuffRef_ : public DstReceiverBase_<TYPE_PIPE(ARGS)...>
 {
+	template <size_t N>
+	struct clear_
+	{
+		static inline void clear(std::tuple<stack_obj<ARGS>&...>& args)
+		{
+			std::get<N - 1>(args).destroy();
+			clear_<N - 1>::clear(args);
+		}
+	};
+
+	template <>
+	struct clear_<0>
+	{
+		static inline void clear(std::tuple<stack_obj<ARGS>&...>& args) {}
+	};
+
 	DstReceiverBuffRef_(stack_obj<ARGS>&... args)
 	:_dstBuffRef(args...) {}
 
 	void move_from(std::tuple<TYPE_PIPE(ARGS)...>& s)
 	{
 		TupleReceiverRef_(_dstBuffRef, std::move(s));
+	}
+
+	void clear()
+	{
+		clear_<sizeof...(ARGS)>::clear(_dstBuffRef);
+	}
+
+	bool has()
+	{
+		return std::get<0>(_dstBuffRef).has();
 	}
 
 	std::tuple<stack_obj<ARGS>&...> _dstBuffRef;
@@ -136,9 +174,21 @@ struct DstReceiverRef_ : public DstReceiverBase_<TYPE_PIPE(ARGS)...>
 
 	void move_from(std::tuple<TYPE_PIPE(ARGS)...>& s)
 	{
+		_has = true;
 		TupleReceiverRef_(_dstRef, std::move(s));
 	}
 
+	void clear()
+	{
+		_has = false;
+	}
+
+	bool has()
+	{
+		return _has;
+	}
+
+	bool _has = false;
 	std::tuple<ARGS&...> _dstRef;
 };
 
@@ -162,6 +212,15 @@ protected:
 	std::shared_ptr<bool> _closed;
 	DEBUG_OPERATION(shared_strand _strand);
 };
+
+template <typename... ARGS>
+class mutex_block_msg;
+
+template <typename... ARGS>
+class mutex_block_trig;
+
+template <typename... ARGS>
+class mutex_block_pump;
 
 template <typename... ARGS>
 class actor_msg_handle;
@@ -321,6 +380,7 @@ class actor_msg_handle: public actor_msg_handle_base
 	typedef actor_msg_notifer<ARGS...> msg_notifer;
 
 	friend MsgNotiferBase_<actor_msg_handle<ARGS...>, ARGS...>;
+	friend mutex_block_msg<ARGS...>;
 	friend my_actor;
 public:
 	actor_msg_handle(size_t fixedSize = 16)
@@ -375,6 +435,12 @@ private:
 		return false;
 	}
 
+	void stop_waiting()
+	{
+		_waiting = false;
+		_dstRec = NULL;
+	}
+
 	void close()
 	{
 		if (_closed)
@@ -406,6 +472,7 @@ class actor_msg_handle<> : public actor_msg_handle_base
 	typedef actor_msg_notifer<> msg_notifer;
 
 	friend MsgNotiferBase_<actor_msg_handle<>>;
+	friend mutex_block_msg<>;
 	friend my_actor;
 public:
 	~actor_msg_handle()
@@ -451,6 +518,11 @@ private:
 		return false;
 	}
 
+	void stop_waiting()
+	{
+		_waiting = false;
+	}
+
 	void close()
 	{
 		if (_closed)
@@ -482,6 +554,7 @@ class actor_trig_handle : public actor_msg_handle_base
 	typedef actor_trig_notifer<ARGS...> msg_notifer;
 
 	friend MsgNotiferBase_<actor_trig_handle<ARGS...>, ARGS...>;
+	friend mutex_block_trig<ARGS...>;
 	friend my_actor;
 public:
 	actor_trig_handle()
@@ -539,6 +612,12 @@ private:
 		return false;
 	}
 
+	void stop_waiting()
+	{
+		_waiting = false;
+		_dstRec = NULL;
+	}
+
 	void close()
 	{
 		if (_closed)
@@ -574,6 +653,7 @@ class actor_trig_handle<> : public actor_msg_handle_base
 	typedef actor_trig_notifer<> msg_notifer;
 
 	friend MsgNotiferBase_<actor_trig_handle<>>;
+	friend mutex_block_trig<>;
 	friend my_actor;
 public:
 	actor_trig_handle()
@@ -622,6 +702,11 @@ private:
 		assert(!*_closed);
 		_waiting = true;
 		return false;
+	}
+
+	void stop_waiting()
+	{
+		_waiting = false;
 	}
 
 	void close()
@@ -723,6 +808,7 @@ class MsgPump_ : public MsgPumpBase_
 
 	friend my_actor;
 	friend MsgPool_<ARGS...>;
+	friend mutex_block_pump<ARGS...>;
 	friend pump_handler;
 private:
 	MsgPump_(){}
@@ -843,6 +929,12 @@ private:
 		return false;
 	}
 
+	void stop_waiting()
+	{
+		_waiting = false;
+		_dstRec = NULL;
+	}
+
 	void connect(const pump_handler& pumpHandler)
 	{
 		assert(_strand->running_in_this_thread());
@@ -914,24 +1006,32 @@ class MsgPool_ : public MsgPoolBase_
 		{
 			assert(_msgPump == _thisPool->_msgPump);
 			auto& msgBuff = _thisPool->_msgBuff;
-			if (pumpID == _thisPool->_sendCount)
+			if (!_thisPool->_waiting)//上次取消息超时后取消了等待，此时取还没消息
 			{
-				if (!msgBuff.empty())
+				if (pumpID == _thisPool->_sendCount)
 				{
-					msg_type mt_ = std::move(msgBuff.front());
-					msgBuff.pop_front();
-					_thisPool->_sendCount++;
-					_msgPump->receive_msg(std::move(mt_), hostActor);
+					if (!msgBuff.empty())
+					{
+						msg_type mt_ = std::move(msgBuff.front());
+						msgBuff.pop_front();
+						_thisPool->_sendCount++;
+						_msgPump->receive_msg(std::move(mt_), hostActor);
+					}
+					else
+					{
+						_thisPool->_waiting = true;
+					}
 				}
 				else
-				{
-					_thisPool->_waiting = true;
+				{//上次消息没取到，重新取，但实际中间已经post出去了
+					assert(!_thisPool->_waiting);
+					assert(pumpID + 1 == _thisPool->_sendCount);
 				}
 			}
 			else
-			{//上次消息没取到，重新取，但实际中间已经post出去了
-				assert(!_thisPool->_waiting);
-				assert(pumpID + 1 == _thisPool->_sendCount);
+			{
+				assert(msgBuff.empty());
+				assert(pumpID == _thisPool->_sendCount);
 			}
 		}
 
@@ -1222,6 +1322,7 @@ class MsgPumpVoid_ : public MsgPumpBase_
 
 	friend my_actor;
 	friend MsgPoolVoid_;
+	friend mutex_block_pump<>;
 	friend pump_handler;
 protected:
 	MsgPumpVoid_(const actor_handle& hostActor);
@@ -1232,6 +1333,7 @@ protected:
 	void receive_msg(const actor_handle& hostActor);
 	bool read_msg();
 	bool try_read();
+	void stop_waiting();
 	void connect(const pump_handler& pumpHandler);
 	void clear();
 	void close();
@@ -1270,6 +1372,7 @@ template <>
 class MsgPump_<> : public MsgPumpVoid_
 {
 	friend my_actor;
+	friend mutex_block_pump<>;
 public:
 	typedef MsgPump_* handle;
 private:
@@ -1290,6 +1393,8 @@ template <typename... ARGS>
 class msg_pump_handle
 {
 	friend my_actor;
+	friend mutex_block_pump<ARGS...>;
+
 	typedef MsgPump_<ARGS...> pump;
 
 	pump* operator ->() const
@@ -1346,6 +1451,316 @@ private:
 	actor_handle _hostActor;
 	std::shared_ptr<msg_pool_type> _msgPool;
 };
+//////////////////////////////////////////////////////////////////////////
+class MutexBlock_
+{
+	friend my_actor;
+private:
+	virtual bool ready() = 0;
+	virtual void cancel() = 0;
+	virtual bool go() = 0;
+	virtual size_t snap_id() = 0;
+
+	MutexBlock_(const MutexBlock_&) {}
+	void operator =(const MutexBlock_&) {}
+protected:
+	MutexBlock_() {}
+
+	template <typename... Args>
+	msg_pump_handle<Args...> connect_msg_pump(my_actor* host)
+	{
+		return my_actor::_connect_msg_pump<Args...>(host);
+	}
+};
+
+/*!
+@brief actor_msg_handle消息互斥执行块
+*/
+template <typename... ARGS>
+class mutex_block_msg : public MutexBlock_
+{
+	typedef actor_msg_handle<ARGS...> msg_handle;
+	typedef DstReceiverBuff_<ARGS...> dst_receiver;
+
+	friend my_actor;
+public:
+	template <typename Handler>
+	mutex_block_msg(msg_handle& msgHandle, Handler&& handler)
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)) {}
+private:
+	bool ready()
+	{
+		assert(!_msgBuff.has());
+		return _msgHandle.read_msg(_msgBuff);
+	}
+
+	void cancel()
+	{
+		_msgHandle.stop_waiting();
+	}
+
+	bool go()
+	{
+		if (_msgBuff.has())
+		{
+			bool r = tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
+			_msgBuff.clear();
+			return r;
+		}
+		return false;
+	}
+
+	size_t snap_id()
+	{
+		return (size_t)&_msgHandle;
+	}
+private:
+	msg_handle& _msgHandle;
+	std::function<bool(ARGS...)> _handler;
+	dst_receiver _msgBuff;
+};
+
+/*!
+@brief actor_trig_handle消息互斥执行块
+*/
+template <typename... ARGS>
+class mutex_block_trig : public MutexBlock_
+{
+	typedef actor_trig_handle<ARGS...> msg_handle;
+	typedef DstReceiverBuff_<ARGS...> dst_receiver;
+
+	friend my_actor;
+public:
+	template <typename Handler>
+	mutex_block_trig(msg_handle& msgHandle, Handler&& handler)
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _triged(false) {}
+private:
+	bool ready()
+	{
+		if (!_triged)
+		{
+			assert(!_msgBuff.has());
+			return _msgHandle.read_msg(_msgBuff);
+		}
+		return false;
+	}
+
+	void cancel()
+	{
+		_msgHandle.stop_waiting();
+	}
+
+	bool go()
+	{
+		if (_msgBuff.has())
+		{
+			_triged = true;
+			bool r = tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
+			_msgBuff.clear();
+			return r;
+		}
+		return false;
+	}
+
+	size_t snap_id()
+	{
+		return (size_t)&_msgHandle;
+	}
+private:
+	msg_handle& _msgHandle;
+	std::function<bool(ARGS...)> _handler;
+	dst_receiver _msgBuff;
+	bool _triged;
+};
+
+/*!
+@brief msg_pump消息互斥执行块
+*/
+template <typename... ARGS>
+class mutex_block_pump : public MutexBlock_
+{
+	typedef msg_pump_handle<ARGS...> pump_handle;
+	typedef DstReceiverBuff_<ARGS...> dst_receiver;
+
+	friend my_actor;
+public:
+	template <typename Handler>
+	mutex_block_pump(my_actor* host, Handler&& handler)
+		:_handler(TRY_MOVE(handler))
+	{
+		_msgHandle = connect_msg_pump<ARGS...>(host);
+	}
+private:
+	bool ready()
+	{
+		assert(!_msgBuff.has());
+		return _msgHandle._handle->read_msg(_msgBuff);
+	}
+
+	void cancel()
+	{
+		_msgHandle._handle->stop_waiting();
+	}
+
+	bool go()
+	{
+		if (_msgBuff.has())
+		{
+			bool r = tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
+			_msgBuff.clear();
+			return r;
+		}
+		return false;
+	}
+
+	size_t snap_id()
+	{
+		return (size_t)_msgHandle._handle;
+	}
+private:
+	pump_handle _msgHandle;
+	std::function<bool(ARGS...)> _handler;
+	dst_receiver _msgBuff;
+};
+
+template <>
+class mutex_block_msg<> : public MutexBlock_
+{
+	typedef actor_msg_handle<> msg_handle;
+
+	friend my_actor;
+public:
+	template <typename Handler>
+	mutex_block_msg(msg_handle& msgHandle, Handler&& handler)
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _has(false) {}
+private:
+	bool ready()
+	{
+		assert(!_has);
+		_has = _msgHandle.read_msg();
+		return _has;
+	}
+
+	void cancel()
+	{
+		_msgHandle.stop_waiting();
+	}
+
+	bool go()
+	{
+		if (_has)
+		{
+			_has = false;
+			return _handler();
+		}
+		return false;
+	}
+
+	size_t snap_id()
+	{
+		return (size_t)&_msgHandle;
+	}
+private:
+	msg_handle& _msgHandle;
+	std::function<bool()> _handler;
+	bool _has;
+};
+
+template <>
+class mutex_block_trig<> : public MutexBlock_
+{
+	typedef actor_trig_handle<> msg_handle;
+
+	friend my_actor;
+public:
+	template <typename Handler>
+	mutex_block_trig(msg_handle& msgHandle, Handler&& handler)
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _has(false), _triged(false) {}
+private:
+	bool ready()
+	{
+		if (!_triged)
+		{
+			assert(!_has);
+			_has = _msgHandle.read_msg();
+			return _has;
+		}
+		return false;
+	}
+
+	void cancel()
+	{
+		_msgHandle.stop_waiting();
+	}
+
+	bool go()
+	{
+		if (_has)
+		{
+			_triged = true;
+			_has = false;
+			return _handler();
+		}
+		return false;
+	}
+
+	size_t snap_id()
+	{
+		return (size_t)&_msgHandle;
+	}
+private:
+	msg_handle& _msgHandle;
+	std::function<bool()> _handler;
+	bool _has;
+	bool _triged;
+};
+
+template <>
+class mutex_block_pump<> : public MutexBlock_
+{
+	typedef msg_pump_handle<> pump_handle;
+
+	friend my_actor;
+public:
+	template <typename Handler>
+	mutex_block_pump(my_actor* host, Handler&& handler)
+		:_handler(TRY_MOVE(handler)), _has(false)
+	{
+		_msgHandle = host->connect_msg_pump<>();
+	}
+private:
+	bool ready()
+	{
+		assert(!_has);
+		_has = _msgHandle._handle->read_msg();
+		return _has;
+	}
+
+	void cancel()
+	{
+		_msgHandle._handle->stop_waiting();
+	}
+
+	bool go()
+	{
+		if (_has)
+		{
+			_has = false;
+			return _handler();
+		}
+		return false;
+	}
+
+	size_t snap_id()
+	{
+		return (size_t)_msgHandle._handle;
+	}
+private:
+	pump_handle _msgHandle;
+	std::function<bool()> _handler;
+	bool _has;
+};
+
 //////////////////////////////////////////////////////////////////////////
 
 class TrigOnceBase_
@@ -1682,6 +2097,7 @@ class my_actor
 	friend mutex_trig_handle;
 	friend ActorTimer_;
 	friend ActorMutex_;
+	friend MutexBlock_;
 public:
 	/*!
 	@brief 在{}一定范围内锁定当前Actor不被强制退出，如果锁定期间被挂起，将无法等待其退出
@@ -2106,8 +2522,7 @@ private:
 					return true;
 				}
 			}
-			amh._dstRec = NULL;
-			amh._waiting = false;
+			amh.stop_waiting();
 			return false;
 		}
 		return true;
@@ -2171,6 +2586,26 @@ public:
 			return true;
 		}
 		return false;
+	}
+
+	template <typename... Args>
+	__yield_interrupt bool try_wait_msg(actor_msg_handle<Args...>& amh, Args&... res)
+	{
+		return timed_wait_msg(0, amh, res...);
+	}
+
+	template <typename... Args>
+	__yield_interrupt bool try_wait_msg(actor_msg_handle<Args...>& amh, stack_obj<Args>&... res)
+	{
+		return timed_wait_msg(0, amh, res...);
+	}
+
+	__yield_interrupt bool try_wait_msg(actor_msg_handle<>& amh);
+
+	template <typename... Args, typename Handler>
+	__yield_interrupt bool try_wait_msg(actor_msg_handle<Args...>& amh, const Handler& h)
+	{
+		return timed_wait_msg(0, amh, h);
 	}
 
 	/*!
@@ -2270,6 +2705,26 @@ public:
 			return true;
 		}
 		return false;
+	}
+
+	template <typename... Args>
+	__yield_interrupt bool try_wait_trig(actor_trig_handle<Args...>& ath, Args&... res)
+	{
+		return timed_wait_trig(0, ath, res...);
+	}
+
+	template <typename... Args>
+	__yield_interrupt bool try_wait_trig(actor_trig_handle<Args...>& ath, stack_obj<Args>&... res)
+	{
+		return timed_wait_trig(0, ath, res...);
+	}
+
+	__yield_interrupt bool try_wait_trig(actor_trig_handle<>& ath);
+
+	template <typename... Args, typename Handler>
+	__yield_interrupt bool try_wait_trig(actor_trig_handle<Args...>& ath, const Handler& h)
+	{
+		return timed_wait_trig(0, ath, h);
 	}
 
 	/*!
@@ -2800,8 +3255,7 @@ private:
 		{
 			if (checkDis && pump->isDisconnected())
 			{
-				pump->_waiting = false;
-				pump->_dstRec = NULL;
+				pump->stop_waiting();
 				throw pump_disconnected_exception();
 			}
 			if (0 != tm)
@@ -2836,8 +3290,7 @@ private:
 				}
 			}
 			pump->_checkDis = false;
-			pump->_waiting = false;
-			pump->_dstRec = NULL;
+			pump->stop_waiting();
 			return false;
 		}
 		return true;
@@ -2920,38 +3373,6 @@ public:
 	}
 
 	/*!
-	@brief 从消息泵中提取消息
-	*/
-	template <typename... Args>
-	__yield_interrupt void pump_msg(const msg_pump_handle<Args...>& pump, Args&... res, bool checkDis = false)
-	{
-		timed_pump_msg(-1, pump, res..., checkDis);
-	}
-
-	template <typename... Args>
-	__yield_interrupt void pump_msg(const msg_pump_handle<Args...>& pump, stack_obj<Args>&... res, bool checkDis = false)
-	{
-		timed_pump_msg(-1, pump, res..., checkDis);
-	}
-
-	template <typename Arg>
-	__yield_interrupt Arg pump_msg(const msg_pump_handle<Arg>& pump, bool checkDis = false)
-	{
-		assert_enter();
-		DstReceiverBuff_<Arg> dstRec;
-		_pump_msg(pump, dstRec, checkDis);
-		return std::move(std::get<0>(dstRec._dstBuff.get()));
-	}
-
-	__yield_interrupt void pump_msg(const msg_pump_handle<>& pump, bool checkDis = false);
-
-	template <typename... Args, typename Handler>
-	__yield_interrupt void pump_msg(const msg_pump_handle<Args...>& pump, const Handler& h, bool checkDis = false)
-	{
-		timed_pump_msg<Args...>(-1, pump, h, checkDis);
-	}
-
-	/*!
 	@brief 尝试从消息泵中提取消息
 	*/
 	template <typename... Args>
@@ -2983,6 +3404,38 @@ public:
 			return true;
 		}
 		return false;
+	}
+
+	/*!
+	@brief 从消息泵中提取消息
+	*/
+	template <typename... Args>
+	__yield_interrupt void pump_msg(const msg_pump_handle<Args...>& pump, Args&... res, bool checkDis = false)
+	{
+		timed_pump_msg(-1, pump, res..., checkDis);
+	}
+
+	template <typename... Args>
+	__yield_interrupt void pump_msg(const msg_pump_handle<Args...>& pump, stack_obj<Args>&... res, bool checkDis = false)
+	{
+		timed_pump_msg(-1, pump, res..., checkDis);
+	}
+
+	template <typename Arg>
+	__yield_interrupt Arg pump_msg(const msg_pump_handle<Arg>& pump, bool checkDis = false)
+	{
+		assert_enter();
+		DstReceiverBuff_<Arg> dstRec;
+		_pump_msg(pump, dstRec, checkDis);
+		return std::move(std::get<0>(dstRec._dstBuff.get()));
+	}
+
+	__yield_interrupt void pump_msg(const msg_pump_handle<>& pump, bool checkDis = false);
+
+	template <typename... Args, typename Handler>
+	__yield_interrupt void pump_msg(const msg_pump_handle<Args...>& pump, const Handler& h, bool checkDis = false)
+	{
+		timed_pump_msg<Args...>(-1, pump, h, checkDis);
 	}
 public:
 	/*!
@@ -3034,6 +3487,87 @@ public:
 			}
 		}
 		return actor_handle();
+	}
+private:
+	template <typename... MutexBlock>
+	static void _mutex_ready(bool& r, MutexBlock_& mb, MutexBlock&... mbs)
+	{
+		r |= mb.ready();
+		_mutex_ready(r, mbs...);
+	}
+
+	template <typename... MutexBlock>
+	static void _mutex_cancel(MutexBlock_& mb, MutexBlock&... mbs)
+	{
+		mb.cancel();
+		_mutex_cancel(mbs...);
+	}
+
+	template <typename... MutexBlock>
+	static bool _mutex_go(MutexBlock_& mb, MutexBlock&... mbs)
+	{
+		if (!mb.go())
+		{
+			return _mutex_go(mbs...);
+		}
+		return true;
+	}
+
+	template <typename... MutexBlock>
+	static void _check_is_mutex_block(MutexBlock_& mb, MutexBlock&... mbs)
+	{
+		_check_is_mutex_block(mbs...);
+	}
+
+	static void _mutex_ready(bool&) {}
+	static void _mutex_cancel() {}
+	static bool _mutex_go() { return false; }
+	static void _check_is_mutex_block() {}
+
+	template <typename... MutexBlock>
+	static bool _cmp_snap_id_(MutexBlock_& mb, MutexBlock_& fst, MutexBlock&... mbs)
+	{
+		if (mb.snap_id() != fst.snap_id())
+		{
+			return _cmp_snap_id_(mb, mbs...) && _cmp_snap_id_(fst, mbs...);
+		}
+		return false;
+	}
+
+	static bool _cmp_snap_id_(MutexBlock_& mb)
+	{
+		return true;
+	}
+
+	template <typename... MutexBlock>
+	static bool _cmp_snap_id(MutexBlock_& mb, MutexBlock&... mbs)
+	{
+		return _cmp_snap_id_(mb, mbs...);
+	}
+public:
+	/*!
+	@brief 运行互斥消息执行块（阻塞）
+	*/
+	template <typename... MutexBlock>
+	void run_mutex_blocks(MutexBlock_& mb, MutexBlock&... mbs)
+	{
+		_check_is_mutex_block(mb, mbs...);//判断参数是否为 mutex_block_xxx
+		assert(_cmp_snap_id(mb, mbs...));//判断有没有重复参数
+		quit_guard qg(this);
+		do
+		{
+			DEBUG_OPERATION(auto nt = yield_count());
+			bool hasReady = false;
+			_mutex_ready(hasReady, mb, mbs...);
+			assert(yield_count() == nt);
+			if (!hasReady)
+			{
+				push_yield();
+			}
+			DEBUG_OPERATION(nt = yield_count());
+			_mutex_cancel(mb, mbs...);
+			assert(yield_count() == nt);
+		} while (!_mutex_go(mb, mbs...));
 	}
 public:
 	/*!

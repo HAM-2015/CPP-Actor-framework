@@ -331,24 +331,31 @@ bool MsgPoolVoid_::pump_handler::empty()
 void MsgPoolVoid_::pump_handler::pump_msg(unsigned char pumpID, const actor_handle& hostActor)
 {
 	assert(_msgPump == _thisPool->_msgPump);
-	assert(!_thisPool->_waiting);
-	if (pumpID == _thisPool->_sendCount)
+	if (!_thisPool->_waiting)//上次取消息超时后取消了等待，此时取还没消息
 	{
-		if (_thisPool->_msgBuff)
+		if (pumpID == _thisPool->_sendCount)
 		{
-			_thisPool->_msgBuff--;
-			_thisPool->_sendCount++;
-			_msgPump->receive_msg(hostActor);
+			if (_thisPool->_msgBuff)
+			{
+				_thisPool->_msgBuff--;
+				_thisPool->_sendCount++;
+				_msgPump->receive_msg(hostActor);
+			}
+			else
+			{
+				_thisPool->_waiting = true;
+			}
 		}
 		else
-		{
-			_thisPool->_waiting = true;
+		{//上次消息没取到，重新取，但实际中间已经post出去了
+			assert(!_thisPool->_waiting);
+			assert(pumpID + 1 == _thisPool->_sendCount);
 		}
 	}
 	else
-	{//上次消息没取到，重新取，但实际中间已经post出去了
-		assert(!_thisPool->_waiting);
-		assert(pumpID + 1 == _thisPool->_sendCount);
+	{
+		assert(!_thisPool->_msgBuff);
+		assert(pumpID == _thisPool->_sendCount);
 	}
 }
 
@@ -529,6 +536,11 @@ bool MsgPumpVoid_::try_read()
 		}
 	}
 	return false;
+}
+
+void MsgPumpVoid_::stop_waiting()
+{
+	_waiting = false;
 }
 
 void MsgPumpVoid_::receive_msg(const actor_handle& hostActor)
@@ -1961,10 +1973,15 @@ bool my_actor::timed_wait_msg(int tm, actor_msg_handle<>& amh)
 				return true;
 			}
 		}
-		amh._waiting = false;
+		amh.stop_waiting();
 		return false;
 	}
 	return true;
+}
+
+bool my_actor::try_wait_msg(actor_msg_handle<>& amh)
+{
+	return timed_wait_msg(0, amh);
 }
 
 bool my_actor::timed_pump_msg(int tm, const msg_pump_handle<>& pump, bool checkDis)
@@ -1975,7 +1992,7 @@ bool my_actor::timed_pump_msg(int tm, const msg_pump_handle<>& pump, bool checkD
 	{
 		if (checkDis && pump->isDisconnected())
 		{
-			pump->_waiting = false;
+			pump->stop_waiting();
 			throw pump_disconnected_exception();
 		}
 		if (0 != tm)
@@ -2010,7 +2027,7 @@ bool my_actor::timed_pump_msg(int tm, const msg_pump_handle<>& pump, bool checkD
 			}
 		}
 		pump->_checkDis = false;
-		pump->_waiting = false;
+		pump->stop_waiting();
 		return false;
 	}
 	return true;
@@ -2068,10 +2085,15 @@ bool my_actor::timed_wait_trig(int tm, actor_trig_handle<>& ath)
 				return true;
 			}
 		}
-		ath._waiting = false;
+		ath.stop_waiting();
 		return false;
 	}
 	return true;
+}
+
+bool my_actor::try_wait_trig(actor_trig_handle<>& ath)
+{
+	return timed_wait_trig(0, ath);
 }
 
 void my_actor::wait_msg(actor_msg_handle<>& amh)

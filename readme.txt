@@ -13,6 +13,9 @@ oschina url:
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
+2015-08-02
+添加在一个Actor内互斥运行多个消息执行体;
+
 2015-07-30
 支持任意参数个数消息;
 

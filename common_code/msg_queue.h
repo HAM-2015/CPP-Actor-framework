@@ -84,12 +84,15 @@ public:
 		while (pIt)
 		{
 			_size--;
+			assert((int)_size >= 0);
 			((T*)pIt->_data)->~T();
 			node* t = pIt;
 			pIt = pIt->_next;
 			_alloc.deallocate(t);
 		}
 		assert(0 == _size);
+		_head._next = NULL;
+		_tail = &_head;
 	}
 
 	void expand_fixed(size_t fixedSize)
