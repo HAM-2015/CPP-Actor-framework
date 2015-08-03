@@ -180,7 +180,6 @@
     <ClInclude Include="..\common_code\check_actor_stack.h" />
     <ClInclude Include="..\common_code\trace.h" />
     <ClInclude Include="..\common_code\try_move.h" />
-    <ClInclude Include="..\common_code\function_type.h" />
     <ClInclude Include="..\common_code\ios_proxy.h" />
     <ClInclude Include="..\common_code\msg_queue.h" />
     <ClInclude Include="..\common_code\mem_pool.h" />

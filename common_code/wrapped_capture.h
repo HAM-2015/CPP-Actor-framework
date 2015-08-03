@@ -22,7 +22,7 @@ struct wrapped_capture
 
 	void operator ()()
 	{
-		tuple_invoke<void>(_h, _args);
+		tuple_invoke(_h, _args);
 	}
 
 	H _h;

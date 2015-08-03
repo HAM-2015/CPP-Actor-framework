@@ -1092,7 +1092,7 @@ class CspInvokeBase_ : public CspChannel_<typename std::tuple<RM_REF(ARGS)&...>,
 		template <typename H, typename TUPLE>
 		static inline VoidReturn_ invoke(H&& h, TUPLE&& t)
 		{
-			tuple_invoke<void>(TRY_MOVE(h), TRY_MOVE(t));
+			tuple_invoke(TRY_MOVE(h), TRY_MOVE(t));
 			return VoidReturn_();
 		}
 	};

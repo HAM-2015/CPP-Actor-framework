@@ -96,19 +96,19 @@ struct apply_arg<R, 0>
 	}
 };
 
-template <typename R, typename H, typename TUPLE>
+template <typename R = void, typename H, typename TUPLE>
 inline R tuple_invoke(H&& h, TUPLE&& t)
 {
 	return apply_arg<R, std::tuple_size<RM_REF(TUPLE)>::value>::append(TRY_MOVE(h), TRY_MOVE(t));
 }
 
-template <typename R, typename F, typename TUPLE>
+template <typename R = void, typename F, typename TUPLE>
 inline R tuple_invoke(RM_REF(F) pf, TUPLE&& t)
 {
 	return apply_arg<R, std::tuple_size<RM_REF(TUPLE)>::value>::append(pf, TRY_MOVE(t));
 }
 
-template <typename R, typename F, typename C, typename TUPLE>
+template <typename R = void, typename F, typename C, typename TUPLE>
 inline R tuple_invoke(F pf, C* obj, TUPLE&& t)
 {
 	return apply_arg<R, std::tuple_size<RM_REF(TUPLE)>::value>::append(pf, obj, TRY_MOVE(t));

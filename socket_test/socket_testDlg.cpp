@@ -217,7 +217,7 @@ void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param>
 			self->close_msg_notifer(amh);
 		});
 		self->child_actor_run(readActor);
-		auto textio = text_stream_io::create(self->self_strand(), param->_clientSocket, readActor.get_actor()->make_msg_notifer(amh));
+		auto textio = text_stream_io::create(self->self_strand(), param->_clientSocket, readActor->make_msg_notifer(amh));
 		child_actor_handle writerActor = self->msg_agent_to_actor<shared_data>(true, 
 			[&textio, &param](my_actor* self, msg_pump_handle<shared_data> amh)
 		{
@@ -302,7 +302,7 @@ void Csocket_testDlg::serverActor(my_actor* self, std::shared_ptr<server_param> 
 		}
 		self->close_msg_notifer(sessDissonnLst);
 	});
-	auto sessDissonnNtf = sessMngActor.get_actor()->make_msg_notifer(sessDissonnLst);
+	auto sessDissonnNtf = sessMngActor->make_msg_notifer(sessDissonnLst);
 	self->child_actor_run(sessMngActor);
 	while (true)
 	{

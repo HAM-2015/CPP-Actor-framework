@@ -114,8 +114,8 @@ void check_two_down(my_actor* self, int dt, int id1, int id2)
 			child_actor_handle up2 = self->create_child_actor([&](my_actor* self){check_both_up(self, id2, st2, st1); });
 			actor_trig_handle<> ath;
 			auto nh = self->make_trig_notifer(ath);
-			up1.get_actor()->append_quit_callback(nh);
-			up2.get_actor()->append_quit_callback(nh);
+			up1->append_quit_callback(nh);
+			up2->append_quit_callback(nh);
 			self->child_actor_run(up1);
 			self->child_actor_run(up2);
 			if (self->timed_wait_trig(3000, ath))
@@ -137,8 +137,8 @@ void check_two_down(my_actor* self, int dt, int id1, int id2)
 			child_actor_handle check2 = self->create_child_actor([&](my_actor* self){check_key_down(self, id2); });
 			actor_trig_handle<child_actor_handle*> ath;
 			auto nh = self->make_trig_notifer(ath);
-			check1.get_actor()->append_quit_callback([&]{nh(&check2); });
-			check2.get_actor()->append_quit_callback([&]{nh(&check1); });
+			check1->append_quit_callback([&]{nh(&check2); });
+			check2->append_quit_callback([&]{nh(&check1); });
 			self->child_actor_run(check1);
 			self->child_actor_run(check2);
 			if (self->timed_child_actor_wait_quit(dt, *(self->wait_trig(ath))))
@@ -280,6 +280,7 @@ void actor_test(my_actor* self)
 	child_actor_handle syncPush;
 	child_actor_handle syncPop1;
 	child_actor_handle syncPop2;
+	child_actor_handle mutexBlocks;
 	//创建生产者/消费者模型测试
 	{//模拟消息转发，转发切换
 		actorConsumer = self->create_child_actor(self->self_strand()->clone(), [](my_actor* self)
@@ -486,6 +487,74 @@ void actor_test(my_actor* self)
 // 		self->child_actor_run(syncPop1);
 // 		self->child_actor_run(syncPop2);
 	}
+	{//互斥消息处理块
+		mutexBlocks = self->create_child_actor([](my_actor* self)
+		{
+			actor_msg_handle<> amh;
+			child_actor_handle mb1 = self->create_child_actor([&](my_actor* self)
+			{
+				self->run_mutex_blocks(mutex_block_pump<int>(self, [&](int i)->bool
+				{
+					trace_line("block1 begin ", i, " ");
+					if (self->timed_wait_msg(1500, amh))
+					{
+						trace_line("block1 end ", i, " ");
+					}
+					else
+					{
+						trace_line("block1 timeout ", i, " ");
+					}
+					return false;
+				}), mutex_block_pump<move_test>(self, [&](move_test mt)->bool
+				{
+					trace_line("block2 begin ", mt._count->_id, " ");
+					if (self->timed_wait_msg(1500, amh))
+					{
+						trace_line("block2 end ", mt._count->_id, " ");
+					}
+					else
+					{
+						trace_line("block2 timeout ", mt._count->_id, " ");
+					}
+					return false;
+				}), mutex_block_pump<move_test, move_test>(self, [&](move_test mt1, move_test mt2)->bool
+				{
+					trace_line("block3 begin ", mt1._count->_id, " ", mt2._count->_id, " ");
+					if (self->timed_wait_msg(1500, amh))
+					{
+						trace_line("block3 end ", mt1._count->_id, " ", mt2._count->_id, " ");
+					}
+					else
+					{
+						trace_line("block3 timeout ", mt1._count->_id, " ", mt2._count->_id, " ");
+					}
+					return false;
+				}));
+			});
+			self->child_actor_run(mb1);
+			auto ntf1 = self->connect_msg_notifer_to<int>(mb1);
+			auto ntf2 = self->connect_msg_notifer_to<move_test>(mb1);
+			auto ntf3 = self->connect_msg_notifer_to<move_test, move_test>(mb1);
+			auto ntf = mb1->make_msg_notifer(amh);
+			for (int i = 0; i < 10; i++)
+			{
+				ntf1(i);
+				self->sleep(500);
+				ntf2(move_test(i));
+				self->sleep(500);
+				ntf3(move_test(i), move_test(i));
+				self->sleep(500);
+				ntf();
+				self->sleep(500);
+				ntf();
+				self->sleep(500);
+				ntf();
+				self->sleep(500);
+			}
+			self->child_actor_wait_quit(mb1);
+		});
+		//self->child_actor_run(mutexBlocks);
+	}
 	list<actor_handle> chs;//需要被挂起的Actor对象，可以从下方注释几个测试
 	chs.push_back(actorLeft.get_actor());
 	chs.push_back(actorRight.get_actor());
@@ -543,6 +612,7 @@ void actor_test(my_actor* self)
 	self->child_actor_force_quit(syncPop1);
 	self->child_actor_force_quit(syncPop2);
 	perforIos.stop();
+	self->child_actor_force_quit(mutexBlocks);
 }
 
 

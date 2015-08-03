@@ -16,7 +16,6 @@
 #include <functional>
 #include "ios_proxy.h"
 #include "shared_strand.h"
-#include "function_type.h"
 #include "msg_queue.h"
 #include "actor_mutex.h"
 #include "scattered.h"
@@ -75,10 +74,10 @@ template <>
 struct TupleTec_<0>
 {
 	template <typename DTuple>
-	static inline void receive(DTuple& dst) {}
+	static inline void receive(DTuple&) {}
 
 	template <typename DTuple, typename STuple>
-	static inline void receive_ref(DTuple& dst, STuple&& src) {}
+	static inline void receive_ref(DTuple&, STuple&&) {}
 };
 
 template <typename DTuple, typename... Args>
@@ -318,9 +317,9 @@ public:
 		_hostActor->self_strand()->try_tick(msg_capture<>(_msgHandle, _hostActor, _closed));
 	}
 
-	typename func_type<ARGS...>::result case_func() const
+	std::function<void(ARGS...)> case_func() const
 	{
-		return typename func_type<ARGS...>::result(*this);
+		return std::function<void(ARGS...)>(*this);
 	}
 
 	actor_handle host_actor() const
@@ -1427,9 +1426,9 @@ public:
 		_msgPool->push_msg(_hostActor);
 	}
 
-	typename func_type<ARGS...>::result case_func() const
+	std::function<void(ARGS...)> case_func() const
 	{
-		return typename func_type<ARGS...>::result(*this);
+		return std::function<void(ARGS...)>(*this);
 	}
 
 	bool empty() const
@@ -1835,9 +1834,9 @@ public:
 		tick_handler();
 	}
 
-	typename func_type<ARGS...>::result case_func() const
+	std::function<void(ARGS...)> case_func() const
 	{
-		return typename func_type<ARGS...>::result(*this);
+		return std::function<void(ARGS...)>(*this);
 	}
 private:
 	void reset() const
@@ -1984,6 +1983,7 @@ public:
 	~child_actor_handle();
 	child_actor_handle& operator =(child_actor_param& s);
 	actor_handle get_actor();
+	my_actor* operator ->();
 	static ptr make_ptr();
 	bool empty();
 private:
@@ -2582,7 +2582,7 @@ public:
 		DstReceiverBuff_<Args...> dstRec;
 		if (_timed_wait_msg(amh, dstRec, tm))
 		{
-			tuple_invoke<void>(h, std::move(dstRec._dstBuff.get()));
+			tuple_invoke(h, std::move(dstRec._dstBuff.get()));
 			return true;
 		}
 		return false;
@@ -2701,7 +2701,7 @@ public:
 		DstReceiverBuff_<Args...> dstRec;
 		if (_timed_wait_msg(ath, dstRec, tm))
 		{
-			tuple_invoke<void>(h, std::move(dstRec._dstBuff.get()));
+			tuple_invoke(h, std::move(dstRec._dstBuff.get()));
 			return true;
 		}
 		return false;
@@ -2766,7 +2766,7 @@ private:
 	static std::shared_ptr<msg_pool_status::pck<Args...> > msg_pool_pck(my_actor* const host, bool make = true)
 	{
 		typedef msg_pool_status::pck<Args...> pck_type;
-		size_t typeID = func_type<Args...>::number != 0 ? typeid(pck_type).hash_code() : 0;
+		size_t typeID = sizeof...(Args) != 0 ? typeid(pck_type).hash_code() : 0;
 		if (make)
 		{
 			auto& res = host->_msgPoolStatus._msgTypeMap.insert(make_pair(typeID, std::shared_ptr<pck_type>())).first->second;
@@ -3366,7 +3366,7 @@ public:
 		DstReceiverBuff_<Args...> dstRec;
 		if (_timed_pump_msg(pump, dstRec, tm, checkDis))
 		{
-			tuple_invoke<void>(h, std::move(dstRec._dstBuff.get()));
+			tuple_invoke(h, std::move(dstRec._dstBuff.get()));
 			return true;
 		}
 		return false;
@@ -3400,7 +3400,7 @@ public:
 		DstReceiverBuff_<Args...> dstRec;
 		if (_try_pump_msg(pump, dstRec, checkDis))
 		{
-			tuple_invoke<void>(h, std::move(dstRec._dstBuff.get()));
+			tuple_invoke(h, std::move(dstRec._dstBuff.get()));
 			return true;
 		}
 		return false;
@@ -3489,85 +3489,119 @@ public:
 		return actor_handle();
 	}
 private:
-	template <typename... MutexBlock>
-	static void _mutex_ready(bool& r, MutexBlock_& mb, MutexBlock&... mbs)
+	template <typename Frist, typename... MutexBlocks>
+	static void _mutex_ready(bool& r, Frist& fst, MutexBlocks&... mbs)
 	{
-		r |= mb.ready();
+		r |= fst.ready();
 		_mutex_ready(r, mbs...);
 	}
 
-	template <typename... MutexBlock>
-	static void _mutex_cancel(MutexBlock_& mb, MutexBlock&... mbs)
+	template <typename Frist, typename... MutexBlocks>
+	static bool _mutex_ready2(Frist& fst, MutexBlocks&... mbs)
 	{
-		mb.cancel();
+		if (!fst.ready())
+		{
+			return _mutex_ready2(mbs...);
+		}
+		return true;
+	}
+
+	template <typename Frist, typename... MutexBlocks>
+	static void _mutex_cancel(Frist& fst, MutexBlocks&... mbs)
+	{
+		fst.cancel();
 		_mutex_cancel(mbs...);
 	}
 
-	template <typename... MutexBlock>
-	static bool _mutex_go(MutexBlock_& mb, MutexBlock&... mbs)
+	template <typename Frist, typename... MutexBlocks>
+	static bool _mutex_go(Frist& fst, MutexBlocks&... mbs)
 	{
-		if (!mb.go())
+		if (!fst.go())
 		{
 			return _mutex_go(mbs...);
 		}
 		return true;
 	}
 
-	template <typename... MutexBlock>
-	static void _check_is_mutex_block(MutexBlock_& mb, MutexBlock&... mbs)
+	template <typename... MutexBlocks>
+	static void _check_is_mutex_block(const MutexBlock_&, MutexBlocks&... mbs)
 	{
 		_check_is_mutex_block(mbs...);
 	}
 
-	static void _mutex_ready(bool&) {}
-	static void _mutex_cancel() {}
-	static bool _mutex_go() { return false; }
-	static void _check_is_mutex_block() {}
-
-	template <typename... MutexBlock>
-	static bool _cmp_snap_id_(MutexBlock_& mb, MutexBlock_& fst, MutexBlock&... mbs)
+	template <typename Frist, typename Second, typename... MutexBlocks>
+	static bool _cmp_snap_id_(Frist& fst, Second& sec, MutexBlocks&... mbs)
 	{
-		if (mb.snap_id() != fst.snap_id())
+		if (fst.snap_id() != sec.snap_id())
 		{
-			return _cmp_snap_id_(mb, mbs...) && _cmp_snap_id_(fst, mbs...);
+			return _cmp_snap_id_(fst, mbs...) && _cmp_snap_id_(sec, mbs...);
 		}
 		return false;
 	}
 
-	static bool _cmp_snap_id_(MutexBlock_& mb)
+	template <typename Frist, typename... MutexBlocks>
+	static bool _cmp_snap_id(Frist& fst, MutexBlocks&... mbs)
 	{
-		return true;
+		return _cmp_snap_id_(fst, mbs...);
 	}
 
-	template <typename... MutexBlock>
-	static bool _cmp_snap_id(MutexBlock_& mb, MutexBlock&... mbs)
-	{
-		return _cmp_snap_id_(mb, mbs...);
-	}
+	static void _mutex_ready(bool&) {}
+	static bool _mutex_ready2() { return false; }
+	static void _mutex_cancel() {}
+	static bool _mutex_go() { return false; }
+	static void _check_is_mutex_block() {}
+	static bool _cmp_snap_id_(const MutexBlock_&)  { return true; }
 public:
 	/*!
 	@brief 运行互斥消息执行块（阻塞）
 	*/
-	template <typename... MutexBlock>
-	void run_mutex_blocks(MutexBlock_& mb, MutexBlock&... mbs)
+	template <typename Frist, typename... MutexBlocks>
+	__yield_interrupt void run_mutex_blocks(Frist& fst, MutexBlocks&... mbs)
 	{
-		_check_is_mutex_block(mb, mbs...);//判断参数是否为 mutex_block_xxx
-		assert(_cmp_snap_id(mb, mbs...));//判断有没有重复参数
+		_check_is_mutex_block(fst, mbs...);//判断参数类型是否为 mutex_block_xxx
+		assert(_cmp_snap_id(fst, mbs...));//判断有没有重复参数
 		quit_guard qg(this);
 		do
 		{
 			DEBUG_OPERATION(auto nt = yield_count());
 			bool hasReady = false;
-			_mutex_ready(hasReady, mb, mbs...);
+			_mutex_ready(hasReady, fst, mbs...);
 			assert(yield_count() == nt);
 			if (!hasReady)
 			{
+				qg.unlock();
 				push_yield();
+				qg.lock();
 			}
 			DEBUG_OPERATION(nt = yield_count());
-			_mutex_cancel(mb, mbs...);
+			_mutex_cancel(fst, mbs...);
 			assert(yield_count() == nt);
-		} while (!_mutex_go(mb, mbs...));
+		} while (!_mutex_go(fst, mbs...));
+	}
+
+	/*!
+	@brief 运行互斥消息执行块（阻塞），每次只取一条消息
+	*/
+	template <typename Frist, typename... MutexBlocks>
+	__yield_interrupt void run_mutex_blocks2(Frist& fst, MutexBlocks&... mbs)
+	{
+		_check_is_mutex_block(fst, mbs...);//判断参数类型是否为 mutex_block_xxx
+		assert(_cmp_snap_id(fst, mbs...));//判断有没有重复参数
+		quit_guard qg(this);
+		do
+		{
+			DEBUG_OPERATION(auto nt = yield_count());
+			if (!_mutex_ready2(fst, mbs...))
+			{
+				assert(yield_count() == nt);
+				qg.unlock();
+				push_yield();
+				qg.lock();
+				DEBUG_OPERATION(nt = yield_count());
+			}
+			_mutex_cancel(fst, mbs...);
+			assert(yield_count() == nt);
+		} while (!_mutex_go(fst, mbs...));
 	}
 public:
 	/*!

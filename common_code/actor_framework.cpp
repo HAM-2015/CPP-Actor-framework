@@ -156,6 +156,11 @@ actor_handle child_actor_handle::get_actor()
 	return _param._actor;
 }
 
+my_actor* child_actor_handle::operator ->()
+{
+	return _param._actor.get();
+}
+
 void child_actor_handle::peel()
 {
 	if (_param._actor)
