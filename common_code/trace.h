@@ -179,17 +179,17 @@ void trace_line()
 	std::cout << std::endl;
 }
 
-template <typename T, typename... Args>
-void trace(T&& p, Args&&... args)
+template <typename First, typename... Args>
+void trace(First&& fst, Args&&... args)
 {
-	trace_match<RM_CREF(T)>::trace(p);
+	trace_match<RM_CREF(First)>::trace(fst);
 	trace(TRY_MOVE(args)...);
 }
 
-template <typename T, typename... Args>
-void trace_line(T&& p, Args&&... args)
+template <typename First, typename... Args>
+void trace_line(First&& fst, Args&&... args)
 {
-	trace_match<RM_CREF(T)>::trace(p);
+	trace_match<RM_CREF(First)>::trace(fst);
 	trace(TRY_MOVE(args)...);
 	std::cout << std::endl;
 }

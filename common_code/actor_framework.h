@@ -1589,6 +1589,10 @@ public:
 	{
 		_msgHandle = connect_msg_pump<ARGS...>(host);
 	}
+
+	template <typename Handler>
+	mutex_block_pump(const pump_handle& pump, Handler&& handler)
+		: _msgHandle(pump), _handler(TRY_MOVE(handler)) {}
 private:
 	bool ready()
 	{
@@ -1727,6 +1731,10 @@ public:
 	{
 		_msgHandle = host->connect_msg_pump<>();
 	}
+
+	template <typename Handler>
+	mutex_block_pump(const pump_handle& pump, Handler&& handler)
+		: _msgHandle(pump), _handler(TRY_MOVE(handler)), _has(false) {}
 private:
 	bool ready()
 	{
@@ -1943,7 +1951,7 @@ private:
 		static_assert(false, "no copy");
 	}
 private:
-	unsigned char _dstRef[static_get_max<sizeof(dst_receiver1), sizeof(dst_receiver2)>::value];
+	unsigned char _dstRef[static_cmp_type_size<dst_receiver1, dst_receiver2>::max];
 	const bool _early;
 	const bool _isRef;
 };
@@ -3489,15 +3497,15 @@ public:
 		return actor_handle();
 	}
 private:
-	template <typename Frist, typename... MutexBlocks>
-	static void _mutex_ready(bool& r, Frist& fst, MutexBlocks&... mbs)
+	template <typename First, typename... MutexBlocks>
+	static void _mutex_ready(bool& r, First& fst, MutexBlocks&... mbs)
 	{
 		r |= fst.ready();
 		_mutex_ready(r, mbs...);
 	}
 
-	template <typename Frist, typename... MutexBlocks>
-	static bool _mutex_ready2(Frist& fst, MutexBlocks&... mbs)
+	template <typename First, typename... MutexBlocks>
+	static bool _mutex_ready2(First& fst, MutexBlocks&... mbs)
 	{
 		if (!fst.ready())
 		{
@@ -3506,15 +3514,15 @@ private:
 		return true;
 	}
 
-	template <typename Frist, typename... MutexBlocks>
-	static void _mutex_cancel(Frist& fst, MutexBlocks&... mbs)
+	template <typename First, typename... MutexBlocks>
+	static void _mutex_cancel(First& fst, MutexBlocks&... mbs)
 	{
 		fst.cancel();
 		_mutex_cancel(mbs...);
 	}
 
-	template <typename Frist, typename... MutexBlocks>
-	static bool _mutex_go(Frist& fst, MutexBlocks&... mbs)
+	template <typename First, typename... MutexBlocks>
+	static bool _mutex_go(First& fst, MutexBlocks&... mbs)
 	{
 		if (!fst.go())
 		{
@@ -3529,8 +3537,8 @@ private:
 		_check_is_mutex_block(mbs...);
 	}
 
-	template <typename Frist, typename Second, typename... MutexBlocks>
-	static bool _cmp_snap_id_(Frist& fst, Second& sec, MutexBlocks&... mbs)
+	template <typename First, typename Second, typename... MutexBlocks>
+	static bool _cmp_snap_id_(First& fst, Second& sec, MutexBlocks&... mbs)
 	{
 		if (fst.snap_id() != sec.snap_id())
 		{
@@ -3539,8 +3547,8 @@ private:
 		return false;
 	}
 
-	template <typename Frist, typename... MutexBlocks>
-	static bool _cmp_snap_id(Frist& fst, MutexBlocks&... mbs)
+	template <typename First, typename... MutexBlocks>
+	static bool _cmp_snap_id(First& fst, MutexBlocks&... mbs)
 	{
 		return _cmp_snap_id_(fst, mbs...);
 	}
@@ -3555,8 +3563,8 @@ public:
 	/*!
 	@brief 运行互斥消息执行块（阻塞）
 	*/
-	template <typename Frist, typename... MutexBlocks>
-	__yield_interrupt void run_mutex_blocks(Frist& fst, MutexBlocks&... mbs)
+	template <typename First, typename... MutexBlocks>
+	__yield_interrupt void run_mutex_blocks(First& fst, MutexBlocks&... mbs)
 	{
 		_check_is_mutex_block(fst, mbs...);//判断参数类型是否为 mutex_block_xxx
 		assert(_cmp_snap_id(fst, mbs...));//判断有没有重复参数
@@ -3582,8 +3590,8 @@ public:
 	/*!
 	@brief 运行互斥消息执行块（阻塞），每次只取一条消息
 	*/
-	template <typename Frist, typename... MutexBlocks>
-	__yield_interrupt void run_mutex_blocks2(Frist& fst, MutexBlocks&... mbs)
+	template <typename First, typename... MutexBlocks>
+	__yield_interrupt void run_mutex_blocks2(First& fst, MutexBlocks&... mbs)
 	{
 		_check_is_mutex_block(fst, mbs...);//判断参数类型是否为 mutex_block_xxx
 		assert(_cmp_snap_id(fst, mbs...));//判断有没有重复参数
