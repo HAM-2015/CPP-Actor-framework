@@ -485,6 +485,7 @@ private:
 		set_actor(hostActor);
 		_closed = new_bool();
 		_waiting = false;
+		_dstRec = NULL;
 		return msg_notifer(this);
 	}
 
@@ -496,6 +497,11 @@ private:
 			if (_waiting)
 			{
 				_waiting = false;
+				if (_dstRec)
+				{
+					*_dstRec = true;
+					_dstRec = NULL;
+				}
 				run_one();
 				return;
 			}
@@ -508,6 +514,7 @@ private:
 		assert(_strand->running_in_this_thread());
 		assert(_closed);
 		assert(!*_closed);
+		assert(!_dstRec);
 		if (_msgCount)
 		{
 			_msgCount--;
@@ -517,9 +524,26 @@ private:
 		return false;
 	}
 
+	bool read_msg(bool& dst)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(_closed);
+		assert(!*_closed);
+		if (_msgCount)
+		{
+			_msgCount--;
+			dst = true;
+			return true;
+		}
+		_dstRec = &dst;
+		_waiting = true;
+		return false;
+	}
+
 	void stop_waiting()
 	{
 		_waiting = false;
+		_dstRec = NULL;
 	}
 
 	void close()
@@ -530,6 +554,7 @@ private:
 			*_closed = true;
 			_closed.reset();
 		}
+		_dstRec = NULL;
 		_msgCount = 0;
 		_waiting = false;
 		_hostActor = NULL;
@@ -541,6 +566,7 @@ private:
 		return _msgCount;
 	}
 private:
+	bool* _dstRec;
 	size_t _msgCount;
 };
 //////////////////////////////////////////////////////////////////////////
@@ -670,6 +696,7 @@ private:
 		_closed = new_bool();
 		_waiting = false;
 		_hasMsg = false;
+		_dstRec = NULL;
 		return msg_notifer(this);
 	}
 
@@ -682,6 +709,11 @@ private:
 			if (_waiting)
 			{
 				_waiting = false;
+				if (_dstRec)
+				{
+					*_dstRec = true;
+					_dstRec = NULL;
+				}
 				run_one();
 				return;
 			}
@@ -693,6 +725,7 @@ private:
 	{
 		assert(_strand->running_in_this_thread());
 		assert(_closed);
+		assert(!_dstRec);
 		if (_hasMsg)
 		{
 			_hasMsg = false;
@@ -703,9 +736,26 @@ private:
 		return false;
 	}
 
+	bool read_msg(bool& dst)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(_closed);
+		if (_hasMsg)
+		{
+			_hasMsg = false;
+			dst = true;
+			return true;
+		}
+		assert(!*_closed);
+		_dstRec = &dst;
+		_waiting = true;
+		return false;
+	}
+
 	void stop_waiting()
 	{
 		_waiting = false;
+		_dstRec = NULL;
 	}
 
 	void close()
@@ -716,6 +766,7 @@ private:
 			*_closed = true;
 			_closed.reset();
 		}
+		_dstRec = NULL;
 		_hasMsg = false;
 		_waiting = false;
 		_hostActor = NULL;
@@ -727,6 +778,7 @@ public:
 		return _hasMsg;
 	}
 private:
+	bool* _dstRec;
 	bool _hasMsg;
 };
 
@@ -1331,6 +1383,7 @@ protected:
 	void receive_msg_tick(const actor_handle& hostActor);
 	void receive_msg(const actor_handle& hostActor);
 	bool read_msg();
+	bool read_msg(bool& dst);
 	bool try_read();
 	void stop_waiting();
 	void connect(const pump_handler& pumpHandler);
@@ -1342,6 +1395,7 @@ protected:
 	pump_handler _pumpHandler;
 	shared_strand _strand;
 	unsigned char _pumpCount;
+	bool* _dstRec;
 	bool _waiting;
 	bool _hasMsg;
 	bool _checkDis;
@@ -1640,8 +1694,7 @@ private:
 	bool ready()
 	{
 		assert(!_has);
-		_has = _msgHandle.read_msg();
-		return _has;
+		return _msgHandle.read_msg(_has);
 	}
 
 	void cancel()
@@ -1685,8 +1738,7 @@ private:
 		if (!_triged)
 		{
 			assert(!_has);
-			_has = _msgHandle.read_msg();
-			return _has;
+			return _msgHandle.read_msg(_has);
 		}
 		return false;
 	}
@@ -1739,8 +1791,7 @@ private:
 	bool ready()
 	{
 		assert(!_has);
-		_has = _msgHandle._handle->read_msg();
-		return _has;
+		return _msgHandle._handle->read_msg(_has);
 	}
 
 	void cancel()

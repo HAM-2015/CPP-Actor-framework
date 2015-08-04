@@ -430,6 +430,7 @@ MsgPumpVoid_::MsgPumpVoid_(const actor_handle& hostActor)
 	_waiting = false;
 	_hasMsg = false;
 	_checkDis = false;
+	_dstRec = NULL;
 	_pumpCount = 0;
 	_hostActor = hostActor.get();
 	_strand = hostActor->self_strand();
@@ -448,6 +449,7 @@ void MsgPumpVoid_::clear()
 	{
 		assert(_waiting);
 		_waiting = false;
+		_dstRec = NULL;
 		run_one();
 	}
 }
@@ -457,6 +459,7 @@ void MsgPumpVoid_::close()
 	_hasMsg = false;
 	_waiting = false;
 	_checkDis = false;
+	_dstRec = NULL;
 	_pumpCount = 0;
 	_pumpHandler.clear();
 	_hostActor = NULL;
@@ -484,6 +487,11 @@ void MsgPumpVoid_::receiver()
 		{
 			_waiting = false;
 			_checkDis = false;
+			if (_dstRec)
+			{
+				*_dstRec = true;
+				_dstRec = NULL;
+			}
 			run_one();
 		}
 		else
@@ -497,11 +505,34 @@ bool MsgPumpVoid_::read_msg()
 {
 	assert(_strand->running_in_this_thread());
 	assert(!_waiting);
+	assert(!_dstRec);
 	if (_hasMsg)
 	{
 		_hasMsg = false;
 		return true;
 	}
+	if (!_pumpHandler.empty())
+	{
+		_pumpHandler(_pumpCount);
+		_waiting = !_hasMsg;
+		_hasMsg = false;
+		return !_waiting;
+	}
+	_waiting = true;
+	return false;
+}
+
+bool MsgPumpVoid_::read_msg(bool& dst)
+{
+	assert(_strand->running_in_this_thread());
+	assert(!_waiting);
+	if (_hasMsg)
+	{
+		_hasMsg = false;
+		dst = true;
+		return true;
+	}
+	_dstRec = &dst;
 	if (!_pumpHandler.empty())
 	{
 		_pumpHandler(_pumpCount);
@@ -546,6 +577,7 @@ bool MsgPumpVoid_::try_read()
 void MsgPumpVoid_::stop_waiting()
 {
 	_waiting = false;
+	_dstRec = NULL;
 }
 
 void MsgPumpVoid_::receive_msg(const actor_handle& hostActor)

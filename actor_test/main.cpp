@@ -529,6 +529,10 @@ void actor_test(my_actor* self)
 						trace_line("block3 timeout ", mt1._count->_id, " ", mt2._count->_id, " ");
 					}
 					return false;
+				}), mutex_block_pump<>(self, []()->bool
+				{
+					trace_line("block stop");
+					return true;
 				}));
 			});
 			self->child_actor_run(mb1);
@@ -551,7 +555,9 @@ void actor_test(my_actor* self)
 				ntf();
 				self->sleep(500);
 			}
+			self->connect_msg_notifer_to(mb1)();
 			self->child_actor_wait_quit(mb1);
+			trace_line("mutexBlocks over");
 		});
 		//self->child_actor_run(mutexBlocks);
 	}
