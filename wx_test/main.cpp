@@ -9,7 +9,6 @@ class MyApp :public wxApp
 public:
 	int OnRun()
 	{
-		my_actor::enable_stack_pool();
 		ios_proxy ios;
 		ios.run();
 		{

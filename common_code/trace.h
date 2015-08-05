@@ -169,13 +169,16 @@ struct trace_match<std::set<T>>
 	}
 };
 
-void trace()
+template <typename First>
+void trace(First&& fst)
 {
-
+	trace_match<RM_CREF(First)>::trace(fst);
 }
 
-void trace_line()
+template <typename First>
+void trace_line(First&& fst)
 {
+	trace_match<RM_CREF(First)>::trace(fst);
 	std::cout << std::endl;
 }
 

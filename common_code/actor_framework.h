@@ -2232,11 +2232,6 @@ public:
 	@param stackSize Actor栈大小，默认64k字节，必须是4k的整数倍，最小4k，最大1M
 	*/
 	static actor_handle create(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-
-	/*!
-	@brief 启用堆栈内存池
-	*/
-	static void enable_stack_pool();
 public:
 	/*!
 	@brief 创建一个子Actor，父Actor终止时，子Actor也终止（在子Actor都完全退出后，父Actor才结束）

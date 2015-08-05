@@ -4,6 +4,12 @@
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/lock_guard.hpp>
 
+struct null_mutex
+{
+	void inline lock() const {};
+	void inline unlock() const {};
+};
+
 struct mem_alloc_base 
 {
 	mem_alloc_base(){}
@@ -26,130 +32,6 @@ private:
 	void operator=(const mem_alloc_base&){}
 };
 
-template <typename DATA>
-struct mem_alloc : public mem_alloc_base
-{
-	struct node_space;
-
-	union BUFFER
-	{
-		unsigned char _space[sizeof(DATA)];
-		node_space* _link;
-	};
-
-	struct node_space
-	{
-		void set_df()
-		{
-#ifdef _DEBUG
-			memset(get_ptr(), 0xDF, sizeof(DATA));
-#endif
-		}
-
-		void set_cf()
-		{
-#ifdef _DEBUG
-			memset(get_ptr(), 0xCF, sizeof(DATA));
-#endif
-		}
-
-		void* get_ptr()
-		{
-			return _buff._space;
-		}
-
-		void set_head()
-		{
-#ifdef _DEBUG
-			_size = sizeof(DATA);
-#endif
-		}
-
-		void check_head()
-		{
-			assert(sizeof(DATA) <= _size);
-		}
-
-		static node_space* get_node(void* p)
-		{
-#ifdef _DEBUG
-			return (node_space*)((unsigned char*)p - sizeof(size_t));
-#else
-			return (node_space*)p;
-#endif
-		}
-
-#ifdef _DEBUG
-		size_t _size;
-#endif
-		BUFFER _buff;
-	};
-
-	mem_alloc(size_t poolSize)
-	{
-		_nodeCount = 0;
-		_poolMaxSize = poolSize;
-		_pool = NULL;
-		_blockNumber = 0;
-	}
-
-	~mem_alloc()
-	{
-		node_space* pIt = _pool;
-		while (pIt)
-		{
-			_nodeCount--;
-			node_space* t = pIt;
-			pIt = pIt->_buff._link;
-			free(t);
-		}
-		assert(0 == _nodeCount);
-	}
-
-	void* allocate()
-	{
-		_blockNumber++;
-		if (_pool)
-		{
-			_nodeCount--;
-			node_space* fixedSpace = _pool;
-			_pool = fixedSpace->_buff._link;
-			fixedSpace->set_cf();
-			return fixedSpace->get_ptr();
-		}
-		node_space* p = (node_space*)malloc(sizeof(node_space));
-		p->set_head();
-		return p->get_ptr();
-	}
-
-	void deallocate(void* p)
-	{
-		_blockNumber--;
-		node_space* space = node_space::get_node(p);
-		space->check_head();
-		if (_nodeCount < _poolMaxSize)
-		{
-			_nodeCount++;
-			space->set_df();
-			space->_buff._link = _pool;
-			_pool = space;
-			return;
-		}
-		free(space);
-	}
-
-	size_t alloc_size() const
-	{
-		return sizeof(DATA);
-	}
-
-	bool shared() const
-	{
-		return false;
-	}
-
-	node_space* _pool;
-};
 //////////////////////////////////////////////////////////////////////////
 
 template <typename DATA, typename MUTEX = boost::mutex>
@@ -219,12 +101,13 @@ struct mem_alloc_mt: mem_alloc_base
 		_blockNumber = 0;
 	}
 
-	~mem_alloc_mt()
+	virtual ~mem_alloc_mt()
 	{
 		boost::lock_guard<MUTEX> lg(_mutex);
 		node_space* pIt = _pool;
 		while (pIt)
 		{
+			assert(_nodeCount > 0);
 			_nodeCount--;
 			node_space* t = pIt;
 			pIt = pIt->_buff._link;
@@ -286,7 +169,17 @@ struct mem_alloc_mt: mem_alloc_base
 };
 
 //////////////////////////////////////////////////////////////////////////
-class reusable_mem
+template <typename DATA>
+struct mem_alloc : public mem_alloc_mt<DATA, null_mutex>
+{
+	mem_alloc(size_t poolSize)
+	:mem_alloc_mt(poolSize) {}
+};
+
+//////////////////////////////////////////////////////////////////////////
+
+template <typename MUTEX = boost::mutex>
+class reusable_mem_mt
 {
 	struct node 
 	{
@@ -294,7 +187,7 @@ class reusable_mem
 		node* _next;
 	};
 public:
-	reusable_mem()
+	reusable_mem_mt()
 	{
 		_top = NULL;
 #ifdef _DEBUG
@@ -302,51 +195,49 @@ public:
 #endif
 	}
 
-	~reusable_mem()
+	virtual ~reusable_mem_mt()
 	{
+		boost::lock_guard<MUTEX> lg(_mutex);
 		while (_top)
 		{
+			assert(_nodeCount-- > 0);
 			void* t = _top;
 			_top = _top->_next;
 			free(t);
-#ifdef _DEBUG
-			_nodeCount--;
-#endif
 		}
 		assert(0 == _nodeCount);
 	}
 
 	void* allocate(size_t size)
 	{
-		if (_top)
+		void* freeMem = NULL;
 		{
-			node* res = _top;
-			_top = _top->_next;
-			if (res->_size >= size)
+			boost::lock_guard<MUTEX> lg(_mutex);
+			if (_top)
 			{
-				return res;
+				node* res = _top;
+				_top = _top->_next;
+				if (res->_size >= size)
+				{
+					return res;
+				}
+				assert(_nodeCount-- > 0);
+				freeMem = res;
 			}
-			free(res);
 #ifdef _DEBUG
-			_nodeCount--;
+			_nodeCount++;
 #endif
 		}
-#ifdef _DEBUG
-		_nodeCount++;
-#endif
+		if (freeMem)
+		{
+			free(freeMem);
+		}
 		return malloc(size < sizeof(node) ? sizeof(node) : size);
 	}
 
-// 	void deallocate(void* p)
-// 	{
-// 		node* dp = (node*)p;
-// 		dp->_size = dp->_size < sizeof(node) ? sizeof(node) : dp->_size;
-// 		dp->_next = _top;
-// 		_top = dp;
-// 	}
-
 	void deallocate(void* p, size_t size)
 	{
+		boost::lock_guard<MUTEX> lg(_mutex);
 		node* dp = (node*)p;
 		dp->_size = size < sizeof(node) ? sizeof(node) : (unsigned)size;
 		dp->_next = _top;
@@ -354,10 +245,14 @@ public:
 	}
 private:
 	node* _top;
+	MUTEX _mutex;
 #ifdef _DEBUG
 	size_t _nodeCount;
 #endif
 };
+//////////////////////////////////////////////////////////////////////////
+
+class reusable_mem : public reusable_mem_mt<null_mutex> {};
 
 //////////////////////////////////////////////////////////////////////////
 template<class _Ty, class _Mtx = boost::mutex>
@@ -655,6 +550,7 @@ public:
 		node* it = _link;
 		while (it)
 		{
+			assert(_nodeCount > 0);
 			_nodeCount--;
 			node* t = it;
 			it = it->_link;

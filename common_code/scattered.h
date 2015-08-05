@@ -210,16 +210,6 @@ namespace ph
 	static decltype(std::placeholders::_9) _9;
 }
 
-/*!
-@brief ¿ÕËø
-*/
-class null_mutex
-{
-public:
-	void lock() const{};
-	void unlock() const{};
-};
-
 #ifdef _DEBUG
 #define DEBUG_OPERATION(__exp__)	__exp__
 #else

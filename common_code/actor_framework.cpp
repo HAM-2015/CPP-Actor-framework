@@ -9,8 +9,6 @@
 typedef boost::coroutines::coroutine<void>::pull_type actor_pull_type;
 typedef boost::coroutines::coroutine<void>::push_type actor_push_type;
 
-boost::atomic<my_actor::id> s_actorIDCount(0);//ID计数
-std::shared_ptr<shared_obj_pool<bool>> s_sharedBoolPool;
 #ifdef CHECK_SELF
 msg_map<void*, my_actor*> s_stackLine(100000);
 boost::mutex s_stackLineMutex;
@@ -26,10 +24,12 @@ struct initStackLine
 
 #define CORO_CONTEXT_STATE_SPACE	(4 kB)
 
-msg_list_shared_alloc<actor_handle>::shared_node_alloc my_actor::_childActorListAll(sizeof(void*), false);
-msg_list_shared_alloc<std::function<void()> >::shared_node_alloc my_actor::_quitExitCallbackAll(sizeof(void*), false);
-msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc my_actor::_suspendResumeQueueAll(sizeof(void*), false);
-msg_map_shared_alloc<size_t, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc my_actor::msg_pool_status::_msgTypeMapAll(sizeof(void*), false);
+boost::atomic<my_actor::id> s_actorIDCount(0);//ID计数
+std::shared_ptr<shared_obj_pool<bool>> s_sharedBoolPool(create_shared_pool<bool>(100000, [](void*){}));
+msg_list_shared_alloc<actor_handle>::shared_node_alloc my_actor::_childActorListAll(100000);
+msg_list_shared_alloc<std::function<void()> >::shared_node_alloc my_actor::_quitExitCallbackAll(100000);
+msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc my_actor::_suspendResumeQueueAll(100000);
+msg_map_shared_alloc<size_t, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc my_actor::msg_pool_status::_msgTypeMapAll(100000);
 
 /*!
 @brief Actor栈分配器
@@ -211,13 +211,10 @@ bool actor_msg_handle_base::is_quited()
 
 std::shared_ptr<bool> actor_msg_handle_base::new_bool()
 {
-	if (s_sharedBoolPool)
-	{
-		std::shared_ptr<bool> r = s_sharedBoolPool->new_();
-		*r = false;
-		return r;
-	} 
-	return std::shared_ptr<bool>(new bool(false));
+	assert(s_sharedBoolPool);
+	std::shared_ptr<bool> r = s_sharedBoolPool->new_();
+	*r = false;
+	return r;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -548,6 +545,7 @@ bool MsgPumpVoid_::try_read()
 {
 	assert(_strand->running_in_this_thread());
 	assert(!_waiting);
+	assert(!_dstRec);
 	if (_hasMsg)
 	{
 		_hasMsg = false;
@@ -837,8 +835,8 @@ actor_handle my_actor::create(const shared_strand& actorStrand, const main_func&
 {
 	assert(stackSize && stackSize <= 1024 kB && 0 == stackSize % (4 kB));
 	actor_handle newActor;
-	if (ActorStackPool_::isEnable())
 	{
+		assert(ActorStackPool_::isEnable());
 		/*内存结构(L:H):|------Actor Stack------|---shared_ptr_ref_count---|--Actor Obj--|*/
 		const size_t actorSize = MEM_ALIGN(sizeof(my_actor), sizeof(void*));
 		StackPck_ stackMem = ActorStackPool_::getStack(stackSize + STACK_RESERVED_SPACE_SIZE);
@@ -853,7 +851,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, const main_func&
 		newActor->_actorPull = new actor_pull_type(boost_actor_run(*newActor),
 			boost::coroutines::attributes(newActor->_stackSize), actor_stack_pool_allocate(newActor->_stackTop, newActor->_stackSize));
 	} 
-	else
+	/*
 	{
 		newActor = actor_handle(new my_actor, [](my_actor* p){delete p; });
 		newActor->_timer = actorStrand->get_timer();
@@ -861,7 +859,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, const main_func&
 		newActor->_mainFunc = mainFunc;
 		newActor->_actorPull = new actor_pull_type(boost_actor_run(*newActor),
 			boost::coroutines::attributes(stackSize + STACK_RESERVED_SPACE_SIZE), actor_stack_allocate(&newActor->_stackTop, &newActor->_stackSize));
-	}
+	}*/
 	newActor->_stackSize -= STACK_RESERVED_SPACE_SIZE;
 	newActor->_weakThis = newActor;
 #ifdef CHECK_SELF
@@ -1865,17 +1863,6 @@ void my_actor::exit_callback()
 	}
 	assert(yield_count() == yc);
 	(*(actor_pull_type*)_actorPull)();
-}
-
-void my_actor::enable_stack_pool()
-{
-	assert(0 == s_actorIDCount);
-	ActorStackPool_::enable();
-	s_sharedBoolPool = std::shared_ptr<shared_obj_pool<bool>>(create_shared_pool<bool>(4096, [](void*){}));
-	_suspendResumeQueueAll.enable_shared(100000);
-	_quitExitCallbackAll.enable_shared(100000);
-	_childActorListAll.enable_shared(100000);
-	msg_pool_status::_msgTypeMapAll.enable_shared(100000);
 }
 
 void my_actor::timeout_handler()

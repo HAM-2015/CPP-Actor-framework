@@ -111,7 +111,6 @@ BOOL Csocket_testDlg::OnInitDialog()
 	_serverPortEdit.SetWindowText("1000");
 	_maxSessionEdit.SetWindowText("3");
 
-	my_actor::enable_stack_pool();
 	_ios.run();
 	_strand = boost_strand::create(_ios);
 	actor_handle mainActor = my_actor::create(_strand, boost::bind(&Csocket_testDlg::mainActor, this, _1));

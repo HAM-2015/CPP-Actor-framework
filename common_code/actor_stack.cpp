@@ -179,3 +179,13 @@ void ActorStackPool_::clearThread()
 		} while (freeCount);
 	}
 }
+
+//////////////////////////////////////////////////////////////////////////
+
+struct enable_stack_pool 
+{
+	enable_stack_pool()
+	{
+		ActorStackPool_::enable();
+	}
+}  _enable_stack_pool;

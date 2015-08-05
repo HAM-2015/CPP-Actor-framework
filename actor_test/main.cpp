@@ -495,38 +495,38 @@ void actor_test(my_actor* self)
 			{
 				self->run_mutex_blocks(mutex_block_pump<int>(self, [&](int i)->bool
 				{
-					trace_line("block1 begin ", i, " ");
+					trace_line("block1 begin ", i);
 					if (self->timed_wait_msg(1500, amh))
 					{
-						trace_line("block1 end ", i, " ");
+						trace_line("block1 end ", i);
 					}
 					else
 					{
-						trace_line("block1 timeout ", i, " ");
+						trace_line("block1 timeout ", i);
 					}
 					return false;
 				}), mutex_block_pump<move_test>(self, [&](move_test mt)->bool
 				{
-					trace_line("block2 begin ", mt._count->_id, " ");
+					trace_line("block2 begin ", mt._count->_id);
 					if (self->timed_wait_msg(1500, amh))
 					{
-						trace_line("block2 end ", mt._count->_id, " ");
+						trace_line("block2 end ", mt._count->_id);
 					}
 					else
 					{
-						trace_line("block2 timeout ", mt._count->_id, " ");
+						trace_line("block2 timeout ", mt._count->_id);
 					}
 					return false;
 				}), mutex_block_pump<move_test, move_test>(self, [&](move_test mt1, move_test mt2)->bool
 				{
-					trace_line("block3 begin ", mt1._count->_id, " ", mt2._count->_id, " ");
+					trace_line("block3 begin ", mt1._count->_id, " ", mt2._count->_id);
 					if (self->timed_wait_msg(1500, amh))
 					{
-						trace_line("block3 end ", mt1._count->_id, " ", mt2._count->_id, " ");
+						trace_line("block3 end ", mt1._count->_id, " ", mt2._count->_id);
 					}
 					else
 					{
-						trace_line("block3 timeout ", mt1._count->_id, " ", mt2._count->_id, " ");
+						trace_line("block3 timeout ", mt1._count->_id, " ", mt2._count->_id);
 					}
 					return false;
 				}), mutex_block_pump<>(self, []()->bool
@@ -636,7 +636,6 @@ int main(int argc, char* argv[])
 {
 	trace_line(get_time_string_s(), " Hello Actor");
 	enable_high_resolution();
-	my_actor::enable_stack_pool();
 	ios_proxy ios;
 	ios.run();
 	{
