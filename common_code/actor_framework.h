@@ -1855,10 +1855,27 @@ protected:
 		reset();
 	}
 
+	template <typename DST, typename... Args>
+	void _dispatch_handler(DST& dstRec, Args&&... args) const
+	{
+		assert(!_pIsTrig->exchange(true));
+		assert(_hostActor);
+		_hostActor->_dispatch_handler(dstRec, TRY_MOVE(args)...);
+		reset();
+	}
+
+	template <typename DST, typename... Args>
+	void _dispatch_handler2(DST& dstRec, Args&&... args) const
+	{
+		assert(!_pIsTrig->exchange(true));
+		assert(_hostActor);
+		_hostActor->_dispatch_handler2(dstRec, TRY_MOVE(args)...);
+		reset();
+	}
+
 	void tick_handler() const;
-
+	void dispatch_handler() const;
 	void push_yield() const;
-
 	virtual void reset() const = 0;
 private:
 	void operator =(const TrigOnceBase_&);
@@ -1891,6 +1908,17 @@ public:
 	void operator()() const
 	{
 		tick_handler();
+	}
+
+	template <typename... Args>
+	void dispatch(Args&&... args) const
+	{
+		_dispatch_handler(*_dstRec, TRY_MOVE(args)...);
+	}
+
+	void dispatch() const
+	{
+		dispatch_handler();
 	}
 
 	std::function<void(ARGS...)> case_func() const
@@ -1998,6 +2026,106 @@ private:
 	}
 
 	void operator =(const callback_handler& s)
+	{
+		static_assert(false, "no copy");
+	}
+private:
+	unsigned char _dstRef[static_cmp_type_size<dst_receiver1, dst_receiver2>::max];
+	const bool _early;
+	const bool _isRef;
+};
+
+/*!
+@brief ASIO库异步回调器，作为回调函数参数传入，回调后，自动返回到下一行语句继续执行
+*/
+template <typename... ARGS>
+class asio_cb_handler : public TrigOnceBase_
+{
+	typedef std::tuple<TYPE_PIPE(ARGS)&...> dst_receiver1;
+	typedef std::tuple<stack_obj<ARGS>&...> dst_receiver2;
+
+	friend my_actor;
+public:
+	template <typename... Args>
+	asio_cb_handler(my_actor* host, Args&... args)
+		:_early(true), _isRef(true)
+	{
+		new(_dstRef)dst_receiver1(args...);
+		_hostActor = host->shared_from_this();
+	}
+
+	template <typename... Args>
+	asio_cb_handler(my_actor* host, stack_obj<Args>&... args)
+		: _early(true), _isRef(false)
+	{
+		new(_dstRef)dst_receiver2(args...);
+		_hostActor = host->shared_from_this();
+	}
+
+	asio_cb_handler(my_actor* host)
+		:_early(true)
+	{
+		_hostActor = host->shared_from_this();
+	}
+
+	~asio_cb_handler()
+	{
+		if (_early)
+		{
+			//可能在此析构函数内抛出 force_quit_exception 异常，但在 push_yield 已经切换出堆栈，在切换回来后会安全的释放资源
+			push_yield();
+			_hostActor.reset();
+		}
+		if (_isRef)
+		{
+			((dst_receiver1*)_dstRef)->~dst_receiver1();
+		}
+		else
+		{
+			((dst_receiver2*)_dstRef)->~dst_receiver2();
+		}
+	}
+
+	asio_cb_handler(const asio_cb_handler& s)
+		:TrigOnceBase_(s), _early(false), _isRef(s._isRef)
+	{
+		if (_isRef)
+		{
+			new(_dstRef)dst_receiver1(*(dst_receiver1*)s._dstRef);
+		}
+		else
+		{
+			new(_dstRef)dst_receiver2(*(dst_receiver2*)s._dstRef);
+		}
+	}
+public:
+	template <typename... Args>
+	void operator()(Args&&... args) const
+	{
+		if (_isRef)
+		{
+			_dispatch_handler2(*(dst_receiver1*)_dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
+		}
+		else
+		{
+			_dispatch_handler2(*(dst_receiver2*)_dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
+		}
+	}
+
+	void operator()() const
+	{
+		dispatch_handler();
+	}
+private:
+	void reset() const
+	{
+		if (!_early)
+		{
+			_hostActor.reset();
+		}
+	}
+
+	void operator =(const asio_cb_handler& s)
 	{
 		static_assert(false, "no copy");
 	}
@@ -2493,6 +2621,7 @@ public:
 	}
 private:
 	void post_handler();
+	void dispatch_handler();
 	void tick_handler();
 	void next_tick_handler();
 
@@ -2544,6 +2673,34 @@ private:
 				}
 			});
 		}
+	}
+
+	template <typename DST, typename... Args>
+	void _dispatch_handler(DST& dstRec, Args&&... args)
+	{
+		actor_handle shared_this = shared_from_this();
+		_strand->dispatch([=, &dstRec]() mutable
+		{
+			if (!shared_this->_quited)
+			{
+				TupleReceiver_(dstRec, std::move(args)...);
+				shared_this->pull_yield();
+			}
+		});
+	}
+
+	template <typename DST, typename... Args>
+	void _dispatch_handler2(DST& dstRec, Args&&... args)
+	{
+		actor_handle shared_this = shared_from_this();
+		_strand->dispatch([=]() mutable
+		{
+			if (!shared_this->_quited)
+			{
+				TupleReceiver_(dstRec, std::move(args)...);
+				shared_this->pull_yield();
+			}
+		});
 	}
 private:
 	template <typename AMH, typename DST>
@@ -2709,6 +2866,23 @@ public:
 	{
 		assert_enter();
 		return callback_handler<Args...>(this, args...);
+	}
+
+	/*!
+	@brief 创建ASIO库上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_asio_context())
+	*/
+	template <typename... Args>
+	asio_cb_handler<Args...> make_asio_context(Args&... args)
+	{
+		assert_enter();
+		return asio_cb_handler<Args...>(this, args...);
+	}
+
+	template <typename... Args>
+	asio_cb_handler<Args...> make_asio_context(stack_obj<Args>&... args)
+	{
+		assert_enter();
+		return asio_cb_handler<Args...>(this, args...);
 	}
 
 	/*!

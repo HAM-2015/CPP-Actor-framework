@@ -90,8 +90,9 @@ void ActorTimer_::timer_loop(unsigned long long us)
 	int tc = ++_timerCount;
 	boost::system::error_code ec;
 	((timer_type*)_timer)->expires_from_now(boost::chrono::microseconds(us), ec);
-	((timer_type*)_timer)->async_wait(_strand->wrap_post([this, tc](const boost::system::error_code&)
+	((timer_type*)_timer)->async_wait(_strand->wrap_asio([this, tc](const boost::system::error_code&)
 	{
+		assert(_strand->running_in_this_thread());
 		if (tc == _timerCount)
 		{
 			_extFinishTime = 0;

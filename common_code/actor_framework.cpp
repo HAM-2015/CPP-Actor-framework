@@ -619,6 +619,14 @@ void TrigOnceBase_::tick_handler() const
 	reset();
 }
 
+void TrigOnceBase_::dispatch_handler() const
+{
+	assert(!_pIsTrig->exchange(true));
+	assert(_hostActor);
+	_hostActor->dispatch_handler();
+	reset();
+}
+
 void TrigOnceBase_::push_yield() const
 {
 	_hostActor->push_yield();
@@ -1179,6 +1187,12 @@ void my_actor::post_handler()
 {
 	actor_handle shared_this = shared_from_this();
 	_strand->post([shared_this]{shared_this->run_one(); });
+}
+
+void my_actor::dispatch_handler()
+{
+	actor_handle shared_this = shared_from_this();
+	_strand->dispatch([shared_this]{shared_this->run_one(); });
 }
 
 void my_actor::tick_handler()

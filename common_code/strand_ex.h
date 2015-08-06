@@ -33,6 +33,12 @@ public:
 	{
 		_service.post(_impl, TRY_MOVE(handler));
 	}
+
+	template <typename Handler>
+	void dispatch(Handler&& handler)
+	{
+		_service.dispatch(_impl, TRY_MOVE(handler));
+	}
 private:
 	ios_proxy& _ios;
 	boost::asio::detail::strand_service& _service;

@@ -21,6 +21,7 @@
 #include "wrapped_try_tick_handler.h"
 #include "wrapped_dispatch_handler.h"
 #include "wrapped_next_tick_handler.h"
+#include "wrapped_distribute_handler.h"
 
 class ActorTimer_;
 
@@ -44,6 +45,16 @@ typedef std::shared_ptr<boost_strand> shared_strand;
 if (_strand)\
 {\
 	_strand->post(RUN_HANDLER); \
+}\
+else\
+{\
+	_post(TRY_MOVE(handler)); \
+};
+
+#define UI_DISPATCH()\
+if (_strand)\
+{\
+	_strand->dispatch(RUN_HANDLER); \
 }\
 else\
 {\
@@ -76,7 +87,7 @@ else\
 }
 
 /*!
-@brief 重新定义dispatch实现，所有不同strand中以消息方式进行函数调用
+@brief 二级调度器
 */
 class boost_strand
 {
@@ -298,7 +309,7 @@ public:
 	@param handler 被调用函数
 	*/
 	template <typename Handler>
-	void dispatch(Handler&& handler)
+	void distribute(Handler&& handler)
 	{
 		if (running_in_this_thread())
 		{
@@ -308,6 +319,21 @@ public:
 		{
 			post(TRY_MOVE(handler));
 		}
+	}
+
+	/*!
+	@brief 如果当前strand没任务就直接执行，否则添加到队列中等待执行
+	*/
+	template <typename Handler>
+	void dispatch(Handler&&  handler)
+	{
+#ifdef ENABLE_MFC_ACTOR
+		UI_DISPATCH();
+#elif ENABLE_WX_ACTOR
+		UI_DISPATCH();
+#else
+		_strand->dispatch(RUN_HANDLER);
+#endif
 	}
 
 	/*!
@@ -363,7 +389,7 @@ public:
 	@brief 把被调用函数包装到dispatch中，用于不同strand间消息传递
 	*/
 	template <typename Handler>
-	wrapped_dispatch_handler<boost_strand, RM_CREF(Handler)> wrap(Handler&& handler)
+	wrapped_dispatch_handler<boost_strand, RM_CREF(Handler)> wrap_asio(Handler&& handler)
 	{
 		return wrapped_dispatch_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
 	}
@@ -372,9 +398,27 @@ public:
 	@brief 把被调用函数包装到dispatch中，用于不同strand间消息传递，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_dispatch_handler<boost_strand, RM_CREF(Handler), true> suck_wrap(Handler&& handler)
+	wrapped_dispatch_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_asio(Handler&& handler)
 	{
-		return wrapped_dispatch_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+		return wrapped_dispatch_handler<boost_strand, RM_CREF(Handler),true>(this, TRY_MOVE(handler));
+	}
+
+	/*!
+	@brief 把被调用函数包装到distribute中，用于不同strand间消息传递
+	*/
+	template <typename Handler>
+	wrapped_distribute_handler<boost_strand, RM_CREF(Handler)> wrap(Handler&& handler)
+	{
+		return wrapped_distribute_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+	}
+
+	/*!
+	@brief 把被调用函数包装到distribute中，用于不同strand间消息传递，调用后参数将强制被右值引用，且只能调用一次
+	*/
+	template <typename Handler>
+	wrapped_distribute_handler<boost_strand, RM_CREF(Handler), true> suck_wrap(Handler&& handler)
+	{
+		return wrapped_distribute_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
 	}
 	
 	/*!
@@ -560,5 +604,12 @@ public:
 		try_tick(wrap_async_invoke_void<RM_CREF(H), RM_CREF(CB)>(TRY_MOVE(h), TRY_MOVE(cb)));
 	}
 };
+
+#undef SPACE_SIZE
+#undef RUN_HANDLER
+#undef UI_POST
+#undef UI_DISPATCH
+#undef APPEND_TICK
+#undef UI_NEXT_TICK
 
 #endif
