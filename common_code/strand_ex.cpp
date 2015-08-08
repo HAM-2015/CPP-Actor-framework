@@ -1,4 +1,5 @@
 #include "strand_ex.h"
+#include "ios_proxy.h"
 
 #ifdef ENABLE_STRAND_IMPL_POOL
 struct get_impl_ready_empty_strand_ex

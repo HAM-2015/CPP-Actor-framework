@@ -3854,7 +3854,7 @@ public:
 		{
 			DEBUG_OPERATION(auto nt = yield_count());
 			ct = (ct + 1) % cmax;
-			const size_t i = (m - std::sqrt(m * m - 8 * ct)) / 2;
+			const size_t i = (size_t)(m - std::sqrt(m * m - 8 * ct)) / 2;
 			assert(i < sizeof...(MutexBlocks));
 			if (!_mutex_ready2(i, mbList))
 			{

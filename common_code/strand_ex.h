@@ -9,8 +9,10 @@
 #include <boost/asio/detail/wrapped_handler.hpp>
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/detail/push_options.hpp>
-#include "ios_proxy.h"
 #include "try_move.h"
+
+class boost_strand;
+class ios_proxy;
 
 /*!
 @brief 修改标准boost strand，impl_改为独占
@@ -18,7 +20,8 @@
 class StrandEx_
 {
 	friend ios_proxy;
-public:
+	friend boost_strand;
+private:
 	StrandEx_(ios_proxy& ios);
 	~StrandEx_();
 
