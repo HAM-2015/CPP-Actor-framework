@@ -3732,6 +3732,7 @@ private:
 	template <size_t N>
 	static bool _mutex_ready2(const size_t st, MutexBlock_* const (&mbs)[N])
 	{
+		assert(st < N);
 		size_t i = st;
 		while (!mbs[i]->ready())
 		{
@@ -3823,7 +3824,7 @@ public:
 		do
 		{
 			DEBUG_OPERATION(auto nt = yield_count());
-			i = (i + 1) % (sizeof...(MutexBlocks));
+			i = sizeof...(MutexBlocks)-1 != i ? i + 1 : 0;
 			if (!_mutex_ready2(i, mbList))
 			{
 				assert(yield_count() == nt);
@@ -3847,15 +3848,14 @@ public:
 		quit_guard qg(this);
 		const size_t m = 2 * sizeof...(MutexBlocks) + 1;
 		const size_t cmax = sizeof...(MutexBlocks) * (sizeof...(MutexBlocks) + 1) / 2;
-		size_t ct = -1;
+		size_t ct = 0;
 		MutexBlock_* mbList[sizeof...(MutexBlocks)] = { &mbs... };
 		assert(_cmp_snap_id(mbList));//判断有没有重复参数
 		do
 		{
 			DEBUG_OPERATION(auto nt = yield_count());
-			ct = (ct + 1) % cmax;
-			const size_t i = (size_t)(m - std::sqrt(m * m - 8 * ct)) / 2;
-			assert(i < sizeof...(MutexBlocks));
+			ct = cmax != ct ? ct + 1 : 1;
+			const size_t i = (m + 1 - (size_t)std::sqrt(m * m - 8 * ct)) / 2 - 1;
 			if (!_mutex_ready2(i, mbList))
 			{
 				assert(yield_count() == nt);
