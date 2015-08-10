@@ -843,31 +843,20 @@ actor_handle my_actor::create(const shared_strand& actorStrand, const main_func&
 {
 	assert(stackSize && stackSize <= 1024 kB && 0 == stackSize % (4 kB));
 	actor_handle newActor;
-	{
-		assert(ActorStackPool_::isEnable());
-		/*内存结构(L:H):|------Actor Stack------|---shared_ptr_ref_count---|--Actor Obj--|*/
-		const size_t actorSize = MEM_ALIGN(sizeof(my_actor), sizeof(void*));
-		StackPck_ stackMem = ActorStackPool_::getStack(stackSize + STACK_RESERVED_SPACE_SIZE);
-		unsigned char* refTop = (unsigned char*)stackMem._stack.sp - actorSize;
-		newActor = actor_handle(new(refTop)my_actor, [stackMem](my_actor* p){p->~my_actor(); },
-			actor_ref_count_alloc<void>(stackMem, (void**)&refTop));
-		newActor->_stackTop = refTop;
-		newActor->_stackSize = stackMem._stack.size - ((size_t)stackMem._stack.sp - (size_t)newActor->_stackTop);
-		newActor->_strand = actorStrand;
-		newActor->_mainFunc = mainFunc;
-		newActor->_timer = actorStrand->get_timer();
-		newActor->_actorPull = new actor_pull_type(boost_actor_run(*newActor),
-			boost::coroutines::attributes(newActor->_stackSize), actor_stack_pool_allocate(newActor->_stackTop, newActor->_stackSize));
-	} 
-	/*
-	{
-		newActor = actor_handle(new my_actor, [](my_actor* p){delete p; });
-		newActor->_timer = actorStrand->get_timer();
-		newActor->_strand = actorStrand;
-		newActor->_mainFunc = mainFunc;
-		newActor->_actorPull = new actor_pull_type(boost_actor_run(*newActor),
-			boost::coroutines::attributes(stackSize + STACK_RESERVED_SPACE_SIZE), actor_stack_allocate(&newActor->_stackTop, &newActor->_stackSize));
-	}*/
+	assert(ActorStackPool_::isEnable());
+	/*内存结构(L:H):|------Actor Stack------|---shared_ptr_ref_count---|--Actor Obj--|*/
+	const size_t actorSize = MEM_ALIGN(sizeof(my_actor), sizeof(void*));
+	StackPck_ stackMem = ActorStackPool_::getStack(stackSize + STACK_RESERVED_SPACE_SIZE);
+	unsigned char* refTop = (unsigned char*)stackMem._stack.sp - actorSize;
+	newActor = actor_handle(new(refTop)my_actor, [](my_actor* p){p->~my_actor(); },
+		actor_ref_count_alloc<void>(stackMem, (void**)&refTop));
+	newActor->_stackTop = refTop;
+	newActor->_stackSize = stackMem._stack.size - ((size_t)stackMem._stack.sp - (size_t)newActor->_stackTop);
+	newActor->_strand = actorStrand;
+	newActor->_mainFunc = mainFunc;
+	newActor->_timer = actorStrand->get_timer();
+	newActor->_actorPull = new actor_pull_type(boost_actor_run(*newActor),
+		boost::coroutines::attributes(newActor->_stackSize), actor_stack_pool_allocate(newActor->_stackTop, newActor->_stackSize));
 	newActor->_stackSize -= STACK_RESERVED_SPACE_SIZE;
 	newActor->_weakThis = newActor;
 #ifdef CHECK_SELF
