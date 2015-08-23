@@ -505,16 +505,28 @@ void actor_test(my_actor* self)
 						trace_line("block1 timeout ", i);
 					}
 					return false;
-				}), mutex_block_pump<move_test>(self, [&](move_test mt)->bool
+				}), mutex_block_pump<move_test>(0, self, [&](move_test mt)->bool
 				{
-					trace_line("block2 begin ", mt._count->_id);
+					trace_line("block2_0 begin ", mt._count->_id);
 					if (self->timed_wait_msg(1500, amh))
 					{
-						trace_line("block2 end ", mt._count->_id);
+						trace_line("block2_0 end ", mt._count->_id);
 					}
 					else
 					{
-						trace_line("block2 timeout ", mt._count->_id);
+						trace_line("block2_0 timeout ", mt._count->_id);
+					}
+					return false;
+				}), mutex_block_pump<move_test>(1, self, [&](move_test mt)->bool
+				{
+					trace_line("block2_1 begin ", mt._count->_id);
+					if (self->timed_wait_msg(1500, amh))
+					{
+						trace_line("block2_1 end ", mt._count->_id);
+					}
+					else
+					{
+						trace_line("block2_1 timeout ", mt._count->_id);
 					}
 					return false;
 				}), mutex_block_pump<move_test, move_test>(self, [&](move_test mt1, move_test mt2)->bool
@@ -537,14 +549,17 @@ void actor_test(my_actor* self)
 			});
 			self->child_actor_run(mb1);
 			auto ntf1 = self->connect_msg_notifer_to<int>(mb1);
-			auto ntf2 = self->connect_msg_notifer_to<move_test>(mb1);
+			auto ntf2_0 = self->connect_msg_notifer_to<move_test>(0, mb1);
+			auto ntf2_1 = self->connect_msg_notifer_to<move_test>(1, mb1);
 			auto ntf3 = self->connect_msg_notifer_to<move_test, move_test>(mb1);
 			auto ntf = mb1->make_msg_notifer(amh);
 			for (int i = 0; i < 10; i++)
 			{
 				ntf1(i);
 				self->sleep(500);
-				ntf2(move_test(i));
+				ntf2_0(move_test(i));
+				self->sleep(500);
+				ntf2_1(move_test(i));
 				self->sleep(500);
 				ntf3(move_test(i), move_test(i));
 				self->sleep(500);

@@ -29,7 +29,7 @@ std::shared_ptr<shared_obj_pool<bool>> s_sharedBoolPool(create_shared_pool<bool>
 msg_list_shared_alloc<actor_handle>::shared_node_alloc my_actor::_childActorListAll(100000);
 msg_list_shared_alloc<std::function<void()> >::shared_node_alloc my_actor::_quitExitCallbackAll(100000);
 msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc my_actor::_suspendResumeQueueAll(100000);
-msg_map_shared_alloc<size_t, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc my_actor::msg_pool_status::_msgTypeMapAll(100000);
+msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc my_actor::msg_pool_status::_msgTypeMapAll(100000);
 
 /*!
 @brief Actor’ª∑÷≈‰∆˜

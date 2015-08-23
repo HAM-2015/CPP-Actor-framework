@@ -1521,9 +1521,9 @@ protected:
 	MutexBlock_() {}
 
 	template <typename... Args>
-	msg_pump_handle<Args...> connect_msg_pump(my_actor* host)
+	msg_pump_handle<Args...> connect_msg_pump(const int id, my_actor* host)
 	{
-		return my_actor::_connect_msg_pump<Args...>(host);
+		return my_actor::_connect_msg_pump<Args...>(id, host);
 	}
 };
 
@@ -1642,7 +1642,14 @@ public:
 	mutex_block_pump(my_actor* host, Handler&& handler)
 		:_handler(TRY_MOVE(handler))
 	{
-		_msgHandle = connect_msg_pump<ARGS...>(host);
+		_msgHandle = connect_msg_pump<ARGS...>(0, host);
+	}
+
+	template <typename Handler>
+	mutex_block_pump(const int id, my_actor* host, Handler&& handler)
+		: _handler(TRY_MOVE(handler))
+	{
+		_msgHandle = connect_msg_pump<ARGS...>(id, host);
 	}
 
 	template <typename Handler>
@@ -1782,7 +1789,14 @@ public:
 	mutex_block_pump(my_actor* host, Handler&& handler)
 		:_handler(TRY_MOVE(handler)), _has(false)
 	{
-		_msgHandle = host->connect_msg_pump<>();
+		_msgHandle = host->connect_msg_pump<>(0);
+	}
+	
+	template <typename Handler>
+	mutex_block_pump(const int id, my_actor* host, Handler&& handler)
+		:_handler(TRY_MOVE(handler)), _has(false)
+	{
+		_msgHandle = host->connect_msg_pump<>(id);
 	}
 
 	template <typename Handler>
@@ -2195,6 +2209,20 @@ class my_actor
 
 	struct msg_pool_status 
 	{
+		struct id_key
+		{
+			id_key(size_t hash, const int id)
+			:_typeHash(hash), _id(id) {}
+
+			bool operator < (const id_key& r) const
+			{
+				return _typeHash < r._typeHash || (_typeHash == r._typeHash && _id < r._id);
+			}
+
+			const size_t _typeHash;
+			const int _id;
+		};
+
 		msg_pool_status()
 		:_msgTypeMap(_msgTypeMapAll) {}
 
@@ -2260,8 +2288,8 @@ class my_actor
 			_msgTypeMap.clear();
 		}
 
-		msg_map_shared_alloc<size_t, std::shared_ptr<pck_base> > _msgTypeMap;
-		static msg_map_shared_alloc<size_t, std::shared_ptr<pck_base> >::shared_node_alloc _msgTypeMapAll;
+		msg_map_shared_alloc<id_key, std::shared_ptr<pck_base> > _msgTypeMap;
+		static msg_map_shared_alloc<id_key, std::shared_ptr<pck_base> >::shared_node_alloc _msgTypeMapAll;
 	};
 
 	struct timer_state 
@@ -2992,10 +3020,10 @@ private:
 	@brief 寻找出与模板参数类型匹配的消息池
 	*/
 	template <typename... Args>
-	static std::shared_ptr<msg_pool_status::pck<Args...> > msg_pool_pck(my_actor* const host, bool make = true)
+	static std::shared_ptr<msg_pool_status::pck<Args...> > msg_pool_pck(const int id, my_actor* const host, bool make = true)
 	{
 		typedef msg_pool_status::pck<Args...> pck_type;
-		size_t typeID = sizeof...(Args) != 0 ? typeid(pck_type).hash_code() : 0;
+		msg_pool_status::id_key typeID(sizeof...(Args) != 0 ? typeid(pck_type).hash_code() : 0, id);
 		if (make)
 		{
 			auto& res = host->_msgPoolStatus._msgTypeMap.insert(make_pair(typeID, std::shared_ptr<pck_type>())).first->second;
@@ -3143,7 +3171,7 @@ private:
 	@brief 把本Actor内消息由伙伴Actor代理处理
 	*/
 	template <typename... Args>
-	__yield_interrupt bool msg_agent_to(actor_handle childActor)
+	__yield_interrupt bool msg_agent_to(const int id, actor_handle childActor)
 	{
 		typedef std::shared_ptr<msg_pool_status::pck<Args...>> pck_type;
 
@@ -3158,17 +3186,17 @@ private:
 			}
 		}
 		quit_guard qg(this);
-		auto childPck = send<pck_type>(childActor->self_strand(), [&childActor]()->pck_type
+		auto childPck = send<pck_type>(childActor->self_strand(), [id, &childActor]()->pck_type
 		{
 			if (!childActor->is_quited())
 			{
-				return my_actor::msg_pool_pck<Args...>(childActor.get());
+				return my_actor::msg_pool_pck<Args...>(id, childActor.get());
 			}
 			return pck_type();
 		});
 		if (childPck)
 		{
-			auto msgPck = msg_pool_pck<Args...>(this);
+			auto msgPck = msg_pool_pck<Args...>(id, this);
 			msgPck->lock(this);
 			childPck->lock(this);
 			childPck->_isHead = false;
@@ -3193,9 +3221,15 @@ private:
 	}
 public:
 	template <typename... Args>
+	__yield_interrupt bool msg_agent_to(const int id, child_actor_handle& childActor)
+	{
+		return msg_agent_to<Args...>(id, childActor.get_actor());
+	}
+
+	template <typename... Args>
 	__yield_interrupt bool msg_agent_to(child_actor_handle& childActor)
 	{
-		return msg_agent_to<Args...>(childActor.get_actor());
+		return msg_agent_to<Args...>(0, childActor.get_actor());
 	}
 public:
 	/*!
@@ -3203,13 +3237,13 @@ public:
 	@return 返回处理该消息的子Actor句柄
 	*/
 	template <typename... Args, typename Handler>
-	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(const shared_strand& strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(const int id, const shared_strand& strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
-		child_actor_handle::child_actor_param childActor = create_child_actor(strand, [agentActor](my_actor* self)
+		child_actor_handle::child_actor_param childActor = create_child_actor(strand, [id, agentActor](my_actor* self)
 		{
-			agentActor(self, my_actor::_connect_msg_pump<Args...>(self));
+			agentActor(self, my_actor::_connect_msg_pump<Args...>(id, self));
 		}, stackSize);
-		msg_agent_to<Args...>(childActor._actor);
+		msg_agent_to<Args...>(id, childActor._actor);
 		if (autoRun)
 		{
 			childActor._actor->notify_run();
@@ -3218,19 +3252,31 @@ public:
 	}
 
 	template <typename... Args, typename Handler>
+	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(const int id, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	{
+		return msg_agent_to_actor<Args...>(id, self_strand(), autoRun, agentActor, stackSize);
+	}
+
+	template <typename... Args, typename Handler>
+	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(const shared_strand& strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	{
+		return msg_agent_to_actor<Args...>(0, strand, autoRun, agentActor, stackSize);
+	}
+
+	template <typename... Args, typename Handler>
 	__yield_interrupt child_actor_handle::child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
-		return msg_agent_to_actor<Args...>(self_strand(), autoRun, agentActor, stackSize);
+		return msg_agent_to_actor<Args...>(0, self_strand(), autoRun, agentActor, stackSize);
 	}
 public:
 	/*!
 	@brief 断开伙伴代理该消息
 	*/
 	template <typename... Args>
-	__yield_interrupt void msg_agent_off()
+	__yield_interrupt void msg_agent_off(const int id = 0)
 	{
 		assert_enter();
-		auto msgPck = msg_pool_pck<Args...>(this, false);
+		auto msgPck = msg_pool_pck<Args...>(id, this, false);
 		if (msgPck)
 		{
 			quit_guard qg(this);
@@ -3255,7 +3301,7 @@ public:
 	@return 消息通知函数
 	*/
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const actor_handle& buddyActor, bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const int id, const actor_handle& buddyActor, bool makeNew = false, size_t fixedSize = 16)
 	{
 		typedef MsgPool_<Args...> pool_type;
 		typedef typename pool_type::pump_handler pump_handler;
@@ -3280,14 +3326,14 @@ public:
 			}
 		}
 #endif
-		auto msgPck = msg_pool_pck<Args...>(this);
+		auto msgPck = msg_pool_pck<Args...>(id, this);
 		quit_guard qg(this);
 		msgPck->lock(this);
-		auto childPck = send<pck_type>(buddyActor->self_strand(), [&buddyActor]()->pck_type
+		auto childPck = send<pck_type>(buddyActor->self_strand(), [id, &buddyActor]()->pck_type
 		{
 			if (!buddyActor->is_quited())
 			{
-				return my_actor::msg_pool_pck<Args...>(buddyActor.get());
+				return my_actor::msg_pool_pck<Args...>(id, buddyActor.get());
 			}
 			return pck_type();
 		});
@@ -3357,9 +3403,21 @@ public:
 	}
 
 	template <typename... Args>
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const int id, child_actor_handle& childActor, bool makeNew = false, size_t fixedSize = 16)
+	{
+		return connect_msg_notifer_to<Args...>(id, childActor.get_actor(), makeNew, fixedSize);
+	}
+
+	template <typename... Args>
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const actor_handle& buddyActor, bool makeNew = false, size_t fixedSize = 16)
+	{
+		return connect_msg_notifer_to<Args...>(0, buddyActor, makeNew, fixedSize);
+	}
+
+	template <typename... Args>
 	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(child_actor_handle& childActor, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to<Args...>(childActor.get_actor(), makeNew, fixedSize);
+		return connect_msg_notifer_to<Args...>(0, childActor.get_actor(), makeNew, fixedSize);
 	}
 
 	/*!
@@ -3370,12 +3428,12 @@ public:
 	@return 消息通知函数
 	*/
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to_self(bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to_self(const int id, bool makeNew = false, size_t fixedSize = 16)
 	{
 		typedef MsgPool_<Args...> pool_type;
 
 		assert_enter();
-		auto msgPck = msg_pool_pck<Args...>(this);
+		auto msgPck = msg_pool_pck<Args...>(id, this);
 		quit_guard qg(this);
 		msgPck->lock(this);
 		if (msgPck->_isHead)
@@ -3400,28 +3458,40 @@ public:
 		return post_actor_msg<Args...>();
 	}
 
+	template <typename... Args>
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to_self(bool makeNew = false, size_t fixedSize = 16)
+	{
+		return connect_msg_notifer_to_self<Args...>(0, makeNew, fixedSize);
+	}
+
 	/*!
 	@brief 创建一个消息通知函数，在该Actor所依赖的ios无关线程中使用，且在该Actor调用 notify_run() 之前
 	@param fixedSize 消息队列内存池长度
 	@return 消息通知函数
 	*/
 	template <typename... Args>
-	post_actor_msg<Args...> connect_msg_notifer(size_t fixedSize = 16)
+	post_actor_msg<Args...> connect_msg_notifer(const int id, size_t fixedSize = 16)
 	{
 		typedef post_actor_msg<Args...> post_type;
 
-		return _strand->syncInvoke<post_type>([this, fixedSize]()->post_type
+		return _strand->syncInvoke<post_type>([this, id, fixedSize]()->post_type
 		{
 			typedef MsgPool_<Args...> pool_type;
 			if (!parent_actor() && !is_started() && !is_quited())
 			{
-				auto msgPck = msg_pool_pck<Args...>(this);
+				auto msgPck = msg_pool_pck<Args...>(id, this);
 				msgPck->_msgPool = pool_type::make(self_strand(), fixedSize);
 				return post_type(msgPck->_msgPool, shared_from_this());
 			}
 			assert(false);
 			return post_type();
 		});
+	}
+
+	template <typename... Args>
+	post_actor_msg<Args...> connect_msg_notifer(size_t fixedSize = 16)
+	{
+		return connect_msg_notifer<Args...>(0, fixedSize);
 	}
 	//////////////////////////////////////////////////////////////////////////
 
@@ -3430,20 +3500,20 @@ public:
 	@return 返回消息泵句柄
 	*/
 	template <typename... Args>
-	msg_pump_handle<Args...> connect_msg_pump()
+	msg_pump_handle<Args...> connect_msg_pump(const int id = 0)
 	{
-		return _connect_msg_pump<Args...>(this);
+		return _connect_msg_pump<Args...>(id, this);
 	}
 private:
 	template <typename... Args>
-	static msg_pump_handle<Args...> _connect_msg_pump(my_actor* const host)
+	static msg_pump_handle<Args...> _connect_msg_pump(const int id, my_actor* const host)
 	{
 		typedef MsgPump_<Args...> pump_type;
 		typedef MsgPool_<Args...> pool_type;
 		typedef typename pool_type::pump_handler pump_handler;
 
 		host->assert_enter();
-		auto msgPck = msg_pool_pck<Args...>(host);
+		auto msgPck = msg_pool_pck<Args...>(id, host);
 		quit_guard qg(host);
 		msgPck->lock(host);
 		if (msgPck->_next)
@@ -3671,16 +3741,16 @@ public:
 	@brief 查询当前消息由谁代理
 	*/
 	template <typename... Args>
-	actor_handle msg_agent_handle(const actor_handle& buddyActor)
+	__yield_interrupt actor_handle msg_agent_handle(const int id, const actor_handle& buddyActor)
 	{
 		typedef std::shared_ptr<msg_pool_status::pck<Args...>> pck_type;
 
 		quit_guard qg(this);
-		auto msgPck = send<pck_type>(buddyActor->self_strand(), [&buddyActor]()->pck_type
+		auto msgPck = send<pck_type>(buddyActor->self_strand(), [id, &buddyActor]()->pck_type
 		{
 			if (!buddyActor->is_quited())
 			{
-				return my_actor::msg_pool_pck<Args...>(buddyActor.get(), false);
+				return my_actor::msg_pool_pck<Args...>(id, buddyActor.get(), false);
 			}
 			return pck_type();
 		});
@@ -3716,6 +3786,24 @@ public:
 			}
 		}
 		return actor_handle();
+	}
+
+	template <typename... Args>
+	__yield_interrupt actor_handle msg_agent_handle(const int id, child_actor_handle& buddyActor)
+	{
+		return msg_agent_handle<Args...>(id, buddyActor.get_actor());
+	}
+
+	template <typename... Args>
+	__yield_interrupt actor_handle msg_agent_handle(const actor_handle& buddyActor)
+	{
+		return msg_agent_handle<Args...>(0, buddyActor);
+	}
+
+	template <typename... Args>
+	__yield_interrupt actor_handle msg_agent_handle(child_actor_handle& buddyActor)
+	{
+		return msg_agent_handle<Args...>(0, buddyActor.get_actor());
 	}
 private:
 	template <size_t N>
