@@ -32,19 +32,17 @@ ActorTimer_::timer_handle ActorTimer_::timeout(unsigned long long us, const acto
 	assert(_strand->running_in_this_thread());
 	assert(us < 0x80000000LL * 1000);
 	unsigned long long et = (get_tick_us() + us) & -256;
-	auto node = _handlerTable.insert(make_pair(et, handler_list()));
-	auto& nl = node.first->second;
-	if (!nl)
-	{
-		nl = _listPool->new_();
-		assert(nl->empty());
-	}
-
-	nl->push_front(host);
 	timer_handle timerHandle;
-	timerHandle._handlerList = nl;
-	timerHandle._handlerNode = nl->begin();
-	timerHandle._tableNode = node.first;
+	timerHandle._tableNode = _handlerTable.insert(_handlerTable.end(), make_pair(et, handler_list()));
+	handler_list& hl = timerHandle._tableNode->second;
+	if (!hl)
+	{
+		hl = _listPool->new_();
+		assert(hl->empty());
+	}
+	hl->push_front(host);
+	timerHandle._handlerNode = hl->begin();
+	timerHandle._handlerList = hl;
 	
 	if (!_looping)
 	{//定时器已经退出循环，重新启动定时器
@@ -66,10 +64,10 @@ ActorTimer_::timer_handle ActorTimer_::timeout(unsigned long long us, const acto
 
 void ActorTimer_::cancel(timer_handle& th)
 {
-	assert(_strand->running_in_this_thread());
-	auto hl = th._handlerList.lock();
+	auto* hl = th._handlerList.get();
 	if (hl)
 	{//删除当前定时器节点
+		assert(_strand && _strand->running_in_this_thread());
 		hl->erase(th._handlerNode);
 		if (hl->empty())
 		{
@@ -82,6 +80,7 @@ void ActorTimer_::cancel(timer_handle& th)
 				_looping = false;
 			}
 		}
+		th._handlerList.reset();
 	}
 }
 

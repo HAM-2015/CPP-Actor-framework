@@ -1872,6 +1872,7 @@ void my_actor::timeout_handler()
 {
 	assert(_timerState._timerCb);
 	_timerState._timerCompleted = true;
+	_timerState._timerHandle.reset();
 	auto h = std::move(_timerState._timerCb);
 	assert(!_timerState._timerCb);
 	h();

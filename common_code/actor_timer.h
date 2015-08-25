@@ -30,8 +30,13 @@ class ActorTimer_
 	class timer_handle 
 	{
 		friend ActorTimer_;
-
-		std::weak_ptr<msg_list_shared_alloc<actor_handle, null_mutex> > _handlerList;
+	public:
+		void reset()
+		{
+			_handlerList.reset();
+		}
+	private:
+		handler_list _handlerList;
 		msg_list_shared_alloc<actor_handle, null_mutex>::iterator _handlerNode;
 		handler_table::iterator _tableNode;
 	};

@@ -3500,7 +3500,7 @@ public:
 	@return ·µ»ØÏûÏ¢±Ã¾ä±ú
 	*/
 	template <typename... Args>
-	msg_pump_handle<Args...> connect_msg_pump(const int id = 0)
+	__yield_interrupt msg_pump_handle<Args...> connect_msg_pump(const int id = 0)
 	{
 		return _connect_msg_pump<Args...>(id, this);
 	}
