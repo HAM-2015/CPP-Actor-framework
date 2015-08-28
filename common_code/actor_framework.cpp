@@ -587,9 +587,8 @@ void MsgPumpVoid_::receive_msg(const actor_handle& hostActor)
 	else
 	{
 		auto shared_this = _weakThis.lock();
-		_strand->post([=]
+		_strand->post([shared_this, hostActor]
 		{
-			actor_handle lockActor = hostActor;
 			shared_this->receiver();
 		});
 	}
@@ -598,9 +597,8 @@ void MsgPumpVoid_::receive_msg(const actor_handle& hostActor)
 void MsgPumpVoid_::receive_msg_tick(const actor_handle& hostActor)
 {
 	auto shared_this = _weakThis.lock();
-	_strand->try_tick([=]
+	_strand->try_tick([shared_this, hostActor]
 	{
-		actor_handle lockActor = hostActor;
 		shared_this->receiver();
 	});
 }
@@ -917,7 +915,7 @@ void my_actor::child_actor_force_quit( child_actor_handle& actorHandle )
 		assert(actorHandle.get_actor());
 		assert(actorHandle.get_actor()->parent_actor()->self_id() == self_id());
 
-		actor_handle actor = actorHandle._param._actor;
+		my_actor* actor = actorHandle._param._actor.get();
 		if (actor->self_strand() == _strand)
 		{
 			actor->force_quit(std::function<void()>());
@@ -941,7 +939,7 @@ void my_actor::child_actors_force_quit(const list<child_actor_handle::ptr>& acto
 		{
 			assert(actorHandle->get_actor());
 			assert(actorHandle->get_actor()->parent_actor()->self_id() == self_id());
-			actor_handle actor = actorHandle->_param._actor;
+			my_actor* actor = actorHandle->_param._actor.get();
 			if (actor->self_strand() == _strand)
 			{
 				actor->force_quit(std::function<void()>());
@@ -1006,7 +1004,7 @@ void my_actor::child_actor_suspend(child_actor_handle& actorHandle)
 	assert_enter();
 	assert(actorHandle.get_actor());
 	assert(actorHandle.get_actor()->parent_actor()->self_id() == self_id());
-	actor_handle actor = actorHandle.get_actor();
+	my_actor* actor = actorHandle.get_actor().get();
 	if (actorHandle.get_actor()->self_strand() == _strand)
 	{
 		trig([actor](const trig_once_notifer<>& h){actor->suspend(h); });
@@ -1027,7 +1025,7 @@ void my_actor::child_actors_suspend(const list<child_actor_handle::ptr>& actorHa
 		child_actor_handle::ptr actorHandle = *it;
 		assert(actorHandle->get_actor());
 		assert(actorHandle->get_actor()->parent_actor()->self_id() == self_id());
-		actor_handle actor = actorHandle->get_actor();
+		my_actor* actor = actorHandle->get_actor().get();
 		if (actor->self_strand() == _strand)
 		{
 			actor->suspend(h);
@@ -1049,7 +1047,7 @@ void my_actor::child_actor_resume(child_actor_handle& actorHandle)
 	assert_enter();
 	assert(actorHandle.get_actor());
 	assert(actorHandle.get_actor()->parent_actor()->self_id() == self_id());
-	actor_handle actor = actorHandle.get_actor();
+	my_actor* actor = actorHandle.get_actor().get();
 	if (actorHandle.get_actor()->self_strand() == _strand)
 	{
 		trig([actor](const trig_once_notifer<>& h){actor->resume(h); });
@@ -1070,7 +1068,7 @@ void my_actor::child_actors_resume(const list<child_actor_handle::ptr>& actorHan
 		child_actor_handle::ptr actorHandle = *it;
 		assert(actorHandle->get_actor());
 		assert(actorHandle->get_actor()->parent_actor()->self_id() == self_id());
-		actor_handle actor = actorHandle->get_actor();
+		my_actor* actor = actorHandle->get_actor().get();
 		if (actor->self_strand() == _strand)
 		{
 			actor->resume(h);
@@ -1607,7 +1605,7 @@ void my_actor::actors_start_run(const list<actor_handle>& anotherActors)
 	}
 }
 
-void my_actor::actor_force_quit( actor_handle anotherActor )
+void my_actor::actor_force_quit(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
@@ -1630,7 +1628,7 @@ void my_actor::actors_force_quit(const list<actor_handle>& anotherActors)
 	close_msg_notifer(amh);
 }
 
-void my_actor::actor_wait_quit( actor_handle anotherActor )
+void my_actor::actor_wait_quit(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
@@ -1646,7 +1644,7 @@ void my_actor::actors_wait_quit(const list<actor_handle>& anotherActors)
 	}
 }
 
-bool my_actor::timed_actor_wait_quit(int tm, actor_handle anotherActor)
+bool my_actor::timed_actor_wait_quit(int tm, const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
@@ -1655,7 +1653,7 @@ bool my_actor::timed_actor_wait_quit(int tm, actor_handle anotherActor)
 	return timed_wait_trig(tm, ath);
 }
 
-void my_actor::actor_suspend(actor_handle anotherActor)
+void my_actor::actor_suspend(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
@@ -1678,7 +1676,7 @@ void my_actor::actors_suspend(const list<actor_handle>& anotherActors)
 	close_msg_notifer(amh);
 }
 
-void my_actor::actor_resume(actor_handle anotherActor)
+void my_actor::actor_resume(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
@@ -1701,7 +1699,7 @@ void my_actor::actors_resume(const list<actor_handle>& anotherActors)
 	close_msg_notifer(amh);
 }
 
-bool my_actor::actor_switch(actor_handle anotherActor)
+bool my_actor::actor_switch(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);

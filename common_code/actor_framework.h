@@ -4099,33 +4099,33 @@ public:
 	/*!
 	@brief 强制退出另一个Actor，并且等待完成
 	*/
-	__yield_interrupt void actor_force_quit(actor_handle anotherActor);
+	__yield_interrupt void actor_force_quit(const actor_handle& anotherActor);
 	__yield_interrupt void actors_force_quit(const list<actor_handle>& anotherActors);
 
 	/*!
 	@brief 等待另一个Actor结束后返回
 	*/
-	__yield_interrupt void actor_wait_quit(actor_handle anotherActor);
+	__yield_interrupt void actor_wait_quit(const actor_handle& anotherActor);
 	__yield_interrupt void actors_wait_quit(const list<actor_handle>& anotherActors);
-	__yield_interrupt bool timed_actor_wait_quit(int tm, actor_handle anotherActor);
+	__yield_interrupt bool timed_actor_wait_quit(int tm, const actor_handle& anotherActor);
 
 	/*!
 	@brief 挂起另一个Actor，等待其所有子Actor都调用后才返回
 	*/
-	__yield_interrupt void actor_suspend(actor_handle anotherActor);
+	__yield_interrupt void actor_suspend(const actor_handle& anotherActor);
 	__yield_interrupt void actors_suspend(const list<actor_handle>& anotherActors);
 
 	/*!
 	@brief 恢复另一个Actor，等待其所有子Actor都调用后才返回
 	*/
-	__yield_interrupt void actor_resume(actor_handle anotherActor);
+	__yield_interrupt void actor_resume(const actor_handle& anotherActor);
 	__yield_interrupt void actors_resume(const list<actor_handle>& anotherActors);
 
 	/*!
 	@brief 对另一个Actor进行挂起/恢复状态切换
 	@return 都已挂起返回true，否则false
 	*/
-	__yield_interrupt bool actor_switch(actor_handle anotherActor);
+	__yield_interrupt bool actor_switch(const actor_handle& anotherActor);
 	__yield_interrupt bool actors_switch(const list<actor_handle>& anotherActors);
 
 	void assert_enter();
