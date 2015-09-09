@@ -547,12 +547,12 @@ void actor_test(my_actor* self)
 					return true;
 				}));
 			});
-			self->child_actor_run(mb1);
 			auto ntf1 = self->connect_msg_notifer_to<int>(mb1);
 			auto ntf2_0 = self->connect_msg_notifer_to<move_test>(0, mb1);
 			auto ntf2_1 = self->connect_msg_notifer_to<move_test>(1, mb1);
 			auto ntf3 = self->connect_msg_notifer_to<move_test, move_test>(mb1);
 			auto ntf = mb1->make_msg_notifer(amh);
+			self->child_actor_run(mb1);
 			for (int i = 0; i < 10; i++)
 			{
 				ntf1(i);
@@ -649,7 +649,7 @@ void actor_test(my_actor* self)
 	*/
 int main(int argc, char* argv[])
 {
-	trace_line(get_time_string_s(), " Hello Actor");
+	trace_space(get_time_string_s(), "Hello Actor");
 	enable_high_resolution();
 	ios_proxy ios;
 	ios.run();

@@ -1,6 +1,7 @@
 #ifndef __BIND_MODAL_RUN_H
 #define __BIND_MODAL_RUN_H
 
+#ifdef ENABLE_MFC_ACTOR
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/thread.hpp>
 #include <functional>
@@ -204,5 +205,6 @@ private:
 	boost::thread::id _threadID;
 	bool _isClosed;
 };
+#endif
 
 #endif

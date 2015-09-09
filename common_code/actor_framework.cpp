@@ -368,7 +368,6 @@ bool MsgPoolVoid_::pump_handler::try_pump(my_actor* host, unsigned char pumpID, 
 	my_actor::quit_guard qg(host);
 	return host->send<bool>(_thisPool->_strand, [&, refThis_]()->bool
 	{
-		auto lockThis = refThis_;
 		bool ok = false;
 		if (_msgPump == _thisPool->_msgPump)
 		{
@@ -389,6 +388,49 @@ bool MsgPoolVoid_::pump_handler::try_pump(my_actor* host, unsigned char pumpID, 
 		}
 		return ok;
 	});
+}
+
+size_t MsgPoolVoid_::pump_handler::size(my_actor* host, unsigned char pumpID)
+{
+	assert(_thisPool);
+	auto& refThis_ = *this;
+	my_actor::quit_guard qg(host);
+	return host->send<size_t>(_thisPool->_strand, [&, refThis_]()->size_t
+	{
+		if (_msgPump == _thisPool->_msgPump)
+		{
+			if (pumpID == _thisPool->_sendCount)
+			{
+				return _thisPool->_msgBuff;
+			}
+			else
+			{
+				return _thisPool->_msgBuff + 1;
+			}
+		}
+		return 0;
+	});
+}
+
+size_t MsgPoolVoid_::pump_handler::snap_size(unsigned char pumpID)
+{
+	assert(_thisPool);
+	if (_thisPool->_strand->running_in_this_thread())
+	{
+		if (_msgPump == _thisPool->_msgPump)
+		{
+			if (pumpID == _thisPool->_sendCount)
+			{
+				return _thisPool->_msgBuff;
+			}
+			else
+			{
+				return _thisPool->_msgBuff + 1;
+			}
+		}
+		return 0;
+	}
+	return _thisPool->_msgBuff;
 }
 
 void MsgPoolVoid_::pump_handler::post_pump(unsigned char pumpID)
@@ -570,6 +612,26 @@ bool MsgPumpVoid_::try_read()
 		}
 	}
 	return false;
+}
+
+size_t MsgPumpVoid_::size()
+{
+	assert(_strand->running_in_this_thread());
+	if (!_pumpHandler.empty())
+	{
+		return (_hasMsg ? 1 : 0) + _pumpHandler.size(_hostActor, _pumpCount);
+	}
+	return 0;
+}
+
+size_t MsgPumpVoid_::snap_size()
+{
+	assert(_strand->running_in_this_thread());
+	if (!_pumpHandler.empty())
+	{
+		return (_hasMsg ? 1 : 0) + _pumpHandler.snap_size(_pumpCount);
+	}
+	return 0;
 }
 
 void MsgPumpVoid_::stop_waiting()
@@ -859,14 +921,14 @@ actor_handle my_actor::create(const shared_strand& actorStrand, const main_func&
 	newActor->_weakThis = newActor;
 #ifdef CHECK_SELF
 	s_stackLineMutex.lock();
-	newActor->_btIt = s_stackLine.insert(make_pair((unsigned char*)newActor->_stackTop-newActor->_stackSize, newActor.get())).first;
-	newActor->_topIt = s_stackLine.insert(make_pair((unsigned char*)newActor->_stackTop - 1, (my_actor*)NULL)).first;
+	newActor->_topIt = s_stackLine.insert(make_pair((char*)newActor->_stackTop, (my_actor*)NULL)).first;
+	newActor->_btIt = s_stackLine.insert(newActor->_topIt, make_pair((char*)newActor->_stackTop - newActor->_stackSize - STACK_RESERVED_SPACE_SIZE, newActor.get()));
 	s_stackLineMutex.unlock();
 #endif
 
 #ifdef CHECK_ACTOR_STACK
 	newActor->_checkStackFree = false;
-	memset((unsigned char*)newActor->_stackTop - newActor->_stackSize - STACK_RESERVED_SPACE_SIZE, 0xFD, newActor->_stackSize + STACK_RESERVED_SPACE_SIZE - CORO_CONTEXT_STATE_SPACE);
+	memset((char*)newActor->_stackTop - newActor->_stackSize - STACK_RESERVED_SPACE_SIZE, 0xFD, newActor->_stackSize + STACK_RESERVED_SPACE_SIZE - CORO_CONTEXT_STATE_SPACE);
 	newActor->_createStack = std::shared_ptr<list<stack_line_info>>(new list<stack_line_info>(get_stack_list(8, 1)));
 #endif
 	return newActor;
@@ -898,7 +960,7 @@ void my_actor::child_actor_run( child_actor_handle& actorHandle )
 	actorHandle._param._actor->notify_run();
 }
 
-void my_actor::child_actor_run(const list<std::shared_ptr<child_actor_handle> >& actorHandles)
+void my_actor::child_actors_run(const list<std::shared_ptr<child_actor_handle> >& actorHandles)
 {
 	assert_enter();
 	for (auto it = actorHandles.begin(); it != actorHandles.end(); it++)
@@ -1194,7 +1256,7 @@ void my_actor::next_tick_handler()
 	_strand->next_tick([shared_this]{shared_this->run_one(); });
 }
 
-shared_strand my_actor::self_strand()
+const shared_strand& my_actor::self_strand()
 {
 	return _strand;
 }

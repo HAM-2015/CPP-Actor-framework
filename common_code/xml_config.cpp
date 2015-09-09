@@ -84,7 +84,7 @@ bool xml_config::decrypt(string& data)
 			memcpy(tBuf, _password.c_str(), _password.size() < 16? _password.size(): 16);
 			AES_KEY key;
 			AES_set_decrypt_key(tBuf, 128, &key);
-			int blocks = data.size() / 16;
+			int blocks = (int)data.size() / 16;
 			unsigned char ivec[16];
 			memset(ivec, 0, sizeof(ivec));
 			for (int i = 0; i < blocks; i++)

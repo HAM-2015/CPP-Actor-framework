@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <winsock2.h>
 #include <Windows.h>
+#include <MMSystem.h>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #ifdef CHECK_ACTOR_STACK
 #include <WinDNS.h>

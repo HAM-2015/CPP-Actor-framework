@@ -182,9 +182,24 @@ void trace_line(First&& fst)
 	std::cout << std::endl;
 }
 
+template <typename First>
+void trace_space(First&& fst)
+{
+	trace_match<RM_CREF(First)>::trace(fst);
+	std::cout << std::endl;
+}
+
+template <typename First>
+void trace_comma(First&& fst)
+{
+	trace_match<RM_CREF(First)>::trace(fst);
+	std::cout << std::endl;
+}
+
 template <typename First, typename... Args>
 void trace(First&& fst, Args&&... args)
 {
+	static_assert(sizeof...(Args) > 0, "");
 	trace_match<RM_CREF(First)>::trace(fst);
 	trace(TRY_MOVE(args)...);
 }
@@ -192,9 +207,27 @@ void trace(First&& fst, Args&&... args)
 template <typename First, typename... Args>
 void trace_line(First&& fst, Args&&... args)
 {
+	static_assert(sizeof...(Args) > 0, "");
 	trace_match<RM_CREF(First)>::trace(fst);
-	trace(TRY_MOVE(args)...);
-	std::cout << std::endl;
+	trace_line(TRY_MOVE(args)...);
+}
+
+template <typename First, typename... Args>
+void trace_space(First&& fst, Args&&... args)
+{
+	static_assert(sizeof...(Args) > 0, "");
+	trace_match<RM_CREF(First)>::trace(fst);
+	std::cout << " ";
+	trace_space(TRY_MOVE(args)...);
+}
+
+template <typename First, typename... Args>
+void trace_comma(First&& fst, Args&&... args)
+{
+	static_assert(sizeof...(Args) > 0, "");
+	trace_match<RM_CREF(First)>::trace(fst);
+	std::cout << ", ";
+	trace_comma(TRY_MOVE(args)...);
 }
 
 #endif

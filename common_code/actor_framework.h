@@ -22,6 +22,8 @@
 #include "stack_object.h"
 #include "check_actor_stack.h"
 #include "actor_timer.h"
+#include "tuple_option.h"
+#include "trace.h"
 
 class my_actor;
 typedef std::shared_ptr<my_actor> actor_handle;//Actor句柄
@@ -981,6 +983,26 @@ private:
 		return false;
 	}
 
+	size_t size()
+	{
+		assert(_strand->running_in_this_thread());
+		if (!_pumpHandler.empty())
+		{
+			return (_hasMsg ? 1 : 0) + _pumpHandler.size(_hostActor, _pumpCount);
+		}
+		return 0;
+	}
+
+	size_t snap_size()
+	{
+		assert(_strand->running_in_this_thread());
+		if (!_pumpHandler.empty())
+		{
+			return (_hasMsg ? 1 : 0) + _pumpHandler.snap_size(_pumpCount);
+		}
+		return 0;
+	}
+
 	void stop_waiting()
 	{
 		_waiting = false;
@@ -1039,9 +1061,9 @@ private:
 	shared_strand _strand;
 	dst_receiver* _dstRec;
 	unsigned char _pumpCount;
-	bool _hasMsg;
-	bool _waiting;
-	bool _checkDis;
+	bool _hasMsg : 1;
+	bool _waiting : 1;
+	bool _checkDis : 1;
 };
 
 template <typename... ARGS>
@@ -1110,7 +1132,6 @@ class MsgPool_ : public MsgPoolBase_
 			my_actor::quit_guard qg(host);
 			return host->send<bool>(_thisPool->_strand, [&, refThis_]()->bool
 			{
-				auto lockThis = refThis_;
 				bool ok = false;
 				if (_msgPump == _thisPool->_msgPump)
 				{
@@ -1134,6 +1155,51 @@ class MsgPool_ : public MsgPoolBase_
 				}
 				return ok;
 			});
+		}
+
+		size_t size(my_actor* host, unsigned char pumpID)
+		{
+			assert(_thisPool);
+			auto& refThis_ = *this;
+			my_actor::quit_guard qg(host);
+			return host->send<size_t>(_thisPool->_strand, [&, refThis_]()->size_t
+			{
+				if (_msgPump == _thisPool->_msgPump)
+				{
+					auto& msgBuff = _thisPool->_msgBuff;
+					if (pumpID == _thisPool->_sendCount)
+					{
+						return msgBuff.size();
+					}
+					else
+					{
+						return msgBuff.size() + 1;
+					}
+				}
+				return 0;
+			});
+		}
+
+		size_t snap_size(unsigned char pumpID)
+		{
+			assert(_thisPool);
+			if (_thisPool->_strand->running_in_this_thread())
+			{
+				if (_msgPump == _thisPool->_msgPump)
+				{
+					auto& msgBuff = _thisPool->_msgBuff;
+					if (pumpID == _thisPool->_sendCount)
+					{
+						return msgBuff.size();
+					}
+					else
+					{
+						return msgBuff.size() + 1;
+					}
+				}
+				return 0;
+			} 
+			return _thisPool->_msgBuff.size();
 		}
 
 		void post_pump(unsigned char pumpID)
@@ -1336,6 +1402,8 @@ class MsgPoolVoid_ : public MsgPoolBase_
 		void operator()(unsigned char pumpID);
 		void pump_msg(unsigned char pumpID, const actor_handle& hostActor);
 		bool try_pump(my_actor* host, unsigned char pumpID, bool& wait);
+		size_t size(my_actor* host, unsigned char pumpID);
+		size_t snap_size(unsigned char pumpID);
 		void post_pump(unsigned char pumpID);
 		bool empty();
 		bool same_strand();
@@ -1386,6 +1454,8 @@ protected:
 	bool read_msg();
 	bool read_msg(bool& dst);
 	bool try_read();
+	size_t size();
+	size_t snap_size();
 	void stop_waiting();
 	void connect(const pump_handler& pumpHandler);
 	void clear();
@@ -1397,9 +1467,9 @@ protected:
 	shared_strand _strand;
 	unsigned char _pumpCount;
 	bool* _dstRec;
-	bool _waiting;
-	bool _hasMsg;
-	bool _checkDis;
+	bool _waiting : 1;
+	bool _hasMsg : 1;
+	bool _checkDis : 1;
 };
 
 template <>
@@ -2046,8 +2116,8 @@ private:
 	}
 private:
 	unsigned char _dstRef[static_cmp_type_size<dst_receiver1, dst_receiver2>::max];
-	const bool _early;
-	const bool _isRef;
+	const bool _early : 1;
+	const bool _isRef : 1;
 };
 
 /*!
@@ -2146,8 +2216,8 @@ private:
 	}
 private:
 	unsigned char _dstRef[static_cmp_type_size<dst_receiver1, dst_receiver2>::max];
-	const bool _early;
-	const bool _isRef;
+	const bool _early : 1;
+	const bool _isRef : 1;
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -2294,8 +2364,8 @@ class my_actor
 
 	struct timer_state 
 	{
-		bool _timerSuspend;
-		bool _timerCompleted;
+		bool _timerSuspend : 1;
+		bool _timerCompleted : 1;
 		long long _timerTime;
 		long long _timerStampBegin;
 		long long _timerStampEnd;
@@ -2404,12 +2474,39 @@ public:
 	@brief 开始运行子Actor，只能调用一次
 	*/
 	void child_actor_run(child_actor_handle& actorHandle);
-	void child_actor_run(const list<child_actor_handle::ptr>& actorHandles);
+
+	template <typename... Handles>
+	void child_actor_run(Handles&... handles)
+	{
+		static_assert(sizeof...(Handles) > 1, "");
+		child_actor_handle* handles[sizeof...(Handles)] = { &handles... };
+		for (int i = 0; i < sizeof...(Handles); i++)
+		{
+			child_actor_run(*handles[i]);
+		}
+	}
+
+	/*!
+	@brief 开始运行一组子Actor，只能调用一次
+	*/
+	void child_actors_run(const list<child_actor_handle::ptr>& actorHandles);
 
 	/*!
 	@brief 强制终止一个子Actor
 	*/
 	__yield_interrupt void child_actor_force_quit(child_actor_handle& actorHandle);
+
+	template <typename... Handles>
+	__yield_interrupt void child_actor_force_quit(Handles&... handles)
+	{
+		static_assert(sizeof...(Handles) > 1, "");
+		child_actor_handle* handles[sizeof...(Handles)] = { &handles... };
+		for (int i = 0; i < sizeof...(Handles); i++)
+		{
+			child_actor_force_quit(*handles[i]);
+		}
+	}
+
 	__yield_interrupt void child_actors_force_quit(const list<child_actor_handle::ptr>& actorHandles);
 
 	/*!
@@ -2417,6 +2514,17 @@ public:
 	@return 正常退出的返回true，否则false
 	*/
 	__yield_interrupt void child_actor_wait_quit(child_actor_handle& actorHandle);
+
+	template <typename... Handles>
+	__yield_interrupt void child_actor_wait_quit(Handles&... handles)
+	{
+		static_assert(sizeof...(Handles) > 1, "");
+		child_actor_handle* handles[sizeof...(Handles)] = { &handles... };
+		for (int i = 0; i < sizeof...(Handles); i++)
+		{
+			child_actor_wait_quit(*handles[i]);
+		}
+	}
 
 	__yield_interrupt bool timed_child_actor_wait_quit(int tm, child_actor_handle& actorHandle);
 
@@ -2430,6 +2538,17 @@ public:
 	@brief 挂起子Actor
 	*/
 	__yield_interrupt void child_actor_suspend(child_actor_handle& actorHandle);
+
+	template <typename... Handles>
+	__yield_interrupt void child_actor_suspend(Handles&... handles)
+	{
+		static_assert(sizeof...(Handles) > 1, "");
+		child_actor_handle* handles[sizeof...(Handles)] = { &handles... };
+		for (int i = 0; i < sizeof...(Handles); i++)
+		{
+			child_actor_suspend(*handles[i]);
+		}
+	}
 	
 	/*!
 	@brief 挂起一组子Actor
@@ -2440,6 +2559,17 @@ public:
 	@brief 恢复子Actor
 	*/
 	__yield_interrupt void child_actor_resume(child_actor_handle& actorHandle);
+
+	template <typename... Handles>
+	__yield_interrupt void child_actor_resume(Handles&... handles)
+	{
+		static_assert(sizeof...(Handles) > 1, "");
+		child_actor_handle* handles[sizeof...(Handles)] = { &handles... };
+		for (int i = 0; i < sizeof...(Handles); i++)
+		{
+			child_actor_resume(*handles[i]);
+		}
+	}
 	
 	/*!
 	@brief 恢复一组子Actor
@@ -3292,16 +3422,47 @@ public:
 			msgPck->unlock(this);
 		}
 	}
+
+	/*!
+	@brief 重置消息管道，所有之前连接到当前管道的通知句柄将永久失效
+	*/
+	template <typename... Args>
+	__yield_interrupt bool reset_msg_pipe(const int id = 0)
+	{
+		assert_enter();
+		typedef msg_pool_status::pck<Args...> pck_type;
+		msg_pool_status::id_key typeID(sizeof...(Args) != 0 ? typeid(pck_type).hash_code() : 0, id);
+		auto it = _msgPoolStatus._msgTypeMap.find(typeID);
+		if (_msgPoolStatus._msgTypeMap.end() != it)
+		{
+			std::shared_ptr<pck_type> msgPck = std::static_pointer_cast<pck_type>(it->second);
+			msgPck->lock(this);
+			if (msgPck->_next)
+			{
+				msgPck->_next->lock(this);
+				clear_msg_list<Args...>(this, msgPck->_next);
+				msgPck->_next->_isHead = true;
+				msgPck->_next->unlock(this);
+				msgPck->_next.reset();
+			}
+			_msgPoolStatus._msgTypeMap.erase(it);
+			msgPck->unlock(this);
+			return true;
+		}
+		return false;
+	}
 public:
 	/*!
 	@brief 连接消息通知到一个伙伴Actor，该Actor必须是子Actor或没有父Actor
+	@param strand 消息调度器
+	@param id 相同类型消息id
 	@param makeNew false 如果存在返回之前，否则创建新的通知；true 强制创建新的通知，之前的将失效，且断开与buddyActor的关联
 	@param fixedSize 消息队列内存池长度
 	@warning 如果 makeNew = false 且该节点为父的代理，将创建失败
 	@return 消息通知函数
 	*/
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const int id, const actor_handle& buddyActor, bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const shared_strand& strand, const int id, const actor_handle& buddyActor, bool makeNew = false, size_t fixedSize = 16)
 	{
 		typedef MsgPool_<Args...> pool_type;
 		typedef typename pool_type::pump_handler pump_handler;
@@ -3344,7 +3505,7 @@ public:
 		}
 		if (makeNew)
 		{
-			auto newPool = pool_type::make(buddyActor->self_strand(), fixedSize);
+			auto newPool = pool_type::make(strand, fixedSize);
 			childPck->lock(this);
 			childPck->_isHead = true;
 			actor_handle hostActor = update_msg_list<Args...>(childPck, newPool);
@@ -3386,7 +3547,7 @@ public:
 			auto childPool = childPck->_msgPool;
 			if (!childPool)
 			{
-				childPool = pool_type::make(buddyActor->self_strand(), fixedSize);
+				childPool = pool_type::make(strand, fixedSize);
 			}
 			actor_handle hostActor = update_msg_list<Args...>(childPck, childPool);
 			if (hostActor)
@@ -3403,32 +3564,58 @@ public:
 	}
 
 	template <typename... Args>
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const shared_strand& strand, const int id, child_actor_handle& childActor, bool makeNew = false, size_t fixedSize = 16)
+	{
+		return connect_msg_notifer_to<Args...>(strand, id, childActor.get_actor(), makeNew, fixedSize);
+	}
+
+	template <typename... Args>
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const shared_strand& strand, const actor_handle& buddyActor, bool makeNew = false, size_t fixedSize = 16)
+	{
+		return connect_msg_notifer_to<Args...>(strand, 0, buddyActor, makeNew, fixedSize);
+	}
+
+	template <typename... Args>
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const shared_strand& strand, child_actor_handle& childActor, bool makeNew = false, size_t fixedSize = 16)
+	{
+		return connect_msg_notifer_to<Args...>(strand, 0, childActor.get_actor(), makeNew, fixedSize);
+	}
+
+	template <typename... Args>
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const int id, const actor_handle& buddyActor, bool makeNew = false, size_t fixedSize = 16)
+	{
+		return connect_msg_notifer_to<Args...>(buddyActor->self_strand(), id, buddyActor, makeNew, fixedSize);
+	}
+
+	template <typename... Args>
 	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const int id, child_actor_handle& childActor, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to<Args...>(id, childActor.get_actor(), makeNew, fixedSize);
+		return connect_msg_notifer_to<Args...>(childActor->self_strand(), id, childActor.get_actor(), makeNew, fixedSize);
 	}
 
 	template <typename... Args>
 	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const actor_handle& buddyActor, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to<Args...>(0, buddyActor, makeNew, fixedSize);
+		return connect_msg_notifer_to<Args...>(buddyActor->self_strand(), 0, buddyActor, makeNew, fixedSize);
 	}
 
 	template <typename... Args>
 	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(child_actor_handle& childActor, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to<Args...>(0, childActor.get_actor(), makeNew, fixedSize);
+		return connect_msg_notifer_to<Args...>(childActor->self_strand(), 0, childActor.get_actor(), makeNew, fixedSize);
 	}
 
 	/*!
 	@brief 连接消息通知到自己的Actor
+	@param strand 消息调度器
+	@param id 相同类型消息id
 	@param makeNew false 如果存在返回之前，否则创建新的通知；true 强制创建新的通知，之前的将失效，且断开与buddyActor的关联
 	@param fixedSize 消息队列内存池长度
 	@warning 如果该节点为父的代理，那么将创建失败
 	@return 消息通知函数
 	*/
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to_self(const int id, bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to_self(const shared_strand& strand, const int id, bool makeNew = false, size_t fixedSize = 16)
 	{
 		typedef MsgPool_<Args...> pool_type;
 
@@ -3441,7 +3628,7 @@ public:
 			std::shared_ptr<pool_type> msgPool;
 			if (makeNew || !msgPck->_msgPool)
 			{
-				msgPool = pool_type::make(self_strand(), fixedSize);
+				msgPool = pool_type::make(strand, fixedSize);
 			}
 			else
 			{
@@ -3459,28 +3646,42 @@ public:
 	}
 
 	template <typename... Args>
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to_self(const shared_strand& strand, bool makeNew = false, size_t fixedSize = 16)
+	{
+		return connect_msg_notifer_to_self<Args...>(strand, 0, makeNew, fixedSize);
+	}
+
+	template <typename... Args>
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to_self(const int id, bool makeNew = false, size_t fixedSize = 16)
+	{
+		return connect_msg_notifer_to_self<Args...>(self_strand(), id, makeNew, fixedSize);
+	}
+
+	template <typename... Args>
 	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to_self(bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to_self<Args...>(0, makeNew, fixedSize);
+		return connect_msg_notifer_to_self<Args...>(self_strand(), 0, makeNew, fixedSize);
 	}
 
 	/*!
 	@brief 创建一个消息通知函数，在该Actor所依赖的ios无关线程中使用，且在该Actor调用 notify_run() 之前
+	@param strand 消息调度器
+	@param id 相同类型消息id
 	@param fixedSize 消息队列内存池长度
 	@return 消息通知函数
 	*/
 	template <typename... Args>
-	post_actor_msg<Args...> connect_msg_notifer(const int id, size_t fixedSize = 16)
+	post_actor_msg<Args...> connect_msg_notifer(const shared_strand& strand, const int id, size_t fixedSize = 16)
 	{
 		typedef post_actor_msg<Args...> post_type;
 
-		return _strand->syncInvoke<post_type>([this, id, fixedSize]()->post_type
+		return _strand->syncInvoke<post_type>([&]()->post_type
 		{
 			typedef MsgPool_<Args...> pool_type;
 			if (!parent_actor() && !is_started() && !is_quited())
 			{
 				auto msgPck = msg_pool_pck<Args...>(id, this);
-				msgPck->_msgPool = pool_type::make(self_strand(), fixedSize);
+				msgPck->_msgPool = pool_type::make(strand, fixedSize);
 				return post_type(msgPck->_msgPool, shared_from_this());
 			}
 			assert(false);
@@ -3489,9 +3690,21 @@ public:
 	}
 
 	template <typename... Args>
+	post_actor_msg<Args...> connect_msg_notifer(const shared_strand& strand, size_t fixedSize = 16)
+	{
+		return connect_msg_notifer<Args...>(strand, 0, fixedSize);
+	}
+
+	template <typename... Args>
+	post_actor_msg<Args...> connect_msg_notifer(const int id, size_t fixedSize = 16)
+	{
+		return connect_msg_notifer<Args...>(self_strand(), id, fixedSize);
+	}
+
+	template <typename... Args>
 	post_actor_msg<Args...> connect_msg_notifer(size_t fixedSize = 16)
 	{
-		return connect_msg_notifer<Args...>(0, fixedSize);
+		return connect_msg_notifer<Args...>(self_strand(), 0, fixedSize);
 	}
 	//////////////////////////////////////////////////////////////////////////
 
@@ -3735,6 +3948,24 @@ public:
 	__yield_interrupt void pump_msg(const msg_pump_handle<Args...>& pump, const Handler& h, bool checkDis = false)
 	{
 		timed_pump_msg<Args...>(-1, pump, h, checkDis);
+	}
+
+	/*!
+	@brief 获取当前消息准确数
+	*/
+	template <typename... Args>
+	__yield_interrupt size_t pump_length(const msg_pump_handle<Args...>& pump)
+	{
+		return pump._handle->size();
+	}
+
+	/*!
+	@brief 获取当前消息大概数
+	*/
+	template <typename... Args>
+	size_t pump_snap_length(const msg_pump_handle<Args...>& pump)
+	{
+		return pump._handle->snap_size();
 	}
 public:
 	/*!
@@ -3981,7 +4212,7 @@ public:
 	/*!
 	@brief 获取当前Actor调度器
 	*/
-	shared_strand self_strand();
+	const shared_strand& self_strand();
 
 	/*!
 	@brief 获取io_service调度器
@@ -4173,14 +4404,14 @@ private:
 	id _selfID;///<ActorID
 	size_t _stackSize;///<Actor栈大小
 	shared_strand _strand;///<Actor调度器
-	bool _inActor;///<当前正在Actor内部执行标记
-	bool _started;///<已经开始运行的标记
-	bool _quited;///<_mainFunc已经执行完毕
-	bool _exited;///<完全退出
-	bool _suspended;///<Actor挂起标记
-	bool _hasNotify;///<当前Actor挂起，有外部触发准备进入Actor标记
-	bool _isForce;///<是否是强制退出的标记，成功调用了force_quit
-	bool _notifyQuited;///<当前Actor被锁定后，收到退出消息
+	bool _inActor : 1;///<当前正在Actor内部执行标记
+	bool _started : 1;///<已经开始运行的标记
+	bool _quited : 1;///<_mainFunc已经执行完毕
+	bool _exited : 1;///<完全退出
+	bool _suspended : 1;///<Actor挂起标记
+	bool _hasNotify : 1;///<当前Actor挂起，有外部触发准备进入Actor标记
+	bool _isForce : 1;///<是否是强制退出的标记，成功调用了force_quit
+	bool _notifyQuited : 1;///<当前Actor被锁定后，收到退出消息
 	size_t _lockQuit;///<锁定当前Actor，如果当前接收到退出消息，暂时不退，等到解锁后退出
 	size_t _yieldCount;//yield计数
 	size_t _childOverCount;///<子Actor退出时计数
