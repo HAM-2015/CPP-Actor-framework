@@ -83,6 +83,24 @@ struct trace_match<std::wstring>
 	}
 };
 
+template <>
+struct trace_match<char*>
+{
+	static void trace(const char* s)
+	{
+		std::cout << s;
+	}
+};
+
+template <>
+struct trace_match<wchar_t*>
+{
+	static void trace(const wchar_t* s)
+	{
+		std::wcout << s;
+	}
+};
+
 template <typename T>
 struct trace_match<std::vector<T>>
 {
