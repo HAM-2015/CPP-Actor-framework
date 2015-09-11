@@ -411,7 +411,8 @@ void actor_test(my_actor* self)
 			{
 				while (true)
 				{
-					abuff.push(self, move_test(i++));
+					abuff.force_push(self, move_test(i++));
+					self->sleep(100);
 				}
 			}
 			catch (async_buffer_close_exception)
@@ -436,7 +437,7 @@ void actor_test(my_actor* self)
 				printf("!--\n");
 			}
 		});
-// 		self->child_actor_run(buffPush);
+//		self->child_actor_run(buffPush);
 // 		self->child_actor_run(buffPop);
 	}
 	sync_msg<move_test> syncMsg(self->self_strand());

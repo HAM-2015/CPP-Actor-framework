@@ -11,7 +11,7 @@ struct async_buffer_close_exception
 };
 
 /*!
-@brief 异步缓冲队列，多写/多读
+@brief 异步缓冲队列，多写/多读，角色可转换
 */
 template <typename T>
 class async_buffer
@@ -98,66 +98,104 @@ public:
 		_strand = strand;
 	}
 public:
+	/*!
+	@brief 从左到右添加多条数据，如果队列已满就等待直到都成功
+	*/
 	template <typename...  TMS>
 	void push(my_actor* host, TMS&&... msgs)
 	{
 		static_assert(sizeof...(TMS) > 0, "");
 		size_t pushCount = 0;
-		_push(host, [&]
+		_push(host, [&]()->bool
 		{
 			buff_push<sizeof...(TMS)>::push(this, pushCount, try_move<TMS&&>::move(msgs)...);
 			return sizeof...(TMS) == ++pushCount;
 		});
 	}
 
+	/*!
+	@brief 尝试添加数据，如果队列已满就放弃
+	@return true 添加成功
+	*/
 	template <typename TM>
 	bool try_push(my_actor* host, TM&& msg)
 	{
-		return !!_try_push(host, [&]
+		return !!_try_push(host, [&]()->bool
 		{
 			_buffer.push_back(try_move<TM&&>::move(msg));
 			return true;
 		});
 	}
 
+	/*!
+	@brief 从左到右尝试添加数据，如果队列放不下就放弃多余的
+	@return 从左到右成功添加了几条
+	*/
 	template <typename...  TMS>
 	size_t try_push(my_actor* host, TMS&&... msgs)
 	{
 		static_assert(sizeof...(TMS) > 1, "");
 		size_t pushCount = 0;
-		return _try_push(host, [&]
+		return _try_push(host, [&]()->bool
 		{
 			buff_push<sizeof...(TMS)>::push(this, pushCount, try_move<TMS&&>::move(msgs)...);
 			return sizeof...(TMS) == ++pushCount;
 		});
 	}
 
+	/*!
+	@brief 在一定时间内尝试添加数据，如果队列到时还无法添加就放弃
+	@return true 添加成功
+	*/
 	template <typename TM>
 	bool timed_push(int tm, my_actor* host, TM&& msg)
 	{
-		return !!_timed_push(tm, host, [&]
+		return !!_timed_push(tm, host, [&]()->bool
 		{
 			_buffer.push_back(try_move<TM&&>::move(msg));
 			return true;
 		});
 	}
 
+	/*!
+	@brief 从左到右在一定时间内尝试添加多条数据，如果队列到时还无法添加就放弃
+	@return 从左到右成功添加了几条
+	*/
 	template <typename...  TMS>
 	size_t timed_push(int tm, my_actor* host, TMS&&... msgs)
 	{
 		static_assert(sizeof...(TMS) > 1, "");
 		size_t pushCount = 0;
-		return _timed_push(tm, host, [&]
+		return _timed_push(tm, host, [&]()->bool
 		{
 			buff_push<sizeof...(TMS)>::push(this, pushCount, try_move<TMS&&>::move(msgs)...);
 			return sizeof...(TMS) == ++pushCount;
 		});
 	}
 
+	/*!
+	@brief 从左到右强行添加多条数据，超出队列就丢弃最前面的数据
+	@return 丢弃了几条数据
+	*/
+	template <typename...  TMS>
+	size_t force_push(my_actor* host, TMS&&... msgs)
+	{
+		static_assert(sizeof...(TMS) > 0, "");
+		size_t pushCount = 0;
+		return _force_push(host, [&]()->bool
+		{
+			buff_push<sizeof...(TMS)>::push(this, pushCount, try_move<TMS&&>::move(msgs)...);
+			return sizeof...(TMS) == ++pushCount;
+		});
+	}
+
+	/*!
+	@brief 弹出一条数据，如果队列空就等待直到有数据
+	*/
 	T pop(my_actor* host)
 	{
 		char resBuf[sizeof(T)];
-		_pop(host, [&]
+		_pop(host, [&]()->bool
 		{
 			new(resBuf)T(std::move(_buffer.front()));
 			_buffer.pop_front();
@@ -171,12 +209,15 @@ public:
 		return std::move(*(T*)resBuf);
 	}
 
+	/*!
+	@brief 从左到右弹出多条数据，如果队列不够就等待直到成功
+	*/
 	template <typename... OTMS>
 	void pop(my_actor* host, OTMS&... outs)
 	{
 		static_assert(sizeof...(OTMS) > 0, "");
 		size_t popCount = 0;
-		_pop(host, [&]
+		_pop(host, [&]()->bool
 		{
 			buff_pop<sizeof...(OTMS)>::pop(this, popCount, outs...);
 			_buffer.pop_front();
@@ -184,11 +225,15 @@ public:
 		});
 	}
 
+	/*!
+	@brief 尝试弹出一条数据，如果队列为空就放弃
+	@return 成功得到消息
+	*/
 	template <typename OTM>
 	bool try_pop(my_actor* host, OTM& out)
 	{
 		size_t popCount = 0;
-		return !!_try_pop(host, [&]
+		return !!_try_pop(host, [&]()->bool
 		{
 			out = std::move(_buffer.front());
 			_buffer.pop_front();
@@ -196,12 +241,16 @@ public:
 		});
 	}
 
+	/*!
+	@brief 从左到右尝试弹出多条数据，如果队列不够放弃剩下的
+	@return 从左到右得到几条数据
+	*/
 	template <typename... OTMS>
 	size_t try_pop(my_actor* host, OTMS&... outs)
 	{
 		static_assert(sizeof...(OTMS) > 1, "");
 		size_t popCount = 0;
-		return _try_pop(host, [&]
+		return _try_pop(host, [&]()->bool
 		{
 			buff_pop<sizeof...(OTMS)>::pop(this, popCount, outs...);
 			_buffer.pop_front();
@@ -209,10 +258,14 @@ public:
 		});
 	}
 
+	/*!
+	@brief 在一定时间内尝试弹出一条数据，如果队列到时还无数据就放弃
+	@return true 成功得到消息
+	*/
 	template <typename OTM>
 	bool timed_pop(int tm, my_actor* host, OTM& out)
 	{
-		return !!_timed_pop(tm, host, [&]
+		return !!_timed_pop(tm, host, [&]()->bool
 		{
 			out = std::move(_buffer.front());
 			_buffer.pop_front();
@@ -220,12 +273,16 @@ public:
 		});
 	}
 
+	/*!
+	@brief 从左到右在一定时间内尝试弹出多条数据，如果队列到时还不够就放弃剩下的
+	@return 成功得到几条消息
+	*/
 	template <typename... OTMS>
 	size_t timed_pop(int tm, my_actor* host, OTMS&... outs)
 	{
 		static_assert(sizeof...(OTMS) > 1, "");
 		size_t popCount = 0;
-		return _timed_pop(tm, host, [&]
+		return _timed_pop(tm, host, [&]()->bool
 		{
 			buff_pop<sizeof...(OTMS)>::pop(this, popCount, outs...);
 			_buffer.pop_front();
@@ -327,24 +384,22 @@ private:
 	size_t _try_push(my_actor* host, H& h)
 	{
 		my_actor::quit_guard qg(host);
-		bool isFull = false;
 		bool closed = false;
 		size_t pushCount = 0;
-		LAMBDA_THIS_REF5(ref5, host, h, isFull, closed, pushCount);
-		host->send(_strand, [&ref5]
+		LAMBDA_THIS_REF4(ref4, host, h, closed, pushCount);
+		host->send(_strand, [&ref4]
 		{
-			ref5.closed = ref5->_closed;
-			if (!ref5->_closed)
+			ref4.closed = ref4->_closed;
+			if (!ref4->_closed)
 			{
 				while (true)
 				{
 					bool break_ = true;
-					ref5.isFull = ref5->_buffer.full();
-					if (!ref5.isFull)
+					if (!ref4->_buffer.full())
 					{
-						ref5.pushCount++;
-						break_ = ref5.h();
-						auto& _popWait = ref5->_popWait;
+						ref4.pushCount++;
+						break_ = ref4.h();
+						auto& _popWait = ref4->_popWait;
 						if (!_popWait.empty())
 						{
 							_popWait.back()(false);
@@ -450,6 +505,47 @@ private:
 	}
 
 	template <typename H>
+	size_t _force_push(my_actor* host, H& h)
+	{
+		my_actor::quit_guard qg(host);
+		bool closed = false;
+		size_t lostCount = 0;
+		LAMBDA_THIS_REF4(ref4, host, h, closed, lostCount);
+		host->send(_strand, [&ref4]
+		{
+			ref4.closed = ref4->_closed;
+			if (!ref4->_closed)
+			{
+				while (true)
+				{
+					if (ref4->_buffer.full())
+					{
+						ref4.lostCount++;
+						ref4->_buffer.pop_front();
+					}
+					bool break_ = ref4.h();
+					auto& _popWait = ref4->_popWait;
+					if (!_popWait.empty())
+					{
+						_popWait.back()(false);
+						_popWait.pop_back();
+					}
+					if (break_)
+					{
+						break;
+					}
+				}
+			}
+		});
+		if (closed)
+		{
+			qg.unlock();
+			throw close_exception();
+		}
+		return lostCount;
+	}
+
+	template <typename H>
 	void _pop(my_actor* host, H& out)
 	{
 		my_actor::quit_guard qg(host);
@@ -513,25 +609,23 @@ private:
 	size_t _try_pop(my_actor* host, H& out)
 	{
 		my_actor::quit_guard qg(host);
-		bool isEmpty = false;
 		bool closed = false;
 		bool popCount = 0;
-		LAMBDA_THIS_REF5(ref5, host, out, isEmpty, closed, popCount);
-		host->send(_strand, [&ref5]
+		LAMBDA_THIS_REF4(ref4, host, out, closed, popCount);
+		host->send(_strand, [&ref4]
 		{
-			ref5.closed = ref5->_closed;
-			if (!ref5->_closed)
+			ref4.closed = ref4->_closed;
+			if (!ref4->_closed)
 			{
 				while (true)
 				{
 					bool break_ = true;
-					auto& _buffer = ref5->_buffer;
-					auto& _pushWait = ref5->_pushWait;
-					ref5.isEmpty = _buffer.empty();
-					if (!ref5.isEmpty)
+					auto& _buffer = ref4->_buffer;
+					auto& _pushWait = ref4->_pushWait;
+					if (!_buffer.empty())
 					{
-						ref5.popCount++;
-						break_ = ref5.out();
+						ref4.popCount++;
+						break_ = ref4.out();
 					}
 					if (_buffer.size() <= _buffer.capacity() / 2 && !_pushWait.empty())
 					{
