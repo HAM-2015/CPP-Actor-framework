@@ -84,6 +84,12 @@ public:
 		return *(type*)_buff;
 	}
 
+	RM_REF(OBJ)& operator *()
+	{
+		assert(!_null);
+		return *(type*)_buff;
+	}
+
 	/*!
 	@brief 调用该临时对象方法
 	*/
@@ -166,6 +172,12 @@ public:
 	}
 
 	RM_REF(OBJ)& get()
+	{
+		assert(!_null);
+		return *(type*)_buff;
+	}
+
+	RM_REF(OBJ)& operator *()
 	{
 		assert(!_null);
 		return *(type*)_buff;

@@ -70,6 +70,7 @@ private:
 	shared_strand _strand;
 	handler_table _handlerTable;
 	handler_list_pool* _listPool;
+	unsigned long long _extMaxTick;
 	unsigned long long _extFinishTime;
 	std::weak_ptr<boost_strand> _weakStrand;
 };

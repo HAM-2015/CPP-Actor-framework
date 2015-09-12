@@ -7,7 +7,7 @@ typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> 
 
 ActorTimer_::ActorTimer_(const shared_strand& strand)
 :_ios(strand->get_ios_proxy()), _looping(false), _weakStrand(strand), _timerCount(0),
-_extFinishTime(-1), _timer(_ios.getTimer()), _listAlloc(8192), _handlerTable(4096)
+_extMaxTick(-1), _extFinishTime(-1), _timer(_ios.getTimer()), _listAlloc(8192), _handlerTable(4096)
 {
 	_listPool = create_shared_pool<msg_list_shared_alloc<actor_handle, null_mutex>>(4096, [this](void* p)
 	{
@@ -33,7 +33,15 @@ ActorTimer_::timer_handle ActorTimer_::timeout(unsigned long long us, const acto
 	assert(us < 0x80000000LL * 1000);
 	unsigned long long et = (get_tick_us() + us) & -256;
 	timer_handle timerHandle;
-	timerHandle._tableNode = _handlerTable.insert(_handlerTable.end(), make_pair(et, handler_list()));
+	if (et >= _extMaxTick)
+	{
+		_extMaxTick = et;
+		timerHandle._tableNode = _handlerTable.insert(_handlerTable.end(), make_pair(et, handler_list()));
+	}
+	else
+	{
+		timerHandle._tableNode = _handlerTable.insert(make_pair(et, handler_list())).first;
+	}
 	handler_list& hl = timerHandle._tableNode->second;
 	if (!hl)
 	{
@@ -71,13 +79,24 @@ void ActorTimer_::cancel(timer_handle& th)
 		hl->erase(th._handlerNode);
 		if (hl->empty())
 		{
-			_handlerTable.erase(th._tableNode);
-			if (_handlerTable.empty())
-			{//如果没有定时任务就退出定时循环
+			if (_handlerTable.size() == 1)
+			{
+				_extMaxTick = -1;
+				_handlerTable.erase(th._tableNode);
+				//如果没有定时任务就退出定时循环
 				boost::system::error_code ec;
 				((timer_type*)_timer)->cancel(ec);
 				_timerCount++;
 				_looping = false;
+			}
+			else if (th._tableNode->first == _extMaxTick)
+			{
+				_handlerTable.erase(th._tableNode--);
+				_extMaxTick = th._tableNode->first;
+			}
+			else
+			{
+				_handlerTable.erase(th._tableNode);
 			}
 		}
 		th._handlerList.reset();

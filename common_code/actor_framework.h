@@ -166,12 +166,15 @@ struct DstReceiverBuffRef_ : public DstReceiverBase_<TYPE_PIPE(ARGS)...>
 	std::tuple<stack_obj<ARGS>&...> _dstBuffRef;
 };
 
-template <typename... ARGS>
-struct DstReceiverRef_ : public DstReceiverBase_<TYPE_PIPE(ARGS)...>
+template <typename... TYPES>
+struct DstReceiverRef_{};
+
+template <typename... ARGS, typename... OUTS>
+struct DstReceiverRef_<types_pck<ARGS...>, types_pck<OUTS...>> : public DstReceiverBase_<TYPE_PIPE(ARGS)...>
 {
-	template <typename... Args>
-	DstReceiverRef_(Args&... args)
-		:_dstRef(args...) {}
+	template <typename... Outs>
+	DstReceiverRef_(Outs&... outs)
+		:_dstRef(outs...) {}
 
 	void move_from(std::tuple<TYPE_PIPE(ARGS)...>& s)
 	{
@@ -189,8 +192,8 @@ struct DstReceiverRef_ : public DstReceiverBase_<TYPE_PIPE(ARGS)...>
 		return _has;
 	}
 
+	std::tuple<OUTS&...> _dstRef;
 	bool _has = false;
-	std::tuple<ARGS&...> _dstRef;
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -208,10 +211,10 @@ protected:
 	void set_actor(const actor_handle& hostActor);
 	static std::shared_ptr<bool> new_bool();
 protected:
-	bool _waiting;
 	my_actor* _hostActor;
 	std::shared_ptr<bool> _closed;
 	DEBUG_OPERATION(shared_strand _strand);
+	bool _waiting;
 };
 
 template <typename... ARGS>
@@ -311,11 +314,13 @@ public:
 	template <typename... Args>
 	void operator()(Args&&... args) const
 	{
+		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
 		_hostActor->self_strand()->try_tick(msg_capture<TYPE_PIPE(ARGS)...>(_msgHandle, _hostActor, _closed, TRY_MOVE(args)...));
 	}
 
 	void operator()() const
 	{
+		static_assert(sizeof...(ARGS) == 0, "");
 		_hostActor->self_strand()->try_tick(msg_capture<>(_msgHandle, _hostActor, _closed));
 	}
 
@@ -1541,12 +1546,14 @@ public:
 	template <typename... Args>
 	void operator()(Args&&... args) const
 	{
+		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
 		assert(!empty());
 		_msgPool->push_msg(std::tuple<TYPE_PIPE(ARGS)...>(TRY_MOVE(args)...), _hostActor);
 	}
 
 	void operator()() const
 	{
+		static_assert(sizeof...(ARGS) == 0, "");
 		assert(!empty());
 		_msgPool->push_msg(_hostActor);
 	}
@@ -1987,11 +1994,13 @@ public:
 	template <typename...  Args>
 	void operator()(Args&&... args) const
 	{
+		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
 		_trig_handler(*_dstRec, TRY_MOVE(args)...);
 	}
 
 	void operator()() const
 	{
+		static_assert(sizeof...(ARGS) == 0, "");
 		tick_handler();
 	}
 
@@ -2026,30 +2035,15 @@ private:
 template <typename... ARGS>
 class callback_handler: public TrigOnceBase_
 {
-	typedef std::tuple<TYPE_PIPE(ARGS)&...> dst_receiver1;
-	typedef std::tuple<stack_obj<ARGS>&...> dst_receiver2;
+	typedef std::tuple<TYPE_PIPE(ARGS)&...> dst_receiver;
 
 	friend my_actor;
 public:
 	template <typename... Args>
 	callback_handler(my_actor* host, Args&... args)
-		:_early(true), _isRef(true)
-	{
-		new(_dstRef)dst_receiver1(args...);
-		_hostActor = host->shared_from_this();
-	}
-
-	template <typename... Args>
-	callback_handler(my_actor* host, stack_obj<Args>&... args)
-		: _early(true), _isRef(false)
-	{
-		new(_dstRef)dst_receiver2(args...);
-		_hostActor = host->shared_from_this();
-	}
-
-	callback_handler(my_actor* host)
 		:_early(true)
 	{
+		new(_dstRef)dst_receiver(args...);
 		_hostActor = host->shared_from_this();
 	}
 
@@ -2057,48 +2051,28 @@ public:
 	{
 		if (_early)
 		{
-			//可能在此析构函数内抛出 force_quit_exception 异常，但在 push_yield 已经切换出堆栈，在切换回来后会安全的释放资源
 			push_yield();
 			_hostActor.reset();
 		}
-		if (_isRef)
-		{
-			((dst_receiver1*)_dstRef)->~dst_receiver1();
-		}
-		else
-		{
-			((dst_receiver2*)_dstRef)->~dst_receiver2();
-		}
+		((dst_receiver*)_dstRef)->~dst_receiver();
 	}
 
 	callback_handler(const callback_handler& s)
-		:TrigOnceBase_(s), _early(false), _isRef(s._isRef)
+		:TrigOnceBase_(s), _early(false)
 	{
-		if (_isRef)
-		{
-			new(_dstRef)dst_receiver1(*(dst_receiver1*)s._dstRef);
-		} 
-		else
-		{
-			new(_dstRef)dst_receiver2(*(dst_receiver2*)s._dstRef);
-		}
+		new(_dstRef)dst_receiver(*(dst_receiver*)s._dstRef);
 	}
 public:
 	template <typename... Args>
 	void operator()(Args&&... args) const
 	{
-		if (_isRef)
-		{
-			_trig_handler2(*(dst_receiver1*)_dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
-		}
-		else
-		{
-			_trig_handler2(*(dst_receiver2*)_dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
-		}
+		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
+		_trig_handler2(*(dst_receiver*)_dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
 	}
 
 	void operator()() const
 	{
+		static_assert(sizeof...(ARGS) == 0, "");
 		tick_handler();
 	}
 private:
@@ -2115,9 +2089,8 @@ private:
 		static_assert(false, "no copy");
 	}
 private:
-	unsigned char _dstRef[static_cmp_type_size<dst_receiver1, dst_receiver2>::max];
-	const bool _early : 1;
-	const bool _isRef : 1;
+	unsigned char _dstRef[sizeof(dst_receiver)];
+	const bool _early;
 };
 
 /*!
@@ -2126,30 +2099,15 @@ private:
 template <typename... ARGS>
 class asio_cb_handler : public TrigOnceBase_
 {
-	typedef std::tuple<TYPE_PIPE(ARGS)&...> dst_receiver1;
-	typedef std::tuple<stack_obj<ARGS>&...> dst_receiver2;
+	typedef std::tuple<TYPE_PIPE(ARGS)&...> dst_receiver;
 
 	friend my_actor;
 public:
 	template <typename... Args>
 	asio_cb_handler(my_actor* host, Args&... args)
-		:_early(true), _isRef(true)
-	{
-		new(_dstRef)dst_receiver1(args...);
-		_hostActor = host->shared_from_this();
-	}
-
-	template <typename... Args>
-	asio_cb_handler(my_actor* host, stack_obj<Args>&... args)
-		: _early(true), _isRef(false)
-	{
-		new(_dstRef)dst_receiver2(args...);
-		_hostActor = host->shared_from_this();
-	}
-
-	asio_cb_handler(my_actor* host)
 		:_early(true)
 	{
+		new(_dstRef)dst_receiver(args...);
 		_hostActor = host->shared_from_this();
 	}
 
@@ -2157,48 +2115,28 @@ public:
 	{
 		if (_early)
 		{
-			//可能在此析构函数内抛出 force_quit_exception 异常，但在 push_yield 已经切换出堆栈，在切换回来后会安全的释放资源
 			push_yield();
 			_hostActor.reset();
 		}
-		if (_isRef)
-		{
-			((dst_receiver1*)_dstRef)->~dst_receiver1();
-		}
-		else
-		{
-			((dst_receiver2*)_dstRef)->~dst_receiver2();
-		}
+		((dst_receiver*)_dstRef)->~dst_receiver();
 	}
 
 	asio_cb_handler(const asio_cb_handler& s)
-		:TrigOnceBase_(s), _early(false), _isRef(s._isRef)
+		:TrigOnceBase_(s), _early(false)
 	{
-		if (_isRef)
-		{
-			new(_dstRef)dst_receiver1(*(dst_receiver1*)s._dstRef);
-		}
-		else
-		{
-			new(_dstRef)dst_receiver2(*(dst_receiver2*)s._dstRef);
-		}
+		new(_dstRef)dst_receiver(*(dst_receiver*)s._dstRef);
 	}
 public:
 	template <typename... Args>
 	void operator()(Args&&... args) const
 	{
-		if (_isRef)
-		{
-			_dispatch_handler2(*(dst_receiver1*)_dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
-		}
-		else
-		{
-			_dispatch_handler2(*(dst_receiver2*)_dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
-		}
+		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
+		_dispatch_handler2(*(dst_receiver*)_dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
 	}
 
 	void operator()() const
 	{
+		static_assert(sizeof...(ARGS) == 0, "");
 		dispatch_handler();
 	}
 private:
@@ -2215,9 +2153,8 @@ private:
 		static_assert(false, "no copy");
 	}
 private:
-	unsigned char _dstRef[static_cmp_type_size<dst_receiver1, dst_receiver2>::max];
-	const bool _early : 1;
-	const bool _isRef : 1;
+	unsigned char _dstRef[sizeof(dst_receiver)];
+	const bool _early;
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -2837,29 +2774,51 @@ private:
 	template <typename DST, typename... Args>
 	void _dispatch_handler(DST& dstRec, Args&&... args)
 	{
-		actor_handle shared_this = shared_from_this();
-		_strand->dispatch([=, &dstRec]() mutable
+		if (_strand->running_in_this_thread())
 		{
-			if (!shared_this->_quited)
+			if (!_quited)
 			{
-				TupleReceiver_(dstRec, std::move(args)...);
-				shared_this->pull_yield();
+				TupleReceiver_(dstRec, TRY_MOVE(args)...);
+				next_tick_handler();
 			}
-		});
+		} 
+		else
+		{
+			actor_handle shared_this = shared_from_this();
+			_strand->dispatch([=, &dstRec]() mutable
+			{
+				if (!shared_this->_quited)
+				{
+					TupleReceiver_(dstRec, std::move(args)...);
+					shared_this->pull_yield();
+				}
+			});
+		}
 	}
 
 	template <typename DST, typename... Args>
 	void _dispatch_handler2(DST& dstRec, Args&&... args)
 	{
-		actor_handle shared_this = shared_from_this();
-		_strand->dispatch([=]() mutable
+		if (_strand->running_in_this_thread())
 		{
-			if (!shared_this->_quited)
+			if (!_quited)
 			{
-				TupleReceiver_(dstRec, std::move(args)...);
-				shared_this->pull_yield();
+				TupleReceiver_(dstRec, TRY_MOVE(args)...);
+				next_tick_handler();
 			}
-		});
+		} 
+		else
+		{
+			actor_handle shared_this = shared_from_this();
+			_strand->dispatch([=]() mutable
+			{
+				if (!shared_this->_quited)
+				{
+					TupleReceiver_(dstRec, std::move(args)...);
+					shared_this->pull_yield();
+				}
+			});
+		}
 	}
 private:
 	template <typename AMH, typename DST>
@@ -2927,19 +2886,11 @@ public:
 	@param tm 超时时间
 	@return 超时完成返回false，成功提取消息返回true
 	*/
-	template <typename... Args>
-	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<Args...>& amh, Args&... res)
+	template <typename... Args, typename... Outs>
+	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<Args...>& amh, Outs&... res)
 	{
 		assert_enter();
-		DstReceiverRef_<Args...> dstRec(res...);
-		return _timed_wait_msg(amh, dstRec, tm);
-	}
-
-	template <typename... Args>
-	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<Args...>& amh, stack_obj<Args>&... res)
-	{
-		assert_enter();
-		DstReceiverBuffRef_<Args...> dstRec(res...);
+		DstReceiverRef_<types_pck<Args...>, types_pck<Outs...>> dstRec(res...);
 		return _timed_wait_msg(amh, dstRec, tm);
 	}
 
@@ -2958,14 +2909,8 @@ public:
 		return false;
 	}
 
-	template <typename... Args>
-	__yield_interrupt bool try_wait_msg(actor_msg_handle<Args...>& amh, Args&... res)
-	{
-		return timed_wait_msg(0, amh, res...);
-	}
-
-	template <typename... Args>
-	__yield_interrupt bool try_wait_msg(actor_msg_handle<Args...>& amh, stack_obj<Args>&... res)
+	template <typename... Args, typename... Outs>
+	__yield_interrupt bool try_wait_msg(actor_msg_handle<Args...>& amh, Outs&... res)
 	{
 		return timed_wait_msg(0, amh, res...);
 	}
@@ -2981,14 +2926,8 @@ public:
 	/*!
 	@brief 从消息句柄中提取消息
 	*/
-	template <typename... Args>
-	__yield_interrupt void wait_msg(actor_msg_handle<Args...>& amh, Args&... res)
-	{
-		timed_wait_msg(-1, amh, res...);
-	}
-
-	template <typename... Args>
-	__yield_interrupt void wait_msg(actor_msg_handle<Args...>& amh, stack_obj<Args>&... res)
+	template <typename... Args, typename... Outs>
+	__yield_interrupt void wait_msg(actor_msg_handle<Args...>& amh, Outs&... res)
 	{
 		timed_wait_msg(-1, amh, res...);
 	}
@@ -3011,7 +2950,7 @@ public:
 	}
 public:
 	/*!
-	@brief 创建上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_context())
+	@brief 创建上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_context(...))
 	*/
 	template <typename... Args>
 	callback_handler<Args...> make_context(Args&... args)
@@ -3020,25 +2959,11 @@ public:
 		return callback_handler<Args...>(this, args...);
 	}
 
-	template <typename... Args>
-	callback_handler<Args...> make_context(stack_obj<Args>&... args)
-	{
-		assert_enter();
-		return callback_handler<Args...>(this, args...);
-	}
-
 	/*!
-	@brief 创建ASIO库上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_asio_context())
+	@brief 创建ASIO库上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_asio_context(...))
 	*/
 	template <typename... Args>
 	asio_cb_handler<Args...> make_asio_context(Args&... args)
-	{
-		assert_enter();
-		return asio_cb_handler<Args...>(this, args...);
-	}
-
-	template <typename... Args>
-	asio_cb_handler<Args...> make_asio_context(stack_obj<Args>&... args)
 	{
 		assert_enter();
 		return asio_cb_handler<Args...>(this, args...);
@@ -3063,19 +2988,11 @@ public:
 	@param tm 超时时间
 	@return 超时完成返回false，成功提取消息返回true
 	*/
-	template <typename... Args>
-	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<Args...>& ath, Args&... res)
+	template <typename... Args, typename... Outs>
+	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<Args...>& ath, Outs&... res)
 	{
 		assert_enter();
-		DstReceiverRef_<Args...> dstRec(res...);
-		return _timed_wait_msg(ath, dstRec, tm);
-	}
-
-	template <typename... Args>
-	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<Args...>& ath, stack_obj<Args>&... res)
-	{
-		assert_enter();
-		DstReceiverBuffRef_<Args...> dstRec(res...);
+		DstReceiverRef_<types_pck<Args...>, types_pck<Outs...>> dstRec(res...);
 		return _timed_wait_msg(ath, dstRec, tm);
 	}
 
@@ -3094,14 +3011,8 @@ public:
 		return false;
 	}
 
-	template <typename... Args>
-	__yield_interrupt bool try_wait_trig(actor_trig_handle<Args...>& ath, Args&... res)
-	{
-		return timed_wait_trig(0, ath, res...);
-	}
-
-	template <typename... Args>
-	__yield_interrupt bool try_wait_trig(actor_trig_handle<Args...>& ath, stack_obj<Args>&... res)
+	template <typename... Args, typename... Outs>
+	__yield_interrupt bool try_wait_trig(actor_trig_handle<Args...>& ath, Outs&... res)
 	{
 		return timed_wait_trig(0, ath, res...);
 	}
@@ -3117,14 +3028,8 @@ public:
 	/*!
 	@brief 从触发句柄中提取消息
 	*/
-	template <typename... Args>
-	__yield_interrupt void wait_trig(actor_trig_handle<Args...>& ath, Args&... res)
-	{
-		timed_wait_trig(-1, ath, res...);
-	}
-
-	template <typename... Args>
-	__yield_interrupt void wait_trig(actor_trig_handle<Args...>& ath, stack_obj<Args>&... res)
+	template <typename... Args, typename... Outs>
+	__yield_interrupt void wait_trig(actor_trig_handle<Args...>& ath, Outs&... res)
 	{
 		timed_wait_trig(-1, ath, res...);
 	}
@@ -3853,26 +3758,26 @@ public:
 	@param checkDis 检测是否被断开连接，是就抛出 pump_disconnected_exception 异常
 	@return 超时完成返回false，成功取到消息返回true
 	*/
-	template <typename... Args>
-	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<Args...>& pump, Args&... res, bool checkDis = false)
+	template <typename... Args, typename... Outs>
+	__yield_interrupt bool timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<Args...>& pump, Outs&... res)
 	{
 		assert_enter();
-		DstReceiverRef_<Args...> dstRec(res...);
+		DstReceiverRef_<types_pck<Args...>, types_pck<Outs...>> dstRec(res...);
 		return _timed_pump_msg(pump, dstRec, tm, checkDis);
 	}
 
-	template <typename... Args>
-	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<Args...>& pump, stack_obj<Args>&... res, bool checkDis = false)
+	template <typename... Args, typename... Outs>
+	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<Args...>& pump, Outs&... res)
 	{
-		assert_enter();
-		DstReceiverBuffRef_<Args...> dstRec(res);
-		return _timed_pump_msg(pump, dstRec, tm, checkDis);
+		return timed_pump_msg(tm, false, pump, res...);
 	}
 
-	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<>& pump, bool checkDis = false);
+	__yield_interrupt bool timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<>& pump);
+
+	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<>& pump);
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<Args...>& pump, const Handler& h, bool checkDis = false)
+	__yield_interrupt bool timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<Args...>& pump, const Handler& h)
 	{
 		assert_enter();
 		DstReceiverBuff_<Args...> dstRec;
@@ -3884,29 +3789,35 @@ public:
 		return false;
 	}
 
+	template <typename... Args, typename Handler>
+	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<Args...>& pump, const Handler& h)
+	{
+		return timed_pump_msg(tm, false, pump, h);
+	}
+
 	/*!
 	@brief 尝试从消息泵中提取消息
 	*/
-	template <typename... Args>
-	__yield_interrupt bool try_pump_msg(const msg_pump_handle<Args...>& pump, Args&... res, bool checkDis = false)
+	template <typename... Args, typename... Outs>
+	__yield_interrupt bool try_pump_msg(bool checkDis, const msg_pump_handle<Args...>& pump, Outs&... res)
 	{
 		assert_enter();
-		DstReceiverRef_<Args...> dstRec(res...);
+		DstReceiverRef_<types_pck<Args...>, types_pck<Outs...>> dstRec(res...);
 		return _try_pump_msg(pump, dstRec, checkDis);
 	}
 
-	template <typename... Args>
-	__yield_interrupt bool try_pump_msg(const msg_pump_handle<Args...>& pump, stack_obj<Args>&... res, bool checkDis = false)
+	template <typename... Args, typename... Outs>
+	__yield_interrupt bool try_pump_msg(const msg_pump_handle<Args...>& pump, Outs&... res)
 	{
-		assert_enter();
-		DstReceiverBuffRef_<Args...> dstRec(res...);
-		return _try_pump_msg(pump, dstRec, checkDis);
+		return try_pump_msg(false, pump, res...);
 	}
 
-	__yield_interrupt bool try_pump_msg(const msg_pump_handle<>& pump, bool checkDis = false);
+	__yield_interrupt bool try_pump_msg(bool checkDis, const msg_pump_handle<>& pump);
+
+	__yield_interrupt bool try_pump_msg(const msg_pump_handle<>& pump);
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt bool try_pump_msg(const msg_pump_handle<Args...>& pump, const Handler& h, bool checkDis = false)
+	__yield_interrupt bool try_pump_msg(bool checkDis, const msg_pump_handle<Args...>& pump, const Handler& h)
 	{
 		assert_enter();
 		DstReceiverBuff_<Args...> dstRec;
@@ -3918,23 +3829,29 @@ public:
 		return false;
 	}
 
+	template <typename... Args, typename Handler>
+	__yield_interrupt bool try_pump_msg(const msg_pump_handle<Args...>& pump, const Handler& h)
+	{
+		return try_pump_msg(false, pump, h);
+	}
+
 	/*!
 	@brief 从消息泵中提取消息
 	*/
-	template <typename... Args>
-	__yield_interrupt void pump_msg(const msg_pump_handle<Args...>& pump, Args&... res, bool checkDis = false)
+	template <typename... Args, typename... Outs>
+	__yield_interrupt void pump_msg(bool checkDis, const msg_pump_handle<Args...>& pump, Outs&... res)
 	{
-		timed_pump_msg(-1, pump, res..., checkDis);
+		timed_pump_msg(-1, checkDis, pump, res...);
 	}
 
-	template <typename... Args>
-	__yield_interrupt void pump_msg(const msg_pump_handle<Args...>& pump, stack_obj<Args>&... res, bool checkDis = false)
+	template <typename... Args, typename... Outs>
+	__yield_interrupt void pump_msg(const msg_pump_handle<Args...>& pump, Outs&... res)
 	{
-		timed_pump_msg(-1, pump, res..., checkDis);
+		pump_msg(false, pump, res...);
 	}
 
 	template <typename Arg>
-	__yield_interrupt Arg pump_msg(const msg_pump_handle<Arg>& pump, bool checkDis = false)
+	__yield_interrupt Arg pump_msg(bool checkDis, const msg_pump_handle<Arg>& pump)
 	{
 		assert_enter();
 		DstReceiverBuff_<Arg> dstRec;
@@ -3942,12 +3859,26 @@ public:
 		return std::move(std::get<0>(dstRec._dstBuff.get()));
 	}
 
-	__yield_interrupt void pump_msg(const msg_pump_handle<>& pump, bool checkDis = false);
+	template <typename Arg>
+	__yield_interrupt Arg pump_msg(const msg_pump_handle<Arg>& pump)
+	{
+		return pump_msg(false, pump);
+	}
+
+	__yield_interrupt void pump_msg(bool checkDis, const msg_pump_handle<>& pump);
+
+	__yield_interrupt void pump_msg(const msg_pump_handle<>& pump);
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt void pump_msg(const msg_pump_handle<Args...>& pump, const Handler& h, bool checkDis = false)
+	__yield_interrupt void pump_msg(bool checkDis, const msg_pump_handle<Args...>& pump, const Handler& h)
 	{
-		timed_pump_msg<Args...>(-1, pump, h, checkDis);
+		timed_pump_msg<Args...>(-1, checkDis, pump, h);
+	}
+
+	template <typename... Args, typename Handler>
+	__yield_interrupt void pump_msg(const msg_pump_handle<Args...>& pump, const Handler& h)
+	{
+		pump_msg(false, pump, h);
 	}
 
 	/*!

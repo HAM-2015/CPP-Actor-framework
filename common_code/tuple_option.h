@@ -4,6 +4,9 @@
 #include <tuple>
 #include "try_move.h"
 
+template <typename... ARGS>
+struct types_pck {};
+
 template <typename TUPLE, size_t N>
 struct tuple_move
 {

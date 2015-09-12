@@ -294,7 +294,7 @@ void actor_test(my_actor* self)
 				{
 					BEGIN_TRY_
 					{
-						msg = self->pump_msg(conCmh, true);
+						msg = self->pump_msg(true, conCmh);
 						printf("数据:%d 发送者:%d 接收者:%d\n", msg._count->_id / 10000, msg._count->_id % 10000, (int)self->self_id());
 					}
 					CATCH_PUMP_DISCONNECTED

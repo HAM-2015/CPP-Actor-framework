@@ -2072,7 +2072,12 @@ bool my_actor::try_wait_msg(actor_msg_handle<>& amh)
 	return timed_wait_msg(0, amh);
 }
 
-bool my_actor::timed_pump_msg(int tm, const msg_pump_handle<>& pump, bool checkDis)
+bool my_actor::timed_pump_msg(int tm, const msg_pump_handle<>& pump)
+{
+	return timed_pump_msg(tm, false, pump);
+}
+
+bool my_actor::timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<>& pump)
 {
 	assert_enter();
 	assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
@@ -2121,7 +2126,12 @@ bool my_actor::timed_pump_msg(int tm, const msg_pump_handle<>& pump, bool checkD
 	return true;
 }
 
-bool my_actor::try_pump_msg(const msg_pump_handle<>& pump, bool checkDis)
+bool my_actor::try_pump_msg(const msg_pump_handle<>& pump)
+{
+	return try_pump_msg(false, pump);
+}
+
+bool my_actor::try_pump_msg(bool checkDis, const msg_pump_handle<>& pump)
 {
 	assert_enter();
 	assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
@@ -2194,7 +2204,12 @@ void my_actor::wait_trig(actor_trig_handle<>& ath)
 	timed_wait_trig(-1, ath);
 }
 
-void my_actor::pump_msg(const msg_pump_handle<>& pump, bool checkDis /*= false*/)
+void my_actor::pump_msg(bool checkDis, const msg_pump_handle<>& pump)
 {
-	timed_pump_msg(-1, pump, checkDis);
+	timed_pump_msg(-1, checkDis, pump);
+}
+
+void my_actor::pump_msg(const msg_pump_handle<>& pump)
+{
+	return pump_msg(false, pump);
 }
