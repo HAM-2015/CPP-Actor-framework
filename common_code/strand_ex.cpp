@@ -1,5 +1,5 @@
 #include "strand_ex.h"
-#include "ios_proxy.h"
+#include "io_engine.h"
 
 #ifdef ENABLE_STRAND_IMPL_POOL
 struct get_impl_ready_empty_strand_ex
@@ -25,7 +25,7 @@ inline void boost::asio::detail::strand_service::post(boost::asio::detail::stran
 }
 //////////////////////////////////////////////////////////////////////////
 
-StrandEx_::StrandEx_(ios_proxy& ios) : _ios(ios), _service(boost::asio::use_service<boost::asio::detail::strand_service>(ios))
+StrandEx_::StrandEx_(io_engine& ios) : _ios(ios), _service(boost::asio::use_service<boost::asio::detail::strand_service>(ios))
 {
 	_impl = (boost::asio::detail::strand_service::implementation_type)_ios.getImpl();
 }

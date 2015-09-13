@@ -13,10 +13,10 @@ mfc_strand::~mfc_strand()
 
 }
 
-shared_strand mfc_strand::create(ios_proxy& iosProxy, bind_mfc_run* mfc)
+shared_strand mfc_strand::create(io_engine& ioEngine, bind_mfc_run* mfc)
 {
 	std::shared_ptr<mfc_strand> res(new mfc_strand, [](mfc_strand* p){delete p; });
-	res->_iosProxy = &iosProxy;
+	res->_ioEngine = &ioEngine;
 	res->_mfc = mfc;
 	res->_mfcThreadID = mfc->thread_id();
 	res->_timer = new ActorTimer_(res);
@@ -35,7 +35,7 @@ shared_strand mfc_strand::create( bind_mfc_run* mfc )
 
 shared_strand mfc_strand::clone()
 {
-	return create(*_iosProxy, _mfc);
+	return create(*_ioEngine, _mfc);
 }
 
 bool mfc_strand::in_this_ios()

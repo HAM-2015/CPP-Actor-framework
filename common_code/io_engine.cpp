@@ -1,4 +1,4 @@
-#include "ios_proxy.h"
+#include "io_engine.h"
 #include "shared_data.h"
 #include "mem_pool.h"
 #include <boost/asio/high_resolution_timer.hpp>
@@ -8,7 +8,7 @@
 typedef boost::asio::detail::strand_service::strand_impl impl_type;
 typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> timer_type;
 
-ios_proxy::ios_proxy()
+io_engine::io_engine()
 {
 	_opend = false;
 	_runLock = NULL;
@@ -24,14 +24,14 @@ ios_proxy::ios_proxy()
 	});
 }
 
-ios_proxy::~ios_proxy()
+io_engine::~io_engine()
 {
 	assert(!_opend);
 	delete (obj_pool<impl_type>*)_implPool;
 	delete (obj_pool<timer_type>*)_timerPool;
 }
 
-void ios_proxy::run(size_t threadNum)
+void io_engine::run(size_t threadNum)
 {
 	assert(threadNum >= 1);
 	boost::lock_guard<boost::mutex> lg(_runMutex);
@@ -101,7 +101,7 @@ void ios_proxy::run(size_t threadNum)
 	}
 }
 
-void ios_proxy::stop()
+void io_engine::stop()
 {
 	boost::lock_guard<boost::mutex> lg(_runMutex);
 	if (_opend)
@@ -119,7 +119,7 @@ void ios_proxy::stop()
 	}
 }
 
-void ios_proxy::suspend()
+void io_engine::suspend()
 {
 	boost::lock_guard<boost::mutex> lg(_ctrlMutex);
 	for (auto it = _handleList.begin(); it != _handleList.end(); it++)
@@ -128,7 +128,7 @@ void ios_proxy::suspend()
 	}
 }
 
-void ios_proxy::resume()
+void io_engine::resume()
 {
 	boost::lock_guard<boost::mutex> lg(_ctrlMutex);
 	for (auto it = _handleList.begin(); it != _handleList.end(); it++)
@@ -137,19 +137,19 @@ void ios_proxy::resume()
 	}
 }
 
-bool ios_proxy::runningInThisIos()
+bool io_engine::runningInThisIos()
 {
 	assert(_opend);
 	return _threadsID.find(boost::this_thread::get_id()) != _threadsID.end();
 }
 
-size_t ios_proxy::threadNumber()
+size_t io_engine::threadNumber()
 {
 	assert(_opend);
 	return _threadsID.size();
 }
 
-void ios_proxy::runPriority(priority pri)
+void io_engine::runPriority(priority pri)
 {
 	boost::lock_guard<boost::mutex> lg(_ctrlMutex);
 	_priority = pri;
@@ -159,27 +159,27 @@ void ios_proxy::runPriority(priority pri)
 	}
 }
 
-ios_proxy::priority ios_proxy::getPriority()
+io_engine::priority io_engine::getPriority()
 {
 	return _priority;
 }
 
-long long ios_proxy::getRunCount()
+long long io_engine::getRunCount()
 {
 	return _runCount;
 }
 
-unsigned ios_proxy::physicalConcurrency()
+unsigned io_engine::physicalConcurrency()
 {
 	return boost::thread::physical_concurrency();
 }
 
-unsigned ios_proxy::hardwareConcurrency()
+unsigned io_engine::hardwareConcurrency()
 {
 	return boost::thread::hardware_concurrency();
 }
 
-void ios_proxy::cpuAffinity(unsigned mask)
+void io_engine::cpuAffinity(unsigned mask)
 {
 	boost::lock_guard<boost::mutex> lg(_ctrlMutex);
 	for (auto it = _handleList.begin(); it != _handleList.end(); it++)
@@ -188,32 +188,32 @@ void ios_proxy::cpuAffinity(unsigned mask)
 	}
 }
 
-const std::set<boost::thread::id>& ios_proxy::threadsID()
+const std::set<boost::thread::id>& io_engine::threadsID()
 {
 	return _threadsID;
 }
 
-ios_proxy::operator boost::asio::io_service&() const
+io_engine::operator boost::asio::io_service&() const
 {
 	return (boost::asio::io_service&)_ios;
 }
 
-void* ios_proxy::getImpl()
+void* io_engine::getImpl()
 {
 	return ((obj_pool<impl_type>*)_implPool)->new_();
 }
 
-void ios_proxy::freeImpl(void* impl)
+void io_engine::freeImpl(void* impl)
 {
 	((obj_pool<impl_type>*)_implPool)->delete_(impl);
 }
 
-void* ios_proxy::getTimer()
+void* io_engine::getTimer()
 {
 	return ((obj_pool<timer_type>*)_timerPool)->new_();
 }
 
-void ios_proxy::freeTimer(void* timer)
+void io_engine::freeTimer(void* timer)
 {
 	((obj_pool<timer_type>*)_timerPool)->delete_(timer);
 }

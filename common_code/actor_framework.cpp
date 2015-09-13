@@ -186,7 +186,7 @@ bool child_actor_handle::empty()
 
 //////////////////////////////////////////////////////////////////////////
 
-void actor_msg_handle_base::run_one()
+void actor_msg_handle_base::pull_yield()
 {
 	assert(!_hostActor->is_quited());
 	_hostActor->pull_yield();
@@ -219,7 +219,7 @@ std::shared_ptr<bool> actor_msg_handle_base::new_bool()
 
 //////////////////////////////////////////////////////////////////////////
 
-void MsgPumpBase_::run_one()
+void MsgPumpBase_::pull_yield()
 {
 	assert(!_hostActor->is_quited());
 	_hostActor->pull_yield();
@@ -489,7 +489,7 @@ void MsgPumpVoid_::clear()
 		assert(_waiting);
 		_waiting = false;
 		_dstRec = NULL;
-		run_one();
+		pull_yield();
 	}
 }
 
@@ -531,7 +531,7 @@ void MsgPumpVoid_::receiver()
 				*_dstRec = true;
 				_dstRec = NULL;
 			}
-			run_one();
+			pull_yield();
 		}
 		else
 		{

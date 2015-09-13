@@ -27,9 +27,6 @@
     <ClCompile Include="..\common_code\wx_strand.cpp">
       <Filter>源文件\common_code</Filter>
     </ClCompile>
-    <ClCompile Include="..\common_code\ios_proxy.cpp">
-      <Filter>源文件\common_code</Filter>
-    </ClCompile>
     <ClCompile Include="..\common_code\shared_data.cpp">
       <Filter>源文件\common_code</Filter>
     </ClCompile>
@@ -63,12 +60,12 @@
     <ClCompile Include="..\common_code\strand_ex.cpp">
       <Filter>源文件\common_code</Filter>
     </ClCompile>
+    <ClCompile Include="..\common_code\io_engine.cpp">
+      <Filter>源文件\common_code</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common_code\bind_wx_run.h">
-      <Filter>头文件\common_code</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common_code\ios_proxy.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
     <ClInclude Include="..\common_code\shared_data.h">
@@ -108,6 +105,9 @@
       <Filter>头文件\common_code</Filter>
     </ClInclude>
     <ClInclude Include="..\common_code\actor_timer.h">
+      <Filter>头文件\common_code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common_code\io_engine.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
   </ItemGroup>

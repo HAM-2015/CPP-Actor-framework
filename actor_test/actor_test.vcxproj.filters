@@ -33,9 +33,6 @@
     <ClCompile Include="..\common_code\actor_stack.cpp">
       <Filter>源文件\common_code</Filter>
     </ClCompile>
-    <ClCompile Include="..\common_code\ios_proxy.cpp">
-      <Filter>源文件\common_code</Filter>
-    </ClCompile>
     <ClCompile Include="..\common_code\scattered.cpp">
       <Filter>源文件\common_code</Filter>
     </ClCompile>
@@ -51,6 +48,9 @@
     <ClCompile Include="..\common_code\strand_ex.cpp">
       <Filter>源文件\common_code</Filter>
     </ClCompile>
+    <ClCompile Include="..\common_code\io_engine.cpp">
+      <Filter>源文件\common_code</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common_code\actor_framework.h">
@@ -63,9 +63,6 @@
       <Filter>头文件\common_code</Filter>
     </ClInclude>
     <ClInclude Include="..\common_code\async_buffer.h">
-      <Filter>头文件\common_code</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common_code\ios_proxy.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
     <ClInclude Include="..\common_code\mem_pool.h">
@@ -123,6 +120,9 @@
       <Filter>头文件\common_code</Filter>
     </ClInclude>
     <ClInclude Include="..\common_code\wrapped_distribute_handler.h">
+      <Filter>头文件\common_code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common_code\io_engine.h">
       <Filter>头文件\common_code</Filter>
     </ClInclude>
   </ItemGroup>

@@ -15,7 +15,7 @@ bind_wx_run_base::~bind_wx_run_base()
 	assert(boost::this_thread::get_id() == _threadID);
 }
 
-actor_handle bind_wx_run_base::create_wx_actor(ios_proxy& ios, const my_actor::main_func& mainFunc, size_t stackSize /*= DEFAULT_STACKSIZE*/)
+actor_handle bind_wx_run_base::create_wx_actor(io_engine& ios, const my_actor::main_func& mainFunc, size_t stackSize /*= DEFAULT_STACKSIZE*/)
 {
 	assert(!_isClosed);
 	return my_actor::create(make_wx_strand(ios), mainFunc, stackSize);
@@ -32,7 +32,7 @@ shared_wx_strand bind_wx_run_base::make_wx_strand()
 	return wx_strand::create(this);
 }
 
-shared_wx_strand bind_wx_run_base::make_wx_strand(ios_proxy& ios)
+shared_wx_strand bind_wx_run_base::make_wx_strand(io_engine& ios)
 {
 	return wx_strand::create(ios, this);
 }

@@ -15,7 +15,7 @@ private:
 	wx_strand();
 	~wx_strand();
 public:
-	static shared_wx_strand create(ios_proxy& iosProxy, bind_wx_run_base* wx);
+	static shared_wx_strand create(io_engine& ioEngine, bind_wx_run_base* wx);
 	static shared_wx_strand create(bind_wx_run_base* wx);
 private:
 	shared_strand clone();

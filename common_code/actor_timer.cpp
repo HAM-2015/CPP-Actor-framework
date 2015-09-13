@@ -6,7 +6,7 @@
 typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> timer_type;
 
 ActorTimer_::ActorTimer_(const shared_strand& strand)
-:_ios(strand->get_ios_proxy()), _looping(false), _weakStrand(strand), _timerCount(0),
+:_ios(strand->get_io_engine()), _looping(false), _weakStrand(strand), _timerCount(0),
 _extMaxTick(-1), _extFinishTime(-1), _timer(_ios.getTimer()), _listAlloc(8192), _handlerTable(4096)
 {
 	_listPool = create_shared_pool<msg_list_shared_alloc<actor_handle, null_mutex>>(4096, [this](void* p)

@@ -14,7 +14,7 @@
 #include <list>
 #include <xutility>
 #include <functional>
-#include "ios_proxy.h"
+#include "io_engine.h"
 #include "shared_strand.h"
 #include "msg_queue.h"
 #include "actor_mutex.h"
@@ -198,25 +198,6 @@ struct DstReceiverRef_<types_pck<ARGS...>, types_pck<OUTS...>> : public DstRecei
 
 //////////////////////////////////////////////////////////////////////////
 
-class actor_msg_handle_base
-{
-protected:
-	actor_msg_handle_base();
-	virtual ~actor_msg_handle_base(){}
-public:
-	virtual void close() = 0;
-protected:
-	void run_one();
-	bool is_quited();
-	void set_actor(const actor_handle& hostActor);
-	static std::shared_ptr<bool> new_bool();
-protected:
-	my_actor* _hostActor;
-	std::shared_ptr<bool> _closed;
-	DEBUG_OPERATION(shared_strand _strand);
-	bool _waiting;
-};
-
 template <typename... ARGS>
 class mutex_block_msg;
 
@@ -232,10 +213,49 @@ class actor_msg_handle;
 template <typename... ARGS>
 class actor_trig_handle;
 
-template <typename msg_handle, typename... ARGS>
+template <typename... ARGS>
+class MsgNotiferBase_;
+
+class actor_msg_handle_base
+{
+protected:
+	actor_msg_handle_base();
+	virtual ~actor_msg_handle_base(){}
+public:
+	virtual void close() = 0;
+	virtual size_t size() = 0;
+protected:
+	void pull_yield();
+	bool is_quited();
+	void set_actor(const actor_handle& hostActor);
+	static std::shared_ptr<bool> new_bool();
+protected:
+	my_actor* _hostActor;
+	std::shared_ptr<bool> _closed;
+	DEBUG_OPERATION(shared_strand _strand);
+	bool _waiting;
+};
+
+template <typename... ARGS>
+class ActorMsgHandlePush_: public actor_msg_handle_base
+{
+	friend MsgNotiferBase_<ARGS...>;
+protected:
+	virtual void push_msg(std::tuple<TYPE_PIPE(ARGS)...>&) = 0;
+};
+
+template <>
+class ActorMsgHandlePush_<> : public actor_msg_handle_base
+{
+	friend MsgNotiferBase_<>;
+protected:
+	virtual void push_msg() = 0;
+};
+
+template <typename... ARGS>
 class MsgNotiferBase_
 {
-	friend msg_handle;
+	typedef ActorMsgHandlePush_<ARGS...> msg_handle;
 protected:
 	MsgNotiferBase_()
 		:_msgHandle(NULL){}
@@ -357,35 +377,34 @@ private:
 };
 
 template <typename... ARGS>
-class actor_msg_notifer : public MsgNotiferBase_<actor_msg_handle<ARGS...>, ARGS...>
+class actor_msg_notifer : public MsgNotiferBase_<ARGS...>
 {
 	friend actor_msg_handle<ARGS...>;
 public:
 	actor_msg_notifer()	{}
 private:
-	actor_msg_notifer(actor_msg_handle<ARGS...>* msgHandle)
+	actor_msg_notifer(ActorMsgHandlePush_<ARGS...>* msgHandle)
 		:MsgNotiferBase_(msgHandle) {}
 };
 
 template <typename... ARGS>
-class actor_trig_notifer : public MsgNotiferBase_<actor_trig_handle<ARGS...>, ARGS...>
+class actor_trig_notifer : public MsgNotiferBase_<ARGS...>
 {
 	friend actor_trig_handle<ARGS...>;
 public:
 	actor_trig_notifer() {}
 private:
-	actor_trig_notifer(actor_trig_handle<ARGS...>* msgHandle)
+	actor_trig_notifer(ActorMsgHandlePush_<ARGS...>* msgHandle)
 		:MsgNotiferBase_(msgHandle) {}
 };
 
 template <typename... ARGS>
-class actor_msg_handle: public actor_msg_handle_base
+class actor_msg_handle : public ActorMsgHandlePush_<ARGS...>
 {
 	typedef std::tuple<TYPE_PIPE(ARGS)...> msg_type;
 	typedef DstReceiverBase_<TYPE_PIPE(ARGS)...> dst_receiver;
 	typedef actor_msg_notifer<ARGS...> msg_notifer;
 
-	friend MsgNotiferBase_<actor_msg_handle<ARGS...>, ARGS...>;
 	friend mutex_block_msg<ARGS...>;
 	friend my_actor;
 public:
@@ -418,7 +437,7 @@ private:
 				assert(_dstRec);
 				_dstRec->move_from(msg);
 				_dstRec = NULL;
-				run_one();
+				pull_yield();
 				return;
 			}
 			_msgBuff.push_back(std::move(msg));
@@ -471,13 +490,11 @@ private:
 	msg_queue<msg_type> _msgBuff;
 };
 
-
 template <>
-class actor_msg_handle<> : public actor_msg_handle_base
+class actor_msg_handle<> : public ActorMsgHandlePush_<>
 {
 	typedef actor_msg_notifer<> msg_notifer;
 
-	friend MsgNotiferBase_<actor_msg_handle<>>;
 	friend mutex_block_msg<>;
 	friend my_actor;
 public:
@@ -509,7 +526,7 @@ private:
 					*_dstRec = true;
 					_dstRec = NULL;
 				}
-				run_one();
+				pull_yield();
 				return;
 			}
 			_msgCount++;
@@ -579,13 +596,12 @@ private:
 //////////////////////////////////////////////////////////////////////////
 
 template <typename... ARGS>
-class actor_trig_handle : public actor_msg_handle_base
+class actor_trig_handle : public ActorMsgHandlePush_<ARGS...>
 {
 	typedef std::tuple<TYPE_PIPE(ARGS)...> msg_type;
 	typedef DstReceiverBase_<TYPE_PIPE(ARGS)...> dst_receiver;
 	typedef actor_trig_notifer<ARGS...> msg_notifer;
 
-	friend MsgNotiferBase_<actor_trig_handle<ARGS...>, ARGS...>;
 	friend mutex_block_trig<ARGS...>;
 	friend my_actor;
 public:
@@ -619,7 +635,7 @@ private:
 				assert(_dstRec);
 				_dstRec->move_from(msg);
 				_dstRec = NULL;
-				run_one();
+				pull_yield();
 				return;
 			}
 			_hasMsg = true;
@@ -673,6 +689,12 @@ public:
 		assert(_strand->running_in_this_thread());
 		return _hasMsg;
 	}
+
+	size_t size()
+	{
+		assert(_strand->running_in_this_thread());
+		return _hasMsg ? 1 : 0;
+	}
 private:
 	dst_receiver* _dstRec;
 	bool _hasMsg;
@@ -680,11 +702,10 @@ private:
 };
 
 template <>
-class actor_trig_handle<> : public actor_msg_handle_base
+class actor_trig_handle<> : public ActorMsgHandlePush_<>
 {
 	typedef actor_trig_notifer<> msg_notifer;
 
-	friend MsgNotiferBase_<actor_trig_handle<>>;
 	friend mutex_block_trig<>;
 	friend my_actor;
 public:
@@ -721,7 +742,7 @@ private:
 					*_dstRec = true;
 					_dstRec = NULL;
 				}
-				run_one();
+				pull_yield();
 				return;
 			}
 			_hasMsg = true;
@@ -784,6 +805,12 @@ public:
 		assert(_strand->running_in_this_thread());
 		return _hasMsg;
 	}
+
+	size_t size()
+	{
+		assert(_strand->running_in_this_thread());
+		return _hasMsg ? 1 : 0;
+	}
 private:
 	bool* _dstRec;
 	bool _hasMsg;
@@ -806,18 +833,10 @@ public:
 	virtual ~MsgPumpBase_() {}
 protected:
 	bool is_quited();
-	void run_one();
+	void pull_yield();
 	void push_yield();
 protected:
 	my_actor* _hostActor;
-};
-
-class MsgPoolBase_
-{
-	friend MsgPump_<>;
-	friend my_actor;
-public:
-	virtual ~MsgPoolBase_() {}
 };
 
 template <typename... ARGS>
@@ -900,7 +919,7 @@ private:
 				{
 					_waiting = false;
 					_checkDis = false;
-					run_one();
+					pull_yield();
 				}
 				//read_msgʱ
 			}
@@ -1036,7 +1055,7 @@ private:
 			assert(_waiting);
 			_waiting = false;
 			_dstRec = NULL;
-			run_one();
+			pull_yield();
 		}
 	}
 
@@ -1072,7 +1091,7 @@ private:
 };
 
 template <typename... ARGS>
-class MsgPool_ : public MsgPoolBase_
+class MsgPool_
 {
 	typedef std::tuple<TYPE_PIPE(ARGS)...> msg_type;
 	typedef DstReceiverBase_<TYPE_PIPE(ARGS)...> dst_receiver;
@@ -1397,7 +1416,7 @@ private:
 
 class MsgPumpVoid_;
 
-class MsgPoolVoid_ : public MsgPoolBase_
+class MsgPoolVoid_
 {
 	typedef post_actor_msg<> post_type;
 	typedef MsgPumpVoid_ msg_pump_type;

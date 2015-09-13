@@ -5,7 +5,7 @@
 #include <codecvt>
 #include <windows.h>
 
-#ifndef DISABLE_XML_ENC
+#ifdef ENABLE_XML_ENC
 #pragma comment(lib, "libeay32.lib")
 #include <openssl/aes.h>
 #include <openssl/md5.h>
@@ -75,7 +75,7 @@ xml_config::~xml_config()
 
 bool xml_config::decrypt(string& data)
 {
-#ifndef DISABLE_XML_ENC
+#ifdef ENABLE_XML_ENC
 	if (data.size() > 0 && data.size() % 16 == 0)
 	{
 		{
@@ -133,7 +133,7 @@ bool xml_config::decrypt(string& data)
 
 void xml_config::encrypt(string& data, std::ostringstream& inData, const char* pas)
 {
-#ifndef DISABLE_XML_ENC
+#ifdef ENABLE_XML_ENC
 	{
 		string& src = inData.str();
 		data.resize((sizeof(enc_head) + src.size() + 15) & -16);

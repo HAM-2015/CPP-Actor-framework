@@ -1,5 +1,5 @@
-#ifndef __IOS_PROXY_H
-#define __IOS_PROXY_H
+#ifndef __IO_ENGINE_H
+#define __IO_ENGINE_H
 
 #include <boost/asio/io_service.hpp>
 #include <boost/atomic/atomic.hpp>
@@ -11,9 +11,9 @@ class StrandEx_;
 class ActorTimer_;
 
 /*!
-@brief io_service调度器封装
+@brief io_service调度引擎
 */
-class ios_proxy
+class io_engine
 {
 	friend StrandEx_;
 	friend ActorTimer_;
@@ -29,8 +29,8 @@ public:
 		time_critical = THREAD_PRIORITY_TIME_CRITICAL
 	};
 public:
-	ios_proxy();
-	~ios_proxy();
+	io_engine();
+	~io_engine();
 public:
 	/*!
 	@brief 开始运行调度器，非阻塞，启动完毕后立即返回

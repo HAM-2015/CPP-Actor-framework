@@ -12,10 +12,10 @@ wx_strand::~wx_strand()
 
 }
 
-shared_wx_strand wx_strand::create(ios_proxy& iosProxy, bind_wx_run_base* wx)
+shared_wx_strand wx_strand::create(io_engine& ioEngine, bind_wx_run_base* wx)
 {
 	shared_wx_strand res(new wx_strand, [](wx_strand* p){delete p; });
-	res->_iosProxy = &iosProxy;
+	res->_ioEngine = &ioEngine;
 	res->_wx = wx;
 	res->_wxThreadID = wx->thread_id();
 	res->_timer = new ActorTimer_(res);
@@ -34,7 +34,7 @@ shared_wx_strand wx_strand::create(bind_wx_run_base* wx)
 
 shared_strand wx_strand::clone()
 {
-	return create(*_iosProxy, _wx);
+	return create(*_ioEngine, _wx);
 }
 
 bool wx_strand::in_this_ios()

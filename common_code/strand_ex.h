@@ -12,17 +12,17 @@
 #include "try_move.h"
 
 class boost_strand;
-class ios_proxy;
+class io_engine;
 
 /*!
 @brief 修改标准boost strand，impl_改为独占
 */
 class StrandEx_
 {
-	friend ios_proxy;
+	friend io_engine;
 	friend boost_strand;
 private:
-	StrandEx_(ios_proxy& ios);
+	StrandEx_(io_engine& ios);
 	~StrandEx_();
 
 	boost::asio::io_service& get_io_service();
@@ -43,7 +43,7 @@ private:
 		_service.dispatch(_impl, TRY_MOVE(handler));
 	}
 private:
-	ios_proxy& _ios;
+	io_engine& _ios;
 	boost::asio::detail::strand_service& _service;
 	boost::asio::detail::strand_service::implementation_type _impl;
 };

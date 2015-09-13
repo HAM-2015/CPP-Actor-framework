@@ -79,7 +79,7 @@ private:
 	void serverActor(my_actor* self, std::shared_ptr<server_param> param);
 	void mainActor(my_actor* self);
 private:
-	ios_proxy _ios;
+	io_engine _ios;
 	shared_strand _strand;
 	CFont _editFont;
 	post_actor_msg<ui_cmd> _uiCMD;

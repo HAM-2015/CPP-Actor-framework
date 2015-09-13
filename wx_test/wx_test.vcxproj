@@ -89,7 +89,7 @@
     <ClCompile Include="..\common_code\actor_stack.cpp" />
     <ClCompile Include="..\common_code\actor_timer.cpp" />
     <ClCompile Include="..\common_code\bind_wx_run.cpp" />
-    <ClCompile Include="..\common_code\ios_proxy.cpp" />
+    <ClCompile Include="..\common_code\io_engine.cpp" />
     <ClCompile Include="..\common_code\scattered.cpp" />
     <ClCompile Include="..\common_code\shared_data.cpp" />
     <ClCompile Include="..\common_code\shared_strand.cpp" />
@@ -105,7 +105,7 @@
     <ClInclude Include="..\common_code\actor_stack.h" />
     <ClInclude Include="..\common_code\actor_timer.h" />
     <ClInclude Include="..\common_code\bind_wx_run.h" />
-    <ClInclude Include="..\common_code\ios_proxy.h" />
+    <ClInclude Include="..\common_code\io_engine.h" />
     <ClInclude Include="..\common_code\msg_pipe.h" />
     <ClInclude Include="..\common_code\msg_queue.h" />
     <ClInclude Include="..\common_code\scattered.h" />

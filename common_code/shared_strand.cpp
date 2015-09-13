@@ -44,7 +44,7 @@ boost_strand::boost_strand()
 :_pCheckDestroy(NULL), _isReset(true), _nextTickAlloc(128), _nextTickQueue1(128), _nextTickQueue2(128), _frontTickQueue(&_nextTickQueue1), _backTickQueue(&_nextTickQueue2)
 #endif //ENABLE_NEXT_TICK
 {
-	_iosProxy = NULL;
+	_ioEngine = NULL;
 	_strand = NULL;
 	_timer = NULL;
 }
@@ -63,11 +63,11 @@ boost_strand::~boost_strand()
 	delete _timer;
 }
 
-shared_strand boost_strand::create(ios_proxy& iosProxy, bool makeTimer /* = true */)
+shared_strand boost_strand::create(io_engine& ioEngine, bool makeTimer /* = true */)
 {
 	shared_strand res(new boost_strand, [](boost_strand* p){delete p; });
-	res->_iosProxy = &iosProxy;
-	res->_strand = new strand_type(iosProxy);
+	res->_ioEngine = &ioEngine;
+	res->_strand = new strand_type(ioEngine);
 	if (makeTimer)
 	{
 		res->_timer = new ActorTimer_(res);
@@ -78,13 +78,13 @@ shared_strand boost_strand::create(ios_proxy& iosProxy, bool makeTimer /* = true
 
 shared_strand boost_strand::clone()
 {
-	return create(*_iosProxy);
+	return create(*_ioEngine);
 }
 
 bool boost_strand::in_this_ios()
 {
-	assert(_iosProxy);
-	return _iosProxy->runningInThisIos();
+	assert(_ioEngine);
+	return _ioEngine->runningInThisIos();
 }
 
 bool boost_strand::running_in_this_thread()
@@ -124,20 +124,20 @@ bool boost_strand::empty(bool checkTick)
 
 size_t boost_strand::ios_thread_number()
 {
-	assert(_iosProxy);
-	return _iosProxy->threadNumber();
+	assert(_ioEngine);
+	return _ioEngine->threadNumber();
 }
 
-ios_proxy& boost_strand::get_ios_proxy()
+io_engine& boost_strand::get_io_engine()
 {
-	assert(_iosProxy);
-	return *_iosProxy;
+	assert(_ioEngine);
+	return *_ioEngine;
 }
 
 boost::asio::io_service& boost_strand::get_io_service()
 {
-	assert(_iosProxy);
-	return *_iosProxy;
+	assert(_ioEngine);
+	return *_ioEngine;
 }
 
 ActorTimer_* boost_strand::get_timer()

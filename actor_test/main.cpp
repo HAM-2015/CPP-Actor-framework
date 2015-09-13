@@ -1,7 +1,7 @@
 // actor_test.cpp : 定义控制台应用程序的入口点。
 //
 
-#include "ios_proxy.h"
+#include "io_engine.h"
 #include "actor_framework.h"
 #include "async_buffer.h"
 #include "sync_msg.h"
@@ -208,7 +208,7 @@ void test_shift(my_actor* self, actor_handle pauseactor)
 	}
 }
 
-void perfor_test(my_actor* self, ios_proxy& ios)
+void perfor_test(my_actor* self, io_engine& ios)
 {
 	self->check_stack();
 	vector<shared_strand> strands;
@@ -256,9 +256,9 @@ void perfor_test(my_actor* self, ios_proxy& ios)
 void actor_test(my_actor* self)
 {
 	SELF_POSITION;
-	ios_proxy perforIos;//用于测试多线程下的Actor切换性能
-	perforIos.run(ios_proxy::hardwareConcurrency());//调度器线程设置为CPU线程数
-	perforIos.runPriority(ios_proxy::idle);//调度器优先级设置为最低
+	io_engine perforIos;//用于测试多线程下的Actor切换性能
+	perforIos.run(io_engine::hardwareConcurrency());//调度器线程设置为CPU线程数
+	perforIos.runPriority(io_engine::idle);//调度器优先级设置为最低
 	child_actor_handle actorLeft = self->create_child_actor(std::bind(&check_key_test, ph::_1, VK_LEFT));
 	child_actor_handle actorRight = self->create_child_actor(std::bind(&check_key_test, ph::_1, VK_RIGHT));
 	child_actor_handle actorUp = self->create_child_actor(std::bind(&check_key_test, ph::_1, VK_UP));
@@ -652,7 +652,7 @@ int main(int argc, char* argv[])
 {
 	trace_space(get_time_string_s(), "Hello Actor");
 	enable_high_resolution();
-	ios_proxy ios;
+	io_engine ios;
 	ios.run();
 	{
 		actor_handle actorTest = my_actor::create(boost_strand::create(ios), std::bind(&actor_test, ph::_1));

@@ -9,7 +9,7 @@ class MyApp :public wxApp
 public:
 	int OnRun()
 	{
-		ios_proxy ios;
+		io_engine ios;
 		ios.run();
 		{
 			wx_ui wxTest(ios);

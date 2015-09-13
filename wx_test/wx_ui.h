@@ -12,13 +12,13 @@ class wx_ui : public bind_wx_run<MyDialog1>
 		ui_close
 	};
 public:
-	wx_ui(ios_proxy& ios);
+	wx_ui(io_engine& ios);
 	~wx_ui();
 private:
 	void btn_click_run(wxCommandEvent& event);
 	void OnClose();
 private:
-	ios_proxy& _ios;
+	io_engine& _ios;
 	wxFont _font;
 	post_actor_msg<ui_cmd> _uiCMD;
 
@@ -28,7 +28,7 @@ template <typename dlg>
 class cancel_dlg: public bind_wx_run<dlg>
 {
 public:
-	cancel_dlg(ios_proxy& ios, wxWindow* parent, const std::function<void ()>& cancelNtf)
+	cancel_dlg(io_engine& ios, wxWindow* parent, const std::function<void ()>& cancelNtf)
 		:bind_wx_run(parent), _ios(ios), _cancelNtf(cancelNtf)
 	{
 
@@ -73,7 +73,7 @@ private:
 		_ntfClose();
 	}
 private:
-	ios_proxy& _ios;
+	io_engine& _ios;
 	actor_handle _mainActor;
 	const std::function<void()> _cancelNtf;
 	post_actor_msg<> _ntfClose;

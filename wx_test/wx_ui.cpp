@@ -15,7 +15,7 @@ void wx_ui::OnClose()
 	_uiCMD(ui_close);
 }
 
-wx_ui::wx_ui(ios_proxy& ios)
+wx_ui::wx_ui(io_engine& ios)
 :bind_wx_run((wxWindow*)NULL), _ios(ios)
 {
 	_font = wxFont(9, wxDEFAULT, wxNORMAL, wxNORMAL, false, "ËÎÌו");

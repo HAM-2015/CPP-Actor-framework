@@ -176,7 +176,7 @@ public:
 	@brief 在MFC线程中创建一个Actor
 	@param ios Actor内部timer使用的调度器，没有就不能用timer
 	*/
-	actor_handle create_mfc_actor(ios_proxy& ios, const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE)
+	actor_handle create_mfc_actor(io_engine& ios, const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return my_actor::create(mfc_strand::create(ios, this), mainFunc, stackSize);
 	}

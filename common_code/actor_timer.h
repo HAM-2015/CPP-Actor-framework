@@ -62,7 +62,7 @@ private:
 	*/
 	void timer_loop(unsigned long long us);
 private:
-	ios_proxy& _ios;
+	io_engine& _ios;
 	void* _timer;
 	bool _looping;
 	int _timerCount;

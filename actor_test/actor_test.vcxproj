@@ -164,7 +164,7 @@
     <ClCompile Include="..\common_code\actor_mutex.cpp" />
     <ClCompile Include="..\common_code\actor_stack.cpp" />
     <ClCompile Include="..\common_code\actor_timer.cpp" />
-    <ClCompile Include="..\common_code\ios_proxy.cpp" />
+    <ClCompile Include="..\common_code\io_engine.cpp" />
     <ClCompile Include="..\common_code\shared_data.cpp" />
     <ClCompile Include="..\common_code\shared_strand.cpp" />
     <ClCompile Include="..\common_code\scattered.cpp" />
@@ -180,7 +180,7 @@
     <ClInclude Include="..\common_code\check_actor_stack.h" />
     <ClInclude Include="..\common_code\trace.h" />
     <ClInclude Include="..\common_code\try_move.h" />
-    <ClInclude Include="..\common_code\ios_proxy.h" />
+    <ClInclude Include="..\common_code\io_engine.h" />
     <ClInclude Include="..\common_code\msg_queue.h" />
     <ClInclude Include="..\common_code\mem_pool.h" />
     <ClInclude Include="..\common_code\shared_data.h" />

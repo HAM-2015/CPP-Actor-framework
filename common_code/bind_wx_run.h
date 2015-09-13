@@ -127,7 +127,7 @@ protected:
 	virtual ~bind_wx_run_base();
 public:
 	shared_wx_strand make_wx_strand();
-	shared_wx_strand make_wx_strand(ios_proxy& ios);
+	shared_wx_strand make_wx_strand(io_engine& ios);
 
 	/*!
 	@brief 等待对象关闭
@@ -217,7 +217,7 @@ public:
 	@brief 在UI线程中创建一个Actor
 	@param ios Actor内部timer使用的调度器，没有就不能用timer
 	*/
-	actor_handle create_wx_actor(ios_proxy& ios, const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	actor_handle create_wx_actor(io_engine& ios, const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 
 	actor_handle create_wx_actor(const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 #endif

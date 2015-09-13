@@ -15,7 +15,7 @@
 #include <boost/thread/condition_variable.hpp>
 #include <functional>
 #include <memory>
-#include "ios_proxy.h"
+#include "io_engine.h"
 #include "msg_queue.h"
 #include "wrapped_post_handler.h"
 #include "wrapped_try_tick_handler.h"
@@ -302,7 +302,7 @@ protected:
 	boost_strand();
 	virtual ~boost_strand();
 public:
-	static shared_strand create(ios_proxy& iosProxy, bool makeTimer = true);
+	static shared_strand create(io_engine& ioEngine, bool makeTimer = true);
 public:
 	/*!
 	@brief 如果在本strand中调用则直接执行，否则添加到队列中等待执行
@@ -505,7 +505,7 @@ public:
 	/*!
 	@brief 获取当前调度器代理
 	*/
-	ios_proxy& get_ios_proxy();
+	io_engine& get_io_engine();
 
 	/*!
 	@brief 获取当前调度器
@@ -536,7 +536,7 @@ protected:
 	virtual void _post(const std::function<void ()>& h);
 #endif
 	ActorTimer_* _timer;
-	ios_proxy* _iosProxy;
+	io_engine* _ioEngine;
 	strand_type* _strand;
 	std::weak_ptr<boost_strand> _weakThis;
 public:
