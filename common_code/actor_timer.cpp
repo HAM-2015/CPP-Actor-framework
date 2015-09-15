@@ -45,7 +45,7 @@ ActorTimer_::timer_handle ActorTimer_::timeout(unsigned long long us, const acto
 	handler_list& hl = timerHandle._tableNode->second;
 	if (!hl)
 	{
-		hl = _listPool->new_();
+		hl = _listPool->pick();
 		assert(hl->empty());
 	}
 	hl->push_front(host);

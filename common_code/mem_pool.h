@@ -501,8 +501,8 @@ class obj_pool
 {
 public:
 	virtual ~obj_pool(){};
-	virtual	T* new_() = 0;
-	virtual void delete_(void* p) = 0;
+	virtual	T* pick() = 0;
+	virtual void recycle(void* p) = 0;
 };
 
 template <typename T, typename CREATER, typename DESTORY>
@@ -575,7 +575,7 @@ public:
 		assert(0 == _nodeCount);
 	}
 public:
-	T* new_()
+	T* pick()
 	{
 		{
 			boost::lock_guard<MUTEX> lg(_mutex);
@@ -596,7 +596,7 @@ public:
 		return (T*)newNode->_data;
 	}
 
-	void delete_(void* p)
+	void recycle(void* p)
 	{
 		{
 			boost::lock_guard<MUTEX> lg(_mutex);
@@ -632,7 +632,7 @@ class shared_obj_pool
 {
 public:
 	virtual ~shared_obj_pool(){};
-	virtual	std::shared_ptr<T> new_() = 0;
+	virtual	std::shared_ptr<T> pick() = 0;
 };
 
 template <typename T, typename CREATER, typename DESTORY>
@@ -767,9 +767,9 @@ public:
 		assert(!_refCountAlloc);
 	}
 public:
-	std::shared_ptr<T> new_()
+	std::shared_ptr<T> pick()
 	{
-		return std::shared_ptr<T>(_dataAlloc.new_(), [this](T* p){_dataAlloc.delete_(p); }, ref_count_alloc<void>(_refCountAlloc));
+		return std::shared_ptr<T>(_dataAlloc.pick(), [this](T* p){_dataAlloc.recycle(p); }, ref_count_alloc<void>(_refCountAlloc));
 	}
 private:
 	ObjPool_<T, CREATER, DESTORY, MUTEX> _dataAlloc;

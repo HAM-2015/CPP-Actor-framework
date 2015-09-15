@@ -6,9 +6,7 @@
 #include <memory>
 #include "actor_framework.h"
 
-struct async_buffer_close_exception
-{
-};
+struct async_buffer_close_exception {};
 
 /*!
 @brief 异步缓冲队列，多写/多读，角色可转换
@@ -44,11 +42,11 @@ class async_buffer
 	struct buff_push
 	{
 		template <typename Fst, typename... Args>
-		static void push(async_buffer* const this_, const size_t& i, Fst&& fst, Args&&... args)
+		static inline void push(async_buffer* const this_, const size_t i, Fst&& fst, Args&&... args)
 		{
 			if (DEPTH == i)
 			{
-				this_->_buffer.push_back(try_move<Fst&&>::move(fst));
+				this_->_buffer.push_back(TRY_MOVE(fst));
 			}
 			else
 			{
@@ -60,14 +58,14 @@ class async_buffer
 	template <size_t N, size_t DEPTH>
 	struct buff_push<N, DEPTH, true>
 	{
-		static void push(async_buffer* const, const size_t&){}
+		static inline void push(async_buffer* const, const size_t){}
 	};
 
 	template <size_t N, size_t DEPTH = 0, bool TOP = false>
 	struct buff_pop
 	{
 		template <typename Fst, typename... Outs>
-		static void pop(async_buffer* const this_, const size_t& i, Fst& fst, Outs&... outs)
+		static inline void pop(async_buffer* const this_, const size_t i, Fst& fst, Outs&... outs)
 		{
 			if (DEPTH == i)
 			{
@@ -83,13 +81,11 @@ class async_buffer
 	template <size_t N, size_t DEPTH>
 	struct buff_pop<N, DEPTH, true>
 	{
-		static void pop(async_buffer* const, const size_t&){}
+		static inline void pop(async_buffer* const, const size_t){}
 	};
 
 public:
-	struct close_exception : public async_buffer_close_exception
-	{
-	};
+	struct close_exception : public async_buffer_close_exception {};
 public:
 	async_buffer(size_t maxLength, const shared_strand& strand)
 		:_buffer(maxLength)//, _pushWait(4), _popWait(4)

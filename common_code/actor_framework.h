@@ -97,6 +97,9 @@ void TupleReceiverRef_(DTuple& dst, STuple&& src)
 }
 //////////////////////////////////////////////////////////////////////////
 
+template <typename... TYPES>
+struct DstReceiverRef_ {};
+
 template <typename... ArgsPipe>
 struct DstReceiverBase_
 {
@@ -125,49 +128,6 @@ struct DstReceiverBuff_ : public DstReceiverBase_<TYPE_PIPE(ARGS)...>
 
 	stack_obj<std::tuple<TYPE_PIPE(ARGS)...>> _dstBuff;
 };
-
-template <typename... ARGS>
-struct DstReceiverBuffRef_ : public DstReceiverBase_<TYPE_PIPE(ARGS)...>
-{
-	template <size_t N>
-	struct clear_
-	{
-		static inline void clear(std::tuple<stack_obj<ARGS>&...>& args)
-		{
-			std::get<N - 1>(args).destroy();
-			clear_<N - 1>::clear(args);
-		}
-	};
-
-	template <>
-	struct clear_<0>
-	{
-		static inline void clear(std::tuple<stack_obj<ARGS>&...>& args) {}
-	};
-
-	DstReceiverBuffRef_(stack_obj<ARGS>&... args)
-	:_dstBuffRef(args...) {}
-
-	void move_from(std::tuple<TYPE_PIPE(ARGS)...>& s)
-	{
-		TupleReceiverRef_(_dstBuffRef, std::move(s));
-	}
-
-	void clear()
-	{
-		clear_<sizeof...(ARGS)>::clear(_dstBuffRef);
-	}
-
-	bool has()
-	{
-		return std::get<0>(_dstBuffRef).has();
-	}
-
-	std::tuple<stack_obj<ARGS>&...> _dstBuffRef;
-};
-
-template <typename... TYPES>
-struct DstReceiverRef_{};
 
 template <typename... ARGS, typename... OUTS>
 struct DstReceiverRef_<types_pck<ARGS...>, types_pck<OUTS...>> : public DstReceiverBase_<TYPE_PIPE(ARGS)...>
@@ -1311,12 +1271,15 @@ private:
 		res->_weakThis = res;
 		res->_strand = strand;
 		res->_waiting = false;
+		res->_closed = false;
 		res->_sendCount = 0;
 		return res;
 	}
 
 	void send_msg(msg_type&& mt, const actor_handle& hostActor)
 	{
+		if (_closed) return;
+
 		if (_waiting)
 		{
 			_waiting = false;
@@ -1370,6 +1333,8 @@ private:
 
 	void push_msg(msg_type&& mt, const actor_handle& hostActor)
 	{
+		if (_closed) return;
+
 		if (_strand->running_in_this_thread())
 		{
 			post_msg(std::move(mt), hostActor);
@@ -1411,7 +1376,8 @@ private:
 	msg_queue<msg_type> _msgBuff;
 	shared_strand _strand;
 	unsigned char _sendCount;
-	bool _waiting;
+	bool _waiting : 1;
+	bool _closed : 1;
 };
 
 class MsgPumpVoid_;
@@ -1456,7 +1422,8 @@ protected:
 	size_t _msgBuff;
 	shared_strand _strand;
 	unsigned char _sendCount;
-	bool _waiting;
+	bool _waiting : 1;
+	bool _closed : 1;
 };
 
 class MsgPumpVoid_ : public MsgPumpBase_
@@ -2297,6 +2264,10 @@ class my_actor
 				if (_msgPump)
 				{
 					_msgPump->close();
+				}
+				if (_msgPool)
+				{
+					_msgPool->_closed = true;
 				}
 				_hostActor = NULL;
 			}
@@ -3359,6 +3330,7 @@ public:
 		auto it = _msgPoolStatus._msgTypeMap.find(typeID);
 		if (_msgPoolStatus._msgTypeMap.end() != it)
 		{
+			quit_guard qg(this);
 			std::shared_ptr<pck_type> msgPck = std::static_pointer_cast<pck_type>(it->second);
 			msgPck->lock(this);
 			if (msgPck->_next)
@@ -3369,6 +3341,11 @@ public:
 				msgPck->_next->unlock(this);
 				msgPck->_next.reset();
 			}
+			if (msgPck->_msgPool)
+			{
+				msgPck->_msgPool->_closed = true;
+			}
+			clear_msg_list<Args...>(this, msgPck);
 			_msgPoolStatus._msgTypeMap.erase(it);
 			msgPck->unlock(this);
 			return true;

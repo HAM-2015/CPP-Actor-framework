@@ -200,20 +200,20 @@ io_engine::operator boost::asio::io_service&() const
 
 void* io_engine::getImpl()
 {
-	return ((obj_pool<impl_type>*)_implPool)->new_();
+	return ((obj_pool<impl_type>*)_implPool)->pick();
 }
 
 void io_engine::freeImpl(void* impl)
 {
-	((obj_pool<impl_type>*)_implPool)->delete_(impl);
+	((obj_pool<impl_type>*)_implPool)->recycle(impl);
 }
 
 void* io_engine::getTimer()
 {
-	return ((obj_pool<timer_type>*)_timerPool)->new_();
+	return ((obj_pool<timer_type>*)_timerPool)->pick();
 }
 
 void io_engine::freeTimer(void* timer)
 {
-	((obj_pool<timer_type>*)_timerPool)->delete_(timer);
+	((obj_pool<timer_type>*)_timerPool)->recycle(timer);
 }

@@ -5,7 +5,7 @@
 #include "try_move.h"
 
 template <typename... ARGS>
-struct types_pck {};
+struct types_pck;
 
 template <typename TUPLE, size_t N>
 struct tuple_move
@@ -159,6 +159,7 @@ struct static_args_get
 	template <typename First, typename... Args>
 	static inline typename types_element<N - 1, Args...>::type& get(First& fst, Args&... args)
 	{
+		static_assert(N < 1 + sizeof...(Args), "");
 		return static_args_get<N - 1>::get(args...);
 	}
 };

@@ -212,7 +212,7 @@ bool actor_msg_handle_base::is_quited()
 std::shared_ptr<bool> actor_msg_handle_base::new_bool()
 {
 	assert(s_sharedBoolPool);
-	std::shared_ptr<bool> r = s_sharedBoolPool->new_();
+	std::shared_ptr<bool> r = s_sharedBoolPool->pick();
 	*r = false;
 	return r;
 }
@@ -242,6 +242,7 @@ MsgPoolVoid_::MsgPoolVoid_(const shared_strand& strand)
 {
 	_strand = strand;
 	_waiting = false;
+	_closed = false;
 	_sendCount = 0;
 	_msgBuff = 0;
 }
@@ -266,6 +267,8 @@ MsgPoolVoid_::pump_handler MsgPoolVoid_::connect_pump(const std::shared_ptr<msg_
 
 void MsgPoolVoid_::push_msg(const actor_handle& hostActor)
 {
+	//if (_closed) return;
+
 	if (_strand->running_in_this_thread())
 	{
 		post_msg(hostActor);
@@ -282,6 +285,8 @@ void MsgPoolVoid_::push_msg(const actor_handle& hostActor)
 
 void MsgPoolVoid_::send_msg(const actor_handle& hostActor)
 {
+	//if (_closed) return;
+
 	if (_waiting)
 	{
 		_waiting = false;
