@@ -38,50 +38,58 @@ class async_buffer
 		actor_trig_notifer<bool> ntf;
 	};
 
-	template <size_t N, size_t DEPTH = 0, bool TOP = false>
 	struct buff_push
 	{
-		template <typename Fst, typename... Args>
-		static inline void push(async_buffer* const this_, const size_t i, Fst&& fst, Args&&... args)
+		template <typename... Args>
+		inline void operator ()(Args&&... args)
 		{
-			if (DEPTH == i)
+			if (_i < sizeof...(Args) / 2)
 			{
-				this_->_buffer.push_back(TRY_MOVE(fst));
-			}
+				left_invoke<sizeof...(Args) / 2>::invoke(*this, TRY_MOVE(args)...);
+			} 
 			else
 			{
-				buff_push<N, DEPTH + 1, N == DEPTH + 1>::push(this_, i, TRY_MOVE(args)...);
+				_i -= sizeof...(Args) / 2;
+				right_invoke<sizeof...(Args)-sizeof...(Args) / 2>::invoke(*this, TRY_MOVE(args)...);
 			}
 		}
+
+		template <typename Arg>
+		inline void operator ()(Arg&& arg)
+		{
+			assert(0 == _i);
+			_this->_buffer.push_back(TRY_MOVE(arg));
+		}
+
+		async_buffer* const _this;
+		size_t _i;
 	};
 
-	template <size_t N, size_t DEPTH>
-	struct buff_push<N, DEPTH, true>
-	{
-		static inline void push(async_buffer* const, const size_t){}
-	};
-
-	template <size_t N, size_t DEPTH = 0, bool TOP = false>
 	struct buff_pop
 	{
-		template <typename Fst, typename... Outs>
-		static inline void pop(async_buffer* const this_, const size_t i, Fst& fst, Outs&... outs)
+		template <typename... Outs>
+		inline void operator ()(Outs&... outs)
 		{
-			if (DEPTH == i)
+			if (_i < sizeof...(Outs) / 2)
 			{
-				fst = std::move(this_->_buffer.front());
+				left_invoke<sizeof...(Outs) / 2>::invoke(*this, outs...);
 			}
 			else
 			{
-				buff_pop<N, DEPTH + 1, N == DEPTH + 1>::pop(this_, i, outs...);
+				_i -= sizeof...(Outs) / 2;
+				right_invoke<sizeof...(Outs)-sizeof...(Outs) / 2>::invoke(*this, outs...);
 			}
 		}
-	};
 
-	template <size_t N, size_t DEPTH>
-	struct buff_pop<N, DEPTH, true>
-	{
-		static inline void pop(async_buffer* const, const size_t){}
+		template <typename Out>
+		inline void operator ()(Out& out)
+		{
+			assert(0 == _i);
+			out = std::move(_this->_buffer.front());
+		}
+
+		async_buffer* const _this;
+		size_t _i;
 	};
 
 public:
@@ -104,7 +112,8 @@ public:
 		size_t pushCount = 0;
 		_push(host, [&]()->bool
 		{
-			buff_push<sizeof...(TMS)>::push(this, pushCount, try_move<TMS&&>::move(msgs)...);
+			buff_push bp = { this, pushCount };
+			bp((TMS&&)(msgs)...);
 			return sizeof...(TMS) == ++pushCount;
 		});
 	}
@@ -118,7 +127,7 @@ public:
 	{
 		return !!_try_push(host, [&]()->bool
 		{
-			_buffer.push_back(try_move<TM&&>::move(msg));
+			_buffer.push_back((TM&&)msg);
 			return true;
 		});
 	}
@@ -134,7 +143,8 @@ public:
 		size_t pushCount = 0;
 		return _try_push(host, [&]()->bool
 		{
-			buff_push<sizeof...(TMS)>::push(this, pushCount, try_move<TMS&&>::move(msgs)...);
+			buff_push bp = { this, pushCount };
+			bp((TMS&&)(msgs)...);
 			return sizeof...(TMS) == ++pushCount;
 		});
 	}
@@ -148,7 +158,7 @@ public:
 	{
 		return !!_timed_push(tm, host, [&]()->bool
 		{
-			_buffer.push_back(try_move<TM&&>::move(msg));
+			_buffer.push_back((TM&&)msg);
 			return true;
 		});
 	}
@@ -164,7 +174,8 @@ public:
 		size_t pushCount = 0;
 		return _timed_push(tm, host, [&]()->bool
 		{
-			buff_push<sizeof...(TMS)>::push(this, pushCount, try_move<TMS&&>::move(msgs)...);
+			buff_push bp = { this, pushCount };
+			bp((TMS&&)(msgs)...);
 			return sizeof...(TMS) == ++pushCount;
 		});
 	}
@@ -180,7 +191,8 @@ public:
 		size_t pushCount = 0;
 		return _force_push(host, [&]()->bool
 		{
-			buff_push<sizeof...(TMS)>::push(this, pushCount, try_move<TMS&&>::move(msgs)...);
+			buff_push bp = { this, pushCount };
+			bp((TMS&&)(msgs)...);
 			return sizeof...(TMS) == ++pushCount;
 		});
 	}
@@ -215,7 +227,8 @@ public:
 		size_t popCount = 0;
 		_pop(host, [&]()->bool
 		{
-			buff_pop<sizeof...(OTMS)>::pop(this, popCount, outs...);
+			buff_pop bp = { this, popCount };
+			bp(outs...);
 			_buffer.pop_front();
 			return sizeof...(OTMS) == ++popCount;
 		});
@@ -248,7 +261,8 @@ public:
 		size_t popCount = 0;
 		return _try_pop(host, [&]()->bool
 		{
-			buff_pop<sizeof...(OTMS)>::pop(this, popCount, outs...);
+			buff_pop bp = { this, popCount };
+			bp(outs...);
 			_buffer.pop_front();
 			return sizeof...(OTMS) == ++popCount;
 		});
@@ -280,7 +294,8 @@ public:
 		size_t popCount = 0;
 		return _timed_pop(tm, host, [&]()->bool
 		{
-			buff_pop<sizeof...(OTMS)>::pop(this, popCount, outs...);
+			buff_pop bp = { this, popCount };
+			bp(outs...);
 			_buffer.pop_front();
 			return sizeof...(OTMS) == ++popCount;
 		});

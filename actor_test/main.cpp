@@ -411,7 +411,7 @@ void actor_test(my_actor* self)
 			{
 				while (true)
 				{
-					abuff.force_push(self, move_test(i++));
+					abuff.push(self, move_test(i++), move_test(i++), move_test(i++));
 					self->sleep(100);
 				}
 			}
@@ -427,8 +427,9 @@ void actor_test(my_actor* self)
 			{
 				while (true)
 				{
-					move_test id = abuff.pop(self);
-					printf("%d\n", id._count->_id);
+					move_test id0, id1, id2;
+					abuff.pop(self, id0, id1, id2);
+					trace_space(id0, id1, id2, " ");
 					self->sleep(1000);
 				}
 			}
@@ -438,7 +439,7 @@ void actor_test(my_actor* self)
 			}
 		});
 //		self->child_actor_run(buffPush);
-// 		self->child_actor_run(buffPop);
+//		self->child_actor_run(buffPop);
 	}
 	sync_msg<move_test> syncMsg(self->self_strand());
 	csp_invoke<move_test (move_test, int)> cspMsg(self->self_strand());

@@ -69,7 +69,7 @@ struct try_move<T&&>
 
 
 //检测一个参数是否是右值传递，是就继续进行右值传递
-#define TRY_MOVE(__P__) try_move<decltype(__P__)>::move(__P__)
+#define TRY_MOVE(__P__) (decltype(__P__))(__P__)
 //检测一个参数是否是右值传递
 #define CAN_MOVE(__P__) try_move<decltype(__P__)>::can_move
 //const属性强制转换为右值

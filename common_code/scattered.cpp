@@ -192,6 +192,12 @@ void move_test::operator=(const move_test& s)
 	}
 }
 
+move_test::operator size_t() const
+{
+	assert(_count);
+	return _count->_id;
+}
+
 move_test::move_test(move_test&& s)
 {
 	*this = std::move(s);
