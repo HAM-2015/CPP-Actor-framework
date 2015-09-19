@@ -194,7 +194,7 @@ struct move_test
 	move_test(move_test&& s);
 	void operator=(const move_test& s);
 	void operator=(move_test&& s);
-	operator size_t() const;
+	friend std::ostream& operator <<(std::ostream& out, const move_test& s);
 	std::shared_ptr<count> _count;
 };
 

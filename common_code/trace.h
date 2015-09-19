@@ -104,7 +104,7 @@ struct trace_match<wchar_t*>
 template <typename T>
 struct trace_match<std::vector<T>>
 {
-	static void trace(const vector<T>& s)
+	static void trace(const std::vector<T>& s)
 	{
 		std::cout << "[";
 		for (int i = 0; i < (int)s.size() - 1; i++)
@@ -123,7 +123,7 @@ struct trace_match<std::vector<T>>
 template <typename T>
 struct trace_match<std::list<T>>
 {
-	static void trace(const list<T>& s)
+	static void trace(const std::list<T>& s)
 	{
 		std::cout << "{";
 		int l = (int)s.size();
@@ -169,7 +169,7 @@ struct trace_match<std::map<K, V>>
 template <typename T>
 struct trace_match<std::set<T>>
 {
-	static void trace(const set<T>& s)
+	static void trace(const std::set<T>& s)
 	{
 		std::cout << "{";
 		int l = (int)s.size();

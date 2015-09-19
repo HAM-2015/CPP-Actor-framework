@@ -192,10 +192,11 @@ void move_test::operator=(const move_test& s)
 	}
 }
 
-move_test::operator size_t() const
+std::ostream& operator <<(std::ostream& out, const move_test& s)
 {
-	assert(_count);
-	return _count->_id;
+	assert(s._count);
+	out << "(id:" << s._count->_id << ", move:" << s._count->_moveCount << ", copy:" << s._count->_copyCount << ")";
+	return out;
 }
 
 move_test::move_test(move_test&& s)
