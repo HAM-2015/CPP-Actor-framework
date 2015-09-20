@@ -248,4 +248,18 @@ void trace_comma(First&& fst, Args&&... args)
 	trace_comma(TRY_MOVE(args)...);
 }
 
+struct trace_result
+{
+	template <typename... Args>
+	void operator ()(Args&&... args)
+	{
+		trace_comma(TRY_MOVE(args)...);
+	}
+
+	void operator ()()
+	{
+		trace_line("empty...");
+	}
+};
+
 #endif

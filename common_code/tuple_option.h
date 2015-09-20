@@ -42,6 +42,46 @@ template <size_t I, typename... TYPES>
 struct single_element<I, const std::tuple<TYPES...>>: public single_element<I, TYPES...>{};
 //////////////////////////////////////////////////////////////////////////
 
+enum cmp_result
+{
+	cmp_LT = 1,
+	cmp_EQ = 2,
+	cmp_GT = 4,
+};
+
+/*!
+@brief 比较大小
+*/
+template <size_t A, size_t B>
+struct cmp_size
+{
+	template <bool le = true>
+	struct LE
+	{
+		template <bool eq = true>
+		struct eq
+		{
+			enum { res = cmp_EQ };
+		};
+
+		template <>
+		struct eq<false>
+		{
+			enum { res = cmp_LT };
+		};
+
+		enum { res = eq<(A == B)>::res };
+	};
+
+	template <>
+	struct LE<false>
+	{
+		enum { res = cmp_GT };
+	};
+
+	enum { result = LE<(A <= B)>::res };
+};
+
 template <size_t N, typename... TYPES>
 struct TypesPckElement_
 {
@@ -69,63 +109,520 @@ struct TypesPckElement_<N, types_pck<TYPES...>>: public TypesPckElement_<N, TYPE
 @brief 取左边N个类型打包
 */
 template <size_t N, typename... TYPES>
-struct left_elements
+struct left_type
 {
-	typedef typename TypesPckElement_<N, TYPES...>::left_pck type;
+	typedef typename TypesPckElement_<N, TYPES...>::left_pck types;
 };
 
 template <size_t N, typename... TYPES>
-struct left_elements<N, types_pck<TYPES...>>: public left_elements<N, TYPES...>{};
+struct left_type<N, types_pck<TYPES...>>: public left_type<N, TYPES...>{};
 
 /*!
 @brief 取右边N个类型打包
 */
 template <size_t N, typename... TYPES>
-struct right_elements
+struct right_type
 {
-	typedef typename TypesPckElement_<N, TYPES...>::right_pck type;
+	typedef typename TypesPckElement_<N, TYPES...>::right_pck types;
 };
 
 template <size_t N, typename... TYPES>
-struct right_elements<N, types_pck<TYPES...>>: public right_elements<N, TYPES...>{};
+struct right_type<N, types_pck<TYPES...>>: public right_type<N, TYPES...>{};
 
 /*!
 @brief 取中间[S, S+L)个类型打包
 */
 template <size_t S, size_t L, typename... TYPES>
-struct middle_elements
+struct middle_type
 {
-	typedef typename left_elements<L, typename right_elements<sizeof...(TYPES)-S, TYPES...>::type>::type type;
+	typedef typename left_type<L, typename right_type<sizeof...(TYPES)-S, TYPES...>::types>::types types;
 };
 
 template <size_t S, size_t L, typename... TYPES>
-struct middle_elements<S, L, types_pck<TYPES...>>: public middle_elements<S, L, TYPES...>{};
+struct middle_type<S, L, types_pck<TYPES...>>: public middle_type<S, L, TYPES...>{};
+
+template <typename... PCKS>
+struct merge_type 
+{
+	template <typename... TYPES>
+	struct merge {};
+
+	template <typename... TYPEL, typename... TYPER>
+	struct merge<types_pck<TYPEL...>, types_pck<TYPER...>>
+	{
+		typedef types_pck<TYPEL..., TYPER...> types;
+	};
+
+	template <>
+	struct merge<>
+	{
+		typedef types_pck<> types;
+	};
+
+	template <typename... PCKS>
+	struct depth;
+
+	template <typename Fst, typename...PCKS>
+	struct depth<Fst, PCKS...> 
+	{
+		typedef typename merge<Fst, typename depth<PCKS...>::types>::types types;
+	};
+
+	template <>
+	struct depth<>
+	{
+		typedef types_pck<> types;
+	};
+
+	typedef typename depth<PCKS...>::types types;
+};
 
 /*!
 @brief 颠倒类型顺序后打包
 */
 template <typename... TYPES>
-struct reverse_elements {};
+struct reverse_type {};
 
 template <typename HEAD, typename... TYPES>
-struct reverse_elements<HEAD, TYPES...>
+struct reverse_type<HEAD, TYPES...>
 {
-	template <typename... TYPES>
-	struct merge {};
-
-	template <typename... TYPES, typename TAIL>
-	struct merge<types_pck<TYPES...>, TAIL>
-	{
-		typedef types_pck<TYPES..., TAIL> type;
-	};
-
-	typedef typename merge<typename reverse_elements<TYPES...>::type, HEAD>::type type;
+	typedef typename merge_type<typename reverse_type<TYPES...>::types, types_pck<HEAD>>::types types;
 };
 
 template <>
-struct reverse_elements<>
+struct reverse_type<>
 {
-	typedef types_pck<> type;
+	typedef types_pck<> types;
+};
+
+template <typename... TYPES>
+struct reverse_type<types_pck<TYPES...>>:public reverse_type<TYPES...> {};
+
+/*!
+@brief 交换A,B类型顺序后打包
+*/
+template <size_t A, size_t B, typename... TYPES>
+struct swap_type
+{
+	template <size_t A, size_t B, size_t CMP = cmp_LT>
+	struct lt
+	{
+		typedef typename merge_type<typename left_type<A, TYPES...>::types, types_pck<typename single_element<B, TYPES...>::type>>::types left;
+		typedef typename merge_type<typename middle_type<A + 1, B - A - 1, TYPES...>::types, types_pck<typename single_element<A, TYPES...>::type>>::types middle;
+		typedef typename right_type<sizeof...(TYPES)-B - 1, TYPES...>::types right;
+		typedef typename merge_type<typename merge_type<left, middle>::types, right>::types types;
+	};
+
+	template <size_t A, size_t B>
+	struct lt<A, B, cmp_GT> : public lt<B, A, cmp_LT>{};
+
+	template <size_t A, size_t B>
+	struct lt<A, B, cmp_EQ>
+	{
+		typedef types_pck<TYPES...> types;
+	};
+
+	typedef typename lt<A, B, cmp_size<A, B>::result>::types types;
+};
+
+template <size_t A, size_t B, typename... TYPES>
+struct swap_type<A, B, types_pck<TYPES...>>:public swap_type<A, B, TYPES...>{};
+
+/*!
+@brief 在包中I位置插入新类型
+*/
+template <size_t I, typename NEW, typename... TYPES>
+struct insert_type 
+{
+	typedef typename merge_type<typename left_type<I, TYPES...>::types, NEW, typename right_type<sizeof...(TYPES)-I, TYPES...>::types>::types types;
+};
+
+template <size_t I, typename NEW, typename... TYPES>
+struct insert_type<I, NEW, types_pck<TYPES...>> : public insert_type<I, NEW, TYPES...>{};
+
+/*!
+@brief 删除包中[S, S+L)位置的类型
+*/
+template <size_t S, size_t L, typename... TYPES>
+struct erase_type
+{
+	typedef typename merge_type<typename left_type<S, TYPES...>::types, typename right_type<sizeof...(TYPES)-S - L, TYPES...>::types>::types types;
+};
+
+template <size_t S, size_t L, typename... TYPES>
+struct erase_type<S, L, types_pck<TYPES...>> : public erase_type<S, L, TYPES...>{};
+
+/*!
+@brief 展开所有类型包
+*/
+template <typename... PCKS>
+struct solve_types
+{
+	template <typename... PCKS>
+	struct solve {};
+
+	template <typename Fst, typename... PCKS>
+	struct solve<Fst, PCKS...>
+	{
+		typedef typename merge_type<typename solve<Fst>::types, typename solve<PCKS...>::types>::types types;
+	};
+
+	template <typename TYPE>
+	struct solve<TYPE>
+	{
+		typedef types_pck<TYPE> types;
+	};
+
+	template <typename... TYPES>
+	struct solve<types_pck<TYPES...>> : public solve<TYPES...>{};
+
+	template <>
+	struct solve<>
+	{
+		typedef types_pck<> types;
+	};
+
+	typedef typename solve<PCKS...>::types types;
+};
+
+//////////////////////////////////////////////////////////////////////////
+
+/*!
+@brief 常数包
+*/
+template <size_t... NUMS>
+struct numbers_pck
+{
+	template <size_t... NUMS>
+	struct calc_sum;
+
+	template <size_t Fst, size_t... NUMS>
+	struct calc_sum<Fst, NUMS...>
+	{
+		enum { sum = Fst + calc_sum<NUMS...>::sum };
+	};
+
+	template <>
+	struct calc_sum<>
+	{
+		enum { sum = 0 };
+	};
+
+	enum { number = sizeof...(NUMS), sum = calc_sum<NUMS...>::sum };
+};
+
+/*!
+@brief 使用常数包调用某个函数
+*/
+template <typename PCK>
+struct number_invoke{};
+
+template <size_t... NUMS>
+struct number_invoke<numbers_pck<NUMS...>>
+{
+	template <typename R = void, typename Handler>
+	static R invoke(Handler&& h)
+	{
+		return h(NUMS...);
+	}
+};
+
+/*!
+@brief 提取包中的某个数
+*/
+template <size_t I, typename PCK>
+struct number_element
+{
+	template <typename PCK>
+	struct solve;
+
+	template <size_t... NUMS>
+	struct solve<numbers_pck<NUMS...>>
+	{
+		template <size_t I, size_t... NUMS>
+		struct depth;
+
+		template <size_t I, size_t FST, size_t... NUMS>
+		struct depth<I, FST, NUMS...> : public depth<I - 1, NUMS...>{};
+
+		template <size_t FST, size_t... NUMS>
+		struct depth<0, FST, NUMS...>
+		{
+			enum { num = FST };
+		};
+
+		enum { num = depth<I, NUMS...>::num };
+	};
+
+	enum { num = solve<PCK>::num };
+};
+
+/*!
+@brief 合并多个包
+*/
+template <typename... PCKS>
+struct merge_number
+{
+	template <typename PCKL, typename PCKR>
+	struct merge {};
+
+	template <size_t... NUMSL, size_t... NUMSR>
+	struct merge<numbers_pck<NUMSL...>, numbers_pck<NUMSR...>>
+	{
+		typedef numbers_pck<NUMSL..., NUMSR...> result;
+	};
+
+	template <typename... PCKS>
+	struct depth;
+
+	template <typename Fst, typename... PCKS>
+	struct depth<Fst, PCKS...>
+	{
+		typedef typename merge<Fst, typename depth<PCKS...>::result>::result result;
+	};
+
+	template <>
+	struct depth<>
+	{
+		typedef numbers_pck<> result;
+	};
+
+	typedef typename depth<PCKS...>::result numbers;
+};
+
+template <size_t N, typename PCK>
+struct NumberPckElement_
+{
+	template <typename PCK>
+	struct solve;
+
+	template <size_t... NUMS>
+	struct solve<numbers_pck<NUMS...>>
+	{
+		template <size_t N, size_t... NUMS>
+		struct left_depth;
+
+		template <size_t N, size_t Fst, size_t... NUMS>
+		struct left_depth<N, Fst, NUMS...>
+		{
+			typedef typename merge_number<numbers_pck<Fst>, typename left_depth<N - 1, NUMS...>::lefts>::numbers lefts;
+			typedef typename left_depth<N - 1, NUMS...>::rights rights;
+		};
+
+		template <size_t... NUMS>
+		struct left_depth<0, NUMS...>
+		{
+			typedef numbers_pck<> lefts;
+			typedef numbers_pck<NUMS...> rights;
+		};
+
+		typedef typename left_depth<N, NUMS...>::lefts lefts;
+		typedef typename left_depth<N, NUMS...>::rights rights;
+	};
+
+	typedef typename solve<PCK>::lefts lefts;
+	typedef typename solve<PCK>::rights rights;
+};
+
+/*!
+@brief 取包中右边N个数重新打包
+*/
+template <size_t N, typename PCK>
+struct right_number
+{
+	typedef typename NumberPckElement_<PCK::number - N, PCK>::rights numbers;
+};
+
+/*!
+@brief 取包中左边N个数重新打包
+*/
+template <size_t N, typename PCK>
+struct left_number
+{
+	typedef typename NumberPckElement_<N, PCK>::lefts numbers;
+};
+
+/*!
+@brief 取包中[S, S+L)数重新打包
+*/
+template <size_t S, size_t L, typename PCK>
+struct middle_number
+{
+	typedef typename left_number<L, typename right_number<PCK::number - S, PCK>::numbers>::numbers numbers;
+};
+
+/*!
+@brief 交互包中A,B数的位置
+*/
+template <size_t A, size_t B, typename PCK>
+struct swap_number
+{
+	template <size_t A, size_t B, size_t CMP = cmp_LT>
+	struct lt
+	{
+		typedef typename left_number<A, PCK>::numbers lefts;
+		typedef typename middle_number<A + 1, B - A - 1, PCK>::numbers middles;
+		typedef typename right_number<PCK::number - B - 1, PCK>::numbers rights;
+
+		typedef typename merge_number<lefts, numbers_pck<number_element<B, PCK>::num>>::numbers n1;
+		typedef typename merge_number<n1, middles>::numbers n2;
+		typedef typename merge_number<n2, numbers_pck<number_element<A, PCK>::num>>::numbers n3;
+		typedef typename merge_number<n3, rights>::numbers numbers;
+	};
+
+	template <size_t A, size_t B>
+	struct lt<A, B, cmp_GT> : public lt<B, A, cmp_LT>{};
+
+	template <size_t A, size_t B>
+	struct lt<A, B, cmp_EQ>
+	{
+		typedef PCK numbers;
+	};
+
+	typedef typename lt<A, B, cmp_size<A, B>::result>::numbers numbers;
+};
+
+template <typename PCK>
+struct reverse_number
+{
+	template <typename PCK>
+	struct reverse {};
+
+	template <size_t... NUMS>
+	struct reverse<numbers_pck<NUMS...>>
+	{
+		template <size_t... NUMS>
+		struct depth;
+
+		template <size_t Fst, size_t... NUMS>
+		struct depth<Fst, NUMS...>
+		{
+			typedef typename merge_number<typename depth<NUMS...>::result, numbers_pck<Fst>>::numbers result;
+		};
+
+		template <>
+		struct depth<>
+		{
+			typedef numbers_pck<> result;
+		};
+
+		typedef typename depth<NUMS...>::result result;
+	};
+
+	typedef typename reverse<PCK>::result numbers;
+};
+
+/*!
+@brief 在包中I位置插入一个新包
+*/
+template <size_t I, typename NEW, typename OLD>
+struct insert_number
+{
+	typedef typename merge_number<typename left_number<I, OLD>::numbers, NEW, typename right_number<OLD::number - I, OLD>::numbers>::numbers numbers;
+};
+
+/*!
+@brief 删除包中[S, S+L)数后重新打包
+*/
+template <size_t S, size_t L, typename PCK>
+struct erase_number
+{
+	typedef typename merge_number<typename left_number<S, PCK>::numbers, typename right_number<PCK::number - S - L, PCK>::numbers>::numbers numbers;
+};
+
+/*!
+@brief 把类型大小转为常数包
+*/
+template <typename... TYPES>
+struct sizeof_types
+{
+	template <typename... TYPES>
+	struct to_number;
+
+	template <typename... TYPES>
+	struct to_number<types_pck<TYPES...>>
+	{
+		typedef numbers_pck<sizeof(TYPES)...> numbers;
+	};
+
+	typedef typename to_number<typename solve_types<TYPES...>::types>::numbers numbers;
+};
+
+/*!
+@brief 对包中的数进行排序后重新打包
+*/
+template <typename PCK>
+struct sort_number
+{
+	template <size_t N, typename PCK>
+	struct search_index
+	{
+		template <typename PCK>
+		struct search {};
+
+		template <size_t... NUMS>
+		struct search<numbers_pck<NUMS...>>
+		{
+			template <size_t... NUMS>
+			struct depth;
+
+			template <size_t Fst, size_t... NUMS>
+			struct depth<Fst, NUMS...>
+			{
+				template <bool = true>
+				struct le
+				{
+					enum { n = 1 + sizeof...(NUMS) };
+				};
+
+				template <>
+				struct le<false>
+				{
+					enum { n = depth<NUMS...>::n };
+				};
+
+				enum { n = le<(N <= Fst)>::n };
+			};
+
+			template <>
+			struct depth<>
+			{
+				enum { n = 0 };
+			};
+
+			enum { i = sizeof...(NUMS)-depth<NUMS...>::n };
+		};
+
+		enum { i = search<PCK>::i };
+	};
+
+	template <typename PCK>
+	struct sort{};
+
+	template <size_t... NUMS>
+	struct sort<numbers_pck<NUMS...>>
+	{
+		template <size_t... NUMS>
+		struct depth;
+
+		template <size_t Fst, size_t... NUMS>
+		struct depth<Fst, NUMS...>
+		{
+			enum { i = search_index<Fst, typename depth<NUMS...>::result>::i };
+			typedef typename insert_number<i, numbers_pck<Fst>, typename depth<NUMS...>::result>::numbers result;
+		};
+
+		template <>
+		struct depth<>
+		{
+			typedef numbers_pck<> result;
+		};
+
+		typedef typename depth<NUMS...>::result result;
+	};
+
+	typedef typename sort<PCK>::result positive_result;//正序
+	typedef typename reverse_number<positive_result>::numbers reverse_result;//反序
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -480,88 +977,6 @@ struct tuple_append_front<std::tuple<ARGS...>, TYPES...>
 template <typename... ARGS, typename... TYPES>
 struct tuple_append_front<std::tuple<ARGS...>, types_pck<TYPES...>>: public tuple_append_front<std::tuple<ARGS...>, TYPES...>{};
 
-enum cmp_result
-{
-	cmp_LT = 1,
-	cmp_EQ = 2,
-	cmp_GT = 4,
-};
-
-/*!
-@brief 比较大小
-*/
-template <size_t A, size_t B>
-struct cmp_size
-{
-	template <bool le = true>
-	struct LE
-	{
-		template <bool eq = true>
-		struct eq 
-		{
-			enum { res = cmp_EQ };
-		};
-
-		template <>
-		struct eq<false> 
-		{
-			enum { res = cmp_LT };
-		};
-
-		enum { res = eq<(A == B)>::res };
-	};
-
-	template <>
-	struct LE<false> 
-	{
-		enum { res = cmp_GT };
-	};
-
-	enum { result = LE<(A <= B)>::res };
-};
-
-/*!
-@brief 交换A,B类型顺序后打包
-*/
-template <size_t A, size_t B, typename... TYPES>
-struct swap_elements
-{
-	template <size_t A, size_t B, size_t CMP = cmp_LT>
-	struct lt 
-	{
-		template <typename... TYPES>
-		struct merge {};
-
-		template <typename... TYPES, typename TAIL>
-		struct merge<types_pck<TYPES...>, TAIL>
-		{
-			typedef types_pck<TYPES..., TAIL> type;
-		};
-
-		template <typename... LEFTS, typename... RIGHTS>
-		struct merge<types_pck<LEFTS...>, types_pck<RIGHTS...>>
-		{
-			typedef types_pck<LEFTS..., RIGHTS...> type;
-		};
-
-		typedef typename merge<typename left_elements<A, TYPES...>::type, typename single_element<B, TYPES...>::type>::type left;
-		typedef typename merge<typename middle_elements<A + 1, B - A - 1, TYPES...>::type, typename single_element<A, TYPES...>::type>::type middle;
-		typedef typename right_elements<sizeof...(TYPES)-B - 1, TYPES...>::type right;
-		typedef typename merge<typename merge<left, middle>::type, right>::type type;
-	};
-
-	template <size_t A, size_t B>
-	struct lt<A, B, cmp_GT> : public lt<B, A, cmp_LT> {};
-
-	template <size_t A, size_t B>
-	struct lt<A, B, cmp_EQ>
-	{
-		typedef types_pck<TYPES...> type;
-	};
-
-	typedef typename lt<A, B, cmp_size<A, B>::result>::type type;
-};
-
 /*!
 @brief 取第I个参数
 */
@@ -903,16 +1318,16 @@ struct SwapInvoke_
 		const size_t leftN = static_cmp<A, B>::min;
 		const size_t rightN = static_cmp<A, B>::max;
 
-		typedef typename left_elements<leftN, Args&...>::type type_left;
-		typedef typename middle_elements<leftN + 1, rightN - leftN - 1, Args&...>::type type_middle;
-		typedef typename right_elements<sizeof...(Args)-rightN - 1, Args&...>::type type_right;
+		typedef typename left_type<leftN, Args&...>::types type_left;
+		typedef typename middle_type<leftN + 1, rightN - leftN - 1, Args&...>::types type_middle;
+		typedef typename right_type<sizeof...(Args)-rightN - 1, Args&...>::types type_right;
 
 		auto& tuple_a = args_element<leftN>::get(args...);
 		auto& tuple_b = args_element<rightN>::get(args...);
 		auto tuple_left = left_invoke<leftN>::invoke<typename pck_to_tuple<type_left>::tuple>(type_tuple<type_left>(), args...);
  		auto tuple_middle = middle_invoke<leftN + 1, rightN - leftN - 1>::invoke<typename pck_to_tuple<type_middle>::tuple>(type_tuple<type_middle>(), args...);
 		auto tuple_right = right_invoke<sizeof...(Args)-rightN - 1>::invoke<typename pck_to_tuple<type_right>::tuple>(type_tuple<type_right>(), args...);
-		type_tuple<R, Handler, typename swap_elements<leftN, rightN, Args&&...>::type> wrap = { h };
+		type_tuple<R, Handler, typename swap_type<leftN, rightN, Args&&...>::types> wrap = { h };
 		return tuple_invoke<R>(wrap, tuple_left, tuple_b, tuple_middle, tuple_a, tuple_right);
 	}
 
