@@ -55,10 +55,10 @@ enum cmp_result
 template <size_t A, size_t B>
 struct cmp_size
 {
-	template <bool le = true>
+	template <bool = true>
 	struct LE
 	{
-		template <bool eq = true>
+		template <bool = true>
 		struct eq
 		{
 			enum { res = cmp_EQ };
@@ -204,7 +204,7 @@ struct reverse_type<types_pck<TYPES...>>:public reverse_type<TYPES...> {};
 template <size_t A, size_t B, typename... TYPES>
 struct swap_type
 {
-	template <size_t A, size_t B, size_t CMP = cmp_LT>
+	template <size_t A, size_t B, size_t = cmp_LT>
 	struct lt
 	{
 		typedef typename merge_type<typename left_type<A, TYPES...>::types, types_pck<typename single_element<B, TYPES...>::type>>::types left;
@@ -457,7 +457,7 @@ struct middle_number
 template <size_t A, size_t B, typename PCK>
 struct swap_number
 {
-	template <size_t A, size_t B, size_t CMP = cmp_LT>
+	template <size_t A, size_t B, size_t = cmp_LT>
 	struct lt
 	{
 		typedef typename left_number<A, PCK>::numbers lefts;
@@ -482,6 +482,9 @@ struct swap_number
 	typedef typename lt<A, B, cmp_size<A, B>::result>::numbers numbers;
 };
 
+/*!
+@brief 颠倒顺序
+*/
 template <typename PCK>
 struct reverse_number
 {
@@ -608,21 +611,26 @@ struct sort_number
 		template <size_t Fst, size_t... NUMS>
 		struct depth<Fst, NUMS...>
 		{
-			enum { i = search_index<Fst, typename depth<NUMS...>::result>::i };
-			typedef typename insert_number<i, numbers_pck<Fst>, typename depth<NUMS...>::result>::numbers result;
+			enum { i = search_index<Fst, typename depth<NUMS...>::numbers>::i };
+			typedef typename insert_number<i, numbers_pck<Fst>, typename depth<NUMS...>::numbers>::numbers numbers;
+			typedef typename insert_number<i, numbers_pck<PCK::number - sizeof...(NUMS)-1>, typename depth<NUMS...>::indexes>::numbers indexes;
 		};
 
 		template <>
 		struct depth<>
 		{
-			typedef numbers_pck<> result;
+			typedef numbers_pck<> numbers;
+			typedef numbers_pck<> indexes;
 		};
 
-		typedef typename depth<NUMS...>::result result;
+		typedef typename depth<NUMS...>::numbers numbers;
+		typedef typename depth<NUMS...>::indexes indexes;
 	};
 
-	typedef typename sort<PCK>::result positive_result;//正序
-	typedef typename reverse_number<positive_result>::numbers reverse_result;//反序
+	typedef typename sort<PCK>::numbers positive_numbers;//正序
+	typedef typename sort<PCK>::indexes positive_indexes;//正序索引
+	typedef typename reverse_number<positive_numbers>::numbers reverse_numbers;//反序
+	typedef typename reverse_number<positive_indexes>::numbers reverse_indexes;//反序索引
 };
 //////////////////////////////////////////////////////////////////////////
 

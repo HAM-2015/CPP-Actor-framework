@@ -1,9 +1,8 @@
-并发逻辑控制框架(Actor Model)，适用于复杂业务逻辑，有问题或BUG反馈至 591170887@qq.com;
+并发逻辑控制框架(Actor Model)，适用于复杂业务逻辑，有问题或BUG反馈至591170887@qq.com;
 依赖于boost 1.57;
 暂无开发文档，等作者认为可以定型后开放文档;
 仅在VC2013编译器中测试，其它编译器不保证;
-不适合C++初学者，有无boost经验不重要，但必须具有一定的异步编程基础，希望对那些被callback和thread魔鬼困扰的同仁们有所帮助;
-在尝试使用本框架时，你要有编程思维即将被颠覆的准备;
+使用前需要具有一定的异步编程基础，希望解决async-callback和multithread-mutex编程中遇到的问题（本框架主旨绝不是async->sync那么简单）;
 你可以任意使用或编辑源码，而不需通知作者，当然作者也不对你用本框架造成的任何损失负责.
 
 github url:
@@ -12,6 +11,9 @@ https://github.com/HAM-2015/CPP-Actor-framework
 oschina url:
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
+
+2015-09-21
+使Actor在lock_quit()后检测到quit_msg消息仍然可以运行.
 
 2015-08-23
 让一个Actor内可以同时支持多个相同类型消息.

@@ -4385,7 +4385,7 @@ private:
 	shared_strand _strand;///<Actor调度器
 	bool _inActor : 1;///<当前正在Actor内部执行标记
 	bool _started : 1;///<已经开始运行的标记
-	bool _quited : 1;///<_mainFunc已经执行完毕
+	bool _quited : 1;///<_mainFunc已经不再执行
 	bool _exited : 1;///<完全退出
 	bool _suspended : 1;///<Actor挂起标记
 	bool _hasNotify : 1;///<当前Actor挂起，有外部触发准备进入Actor标记

@@ -771,7 +771,7 @@ public:
 				_actor._yieldCount++;
 				_actor._inActor = false;
 				(*(actor_push_type*)_actor._actorPush)();
-				if (_actor._quited)
+				if (_actor._notifyQuited)
 				{
 					throw force_quit_exception();
 				}
@@ -779,7 +779,6 @@ public:
 			}
 			assert(_actor._strand->running_in_this_thread());
 			_actor._mainFunc(&_actor);
-			_actor._quited = true;
 			assert(_actor._inActor);
 			assert(_actor._childActorList.empty());
 			assert(_actor._quitHandlerList.empty());
@@ -808,7 +807,8 @@ public:
 			assert(false);
 		}
 #endif
-		assert(_actor._quited);
+		_actor._quited = true;
+		_actor._notifyQuited = true;
 		clear_function(_actor._mainFunc);
 		clear_function(_actor._timerState._timerCb);
 		if (_actor._timer && !_actor._timerState._timerCompleted)
@@ -816,7 +816,7 @@ public:
 			_actor._timerState._timerCompleted = true;
 			_actor._timer->cancel(_actor._timerState._timerHandle);
 		}
-		_actor._msgPoolStatus.clear(&_actor);
+		_actor._msgPoolStatus.clear(&_actor);//yield now
 		_actor._inActor = false;
 		_actor._exited = true;
 		DEBUG_OPERATION(size_t yc = _actor.yield_count());
@@ -1332,12 +1332,13 @@ void my_actor::force_quit( const std::function<void ()>& h )
 {
 	assert(_strand->running_in_this_thread());
 	assert(!_inActor);
-	if (!_quited)
+	if (!_notifyQuited)
 	{
+		_notifyQuited = true;
 		if (!_lockQuit)
 		{
-			_quited = true;
 			_isForce = true;
+			_quited = true;
 			if (h) _exitCallback.push_back(h);
 			if (!_childActorList.empty())
 			{
@@ -1367,7 +1368,6 @@ void my_actor::force_quit( const std::function<void ()>& h )
 		{
 			_exitCallback.push_back(h);
 		}
-		_notifyQuited = true;
 	}
 	else if (h)
 	{
@@ -1623,7 +1623,7 @@ void my_actor::outside_wait_quit()
 	_strand->post([&ref2]
 	{
 		assert(ref2->_strand->running_in_this_thread());
-		if (ref2->_quited && !ref2->_childOverCount)
+		if (ref2->_exited)
 		{
 			boost::lock_guard<boost::mutex> lg(ref2.mutex);
 			ref2.conVar.notify_one();
@@ -1645,7 +1645,7 @@ void my_actor::append_quit_callback(const std::function<void ()>& h)
 {
 	if (_strand->running_in_this_thread())
 	{
-		if (_quited && !_childOverCount)
+		if (_exited)
 		{
 			DEBUG_OPERATION(size_t yc = yield_count());
 			CHECK_EXCEPTION(h);
@@ -1803,7 +1803,8 @@ void my_actor::run_one()
 
 void my_actor::pull_yield()
 {
-	assert(!_quited);
+	assert(!_exited);
+	assert(!_inActor);
 	if (!_suspended)
 	{
 		(*(actor_pull_type*)_actorPull)();
@@ -1822,13 +1823,13 @@ void my_actor::pull_yield_as_mutex()
 
 void my_actor::push_yield()
 {
-	assert(!_quited);
+	assert(!_exited);
 	assert(_inActor);
 	check_stack();
 	_yieldCount++;
 	_inActor = false;
 	(*(actor_push_type*)_actorPush)();
-	if (!_quited)
+	if (!_notifyQuited || _lockQuit)
 	{
 		_inActor = true;
 		return;
@@ -1844,7 +1845,7 @@ void my_actor::push_yield_as_mutex()
 
 void my_actor::force_quit_cb_handler()
 {
-	assert(_quited);
+	assert(_notifyQuited);
 	assert(_isForce);
 	assert(!_inActor);
 	assert((int)_childOverCount > 0);
@@ -1921,7 +1922,7 @@ void my_actor::child_resume_cb_handler()
 
 void my_actor::exit_callback()
 {
-	assert(_quited);
+	assert(_notifyQuited);
 	assert(!_childOverCount);
 	DEBUG_OPERATION(size_t yc = yield_count());
 	while (!_quitHandlerList.empty())
