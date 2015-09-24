@@ -1050,7 +1050,7 @@ void actor_shared_mutex::lock_shared(my_actor* host) const
 	_amutex->lock_shared(host);
 }
 
-bool actor_shared_mutex::try_lock_shared(my_actor* host)
+bool actor_shared_mutex::try_lock_shared(my_actor* host) const
 {
 	return _amutex->try_lock_shared(host);
 }

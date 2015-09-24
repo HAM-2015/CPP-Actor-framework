@@ -12,6 +12,9 @@ oschina url:
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
+2015-09-24
+改进采用TSS技术检测当前代码运行在哪个Actor下.
+
 2015-09-21
 使Actor在lock_quit()后检测到quit_msg消息仍然可以运行.
 

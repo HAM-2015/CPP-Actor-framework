@@ -123,7 +123,7 @@ public:
 	@brief ¹²ÏíËø
 	*/
 	void lock_shared(my_actor* host) const;
-	bool try_lock_shared(my_actor* host);
+	bool try_lock_shared(my_actor* host) const;
 	bool timed_lock_shared(int tm, my_actor* host) const;
 
 	/*!
