@@ -402,7 +402,7 @@ void actor_test(my_actor* self)
 // 		self->child_actor_run(actorConVarWait);
 // 		self->child_actor_run(actorConVarNtf);
 	}
-	async_buffer<move_test> abuff(2, self->self_strand());
+	async_buffer<move_test> abuff(self->self_strand(), 2);
 	{//Òì²½¶ÓÁÐ²âÊÔ
 		buffPush = self->create_child_actor(self->self_strand(), [&](my_actor* self)
 		{

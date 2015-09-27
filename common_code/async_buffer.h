@@ -95,11 +95,10 @@ class async_buffer
 public:
 	struct close_exception : public async_buffer_close_exception {};
 public:
-	async_buffer(size_t maxLength, const shared_strand& strand)
-		:_buffer(maxLength)//, _pushWait(4), _popWait(4)
+	async_buffer(const shared_strand& strand, size_t buffLength, size_t halfLength = 0)
+		:_strand(strand), _closed(false), _buffer(buffLength)//, _pushWait(4), _popWait(4)
 	{
-		_closed = false;
-		_strand = strand;
+		_halfLength = halfLength ? halfLength : buffLength / 2;
 	}
 public:
 	/*!
@@ -587,7 +586,7 @@ private:
 							pop_pck pck = { ref6.notified, ref6.host->make_trig_notifer(ref6.ath) };
 							ref6->_popWait.push_front(pck);
 						}
-						if (_buffer.size() <= _buffer.capacity() / 2 && !_pushWait.empty())
+						if (!_pushWait.empty() && _buffer.size() <= ref6->_halfLength)
 						{
 							_pushWait.back()(false);
 							_pushWait.pop_back();
@@ -638,7 +637,7 @@ private:
 						ref4.popCount++;
 						break_ = ref4.out();
 					}
-					if (_buffer.size() <= _buffer.capacity() / 2 && !_pushWait.empty())
+					if (!_pushWait.empty() && _buffer.size() <= ref4->_halfLength)
 					{
 						_pushWait.back()(false);
 						_pushWait.pop_back();
@@ -694,7 +693,7 @@ private:
 							ref8->_popWait.push_front(pck);
 							ref8.mit = ref8->_popWait.begin();
 						}
-						if (_buffer.size() <= _buffer.capacity() / 2 && !_pushWait.empty())
+						if (!_pushWait.empty() && _buffer.size() <= ref8->_halfLength)
 						{
 							_pushWait.back()(false);
 							_pushWait.pop_back();
@@ -742,11 +741,12 @@ private:
 		return popCount;
 	}
 private:
-	bool _closed;
 	shared_strand _strand;
 	boost::circular_buffer<T> _buffer;
 	msg_list<push_pck> _pushWait;
 	msg_list<pop_pck> _popWait;
+	size_t _halfLength;
+	bool _closed;
 };
 
 #endif

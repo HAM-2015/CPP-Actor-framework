@@ -9,7 +9,9 @@
 typedef boost::coroutines::coroutine<void>::pull_type actor_pull_type;
 typedef boost::coroutines::coroutine<void>::push_type actor_push_type;
 
+#ifdef CHECK_SELF
 boost::thread_specific_ptr<my_actor*> s_actorTss(NULL);
+#endif
 
 #define CORO_CONTEXT_STATE_SPACE	(4 kB)
 
