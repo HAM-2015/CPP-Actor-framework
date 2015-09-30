@@ -8,6 +8,8 @@
 typedef boost::asio::detail::strand_service::strand_impl impl_type;
 typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> timer_type;
 
+boost::thread_specific_ptr<void*> io_engine::_tls(NULL);
+
 io_engine::io_engine()
 {
 	_opend = false;
@@ -66,7 +68,10 @@ void io_engine::run(size_t threadNum)
 							lockConVar->wait(ul);
 						}
 					}
+					void* tssBuff[64] = { 0 };
+					_tls.reset(tssBuff);
 					_runCount += _ios.run();
+					_tls.release();
 				}
 				catch (msg_data::pool_memory_exception&)
 				{
@@ -216,4 +221,22 @@ void* io_engine::getTimer()
 void io_engine::freeTimer(void* timer)
 {
 	((obj_pool<timer_type>*)_timerPool)->recycle(timer);
+}
+
+void* io_engine::getTlsValue(int i)
+{
+	assert(i >= 0 && i < 64);
+	return _tls.get()[i];
+}
+
+void io_engine::setTlsValue(int i, void* val)
+{
+	assert(i >= 0 && i < 64);
+	_tls.get()[i] = val;
+}
+
+void** io_engine::getTlsValuePtr(int i)
+{
+	assert(i >= 0 && i < 64);
+	return _tls.get() + i;
 }

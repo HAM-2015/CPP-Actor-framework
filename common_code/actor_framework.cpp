@@ -10,7 +10,18 @@ typedef boost::coroutines::coroutine<void>::pull_type actor_pull_type;
 typedef boost::coroutines::coroutine<void>::push_type actor_push_type;
 
 #ifdef CHECK_SELF
-boost::thread_specific_ptr<my_actor*> s_actorTss(NULL);
+#ifndef ENALBE_TLS_CHECK_SELF
+msg_map<void*, my_actor*> s_stackLine(100000);
+boost::mutex s_stackLineMutex;
+struct initStackLine
+{
+	initStackLine()
+	{
+		s_stackLine.insert(make_pair((void*)NULL, (my_actor*)NULL));
+		s_stackLine.insert(make_pair((void*)-1, (my_actor*)NULL));
+	}
+} s_initStackLine;
+#endif
 #endif
 
 #define CORO_CONTEXT_STATE_SPACE	(4 kB)
@@ -872,6 +883,14 @@ my_actor::~my_actor()
 	assert(_suspendResumeQueue.empty());
 	assert(_exitCallback.empty());
 	assert(_childActorList.empty());
+#ifdef CHECK_SELF
+#ifndef ENALBE_TLS_CHECK_SELF
+	s_stackLineMutex.lock();
+	s_stackLine.erase(_btIt);
+	s_stackLine.erase(_topIt);
+	s_stackLineMutex.unlock();
+#endif
+#endif
 #ifdef CHECK_ACTOR_STACK
 	unsigned char* bt = (unsigned char*)_stackTop - _stackSize - STACK_RESERVED_SPACE_SIZE;
 	size_t i = 0;
@@ -909,6 +928,15 @@ actor_handle my_actor::create(const shared_strand& actorStrand, const main_func&
 		boost::coroutines::attributes(newActor->_stackSize), actor_stack_pool_allocate(newActor->_stackTop, newActor->_stackSize));
 	newActor->_stackSize -= STACK_RESERVED_SPACE_SIZE;
 	newActor->_weakThis = newActor;
+
+#ifdef CHECK_SELF
+#ifndef ENALBE_TLS_CHECK_SELF
+	s_stackLineMutex.lock();
+	newActor->_topIt = s_stackLine.insert(make_pair((char*)newActor->_stackTop, (my_actor*)NULL)).first;
+	newActor->_btIt = s_stackLine.insert(newActor->_topIt, make_pair((char*)newActor->_stackTop - newActor->_stackSize - STACK_RESERVED_SPACE_SIZE, newActor.get()));
+	s_stackLineMutex.unlock();
+#endif
+#endif
 
 #ifdef CHECK_ACTOR_STACK
 	newActor->_checkStackFree = false;
@@ -1780,14 +1808,14 @@ void my_actor::run_one()
 	}
 }
 
-void my_actor::pull_yield_tss()
+void my_actor::pull_yield_tls()
 {
-#ifdef CHECK_SELF
-	my_actor** old = s_actorTss.get();
-	my_actor* self = this;
-	s_actorTss.reset(&self);
+#if (defined CHECK_SELF) && (defined ENALBE_TLS_CHECK_SELF)
+	void** pval = io_engine::getTlsValuePtr(0);
+	my_actor* old = (my_actor*)*pval;
+	*pval = this;
 	(*(actor_pull_type*)_actorPull)();
-	s_actorTss.reset(old);
+	*pval = old;
 #else
 	(*(actor_pull_type*)_actorPull)();
 #endif
@@ -1799,7 +1827,7 @@ void my_actor::pull_yield()
 	assert(!_inActor);
 	if (!_suspended)
 	{
-		pull_yield_tss();
+		pull_yield_tls();
 	}
 	else
 	{
@@ -1808,9 +1836,9 @@ void my_actor::pull_yield()
 	}
 }
 
-void my_actor::pull_yield_as_mutex()
+void my_actor::pull_yield_after_quited()
 {
-	pull_yield_tss();
+	(*(actor_pull_type*)_actorPull)();
 }
 
 void my_actor::push_yield()
@@ -1923,7 +1951,7 @@ void my_actor::exit_callback()
 		_quitHandlerList.pop_front();
 	}
 	assert(yield_count() == yc);
-	pull_yield_tss();
+	pull_yield_tls();
 }
 
 void my_actor::timeout_handler()
@@ -1994,11 +2022,18 @@ void my_actor::check_stack()
 my_actor* my_actor::self_actor()
 {
 #ifdef CHECK_SELF
-	my_actor** p = s_actorTss.get();
-	if (p)
+#ifdef ENALBE_TLS_CHECK_SELF
+	return (my_actor*)io_engine::getTlsValue(0);
+#else
+	boost::lock_guard<boost::mutex> lg(s_stackLineMutex);
+	auto eit = s_stackLine.insert(make_pair(get_sp(), (my_actor*)NULL));
+	if (eit.second)
 	{
-		return *p;
+		s_stackLine.erase(eit.first--);
+		assert(eit.first != s_stackLine.end());
+		return eit.first->second;
 	}
+#endif
 #endif
 	return NULL;
 }

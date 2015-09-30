@@ -4364,9 +4364,9 @@ private:
 	void suspend();
 	void resume();
 	void run_one();
-	void pull_yield_tss();
+	void pull_yield_tls();
 	void pull_yield();
-	void pull_yield_as_mutex();
+	void pull_yield_after_quited();
 	void push_yield();
 	void push_yield_as_mutex();
 	void force_quit_cb_handler();
@@ -4407,6 +4407,12 @@ private:
 	timer_state _timerState;///<定时器状态
 	ActorTimer_* _timer;///<定时器
 	std::weak_ptr<my_actor> _weakThis;
+#ifdef CHECK_SELF
+#ifndef ENALBE_TLS_CHECK_SELF
+	msg_map<void*, my_actor*>::iterator _btIt;
+	msg_map<void*, my_actor*>::iterator _topIt;
+#endif
+#endif
 	static msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc _suspendResumeQueueAll;
 	static msg_list_shared_alloc<std::function<void()> >::shared_node_alloc _quitExitCallbackAll;
 	static msg_list_shared_alloc<actor_handle>::shared_node_alloc _childActorListAll;

@@ -142,7 +142,7 @@ void mutex_trig_handle::push_msg()
 		if (_waiting)
 		{
 			_waiting = false;
-			_hostActor->pull_yield_as_mutex();
+			_hostActor->pull_yield_after_quited();
 			return;
 		}
 		_hasMsg = true;

@@ -102,6 +102,24 @@ public:
 	@brief 调度器对象引用
 	*/
 	operator boost::asio::io_service& () const;
+
+	/*!
+	@brief 获取tls值
+	@param 0 <= i < 64
+	*/
+	static void* getTlsValue(int i);
+
+	/*!
+	@brief 设置tls值
+	@param 0 <= i < 64
+	*/
+	static void setTlsValue(int i, void* val);
+
+	/*!
+	@brief 获取某个tls变量空间
+	@param 0 <= i < 64
+	*/
+	static void** getTlsValuePtr(int i);
 private:
 	void* getImpl();
 	void freeImpl(void* impl);
@@ -120,6 +138,7 @@ private:
 	boost::asio::io_service _ios;
 	boost::asio::io_service::work* _runLock;
 	boost::thread_group _runThreads;
+	static boost::thread_specific_ptr<void*> _tls;///<64位void*
 };
 
 #endif
