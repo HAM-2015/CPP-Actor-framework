@@ -37,8 +37,8 @@ class async_buffer
 		bool& notified;
 		actor_trig_notifer<bool> ntf;
 	};
-
-	struct buff_push
+	
+	struct buff_push1
 	{
 		template <typename... Args>
 		inline void operator ()(Args&&... args)
@@ -49,8 +49,8 @@ class async_buffer
 			} 
 			else
 			{
-				_i -= sizeof...(Args) / 2;
-				right_invoke<sizeof...(Args)-sizeof...(Args) / 2>::invoke(*this, TRY_MOVE(args)...);
+				buff_push1 bp = { _this, _i - sizeof...(Args) / 2 };
+				right_invoke<sizeof...(Args)-sizeof...(Args) / 2>::invoke(bp, TRY_MOVE(args)...);
 			}
 		}
 
@@ -62,10 +62,10 @@ class async_buffer
 		}
 
 		async_buffer* const _this;
-		size_t _i;
+		const size_t _i;
 	};
-
-	struct buff_pop
+	
+	struct buff_pop1
 	{
 		template <typename... Outs>
 		inline void operator ()(Outs&... outs)
@@ -76,8 +76,8 @@ class async_buffer
 			}
 			else
 			{
-				_i -= sizeof...(Outs) / 2;
-				right_invoke<sizeof...(Outs)-sizeof...(Outs) / 2>::invoke(*this, outs...);
+				buff_pop1 bp = { _this, _i - sizeof...(Outs) / 2 };
+				right_invoke<sizeof...(Outs)-sizeof...(Outs) / 2>::invoke(bp, outs...);
 			}
 		}
 
@@ -89,9 +89,61 @@ class async_buffer
 		}
 
 		async_buffer* const _this;
-		size_t _i;
+		const size_t _i;
+	};
+	
+	struct buff_push2
+	{
+		template <typename Fst, typename... Args>
+		inline void operator ()(Fst&& fst, Args&&... args)
+		{
+			if (0 == _i)
+			{
+				_this->_buffer.push_back(TRY_MOVE(fst));
+			} 
+			else
+			{
+				buff_push2 bp = { _this, _i - 1 };
+				bp(TRY_MOVE(args)...);
+			}
+		}
+
+		inline void operator ()()
+		{
+			assert(false);
+		}
+
+		async_buffer* const _this;
+		const size_t _i;
 	};
 
+	struct buff_pop2
+	{
+		template <typename Fst, typename... Outs>
+		inline void operator ()(Fst& fst, Outs&... outs)
+		{
+			if (0 == _i)
+			{
+				fst = std::move(_this->_buffer.front());
+			} 
+			else
+			{
+				buff_pop2 bp = { _this, _i - 1 };
+				bp(outs...);
+			}
+		}
+
+		inline void operator ()()
+		{
+			assert(false);
+		}
+
+		async_buffer* const _this;
+		const size_t _i;
+	};
+
+	typedef buff_push2 buff_push;
+	typedef buff_pop2 buff_pop;
 public:
 	struct close_exception : public async_buffer_close_exception {};
 public:

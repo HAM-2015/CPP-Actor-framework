@@ -1857,7 +1857,7 @@ void my_actor::push_yield()
 	throw force_quit_exception();
 }
 
-void my_actor::push_yield_as_mutex()
+void my_actor::push_yield_after_quited()
 {
 	check_stack();
 	(*(actor_push_type*)_actorPush)();

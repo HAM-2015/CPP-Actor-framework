@@ -4368,7 +4368,7 @@ private:
 	void pull_yield();
 	void pull_yield_after_quited();
 	void push_yield();
-	void push_yield_as_mutex();
+	void push_yield_after_quited();
 	void force_quit_cb_handler();
 	void exit_callback();
 	void child_suspend_cb_handler();

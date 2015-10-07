@@ -74,7 +74,7 @@ void mutex_trig_handle::wait()
 		} 
 		else
 		{
-			_hostActor->push_yield_as_mutex();
+			_hostActor->push_yield_after_quited();
 		}
 	}
 }
