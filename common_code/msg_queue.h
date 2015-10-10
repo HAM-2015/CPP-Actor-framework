@@ -43,6 +43,20 @@ public:
 		new(new_back()->_data)T(std::move(p));
 	}
 
+	void push_front(const T& p)
+	{
+		assert(_size < 256);
+		_size++;
+		new(new_front()->_data)T(p);
+	}
+
+	void push_front(T&& p)
+	{
+		assert(_size < 256);
+		_size++;
+		new(new_front()->_data)T(std::move(p));
+	}
+
 	T& front()
 	{
 		assert(_size && _head._next);
@@ -106,9 +120,21 @@ private:
 	node* new_back()
 	{
 		node* newNode = (node*)_alloc.allocate();
+		newNode->_next = NULL;
 		_tail->_next = newNode;
 		_tail = newNode;
-		_tail->_next = NULL;
+		return newNode;
+	}
+
+	node* new_front()
+	{
+		node* newNode = (node*)_alloc.allocate();
+		newNode->_next = _head._next;
+		_head._next = newNode;
+		if (&_head == _tail)
+		{
+			_tail = newNode;
+		}
 		return newNode;
 	}
 private:

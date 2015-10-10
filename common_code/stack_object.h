@@ -6,7 +6,7 @@
 /*!
 @brief 在栈上分配一段临时空间用于构造临时对象
 */
-template <typename OBJ, bool AUTO = true>
+template <typename OBJ = void, bool AUTO = true>
 class stack_obj
 {
 	typedef TYPE_PIPE(OBJ) type;
@@ -194,6 +194,19 @@ public:
 private:
 	unsigned char _buff[sizeof(type)];
 	DEBUG_OPERATION(bool _null);
+};
+
+template <bool AUTO>
+class stack_obj<void, AUTO>
+{
+public:
+	void create()
+	{
+	}
+
+	void get()
+	{
+	}
 };
 
 #endif

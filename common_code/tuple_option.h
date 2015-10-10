@@ -1397,6 +1397,68 @@ template <size_t A, size_t B>
 struct swap_invoke : public SwapInvoke_<A, B, A == B> {};
 
 /*!
+@brief 使用第I个参数调用
+*/
+template <size_t I>
+struct index_invoke
+{
+	template <size_t N, typename R, typename Handler>
+	struct depth
+	{
+		template <typename Head, typename... Args>
+		inline R operator ()(Head&& head, Args&&... args)
+		{
+			depth<N - 1, R, Handler> dp = { h };
+			return dp(TRY_MOVE(args)...);
+		}
+
+		Handler& h;
+	};
+
+	template <typename R, typename Handler>
+	struct depth<0, R, Handler>
+	{
+		template <typename Head, typename... Args>
+		inline R operator ()(Head&& head, Args&&... args)
+		{
+			return h(TRY_MOVE(head));
+		}
+
+		Handler& h;
+	};
+
+	template <typename R = void, typename Handler, typename... Args>
+	static inline R invoke(Handler&& h, Args&&... args)
+	{
+		static_assert(I < sizeof...(Args), "");
+		depth<I, R, Handler> dp = { h };
+		return dp(TRY_MOVE(args)...);
+	}
+
+	template <typename R = void, typename F, typename C, typename... Args>
+	static inline R invoke(F pf, C* obj, Args&&... args)
+	{
+		static_assert(I < sizeof...(Args), "");
+		InvokeWrapObj_<R, F, C> wrap = { pf, obj };
+		return invoke<R>(wrap, TRY_MOVE(args)...);
+	}
+
+	template <typename R = void, typename Handler, typename Tuple>
+	static inline R tupleInvoke(Handler&& h, Tuple&& tup)
+	{
+		depth<I, R, Handler> dp = { h };
+		return tuple_invoke<R>(dp, TRY_MOVE(tup));
+	}
+
+	template <typename R = void, typename F, typename C, typename Tuple>
+	static inline R tupleInvoke(F pf, C* obj, Tuple&& tup)
+	{
+		InvokeWrapObj_<R, F, C> wrap = { pf, obj };
+		return tupleInvoke<R>(wrap, TRY_MOVE(tup));
+	}
+};
+
+/*!
 @brief 把tuple移到零散参数中
 */
 template <typename Tuple, typename... Args>

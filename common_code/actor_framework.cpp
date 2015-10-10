@@ -326,6 +326,14 @@ void MsgPoolVoid_::disconnect()
 	_waiting = false;
 }
 
+void MsgPoolVoid_::backflow(const std::shared_ptr<msg_pump_type>& msgPump)
+{
+	assert(_strand->running_in_this_thread());
+	assert(msgPump->_hasMsg);
+	msgPump->_hasMsg = false;
+	_msgBuff++;
+}
+
 void MsgPoolVoid_::pump_handler::clear()
 {
 	_thisPool.reset();
@@ -484,7 +492,7 @@ MsgPumpVoid_::MsgPumpVoid_(const actor_handle& hostActor)
 
 MsgPumpVoid_::~MsgPumpVoid_()
 {
-
+	assert(!_hasMsg);
 }
 
 void MsgPumpVoid_::clear()
@@ -502,6 +510,7 @@ void MsgPumpVoid_::clear()
 
 void MsgPumpVoid_::close()
 {
+	assert(_strand->running_in_this_thread());
 	_hasMsg = false;
 	_waiting = false;
 	_checkDis = false;

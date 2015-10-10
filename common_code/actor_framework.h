@@ -849,7 +849,7 @@ class MsgPump_ : public MsgPumpBase_
 	friend pump_handler;
 private:
 	MsgPump_(){}
-	~MsgPump_(){}
+	~MsgPump_(){ assert(!_hasMsg); }
 private:
 	static std::shared_ptr<MsgPump_> make(const actor_handle& hostActor)
 	{
@@ -1021,6 +1021,7 @@ private:
 
 	void close()
 	{
+		assert(_strand->running_in_this_thread());
 		if (_hasMsg)
 		{
 			((msg_type*)_msgSpace)->~msg_type();
@@ -1370,6 +1371,16 @@ private:
 		assert(_strand->running_in_this_thread());
 		_msgBuff.expand_fixed(fixedSize);
 	}
+
+	void backflow(const std::shared_ptr<msg_pump_type>& msgPump)
+	{
+		typedef typename msg_pump_type::msg_type msg_type;
+		assert(_strand->running_in_this_thread());
+		assert(msgPump->_hasMsg);
+		msgPump->_hasMsg = false;
+		_msgBuff.push_front(std::move(*(msg_type*)msgPump->_msgSpace));
+		((msg_type*)msgPump->_msgSpace)->~msg_type();
+	}
 private:
 	std::weak_ptr<MsgPool_> _weakThis;
 	std::shared_ptr<msg_pump_type> _msgPump;
@@ -1416,6 +1427,7 @@ protected:
 	pump_handler connect_pump(const std::shared_ptr<msg_pump_type>& msgPump);
 	void disconnect();
 	void expand_fixed(size_t fixedSize){};
+	void backflow(const std::shared_ptr<msg_pump_type>& msgPump);
 protected:
 	std::weak_ptr<MsgPoolVoid_> _weakThis;
 	std::shared_ptr<msg_pump_type> _msgPump;
@@ -2021,6 +2033,9 @@ class callback_handler {};
 template <typename... TYPES>
 class asio_cb_handler {};
 
+template <typename... TYPES>
+class sync_cb_handler {};
+
 /*!
 @brief 异步回调器，作为回调函数参数传入，回调后，自动返回到下一行语句继续执行
 */
@@ -2138,8 +2153,337 @@ private:
 	dst_receiver _dstRef;
 	const bool _early;
 };
-
 //////////////////////////////////////////////////////////////////////////
+
+/*!
+@brief 同步回调传入返回值
+*/
+template <typename R = void>
+struct sync_result
+{
+	sync_result()
+		:_res(NULL) {}
+
+	template <typename... Args>
+	void return_(Args&&... args)
+	{
+		assert(_res);
+		_res->create(TRY_MOVE(args)...);
+		{
+			boost::lock_guard<boost::mutex> lg(_mutex);
+			_con.notify_one();
+		}
+		_res = NULL;
+	}
+
+	template <typename T>
+	void operator =(T&& r)
+	{
+		assert(_res);
+		_res->create(TRY_MOVE(r));
+		{
+			boost::lock_guard<boost::mutex> lg(_mutex);
+			_con.notify_one();
+		}
+		_res = NULL;
+	}
+
+	boost::mutex _mutex;
+	boost::condition_variable _con;
+	stack_obj<R>* _res;
+};
+
+template <>
+struct sync_result<void>
+{
+	sync_result()
+DEBUG_OPERATION(:_res(false)){}
+
+	void return_()
+	{
+		assert(_res);
+		{
+			boost::lock_guard<boost::mutex> lg(_mutex);
+			_con.notify_one();
+		}
+		DEBUG_OPERATION(_res = false);
+	}
+
+	boost::mutex _mutex;
+	boost::condition_variable _con;
+	DEBUG_OPERATION(bool _res);
+};
+
+/*!
+@brief 同步回调器，作为回调函数参数传入，回调后，自动返回到下一行语句继续执行
+*/
+template <typename R, typename... ARGS, typename... OUTS>
+class sync_cb_handler<R, types_pck<ARGS...>, types_pck<OUTS...>> : public TrigOnceBase_
+{
+	typedef std::tuple<OUTS&...> dst_receiver;
+
+	friend my_actor;
+public:
+	template <typename... Outs>
+	sync_cb_handler(my_actor* host, sync_result<R>& res, Outs&... outs)
+		:_early(true), _result(res), _dstRef(outs...)
+	{
+		_hostActor = host->shared_from_this();
+	}
+
+	~sync_cb_handler()
+	{
+		if (_early)
+		{
+			push_yield();
+			_hostActor.reset();
+		}
+	}
+
+	sync_cb_handler(const sync_cb_handler& s)
+		:TrigOnceBase_(s), _early(false), _result(s._result), _dstRef(s._dstRef) {}
+public:
+	template <typename... Args>
+	R operator()(Args&&... args) const
+	{
+		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
+		assert(!_hostActor->self_strand()->in_this_ios());
+		stack_obj<R> res;
+		_result._res = &res;
+		{
+			boost::unique_lock<boost::mutex> ul(_result._mutex);
+			_dispatch_handler2(_dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
+			_result._con.wait(ul);
+		}
+		return (R&&)res.get();
+	}
+
+	R operator()() const
+	{
+		static_assert(sizeof...(ARGS) == 0, "");
+		assert(!_hostActor->self_strand()->in_this_ios());
+		stack_obj<R> res;
+		_result._res = &res;
+		{
+			boost::unique_lock<boost::mutex> ul(_result._mutex);
+			dispatch_handler();
+			_result._con.wait(ul);
+		}
+		return (R&&)res.get();
+	}
+private:
+	void reset() const
+	{
+		if (!_early)
+		{
+			_hostActor.reset();
+		}
+	}
+
+	void operator =(const sync_cb_handler& s)
+	{
+		static_assert(false, "no copy");
+	}
+private:
+	dst_receiver _dstRef;
+	const bool _early;
+	sync_result<R>& _result;
+};
+
+template <typename... ARGS, typename... OUTS>
+class sync_cb_handler<void, types_pck<ARGS...>, types_pck<OUTS...>> : public TrigOnceBase_
+{
+	typedef std::tuple<OUTS&...> dst_receiver;
+
+	friend my_actor;
+public:
+	template <typename... Outs>
+	sync_cb_handler(my_actor* host, sync_result<void>& res, Outs&... outs)
+		:_early(true), _result(res), _dstRef(outs...)
+	{
+		_hostActor = host->shared_from_this();
+	}
+
+	~sync_cb_handler()
+	{
+		if (_early)
+		{
+			push_yield();
+			_hostActor.reset();
+		}
+	}
+
+	sync_cb_handler(const sync_cb_handler& s)
+		:TrigOnceBase_(s), _early(false), _result(s._result), _dstRef(s._dstRef) {}
+public:
+	template <typename... Args>
+	void operator()(Args&&... args) const
+	{
+		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
+		assert(!_hostActor->self_strand()->in_this_ios());
+		DEBUG_OPERATION(_result._res = true);
+		{
+			boost::unique_lock<boost::mutex> ul(_result._mutex);
+			_dispatch_handler2(_dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
+			_result._con.wait(ul);
+		}
+	}
+
+	void operator()() const
+	{
+		static_assert(sizeof...(ARGS) == 0, "");
+		assert(!_hostActor->self_strand()->in_this_ios());
+		DEBUG_OPERATION(_result._res = true);
+		{
+			boost::unique_lock<boost::mutex> ul(_result._mutex);
+			dispatch_handler();
+			_result._con.wait(ul);
+		}
+	}
+private:
+	void reset() const
+	{
+		if (!_early)
+		{
+			_hostActor.reset();
+		}
+	}
+
+	void operator =(const sync_cb_handler& s)
+	{
+		static_assert(false, "no copy");
+	}
+private:
+	dst_receiver _dstRef;
+	const bool _early;
+	sync_result<void>& _result;
+};
+//////////////////////////////////////////////////////////////////////////
+
+template <typename R, typename Handler>
+class wrapped_sync_handler
+{
+public:
+	template <typename H>
+	wrapped_sync_handler(H&& h, sync_result<R>& res)
+		:_handler(TRY_MOVE(h)), _result(&res)
+	{
+		DEBUG_OPERATION(_pIsTrig = std::shared_ptr<boost::atomic<bool> >(new boost::atomic<bool>(false)));
+	}
+
+	wrapped_sync_handler(wrapped_sync_handler&& s)
+		:_handler(std::move(s._handler)), _result(s._result)
+	{
+		DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
+	}
+
+	void operator =(wrapped_sync_handler&& s)
+	{
+		_handler = std::move(s._handler);
+		_result = s._result;
+		DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
+	}
+
+	template <typename... Args>
+	R operator()(Args&&... args)
+	{
+		stack_obj<R> res;
+		_result->_res = &res;
+		assert(!_pIsTrig->exchange(true));
+		{
+			boost::unique_lock<boost::mutex> ul(_result->_mutex);
+			_handler(TRY_MOVE(args)...);
+			_result->_con.wait(ul);
+		}
+		DEBUG_OPERATION(_pIsTrig->exchange(false));
+		return (R&&)res.get();
+	}
+
+	template <typename... Args>
+	R operator()(Args&&... args) const
+	{
+		stack_obj<R> res;
+		_result->_res = &res;
+		assert(!_pIsTrig->exchange(true));
+		{
+			boost::unique_lock<boost::mutex> ul(_result->_mutex);
+			_handler(TRY_MOVE(args)...);
+			_result->_con.wait(ul);
+		}
+		DEBUG_OPERATION(_pIsTrig->exchange(false));
+		return (R&&)res.get();
+	}
+private:
+	Handler _handler;
+	sync_result<R>* _result;
+	DEBUG_OPERATION(std::shared_ptr<boost::atomic<bool> > _pIsTrig);
+};
+
+template <typename Handler>
+class wrapped_sync_handler<void, Handler>
+{
+public:
+	template <typename H>
+	wrapped_sync_handler(H&& h, sync_result<void>& res)
+		:_handler(TRY_MOVE(h)), _result(&res)
+	{
+		DEBUG_OPERATION(_pIsTrig = std::shared_ptr<boost::atomic<bool> >(new boost::atomic<bool>(false)));
+	}
+
+	wrapped_sync_handler(wrapped_sync_handler&& s)
+		:_handler(std::move(s._handler)), _result(s._result)
+	{
+		DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
+	}
+
+	void operator =(wrapped_sync_handler&& s)
+	{
+		_handler = std::move(s._handler);
+		_result = s._result;
+		DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
+	}
+
+	template <typename... Args>
+	void operator()(Args&&... args)
+	{
+		DEBUG_OPERATION(_result->_res = true);
+		assert(!_pIsTrig->exchange(true));
+		{
+			boost::unique_lock<boost::mutex> ul(_result->_mutex);
+			_handler(TRY_MOVE(args)...);
+			_result->_con.wait(ul);
+		}
+		DEBUG_OPERATION(_pIsTrig->exchange(false));
+	}
+
+	template <typename... Args>
+	void operator()(Args&&... args) const
+	{
+		DEBUG_OPERATION(_result->_res = true);
+		assert(!_pIsTrig->exchange(true));
+		{
+			boost::unique_lock<boost::mutex> ul(_result->_mutex);
+			_handler(TRY_MOVE(args)...);
+			_result->_con.wait(ul);
+		}
+		DEBUG_OPERATION(_pIsTrig->exchange(false));
+	}
+private:
+	Handler _handler;
+	sync_result<void>* _result;
+	DEBUG_OPERATION(std::shared_ptr<boost::atomic<bool> > _pIsTrig);
+};
+
+/*!
+@brief 包装一个handler到与当前ios无关的线程中同步调用
+*/
+template <typename R = void, typename Handler>
+wrapped_sync_handler<R, Handler> wrap_sync(sync_result<R>& res, Handler&& h)
+{
+	return wrapped_sync_handler<R, Handler>(TRY_MOVE(h), res);
+}
+//////////////////////////////////////////////////////////////////////////
+
 /*!
 @brief 子Actor句柄，不可拷贝
 */
@@ -2261,7 +2605,7 @@ class my_actor
 				{
 					_msgPump->close();
 				}
-				if (_msgPool)
+				if (_msgPool && _isHead)
 				{
 					_msgPool->_closed = true;
 				}
@@ -2674,14 +3018,14 @@ public:
 		h();
 	}
 
-	template <typename Arg, typename H>
-	__yield_interrupt Arg send(const shared_strand& exeStrand, H&& h)
+	template <typename R, typename H>
+	__yield_interrupt R send(const shared_strand& exeStrand, H&& h)
 	{
 		assert_enter();
 		if (exeStrand != _strand)
 		{
-			std::tuple<stack_obj<TYPE_PIPE(Arg)>> dstRec;
-			exeStrand->asyncInvoke(TRY_MOVE(h), async_invoke_handler<std::tuple<stack_obj<TYPE_PIPE(Arg)>>, Arg>(shared_from_this(), dstRec));
+			std::tuple<stack_obj<TYPE_PIPE(R)>> dstRec;
+			exeStrand->asyncInvoke(TRY_MOVE(h), async_invoke_handler<std::tuple<stack_obj<TYPE_PIPE(R)>>, R>(shared_from_this(), dstRec));
 			push_yield();
 			return std::move(std::get<0>(dstRec).get());
 		} 
@@ -2703,10 +3047,10 @@ public:
 		push_yield();
 	}
 
-	template <typename Arg, typename H>
-	__yield_interrupt Arg run_in_thread_stack(H&& h)
+	template <typename R, typename H>
+	__yield_interrupt R run_in_thread_stack(H&& h)
 	{
-		return async_send<Arg>(_strand, TRY_MOVE(h));
+		return async_send<R>(_strand, TRY_MOVE(h));
 	}
 
 	/*!
@@ -2725,12 +3069,12 @@ public:
 		push_yield();
 	}
 
-	template <typename Arg, typename H>
-	__yield_interrupt Arg async_send(const shared_strand& exeStrand, H&& h)
+	template <typename R, typename H>
+	__yield_interrupt R async_send(const shared_strand& exeStrand, H&& h)
 	{
 		assert_enter();
-		std::tuple<stack_obj<TYPE_PIPE(Arg)>> dstRec;
-		exeStrand->asyncInvoke(TRY_MOVE(h), async_invoke_handler<std::tuple<stack_obj<TYPE_PIPE(Arg)>>, Arg>(shared_from_this(), dstRec));
+		std::tuple<stack_obj<TYPE_PIPE(R)>> dstRec;
+		exeStrand->asyncInvoke(TRY_MOVE(h), async_invoke_handler<std::tuple<stack_obj<TYPE_PIPE(R)>>, R>(shared_from_this(), dstRec));
 		push_yield();
 		return std::move(std::get<0>(dstRec).get());
 	}
@@ -2741,10 +3085,10 @@ public:
 		async_send(_strand, TRY_MOVE(h));
 	}
 
-	template <typename Arg, typename H>
-	__yield_interrupt Arg async_send_self(H&& h)
+	template <typename R, typename H>
+	__yield_interrupt R async_send_self(H&& h)
 	{
-		return async_send<Arg>(_strand, TRY_MOVE(h));
+		return async_send<R>(_strand, TRY_MOVE(h));
 	}
 
 	/*!
@@ -2961,11 +3305,11 @@ public:
 
 	__yield_interrupt void wait_msg(actor_msg_handle<>& amh);
 
-	template <typename Arg>
-	__yield_interrupt Arg wait_msg(actor_msg_handle<Arg>& amh)
+	template <typename R>
+	__yield_interrupt R wait_msg(actor_msg_handle<R>& amh)
 	{
 		assert_enter();
-		DstReceiverBuff_<Arg> dstRec;
+		DstReceiverBuff_<R> dstRec;
 		_wait_msg(amh, dstRec);
 		return std::move(std::get<0>(dstRec._dstBuff.get()));
 	}
@@ -3010,6 +3354,24 @@ public:
 	{
 		assert_enter();
 		return asio_cb_handler<types_pck<Outs...>, types_pck<Outs...>>(this, outs...);
+	}
+
+	/*!
+	@brief 创建同步上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_sync_context(sync_result, ...))
+	*/
+	template <typename R = void, typename... Args, typename... Outs>
+	sync_cb_handler<R, types_pck<Outs...>, types_pck<Outs...>> make_sync_context_as_type(sync_result<R>& res, Outs&... outs)
+	{
+		static_assert(sizeof...(Args) == sizeof...(Outs), "");
+		assert_enter();
+		return sync_cb_handler<R, types_pck<Outs...>, types_pck<Outs...>>(this, res, outs...);
+	}
+
+	template <typename R = void, typename... Outs>
+	sync_cb_handler<R, types_pck<Outs...>, types_pck<Outs...>> make_sync_context(sync_result<R>& res, Outs&... outs)
+	{
+		assert_enter();
+		return sync_cb_handler<R, types_pck<Outs...>, types_pck<Outs...>>(this, res, outs...);
 	}
 
 	/*!
@@ -3079,11 +3441,11 @@ public:
 
 	__yield_interrupt void wait_trig(actor_trig_handle<>& ath);
 
-	template <typename Arg>
-	__yield_interrupt Arg wait_trig(actor_trig_handle<Arg>& ath)
+	template <typename R>
+	__yield_interrupt R wait_trig(actor_trig_handle<R>& ath)
 	{
 		assert_enter();
-		DstReceiverBuff_<Arg> dstRec;
+		DstReceiverBuff_<R> dstRec;
 		_wait_msg(ath, dstRec);
 		return std::move(std::get<0>(dstRec._dstBuff.get()));
 	}
@@ -3098,7 +3460,7 @@ private:
 	@brief 寻找出与模板参数类型匹配的消息池
 	*/
 	template <typename... Args>
-	static std::shared_ptr<msg_pool_status::pck<Args...> > msg_pool_pck(const int id, my_actor* const host, bool make = true)
+	static std::shared_ptr<msg_pool_status::pck<Args...> > msg_pool_pck(const int id, my_actor* const host, const bool make = true)
 	{
 		typedef msg_pool_status::pck<Args...> pck_type;
 		msg_pool_status::id_key typeID(sizeof...(Args) != 0 ? typeid(pck_type).hash_code() : 0, id);
@@ -3123,7 +3485,7 @@ private:
 	@brief 清除消息代理链
 	*/
 	template <typename... Args>
-	static void clear_msg_list(my_actor* const host, const std::shared_ptr<msg_pool_status::pck<Args...>>& msgPck, bool poolDis = true)
+	static void clear_msg_list(my_actor* const host, const std::shared_ptr<msg_pool_status::pck<Args...>>& msgPck, const bool poolDis = true, const bool bkMsg = false)
 	{
 		std::shared_ptr<msg_pool_status::pck<Args...>> uStack[16];
 		size_t stackl = 0;
@@ -3142,28 +3504,35 @@ private:
 			{
 				if (!pckIt->is_closed())
 				{
-					if (pckIt->_msgPool)
+					auto& msgPool_ = pckIt->_msgPool;
+					auto& msgPump_ = pckIt->_msgPump;
+					if (msgPool_)
 					{
 						if (poolDis)
 						{
-							auto& msgPool_ = pckIt->_msgPool;
-							auto& msgPump_ = pckIt->_msgPump;
-							host->send(msgPool_->_strand, [&msgPool_, &msgPump_]
+							host->send(msgPool_->_strand, [&]
 							{
 								assert(msgPool_->_msgPump == msgPump_);
 								msgPool_->disconnect();
 							});
 						}
-						pckIt->_msgPool.reset();
 					}
-					if (pckIt->_msgPump)
+					if (msgPump_)
 					{
-						auto& msgPump_ = pckIt->_msgPump;
-						host->send(msgPump_->_strand, [&msgPump_]
+						bool hasMsg = host->send<bool>(msgPump_->_strand, [&msgPump_]()->bool
 						{
 							msgPump_->clear();
+							return msgPump_->_hasMsg;
 						});
+						if (bkMsg && hasMsg && msgPool_)
+						{
+							host->send(msgPool_->_strand, [&]
+							{
+								msgPool_->backflow(msgPump_);
+							});
+						}
 					}
+					msgPool_.reset();
 				}
 				while (stackl)
 				{
@@ -3230,6 +3599,13 @@ private:
 							});
 						}
 					}
+					else if (newPool)
+					{
+						send(newPool->_strand, [&newPool]
+						{
+							newPool->disconnect();
+						});
+					}
 					while (stackl)
 					{
 						uStack[--stackl]->unlock(this);
@@ -3249,7 +3625,7 @@ private:
 	@brief 把本Actor内消息由伙伴Actor代理处理
 	*/
 	template <typename... Args>
-	__yield_interrupt bool msg_agent_to(const int id, actor_handle childActor)
+	__yield_interrupt bool msg_agent_to(const int id, const actor_handle& childActor)
 	{
 		typedef std::shared_ptr<msg_pool_status::pck<Args...>> pck_type;
 
@@ -3389,17 +3765,18 @@ public:
 			if (msgPck->_next)
 			{
 				msgPck->_next->lock(this);
-				clear_msg_list<Args...>(this, msgPck->_next);
+				clear_msg_list<Args...>(this, msgPck->_next, true, !msgPck->_isHead);
 				msgPck->_next->_isHead = true;
 				msgPck->_next->unlock(this);
 				msgPck->_next.reset();
+				clear_msg_list<Args...>(this, msgPck);
 			}
-			if (msgPck->_msgPool)
+			else
 			{
-				msgPck->_msgPool->_closed = true;
+				clear_msg_list<Args...>(this, msgPck, true, !msgPck->_isHead);
 			}
-			clear_msg_list<Args...>(this, msgPck);
 			_msgPoolStatus._msgTypeMap.erase(it);
+			msgPck->close();
 			msgPck->unlock(this);
 			return true;
 		}
@@ -3899,17 +4276,17 @@ public:
 		pump_msg(false, pump, res...);
 	}
 
-	template <typename Arg>
-	__yield_interrupt Arg pump_msg(bool checkDis, const msg_pump_handle<Arg>& pump)
+	template <typename R>
+	__yield_interrupt R pump_msg(bool checkDis, const msg_pump_handle<R>& pump)
 	{
 		assert_enter();
-		DstReceiverBuff_<Arg> dstRec;
+		DstReceiverBuff_<R> dstRec;
 		_pump_msg(pump, dstRec, checkDis);
 		return std::move(std::get<0>(dstRec._dstBuff.get()));
 	}
 
-	template <typename Arg>
-	__yield_interrupt Arg pump_msg(const msg_pump_handle<Arg>& pump)
+	template <typename R>
+	__yield_interrupt R pump_msg(const msg_pump_handle<R>& pump)
 	{
 		return pump_msg(false, pump);
 	}
