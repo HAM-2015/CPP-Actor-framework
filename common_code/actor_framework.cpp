@@ -2119,6 +2119,7 @@ bool my_actor::timed_pump_msg(int tm, const msg_pump_handle<>& pump)
 bool my_actor::timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<>& pump)
 {
 	assert_enter();
+	assert(!pump.check_closed());
 	assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
 	if (!pump->read_msg())
 	{
@@ -2173,6 +2174,7 @@ bool my_actor::try_pump_msg(const msg_pump_handle<>& pump)
 bool my_actor::try_pump_msg(bool checkDis, const msg_pump_handle<>& pump)
 {
 	assert_enter();
+	assert(!pump.check_closed());
 	assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
 	if (!pump->try_read())
 	{

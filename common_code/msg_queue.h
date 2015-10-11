@@ -17,12 +17,7 @@ class msg_queue
 	};
 public:
 	msg_queue(size_t poolSize = sizeof(void*))
-		:_alloc(poolSize)
-	{
-		_size = 0;
-		_head._next = NULL;
-		_tail = &_head;
-	}
+		:_alloc(poolSize), _size(0), _head(NULL), _tail(NULL) {}
 
 	~msg_queue()
 	{
@@ -59,27 +54,28 @@ public:
 
 	T& front()
 	{
-		assert(_size && _head._next);
-		return *(T*)_head._next->_data;
+		assert(_size && _head);
+		return *(T*)_head->_data;
 	}
 
 	T& back()
 	{
-		assert(_size);
+		assert(_size && _tail);
 		return *(T*)_tail->_data;
 	}
 
 	void pop_front()
 	{
 		assert(_size);
-		if (0 == --_size)
-		{
-			_tail = &_head;
-		}
-		node* frontNode = _head._next;
-		_head._next = frontNode->_next;
+		node* frontNode = _head;
+		_head = _head->_next;
 		((T*)frontNode->_data)->~T();
 		_alloc.deallocate(frontNode);
+		if (0 == --_size)
+		{
+			assert(!_head);
+			_tail = NULL;
+		}
 	}
 
 	size_t size()
@@ -94,7 +90,7 @@ public:
 
 	void clear()
 	{
-		node* pIt = _head._next;
+		node* pIt = _head;
 		while (pIt)
 		{
 			_size--;
@@ -105,8 +101,8 @@ public:
 			_alloc.deallocate(t);
 		}
 		assert(0 == _size);
-		_head._next = NULL;
-		_tail = &_head;
+		_head = NULL;
+		_tail = NULL;
 	}
 
 	void expand_fixed(size_t fixedSize)
@@ -121,7 +117,14 @@ private:
 	{
 		node* newNode = (node*)_alloc.allocate();
 		newNode->_next = NULL;
-		_tail->_next = newNode;
+		if (!_head)
+		{
+			_head = newNode;
+		} 
+		else
+		{
+			_tail->_next = newNode;
+		}
 		_tail = newNode;
 		return newNode;
 	}
@@ -129,16 +132,16 @@ private:
 	node* new_front()
 	{
 		node* newNode = (node*)_alloc.allocate();
-		newNode->_next = _head._next;
-		_head._next = newNode;
-		if (&_head == _tail)
+		newNode->_next = _head;
+		_head = newNode;
+		if (!_tail)
 		{
 			_tail = newNode;
 		}
 		return newNode;
 	}
 private:
-	node _head;
+	node* _head;
 	node* _tail;
 	size_t _size;
 	mem_alloc<node> _alloc;

@@ -848,8 +848,16 @@ class MsgPump_ : public MsgPumpBase_
 	friend mutex_block_pump<ARGS...>;
 	friend pump_handler;
 private:
-	MsgPump_(){}
-	~MsgPump_(){ assert(!_hasMsg); }
+	MsgPump_()
+	{
+		DEBUG_OPERATION(_pClosed = std::shared_ptr<bool>(new bool(false)));
+	}
+
+	~MsgPump_()
+	{
+		assert(!_hasMsg);
+		DEBUG_OPERATION(*_pClosed = true);
+	}
 private:
 	static std::shared_ptr<MsgPump_> make(const actor_handle& hostActor)
 	{
@@ -1049,6 +1057,7 @@ private:
 	bool _hasMsg : 1;
 	bool _waiting : 1;
 	bool _checkDis : 1;
+	DEBUG_OPERATION(std::shared_ptr<bool> _pClosed);
 };
 
 template <typename... ARGS>
@@ -1504,9 +1513,15 @@ public:
 	typedef MsgPump_* handle;
 private:
 	MsgPump_(const actor_handle& hostActor)
-		:MsgPumpVoid_(hostActor){}
+		:MsgPumpVoid_(hostActor)
+	{
+		DEBUG_OPERATION(_pClosed = std::shared_ptr<bool>(new bool(false)));
+	}
 
-	~MsgPump_(){}
+	~MsgPump_()
+	{
+		DEBUG_OPERATION(*_pClosed = true);
+	}
 
 	static std::shared_ptr<MsgPump_> make(const actor_handle& hostActor)
 	{
@@ -1514,6 +1529,8 @@ private:
 		res->_weakThis = res;
 		return res;
 	}
+
+	DEBUG_OPERATION(std::shared_ptr<bool> _pClosed);
 };
 
 template <typename... ARGS>
@@ -1526,10 +1543,19 @@ class msg_pump_handle
 
 	pump* operator ->() const
 	{
+		assert(!*_pClosed);
 		return _handle;
 	}
 
+#ifdef _DEBUG
+	bool check_closed() const
+	{
+		return !_pClosed || *_pClosed;
+	}
+#endif
+
 	pump* _handle;
+	DEBUG_OPERATION(std::shared_ptr<bool> _pClosed);
 };
 
 template <typename... ARGS>
@@ -1734,16 +1760,19 @@ private:
 	bool ready()
 	{
 		assert(!_msgBuff.has());
+		assert(!_msgHandle.check_closed());
 		return _msgHandle._handle->read_msg(_msgBuff);
 	}
 
 	void cancel()
 	{
+		assert(!_msgHandle.check_closed());
 		_msgHandle._handle->stop_waiting();
 	}
 
 	bool go()
 	{
+		assert(!_msgHandle.check_closed());
 		if (_msgBuff.has())
 		{
 			bool r = tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
@@ -1755,6 +1784,7 @@ private:
 
 	size_t snap_id()
 	{
+		assert(!_msgHandle.check_closed());
 		return (size_t)_msgHandle._handle;
 	}
 private:
@@ -1881,16 +1911,19 @@ private:
 	bool ready()
 	{
 		assert(!_has);
+		assert(!_msgHandle.check_closed());
 		return _msgHandle._handle->read_msg(_has);
 	}
 
 	void cancel()
 	{
+		assert(!_msgHandle.check_closed());
 		_msgHandle._handle->stop_waiting();
 	}
 
 	bool go()
 	{
+		assert(!_msgHandle.check_closed());
 		if (_has)
 		{
 			_has = false;
@@ -1901,6 +1934,7 @@ private:
 
 	size_t snap_id()
 	{
+		assert(!_msgHandle.check_closed());
 		return (size_t)_msgHandle._handle;
 	}
 private:
@@ -3657,13 +3691,14 @@ private:
 			actor_handle hostActor = update_msg_list<Args...>(childPck, msgPck->_msgPool);
 			if (hostActor)
 			{
-				if (msgPck->_next && msgPck->_next != childPck)
+				auto& next_ = msgPck->_next;
+				if (next_ && next_ != childPck)
 				{
-					msgPck->_next->lock(this);
-					clear_msg_list<Args...>(this, msgPck->_next, false);
-					msgPck->_next->unlock(this);
+					next_->lock(this);
+					clear_msg_list<Args...>(this, next_, false);
+					next_->unlock(this);
 				}
-				msgPck->_next = childPck;
+				next_ = childPck;
 				childPck->unlock(this);
 				msgPck->unlock(this);
 				return true;
@@ -3734,14 +3769,15 @@ public:
 		if (msgPck)
 		{
 			quit_guard qg(this);
+			auto& next_ = msgPck->_next;
 			msgPck->lock(this);
-			if (msgPck->_next)
+			if (next_)
 			{
-				msgPck->_next->lock(this);
-				clear_msg_list<Args...>(this, msgPck->_next);
-				msgPck->_next->_isHead = true;
-				msgPck->_next->unlock(this);
-				msgPck->_next.reset();
+				next_->lock(this);
+				clear_msg_list<Args...>(this, next_);
+				next_->_isHead = true;
+				next_->unlock(this);
+				next_.reset();
 			}
 			msgPck->unlock(this);
 		}
@@ -3761,14 +3797,15 @@ public:
 		{
 			quit_guard qg(this);
 			std::shared_ptr<pck_type> msgPck = std::static_pointer_cast<pck_type>(it->second);
+			auto& next_ = msgPck->_next;
 			msgPck->lock(this);
-			if (msgPck->_next)
+			if (next_)
 			{
-				msgPck->_next->lock(this);
-				clear_msg_list<Args...>(this, msgPck->_next, true, !msgPck->_isHead);
-				msgPck->_next->_isHead = true;
-				msgPck->_next->unlock(this);
-				msgPck->_next.reset();
+				next_->lock(this);
+				clear_msg_list<Args...>(this, next_, true, !msgPck->_isHead);
+				next_->_isHead = true;
+				next_->unlock(this);
+				next_.reset();
 				clear_msg_list<Args...>(this, msgPck);
 			}
 			else
@@ -4087,12 +4124,14 @@ private:
 		msgPck->unlock(host);
 		msg_pump_handle<Args...> mh;
 		mh._handle = msgPump.get();
+		DEBUG_OPERATION(mh._pClosed = msgPump->_pClosed);
 		return mh;
 	}
 private:
 	template <typename PUMP, typename DST>
 	bool _timed_pump_msg(const PUMP& pump, DST& dstRec, int tm, bool checkDis)
 	{
+		assert(!pump.check_closed());
 		assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
 		if (!pump->read_msg(dstRec))
 		{
@@ -4142,6 +4181,7 @@ private:
 	template <typename PUMP, typename DST>
 	bool _try_pump_msg(const PUMP& pump, DST& dstRec, bool checkDis)
 	{
+		assert(!pump.check_closed());
 		assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
 		if (!pump->try_read(dstRec))
 		{
@@ -4157,6 +4197,7 @@ private:
 	template <typename PUMP, typename DST>
 	void _pump_msg(const PUMP& pump, DST& dstRec, bool checkDis)
 	{
+		assert(!pump.check_closed());
 		assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
 		if (!pump->read_msg(dstRec))
 		{
@@ -4313,6 +4354,7 @@ public:
 	template <typename... Args>
 	__yield_interrupt size_t pump_length(const msg_pump_handle<Args...>& pump)
 	{
+		assert(!pump.check_closed());
 		return pump._handle->size();
 	}
 
@@ -4322,6 +4364,7 @@ public:
 	template <typename... Args>
 	size_t pump_snap_length(const msg_pump_handle<Args...>& pump)
 	{
+		assert(!pump.check_closed());
 		return pump._handle->snap_size();
 	}
 public:
