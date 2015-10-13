@@ -65,7 +65,7 @@ boost_strand::~boost_strand()
 
 shared_strand boost_strand::create(io_engine& ioEngine, bool makeTimer /* = true */)
 {
-	shared_strand res(new boost_strand, [](boost_strand* p){delete p; });
+	shared_strand res(new boost_strand);
 	res->_ioEngine = &ioEngine;
 	res->_strand = new strand_type(ioEngine);
 	if (makeTimer)

@@ -211,6 +211,10 @@ namespace ph
 	static decltype(std::placeholders::_9) _9;
 }
 
+#define FRIEND_SHARED_PTR(__T__)\
+	friend std::shared_ptr<__T__>;\
+	friend std::_Ref_count<__T__>;
+
 #ifdef _DEBUG
 #define DEBUG_OPERATION(__exp__)	__exp__
 #else

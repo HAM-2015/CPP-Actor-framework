@@ -298,6 +298,7 @@ class boost_strand
 		CB _cb;
 	};
 
+	FRIEND_SHARED_PTR(boost_strand);
 protected:
 	boost_strand();
 	virtual ~boost_strand();
