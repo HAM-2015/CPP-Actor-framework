@@ -196,6 +196,7 @@ struct move_test
 	void operator=(move_test&& s);
 	friend std::ostream& operator <<(std::ostream& out, const move_test& s);
 	std::shared_ptr<count> _count;
+	size_t _generation;
 };
 
 namespace ph

@@ -172,6 +172,7 @@ void* get_sp()
 void move_test::operator=(move_test&& s)
 {
 	assert(s._count);
+	_generation = s._generation + 1;
 	_count = s._count;
 	_count->_moveCount++;
 	s._count.reset();
@@ -184,6 +185,7 @@ void move_test::operator=(move_test&& s)
 void move_test::operator=(const move_test& s)
 {
 	assert(s._count);
+	_generation = s._generation + 1;
 	_count = s._count;
 	_count->_copyCount++;
 	if (_count->_cb)
@@ -195,7 +197,7 @@ void move_test::operator=(const move_test& s)
 std::ostream& operator <<(std::ostream& out, const move_test& s)
 {
 	assert(s._count);
-	out << "(id:" << s._count->_id << ", move:" << s._count->_moveCount << ", copy:" << s._count->_copyCount << ")";
+	out << "(id:" << s._count->_id << ", move:" << s._count->_moveCount << ", copy:" << s._count->_copyCount << ", generation:" << s._generation << ")";
 	return out;
 }
 
@@ -216,6 +218,7 @@ move_test::move_test(int id, const std::function<void(std::shared_ptr<count>)>& 
 	_count->_moveCount = 0;
 	_count->_id = id;
 	_count->_cb = cb;
+	_generation = 0;
 }
 
 move_test::move_test(int id)
@@ -224,9 +227,11 @@ move_test::move_test(int id)
 	_count->_copyCount = 0;
 	_count->_moveCount = 0;
 	_count->_id = id;
+	_generation = 0;
 }
 
 move_test::move_test()
+:_generation(0)
 {
 
 }

@@ -580,6 +580,7 @@ bool MsgPumpVoid_::read_msg()
 bool MsgPumpVoid_::read_msg(bool& dst)
 {
 	assert(_strand->running_in_this_thread());
+	assert(!_dstRec);
 	assert(!_waiting);
 	if (_hasMsg)
 	{
@@ -592,7 +593,12 @@ bool MsgPumpVoid_::read_msg(bool& dst)
 	{
 		_pumpHandler(_pumpCount);
 		_waiting = !_hasMsg;
-		_hasMsg = false;
+		if (_hasMsg)
+		{
+			_hasMsg = false;
+			*_dstRec = true;
+			_dstRec = NULL;
+		}
 		return !_waiting;
 	}
 	_waiting = true;

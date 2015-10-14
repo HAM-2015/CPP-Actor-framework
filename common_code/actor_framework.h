@@ -4533,7 +4533,33 @@ public:
 	}
 
 	/*!
-	@brief 运行互斥消息执行块（阻塞），每次只取一条消息
+	@brief 运行互斥消息执行块（阻塞），每次从头开始优先只取一条消息
+	*/
+	template <typename... MutexBlocks>
+	__yield_interrupt void run_mutex_blocks1(MutexBlocks&... mbs)
+	{
+		static_assert(sizeof...(MutexBlocks) > 0, "");
+		quit_guard qg(this);
+		MutexBlock_* mbList[sizeof...(MutexBlocks)] = { &mbs... };
+		assert(_cmp_snap_id(mbList));//判断有没有重复参数
+		do
+		{
+			DEBUG_OPERATION(auto nt = yield_count());
+			if (!_mutex_ready2(0, mbList))
+			{
+				assert(yield_count() == nt);
+				qg.unlock();
+				push_yield();
+				qg.lock();
+				DEBUG_OPERATION(nt = yield_count());
+			}
+			_mutex_cancel(mbList);
+			assert(yield_count() == nt);
+		} while (!_mutex_go(mbList));
+	}
+
+	/*!
+	@brief 运行互斥消息执行块（阻塞），每次依次往后开始优先只取一条消息
 	*/
 	template <typename... MutexBlocks>
 	__yield_interrupt void run_mutex_blocks2(MutexBlocks&... mbs)
