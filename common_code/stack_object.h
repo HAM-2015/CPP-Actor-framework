@@ -200,13 +200,35 @@ template <bool AUTO>
 class stack_obj<void, AUTO>
 {
 public:
+	stack_obj()
+	{
+		_null = true;
+	}
+
+	~stack_obj()
+	{
+		destroy();
+	}
+
 	void create()
 	{
+		_null = false;
+	}
+
+	bool has() const
+	{
+		return !_null;
+	}
+	void destroy()
+	{
+		_null = true;
 	}
 
 	void get()
 	{
 	}
+
+	bool _null;
 };
 
 #endif

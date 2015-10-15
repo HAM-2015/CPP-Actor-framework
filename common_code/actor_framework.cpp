@@ -326,11 +326,10 @@ void MsgPoolVoid_::disconnect()
 	_waiting = false;
 }
 
-void MsgPoolVoid_::backflow(const std::shared_ptr<msg_pump_type>& msgPump)
+void MsgPoolVoid_::backflow(stack_obj<msg_type>& suck)
 {
 	assert(_strand->running_in_this_thread());
-	assert(msgPump->_hasMsg);
-	msgPump->_hasMsg = false;
+	assert(suck.has());
 	_msgBuff++;
 }
 
@@ -384,7 +383,7 @@ bool MsgPoolVoid_::pump_handler::try_pump(my_actor* host, unsigned char pumpID, 
 	return host->send<bool>(_thisPool->_strand, [&, refThis_]()->bool
 	{
 		bool ok = false;
-		if (_msgPump == _thisPool->_msgPump)
+		if (_thisPool && _msgPump == _thisPool->_msgPump)
 		{
 			if (pumpID == _thisPool->_sendCount)
 			{
@@ -518,6 +517,15 @@ void MsgPumpVoid_::close()
 	_pumpCount = 0;
 	_pumpHandler.clear();
 	_hostActor = NULL;
+}
+
+void MsgPumpVoid_::backflow(stack_obj<msg_type>& suck)
+{
+	if (_hasMsg)
+	{
+		_hasMsg = false;
+		suck.create();
+	}
 }
 
 void MsgPumpVoid_::connect(const pump_handler& pumpHandler)

@@ -1028,6 +1028,16 @@ private:
 		}
 	}
 
+	void backflow(stack_obj<msg_type>& suck)
+	{
+		if (_hasMsg)
+		{
+			_hasMsg = false;
+			suck.create(std::move(*(msg_type*)_msgSpace));
+			((msg_type*)_msgSpace)->~msg_type();
+		}
+	}
+
 	void close()
 	{
 		assert(_strand->running_in_this_thread());
@@ -1128,7 +1138,7 @@ class MsgPool_
 			return host->send<bool>(_thisPool->_strand, [&, refThis_]()->bool
 			{
 				bool ok = false;
-				if (_msgPump == _thisPool->_msgPump)
+				if (_thisPool && _msgPump == _thisPool->_msgPump)
 				{
 					auto& msgBuff = _thisPool->_msgBuff;
 					if (pumpID == _thisPool->_sendCount)
@@ -1383,14 +1393,11 @@ private:
 		_msgBuff.expand_fixed(fixedSize);
 	}
 
-	void backflow(const std::shared_ptr<msg_pump_type>& msgPump)
+	void backflow(stack_obj<msg_type>& suck)
 	{
-		typedef typename msg_pump_type::msg_type msg_type;
 		assert(_strand->running_in_this_thread());
-		assert(msgPump->_hasMsg);
-		msgPump->_hasMsg = false;
-		_msgBuff.push_front(std::move(*(msg_type*)msgPump->_msgSpace));
-		((msg_type*)msgPump->_msgSpace)->~msg_type();
+		assert(suck.has());
+		_msgBuff.push_front(std::move(suck.get()));
 	}
 private:
 	std::weak_ptr<MsgPool_> _weakThis;
@@ -1407,6 +1414,7 @@ class MsgPumpVoid_;
 class MsgPoolVoid_
 {
 	typedef post_actor_msg<> post_type;
+	typedef void msg_type;
 	typedef MsgPumpVoid_ msg_pump_type;
 
 	struct pump_handler
@@ -1438,7 +1446,7 @@ protected:
 	pump_handler connect_pump(const std::shared_ptr<msg_pump_type>& msgPump);
 	void disconnect();
 	void expand_fixed(size_t fixedSize){};
-	void backflow(const std::shared_ptr<msg_pump_type>& msgPump);
+	void backflow(stack_obj<msg_type>& suck);
 protected:
 	std::weak_ptr<MsgPoolVoid_> _weakThis;
 	std::shared_ptr<msg_pump_type> _msgPump;
@@ -1452,6 +1460,7 @@ protected:
 class MsgPumpVoid_ : public MsgPumpBase_
 {
 	typedef MsgPoolVoid_ msg_pool_type;
+	typedef void msg_type;
 	typedef MsgPoolVoid_::pump_handler pump_handler;
 
 	friend my_actor;
@@ -1474,6 +1483,7 @@ protected:
 	void connect(const pump_handler& pumpHandler);
 	void clear();
 	void close();
+	void backflow(stack_obj<msg_type>& suck);
 	bool isDisconnected();
 protected:
 	std::weak_ptr<MsgPumpVoid_> _weakThis;
@@ -2634,26 +2644,42 @@ class my_actor
 		template <typename... ARGS>
 		struct pck: public pck_base
 		{
+			typedef MsgPool_<ARGS...> pool_type;
+			typedef MsgPump_<ARGS...> pump_type;
+
 			pck(my_actor* hostActor)
 			:pck_base(hostActor){}
 
 			void close()
 			{
+				assert(!_next || !_next->_next);
 				if (_msgPump)
 				{
+					if (!_isHead && _msgPump->_hasMsg)
+					{
+						typedef typename pump_type::msg_type msg_type;
+						assert(_msgPool);
+						stack_obj<msg_type> suck;
+						_msgPump->backflow(suck);
+						_hostActor->send_after_quited(_msgPool->_strand, [&]
+						{
+							_msgPool->backflow(suck);
+						});
+					}
 					_msgPump->close();
 				}
-				if (_msgPool && _isHead)
+				if (_isHead && _msgPool)
 				{
 					_msgPool->_closed = true;
 				}
 				_msgPump.reset();
 				_msgPool.reset();
+				_next.reset();
 				_hostActor = NULL;
 			}
 
-			std::shared_ptr<MsgPool_<ARGS...> > _msgPool;
-			std::shared_ptr<MsgPump_<ARGS...> > _msgPump;
+			std::shared_ptr<pool_type> _msgPool;
+			std::shared_ptr<pump_type> _msgPump;
 			std::shared_ptr<pck> _next;
 		};
 
@@ -3050,7 +3076,7 @@ public:
 			actor_handle shared_this = shared_from_this();
 			exeStrand->asyncInvokeVoid(TRY_MOVE(h), [shared_this]
 			{
-				shared_this->post_handler();
+				shared_this->_strand->post([shared_this]{shared_this->run_one(); });
 			});
 			push_yield();
 			return;
@@ -3082,7 +3108,7 @@ public:
 		actor_handle shared_this = shared_from_this();
 		_strand->asyncInvokeVoid(TRY_MOVE(h), [shared_this]
 		{
-			shared_this->next_tick_handler();
+			shared_this->_strand->next_tick([shared_this]{shared_this->run_one(); });
 		});
 		push_yield();
 	}
@@ -3104,7 +3130,7 @@ public:
 		actor_handle shared_this = shared_from_this();
 		exeStrand->asyncInvokeVoid(TRY_MOVE(h), [shared_this]
 		{
-			shared_this->tick_handler();
+			shared_this->_strand->try_tick([shared_this]{shared_this->run_one(); });
 		});
 		push_yield();
 	}
@@ -3130,7 +3156,40 @@ public:
 	{
 		return async_send<R>(_strand, TRY_MOVE(h));
 	}
-
+private:
+	template <typename H>
+	__yield_interrupt void send_after_quited(const shared_strand& exeStrand, H&& h)
+	{
+		if (exeStrand != _strand)
+		{
+			DEBUG_OPERATION(bool setb = false);
+			actor_handle shared_this = shared_from_this();
+			exeStrand->asyncInvokeVoid(TRY_MOVE(h), 
+#ifdef _DEBUG
+				[&setb, shared_this]
+#else
+				[shared_this]
+#endif
+			{
+				shared_this->_strand->post(
+#ifdef _DEBUG
+					[&setb, shared_this]
+#else
+					[shared_this]
+#endif
+				{
+					assert(!shared_this->_inActor);
+					DEBUG_OPERATION(setb = true);
+					shared_this->pull_yield_after_quited();
+				});
+			});
+			push_yield_after_quited();
+			assert(setb);
+			return;
+		}
+		h();
+	}
+public:
 	/*!
 	@brief 调用一个异步函数，异步回调完成后返回
 	*/
@@ -3521,13 +3580,46 @@ private:
 		return std::shared_ptr<pck_type>();
 	}
 
+	template <typename... Args>
+	static void disconnect_pump(my_actor* const host, const std::shared_ptr<MsgPool_<Args...>>& msgPool, const std::shared_ptr<MsgPump_<Args...>>& msgPump)
+	{
+		typedef typename MsgPump_<Args...>::msg_type msg_type;
+
+		if (msgPool)
+		{
+			host->send(msgPool->_strand, [&]
+			{
+				assert(msgPool->_msgPump == msgPump);
+				msgPool->disconnect();
+			});
+		}
+		if (msgPump)
+		{
+			stack_obj<msg_type> suck;
+			host->send(msgPump->_strand, [&msgPump, &suck]
+			{
+				msgPump->backflow(suck);
+				msgPump->clear();
+			});
+			if (suck.has())
+			{
+				assert(msgPool);
+				host->send(msgPool->_strand, [&msgPool, &suck]
+				{
+					msgPool->backflow(suck);
+				});
+			}
+		}
+	}
+
 	/*!
 	@brief 清除消息代理链
 	*/
 	template <typename... Args>
-	static void clear_msg_list(my_actor* const host, const std::shared_ptr<msg_pool_status::pck<Args...>>& msgPck, const bool poolDis = true)
+	static void clear_msg_list(my_actor* const host, const std::shared_ptr<msg_pool_status::pck<Args...>>& msgPck)
 	{
 		std::shared_ptr<msg_pool_status::pck<Args...>> uStack[16];
+
 		size_t stackl = 0;
 		auto pckIt = msgPck;
 		while (true)
@@ -3545,22 +3637,7 @@ private:
 				if (!pckIt->is_closed())
 				{
 					auto& msgPool_ = pckIt->_msgPool;
-					auto& msgPump_ = pckIt->_msgPump;
-					if (msgPool_ && poolDis)
-					{
-						host->send(msgPool_->_strand, [&]
-						{
-							assert(msgPool_->_msgPump == msgPump_);
-							msgPool_->disconnect();
-						});
-					}
-					if (msgPump_)
-					{
-						host->send(msgPump_->_strand, [&msgPump_]
-						{
-							msgPump_->clear();
-						});
-					}
+					disconnect_pump<Args...>(host, msgPool_, pckIt->_msgPump);
 					msgPool_.reset();
 				}
 				while (stackl)
@@ -3579,6 +3656,7 @@ private:
 	actor_handle update_msg_list(const std::shared_ptr<msg_pool_status::pck<Args...>>& msgPck, const std::shared_ptr<MsgPool_<Args...>>& newPool)
 	{
 		typedef typename MsgPool_<Args...>::pump_handler pump_handler;
+		typedef typename MsgPump_<Args...>::msg_type msg_type;
 
 		std::shared_ptr<msg_pool_status::pck<Args...>> uStack[16];
 		size_t stackl = 0;
@@ -3597,23 +3675,17 @@ private:
 			{
 				if (!pckIt->is_closed())
 				{
-					if (pckIt->_msgPool)
-					{
-						auto& msgPool_ = pckIt->_msgPool;
-						send(msgPool_->_strand, [&msgPool_]
-						{
-							msgPool_->disconnect();
-						});
-					}
-					pckIt->_msgPool = newPool;
+					auto& msgPool_ = pckIt->_msgPool;
+					auto& msgPump_ = pckIt->_msgPump;
+					disconnect_pump<Args...>(this, msgPool_, msgPump_);
+					msgPool_ = newPool;
 					if (pckIt->_msgPump)
 					{
-						auto& msgPump_ = pckIt->_msgPump;
-						if (newPool)
+						if (msgPool_)
 						{
-							auto ph = send<pump_handler>(newPool->_strand, [&newPool, &msgPump_]()->pump_handler
+							auto ph = send<pump_handler>(msgPool_->_strand, [&msgPool_, &msgPump_]()->pump_handler
 							{
-								return newPool->connect_pump(msgPump_);
+								return msgPool_->connect_pump(msgPump_);
 							});
 							send(msgPump_->_strand, [&msgPump_, &ph]
 							{
@@ -3627,13 +3699,6 @@ private:
 								msgPump_->clear();
 							});
 						}
-					}
-					else if (newPool)
-					{
-						send(newPool->_strand, [&newPool]
-						{
-							newPool->disconnect();
-						});
 					}
 					while (stackl)
 					{
@@ -3680,26 +3745,42 @@ private:
 		if (childPck)
 		{
 			auto msgPck = msg_pool_pck<Args...>(id, this);
-			msgPck->lock(this);
-			childPck->lock(this);
-			childPck->_isHead = false;
-			actor_handle hostActor = update_msg_list<Args...>(childPck, msgPck->_msgPool);
-			if (hostActor)
+			if (msgPck != childPck)
 			{
+				msgPck->lock(this);
+				auto msgPool = msgPck->_msgPool;
 				auto& next_ = msgPck->_next;
-				if (next_ && next_ != childPck)
+				if (next_)
 				{
 					next_->lock(this);
-					clear_msg_list<Args...>(this, next_, false);
+					clear_msg_list<Args...>(this, next_);
+					next_->_isHead = true;
 					next_->unlock(this);
 				}
-				next_ = childPck;
+				else
+				{
+					clear_msg_list<Args...>(this, msgPck);
+					msgPck->_msgPool = msgPool;
+				}
+				childPck->lock(this);
+				if (update_msg_list<Args...>(childPck, msgPool))
+				{
+					next_ = childPck;
+					childPck->_isHead = false;
+					childPck->unlock(this);
+					msgPck->unlock(this);
+					return true;
+				}
 				childPck->unlock(this);
+				if (next_)
+				{
+					next_->lock(this);
+					update_msg_list<Args...>(next_, msgPool);
+					next_->_isHead = false;
+					next_->unlock(this);
+				}
 				msgPck->unlock(this);
-				return true;
 			}
-			childPck->unlock(this);
-			msgPck->unlock(this);
 		}
 		return false;
 	}
@@ -3793,28 +3874,9 @@ public:
 			quit_guard qg(this);
 			std::shared_ptr<pck_type> msgPck = std::static_pointer_cast<pck_type>(it->second);
 			msgPck->lock(this);
-			{
-				auto& next_ = msgPck->_next;
-				if (next_)
-				{
-					next_->lock(this);
-					clear_msg_list<Args...>(this, next_);
-					next_->_isHead = true;
-					next_->unlock(this);
-					next_.reset();
-				}
-			}
-			{
-				auto& msgPool_ = msgPck->_msgPool;
-				auto& msgPump_ = msgPck->_msgPump;
-				if (msgPool_ && msgPump_ && msgPump_->_hasMsg)
-				{
-					send(msgPool_->_strand, [&]
-					{
-						msgPool_->backflow(msgPump_);
-					});
-				}
-			}
+			auto msgPool = msgPck->_msgPool;
+			clear_msg_list<Args...>(this, msgPck);
+			msgPck->_msgPool = msgPool;
 			msgPck->close();
 			_msgPoolStatus._msgTypeMap.erase(it);
 			msgPck->unlock(this);
@@ -3890,9 +3952,9 @@ public:
 					if (msgPck->_msgPump)
 					{
 						auto& msgPump_ = msgPck->_msgPump;
-						if (msgPck->_msgPool)
+						auto& msgPool_ = msgPck->_msgPool;
+						if (msgPool_)
 						{
-							auto& msgPool_ = msgPck->_msgPool;
 							msgPump_->connect(this->send<pump_handler>(msgPool_->_strand, [&msgPool_, &msgPump_]()->pump_handler
 							{
 								return msgPool_->connect_pump(msgPump_);
