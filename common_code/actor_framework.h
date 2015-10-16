@@ -1130,18 +1130,19 @@ class MsgPool_
 			}
 		}
 
-		bool try_pump(my_actor* host, dst_receiver&dst, unsigned char pumpID, bool& wait)
+		bool try_pump(my_actor* host, dst_receiver& dst, unsigned char pumpID, bool& wait)
 		{
 			assert(_thisPool);
 			auto& refThis_ = *this;
 			my_actor::quit_guard qg(host);
-			return host->send<bool>(_thisPool->_strand, [&, refThis_]()->bool
+			return host->send<bool>(_thisPool->_strand, [&dst, &wait, pumpID, refThis_]()->bool
 			{
 				bool ok = false;
-				if (_thisPool && _msgPump == _thisPool->_msgPump)
+				auto& thisPool_ = refThis_._thisPool;
+				if (refThis_._msgPump == thisPool_->_msgPump)
 				{
-					auto& msgBuff = _thisPool->_msgBuff;
-					if (pumpID == _thisPool->_sendCount)
+					auto& msgBuff = thisPool_->_msgBuff;
+					if (pumpID == thisPool_->_sendCount)
 					{
 						if (!msgBuff.empty())
 						{
@@ -1152,8 +1153,8 @@ class MsgPool_
 					}
 					else
 					{//上次消息没取到，重新取，但实际中间已经post出去了
-						assert(!_thisPool->_waiting);
-						assert(pumpID + 1 == _thisPool->_sendCount);
+						assert(!thisPool_->_waiting);
+						assert(pumpID + 1 == thisPool_->_sendCount);
 						wait = true;
 						ok = true;
 					}
@@ -1167,12 +1168,13 @@ class MsgPool_
 			assert(_thisPool);
 			auto& refThis_ = *this;
 			my_actor::quit_guard qg(host);
-			return host->send<size_t>(_thisPool->_strand, [&, refThis_]()->size_t
+			return host->send<size_t>(_thisPool->_strand, [pumpID, refThis_]()->size_t
 			{
-				if (_msgPump == _thisPool->_msgPump)
+				auto& thisPool_ = refThis_._thisPool;
+				if (refThis_._msgPump == thisPool_->_msgPump)
 				{
-					auto& msgBuff = _thisPool->_msgBuff;
-					if (pumpID == _thisPool->_sendCount)
+					auto& msgBuff = thisPool_->_msgBuff;
+					if (pumpID == thisPool_->_sendCount)
 					{
 						return msgBuff.size();
 					}
