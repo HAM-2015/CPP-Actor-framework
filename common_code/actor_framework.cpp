@@ -238,6 +238,11 @@ bool MsgPumpBase_::is_quited()
 	return !_hostActor || _hostActor->is_quited();
 }
 
+bool MsgPumpBase_::is_closed()
+{
+	return !_hostActor;
+}
+
 //////////////////////////////////////////////////////////////////////////
 
 MsgPoolVoid_::MsgPoolVoid_(const shared_strand& strand)
@@ -545,7 +550,7 @@ void MsgPumpVoid_::connect(const pump_handler& pumpHandler)
 
 void MsgPumpVoid_::receiver()
 {
-	if (!is_quited())
+	if (!is_closed())
 	{
 		_pumpCount++;
 		assert(!_hasMsg);
@@ -883,6 +888,7 @@ _childActorList(_childActorListAll)
 	_stackTop = NULL;
 	_stackSize = 0;
 	_yieldCount = 0;
+	_lastYield = -1;
 	_childOverCount = 0;
 	_childSuspendResumeCount = 0;
 	_timerState._timerTime = 0;
@@ -1233,12 +1239,30 @@ void my_actor::yield()
 	push_yield();
 }
 
+void my_actor::try_yield()
+{
+	if (_lastYield == _yieldCount)
+	{
+		yield();
+	}
+	_lastYield = _yieldCount;
+}
+
 void my_actor::yield_guard()
 {
 	assert_enter();
 	quit_guard qg(this);
 	_strand->next_tick([this]{run_one(); });
 	push_yield();
+}
+
+void my_actor::try_yield_guard()
+{
+	if (_lastYield == _yieldCount)
+	{
+		yield_guard();
+	}
+	_lastYield = _yieldCount;
 }
 
 actor_handle my_actor::parent_actor()
@@ -1324,6 +1348,7 @@ void my_actor::reset_yield()
 {
 	assert_enter();
 	_yieldCount = 0;
+	_lastYield = -1;
 }
 
 void my_actor::notify_run()
@@ -1864,7 +1889,7 @@ void my_actor::pull_yield()
 
 void my_actor::pull_yield_after_quited()
 {
-	(*(actor_pull_type*)_actorPull)();
+	pull_yield_tls();
 }
 
 void my_actor::push_yield()
@@ -1886,7 +1911,9 @@ void my_actor::push_yield()
 void my_actor::push_yield_after_quited()
 {
 	check_stack();
+	_inActor = false;
 	(*(actor_push_type*)_actorPush)();
+	_inActor = true;
 }
 
 void my_actor::force_quit_cb_handler()
@@ -2067,7 +2094,9 @@ my_actor* my_actor::self_actor()
 void my_actor::check_self()
 {
 #ifdef CHECK_SELF
-	assert(this == self_actor());
+	DEBUG_OPERATION(my_actor* self = self_actor());
+	assert(self);
+	assert(this == self);
 #endif
 }
 

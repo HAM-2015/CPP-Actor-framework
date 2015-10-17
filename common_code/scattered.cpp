@@ -196,8 +196,14 @@ void move_test::operator=(const move_test& s)
 
 std::ostream& operator <<(std::ostream& out, const move_test& s)
 {
-	assert(s._count);
-	out << "(id:" << s._count->_id << ", move:" << s._count->_moveCount << ", copy:" << s._count->_copyCount << ", generation:" << s._generation << ")";
+	if (s._count)
+	{
+		out << "(id:" << s._count->_id << ", generation:" << s._generation << ", move:" << s._count->_moveCount << ", copy:" << s._count->_copyCount << ")";
+	}
+	else
+	{
+		out << "(id:null, generation:null, move:null, copy:null)";
+	}
 	return out;
 }
 

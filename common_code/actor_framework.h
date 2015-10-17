@@ -793,6 +793,7 @@ public:
 	virtual ~MsgPumpBase_() {}
 protected:
 	bool is_quited();
+	bool is_closed();
 	void pull_yield();
 	void push_yield();
 protected:
@@ -876,7 +877,7 @@ private:
 
 	void receiver(msg_type&& msg)
 	{
-		if (!is_quited())
+		if (!is_closed())
 		{
 			assert(!_hasMsg);
 			_pumpCount++;
@@ -2621,6 +2622,7 @@ class my_actor
 			virtual ~pck_base() {}
 
 			virtual void close() = 0;
+			virtual void clear() = 0;
 
 			bool is_closed()
 			{
@@ -2655,6 +2657,21 @@ class my_actor
 			void close()
 			{
 				assert(!_next || !_next->_next);
+				if (_msgPool)
+				{
+					if (_isHead)
+					{
+						_msgPool->_closed = true;
+					} 
+					else
+					{
+						_hostActor->send_after_quited(_msgPool->_strand, [&]
+						{
+							assert(_msgPool->_msgPump == _msgPump);
+							_msgPool->disconnect();
+						});
+					}
+				}
 				if (_msgPump)
 				{
 					if (!_isHead && _msgPump->_hasMsg)
@@ -2670,9 +2687,21 @@ class my_actor
 					}
 					_msgPump->close();
 				}
+				_msgPump.reset();
+				_msgPool.reset();
+				_next.reset();
+				_hostActor = NULL;
+			}
+
+			void clear()
+			{
 				if (_isHead && _msgPool)
 				{
 					_msgPool->_closed = true;
+				}
+				if (_msgPump)
+				{
+					_msgPump->close();
 				}
 				_msgPump.reset();
 				_msgPool.reset();
@@ -3011,9 +3040,19 @@ public:
 	__yield_interrupt void yield();
 
 	/*!
+	@brief 尝试yield，如果当前yield计数和上次try_yield没变，就yield一次
+	*/
+	__yield_interrupt void try_yield();
+
+	/*!
 	@brief 中断时间片，当前Actor句柄在别的地方必须被持有
 	*/
 	__yield_interrupt void yield_guard();
+
+	/*!
+	@brief 尝试yield_guard，如果当前yield计数和上次try_yield没变，就yield_guard一次
+	*/
+	__yield_interrupt void try_yield_guard();
 
 	/*!
 	@brief 获取父Actor
@@ -3862,7 +3901,7 @@ public:
 	}
 
 	/*!
-	@brief 重置消息管道，所有之前连接到当前管道的通知句柄将永久失效
+	@brief 重置消息管道，之前该类型下connect_msg_notifer到本地的通知句柄将永久失效，本地必须重新connect_msg_pump，发送者必须重新connect_msg_notifer才能重新开始
 	*/
 	template <typename... Args>
 	__yield_interrupt bool reset_msg_pipe(const int id = 0)
@@ -3879,7 +3918,7 @@ public:
 			auto msgPool = msgPck->_msgPool;
 			clear_msg_list<Args...>(this, msgPck);
 			msgPck->_msgPool = msgPool;
-			msgPck->close();
+			msgPck->clear();
 			_msgPoolStatus._msgTypeMap.erase(it);
 			msgPck->unlock(this);
 			return true;
@@ -4908,6 +4947,7 @@ private:
 	bool _notifyQuited : 1;///<当前Actor被锁定后，收到退出消息
 	size_t _lockQuit;///<锁定当前Actor，如果当前接收到退出消息，暂时不退，等到解锁后退出
 	size_t _yieldCount;//yield计数
+	size_t _lastYield;//记录上次try_yield的计数
 	size_t _childOverCount;///<子Actor退出时计数
 	size_t _childSuspendResumeCount;///<子Actor挂起/恢复计数
 	main_func _mainFunc;///<Actor入口
