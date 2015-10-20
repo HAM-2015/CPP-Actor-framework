@@ -41,7 +41,7 @@ inline void boost::asio::detail::strand_service::post(boost::asio::detail::stran
 
 boost_strand::boost_strand()
 #ifdef ENABLE_NEXT_TICK
-:_pCheckDestroy(NULL), _isReset(true), _nextTickAlloc(128), _nextTickQueue1(128), _nextTickQueue2(128), _frontTickQueue(&_nextTickQueue1), _backTickQueue(&_nextTickQueue2)
+:_pCheckDestroy(NULL), _beginNextRound(false), _nextTickAlloc(128), _nextTickQueue1(128), _nextTickQueue2(128), _frontTickQueue(&_nextTickQueue1), _backTickQueue(&_nextTickQueue2)
 #endif //ENABLE_NEXT_TICK
 {
 	_ioEngine = NULL;
@@ -73,6 +73,7 @@ shared_strand boost_strand::create(io_engine& ioEngine, bool makeTimer /* = true
 		res->_timer = new ActorTimer_(res);
 	}
 	res->_weakThis = res;
+	assert(!res->running_in_this_thread());//ÇëÆôÓÃ ENABLE_STRAND_IMPL_POOL
 	return res;
 }
 
@@ -174,7 +175,7 @@ bool boost_strand::waiting_empty()
 
 void boost_strand::run_tick_front()
 {
-	assert(_isReset);
+	assert(_beginNextRound);
 	while (!_frontTickQueue->empty())
 	{
 		wrap_next_tick_base* tick = _frontTickQueue->front();

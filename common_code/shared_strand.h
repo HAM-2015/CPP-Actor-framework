@@ -127,7 +127,7 @@ class boost_strand
 
 		void operator ()()
 		{
-			if (_strand->_isReset)
+			if (_strand->_beginNextRound)
 			{
 				_strand->run_tick_front();
 			}
@@ -137,8 +137,8 @@ class boost_strand
 			if (!checkDestroy)
 			{
 				_strand->_pCheckDestroy = NULL;
-				_strand->_isReset = _strand->ready_empty();
-				if (_strand->_isReset)
+				_strand->_beginNextRound = _strand->ready_empty();
+				if (_strand->_beginNextRound)
 				{
 					_strand->run_tick_back();
 				}
@@ -359,6 +359,9 @@ public:
 	void next_tick(Handler&& handler)
 	{
 		assert(running_in_this_thread());
+#ifdef ENABLE_NEXT_TICK
+		assert(_beginNextRound || _pCheckDestroy);//错误, strand还没开始第一个post就已经再投递next_tick, 是否未启用ENABLE_STRAND_IMPL_POOL ?
+#endif
 #ifdef ENABLE_MFC_ACTOR
 		UI_NEXT_TICK();
 #elif ENABLE_WX_ACTOR
@@ -524,7 +527,7 @@ private:
 	void run_tick_front();
 	void run_tick_back();
 	bool* _pCheckDestroy;
-	bool _isReset;
+	bool _beginNextRound;
 	reusable_mem _reuMemAlloc;
 	mem_alloc<wrap_next_tick_space> _nextTickAlloc;
 	msg_queue<wrap_next_tick_base*> _nextTickQueue1;

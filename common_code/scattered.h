@@ -164,7 +164,7 @@ private:
 
 #define BOND_LINE(__P__, __L__) NAME_BOND(__P__, __L__)
 
-//作用域退出时自动调用某个函数
+//作用域退出时自动调用lambda
 #define AUTO_CALL(__CL__) \
 	auto BOND_LINE(__t, __LINE__) = [&]__CL__; \
 	auto_call<decltype(BOND_LINE(__t, __LINE__))> BOND_LINE(__cl, __LINE__)(BOND_LINE(__t, __LINE__))

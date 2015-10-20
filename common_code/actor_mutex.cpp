@@ -12,6 +12,7 @@ public:
 	void operator()();
 public:
 	mutex_trig_handle* _trigHandle;
+	actor_handle _lockActor;
 	shared_strand _strand;
 	bool _notified;
 };
@@ -42,8 +43,9 @@ void mutex_trig_notifer::operator()()
 {
 	assert(!_notified);
 	auto& trigHandle_ = _trigHandle;
+	auto& lockActor_ = _lockActor;
 	_notified = true;
-	_strand->try_tick([=]
+	_strand->try_tick([trigHandle_, lockActor_]
 	{
 		trigHandle_->push_msg();
 	});
@@ -51,6 +53,7 @@ void mutex_trig_notifer::operator()()
 
 mutex_trig_notifer::mutex_trig_notifer(mutex_trig_handle* trigHandle)
 :_trigHandle(trigHandle),
+_lockActor(trigHandle->_hostActor->shared_from_this()),
 _strand(trigHandle->_strand),
 _notified(false)
 {

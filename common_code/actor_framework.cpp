@@ -1265,7 +1265,7 @@ void my_actor::try_yield_guard()
 	_lastYield = _yieldCount;
 }
 
-actor_handle my_actor::parent_actor()
+const actor_handle& my_actor::parent_actor()
 {
 	return _parentActor;
 }
@@ -2169,9 +2169,13 @@ bool my_actor::timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<>& pu
 	assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
 	if (!pump->read_msg())
 	{
+		AUTO_CALL(
+		{
+			pump->_checkDis = false;
+			pump->stop_waiting();
+		});
 		if (checkDis && pump->isDisconnected())
 		{
-			pump->stop_waiting();
 			throw pump_disconnected_exception();
 		}
 		if (0 != tm)
@@ -2199,14 +2203,11 @@ bool my_actor::timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<>& pu
 				if (pump->_checkDis)
 				{
 					assert(checkDis);
-					pump->_checkDis = false;
 					throw pump_disconnected_exception();
 				}
 				return true;
 			}
 		}
-		pump->_checkDis = false;
-		pump->stop_waiting();
 		return false;
 	}
 	return true;
@@ -2224,9 +2225,9 @@ bool my_actor::try_pump_msg(bool checkDis, const msg_pump_handle<>& pump)
 	assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
 	if (!pump->try_read())
 	{
+		assert(!pump->_waiting);
 		if (checkDis && pump->isDisconnected())
 		{
-			pump->_waiting = false;
 			throw pump_disconnected_exception();
 		}
 		return false;

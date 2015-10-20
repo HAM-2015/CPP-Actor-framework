@@ -270,6 +270,68 @@ public:
 	}
 };
 
+template <typename Tkey, typename Tval, typename AlNod = pool_alloc<std::pair<const Tkey, Tval>> >
+class msg_multimap : public std::multimap<Tkey, Tval, std::less<Tkey>, AlNod>
+{
+	typedef std::less<Tkey> Tcmp;
+public:
+	typedef std::_Tree_node<std::pair<Tkey const, Tval>, typename AlNod::pointer> node_type;
+	typedef pool_alloc<node_type> node_alloc;
+public:
+	typedef std::multimap<Tkey, Tval, Tcmp, AlNod> base_map;
+public:
+	explicit msg_multimap(size_t poolSize = sizeof(void*))
+		:base_map(Tcmp(), AlNod(poolSize)){}
+
+	explicit msg_multimap(AlNod& al)
+		:base_map(Tcmp(), al) {}
+
+	msg_multimap(const msg_multimap& s)
+		:base_map(s) {}
+
+	msg_multimap(msg_multimap&& s)
+		:base_map(std::move((base_map&)s)) {}
+
+	template <typename Al>
+	msg_multimap(const std::multimap<Tkey, Tval, Tcmp, Al>& s, size_t poolSize = -1)
+		: base_map(Tcmp(), AlNod(-1 == poolSize ? s.size() : poolSize))
+	{
+		*this = s;
+	}
+public:
+	msg_multimap& operator=(const msg_multimap& s)
+	{
+		(base_map&)*this = (const base_map&)s;
+		return *this;
+	}
+
+	msg_multimap& operator=(msg_multimap&& s)
+	{
+		(base_map&)*this = std::move((base_map&)s);
+		return *this;
+	}
+
+	template <typename Al>
+	msg_multimap& operator=(const std::multimap<Tkey, Tval, Tcmp, Al>& s)
+	{
+		clear();
+		for (auto it = s.begin(); s.end() != it; it++)
+		{
+			insert(make_pair((const Tkey&)it->first, (const Tval&)it->second));
+		}
+		return *this;
+	}
+
+	template <typename Al>
+	void copy_to(std::multimap<Tkey, Tval, Tcmp, Al>& d)
+	{
+		for (auto it = begin(); end() != it; it++)
+		{
+			d.insert(make_pair((const Tkey&)it->first, (const Tval&)it->second));
+		}
+	}
+};
+
 template <typename Tkey, typename AlNod = pool_alloc<Tkey> >
 class msg_set : public std::set<Tkey, std::less<Tkey>, AlNod>
 {
@@ -324,6 +386,68 @@ public:
 
 	template <typename Al>
 	void copy_to(std::set<Tkey, Tcmp, Al>& d)
+	{
+		for (auto it = begin(); end() != it; it++)
+		{
+			d.insert(*it);
+		}
+	}
+};
+
+template <typename Tkey, typename AlNod = pool_alloc<Tkey> >
+class msg_multiset : public std::multiset<Tkey, std::less<Tkey>, AlNod>
+{
+	typedef std::less<Tkey> Tcmp;
+public:
+	typedef std::_Tree_node<Tkey, typename AlNod::pointer> node_type;
+	typedef pool_alloc<node_type> node_alloc;
+public:
+	typedef std::multiset<Tkey, Tcmp, AlNod> base_set;
+public:
+	explicit msg_multiset(size_t poolSize = sizeof(void*))
+		:base_set(Tcmp(), AlNod(poolSize)){}
+
+	explicit msg_multiset(AlNod& al)
+		:base_set(Tcmp(), al) {}
+
+	msg_multiset(const msg_multiset& s)
+		:base_set(s) {}
+
+	msg_multiset(msg_multiset&& s)
+		:base_set(std::move((base_set&)s)) {}
+
+	template <typename Al>
+	msg_multiset(const std::multiset<Tkey, Tcmp, Al>& s, size_t poolSize = -1)
+		: base_set(Tcmp(), AlNod(-1 == poolSize ? s.size() : poolSize))
+	{
+		*this = s;
+	}
+public:
+	msg_multiset& operator=(const msg_multiset& s)
+	{
+		(base_set&)*this = (const base_set&)s;
+		return *this;
+	}
+
+	msg_multiset& operator=(msg_multiset&& s)
+	{
+		(base_set&)*this = std::move((base_set&)s);
+		return *this;
+	}
+
+	template <typename Al>
+	msg_multiset& operator=(const std::multiset<Tkey, Tcmp, Al>& s)
+	{
+		clear();
+		for (auto it = s.begin(); s.end() != it; it++)
+		{
+			insert(*it);
+		}
+		return *this;
+	}
+
+	template <typename Al>
+	void copy_to(std::multiset<Tkey, Tcmp, Al>& d)
 	{
 		for (auto it = begin(); end() != it; it++)
 		{
@@ -392,6 +516,36 @@ public:
 	}
 };
 
+template <typename Tkey, typename Tval, typename TMtx = boost::mutex>
+class msg_multimap_shared_alloc : public msg_multimap<Tkey, Tval, pool_alloc_mt<typename msg_multimap<Tkey, Tval>::node_type, TMtx>>
+{
+	typedef pool_alloc_mt<typename msg_multimap<Tkey, Tval>::node_type, TMtx> AlNod;
+public:
+	typedef AlNod shared_node_alloc;
+public:
+	explicit msg_multimap_shared_alloc(size_t poolSize = sizeof(void*))
+		:msg_multimap(poolSize){}
+
+	explicit msg_multimap_shared_alloc(AlNod& al)
+		:msg_multimap(al) {}
+
+	msg_multimap_shared_alloc(const msg_multimap& s)
+		:msg_multimap(s) {}
+
+	msg_multimap_shared_alloc(msg_multimap_shared_alloc&& s)
+		:msg_multimap(std::move((msg_multimap&)s)) {}
+
+	template <typename Al>
+	msg_multimap_shared_alloc(const std::map<Tkey, Tval, Tcmp, Al>& s, size_t poolSize = -1)
+		: msg_multimap(s, poolSize) {}
+
+	msg_multimap_shared_alloc& operator=(msg_multimap_shared_alloc&& s)
+	{
+		(msg_multimap&)*this = std::move((msg_multimap&)s);
+		return *this;
+	}
+};
+
 template <typename Tkey, typename TMtx = boost::mutex>
 class msg_set_shared_alloc : public msg_set<Tkey, pool_alloc_mt<typename msg_set<Tkey>::node_type, TMtx>>
 {
@@ -418,6 +572,36 @@ public:
 	msg_set_shared_alloc& operator=(msg_set_shared_alloc&& s)
 	{
 		(msg_set&)*this = std::move((msg_set&)s);
+		return *this;
+	}
+};
+
+template <typename Tkey, typename TMtx = boost::mutex>
+class msg_multiset_shared_alloc : public msg_multiset<Tkey, pool_alloc_mt<typename msg_multiset<Tkey>::node_type, TMtx>>
+{
+	typedef pool_alloc_mt<typename msg_multiset<Tkey>::node_type, TMtx> AlNod;
+public:
+	typedef AlNod shared_node_alloc;
+public:
+	explicit msg_multiset_shared_alloc(size_t poolSize = sizeof(void*))
+		:msg_multiset(poolSize){}
+
+	explicit msg_multiset_shared_alloc(AlNod& al)
+		:msg_multiset(al) {}
+
+	msg_multiset_shared_alloc(const msg_multiset& s)
+		:msg_multiset(s) {}
+
+	msg_multiset_shared_alloc(msg_multiset_shared_alloc&& s)
+		:msg_multiset(std::move((msg_multiset&)s)) {}
+
+	template <typename Al>
+	msg_multiset_shared_alloc(const std::set<Tkey, Tcmp, Al>& s, size_t poolSize = -1)
+		: msg_multiset(s, poolSize) {}
+
+	msg_multiset_shared_alloc& operator=(msg_multiset_shared_alloc&& s)
+	{
+		(msg_multiset&)*this = std::move((msg_multiset&)s);
 		return *this;
 	}
 };

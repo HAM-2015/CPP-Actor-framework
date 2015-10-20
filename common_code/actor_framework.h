@@ -2691,6 +2691,7 @@ class my_actor
 				_msgPool.reset();
 				_next.reset();
 				_hostActor = NULL;
+				_isHead = false;
 			}
 
 			void clear()
@@ -2707,6 +2708,7 @@ class my_actor
 				_msgPool.reset();
 				_next.reset();
 				_hostActor = NULL;
+				_isHead = false;
 			}
 
 			std::shared_ptr<pool_type> _msgPool;
@@ -3057,7 +3059,7 @@ public:
 	/*!
 	@brief 获取父Actor
 	*/
-	actor_handle parent_actor();
+	const actor_handle& parent_actor();
 
 	/*!
 	@brief 获取子Actor
@@ -3611,11 +3613,13 @@ private:
 			{
 				res = std::shared_ptr<pck_type>(new pck_type(host));
 			}
+			assert(std::dynamic_pointer_cast<pck_type>(res));
 			return std::static_pointer_cast<pck_type>(res);
 		}
 		auto it = host->_msgPoolStatus._msgTypeMap.find(typeID);
 		if (it != host->_msgPoolStatus._msgTypeMap.end())
 		{
+			assert(std::dynamic_pointer_cast<pck_type>(it->second));
 			return std::static_pointer_cast<pck_type>(it->second);
 		}
 		return std::shared_ptr<pck_type>();
@@ -3663,30 +3667,24 @@ private:
 
 		size_t stackl = 0;
 		auto pckIt = msgPck;
-		while (true)
+		while (pckIt->_next)
 		{
-			if (pckIt->_next)
-			{
-				pckIt->_msgPool.reset();
-				pckIt = pckIt->_next;
-				pckIt->lock(host);
-				assert(stackl < 15);
-				uStack[stackl++] = pckIt;
-			}
-			else
-			{
-				if (!pckIt->is_closed())
-				{
-					auto& msgPool_ = pckIt->_msgPool;
-					disconnect_pump<Args...>(host, msgPool_, pckIt->_msgPump);
-					msgPool_.reset();
-				}
-				while (stackl)
-				{
-					uStack[--stackl]->unlock(host);
-				}
-				return;
-			}
+			assert(!pckIt->_next->_isHead);
+			pckIt->_msgPool.reset();
+			pckIt = pckIt->_next;
+			pckIt->lock(host);
+			assert(stackl < 15);
+			uStack[stackl++] = pckIt;
+		}
+		if (!pckIt->is_closed())
+		{
+			auto& msgPool_ = pckIt->_msgPool;
+			disconnect_pump<Args...>(host, msgPool_, pckIt->_msgPump);
+			msgPool_.reset();
+		}
+		while (stackl)
+		{
+			uStack[--stackl]->unlock(host);
 		}
 	}
 
@@ -3694,7 +3692,7 @@ private:
 	@brief 更新消息代理链
 	*/
 	template <typename... Args>
-	actor_handle update_msg_list(const std::shared_ptr<msg_pool_status::pck<Args...>>& msgPck, const std::shared_ptr<MsgPool_<Args...>>& newPool)
+	void update_msg_list(const std::shared_ptr<msg_pool_status::pck<Args...>>& msgPck, const std::shared_ptr<MsgPool_<Args...>>& newPool)
 	{
 		typedef typename MsgPool_<Args...>::pump_handler pump_handler;
 		typedef typename MsgPump_<Args...>::msg_type msg_type;
@@ -3702,57 +3700,46 @@ private:
 		std::shared_ptr<msg_pool_status::pck<Args...>> uStack[16];
 		size_t stackl = 0;
 		auto pckIt = msgPck;
-		while (true)
+		while (pckIt->_next)
 		{
-			if (pckIt->_next)
+			assert(!pckIt->_next->_isHead);
+			pckIt->_msgPool = newPool;
+			pckIt = pckIt->_next;
+			pckIt->lock(this);
+			assert(stackl < 15);
+			uStack[stackl++] = pckIt;
+		}
+		if (!pckIt->is_closed())
+		{
+			auto& msgPool_ = pckIt->_msgPool;
+			auto& msgPump_ = pckIt->_msgPump;
+			disconnect_pump<Args...>(this, msgPool_, msgPump_);
+			msgPool_ = newPool;
+			if (pckIt->_msgPump)
 			{
-				pckIt->_msgPool = newPool;
-				pckIt = pckIt->_next;
-				pckIt->lock(this);
-				assert(stackl < 15);
-				uStack[stackl++] = pckIt;
-			} 
-			else
-			{
-				if (!pckIt->is_closed())
+				if (msgPool_)
 				{
-					auto& msgPool_ = pckIt->_msgPool;
-					auto& msgPump_ = pckIt->_msgPump;
-					disconnect_pump<Args...>(this, msgPool_, msgPump_);
-					msgPool_ = newPool;
-					if (pckIt->_msgPump)
+					auto ph = send<pump_handler>(msgPool_->_strand, [&pckIt]()->pump_handler
 					{
-						if (msgPool_)
-						{
-							auto ph = send<pump_handler>(msgPool_->_strand, [&msgPool_, &msgPump_]()->pump_handler
-							{
-								return msgPool_->connect_pump(msgPump_);
-							});
-							send(msgPump_->_strand, [&msgPump_, &ph]
-							{
-								msgPump_->connect(ph);
-							});
-						}
-						else
-						{
-							send(msgPump_->_strand, [&msgPump_]
-							{
-								msgPump_->clear();
-							});
-						}
-					}
-					while (stackl)
+						return pckIt->_msgPool->connect_pump(pckIt->_msgPump);
+					});
+					send(msgPump_->_strand, [&msgPump_, &ph]
 					{
-						uStack[--stackl]->unlock(this);
-					}
-					return pckIt->_hostActor->shared_from_this();
+						msgPump_->connect(ph);
+					});
 				}
-				while (stackl)
+				else
 				{
-					uStack[--stackl]->unlock(this);
+					send(msgPump_->_strand, [&msgPump_]
+					{
+						msgPump_->clear();
+					});
 				}
-				return actor_handle();
 			}
+		}
+		while (stackl)
+		{
+			uStack[--stackl]->unlock(this);
 		}
 	}
 private:
@@ -3775,55 +3762,55 @@ private:
 			}
 		}
 		quit_guard qg(this);
-		auto childPck = send<pck_type>(childActor->self_strand(), [id, &childActor]()->pck_type
+		pck_type msgPck = msg_pool_pck<Args...>(id, this);
+		msgPck->lock(this);
+		pck_type childPck;
+		while (true)
 		{
-			if (!childActor->is_quited())
+			childPck = send<pck_type>(childActor->self_strand(), [id, &childActor]()->pck_type
 			{
-				return my_actor::msg_pool_pck<Args...>(id, childActor.get());
-			}
-			return pck_type();
-		});
-		if (childPck)
-		{
-			auto msgPck = msg_pool_pck<Args...>(id, this);
-			if (msgPck != childPck)
+				if (!childActor->is_quited())
+				{
+					return my_actor::msg_pool_pck<Args...>(id, childActor.get());
+				}
+				return pck_type();
+			});
+			if (!childPck || msgPck->_next == childPck)
 			{
-				msgPck->lock(this);
-				auto msgPool = msgPck->_msgPool;
-				auto& next_ = msgPck->_next;
-				if (next_)
-				{
-					next_->lock(this);
-					clear_msg_list<Args...>(this, next_);
-					next_->_isHead = true;
-					next_->unlock(this);
-				}
-				else
-				{
-					clear_msg_list<Args...>(this, msgPck);
-					msgPck->_msgPool = msgPool;
-				}
-				childPck->lock(this);
-				if (update_msg_list<Args...>(childPck, msgPool))
-				{
-					next_ = childPck;
-					childPck->_isHead = false;
-					childPck->unlock(this);
-					msgPck->unlock(this);
-					return true;
-				}
-				childPck->unlock(this);
-				if (next_)
-				{
-					next_->lock(this);
-					update_msg_list<Args...>(next_, msgPool);
-					next_->_isHead = false;
-					next_->unlock(this);
-				}
 				msgPck->unlock(this);
+				return false;
 			}
+			childPck->lock(this);
+			if (!childPck->is_closed())
+			{
+				break;
+			}
+			childPck->unlock(this);
 		}
-		return false;
+		auto msgPool = msgPck->_msgPool;
+		auto& next_ = msgPck->_next;
+		if (next_)
+		{
+			next_->lock(this);
+			assert(!next_->_isHead);
+			clear_msg_list<Args...>(this, next_);
+		}
+		else
+		{
+			clear_msg_list<Args...>(this, msgPck);
+			msgPck->_msgPool = msgPool;
+		}
+		update_msg_list<Args...>(childPck, msgPool);
+		if (next_)
+		{
+			next_->_isHead = true;
+			next_->unlock(this);
+		}
+		next_ = childPck;
+		childPck->_isHead = false;
+		childPck->unlock(this);
+		msgPck->unlock(this);
+		return true;
 	}
 public:
 	template <typename... Args>
@@ -3891,6 +3878,7 @@ public:
 			if (next_)
 			{
 				next_->lock(this);
+				assert(!next_->_isHead);
 				clear_msg_list<Args...>(this, next_);
 				next_->_isHead = true;
 				next_->unlock(this);
@@ -3913,6 +3901,7 @@ public:
 		if (_msgPoolStatus._msgTypeMap.end() != it)
 		{
 			quit_guard qg(this);
+			assert(std::dynamic_pointer_cast<pck_type>(it->second));
 			std::shared_ptr<pck_type> msgPck = std::static_pointer_cast<pck_type>(it->second);
 			msgPck->lock(this);
 			auto msgPool = msgPck->_msgPool;
@@ -3927,10 +3916,10 @@ public:
 	}
 public:
 	/*!
-	@brief 连接消息通知到一个伙伴Actor，该Actor必须是子Actor或没有父Actor
+	@brief 连接消息通知到一个伙伴Actor，该Actor必须是子Actor或根Actor
 	@param strand 消息调度器
 	@param id 相同类型消息id
-	@param makeNew false 如果存在返回之前，否则创建新的通知；true 强制创建新的通知，之前的将失效，且断开与buddyActor的关联
+	@param makeNew false 如果该消息是个根消息就成功，否则失败；true 强制创建新的通知，之前的通知和代理将失效
 	@param fixedSize 消息队列内存池长度
 	@warning 如果 makeNew = false 且该节点为父的代理，将创建失败
 	@return 消息通知函数
@@ -3943,96 +3932,89 @@ public:
 		typedef std::shared_ptr<msg_pool_status::pck<Args...>> pck_type;
 
 		assert_enter();
-		{
-			auto buddyParent = buddyActor->parent_actor();
-			if (!(buddyActor && (!buddyParent || buddyParent->self_id() == self_id())))
-			{
-				assert(false);
-				return post_actor_msg<Args...>();
-			}
-		}
 #ifdef _DEBUG
 		{
-			auto pa = parent_actor();
-			while (pa)
+			assert(!buddyActor->parent_actor() || buddyActor->parent_actor()->self_id() == self_id());
+			auto selfParent = parent_actor();
+			while (selfParent)
 			{
-				assert(pa->self_id() != buddyActor->self_id());
-				pa = pa->parent_actor();
+				assert(selfParent->self_id() != buddyActor->self_id());
+				selfParent = selfParent->parent_actor();
 			}
 		}
 #endif
-		auto msgPck = msg_pool_pck<Args...>(id, this);
 		quit_guard qg(this);
+		pck_type msgPck = msg_pool_pck<Args...>(id, this);
 		msgPck->lock(this);
-		auto childPck = send<pck_type>(buddyActor->self_strand(), [id, &buddyActor]()->pck_type
+		pck_type buddyPck;
+		while (true)
 		{
-			if (!buddyActor->is_quited())
+			buddyPck = send<pck_type>(buddyActor->self_strand(), [id, &buddyActor]()->pck_type
 			{
-				return my_actor::msg_pool_pck<Args...>(id, buddyActor.get());
+				if (!buddyActor->is_quited())
+				{
+					return my_actor::msg_pool_pck<Args...>(id, buddyActor.get());
+				}
+				return pck_type();
+			});
+			if (!buddyPck)
+			{
+				msgPck->unlock(this);
+				return post_actor_msg<Args...>();
 			}
-			return pck_type();
-		});
-		if (!childPck)
-		{
-			msgPck->unlock(this);
-			return post_actor_msg<Args...>();
+			buddyPck->lock(this);
+			if (!buddyPck->is_closed())
+			{
+				break;
+			}
+			buddyPck->unlock(this);
 		}
 		if (makeNew)
 		{
-			auto newPool = pool_type::make(strand, fixedSize);
-			childPck->lock(this);
-			childPck->_isHead = true;
-			actor_handle hostActor = update_msg_list<Args...>(childPck, newPool);
-			childPck->unlock(this);
-			if (hostActor)
+			if (buddyPck->_msgPool)
 			{
-				//如果当前消息节点在更新的消息链中，则断开，然后连接到本地消息泵
-				if (msgPck->_next == childPck)
+				buddyPck->_msgPool->_closed = true;
+			}
+			auto newPool = pool_type::make(strand, fixedSize);
+			update_msg_list<Args...>(buddyPck, newPool);
+			buddyPck->_isHead = true;
+			buddyPck->unlock(this);
+			if (msgPck->_next == buddyPck)
+			{//之前的代理将被取消
+				msgPck->_next.reset();
+				if (msgPck->_msgPump)
 				{
-					msgPck->_next.reset();
-					if (msgPck->_msgPump)
+					auto& msgPump_ = msgPck->_msgPump;
+					auto& msgPool_ = msgPck->_msgPool;
+					if (msgPool_)
 					{
-						auto& msgPump_ = msgPck->_msgPump;
-						auto& msgPool_ = msgPck->_msgPool;
-						if (msgPool_)
+						msgPump_->connect(this->send<pump_handler>(msgPool_->_strand, [&msgPck]()->pump_handler
 						{
-							msgPump_->connect(this->send<pump_handler>(msgPool_->_strand, [&msgPool_, &msgPump_]()->pump_handler
-							{
-								return msgPool_->connect_pump(msgPump_);
-							}));
-						}
-						else
-						{
-							msgPump_->clear();
-						}
+							return msgPck->_msgPool->connect_pump(msgPck->_msgPump);
+						}));
+					}
+					else
+					{
+						msgPump_->clear();
 					}
 				}
-				msgPck->unlock(this);
-				return post_actor_msg<Args...>(newPool, hostActor);
 			}
 			msgPck->unlock(this);
-			//消息链的代理人已经退出，失败
-			return post_actor_msg<Args...>();
+			return post_actor_msg<Args...>(newPool, buddyActor);
 		}
-		childPck->lock(this);
-		if (childPck->_isHead)
+		if (buddyPck->_isHead)
 		{
-			assert(msgPck->_next != childPck);
-			auto childPool = childPck->_msgPool;
-			if (!childPool)
+			auto& buddyPool = buddyPck->_msgPool;
+			if (!buddyPool)
 			{
-				childPool = pool_type::make(strand, fixedSize);
+				buddyPool = pool_type::make(strand, fixedSize);
+				update_msg_list<Args...>(buddyPck, buddyPool);
 			}
-			actor_handle hostActor = update_msg_list<Args...>(childPck, childPool);
-			if (hostActor)
-			{
-				childPck->unlock(this);
-				msgPck->unlock(this);
-				return post_actor_msg<Args...>(childPool, hostActor);
-			}
-			//消息链的代理人已经退出，失败
+			buddyPck->unlock(this);
+			msgPck->unlock(this);
+			return post_actor_msg<Args...>(buddyPool, buddyActor);
 		}
-		childPck->unlock(this);
+		buddyPck->unlock(this);
 		msgPck->unlock(this);
 		return post_actor_msg<Args...>();
 	}
@@ -4091,32 +4073,7 @@ public:
 	template <typename... Args>
 	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to_self(const shared_strand& strand, const int id, bool makeNew = false, size_t fixedSize = 16)
 	{
-		typedef MsgPool_<Args...> pool_type;
-
-		assert_enter();
-		auto msgPck = msg_pool_pck<Args...>(id, this);
-		quit_guard qg(this);
-		msgPck->lock(this);
-		if (msgPck->_isHead)
-		{
-			std::shared_ptr<pool_type> msgPool;
-			if (makeNew || !msgPck->_msgPool)
-			{
-				msgPool = pool_type::make(strand, fixedSize);
-			}
-			else
-			{
-				msgPool = msgPck->_msgPool;
-			}
-			actor_handle hostActor = update_msg_list<Args...>(msgPck, msgPool);
-			if (hostActor)
-			{
-				msgPck->unlock(this);
-				return post_actor_msg<Args...>(msgPool, hostActor);
-			}
-		}
-		msgPck->unlock(this);
-		return post_actor_msg<Args...>();
+		return connect_msg_notifer_to<Args...>(strand, id, shared_from_this(), makeNew, fixedSize);
 	}
 
 	template <typename... Args>
@@ -4200,8 +4157,8 @@ private:
 		typedef typename pool_type::pump_handler pump_handler;
 
 		host->assert_enter();
-		auto msgPck = msg_pool_pck<Args...>(id, host);
 		quit_guard qg(host);
+		auto msgPck = msg_pool_pck<Args...>(id, host);
 		msgPck->lock(host);
 		if (msgPck->_next)
 		{
@@ -4210,27 +4167,27 @@ private:
 			msgPck->_next->unlock(host);
 			msgPck->_next.reset();
 		}
-		if (!msgPck->_msgPump)
+		auto& msgPump_ = msgPck->_msgPump;
+		auto& msgPool_ = msgPck->_msgPool;
+		if (!msgPump_)
 		{
-			msgPck->_msgPump = pump_type::make(host->shared_from_this());
+			msgPump_ = pump_type::make(host->shared_from_this());
 		}
-		auto msgPump = msgPck->_msgPump;
-		auto msgPool = msgPck->_msgPool;
-		if (msgPool)
+		if (msgPool_)
 		{
-			msgPump->connect(host->send<pump_handler>(msgPool->_strand, [&msgPck]()->pump_handler
+			msgPump_->connect(host->send<pump_handler>(msgPool_->_strand, [&msgPck]()->pump_handler
 			{
 				return msgPck->_msgPool->connect_pump(msgPck->_msgPump);
 			}));
 		}
 		else
 		{
-			msgPump->clear();
+			msgPump_->clear();
 		}
 		msgPck->unlock(host);
 		msg_pump_handle<Args...> mh;
-		mh._handle = msgPump.get();
-		DEBUG_OPERATION(mh._pClosed = msgPump->_pClosed);
+		mh._handle = msgPump_.get();
+		DEBUG_OPERATION(mh._pClosed = msgPump_->_pClosed);
 		return mh;
 	}
 private:
@@ -4241,9 +4198,13 @@ private:
 		assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
 		if (!pump->read_msg(dstRec))
 		{
+			AUTO_CALL(
+			{
+				pump->_checkDis = false;
+				pump->stop_waiting();
+			});
 			if (checkDis && pump->isDisconnected())
 			{
-				pump->stop_waiting();
 				throw pump_disconnected_exception();
 			}
 			if (0 != tm)
@@ -4271,14 +4232,11 @@ private:
 					if (pump->_checkDis)
 					{
 						assert(checkDis);
-						pump->_checkDis = false;
 						throw pump_disconnected_exception();
 					}
 					return true;
 				}
 			}
-			pump->_checkDis = false;
-			pump->stop_waiting();
 			return false;
 		}
 		return true;
@@ -4291,6 +4249,7 @@ private:
 		assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
 		if (!pump->try_read(dstRec))
 		{
+			assert(!pump->_waiting);
 			if (checkDis && pump->isDisconnected())
 			{
 				throw pump_disconnected_exception();
@@ -4307,10 +4266,13 @@ private:
 		assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
 		if (!pump->read_msg(dstRec))
 		{
+			AUTO_CALL(
+			{
+				pump->_checkDis = false;
+				pump->stop_waiting();
+			});
 			if (checkDis && pump->isDisconnected())
 			{
-				pump->_waiting = false;
-				pump->_dstRec = NULL;
 				throw pump_disconnected_exception();
 			}
 			pump->_checkDis = checkDis;
@@ -4318,7 +4280,6 @@ private:
 			if (pump->_checkDis)
 			{
 				assert(checkDis);
-				pump->_checkDis = false;
 				throw pump_disconnected_exception();
 			}
 		}
@@ -4541,6 +4502,12 @@ public:
 	__yield_interrupt actor_handle msg_agent_handle(child_actor_handle& buddyActor)
 	{
 		return msg_agent_handle<Args...>(0, buddyActor.get_actor());
+	}
+
+	template <typename... Args>
+	__yield_interrupt actor_handle msg_agent_handle(const int id = 0)
+	{
+		return msg_agent_handle<Args...>(id, shared_from_this());
 	}
 private:
 	template <size_t N>

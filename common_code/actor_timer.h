@@ -16,11 +16,7 @@ class my_actor;
 class ActorTimer_
 {
 	typedef std::shared_ptr<my_actor> actor_handle;
-	typedef msg_list_shared_alloc<actor_handle, null_mutex>::shared_node_alloc list_alloc;
-	typedef std::shared_ptr<msg_list_shared_alloc<actor_handle, null_mutex> > handler_list;
-	typedef msg_map<unsigned long long, handler_list>::node_alloc map_alloc;
-	typedef msg_map<unsigned long long, handler_list, map_alloc> handler_table;
-	typedef shared_obj_pool<msg_list_shared_alloc<actor_handle, null_mutex> > handler_list_pool;
+	typedef msg_multimap<unsigned long long, actor_handle> handler_table;
 
 	friend boost_strand;
 	friend mfc_strand;
@@ -33,11 +29,10 @@ class ActorTimer_
 	public:
 		void reset()
 		{
-			_handlerList.reset();
+			_null = true;
 		}
 	private:
-		handler_list _handlerList;
-		msg_list_shared_alloc<actor_handle, null_mutex>::iterator _handlerNode;
+		bool _null : true;
 		handler_table::iterator _tableNode;
 	};
 private:
@@ -66,10 +61,8 @@ private:
 	void* _timer;
 	bool _looping;
 	int _timerCount;
-	list_alloc _listAlloc;
 	shared_strand _strand;
 	handler_table _handlerTable;
-	handler_list_pool* _listPool;
 	unsigned long long _extMaxTick;
 	unsigned long long _extFinishTime;
 	std::weak_ptr<boost_strand> _weakStrand;
