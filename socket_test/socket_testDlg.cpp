@@ -172,7 +172,7 @@ void Csocket_testDlg::OnBnClickedClear()
 void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param> param)
 {
 	actor_trig_handle<boost::system::error_code> ath;
-	param->_clientSocket->async_connect(param->_ip.c_str(), param->_port, self->make_trig_notifer(ath));
+	param->_clientSocket->async_connect(param->_ip.c_str(), param->_port, self->make_trig_notifer_to_self(ath));
 	actor_handle connecting = create_mfc_actor(_ios, [this](my_actor* self)
 	{//让“连接”按钮在连接中闪烁
 		this->GetDlgItem(IDC_BUTTON1)->EnableWindow(TRUE);
@@ -216,7 +216,7 @@ void Csocket_testDlg::connectActor(my_actor* self, std::shared_ptr<client_param>
 			self->close_msg_notifer(amh);
 		});
 		self->child_actor_run(readActor);
-		auto textio = text_stream_io::create(self->self_strand(), param->_clientSocket, readActor->make_msg_notifer(amh));
+		auto textio = text_stream_io::create(self->self_strand(), param->_clientSocket, readActor->make_msg_notifer_to_self(amh));
 		child_actor_handle writerActor = self->msg_agent_to_actor<shared_data>(true, 
 			[&textio, &param](my_actor* self, msg_pump_handle<shared_data> amh)
 		{
@@ -256,7 +256,7 @@ void Csocket_testDlg::newSession(my_actor* self, std::shared_ptr<session_pck> se
 	dlg._strand = _strand;
 	dlg._socket = sess->_socket;
 	dlg._closeNtf = sess->_closeNtf;
-	dlg._closeCallback = self->make_trig_notifer(lstClose);
+	dlg._closeCallback = self->make_trig_notifer_to_self(lstClose);
 	dlg.Create(IDD_SESSION, this);
 	dlg.run(self);
 	dlg.ShowWindow(SW_SHOW);
@@ -268,7 +268,7 @@ void Csocket_testDlg::newSession(my_actor* self, std::shared_ptr<session_pck> se
 void Csocket_testDlg::serverActor(my_actor* self, std::shared_ptr<server_param> param)
 {
 	actor_msg_handle<socket_handle> amh;
-	accept_handle accept = acceptor_socket::create(self->self_strand(), param->_port, self->make_msg_notifer(amh), false);//创建连接侦听器
+	accept_handle accept = acceptor_socket::create(self->self_strand(), param->_port, self->make_msg_notifer_to_self(amh), false);//创建连接侦听器
 	if (!accept)
 	{
 		self->close_msg_notifer(amh);
@@ -301,7 +301,7 @@ void Csocket_testDlg::serverActor(my_actor* self, std::shared_ptr<server_param> 
 		}
 		self->close_msg_notifer(sessDissonnLst);
 	});
-	auto sessDissonnNtf = sessMngActor->make_msg_notifer(sessDissonnLst);
+	auto sessDissonnNtf = sessMngActor->make_msg_notifer_to_self(sessDissonnLst);
 	self->child_actor_run(sessMngActor);
 	while (true)
 	{

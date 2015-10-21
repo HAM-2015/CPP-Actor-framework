@@ -128,7 +128,6 @@ child_actor_handle::child_actor_handle( child_actor_param& s )
 {
 	_quited = true;
 	*this = s;
-	s._actor->_exitCallback.push_back(s._actor->_parentActor->make_trig_notifer(_quiteAth));
 }
 
 child_actor_handle& child_actor_handle::operator=( child_actor_handle& )
@@ -142,7 +141,7 @@ child_actor_handle& child_actor_handle::operator=( child_actor_param& s )
 	assert(_quited);
 	_quited = false;
 	_param = s;
-	s._actor->_exitCallback.push_back(s._actor->_parentActor->make_trig_notifer(_quiteAth));
+	_param._actor->_exitCallback.push_back(_param._actor->_parentActor->make_trig_notifer_to_self(_quiteAth));
 	DEBUG_OPERATION(_param._isCopy = true);
 	DEBUG_OPERATION(_qh = s._actor->parent_actor()->regist_quit_handler([this]{_quited = true;}));//ÔÚ¸¸ActorÍË³öÊ±ÖÃ_quited=true
 	return *this;
@@ -153,7 +152,7 @@ child_actor_handle::~child_actor_handle()
 	assert(_quited);
 }
 
-actor_handle child_actor_handle::get_actor()
+const actor_handle& child_actor_handle::get_actor()
 {
 	return _param._actor;
 }
@@ -195,7 +194,7 @@ void actor_msg_handle_base::pull_yield()
 }
 
 actor_msg_handle_base::actor_msg_handle_base()
-:_waiting(false)
+:_waiting(false), _hostActor(NULL)
 {
 
 }
@@ -217,6 +216,12 @@ std::shared_ptr<bool> actor_msg_handle_base::new_bool()
 	std::shared_ptr<bool> r = s_sharedBoolPool->pick();
 	*r = false;
 	return r;
+}
+//////////////////////////////////////////////////////////////////////////
+long long MutexBlock_::actor_id(my_actor* host)
+{
+	assert(host);
+	return host->self_id();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -675,6 +680,7 @@ size_t MsgPumpVoid_::snap_size()
 void MsgPumpVoid_::stop_waiting()
 {
 	_waiting = false;
+	_checkDis = false;
 	_dstRec = NULL;
 }
 
@@ -1125,7 +1131,7 @@ void my_actor::child_actors_suspend(const list<child_actor_handle::ptr>& actorHa
 {
 	assert_enter();
 	actor_msg_handle<> amh;
-	auto h = make_msg_notifer(amh);
+	auto h = make_msg_notifer_to_self(amh);
 	for (auto it = actorHandles.begin(); it != actorHandles.end(); it++)
 	{
 		child_actor_handle::ptr actorHandle = *it;
@@ -1168,7 +1174,7 @@ void my_actor::child_actors_resume(const list<child_actor_handle::ptr>& actorHan
 {
 	assert_enter();
 	actor_msg_handle<> amh;
-	auto h = make_msg_notifer(amh);
+	auto h = make_msg_notifer_to_self(amh);
 	for (auto it = actorHandles.begin(); it != actorHandles.end(); it++)
 	{
 		child_actor_handle::ptr actorHandle = *it;
@@ -1741,7 +1747,7 @@ void my_actor::actors_force_quit(const list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	actor_msg_handle<> amh;
-	auto h = make_msg_notifer(amh);
+	auto h = make_msg_notifer_to_self(amh);
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
 	{
 		(*it)->notify_quit(h);
@@ -1774,7 +1780,7 @@ bool my_actor::timed_actor_wait_quit(int tm, const actor_handle& anotherActor)
 	assert_enter();
 	assert(anotherActor);
 	actor_trig_handle<> ath;
-	anotherActor->append_quit_callback(make_trig_notifer(ath));
+	anotherActor->append_quit_callback(make_trig_notifer_to_self(ath));
 	return timed_wait_trig(tm, ath);
 }
 
@@ -1789,7 +1795,7 @@ void my_actor::actors_suspend(const list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	actor_msg_handle<> amh;
-	auto h = make_msg_notifer(amh);
+	auto h = make_msg_notifer_to_self(amh);
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
 	{
 		(*it)->notify_suspend(h);
@@ -1812,7 +1818,7 @@ void my_actor::actors_resume(const list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	actor_msg_handle<> amh;
-	auto h = make_msg_notifer(amh);
+	auto h = make_msg_notifer_to_self(amh);
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
 	{
 		(*it)->notify_resume(h);
@@ -1836,7 +1842,7 @@ bool my_actor::actors_switch(const list<actor_handle>& anotherActors)
 	assert_enter();
 	bool isPause = true;
 	actor_msg_handle<bool> amh;
-	auto h = make_msg_notifer(amh);
+	auto h = make_msg_notifer_to_self(amh);
 	for (auto it = anotherActors.begin(); it != anotherActors.end(); it++)
 	{
 		(*it)->switch_pause_play(h);
@@ -2169,9 +2175,8 @@ bool my_actor::timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<>& pu
 	assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
 	if (!pump->read_msg())
 	{
-		AUTO_CALL(
+		OUT_OF_SCOPE(
 		{
-			pump->_checkDis = false;
 			pump->stop_waiting();
 		});
 		if (checkDis && pump->isDisconnected())

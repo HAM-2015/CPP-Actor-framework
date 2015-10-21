@@ -145,29 +145,29 @@ inline void clear_function(F& f)
 }
 
 template <typename CL>
-struct auto_call 
+struct out_of_scope
 {
 	template <typename TC>
-	auto_call(TC&& cl)
+	out_of_scope(TC&& cl)
 		:_cl(TRY_MOVE(cl)) {}
 
-	~auto_call()
+	~out_of_scope()
 	{
 		_cl();
 	}
 
 	CL _cl;
 private:
-	auto_call(const auto_call&){};
-	void operator =(const auto_call&){}
+	out_of_scope(const out_of_scope&){};
+	void operator =(const out_of_scope&){}
 };
 
 #define BOND_LINE(__P__, __L__) NAME_BOND(__P__, __L__)
 
 //作用域退出时自动调用lambda
-#define AUTO_CALL(__CL__) \
+#define OUT_OF_SCOPE(__CL__) \
 	auto BOND_LINE(__t, __LINE__) = [&]__CL__; \
-	auto_call<decltype(BOND_LINE(__t, __LINE__))> BOND_LINE(__cl, __LINE__)(BOND_LINE(__t, __LINE__))
+	out_of_scope<decltype(BOND_LINE(__t, __LINE__))> BOND_LINE(__cl, __LINE__)(BOND_LINE(__t, __LINE__))
 
 
 //内存边界对齐

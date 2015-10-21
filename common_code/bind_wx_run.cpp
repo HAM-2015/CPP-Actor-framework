@@ -43,7 +43,7 @@ void bind_wx_run_base::wait_closed(my_actor* host)
 	if (!_isClosed)
 	{
 		actor_trig_handle<> ath;
-		_closedCallback.push_back(host->make_trig_notifer(ath));
+		_closedCallback.push_back(host->make_trig_notifer_to_self(ath));
 		ul.unlock();
 		host->wait_trig(ath);
 	}

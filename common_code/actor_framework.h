@@ -1000,6 +1000,7 @@ private:
 	void stop_waiting()
 	{
 		_waiting = false;
+		_checkDis = false;
 		_dstRec = NULL;
 	}
 
@@ -1630,8 +1631,9 @@ class MutexBlock_
 private:
 	virtual bool ready() = 0;
 	virtual void cancel() = 0;
-	virtual bool go() = 0;
+	virtual bool go(bool& isRun) = 0;
 	virtual size_t snap_id() = 0;
+	virtual long long host_id() = 0;
 
 	MutexBlock_(const MutexBlock_&) {}
 	void operator =(const MutexBlock_&) {}
@@ -1643,6 +1645,8 @@ protected:
 	{
 		return my_actor::_connect_msg_pump<Args...>(id, host);
 	}
+
+	long long actor_id(my_actor* host);
 };
 
 /*!
@@ -1671,20 +1675,27 @@ private:
 		_msgHandle.stop_waiting();
 	}
 
-	bool go()
+	bool go(bool& isRun)
 	{
 		if (_msgBuff.has())
 		{
+			isRun = true;
 			bool r = tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 			_msgBuff.clear();
 			return r;
 		}
+		isRun = false;
 		return false;
 	}
 
 	size_t snap_id()
 	{
 		return (size_t)&_msgHandle;
+	}
+
+	long long host_id()
+	{
+		return actor_id(_msgHandle._hostActor);
 	}
 private:
 	msg_handle& _msgHandle;
@@ -1722,21 +1733,28 @@ private:
 		_msgHandle.stop_waiting();
 	}
 
-	bool go()
+	bool go(bool& isRun)
 	{
 		if (_msgBuff.has())
 		{
+			isRun = true;
 			_triged = true;
 			bool r = tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 			_msgBuff.clear();
 			return r;
 		}
+		isRun = false;
 		return false;
 	}
 
 	size_t snap_id()
 	{
 		return (size_t)&_msgHandle;
+	}
+
+	long long host_id()
+	{
+		return actor_id(_msgHandle._hostActor);
 	}
 private:
 	msg_handle& _msgHandle;
@@ -1787,15 +1805,17 @@ private:
 		_msgHandle._handle->stop_waiting();
 	}
 
-	bool go()
+	bool go(bool& isRun)
 	{
 		assert(!_msgHandle.check_closed());
 		if (_msgBuff.has())
 		{
+			isRun = true;
 			bool r = tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 			_msgBuff.clear();
 			return r;
 		}
+		isRun = false;
 		return false;
 	}
 
@@ -1803,6 +1823,11 @@ private:
 	{
 		assert(!_msgHandle.check_closed());
 		return (size_t)_msgHandle._handle;
+	}
+
+	long long host_id()
+	{
+		return actor_id(_msgHandle->_hostActor);
 	}
 private:
 	pump_handle _msgHandle;
@@ -1832,19 +1857,26 @@ private:
 		_msgHandle.stop_waiting();
 	}
 
-	bool go()
+	bool go(bool& isRun)
 	{
 		if (_has)
 		{
+			isRun = true;
 			_has = false;
 			return _handler();
 		}
+		isRun = false;
 		return false;
 	}
 
 	size_t snap_id()
 	{
 		return (size_t)&_msgHandle;
+	}
+
+	long long host_id()
+	{
+		return actor_id(_msgHandle._hostActor);
 	}
 private:
 	msg_handle& _msgHandle;
@@ -1878,20 +1910,27 @@ private:
 		_msgHandle.stop_waiting();
 	}
 
-	bool go()
+	bool go(bool& isRun)
 	{
 		if (_has)
 		{
+			isRun = true;
 			_triged = true;
 			_has = false;
 			return _handler();
 		}
+		isRun = false;
 		return false;
 	}
 
 	size_t snap_id()
 	{
 		return (size_t)&_msgHandle;
+	}
+
+	long long host_id()
+	{
+		return actor_id(_msgHandle._hostActor);
 	}
 private:
 	msg_handle& _msgHandle;
@@ -1938,14 +1977,16 @@ private:
 		_msgHandle._handle->stop_waiting();
 	}
 
-	bool go()
+	bool go(bool& isRun)
 	{
 		assert(!_msgHandle.check_closed());
 		if (_has)
 		{
+			isRun = true;
 			_has = false;
 			return _handler();
 		}
+		isRun = false;
 		return false;
 	}
 
@@ -1953,6 +1994,11 @@ private:
 	{
 		assert(!_msgHandle.check_closed());
 		return (size_t)_msgHandle._handle;
+	}
+
+	long long host_id()
+	{
+		return actor_id(_msgHandle->_hostActor);
 	}
 private:
 	pump_handle _msgHandle;
@@ -2568,7 +2614,7 @@ public:
 	child_actor_handle(child_actor_param& s);
 	~child_actor_handle();
 	child_actor_handle& operator =(child_actor_param& s);
-	actor_handle get_actor();
+	const actor_handle& get_actor();
 	my_actor* operator ->();
 	static ptr make_ptr();
 	bool empty();
@@ -3384,9 +3430,25 @@ public:
 	@brief 创建一个消息通知函数
 	*/
 	template <typename... Args>
-	actor_msg_notifer<Args...> make_msg_notifer(actor_msg_handle<Args...>& amh)
+	actor_msg_notifer<Args...> make_msg_notifer_to_self(actor_msg_handle<Args...>& amh)
 	{
 		return amh.make_notifer(shared_from_this());
+	}
+
+	/*!
+	@brief 创建一个消息通知函数到buddyActor
+	*/
+	template <typename... Args>
+	actor_msg_notifer<Args...> make_msg_notifer_to(const actor_handle& buddyActor, actor_msg_handle<Args...>& amh)
+	{
+		assert_enter();
+		return amh.make_notifer(buddyActor);
+	}
+
+	template <typename... Args>
+	actor_msg_notifer<Args...> make_msg_notifer_to(my_actor* buddyActor, actor_msg_handle<Args...>& amh)
+	{
+		return make_msg_notifer_to<Args...>(buddyActor->shared_from_this(), amh);
 	}
 
 	/*!
@@ -3520,9 +3582,25 @@ public:
 	@brief 创建一个消息触发函数，只有一次触发有效
 	*/
 	template <typename... Args>
-	actor_trig_notifer<Args...> make_trig_notifer(actor_trig_handle<Args...>& ath)
+	actor_trig_notifer<Args...> make_trig_notifer_to_self(actor_trig_handle<Args...>& ath)
 	{
 		return ath.make_notifer(shared_from_this());
+	}
+
+	/*!
+	@brief 创建一个消息触发函数到buddyActor，只有一次触发有效
+	*/
+	template <typename... Args>
+	actor_trig_notifer<Args...> make_trig_notifer_to(const actor_handle& buddyActor, actor_trig_handle<Args...>& ath)
+	{
+		assert_enter();
+		return ath.make_notifer(buddyActor);
+	}
+
+	template <typename... Args>
+	actor_trig_notifer<Args...> make_trig_notifer_to(my_actor* buddyActor, actor_trig_handle<Args...>& ath)
+	{
+		return make_trig_notifer_to<Args...>(buddyActor->shared_from_this(), ath);
 	}
 
 	/*!
@@ -3634,7 +3712,7 @@ private:
 		{
 			host->send(msgPool->_strand, [&]
 			{
-				assert(msgPool->_msgPump == msgPump);
+				assert(!msgPool->_msgPump || msgPool->_msgPump == msgPump);
 				msgPool->disconnect();
 			});
 		}
@@ -4198,9 +4276,8 @@ private:
 		assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
 		if (!pump->read_msg(dstRec))
 		{
-			AUTO_CALL(
+			OUT_OF_SCOPE(
 			{
-				pump->_checkDis = false;
 				pump->stop_waiting();
 			});
 			if (checkDis && pump->isDisconnected())
@@ -4266,9 +4343,8 @@ private:
 		assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
 		if (!pump->read_msg(dstRec))
 		{
-			AUTO_CALL(
+			OUT_OF_SCOPE(
 			{
-				pump->_checkDis = false;
 				pump->stop_waiting();
 			});
 			if (checkDis && pump->isDisconnected())
@@ -4551,9 +4627,30 @@ private:
 	{
 		for (size_t i = 0; i < N; i++)
 		{
-			if (mbs[i]->go())
+			bool isRun = false;
+			if (mbs[i]->go(isRun))
 			{
 				return true;
+			}
+		}
+		return false;
+	}
+
+	template <size_t N>
+	static bool _mutex_go_count(size_t& runCount, MutexBlock_* const (&mbs)[N])
+	{
+		for (size_t i = 0; i < N; i++)
+		{
+			bool isRun = false;
+			if (mbs[i]->go(isRun))
+			{
+				assert(isRun);
+				runCount++;
+				return true;
+			}
+			if (isRun)
+			{
+				runCount++;
 			}
 		}
 		return false;
@@ -4575,6 +4672,15 @@ private:
 		}
 		return true;
 	}
+
+	template <size_t N>
+	static void _check_host_id(my_actor* self, MutexBlock_* const (&mbs)[N])
+	{
+		for (size_t i = 0; i < N; i++)
+		{
+			assert(mbs[i]->host_id() == self->self_id());
+		}
+	}
 public:
 	/*!
 	@brief 运行互斥消息执行块（阻塞）
@@ -4585,7 +4691,12 @@ public:
 		static_assert(sizeof...(MutexBlocks) > 0, "");
 		quit_guard qg(this);
 		MutexBlock_* mbList[sizeof...(MutexBlocks)] = { &mbs... };
+		DEBUG_OPERATION(_check_host_id(this, mbList));//判断句柄是不是都是自己的
 		assert(_cmp_snap_id(mbList));//判断有没有重复参数
+		OUT_OF_SCOPE(
+		{
+			_mutex_cancel(mbList);
+		});
 		do
 		{
 			DEBUG_OPERATION(auto nt = yield_count());
@@ -4611,7 +4722,12 @@ public:
 		static_assert(sizeof...(MutexBlocks) > 0, "");
 		quit_guard qg(this);
 		MutexBlock_* mbList[sizeof...(MutexBlocks)] = { &mbs... };
+		DEBUG_OPERATION(_check_host_id(this, mbList));//判断句柄是不是都是自己的
 		assert(_cmp_snap_id(mbList));//判断有没有重复参数
+		OUT_OF_SCOPE(
+		{
+			_mutex_cancel(mbList);
+		});
 		do
 		{
 			DEBUG_OPERATION(auto nt = yield_count());
@@ -4638,7 +4754,12 @@ public:
 		quit_guard qg(this);
 		size_t i = -1;
 		MutexBlock_* mbList[sizeof...(MutexBlocks)] = { &mbs... };
+		DEBUG_OPERATION(_check_host_id(this, mbList));//判断句柄是不是都是自己的
 		assert(_cmp_snap_id(mbList));//判断有没有重复参数
+		OUT_OF_SCOPE(
+		{
+			_mutex_cancel(mbList);
+		});
 		do
 		{
 			DEBUG_OPERATION(auto nt = yield_count());
@@ -4668,7 +4789,12 @@ public:
 		const size_t cmax = sizeof...(MutexBlocks) * (sizeof...(MutexBlocks) + 1) / 2;
 		size_t ct = 0;
 		MutexBlock_* mbList[sizeof...(MutexBlocks)] = { &mbs... };
+		DEBUG_OPERATION(_check_host_id(this, mbList));//判断句柄是不是都是自己的
 		assert(_cmp_snap_id(mbList));//判断有没有重复参数
+		OUT_OF_SCOPE(
+		{
+			_mutex_cancel(mbList);
+		});
 		do
 		{
 			DEBUG_OPERATION(auto nt = yield_count());
@@ -4685,6 +4811,229 @@ public:
 			_mutex_cancel(mbList);
 			assert(yield_count() == nt);
 		} while (!_mutex_go(mbList));
+	}
+
+	/*!
+	@brief 超时等待运行互斥消息执行块（阻塞）
+	*/
+	template <typename... MutexBlocks>
+	__yield_interrupt size_t timed_run_mutex_blocks(int tm, MutexBlocks&... mbs)
+	{
+		static_assert(sizeof...(MutexBlocks) > 0, "");
+		quit_guard qg(this);
+		size_t runCount = 0;
+		MutexBlock_* mbList[sizeof...(MutexBlocks)] = { &mbs... };
+		DEBUG_OPERATION(_check_host_id(this, mbList));//判断句柄是不是都是自己的
+		assert(_cmp_snap_id(mbList));//判断有没有重复参数
+		OUT_OF_SCOPE(
+		{
+			_mutex_cancel(mbList);
+		});
+		do
+		{
+			DEBUG_OPERATION(auto nt = yield_count());
+			if (!_mutex_ready(mbList))
+			{
+				assert(yield_count() == nt);
+				qg.unlock();
+				if (tm >= 0)
+				{
+					bool timed = false;
+					delay_trig(tm, [this, &timed]
+					{
+						if (!_quited)
+						{
+							timed = true;
+							pull_yield();
+						}
+					});
+					push_yield();
+					if (timed)
+					{
+						break;
+					}
+					cancel_delay_trig();
+				}
+				else
+				{
+					push_yield();
+				}
+				qg.lock();
+				DEBUG_OPERATION(nt = yield_count());
+			}
+			_mutex_cancel(mbList);
+			assert(yield_count() == nt);
+		} while (!_mutex_go_count(runCount, mbList));
+		return runCount;
+	}
+
+	/*!
+	@brief 超时等待运行互斥消息执行块（阻塞），每次从头开始优先只取一条消息
+	*/
+	template <typename... MutexBlocks>
+	__yield_interrupt size_t timed_run_mutex_blocks1(int tm, MutexBlocks&... mbs)
+	{
+		static_assert(sizeof...(MutexBlocks) > 0, "");
+		quit_guard qg(this);
+		size_t runCount = 0;
+		MutexBlock_* mbList[sizeof...(MutexBlocks)] = { &mbs... };
+		DEBUG_OPERATION(_check_host_id(this, mbList));//判断句柄是不是都是自己的
+		assert(_cmp_snap_id(mbList));//判断有没有重复参数
+		OUT_OF_SCOPE(
+		{
+			_mutex_cancel(mbList);
+		});
+		do
+		{
+			DEBUG_OPERATION(auto nt = yield_count());
+			if (!_mutex_ready2(0, mbList))
+			{
+				assert(yield_count() == nt);
+				qg.unlock();
+				if (tm >= 0)
+				{
+					bool timed = false;
+					delay_trig(tm, [this, &timed]
+					{
+						if (!_quited)
+						{
+							timed = true;
+							pull_yield();
+						}
+					});
+					push_yield();
+					if (timed)
+					{
+						break;
+					}
+					cancel_delay_trig();
+				}
+				else
+				{
+					push_yield();
+				}
+				qg.lock();
+				DEBUG_OPERATION(nt = yield_count());
+			}
+			_mutex_cancel(mbList);
+			assert(yield_count() == nt);
+		} while (!_mutex_go_count(runCount, mbList));
+		return runCount;
+	}
+
+	/*!
+	@brief 超时等待运行互斥消息执行块（阻塞），每次依次往后开始优先只取一条消息
+	*/
+	template <typename... MutexBlocks>
+	__yield_interrupt size_t timed_run_mutex_blocks2(int tm, MutexBlocks&... mbs)
+	{
+		static_assert(sizeof...(MutexBlocks) > 0, "");
+		quit_guard qg(this);
+		size_t i = -1;
+		size_t runCount = 0;
+		MutexBlock_* mbList[sizeof...(MutexBlocks)] = { &mbs... };
+		DEBUG_OPERATION(_check_host_id(this, mbList));//判断句柄是不是都是自己的
+		assert(_cmp_snap_id(mbList));//判断有没有重复参数
+		OUT_OF_SCOPE(
+		{
+			_mutex_cancel(mbList);
+		});
+		do
+		{
+			DEBUG_OPERATION(auto nt = yield_count());
+			i = sizeof...(MutexBlocks)-1 != i ? i + 1 : 0;
+			if (!_mutex_ready2(i, mbList))
+			{
+				assert(yield_count() == nt);
+				qg.unlock();
+				if (tm >= 0)
+				{
+					bool timed = false;
+					delay_trig(tm, [this, &timed]
+					{
+						if (!_quited)
+						{
+							timed = true;
+							pull_yield();
+						}
+					});
+					push_yield();
+					if (timed)
+					{
+						break;
+					}
+					cancel_delay_trig();
+				}
+				else
+				{
+					push_yield();
+				}
+				qg.lock();
+				DEBUG_OPERATION(nt = yield_count());
+			}
+			_mutex_cancel(mbList);
+			assert(yield_count() == nt);
+		} while (!_mutex_go_count(runCount, mbList));
+		return runCount;
+	}
+
+	/*!
+	@brief 超时等待运行互斥消息执行块（阻塞，带优先级），每次只取一条消息
+	*/
+	template <typename... MutexBlocks>
+	__yield_interrupt size_t timed_run_mutex_blocks3(int tm, MutexBlocks&... mbs)
+	{
+		static_assert(sizeof...(MutexBlocks) > 0, "");
+		quit_guard qg(this);
+		const size_t m = 2 * sizeof...(MutexBlocks)+1;
+		const size_t cmax = sizeof...(MutexBlocks)* (sizeof...(MutexBlocks)+1) / 2;
+		size_t ct = 0;
+		size_t runCount = 0;
+		MutexBlock_* mbList[sizeof...(MutexBlocks)] = { &mbs... };
+		DEBUG_OPERATION(_check_host_id(this, mbList));//判断句柄是不是都是自己的
+		assert(_cmp_snap_id(mbList));//判断有没有重复参数
+		OUT_OF_SCOPE(
+		{
+			_mutex_cancel(mbList);
+		});
+		do
+		{
+			DEBUG_OPERATION(auto nt = yield_count());
+			ct = cmax != ct ? ct + 1 : 1;
+			const size_t i = (m + 1 - (size_t)std::sqrt(m * m - 8 * ct)) / 2 - 1;
+			if (!_mutex_ready2(i, mbList))
+			{
+				assert(yield_count() == nt);
+				qg.unlock();
+				if (tm >= 0)
+				{
+					bool timed = false;
+					delay_trig(tm, [this, &timed]
+					{
+						if (!_quited)
+						{
+							timed = true;
+							pull_yield();
+						}
+					});
+					push_yield();
+					if (timed)
+					{
+						break;
+					}
+					cancel_delay_trig();
+				}
+				else
+				{
+					push_yield();
+				}
+				qg.lock();
+				DEBUG_OPERATION(nt = yield_count());
+			}
+			_mutex_cancel(mbList);
+			assert(yield_count() == nt);
+		} while (!_mutex_go_count(runCount, mbList));
+		return runCount;
 	}
 public:
 	/*!

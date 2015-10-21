@@ -584,7 +584,7 @@ public:
 			mutex.unlock();
 		});
 		con.wait(ul);
-		AUTO_CALL(
+		OUT_OF_SCOPE(
 		{
 			typedef R T_;
 			((T_*)r)->~R();

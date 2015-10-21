@@ -17,7 +17,7 @@ std::shared_ptr<text_stream_io> text_stream_io::create( shared_strand strand, st
 	res->_ioObj = ioObj;
 	res->_msgNotify = h;
 	auto wc = my_actor::create(strand, [res](my_actor* self){res->writeActor(self); });
-	res->_writerPipeIn = wc->make_msg_notifer(res->_writerPipeOut);
+	res->_writerPipeIn = wc->make_msg_notifer_to_self(res->_writerPipeOut);
 	auto rc = my_actor::create(strand, [res](my_actor* self){res->readActor(self); });
 	wc->notify_run();
 	rc->notify_run();

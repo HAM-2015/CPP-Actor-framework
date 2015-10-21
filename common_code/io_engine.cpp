@@ -118,6 +118,10 @@ void io_engine::stop()
 		_ios.reset();
 		_threadsID.clear();
 		_ctrlMutex.lock();
+		for (size_t i = 0; i < _handleList.size(); i++)
+		{
+			CloseHandle(_handleList[i]);
+		}
 		_handleList.clear();
 		_ctrlMutex.unlock();
 		_opend = false;

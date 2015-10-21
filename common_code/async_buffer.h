@@ -260,7 +260,7 @@ public:
 			_buffer.pop_front();
 			return true;
 		});
-		AUTO_CALL(
+		OUT_OF_SCOPE(
 		{
 			typedef T TP_;
 			((TP_*)resBuf)->~TP_();
@@ -415,7 +415,7 @@ private:
 						}
 						else
 						{
-							push_pck pck = { ref6.notified, ref6.host->make_trig_notifer(ref6.ath) };
+							push_pck pck = { ref6.notified, ref6.host->make_trig_notifer_to_self(ref6.ath) };
 							ref6->_pushWait.push_front(pck);
 						}
 						if (break_)
@@ -519,7 +519,7 @@ private:
 						}
 						else
 						{
-							push_pck pck = { ref8.notified, ref8.host->make_trig_notifer(ref8.ath) };
+							push_pck pck = { ref8.notified, ref8.host->make_trig_notifer_to_self(ref8.ath) };
 							ref8->_pushWait.push_front(pck);
 							ref8.mit = ref8->_pushWait.begin();
 						}
@@ -635,7 +635,7 @@ private:
 						}
 						else
 						{
-							pop_pck pck = { ref6.notified, ref6.host->make_trig_notifer(ref6.ath) };
+							pop_pck pck = { ref6.notified, ref6.host->make_trig_notifer_to_self(ref6.ath) };
 							ref6->_popWait.push_front(pck);
 						}
 						if (!_pushWait.empty() && _buffer.size() <= ref6->_halfLength)
@@ -741,7 +741,7 @@ private:
 						}
 						else
 						{
-							pop_pck pck = { ref8.notified, ref8.host->make_trig_notifer(ref8.ath) };
+							pop_pck pck = { ref8.notified, ref8.host->make_trig_notifer_to_self(ref8.ath) };
 							ref8->_popWait.push_front(pck);
 							ref8.mit = ref8->_popWait.begin();
 						}

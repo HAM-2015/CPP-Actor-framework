@@ -146,7 +146,7 @@ public:
 				auto& _takeWait = ref5->_takeWait;
 				if (_takeWait.empty())
 				{
-					send_wait pw = { try_move<TM&&>::can_move, ref5.notified, (ST&)ref5.msg, ref5.host->make_trig_notifer(ref5.ath) };
+					send_wait pw = { try_move<TM&&>::can_move, ref5.notified, (ST&)ref5.msg, ref5.host->make_trig_notifer_to_self(ref5.ath) };
 					ref5->_sendWait.push_front(pw);
 				}
 				else
@@ -158,7 +158,7 @@ public:
 						*wt.can_move = try_move<TM&&>::can_move || !(std::is_reference<T>::value);
 					}
 					wt.notified = true;
-					wt.takeOk = ref5.host->make_trig_notifer(ref5.ath);
+					wt.takeOk = ref5.host->make_trig_notifer_to_self(ref5.ath);
 					wt.ntf(false);
 					_takeWait.pop_back();
 				}
@@ -205,7 +205,7 @@ public:
 					{
 						*wt.can_move = try_move<TM&&>::can_move || !(std::is_reference<T>::value);
 					}
-					wt.takeOk = ref5.host->make_trig_notifer(ref5.ath);
+					wt.takeOk = ref5.host->make_trig_notifer_to_self(ref5.ath);
 					wt.ntf(false);
 					_takeWait.pop_back();
 				}
@@ -247,7 +247,7 @@ public:
 				auto& _takeWait = ref6->_takeWait;
 				if (_takeWait.empty())
 				{
-					send_wait pw = { try_move<TM&&>::can_move, ref6.notified, (T&)ref6.msg, ref6.host->make_trig_notifer(ref6.ath) };
+					send_wait pw = { try_move<TM&&>::can_move, ref6.notified, (T&)ref6.msg, ref6.host->make_trig_notifer_to_self(ref6.ath) };
 					ref6->_sendWait.push_front(pw);
 					ref6.mit = ref6->_sendWait.begin();
 				}
@@ -260,7 +260,7 @@ public:
 						*wt.can_move = try_move<TM&&>::can_move || !(std::is_reference<T>::value);
 					}
 					wt.notified = true;
-					wt.takeOk = ref6.host->make_trig_notifer(ref6.ath);
+					wt.takeOk = ref6.host->make_trig_notifer_to_self(ref6.ath);
 					wt.ntf(false);
 					_takeWait.pop_back();
 				}
@@ -316,7 +316,7 @@ public:
 				if (_sendWait.empty())
 				{
 					ref6.wait = true;
-					take_wait pw = { NULL, ref6.notified, ref6.msgBuf, ref6.host->make_trig_notifer(ref6.ath), ref6.ntf };
+					take_wait pw = { NULL, ref6.notified, ref6.msgBuf, ref6.host->make_trig_notifer_to_self(ref6.ath), ref6.ntf };
 					ref6->_takeWait.push_front(pw);
 				}
 				else
@@ -335,7 +335,7 @@ public:
 		}
 		if (!closed)
 		{
-			AUTO_CALL(
+			OUT_OF_SCOPE(
 			{
 				typedef RT TP_;
 				((TP_*)msgBuf)->~TP_();
@@ -487,7 +487,7 @@ private:
 				if (_sendWait.empty())
 				{
 					ref4.wait = true;
-					take_wait pw = { &ref4.can_move, ref4.notified, ref6.msgBuf, ref6.host->make_trig_notifer(ref6.ath), ref4.ntf };
+					take_wait pw = { &ref4.can_move, ref4.notified, ref6.msgBuf, ref6.host->make_trig_notifer_to_self(ref6.ath), ref4.ntf };
 					ref6->_takeWait.push_front(pw);
 					ref6.mit = ref6->_takeWait.begin();
 				}
@@ -597,7 +597,7 @@ public:
 				auto& _takeWait = ref6->_takeWait;
 				if (_takeWait.empty())
 				{
-					send_wait pw = { ref6.notified, ref6.msg, ref6.resBuf, ref6.host->make_trig_notifer(ref6.ath) };
+					send_wait pw = { ref6.notified, ref6.msg, ref6.resBuf, ref6.host->make_trig_notifer_to_self(ref6.ath) };
 					ref6->_sendWait.push_front(pw);
 				}
 				else
@@ -606,7 +606,7 @@ public:
 					wt.srcMsg = &ref6.msg;
 					wt.notified = true;
 					wt.res = ref6.resBuf;
-					wt.ntfSend = ref6.host->make_trig_notifer(ref6.ath);
+					wt.ntfSend = ref6.host->make_trig_notifer_to_self(ref6.ath);
 					wt.ntf(false);
 					_takeWait.pop_back();
 				}
@@ -621,7 +621,7 @@ public:
 			qg.unlock();
 			throw_close_exception();
 		}
-		AUTO_CALL(
+		OUT_OF_SCOPE(
 		{
 			typedef R TP_;
 			((TP_*)resBuf)->~TP_();
@@ -658,7 +658,7 @@ public:
 					wt.srcMsg = &ref6.msg;
 					wt.notified = true;
 					wt.res = ref6.resBuf;
-					wt.ntfSend = ref6.host->make_trig_notifer(ref6.ath);
+					wt.ntfSend = ref6.host->make_trig_notifer_to_self(ref6.ath);
 					wt.ntf(false);
 					_takeWait.pop_back();
 				}
@@ -678,7 +678,7 @@ public:
 			qg.unlock();
 			throw_close_exception();
 		}
-		AUTO_CALL(
+		OUT_OF_SCOPE(
 		{
 			typedef R TP_;
 			((TP_*)resBuf)->~TP_();
@@ -712,7 +712,7 @@ public:
 				auto& _takeWait = ref8->_takeWait;
 				if (_takeWait.empty())
 				{
-					send_wait pw = { ref8.notified, ref8.msg, ref8.resBuf, ref8.host->make_trig_notifer(ref8.ath) };
+					send_wait pw = { ref8.notified, ref8.msg, ref8.resBuf, ref8.host->make_trig_notifer_to_self(ref8.ath) };
 					ref8->_sendWait.push_front(pw);
 					ref8.nit = ref8->_sendWait.begin();
 				}
@@ -723,7 +723,7 @@ public:
 					wt.srcMsg = &ref8.msg;
 					wt.notified = true;
 					wt.res = ref8.resBuf;
-					wt.ntfSend = ref8.host->make_trig_notifer(ref8.ath);
+					wt.ntfSend = ref8.host->make_trig_notifer_to_self(ref8.ath);
 					wt.ntf(false);
 					_takeWait.pop_back();
 				}
@@ -763,7 +763,7 @@ public:
 			qg.unlock();
 			throw_close_exception();
 		}
-		AUTO_CALL(
+		OUT_OF_SCOPE(
 		{
 			typedef R TP_;
 			((TP_*)resBuf)->~TP_();
@@ -798,7 +798,7 @@ public:
 				if (_sendWait.empty())
 				{
 					ref8.wait = true;
-					take_wait pw = { ref8.notified, ref8.srcMsg, ref8.res, ref8.host->make_trig_notifer(ref8.ath), ref8.ntfSend };
+					take_wait pw = { ref8.notified, ref8.srcMsg, ref8.res, ref8.host->make_trig_notifer_to_self(ref8.ath), ref8.ntfSend };
 					ref8->_takeWait.push_front(pw);
 				}
 				else
@@ -819,7 +819,7 @@ public:
 		if (!closed)
 		{
 			bool ok = false;
-			AUTO_CALL({ ntfSend(!ok); });
+			OUT_OF_SCOPE({ ntfSend(!ok); });
 			BEGIN_TRY_
 			{
 				new(res)R(h(*srcMsg));
@@ -886,7 +886,7 @@ public:
 			throw_try_take_exception();
 		}
 		bool ok = false;
-		AUTO_CALL({ ntfSend(!ok); });
+		OUT_OF_SCOPE({ ntfSend(!ok); });
 		BEGIN_TRY_
 		{
 			new(res)R(h(*srcMsg));
@@ -930,7 +930,7 @@ public:
 				if (_sendWait.empty())
 				{
 					ref9.wait = true;
-					take_wait pw = { ref9.notified, ref9.srcMsg, ref9.res, ref9.host->make_trig_notifer(ref9.ath), ref9.ntfSend };
+					take_wait pw = { ref9.notified, ref9.srcMsg, ref9.res, ref9.host->make_trig_notifer_to_self(ref9.ath), ref9.ntfSend };
 					ref9->_takeWait.push_front(pw);
 					ref9.wit = ref9->_takeWait.begin();
 				}
@@ -977,7 +977,7 @@ public:
 			throw_close_exception();
 		}
 		bool ok = false;
-		AUTO_CALL({ ntfSend(!ok); });
+		OUT_OF_SCOPE({ ntfSend(!ok); });
 		BEGIN_TRY_
 		{
 			new(res)R(h(*srcMsg));

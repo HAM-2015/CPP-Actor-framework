@@ -113,7 +113,7 @@ void check_two_down(my_actor* self, int dt, int id1, int id2)
 			child_actor_handle up1 = self->create_child_actor([&](my_actor* self){check_both_up(self, id1, st1, st2); });
 			child_actor_handle up2 = self->create_child_actor([&](my_actor* self){check_both_up(self, id2, st2, st1); });
 			actor_trig_handle<> ath;
-			auto nh = self->make_trig_notifer(ath);
+			auto nh = self->make_trig_notifer_to_self(ath);
 			up1->append_quit_callback(nh);
 			up2->append_quit_callback(nh);
 			self->child_actor_run(up1);
@@ -136,7 +136,7 @@ void check_two_down(my_actor* self, int dt, int id1, int id2)
 			child_actor_handle check1 = self->create_child_actor([&](my_actor* self){check_key_down(self, id1); });
 			child_actor_handle check2 = self->create_child_actor([&](my_actor* self){check_key_down(self, id2); });
 			actor_trig_handle<child_actor_handle*> ath;
-			auto nh = self->make_trig_notifer(ath);
+			auto nh = self->make_trig_notifer_to_self(ath);
 			check1->append_quit_callback([&]{nh(&check2); });
 			check2->append_quit_callback([&]{nh(&check1); });
 			self->child_actor_run(check1);
@@ -170,7 +170,7 @@ void shift_key(my_actor* self, actor_handle pauseactor)
 {
 	list<child_actor_handle::ptr> childs;
 	actor_msg_handle<int> amh;
-	auto h = self->make_msg_notifer(amh);
+	auto h = self->make_msg_notifer_to_self(amh);
 	for (int i = 'A'; i <= 'Z'; i++)
 	{
 		auto tp = child_actor_handle::make_ptr();
@@ -553,7 +553,7 @@ void actor_test(my_actor* self)
 			auto ntf2_0 = self->connect_msg_notifer_to<move_test>(0, mb1);
 			auto ntf2_1 = self->connect_msg_notifer_to<move_test>(1, mb1);
 			auto ntf3 = self->connect_msg_notifer_to<move_test, move_test>(mb1);
-			auto ntf = mb1->make_msg_notifer(amh);
+			auto ntf = mb1->make_msg_notifer_to_self(amh);
 			self->child_actor_run(mb1);
 			for (int i = 0; i < 10; i++)
 			{

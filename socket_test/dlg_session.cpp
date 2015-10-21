@@ -91,7 +91,7 @@ void dlg_session::sessionActor(my_actor* self)
 	self->msg_agent_to(lstClose);
 	self->child_actor_run(lstClose);
 	actor_msg_handle<shared_data> amh;
-	std::shared_ptr<text_stream_io> textio = text_stream_io::create(_strand, _socket, self->make_msg_notifer(amh));
+	std::shared_ptr<text_stream_io> textio = text_stream_io::create(_strand, _socket, self->make_msg_notifer_to_self(amh));
 	child_actor_handle wd = self->create_child_actor([this, &textio](my_actor* self)
 	{
 		auto amh = self->connect_msg_pump<shared_data>();
