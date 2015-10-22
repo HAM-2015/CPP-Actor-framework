@@ -99,18 +99,49 @@ class boost_strand
 
 #ifdef ENABLE_NEXT_TICK
 
+	struct capture_base
+	{
+		capture_base(boost_strand* strand)
+		:_strand(strand) {}
+
+		void begin_run(bool& checkDestroy)
+		{
+			if (_strand->_beginNextRound)
+			{
+				_strand->run_tick_front();
+			}
+			_strand->_pCheckDestroy = &checkDestroy;
+		}
+
+		void end_run(bool& checkDestroy)
+		{
+			if (!checkDestroy)
+			{
+				_strand->_pCheckDestroy = NULL;
+				_strand->_thisRoundCount++;
+				_strand->_beginNextRound = _strand->ready_empty();
+				if (_strand->_beginNextRound)
+				{
+					_strand->run_tick_back();
+				}
+			}
+		}
+
+		boost_strand* _strand;
+	};
+
 	template <typename H>
-	struct handler_capture
+	struct handler_capture : public capture_base
 	{
 		template <typename Handler>
 		handler_capture(Handler&& handler, boost_strand* strand)
-			:_handler(TRY_MOVE(handler)), _strand(strand) {}
+			:capture_base(strand), _handler(TRY_MOVE(handler)) {}
 
 		handler_capture(const handler_capture& s)
-			:_handler(std::move(s._handler)), _strand(s._strand) {}
+			:capture_base(strand), _handler(std::move(s._handler)) {}
 
 		handler_capture(handler_capture&& s)
-			:_handler(std::move(s._handler)), _strand(s._strand) {}
+			:capture_base(s._strand), _handler(std::move(s._handler)) {}
 
 		void operator =(const handler_capture& s)
 		{
@@ -127,26 +158,13 @@ class boost_strand
 
 		void operator ()()
 		{
-			if (_strand->_beginNextRound)
-			{
-				_strand->run_tick_front();
-			}
 			bool checkDestroy = false;
-			_strand->_pCheckDestroy = &checkDestroy;
+			begin_run(checkDestroy);
 			_handler();
-			if (!checkDestroy)
-			{
-				_strand->_pCheckDestroy = NULL;
-				_strand->_beginNextRound = _strand->ready_empty();
-				if (_strand->_beginNextRound)
-				{
-					_strand->run_tick_back();
-				}
-			}
+			end_run(checkDestroy);
 		}
 
 		mutable H _handler;
-		boost_strand* _strand;
 	};
 
 	struct wrap_next_tick_base
@@ -528,6 +546,7 @@ private:
 	void run_tick_back();
 	bool* _pCheckDestroy;
 	bool _beginNextRound;
+	size_t _thisRoundCount;
 	reusable_mem _reuMemAlloc;
 	mem_alloc<wrap_next_tick_space> _nextTickAlloc;
 	msg_queue<wrap_next_tick_base*> _nextTickQueue1;

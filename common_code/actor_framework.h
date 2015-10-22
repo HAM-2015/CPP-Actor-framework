@@ -3451,6 +3451,12 @@ public:
 		return make_msg_notifer_to<Args...>(buddyActor->shared_from_this(), amh);
 	}
 
+	template <typename... Args>
+	actor_msg_notifer<Args...> make_msg_notifer_to(child_actor_handle& childActor, actor_msg_handle<Args...>& amh)
+	{
+		return make_msg_notifer_to<Args...>(childActor.get_actor(), amh);
+	}
+
 	/*!
 	@brief 关闭消息通知句柄
 	*/
@@ -3601,6 +3607,12 @@ public:
 	actor_trig_notifer<Args...> make_trig_notifer_to(my_actor* buddyActor, actor_trig_handle<Args...>& ath)
 	{
 		return make_trig_notifer_to<Args...>(buddyActor->shared_from_this(), ath);
+	}
+
+	template <typename... Args>
+	actor_trig_notifer<Args...> make_trig_notifer_to(child_actor_handle& childActor, actor_trig_handle<Args...>& ath)
+	{
+		return make_trig_notifer_to<Args...>(childActor.get_actor(), ath);
 	}
 
 	/*!
@@ -4586,8 +4598,7 @@ public:
 		return msg_agent_handle<Args...>(id, shared_from_this());
 	}
 private:
-	template <size_t N>
-	static bool _mutex_ready(MutexBlock_* const (&mbs)[N])
+	static bool _mutex_ready(MutexBlock_** const mbs, const size_t N)
 	{
 		bool r = false;
 		for (size_t i = 0; i < N; i++)
@@ -4597,8 +4608,7 @@ private:
 		return r;
 	}
 
-	template <size_t N>
-	static bool _mutex_ready2(const size_t st, MutexBlock_* const (&mbs)[N])
+	static bool _mutex_ready2(const size_t st, MutexBlock_** const mbs, const size_t N)
 	{
 		assert(st < N);
 		size_t i = st;
@@ -4613,8 +4623,7 @@ private:
 		return true;
 	}
 
-	template <size_t N>
-	static void _mutex_cancel(MutexBlock_* const (&mbs)[N])
+	static void _mutex_cancel(MutexBlock_** const mbs, const size_t N)
 	{
 		for (size_t i = 0; i < N; i++)
 		{
@@ -4622,8 +4631,7 @@ private:
 		}
 	}
 
-	template <size_t N>
-	static bool _mutex_go(MutexBlock_* const (&mbs)[N])
+	static bool _mutex_go(MutexBlock_** const mbs, const size_t N)
 	{
 		for (size_t i = 0; i < N; i++)
 		{
@@ -4636,8 +4644,7 @@ private:
 		return false;
 	}
 
-	template <size_t N>
-	static bool _mutex_go_count(size_t& runCount, MutexBlock_* const (&mbs)[N])
+	static bool _mutex_go_count(size_t& runCount, MutexBlock_** const mbs, const size_t N)
 	{
 		for (size_t i = 0; i < N; i++)
 		{
@@ -4656,8 +4663,7 @@ private:
 		return false;
 	}
 
-	template <size_t N>
-	static bool _cmp_snap_id(MutexBlock_* const (&mbs)[N])
+	static bool _cmp_snap_id(MutexBlock_** const mbs, const size_t N)
 	{
 		for (size_t i = 0; i < N - 1; i++)
 		{
@@ -4673,13 +4679,87 @@ private:
 		return true;
 	}
 
-	template <size_t N>
-	static void _check_host_id(my_actor* self, MutexBlock_* const (&mbs)[N])
+	static void _check_host_id(my_actor* self, MutexBlock_** const mbs, const size_t N)
 	{
 		for (size_t i = 0; i < N; i++)
 		{
 			assert(mbs[i]->host_id() == self->self_id());
 		}
+	}
+
+	template <typename Ready>
+	__yield_interrupt void _run_mutex_blocks(Ready& mutexReady, MutexBlock_** const mbList, const size_t N)
+	{
+		quit_guard qg(this);
+		DEBUG_OPERATION(_check_host_id(this, mbList, N));//判断句柄是不是都是自己的
+		assert(_cmp_snap_id(mbList, N));//判断有没有重复参数
+		OUT_OF_SCOPE(
+		{
+			_mutex_cancel(mbList, N);
+		});
+		do
+		{
+			DEBUG_OPERATION(auto nt = yield_count());
+			if (!mutexReady())
+			{
+				assert(yield_count() == nt);
+				qg.unlock();
+				push_yield();
+				qg.lock();
+				DEBUG_OPERATION(nt = yield_count());
+			}
+			_mutex_cancel(mbList, N);
+			assert(yield_count() == nt);
+		} while (!_mutex_go(mbList, N));
+	}
+
+	template <typename Ready>
+	__yield_interrupt size_t _timed_run_mutex_blocks(const int tm, Ready& mutexReady, MutexBlock_** const mbList, const size_t N)
+	{
+		quit_guard qg(this);
+		size_t runCount = 0;
+		DEBUG_OPERATION(_check_host_id(this, mbList, N));//判断句柄是不是都是自己的
+		assert(_cmp_snap_id(mbList, N));//判断有没有重复参数
+		OUT_OF_SCOPE(
+		{
+			_mutex_cancel(mbList, N);
+		});
+		do
+		{
+			DEBUG_OPERATION(auto nt = yield_count());
+			if (!mutexReady())
+			{
+				assert(yield_count() == nt);
+				qg.unlock();
+				if (tm >= 0)
+				{
+					bool timed = false;
+					delay_trig(tm, [this, &timed]
+					{
+						if (!_quited)
+						{
+							timed = true;
+							pull_yield();
+						}
+					});
+					push_yield();
+					if (timed)
+					{
+						break;
+					}
+					cancel_delay_trig();
+				}
+				else
+				{
+					push_yield();
+				}
+				qg.lock();
+				DEBUG_OPERATION(nt = yield_count());
+			}
+			_mutex_cancel(mbList, N);
+			assert(yield_count() == nt);
+		} while (!_mutex_go_count(runCount, mbList, N));
+		return runCount;
 	}
 public:
 	/*!
@@ -4688,29 +4768,13 @@ public:
 	template <typename... MutexBlocks>
 	__yield_interrupt void run_mutex_blocks(MutexBlocks&... mbs)
 	{
-		static_assert(sizeof...(MutexBlocks) > 0, "");
-		quit_guard qg(this);
-		MutexBlock_* mbList[sizeof...(MutexBlocks)] = { &mbs... };
-		DEBUG_OPERATION(_check_host_id(this, mbList));//判断句柄是不是都是自己的
-		assert(_cmp_snap_id(mbList));//判断有没有重复参数
-		OUT_OF_SCOPE(
+		const size_t N = sizeof...(MutexBlocks);
+		static_assert(N > 0, "");
+		MutexBlock_* mbList[N] = { &mbs... };
+		_run_mutex_blocks([&]()->bool
 		{
-			_mutex_cancel(mbList);
-		});
-		do
-		{
-			DEBUG_OPERATION(auto nt = yield_count());
-			if (!_mutex_ready(mbList))
-			{
-				assert(yield_count() == nt);
-				qg.unlock();
-				push_yield();
-				qg.lock();
-				DEBUG_OPERATION(nt = yield_count());
-			}
-			_mutex_cancel(mbList);
-			assert(yield_count() == nt);
-		} while (!_mutex_go(mbList));
+			return _mutex_ready(mbList, N);
+		}, mbList, N);
 	}
 
 	/*!
@@ -4719,29 +4783,13 @@ public:
 	template <typename... MutexBlocks>
 	__yield_interrupt void run_mutex_blocks1(MutexBlocks&... mbs)
 	{
-		static_assert(sizeof...(MutexBlocks) > 0, "");
-		quit_guard qg(this);
-		MutexBlock_* mbList[sizeof...(MutexBlocks)] = { &mbs... };
-		DEBUG_OPERATION(_check_host_id(this, mbList));//判断句柄是不是都是自己的
-		assert(_cmp_snap_id(mbList));//判断有没有重复参数
-		OUT_OF_SCOPE(
+		const size_t N = sizeof...(MutexBlocks);
+		static_assert(N > 0, "");
+		MutexBlock_* mbList[N] = { &mbs... };
+		_run_mutex_blocks([&]()->bool
 		{
-			_mutex_cancel(mbList);
-		});
-		do
-		{
-			DEBUG_OPERATION(auto nt = yield_count());
-			if (!_mutex_ready2(0, mbList))
-			{
-				assert(yield_count() == nt);
-				qg.unlock();
-				push_yield();
-				qg.lock();
-				DEBUG_OPERATION(nt = yield_count());
-			}
-			_mutex_cancel(mbList);
-			assert(yield_count() == nt);
-		} while (!_mutex_go(mbList));
+			return _mutex_ready2(0, mbList, N);
+		}, mbList, N);
 	}
 
 	/*!
@@ -4750,31 +4798,15 @@ public:
 	template <typename... MutexBlocks>
 	__yield_interrupt void run_mutex_blocks2(MutexBlocks&... mbs)
 	{
-		static_assert(sizeof...(MutexBlocks) > 0, "");
-		quit_guard qg(this);
+		const size_t N = sizeof...(MutexBlocks);
+		static_assert(N > 0, "");
+		MutexBlock_* mbList[N] = { &mbs... };
 		size_t i = -1;
-		MutexBlock_* mbList[sizeof...(MutexBlocks)] = { &mbs... };
-		DEBUG_OPERATION(_check_host_id(this, mbList));//判断句柄是不是都是自己的
-		assert(_cmp_snap_id(mbList));//判断有没有重复参数
-		OUT_OF_SCOPE(
+		_run_mutex_blocks([&]()->bool
 		{
-			_mutex_cancel(mbList);
-		});
-		do
-		{
-			DEBUG_OPERATION(auto nt = yield_count());
-			i = sizeof...(MutexBlocks)-1 != i ? i + 1 : 0;
-			if (!_mutex_ready2(i, mbList))
-			{
-				assert(yield_count() == nt);
-				qg.unlock();
-				push_yield();
-				qg.lock();
-				DEBUG_OPERATION(nt = yield_count());
-			}
-			_mutex_cancel(mbList);
-			assert(yield_count() == nt);
-		} while (!_mutex_go(mbList));
+			i = N - 1 != i ? i + 1 : 0;
+			return _mutex_ready2(i, mbList, N);
+		}, mbList, N);
 	}
 
 	/*!
@@ -4783,257 +4815,85 @@ public:
 	template <typename... MutexBlocks>
 	__yield_interrupt void run_mutex_blocks3(MutexBlocks&... mbs)
 	{
-		static_assert(sizeof...(MutexBlocks) > 0, "");
-		quit_guard qg(this);
-		const size_t m = 2 * sizeof...(MutexBlocks) + 1;
-		const size_t cmax = sizeof...(MutexBlocks) * (sizeof...(MutexBlocks) + 1) / 2;
+		const size_t N = sizeof...(MutexBlocks);
+		static_assert(N > 0, "");
+		MutexBlock_* mbList[N] = { &mbs... };
+		const size_t m = 2 * N + 1;
+		const size_t cmax = N* (N + 1) / 2;
 		size_t ct = 0;
-		MutexBlock_* mbList[sizeof...(MutexBlocks)] = { &mbs... };
-		DEBUG_OPERATION(_check_host_id(this, mbList));//判断句柄是不是都是自己的
-		assert(_cmp_snap_id(mbList));//判断有没有重复参数
-		OUT_OF_SCOPE(
+		_run_mutex_blocks([&]()->bool
 		{
-			_mutex_cancel(mbList);
-		});
-		do
-		{
-			DEBUG_OPERATION(auto nt = yield_count());
 			ct = cmax != ct ? ct + 1 : 1;
 			const size_t i = (m + 1 - (size_t)std::sqrt(m * m - 8 * ct)) / 2 - 1;
-			if (!_mutex_ready2(i, mbList))
-			{
-				assert(yield_count() == nt);
-				qg.unlock();
-				push_yield();
-				qg.lock();
-				DEBUG_OPERATION(nt = yield_count());
-			}
-			_mutex_cancel(mbList);
-			assert(yield_count() == nt);
-		} while (!_mutex_go(mbList));
+			return _mutex_ready2(i, mbList, N);
+		}, mbList, N);
 	}
 
 	/*!
 	@brief 超时等待运行互斥消息执行块（阻塞）
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt size_t timed_run_mutex_blocks(int tm, MutexBlocks&... mbs)
+	__yield_interrupt size_t timed_run_mutex_blocks(const int tm, MutexBlocks&... mbs)
 	{
-		static_assert(sizeof...(MutexBlocks) > 0, "");
-		quit_guard qg(this);
-		size_t runCount = 0;
-		MutexBlock_* mbList[sizeof...(MutexBlocks)] = { &mbs... };
-		DEBUG_OPERATION(_check_host_id(this, mbList));//判断句柄是不是都是自己的
-		assert(_cmp_snap_id(mbList));//判断有没有重复参数
-		OUT_OF_SCOPE(
+		const size_t N = sizeof...(MutexBlocks);
+		static_assert(N > 0, "");
+		MutexBlock_* mbList[N] = { &mbs... };
+		return _timed_run_mutex_blocks(tm, [&]()->bool
 		{
-			_mutex_cancel(mbList);
-		});
-		do
-		{
-			DEBUG_OPERATION(auto nt = yield_count());
-			if (!_mutex_ready(mbList))
-			{
-				assert(yield_count() == nt);
-				qg.unlock();
-				if (tm >= 0)
-				{
-					bool timed = false;
-					delay_trig(tm, [this, &timed]
-					{
-						if (!_quited)
-						{
-							timed = true;
-							pull_yield();
-						}
-					});
-					push_yield();
-					if (timed)
-					{
-						break;
-					}
-					cancel_delay_trig();
-				}
-				else
-				{
-					push_yield();
-				}
-				qg.lock();
-				DEBUG_OPERATION(nt = yield_count());
-			}
-			_mutex_cancel(mbList);
-			assert(yield_count() == nt);
-		} while (!_mutex_go_count(runCount, mbList));
-		return runCount;
+			return _mutex_ready(mbList, N);
+		}, mbList, N);
 	}
 
 	/*!
 	@brief 超时等待运行互斥消息执行块（阻塞），每次从头开始优先只取一条消息
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt size_t timed_run_mutex_blocks1(int tm, MutexBlocks&... mbs)
+	__yield_interrupt size_t timed_run_mutex_blocks1(const int tm, MutexBlocks&... mbs)
 	{
-		static_assert(sizeof...(MutexBlocks) > 0, "");
-		quit_guard qg(this);
-		size_t runCount = 0;
-		MutexBlock_* mbList[sizeof...(MutexBlocks)] = { &mbs... };
-		DEBUG_OPERATION(_check_host_id(this, mbList));//判断句柄是不是都是自己的
-		assert(_cmp_snap_id(mbList));//判断有没有重复参数
-		OUT_OF_SCOPE(
+		const size_t N = sizeof...(MutexBlocks);
+		static_assert(N > 0, "");
+		MutexBlock_* mbList[N] = { &mbs... };
+		return _timed_run_mutex_blocks(tm, [&]()->bool
 		{
-			_mutex_cancel(mbList);
-		});
-		do
-		{
-			DEBUG_OPERATION(auto nt = yield_count());
-			if (!_mutex_ready2(0, mbList))
-			{
-				assert(yield_count() == nt);
-				qg.unlock();
-				if (tm >= 0)
-				{
-					bool timed = false;
-					delay_trig(tm, [this, &timed]
-					{
-						if (!_quited)
-						{
-							timed = true;
-							pull_yield();
-						}
-					});
-					push_yield();
-					if (timed)
-					{
-						break;
-					}
-					cancel_delay_trig();
-				}
-				else
-				{
-					push_yield();
-				}
-				qg.lock();
-				DEBUG_OPERATION(nt = yield_count());
-			}
-			_mutex_cancel(mbList);
-			assert(yield_count() == nt);
-		} while (!_mutex_go_count(runCount, mbList));
-		return runCount;
+			return _mutex_ready2(0, mbList, N);
+		}, mbList, N);
 	}
 
 	/*!
 	@brief 超时等待运行互斥消息执行块（阻塞），每次依次往后开始优先只取一条消息
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt size_t timed_run_mutex_blocks2(int tm, MutexBlocks&... mbs)
+	__yield_interrupt size_t timed_run_mutex_blocks2(const int tm, MutexBlocks&... mbs)
 	{
-		static_assert(sizeof...(MutexBlocks) > 0, "");
-		quit_guard qg(this);
+		const size_t N = sizeof...(MutexBlocks);
+		static_assert(N > 0, "");
+		MutexBlock_* mbList[N] = { &mbs... };
 		size_t i = -1;
-		size_t runCount = 0;
-		MutexBlock_* mbList[sizeof...(MutexBlocks)] = { &mbs... };
-		DEBUG_OPERATION(_check_host_id(this, mbList));//判断句柄是不是都是自己的
-		assert(_cmp_snap_id(mbList));//判断有没有重复参数
-		OUT_OF_SCOPE(
+		return _timed_run_mutex_blocks(tm, [&]()->bool
 		{
-			_mutex_cancel(mbList);
-		});
-		do
-		{
-			DEBUG_OPERATION(auto nt = yield_count());
-			i = sizeof...(MutexBlocks)-1 != i ? i + 1 : 0;
-			if (!_mutex_ready2(i, mbList))
-			{
-				assert(yield_count() == nt);
-				qg.unlock();
-				if (tm >= 0)
-				{
-					bool timed = false;
-					delay_trig(tm, [this, &timed]
-					{
-						if (!_quited)
-						{
-							timed = true;
-							pull_yield();
-						}
-					});
-					push_yield();
-					if (timed)
-					{
-						break;
-					}
-					cancel_delay_trig();
-				}
-				else
-				{
-					push_yield();
-				}
-				qg.lock();
-				DEBUG_OPERATION(nt = yield_count());
-			}
-			_mutex_cancel(mbList);
-			assert(yield_count() == nt);
-		} while (!_mutex_go_count(runCount, mbList));
-		return runCount;
+			i = N - 1 != i ? i + 1 : 0;
+			return _mutex_ready2(i, mbList, N);
+		}, mbList, N);
 	}
 
 	/*!
 	@brief 超时等待运行互斥消息执行块（阻塞，带优先级），每次只取一条消息
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt size_t timed_run_mutex_blocks3(int tm, MutexBlocks&... mbs)
+	__yield_interrupt size_t timed_run_mutex_blocks3(const int tm, MutexBlocks&... mbs)
 	{
-		static_assert(sizeof...(MutexBlocks) > 0, "");
-		quit_guard qg(this);
-		const size_t m = 2 * sizeof...(MutexBlocks)+1;
-		const size_t cmax = sizeof...(MutexBlocks)* (sizeof...(MutexBlocks)+1) / 2;
+		const size_t N = sizeof...(MutexBlocks);
+		static_assert(N > 0, "");
+		MutexBlock_* mbList[N] = { &mbs... };
+		const size_t m = 2 * N + 1;
+		const size_t cmax = N* (N + 1) / 2;
 		size_t ct = 0;
-		size_t runCount = 0;
-		MutexBlock_* mbList[sizeof...(MutexBlocks)] = { &mbs... };
-		DEBUG_OPERATION(_check_host_id(this, mbList));//判断句柄是不是都是自己的
-		assert(_cmp_snap_id(mbList));//判断有没有重复参数
-		OUT_OF_SCOPE(
+		return _timed_run_mutex_blocks(tm, [&]()->bool
 		{
-			_mutex_cancel(mbList);
-		});
-		do
-		{
-			DEBUG_OPERATION(auto nt = yield_count());
 			ct = cmax != ct ? ct + 1 : 1;
 			const size_t i = (m + 1 - (size_t)std::sqrt(m * m - 8 * ct)) / 2 - 1;
-			if (!_mutex_ready2(i, mbList))
-			{
-				assert(yield_count() == nt);
-				qg.unlock();
-				if (tm >= 0)
-				{
-					bool timed = false;
-					delay_trig(tm, [this, &timed]
-					{
-						if (!_quited)
-						{
-							timed = true;
-							pull_yield();
-						}
-					});
-					push_yield();
-					if (timed)
-					{
-						break;
-					}
-					cancel_delay_trig();
-				}
-				else
-				{
-					push_yield();
-				}
-				qg.lock();
-				DEBUG_OPERATION(nt = yield_count());
-			}
-			_mutex_cancel(mbList);
-			assert(yield_count() == nt);
-		} while (!_mutex_go_count(runCount, mbList));
-		return runCount;
+			return _mutex_ready2(i, mbList, N);
+		}, mbList, N);
 	}
 public:
 	/*!

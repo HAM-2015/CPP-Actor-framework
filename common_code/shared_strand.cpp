@@ -41,7 +41,7 @@ inline void boost::asio::detail::strand_service::post(boost::asio::detail::stran
 
 boost_strand::boost_strand()
 #ifdef ENABLE_NEXT_TICK
-:_pCheckDestroy(NULL), _beginNextRound(false), _nextTickAlloc(128), _nextTickQueue1(128), _nextTickQueue2(128), _frontTickQueue(&_nextTickQueue1), _backTickQueue(&_nextTickQueue2)
+:_pCheckDestroy(NULL), _beginNextRound(false), _thisRoundCount(64), _nextTickAlloc(8192), _nextTickQueue1(8192), _nextTickQueue2(8192), _frontTickQueue(&_nextTickQueue1), _backTickQueue(&_nextTickQueue2)
 #endif //ENABLE_NEXT_TICK
 {
 	_ioEngine = NULL;
@@ -176,6 +176,7 @@ bool boost_strand::waiting_empty()
 void boost_strand::run_tick_front()
 {
 	assert(_beginNextRound);
+	_thisRoundCount = 64;
 	while (!_frontTickQueue->empty())
 	{
 		wrap_next_tick_base* tick = _frontTickQueue->front();
@@ -198,7 +199,7 @@ void boost_strand::run_tick_back()
 	if (!_backTickQueue->empty())
 	{
 		shared_strand lockThis = _weakThis.lock();
-		int tickCount = 0;
+		size_t tickCount = 0;
 		do
 		{
 			wrap_next_tick_base* tick = _backTickQueue->front();
@@ -212,7 +213,7 @@ void boost_strand::run_tick_back()
 			{
 				_reuMemAlloc.deallocate(res._ptr, res._size);
 			}
-		} while (!_backTickQueue->empty() && ++tickCount <= 64);
+		} while (!_backTickQueue->empty() && ++tickCount <= _thisRoundCount);
 		std::swap(_frontTickQueue, _backTickQueue);
 		if (!_frontTickQueue->empty() && waiting_empty())
 		{
