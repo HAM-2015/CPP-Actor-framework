@@ -2853,6 +2853,27 @@ class my_actor
 		mutable actor_handle _sharedThis;
 	};
 
+	template <typename Handler>
+	struct wrap_delay_trig
+	{
+		template <typename H>
+		wrap_delay_trig(const actor_handle& self, H&& h)
+			:_lockSelf(self), _h(TRY_MOVE(h)) {}
+
+		wrap_delay_trig(wrap_delay_trig&& s)
+			:_lockSelf(s._lockSelf), _h(TRY_MOVE(s._h)) {}
+
+		wrap_delay_trig(const wrap_delay_trig& s)
+			:_lockSelf(s._lockSelf), _h(TRY_MOVE(s._h)) {}
+
+		void operator ()()
+		{
+			_h();
+		}
+
+		actor_handle _lockSelf;
+		mutable Handler _h;
+	};
 
 	struct timer_state 
 	{
@@ -3140,7 +3161,7 @@ public:
 		} 
 		else if (0 == ms)
 		{
-			_strand->post(TRY_MOVE(h));
+			_strand->post(wrap_delay_trig<H>(shared_from_this(), TRY_MOVE(h)));
 		}
 		else
 		{
