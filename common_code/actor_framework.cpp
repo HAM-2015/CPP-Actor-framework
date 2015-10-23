@@ -1213,18 +1213,21 @@ void my_actor::run_child_actor_complete(const main_func& h, size_t stackSize)
 void my_actor::sleep( int ms )
 {
 	assert_enter();
-	if (ms > 0)
+	if (ms < 0)
 	{
-		assert(_timer);
-		timeout(ms, [this]{run_one(); });
+		actor_handle lockActor = shared_from_this();
 		push_yield();
-	}
+	} 
 	else
 	{
-		actor_handle shared_this = shared_from_this();
 		if (0 == ms)
 		{
-			_strand->post([shared_this]{shared_this->run_one(); });
+			_strand->post(wrap_run_one(shared_from_this()));
+		} 
+		else
+		{
+			assert(_timer);
+			timeout(ms, [this]{run_one(); });
 		}
 		push_yield();
 	}
@@ -1240,8 +1243,7 @@ void my_actor::sleep_guard(int ms)
 void my_actor::yield()
 {
 	assert_enter();
-	actor_handle shared_this = shared_from_this();
-	_strand->post([shared_this]{shared_this->run_one(); });
+	_strand->post(wrap_run_one(shared_from_this()));
 	push_yield();
 }
 
@@ -1258,7 +1260,7 @@ void my_actor::yield_guard()
 {
 	assert_enter();
 	quit_guard qg(this);
-	_strand->next_tick([this]{run_one(); });
+	_strand->next_tick(wrap_run_one(shared_from_this()));
 	push_yield();
 }
 
@@ -1302,26 +1304,22 @@ void my_actor::cancel_delay_trig()
 
 void my_actor::post_handler()
 {
-	actor_handle shared_this = shared_from_this();
-	_strand->post([shared_this]{shared_this->run_one(); });
+	_strand->post(wrap_run_one(shared_from_this()));
 }
 
 void my_actor::dispatch_handler()
 {
-	actor_handle shared_this = shared_from_this();
-	_strand->dispatch([shared_this]{shared_this->run_one(); });
+	_strand->dispatch(wrap_run_one(shared_from_this()));
 }
 
 void my_actor::tick_handler()
 {
-	actor_handle shared_this = shared_from_this();
-	_strand->try_tick([shared_this]{shared_this->run_one(); });
+	_strand->try_tick(wrap_run_one(shared_from_this()));
 }
 
 void my_actor::next_tick_handler()
 {
-	actor_handle shared_this = shared_from_this();
-	_strand->next_tick([shared_this]{shared_this->run_one(); });
+	_strand->next_tick(wrap_run_one(shared_from_this()));
 }
 
 const shared_strand& my_actor::self_strand()

@@ -2875,6 +2875,19 @@ class my_actor
 		mutable Handler _h;
 	};
 
+	struct wrap_run_one
+	{
+		wrap_run_one(const actor_handle& self)
+		:_lockSelf(self) {}
+
+		void operator()()
+		{
+			_lockSelf->run_one();
+		}
+
+		actor_handle _lockSelf;
+	};
+
 	struct timer_state 
 	{
 		bool _timerSuspend : 1;
@@ -3114,7 +3127,7 @@ public:
 	__yield_interrupt void try_yield();
 
 	/*!
-	@brief 中断时间片，当前Actor句柄在别的地方必须被持有
+	@brief 锁定退出后，中断时间片
 	*/
 	__yield_interrupt void yield_guard();
 
@@ -3161,7 +3174,7 @@ public:
 		} 
 		else if (0 == ms)
 		{
-			_strand->post(wrap_delay_trig<H>(shared_from_this(), TRY_MOVE(h)));
+			_strand->post(wrap_delay_trig<RM_CREF(H)>(shared_from_this(), TRY_MOVE(h)));
 		}
 		else
 		{
@@ -3186,7 +3199,7 @@ public:
 			actor_handle shared_this = shared_from_this();
 			exeStrand->asyncInvokeVoid(TRY_MOVE(h), [shared_this]
 			{
-				shared_this->_strand->post([shared_this]{shared_this->run_one(); });
+				shared_this->_strand->post(wrap_run_one(shared_this));
 			});
 			push_yield();
 			return;
@@ -3218,7 +3231,7 @@ public:
 		actor_handle shared_this = shared_from_this();
 		_strand->asyncInvokeVoid(TRY_MOVE(h), [shared_this]
 		{
-			shared_this->_strand->next_tick([shared_this]{shared_this->run_one(); });
+			shared_this->_strand->next_tick(wrap_run_one(shared_this));
 		});
 		push_yield();
 	}
@@ -3240,7 +3253,7 @@ public:
 		actor_handle shared_this = shared_from_this();
 		exeStrand->asyncInvokeVoid(TRY_MOVE(h), [shared_this]
 		{
-			shared_this->_strand->try_tick([shared_this]{shared_this->run_one(); });
+			shared_this->_strand->try_tick(wrap_run_one(shared_this));
 		});
 		push_yield();
 	}
@@ -3274,19 +3287,9 @@ private:
 		{
 			DEBUG_OPERATION(bool setb = false);
 			actor_handle shared_this = shared_from_this();
-			exeStrand->asyncInvokeVoid(TRY_MOVE(h), 
-#ifdef _DEBUG
-				[&setb, shared_this]
-#else
-				[shared_this]
-#endif
+			exeStrand->asyncInvokeVoid(TRY_MOVE(h), [&, shared_this]
 			{
-				shared_this->_strand->post(
-#ifdef _DEBUG
-					[&setb, shared_this]
-#else
-					[shared_this]
-#endif
+				shared_this->_strand->post([&, shared_this]
 				{
 					assert(!shared_this->_inActor);
 					DEBUG_OPERATION(setb = true);
