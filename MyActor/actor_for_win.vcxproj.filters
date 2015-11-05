@@ -42,10 +42,10 @@
     <ClCompile Include="actor\strand_ex.cpp">
       <Filter>源文件\actor</Filter>
     </ClCompile>
-    <ClCompile Include="actor\actor_mutex.cpp">
-      <Filter>头文件\actor</Filter>
-    </ClCompile>
     <ClCompile Include="actor\actor_framework.cpp">
+      <Filter>源文件\actor</Filter>
+    </ClCompile>
+    <ClCompile Include="actor\actor_mutex.cpp">
       <Filter>源文件\actor</Filter>
     </ClCompile>
   </ItemGroup>

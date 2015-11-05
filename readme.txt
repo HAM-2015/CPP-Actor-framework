@@ -1,5 +1,5 @@
 并发逻辑控制框架(Actor Model)，适用于复杂业务逻辑，有问题或BUG反馈至591170887@qq.com;
-依赖于boost 1.57;
+依赖于boost 1.59;
 暂无开发文档，等作者认为可以定型后开放文档;
 目前仅在 VS2013,GCC4.9.2-linux_x64 编译器中测试;
 使用前需要具有一定的异步编程基础，希望解决async-callback和multithread-mutex编程中遇到的问题（本框架主旨绝不是async->sync那么简单）;
@@ -11,6 +11,9 @@ https://github.com/HAM-2015/CPP-Actor-framework
 oschina url:
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
+
+2015-11-05
+添加"通知句柄"丢失检测，消息等待时可以捕获通知句柄丢失异常.
 
 2015-10-31
 移植到gcc4.9.2 for Linux_x64.

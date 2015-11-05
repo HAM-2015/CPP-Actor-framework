@@ -33,6 +33,63 @@ msg_list_shared_alloc<std::function<void()> >::shared_node_alloc my_actor::_quit
 msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc my_actor::_suspendResumeQueueAll(100000);
 msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc my_actor::msg_pool_status::_msgTypeMapAll(100000);
 
+#ifdef ENABLE_CHECK_LOST
+mem_alloc_mt<CheckLost_> s_checkLostObjAlloc(100000);
+mem_alloc_mt<CheckPumpLost_> s_checkPumpLostObjAlloc(100000);
+mem_alloc_base* s_checkLostRefCountAlloc = NULL;
+mem_alloc_base* s_checkPumpLostRefCountAlloc = NULL;
+
+struct makeLostRefCountAlloc
+{
+	makeLostRefCountAlloc()
+	{
+		auto& s_checkLostObjAlloc_ = s_checkLostObjAlloc;
+		auto& s_checkPumpLostObjAlloc_ = s_checkPumpLostObjAlloc;
+		s_checkLostRefCountAlloc = make_ref_count_alloc<CheckLost_, boost::mutex>(100000, [&s_checkLostObjAlloc_](CheckLost_*){});
+		s_checkPumpLostRefCountAlloc = make_ref_count_alloc<CheckPumpLost_, boost::mutex>(100000, [&s_checkPumpLostObjAlloc_](CheckPumpLost_*){});
+	}
+
+	~makeLostRefCountAlloc()
+	{
+		delete s_checkLostRefCountAlloc;
+		delete s_checkPumpLostRefCountAlloc;
+	}
+} s_makeLostRefCountAlloc;
+#endif
+
+//////////////////////////////////////////////////////////////////////////
+#ifdef ENABLE_CHECK_LOST
+CheckLost_::CheckLost_(const shared_strand& strand, actor_msg_handle_base* handle)
+:_strand(strand), _handle(handle), _closed(handle->_closed) {}
+
+CheckLost_::~CheckLost_()
+{
+	if (!(*_closed))
+	{
+		auto& closed_ = _closed;
+		auto& handle_ = _handle;
+		_strand->try_tick([closed_, handle_]()
+		{
+			if (!(*closed_))
+			{
+				handle_->lost_msg();
+			}
+		});
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+CheckPumpLost_::CheckPumpLost_(const actor_handle& hostActor, MsgPoolBase_* pool)
+:_hostActor(hostActor), _pool(pool) {}
+
+CheckPumpLost_::~CheckPumpLost_()
+{
+	_pool->lost_msg(_hostActor);
+}
+#endif
+
+//////////////////////////////////////////////////////////////////////////
+
 /*!
 @brief Actor栈分配器
 */
@@ -184,9 +241,8 @@ bool child_actor_handle::empty()
 }
 
 //////////////////////////////////////////////////////////////////////////
-
 actor_msg_handle_base::actor_msg_handle_base()
-:_waiting(false), _hostActor(NULL)
+:_waiting(false), _losted(false), _checkLost(false), _hostActor(NULL)
 {
 
 }
@@ -197,13 +253,30 @@ void actor_msg_handle_base::set_actor(const actor_handle& hostActor)
 	DEBUG_OPERATION(_strand = hostActor->self_strand());
 }
 
-std::shared_ptr<bool> actor_msg_handle_base::new_bool()
+void actor_msg_handle_base::check_lost(bool b)
 {
-	assert(s_sharedBoolPool);
-	std::shared_ptr<bool> r = s_sharedBoolPool->pick();
-	*r = false;
-	return r;
+	assert(_strand->running_in_this_thread());
+#ifndef ENABLE_CHECK_LOST
+	assert(b);
+#endif
+	_checkLost = b;
 }
+
+void actor_msg_handle_base::lost_msg()
+{
+	assert(_strand->running_in_this_thread());
+	if (!ActorFunc_::is_quited(_hostActor))
+	{
+		_losted = true;
+		if (_waiting && _checkLost)
+		{
+			_waiting = false;
+			ActorFunc_::pull_yield(_hostActor);
+			return;
+		}
+	}
+}
+
 //////////////////////////////////////////////////////////////////////////
 long long MutexBlock_::actor_id(my_actor* host)
 {
@@ -218,6 +291,7 @@ MsgPoolVoid_::MsgPoolVoid_(const shared_strand& strand)
 	_strand = strand;
 	_waiting = false;
 	_closed = false;
+	_losted = false;
 	_sendCount = 0;
 	_msgBuff = 0;
 }
@@ -227,7 +301,7 @@ MsgPoolVoid_::~MsgPoolVoid_()
 
 }
 
-MsgPoolVoid_::pump_handler MsgPoolVoid_::connect_pump(const std::shared_ptr<msg_pump_type>& msgPump)
+MsgPoolVoid_::pump_handler MsgPoolVoid_::connect_pump(const std::shared_ptr<msg_pump_type>& msgPump, bool& losted)
 {
 	assert(msgPump);
 	assert(_strand->running_in_this_thread());
@@ -237,6 +311,7 @@ MsgPoolVoid_::pump_handler MsgPoolVoid_::connect_pump(const std::shared_ptr<msg_
 	compHandler._msgPump = msgPump;
 	_waiting = false;
 	_sendCount = 0;
+	losted = _losted;
 	return compHandler;
 }
 
@@ -258,6 +333,25 @@ void MsgPoolVoid_::push_msg(const actor_handle& hostActor)
 	}
 }
 
+void MsgPoolVoid_::lost_msg(const actor_handle& hostActor)
+{
+	if (!_closed)
+	{
+		auto shared_this = _weakThis.lock();
+		_strand->try_tick([shared_this, hostActor]()
+		{
+			if (!shared_this->_closed && shared_this->_msgPump)
+			{
+				shared_this->_msgPump->lost_msg(hostActor);
+			}
+			else
+			{
+				shared_this->_losted = true;
+			}
+		});
+	}
+}
+
 void MsgPoolVoid_::send_msg(const actor_handle& hostActor)
 {
 	//if (_closed) return;
@@ -265,6 +359,7 @@ void MsgPoolVoid_::send_msg(const actor_handle& hostActor)
 	if (_waiting)
 	{
 		_waiting = false;
+		_losted = false;
 		assert(_msgPump);
 		assert(0 == _msgBuff);
 		_sendCount++;
@@ -281,6 +376,7 @@ void MsgPoolVoid_::post_msg(const actor_handle& hostActor)
 	if (_waiting)
 	{
 		_waiting = false;
+		_losted = false;
 		assert(_msgPump);
 		assert(0 == _msgBuff);
 		_sendCount++;
@@ -454,11 +550,13 @@ void MsgPoolVoid_::pump_handler::operator()(unsigned char pumpID)
 }
 //////////////////////////////////////////////////////////////////////////
 
-MsgPumpVoid_::MsgPumpVoid_(const actor_handle& hostActor)
+MsgPumpVoid_::MsgPumpVoid_(const actor_handle& hostActor, bool checkLost)
 {
 	_waiting = false;
 	_hasMsg = false;
 	_checkDis = false;
+	_losted = false;
+	_checkLost = checkLost;
 	_dstRec = NULL;
 	_pumpCount = 0;
 	_hostActor = hostActor.get();
@@ -489,6 +587,8 @@ void MsgPumpVoid_::close()
 	_hasMsg = false;
 	_waiting = false;
 	_checkDis = false;
+	_losted = false;
+	_checkLost = false;
 	_dstRec = NULL;
 	_pumpCount = 0;
 	_pumpHandler.clear();
@@ -504,15 +604,27 @@ void MsgPumpVoid_::backflow(stack_obj<msg_type>& suck)
 	}
 }
 
-void MsgPumpVoid_::connect(const pump_handler& pumpHandler)
+void MsgPumpVoid_::connect(const pump_handler& pumpHandler, const bool& losted)
 {
 	assert(_strand->running_in_this_thread());
 	assert(_hostActor);
 	_pumpHandler = pumpHandler;
 	_pumpCount = 0;
+	_losted = losted;
 	if (_waiting)
 	{
-		_pumpHandler.post_pump(_pumpCount);
+		if (_losted && _checkLost)
+		{
+			if (_waiting)
+			{
+				_waiting = false;
+				ActorFunc_::pull_yield(_hostActor);
+			}
+		} 
+		else
+		{
+			_pumpHandler.post_pump(_pumpCount);
+		}
 	}
 }
 
@@ -520,8 +632,9 @@ void MsgPumpVoid_::receiver()
 {
 	if (_hostActor)
 	{
-		_pumpCount++;
 		assert(!_hasMsg);
+		_losted = false;
+		_pumpCount++;
 		if (_waiting)
 		{
 			_waiting = false;
@@ -537,6 +650,32 @@ void MsgPumpVoid_::receiver()
 		{
 			_hasMsg = true;
 		}
+	}
+}
+
+void MsgPumpVoid_::lost_msg(const actor_handle& hostActor)
+{
+	if (_strand->running_in_this_thread())
+	{
+		_losted = true;
+		if (_waiting)
+		{
+			_waiting = false;
+			ActorFunc_::pull_yield(_hostActor);
+		}
+	}
+	else
+	{
+		auto shared_this = _weakThis.lock();
+		_strand->post([shared_this, hostActor]()
+		{
+			shared_this->_losted = true;
+			if (shared_this->_waiting)
+			{
+				shared_this->_waiting = false;
+				ActorFunc_::pull_yield(shared_this->_hostActor);
+			}
+		});
 	}
 }
 
@@ -611,6 +750,7 @@ bool MsgPumpVoid_::try_read()
 					_waiting = true;
 					ActorFunc_::push_yield(_hostActor);
 					assert(_hasMsg);
+					assert(!_waiting);
 				}
 				_hasMsg = false;
 			}
@@ -852,6 +992,10 @@ public:
 		{
 			assert(false);
 		}
+		catch (msg_lost_exception&)
+		{
+			assert(false);
+		}
 		catch (...)
 		{
 			assert(false);
@@ -964,18 +1108,17 @@ my_actor& my_actor::operator =(const my_actor&)
 actor_handle my_actor::create(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize)
 {
 	assert(stackSize && stackSize <= 1024 kB && 0 == stackSize % (4 kB));
-	actor_handle newActor;
 	assert(ActorStackPool_::isEnable());
 	/*内存结构(L:H):|------Actor Stack------|---shared_ptr_ref_count---|--Actor Obj--|*/
 	const size_t actorSize = MEM_ALIGN(sizeof(my_actor), sizeof(void*));
 	StackPck_ stackMem = ActorStackPool_::getStack(stackSize + STACK_RESERVED_SPACE_SIZE);
 	unsigned char* refTop = (unsigned char*)stackMem._stack.sp - actorSize;
-	newActor = actor_handle(new(refTop)my_actor, [](my_actor* p){p->~my_actor(); },
+	actor_handle newActor(new(refTop)my_actor, [](my_actor* p){p->~my_actor(); },
 		actor_ref_count_alloc<void>(stackMem, (void**)&refTop));
 	newActor->_stackTop = refTop;
 	newActor->_stackSize = stackMem._stack.size - ((size_t)stackMem._stack.sp - (size_t)newActor->_stackTop);
-	newActor->_strand = actorStrand;
 	newActor->_mainFunc = mainFunc;
+	newActor->_strand = actorStrand;
 	newActor->_timer = actorStrand->get_timer();
 	newActor->_actorPull = new actor_pull_type(boost_actor_run(*newActor),
 		boost::coroutines::attributes(newActor->_stackSize), actor_stack_pool_allocate(newActor->_stackTop, newActor->_stackSize));
@@ -1395,8 +1538,11 @@ void my_actor::assert_enter()
 
 void my_actor::notify_quit()
 {
-	actor_handle shared_this = shared_from_this();
-	_strand->try_tick([shared_this]{shared_this->force_quit(std::function<void()>()); });
+	if (!_quited)
+	{
+		actor_handle shared_this = shared_from_this();
+		_strand->try_tick([shared_this]{shared_this->force_quit(std::function<void()>()); });
+	}
 }
 
 void my_actor::notify_quit(const std::function<void()>& h)
@@ -2145,6 +2291,14 @@ bool my_actor::timed_wait_msg(int tm, actor_msg_handle<>& amh)
 	assert(amh._hostActor && amh._hostActor->self_id() == self_id());
 	if (!amh.read_msg())
 	{
+		OUT_OF_SCOPE(
+		{
+			amh.stop_waiting();
+		});
+		if (amh._checkLost && amh._losted)
+		{
+			amh.throw_lost_exception();
+		}
 		if (tm > 0)
 		{
 			bool timed = false;
@@ -2156,7 +2310,6 @@ bool my_actor::timed_wait_msg(int tm, actor_msg_handle<>& amh)
 			push_yield();
 			if (timed)
 			{
-				amh.stop_waiting();
 				return false;
 			}
 			cancel_delay_trig();
@@ -2167,8 +2320,11 @@ bool my_actor::timed_wait_msg(int tm, actor_msg_handle<>& amh)
 		}
 		else
 		{
-			amh.stop_waiting();
 			return false;
+		}
+		if (amh._checkLost && amh._losted)
+		{
+			amh.throw_lost_exception();
 		}
 	}
 	return true;
@@ -2197,7 +2353,11 @@ bool my_actor::timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<>& pu
 		});
 		if (checkDis && pump->isDisconnected())
 		{
-			throw pump_disconnected_exception();
+			throw pump_disconnected<>();
+		}
+		if (pump->_checkLost && pump->_losted)
+		{
+			throw msg_pump_handle<>::lost_exception();
 		}
 		pump->_checkDis = checkDis;
 		if (tm >= 0)
@@ -2222,7 +2382,11 @@ bool my_actor::timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<>& pu
 		if (pump->_checkDis)
 		{
 			assert(checkDis);
-			throw pump_disconnected_exception();
+			throw pump_disconnected<>();
+		}
+		if (pump->_checkLost && pump->_losted)
+		{
+			throw msg_pump_handle<>::lost_exception();
 		}
 	}
 	return true;
@@ -2238,12 +2402,19 @@ bool my_actor::try_pump_msg(bool checkDis, const msg_pump_handle<>& pump)
 	assert_enter();
 	assert(!pump.check_closed());
 	assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
+	OUT_OF_SCOPE(
+	{
+		pump->stop_waiting();
+	});
 	if (!pump->try_read())
 	{
-		assert(!pump->_waiting);
 		if (checkDis && pump->isDisconnected())
 		{
-			throw pump_disconnected_exception();
+			throw pump_disconnected<>();
+		}
+		if (pump->_checkLost && pump->_losted)
+		{
+			throw msg_pump_handle<>::lost_exception();
 		}
 		return false;
 	}
@@ -2262,6 +2433,14 @@ bool my_actor::timed_wait_trig(int tm, actor_trig_handle<>& ath)
 	assert(ath._hostActor && ath._hostActor->self_id() == self_id());
 	if (!ath.read_msg())
 	{
+		OUT_OF_SCOPE(
+		{
+			ath.stop_waiting();
+		});
+		if (ath._checkLost && ath._losted)
+		{
+			ath.throw_lost_exception();
+		}
 		if (tm > 0)
 		{
 			bool timed = false;
@@ -2273,7 +2452,6 @@ bool my_actor::timed_wait_trig(int tm, actor_trig_handle<>& ath)
 			push_yield();
 			if (timed)
 			{
-				ath.stop_waiting();
 				return false;
 			}
 			cancel_delay_trig();
@@ -2284,8 +2462,11 @@ bool my_actor::timed_wait_trig(int tm, actor_trig_handle<>& ath)
 		}
 		else
 		{
-			ath.stop_waiting();
 			return false;
+		}
+		if (ath._checkLost && ath._losted)
+		{
+			ath.throw_lost_exception();
 		}
 	}
 	return true;
@@ -2364,3 +2545,33 @@ bool ActorFunc_::is_quited(my_actor* host)
 	assert(host);
 	return host->is_quited();
 }
+
+std::shared_ptr<bool> ActorFunc_::new_bool(bool b)
+{
+	assert(s_sharedBoolPool);
+	std::shared_ptr<bool> r = s_sharedBoolPool->pick();
+	*r = b;
+	return r;
+}
+
+#ifdef ENABLE_CHECK_LOST
+std::shared_ptr<CheckLost_> ActorFunc_::new_check_lost(const shared_strand& strand, actor_msg_handle_base* handle)
+{
+	auto& s_checkLostObjAlloc_ = s_checkLostObjAlloc;
+	return std::shared_ptr<CheckLost_>(new(s_checkLostObjAlloc.allocate())CheckLost_(strand, handle), [&s_checkLostObjAlloc_](CheckLost_* p)
+	{
+		p->~CheckLost_();
+		s_checkLostObjAlloc_.deallocate(p);
+	}, ref_count_alloc<void>(s_checkLostRefCountAlloc));
+}
+
+std::shared_ptr<CheckPumpLost_> ActorFunc_::new_check_pump_lost(const actor_handle& hostActor, MsgPoolBase_* pool)
+{
+	auto& s_checkPumpLostObjAlloc_ = s_checkPumpLostObjAlloc;
+	return std::shared_ptr<CheckPumpLost_>(new(s_checkPumpLostObjAlloc.allocate())CheckPumpLost_(hostActor, pool), [&s_checkPumpLostObjAlloc_](CheckPumpLost_* p)
+	{
+		p->~CheckPumpLost_();
+		s_checkPumpLostObjAlloc_.deallocate(p);
+	}, ref_count_alloc<void>(s_checkPumpLostRefCountAlloc));
+}
+#endif

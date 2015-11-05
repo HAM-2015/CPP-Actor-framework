@@ -1070,7 +1070,7 @@ struct ReturnType_<void>
 template <typename R = void>
 struct CspInvokeBaseFunc_
 {
-	typedef R&& type;
+	typedef R&& result_type;
 
 	template <typename H, typename TUPLE>
 	static inline R invoke(H&& h, TUPLE&& t)
@@ -1082,7 +1082,7 @@ struct CspInvokeBaseFunc_
 template <>
 struct CspInvokeBaseFunc_<void>
 {
-	typedef void type;
+	typedef void result_type;
 
 	template <typename H, typename TUPLE>
 	static inline VoidReturn_ invoke(H&& h, TUPLE&& t)
@@ -1134,19 +1134,19 @@ public:
 	template <typename... Args>
 	R invoke(my_actor* host, Args&&... args)
 	{
-		return (typename CspInvokeBaseFunc_<R>::type)base_csp_channel::send(host, std::tuple<Args&...>(args...));
+		return (typename CspInvokeBaseFunc_<R>::result_type)base_csp_channel::send(host, std::tuple<Args&...>(args...));
 	}
 
 	template <typename... Args>
 	R try_invoke(my_actor* host, Args&&... args)
 	{
-		return (typename CspInvokeBaseFunc_<R>::type)base_csp_channel::try_send(host, std::tuple<Args&...>(args...));
+		return (typename CspInvokeBaseFunc_<R>::result_type)base_csp_channel::try_send(host, std::tuple<Args&...>(args...));
 	}
 
 	template <typename... Args>
 	R timed_invoke(int tm, my_actor* host, Args&&... args)
 	{
-		return (typename CspInvokeBaseFunc_<R>::type)base_csp_channel::timed_send(tm, host, std::tuple<Args&...>(args...));
+		return (typename CspInvokeBaseFunc_<R>::result_type)base_csp_channel::timed_send(tm, host, std::tuple<Args&...>(args...));
 	}
 };
 

@@ -67,12 +67,18 @@ private:
 #define CHECK_EXCEPTION2(__h, __p0, __p1) try { (__h)(__p0, __p1); } catch (...) { assert(false); }
 #define CHECK_EXCEPTION3(__h, __p0, __p1, __p2) try { (__h)(__p0, __p1, __p2); } catch (...) { assert(false); }
 
+#define BEGIN_CHECK_EXCEPTION try {
+#define END_CHECK_EXCEPTION } catch (...) { assert(false); }
+
 #else
 
 #define CHECK_EXCEPTION(__h) (__h)()
 #define CHECK_EXCEPTION1(__h, __p0) (__h)(__p0)
 #define CHECK_EXCEPTION2(__h, __p0, __p1) (__h)(__p0, __p1)
 #define CHECK_EXCEPTION3(__h, __p0, __p1, __p2) (__h)(__p0, __p1, __p2)
+
+#define BEGIN_CHECK_EXCEPTION
+#define END_CHECK_EXCEPTION
 
 #endif
 

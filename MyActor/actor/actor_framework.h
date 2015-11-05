@@ -1,13 +1,3 @@
-/*!
- @header     actor_framework.h
- @abstract   并发逻辑控制框架(Actor Model)，使用"协程(coroutine)"技术，依赖boost_1.55或更新;
- @discussion 一个Actor对象(actor_handle)依赖一个shared_strand(二级调度器，本身依赖于io_service)，多个Actor可以共同依赖同一个shared_strand;
-             支持强制结束、挂起/恢复、延时、多子任务(并发控制);
-             在Actor中或所依赖的io_service中进行长时间阻塞的操作或重量级运算，会严重影响依赖同一个io_service的Actor响应速度;
-             默认Actor栈空间64k字节，远比线程栈小，注意局部变量占用的空间以及调用层次(注意递归).
- @copyright  Copyright (c) 2015 HAM, E-Mail:591170887@qq.com
- */
-
 #ifndef __ACTOR_FRAMEWORK_H
 #define __ACTOR_FRAMEWORK_H
 
@@ -34,18 +24,30 @@ class ActorMutex_;
 
 using namespace std;
 
-//此函数会进入Actor中断标记，使用时注意逻辑的“连续性”可能会被打破
+//此函数会上下文切换
 #define __yield_interrupt
 
+#if (_DEBUG || DEBUG)
 /*!
 @brief 用于检测在Actor内调用的函数是否触发了强制退出
 */
-#if (_DEBUG || DEBUG)
 #define BEGIN_CHECK_FORCE_QUIT try {
 #define END_CHECK_FORCE_QUIT } catch (my_actor::force_quit_exception&) {assert(false);}
+
+/*!
+@brief 用于锁定actor不强制退出
+*/
+#define LOCK_QUIT(__self__) __self__->lock_quit(); try {
+#define UNLOCK_QUIT(__self__) } catch (...) { assert (false); } __self__->unlock_quit();
+
 #else
+
 #define BEGIN_CHECK_FORCE_QUIT
 #define END_CHECK_FORCE_QUIT
+
+#define LOCK_QUIT(__self__) __self__->lock_quit();
+#define UNLOCK_QUIT(__self__) __self__->unlock_quit();
+
 #endif
 
 //检测 pump_msg 是否有 pump_disconnected_exception 异常抛出，因为在 catch 内部不能安全的进行coro切换
@@ -56,6 +58,10 @@ using namespace std;
 
 template <typename... ARGS>
 class msg_pump_handle;
+class CheckLost_;
+class CheckPumpLost_;
+class actor_msg_handle_base;
+class MsgPoolBase_;
 
 struct ActorFunc_
 {
@@ -67,10 +73,11 @@ struct ActorFunc_
 	static void pull_yield(my_actor* host);
 	static void push_yield(my_actor* host);
 	static bool is_quited(my_actor* host);
+	static std::shared_ptr<bool> new_bool(bool b = false);
 	template <typename R, typename H>
 	static R send(my_actor* host, const shared_strand& exeStrand, H&& h);
 	template <typename... Args>
-	static msg_pump_handle<Args...> connect_msg_pump(const int id, my_actor* const host);
+	static msg_pump_handle<Args...> connect_msg_pump(const int id, my_actor* const host, bool checkLost);
 	template <typename DST, typename... ARGS>
 	static void _trig_handler(my_actor* host, DST& dstRec, ARGS&&... args);
 	template <typename DST, typename... ARGS>
@@ -79,7 +86,41 @@ struct ActorFunc_
 	static void _dispatch_handler(my_actor* host, DST& dstRec, ARGS&&... args);
 	template <typename DST, typename... ARGS>
 	static void _dispatch_handler2(my_actor* host, DST& dstRec, ARGS&&... args);
+#ifdef ENABLE_CHECK_LOST
+	static std::shared_ptr<CheckLost_> new_check_lost(const shared_strand& strand, actor_msg_handle_base* handle);
+	static std::shared_ptr<CheckPumpLost_> new_check_pump_lost(const actor_handle& hostActor, MsgPoolBase_* pool);
+#endif
 };
+//////////////////////////////////////////////////////////////////////////
+
+struct msg_lost_exception {};
+
+#ifdef ENABLE_CHECK_LOST
+class CheckLost_
+{
+	friend ActorFunc_;
+	FRIEND_SHARED_PTR(CheckLost_);
+private:
+	CheckLost_(const shared_strand& strand, actor_msg_handle_base* handle);
+	~CheckLost_();
+private:
+	shared_strand _strand;
+	std::shared_ptr<bool> _closed;
+	actor_msg_handle_base* _handle;
+};
+
+class CheckPumpLost_
+{
+	friend ActorFunc_;
+	FRIEND_SHARED_PTR(CheckPumpLost_);
+private:
+	CheckPumpLost_(const actor_handle& hostActor, MsgPoolBase_* pool);
+	~CheckPumpLost_();
+private:
+	actor_handle _hostActor;
+	MsgPoolBase_* _pool;
+};
+#endif
 
 //////////////////////////////////////////////////////////////////////////
 template <size_t N>
@@ -206,22 +247,28 @@ class MsgNotiferBase_;
 
 class actor_msg_handle_base
 {
+	friend CheckLost_;
 protected:
 	actor_msg_handle_base();
 	virtual ~actor_msg_handle_base(){}
 public:
 	virtual void close() = 0;
 	virtual size_t size() = 0;
+	void check_lost(bool b = true);
+private:
+	virtual void lost_msg();
 protected:
 	void set_actor(const actor_handle& hostActor);
-	static std::shared_ptr<bool> new_bool();
+	virtual void stop_waiting() = 0;
+	virtual void throw_lost_exception() = 0;
 protected:
 	my_actor* _hostActor;
 	std::shared_ptr<bool> _closed;
 	DEBUG_OPERATION(shared_strand _strand);
-	bool _waiting;
+	bool _waiting : 1;
+	bool _losted : 1;
+	bool _checkLost : 1;
 };
-
 
 template <typename... ARGS>
 struct MsgNotiferBaseMsgCapture_;
@@ -229,19 +276,25 @@ struct MsgNotiferBaseMsgCapture_;
 template <typename... ARGS>
 class ActorMsgHandlePush_ : public actor_msg_handle_base
 {
+	friend my_actor;
 	friend MsgNotiferBase_<ARGS...>;
 	friend MsgNotiferBaseMsgCapture_<ARGS...>;
+	typedef DstReceiverBase_<TYPE_PIPE(ARGS)...> dst_receiver;
 protected:
 	virtual void push_msg(std::tuple<TYPE_PIPE(ARGS)...>&) = 0;
+	virtual bool read_msg(dst_receiver& dst) = 0;
 };
 
 template <>
 class ActorMsgHandlePush_<> : public actor_msg_handle_base
 {
+	friend my_actor;
 	friend MsgNotiferBase_<>;
 	friend MsgNotiferBaseMsgCapture_<>;
+	typedef DstReceiverBase_<> dst_receiver;
 protected:
 	virtual void push_msg() = 0;
+	virtual bool read_msg() = 0;
 };
 
 
@@ -288,10 +341,10 @@ struct MsgNotiferBaseMsgCapture_
 		}
 	}
 
-	mutable std::tuple<TYPE_PIPE(ARGS)...> _args;
 	msg_handle* _msgHandle;
 	actor_handle _hostActor;
 	std::shared_ptr<bool> _closed;
+	mutable std::tuple<TYPE_PIPE(ARGS)...> _args;
 };
 
 template <>
@@ -323,25 +376,41 @@ protected:
 	MsgNotiferBase_()
 		:_msgHandle(NULL){}
 
-	MsgNotiferBase_(msg_handle* msgHandle)
+	MsgNotiferBase_(msg_handle* msgHandle, bool checkLost)
 		:_msgHandle(msgHandle),
 		_hostActor(ActorFunc_::shared_from_this(_msgHandle->_hostActor)),
-		_closed(msgHandle->_closed)
+		_closed(msgHandle->_closed)		
 	{
 		assert(msgHandle->_strand == ActorFunc_::self_strand(_hostActor.get()));
+#ifdef ENABLE_CHECK_LOST
+		if (checkLost)
+		{
+			_autoCheckLost = ActorFunc_::new_check_lost(ActorFunc_::self_strand(_hostActor.get()), msgHandle);
+		}
+#else
+		assert(checkLost);
+#endif
 	}
 public:
 	template <typename... Args>
 	void operator()(Args&&... args) const
 	{
 		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
-		ActorFunc_::self_strand(_hostActor.get())->try_tick(MsgNotiferBaseMsgCapture_<ARGS...>(_msgHandle, _hostActor, _closed, TRY_MOVE(args)...));
+		assert(!empty());
+		if (!(*_closed))
+		{
+			ActorFunc_::self_strand(_hostActor.get())->try_tick(MsgNotiferBaseMsgCapture_<ARGS...>(_msgHandle, _hostActor, _closed, TRY_MOVE(args)...));
+		}
 	}
 
 	void operator()() const
 	{
 		static_assert(sizeof...(ARGS) == 0, "");
-		ActorFunc_::self_strand(_hostActor.get())->try_tick(MsgNotiferBaseMsgCapture_<>(_msgHandle, _hostActor, _closed));
+		assert(!empty());
+		if (!(*_closed))
+		{
+			ActorFunc_::self_strand(_hostActor.get())->try_tick(MsgNotiferBaseMsgCapture_<>(_msgHandle, _hostActor, _closed));
+		}
 	}
 
 	std::function<void(ARGS...)> case_func() const
@@ -364,6 +433,9 @@ public:
 		_msgHandle = NULL;
 		_hostActor.reset();
 		_closed.reset();
+#ifdef ENABLE_CHECK_LOST
+		_autoCheckLost.reset();
+#endif
 	}
 
 	operator bool() const
@@ -374,6 +446,9 @@ private:
 	msg_handle* _msgHandle;
 	actor_handle _hostActor;
 	std::shared_ptr<bool> _closed;
+#ifdef ENABLE_CHECK_LOST
+	std::shared_ptr<CheckLost_> _autoCheckLost;
+#endif
 };
 
 template <typename... ARGS>
@@ -383,8 +458,8 @@ class actor_msg_notifer : public MsgNotiferBase_<ARGS...>
 public:
 	actor_msg_notifer()	{}
 private:
-	actor_msg_notifer(ActorMsgHandlePush_<ARGS...>* msgHandle)
-		:MsgNotiferBase_<ARGS...>(msgHandle) {}
+	actor_msg_notifer(ActorMsgHandlePush_<ARGS...>* msgHandle, bool checkLost)
+		:MsgNotiferBase_<ARGS...>(msgHandle, checkLost) {}
 };
 
 template <typename... ARGS>
@@ -394,8 +469,8 @@ class actor_trig_notifer : public MsgNotiferBase_<ARGS...>
 public:
 	actor_trig_notifer() {}
 private:
-	actor_trig_notifer(ActorMsgHandlePush_<ARGS...>* msgHandle)
-		:MsgNotiferBase_<ARGS...>(msgHandle) {}
+	actor_trig_notifer(ActorMsgHandlePush_<ARGS...>* msgHandle, bool checkLost)
+		:MsgNotiferBase_<ARGS...>(msgHandle, checkLost) {}
 };
 
 template <typename... ARGS>
@@ -409,6 +484,8 @@ class actor_msg_handle : public ActorMsgHandlePush_<ARGS...>
 	friend mutex_block_msg<ARGS...>;
 	friend my_actor;
 public:
+	struct lost_exception : msg_lost_exception {};
+public:
 	actor_msg_handle(size_t fixedSize = 16)
 		:_msgBuff(fixedSize), _dstRec(NULL) {}
 
@@ -417,13 +494,12 @@ public:
 		close();
 	}
 private:
-	msg_notifer make_notifer(const actor_handle& hostActor)
+	msg_notifer make_notifer(const actor_handle& hostActor, bool checkLost)
 	{
 		close();
 		Parent::set_actor(hostActor);
-		Parent::_closed = Parent::new_bool();
-		Parent::_waiting = false;
-		return msg_notifer(this);
+		Parent::_closed = ActorFunc_::new_bool();
+		return msg_notifer(this, checkLost);
 	}
 
 	void push_msg(msg_type& msg)
@@ -467,6 +543,11 @@ private:
 		_dstRec = NULL;
 	}
 
+	void throw_lost_exception()
+	{
+		throw lost_exception();
+	}
+
 	void close()
 	{
 		if (Parent::_closed)
@@ -477,6 +558,8 @@ private:
 		}
 		_dstRec = NULL;
 		Parent::_waiting = false;
+		Parent::_losted = false;
+		Parent::_checkLost = false;
 		_msgBuff.clear();
 		Parent::_hostActor = NULL;
 	}
@@ -500,19 +583,19 @@ class actor_msg_handle<> : public ActorMsgHandlePush_<>
 	friend mutex_block_msg<>;
 	friend my_actor;
 public:
+	struct lost_exception : msg_lost_exception {};
+public:
 	~actor_msg_handle()
 	{
 		close();
 	}
 private:
-	msg_notifer make_notifer(const actor_handle& hostActor)
+	msg_notifer make_notifer(const actor_handle& hostActor, bool checkLost)
 	{
 		close();
 		Parent::set_actor(hostActor);
-		Parent::_closed = Parent::new_bool();
-		Parent::_waiting = false;
-		_dstRec = NULL;
-		return msg_notifer(this);
+		Parent::_closed = ActorFunc_::new_bool();
+		return msg_notifer(this, checkLost);
 	}
 
 	void push_msg()
@@ -572,6 +655,11 @@ private:
 		_dstRec = NULL;
 	}
 
+	void throw_lost_exception()
+	{
+		throw lost_exception();
+	}
+
 	void close()
 	{
 		if (Parent::_closed)
@@ -583,6 +671,8 @@ private:
 		_dstRec = NULL;
 		_msgCount = 0;
 		Parent::_waiting = false;
+		Parent::_losted = false;
+		Parent::_checkLost = false;
 		Parent::_hostActor = NULL;
 	}
 
@@ -608,6 +698,8 @@ class actor_trig_handle : public ActorMsgHandlePush_<ARGS...>
 	friend mutex_block_trig<ARGS...>;
 	friend my_actor;
 public:
+	struct lost_exception : msg_lost_exception {};
+public:
 	actor_trig_handle()
 		:_hasMsg(false), _dstRec(NULL) {}
 
@@ -616,14 +708,12 @@ public:
 		close();
 	}
 private:
-	msg_notifer make_notifer(const actor_handle& hostActor)
+	msg_notifer make_notifer(const actor_handle& hostActor, bool checkLost)
 	{
 		close();
 		Parent::set_actor(hostActor);
-		Parent::_closed = Parent::new_bool();
-		Parent::_waiting = false;
-		_hasMsg = false;
-		return msg_notifer(this);
+		Parent::_closed = ActorFunc_::new_bool();
+		return msg_notifer(this, checkLost);
 	}
 
 	void push_msg(msg_type& msg)
@@ -669,6 +759,11 @@ private:
 		_dstRec = NULL;
 	}
 
+	void throw_lost_exception()
+	{
+		throw lost_exception();
+	}
+
 	void close()
 	{
 		if (Parent::_closed)
@@ -684,6 +779,8 @@ private:
 		}
 		_dstRec = NULL;
 		Parent::_waiting = false;
+		Parent::_losted = false;
+		Parent::_checkLost = false;
 		Parent::_hostActor = NULL;
 	}
 public:
@@ -713,6 +810,8 @@ class actor_trig_handle<> : public ActorMsgHandlePush_<>
 	friend mutex_block_trig<>;
 	friend my_actor;
 public:
+	struct lost_exception : msg_lost_exception {};
+public:
 	actor_trig_handle()
 		:_hasMsg(false){}
 
@@ -721,15 +820,12 @@ public:
 		close();
 	}
 private:
-	msg_notifer make_notifer(const actor_handle& hostActor)
+	msg_notifer make_notifer(const actor_handle& hostActor, bool checkLost)
 	{
 		close();
 		Parent::set_actor(hostActor);
-		Parent::_closed = Parent::new_bool();
-		Parent::_waiting = false;
-		_hasMsg = false;
-		_dstRec = NULL;
-		return msg_notifer(this);
+		Parent::_closed = ActorFunc_::new_bool();
+		return msg_notifer(this, checkLost);
 	}
 
 	void push_msg()
@@ -790,6 +886,11 @@ private:
 		_dstRec = NULL;
 	}
 
+	void throw_lost_exception()
+	{
+		throw lost_exception();
+	}
+
 	void close()
 	{
 		if (Parent::_closed)
@@ -801,6 +902,8 @@ private:
 		_dstRec = NULL;
 		_hasMsg = false;
 		Parent::_waiting = false;
+		Parent::_losted = false;
+		Parent::_checkLost = false;
 		Parent::_hostActor = NULL;
 	}
 public:
@@ -891,7 +994,7 @@ class MsgPump_ : public MsgPumpBase_
 private:
 	MsgPump_()
 	{
-		DEBUG_OPERATION(_pClosed = std::shared_ptr<bool>(new bool(false)));
+		DEBUG_OPERATION(_pClosed = ActorFunc_::new_bool());
 	}
 
 	~MsgPump_()
@@ -900,13 +1003,18 @@ private:
 		DEBUG_OPERATION(*_pClosed = true);
 	}
 private:
-	static std::shared_ptr<MsgPump_<ARGS...>> make(const actor_handle& hostActor)
+	static std::shared_ptr<MsgPump_<ARGS...>> make(const actor_handle& hostActor, bool checkLost)
 	{
+#ifndef ENABLE_CHECK_LOST
+		assert(checkLost);
+#endif
 		std::shared_ptr<MsgPump_<ARGS...>> res(new MsgPump_<ARGS...>());
 		res->_weakThis = res;
 		res->_hasMsg = false;
 		res->_waiting = false;
 		res->_checkDis = false;
+		res->_losted = false;
+		res->_checkLost = checkLost;
 		res->_pumpCount = 0;
 		res->_dstRec = NULL;
 		res->_hostActor = hostActor.get();
@@ -919,6 +1027,7 @@ private:
 		if (Parent::_hostActor)
 		{
 			assert(!_hasMsg);
+			_losted = false;
 			_pumpCount++;
 			if (_dstRec)
 			{
@@ -938,6 +1047,32 @@ private:
 				_hasMsg = true;
 				new (_msgSpace)msg_type(std::move(msg));
 			}
+		}
+	}
+
+	void lost_msg(const actor_handle& hostActor)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_losted = true;
+			if (_waiting)
+			{
+				_waiting = false;
+				ActorFunc_::pull_yield(_hostActor);
+			} 
+		}
+		else
+		{
+			auto shared_this = _weakThis.lock();
+			_strand->post([shared_this, hostActor]()
+			{
+				shared_this->_losted = true;
+				if (shared_this->_waiting)
+				{
+					shared_this->_waiting = false;
+					ActorFunc_::pull_yield(shared_this->_hostActor);
+				}
+			});
 		}
 	}
 
@@ -1003,8 +1138,11 @@ private:
 					if (!_hasMsg)
 					{
 						_dstRec = &dst;
+						_waiting = true;
 						ActorFunc_::push_yield(_hostActor);
 						assert(_hasMsg);
+						assert(!_dstRec);
+						assert(!_waiting);
 					}
 					_hasMsg = false;
 					dst.move_from(*(msg_type*)_msgSpace);
@@ -1043,15 +1181,27 @@ private:
 		_dstRec = NULL;
 	}
 
-	void connect(const pump_handler& pumpHandler)
+	void connect(const pump_handler& pumpHandler, const bool& losted)
 	{
 		assert(_strand->running_in_this_thread());
 		assert(_hostActor);
 		_pumpHandler = pumpHandler;
 		_pumpCount = 0;
+		_losted = losted;
 		if (_waiting)
 		{
-			_pumpHandler.post_pump(_pumpCount);
+			if (_losted && _checkLost)
+			{
+				if (_waiting)
+				{
+					_waiting = false;
+					ActorFunc_::pull_yield(_hostActor);
+				}
+			} 
+			else
+			{
+				_pumpHandler.post_pump(_pumpCount);
+			}
 		}
 	}
 
@@ -1091,6 +1241,8 @@ private:
 		_pumpCount = 0;
 		_waiting = false;
 		_checkDis = false;
+		_losted = false;
+		_checkLost = false;
 		_pumpHandler.clear();
 		Parent::_hostActor = NULL;
 	}
@@ -1109,11 +1261,21 @@ private:
 	bool _hasMsg : 1;
 	bool _waiting : 1;
 	bool _checkDis : 1;
+	bool _checkLost : 1;
+	bool _losted : 1;
 	DEBUG_OPERATION(std::shared_ptr<bool> _pClosed);
 };
 
+class MsgPoolBase_
+{
+	friend my_actor;
+	friend CheckPumpLost_;
+protected:
+	virtual void lost_msg(const actor_handle& hostActor) = 0;
+};
+
 template <typename... ARGS>
-class MsgPool_
+class MsgPool_ : public MsgPoolBase_
 {
 	typedef std::tuple<TYPE_PIPE(ARGS)...> msg_type;
 	typedef DstReceiverBase_<TYPE_PIPE(ARGS)...> dst_receiver;
@@ -1326,6 +1488,7 @@ private:
 	{
 
 	}
+
 	~MsgPool_()
 	{
 
@@ -1338,6 +1501,7 @@ private:
 		res->_strand = strand;
 		res->_waiting = false;
 		res->_closed = false;
+		res->_losted = false;
 		res->_sendCount = 0;
 		return res;
 	}
@@ -1349,6 +1513,7 @@ private:
 		if (_waiting)
 		{
 			_waiting = false;
+			_losted = false;
 			assert(_msgPump);
 			assert(_msgBuff.empty());
 			_sendCount++;
@@ -1376,6 +1541,7 @@ private:
 		if (_waiting)
 		{
 			_waiting = false;
+			_losted = false;
 			assert(_msgPump);
 			assert(_msgBuff.empty());
 			_sendCount++;
@@ -1411,7 +1577,26 @@ private:
 		}
 	}
 
-	pump_handler connect_pump(const std::shared_ptr<msg_pump_type>& msgPump)
+	void lost_msg(const actor_handle& hostActor)
+	{
+		if (!_closed)
+		{
+			auto shared_this = _weakThis.lock();
+			_strand->try_tick([shared_this, hostActor]()
+			{
+				if (!shared_this->_closed && shared_this->_msgPump)
+				{
+					shared_this->_msgPump->lost_msg(hostActor);
+				}
+				else
+				{
+					shared_this->_losted = true;
+				}
+			});
+		}
+	}
+
+	pump_handler connect_pump(const std::shared_ptr<msg_pump_type>& msgPump, bool& losted)
 	{
 		assert(msgPump);
 		assert(_strand->running_in_this_thread());
@@ -1421,6 +1606,7 @@ private:
 		compHandler._msgPump = msgPump;
 		_sendCount = 0;
 		_waiting = false;
+		losted = _losted;
 		return compHandler;
 	}
 
@@ -1445,17 +1631,18 @@ private:
 	}
 private:
 	std::weak_ptr<MsgPool_> _weakThis;
+	shared_strand _strand;
 	std::shared_ptr<msg_pump_type> _msgPump;
 	msg_queue<msg_type> _msgBuff;
-	shared_strand _strand;
 	unsigned char _sendCount;
 	bool _waiting : 1;
 	bool _closed : 1;
+	bool _losted : 1;
 };
 
 class MsgPumpVoid_;
 
-class MsgPoolVoid_
+class MsgPoolVoid_ :public MsgPoolBase_
 {
 	typedef post_actor_msg<> post_type;
 	typedef void msg_type;
@@ -1487,18 +1674,20 @@ protected:
 	void send_msg(const actor_handle& hostActor);
 	void post_msg(const actor_handle& hostActor);
 	void push_msg(const actor_handle& hostActor);
-	pump_handler connect_pump(const std::shared_ptr<msg_pump_type>& msgPump);
+	void lost_msg(const actor_handle& hostActor);
+	pump_handler connect_pump(const std::shared_ptr<msg_pump_type>& msgPump, bool& losted);
 	void disconnect();
 	void expand_fixed(size_t fixedSize){};
 	void backflow(stack_obj<msg_type>& suck);
 protected:
 	std::weak_ptr<MsgPoolVoid_> _weakThis;
+	shared_strand _strand;
 	std::shared_ptr<msg_pump_type> _msgPump;
 	size_t _msgBuff;
-	shared_strand _strand;
 	unsigned char _sendCount;
 	bool _waiting : 1;
 	bool _closed : 1;
+	bool _losted : 1;
 };
 
 class MsgPumpVoid_ : public MsgPumpBase_
@@ -1512,10 +1701,11 @@ class MsgPumpVoid_ : public MsgPumpBase_
 	friend mutex_block_pump<>;
 	friend pump_handler;
 protected:
-	MsgPumpVoid_(const actor_handle& hostActor);
+	MsgPumpVoid_(const actor_handle& hostActor, bool checkLost);
 	virtual ~MsgPumpVoid_();
 protected:
 	void receiver();
+	void lost_msg(const actor_handle& hostActor);
 	void receive_msg_tick(const actor_handle& hostActor);
 	void receive_msg(const actor_handle& hostActor);
 	bool read_msg();
@@ -1524,7 +1714,7 @@ protected:
 	size_t size();
 	size_t snap_size();
 	void stop_waiting();
-	void connect(const pump_handler& pumpHandler);
+	void connect(const pump_handler& pumpHandler, const bool& losted);
 	void clear();
 	void close();
 	void backflow(stack_obj<msg_type>& suck);
@@ -1538,6 +1728,8 @@ protected:
 	bool _waiting : 1;
 	bool _hasMsg : 1;
 	bool _checkDis : 1;
+	bool _checkLost : 1;
+	bool _losted : 1;
 };
 
 template <>
@@ -1570,10 +1762,13 @@ class MsgPump_<> : public MsgPumpVoid_
 public:
 	typedef MsgPump_* handle;
 private:
-	MsgPump_(const actor_handle& hostActor)
-		:MsgPumpVoid_(hostActor)
+	MsgPump_(const actor_handle& hostActor, bool checkLost)
+		:MsgPumpVoid_(hostActor, checkLost)
 	{
-		DEBUG_OPERATION(_pClosed = std::shared_ptr<bool>(new bool(false)));
+#ifndef ENABLE_CHECK_LOST
+		assert(checkLost);
+#endif
+		DEBUG_OPERATION(_pClosed = ActorFunc_::new_bool());
 	}
 
 	~MsgPump_()
@@ -1581,9 +1776,9 @@ private:
 		DEBUG_OPERATION(*_pClosed = true);
 	}
 
-	static std::shared_ptr<MsgPump_> make(const actor_handle& hostActor)
+	static std::shared_ptr<MsgPump_> make(const actor_handle& hostActor, bool checkLost)
 	{
-		std::shared_ptr<MsgPump_> res(new MsgPump_(hostActor));
+		std::shared_ptr<MsgPump_> res(new MsgPump_(hostActor, checkLost));
 		res->_weakThis = res;
 		return res;
 	}
@@ -1614,6 +1809,8 @@ class msg_pump_handle
 
 	pump* _handle;
 	DEBUG_OPERATION(std::shared_ptr<bool> _pClosed);
+public:
+	struct lost_exception : public msg_lost_exception {};
 };
 
 template <typename... ARGS>
@@ -1622,8 +1819,18 @@ class post_actor_msg
 	typedef MsgPool_<ARGS...> msg_pool_type;
 public:
 	post_actor_msg(){}
-	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool, const actor_handle& hostActor)
-		:_msgPool(msgPool), _hostActor(hostActor){}
+	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool, const actor_handle& hostActor, bool checkLost)
+		:_msgPool(msgPool), _hostActor(hostActor)
+	{
+#ifdef ENABLE_CHECK_LOST
+		if (checkLost)
+		{
+			_autoCheckLost = ActorFunc_::new_check_pump_lost(hostActor, msgPool.get());
+		}
+#else
+		assert(checkLost);
+#endif
+	}
 public:
 	template <typename... Args>
 	void operator()(Args&&... args) const
@@ -1652,6 +1859,9 @@ public:
 
 	void clear()
 	{
+#ifdef ENABLE_CHECK_LOST
+		_autoCheckLost.reset();//必须在_msgPool.reset()上面
+#endif
 		_hostActor.reset();
 		_msgPool.reset();
 	}
@@ -1663,6 +1873,9 @@ public:
 private:
 	actor_handle _hostActor;
 	std::shared_ptr<msg_pool_type> _msgPool;
+#ifdef ENABLE_CHECK_LOST
+	std::shared_ptr<CheckPumpLost_> _autoCheckLost;//必须在_msgPool下面
+#endif
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -1675,6 +1888,7 @@ private:
 	virtual bool go(bool& isRun) = 0;
 	virtual size_t snap_id() = 0;
 	virtual long long host_id() = 0;
+	virtual void check_lost() = 0;
 
 	MutexBlock_(const MutexBlock_&) {}
 	void operator =(const MutexBlock_&) {}
@@ -1709,14 +1923,24 @@ private:
 		_msgHandle.stop_waiting();
 	}
 
+	void check_lost()
+	{
+		if (_msgHandle._checkLost && _msgHandle._losted)
+		{
+			throw typename actor_msg_handle<ARGS...>::lost_exception();
+		}
+	}
+
 	bool go(bool& isRun)
 	{
 		if (_msgBuff.has())
 		{
+			BEGIN_CHECK_EXCEPTION;
 			isRun = true;
 			bool r = tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 			_msgBuff.clear();
 			return r;
+			END_CHECK_EXCEPTION;
 		}
 		isRun = false;
 		return false;
@@ -1767,15 +1991,25 @@ private:
 		_msgHandle.stop_waiting();
 	}
 
+	void check_lost()
+	{
+		if (_msgHandle._checkLost && _msgHandle._losted)
+		{
+			throw typename actor_trig_handle<ARGS...>::lost_exception();
+		}
+	}
+
 	bool go(bool& isRun)
 	{
 		if (_msgBuff.has())
 		{
+			BEGIN_CHECK_EXCEPTION;
 			isRun = true;
 			_triged = true;
 			bool r = tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 			_msgBuff.clear();
 			return r;
+			END_CHECK_EXCEPTION;
 		}
 		isRun = false;
 		return false;
@@ -1809,17 +2043,17 @@ class mutex_block_pump : public MutexBlock_
 	friend my_actor;
 public:
 	template <typename Handler>
-	mutex_block_pump(my_actor* host, Handler&& handler)
+	mutex_block_pump(my_actor* host, Handler&& handler, bool checkLost = false)
 		:_handler(TRY_MOVE(handler))
 	{
-		_msgHandle = ActorFunc_::connect_msg_pump<ARGS...>(0, host);
+		_msgHandle = ActorFunc_::connect_msg_pump<ARGS...>(0, host, checkLost);
 	}
 
 	template <typename Handler>
-	mutex_block_pump(const int id, my_actor* host, Handler&& handler)
+	mutex_block_pump(const int id, my_actor* host, Handler&& handler, bool checkLost = false)
 		: _handler(TRY_MOVE(handler))
 	{
-		_msgHandle = ActorFunc_::connect_msg_pump<ARGS...>(id, host);
+		_msgHandle = ActorFunc_::connect_msg_pump<ARGS...>(id, host, checkLost);
 	}
 
 	template <typename Handler>
@@ -1839,15 +2073,25 @@ private:
 		_msgHandle._handle->stop_waiting();
 	}
 
+	void check_lost()
+	{
+		if (_msgHandle->_checkLost && _msgHandle->_losted)
+		{
+			throw typename msg_pump_handle<ARGS...>::lost_exception();
+		}
+	}
+
 	bool go(bool& isRun)
 	{
 		assert(!_msgHandle.check_closed());
 		if (_msgBuff.has())
 		{
+			BEGIN_CHECK_EXCEPTION;
 			isRun = true;
 			bool r = tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 			_msgBuff.clear();
 			return r;
+			END_CHECK_EXCEPTION;
 		}
 		isRun = false;
 		return false;
@@ -1891,13 +2135,23 @@ private:
 		_msgHandle.stop_waiting();
 	}
 
+	void check_lost()
+	{
+		if (_msgHandle._checkLost && _msgHandle._losted)
+		{
+			throw actor_msg_handle<>::lost_exception();
+		}
+	}
+
 	bool go(bool& isRun)
 	{
 		if (_has)
 		{
+			BEGIN_CHECK_EXCEPTION;
 			isRun = true;
 			_has = false;
 			return _handler();
+			END_CHECK_EXCEPTION;
 		}
 		isRun = false;
 		return false;
@@ -1944,14 +2198,24 @@ private:
 		_msgHandle.stop_waiting();
 	}
 
+	void check_lost()
+	{
+		if (_msgHandle._checkLost && _msgHandle._losted)
+		{
+			throw actor_trig_handle<>::lost_exception();
+		}
+	}
+
 	bool go(bool& isRun)
 	{
 		if (_has)
 		{
+			BEGIN_CHECK_EXCEPTION;
 			isRun = true;
 			_triged = true;
 			_has = false;
 			return _handler();
+			END_CHECK_EXCEPTION;
 		}
 		isRun = false;
 		return false;
@@ -1981,17 +2245,17 @@ class mutex_block_pump<> : public MutexBlock_
 	friend my_actor;
 public:
 	template <typename Handler>
-	mutex_block_pump(my_actor* host, Handler&& handler)
+	mutex_block_pump(my_actor* host, Handler&& handler, bool checkLost = false)
 		:_handler(TRY_MOVE(handler)), _has(false)
 	{
-		_msgHandle = ActorFunc_::connect_msg_pump(0, host);
+		_msgHandle = ActorFunc_::connect_msg_pump(0, host, checkLost);
 	}
 
 	template <typename Handler>
-	mutex_block_pump(const int id, my_actor* host, Handler&& handler)
+	mutex_block_pump(const int id, my_actor* host, Handler&& handler, bool checkLost = false)
 		: _handler(TRY_MOVE(handler)), _has(false)
 	{
-		_msgHandle = ActorFunc_::connect_msg_pump(id, host);
+		_msgHandle = ActorFunc_::connect_msg_pump(id, host, checkLost);
 	}
 
 	template <typename Handler>
@@ -2011,14 +2275,24 @@ private:
 		_msgHandle._handle->stop_waiting();
 	}
 
+	void check_lost()
+	{
+		if (_msgHandle->_checkLost && _msgHandle->_losted)
+		{
+			throw msg_pump_handle<>::lost_exception();
+		}
+	}
+
 	bool go(bool& isRun)
 	{
 		assert(!_msgHandle.check_closed());
 		if (_has)
 		{
+			BEGIN_CHECK_EXCEPTION;
 			isRun = true;
 			_has = false;
 			return _handler();
+			END_CHECK_EXCEPTION;
 		}
 		isRun = false;
 		return false;
@@ -2046,8 +2320,7 @@ class TrigOnceBase_
 protected:
 	TrigOnceBase_()
 		DEBUG_OPERATION(:_pIsTrig(new boost::atomic<bool>(false)))
-	{
-		}
+	{}
 
 	TrigOnceBase_(const TrigOnceBase_& s)
 		:_hostActor(s._hostActor)
@@ -2061,7 +2334,7 @@ protected:
 	void _trig_handler(DST& dstRec, Args&&... args) const
 	{
 		assert(!_pIsTrig->exchange(true));
-		assert(_hostActor);;
+		assert(_hostActor);
 		ActorFunc_::_trig_handler(_hostActor.get(), dstRec, TRY_MOVE(args)...);
 		reset();
 	}
@@ -3012,6 +3285,9 @@ public:
 	*/
 	struct pump_disconnected_exception { };
 
+	template <typename... Args>
+	struct pump_disconnected : pump_disconnected_exception {};
+
 	/*!
 	@brief Actor入口函数体
 	*/
@@ -3455,12 +3731,20 @@ private:
 		}
 	}
 private:
-	template <typename AMH, typename DST>
-	bool _timed_wait_msg(AMH& amh, DST& dstRec, int tm)
+	template <typename DST, typename... Args>
+	bool _timed_wait_msg(ActorMsgHandlePush_<Args...>& amh, DST& dstRec, const int tm)
 	{
 		assert(amh._hostActor && amh._hostActor->self_id() == self_id());
 		if (!amh.read_msg(dstRec))
 		{
+			OUT_OF_SCOPE(
+			{
+				amh.stop_waiting();
+			});
+			if (amh._checkLost && amh._losted)
+			{
+				amh.throw_lost_exception();
+			}
 			if (tm > 0)
 			{
 				bool timed = false;
@@ -3472,7 +3756,6 @@ private:
 				push_yield();
 				if (timed)
 				{
-					amh.stop_waiting();
 					return false;
 				}
 				cancel_delay_trig();
@@ -3483,52 +3766,51 @@ private:
 			}
 			else
 			{
-				amh.stop_waiting();
 				return false;
+			}
+			if (amh._checkLost && amh._losted)
+			{
+				amh.throw_lost_exception();
 			}
 		}
 		return true;
 	}
 
-	template <typename AMH, typename DST>
-	void _wait_msg(AMH& amh, DST& dstRec)
+	template <typename DST, typename... Args>
+	void _wait_msg(ActorMsgHandlePush_<Args...>& amh, DST& dstRec)
 	{
-		assert(amh._hostActor && amh._hostActor->self_id() == self_id());
-		if (!amh.read_msg(dstRec))
-		{
-			push_yield();
-		}
+		_timed_wait_msg(amh, dstRec, -1);
 	}
 public:
 	/*!
 	@brief 创建一个消息通知函数
 	*/
 	template <typename... Args>
-	actor_msg_notifer<Args...> make_msg_notifer_to_self(actor_msg_handle<Args...>& amh)
+	actor_msg_notifer<Args...> make_msg_notifer_to_self(actor_msg_handle<Args...>& amh, bool checkLost = false)
 	{
-		return amh.make_notifer(shared_from_this());
+		return amh.make_notifer(shared_from_this(), checkLost);
 	}
 
 	/*!
 	@brief 创建一个消息通知函数到buddyActor
 	*/
 	template <typename... Args>
-	actor_msg_notifer<Args...> make_msg_notifer_to(const actor_handle& buddyActor, actor_msg_handle<Args...>& amh)
+	actor_msg_notifer<Args...> make_msg_notifer_to(const actor_handle& buddyActor, actor_msg_handle<Args...>& amh, bool checkLost = false)
 	{
 		assert_enter();
-		return amh.make_notifer(buddyActor);
+		return amh.make_notifer(buddyActor, checkLost);
 	}
 
 	template <typename... Args>
-	actor_msg_notifer<Args...> make_msg_notifer_to(my_actor* buddyActor, actor_msg_handle<Args...>& amh)
+	actor_msg_notifer<Args...> make_msg_notifer_to(my_actor* buddyActor, actor_msg_handle<Args...>& amh, bool checkLost = false)
 	{
-		return make_msg_notifer_to<Args...>(buddyActor->shared_from_this(), amh);
+		return make_msg_notifer_to<Args...>(buddyActor->shared_from_this(), amh, checkLost);
 	}
 
 	template <typename... Args>
-	actor_msg_notifer<Args...> make_msg_notifer_to(child_actor_handle& childActor, actor_msg_handle<Args...>& amh)
+	actor_msg_notifer<Args...> make_msg_notifer_to(child_actor_handle& childActor, actor_msg_handle<Args...>& amh, bool checkLost = false)
 	{
-		return make_msg_notifer_to<Args...>(childActor.get_actor(), amh);
+		return make_msg_notifer_to<Args...>(childActor.get_actor(), amh, checkLost);
 	}
 
 	/*!
@@ -3662,31 +3944,31 @@ public:
 	@brief 创建一个消息触发函数，只有一次触发有效
 	*/
 	template <typename... Args>
-	actor_trig_notifer<Args...> make_trig_notifer_to_self(actor_trig_handle<Args...>& ath)
+	actor_trig_notifer<Args...> make_trig_notifer_to_self(actor_trig_handle<Args...>& ath, bool checkLost = false)
 	{
-		return ath.make_notifer(shared_from_this());
+		return ath.make_notifer(shared_from_this(), checkLost);
 	}
 
 	/*!
 	@brief 创建一个消息触发函数到buddyActor，只有一次触发有效
 	*/
 	template <typename... Args>
-	actor_trig_notifer<Args...> make_trig_notifer_to(const actor_handle& buddyActor, actor_trig_handle<Args...>& ath)
+	actor_trig_notifer<Args...> make_trig_notifer_to(const actor_handle& buddyActor, actor_trig_handle<Args...>& ath, bool checkLost = false)
 	{
 		assert_enter();
-		return ath.make_notifer(buddyActor);
+		return ath.make_notifer(buddyActor, checkLost);
 	}
 
 	template <typename... Args>
-	actor_trig_notifer<Args...> make_trig_notifer_to(my_actor* buddyActor, actor_trig_handle<Args...>& ath)
+	actor_trig_notifer<Args...> make_trig_notifer_to(my_actor* buddyActor, actor_trig_handle<Args...>& ath, bool checkLost = false)
 	{
-		return make_trig_notifer_to<Args...>(buddyActor->shared_from_this(), ath);
+		return make_trig_notifer_to<Args...>(buddyActor->shared_from_this(), ath, checkLost);
 	}
 
 	template <typename... Args>
-	actor_trig_notifer<Args...> make_trig_notifer_to(child_actor_handle& childActor, actor_trig_handle<Args...>& ath)
+	actor_trig_notifer<Args...> make_trig_notifer_to(child_actor_handle& childActor, actor_trig_handle<Args...>& ath, bool checkLost = false)
 	{
-		return make_trig_notifer_to<Args...>(childActor.get_actor(), ath);
+		return make_trig_notifer_to<Args...>(childActor.get_actor(), ath, checkLost);
 	}
 
 	/*!
@@ -3883,13 +4165,14 @@ private:
 			{
 				if (msgPool_)
 				{
-					auto ph = send<pump_handler>(msgPool_->_strand, [&pckIt]()->pump_handler
+					bool losted = false;
+					auto ph = send<pump_handler>(msgPool_->_strand, [&pckIt, &losted]()->pump_handler
 					{
-						return pckIt->_msgPool->connect_pump(pckIt->_msgPump);
+						return pckIt->_msgPool->connect_pump(pckIt->_msgPump, losted);
 					});
-					send(msgPump_->_strand, [&msgPump_, &ph]
+					send(msgPump_->_strand, [&msgPump_, &ph, &losted]
 					{
-						msgPump_->connect(ph);
+						msgPump_->connect(ph, losted);
 					});
 				}
 				else
@@ -4090,7 +4373,7 @@ public:
 	@return 消息通知函数
 	*/
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const shared_strand& strand, const int id, const actor_handle& buddyActor, bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const shared_strand& strand, const int id, const actor_handle& buddyActor, bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
 	{
 		typedef MsgPool_<Args...> pool_type;
 		typedef typename pool_type::pump_handler pump_handler;
@@ -4153,10 +4436,11 @@ public:
 					auto& msgPool_ = msgPck->_msgPool;
 					if (msgPool_)
 					{
-						msgPump_->connect(this->send<pump_handler>(msgPool_->_strand, [&msgPck]()->pump_handler
+						bool losted = false;
+						msgPump_->connect(this->send<pump_handler>(msgPool_->_strand, [&msgPck, &losted]()->pump_handler
 						{
-							return msgPck->_msgPool->connect_pump(msgPck->_msgPump);
-						}));
+							return msgPck->_msgPool->connect_pump(msgPck->_msgPump, losted);
+						}), losted);
 					}
 					else
 					{
@@ -4165,7 +4449,7 @@ public:
 				}
 			}
 			msgPck->unlock(this);
-			return post_actor_msg<Args...>(newPool, buddyActor);
+			return post_actor_msg<Args...>(newPool, buddyActor, chekcLost);
 		}
 		if (buddyPck->_isHead)
 		{
@@ -4177,7 +4461,7 @@ public:
 			}
 			buddyPck->unlock(this);
 			msgPck->unlock(this);
-			return post_actor_msg<Args...>(buddyPool, buddyActor);
+			return post_actor_msg<Args...>(buddyPool, buddyActor, chekcLost);
 		}
 		buddyPck->unlock(this);
 		msgPck->unlock(this);
@@ -4185,45 +4469,45 @@ public:
 	}
 
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const shared_strand& strand, const int id, child_actor_handle& childActor, bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const shared_strand& strand, const int id, child_actor_handle& childActor, bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to<Args...>(strand, id, childActor.get_actor(), makeNew, fixedSize);
+		return connect_msg_notifer_to<Args...>(strand, id, childActor.get_actor(), chekcLost, makeNew, fixedSize);
 	}
 
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const shared_strand& strand, const actor_handle& buddyActor, bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const shared_strand& strand, const actor_handle& buddyActor, bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to<Args...>(strand, 0, buddyActor, makeNew, fixedSize);
+		return connect_msg_notifer_to<Args...>(strand, 0, buddyActor, chekcLost, makeNew, fixedSize);
 	}
 
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const shared_strand& strand, child_actor_handle& childActor, bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const shared_strand& strand, child_actor_handle& childActor, bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to<Args...>(strand, 0, childActor.get_actor(), makeNew, fixedSize);
+		return connect_msg_notifer_to<Args...>(strand, 0, childActor.get_actor(), makeNew, chekcLost, fixedSize);
 	}
 
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const int id, const actor_handle& buddyActor, bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const int id, const actor_handle& buddyActor, bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to<Args...>(buddyActor->self_strand(), id, buddyActor, makeNew, fixedSize);
+		return connect_msg_notifer_to<Args...>(buddyActor->self_strand(), id, buddyActor, chekcLost, makeNew, fixedSize);
 	}
 
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const int id, child_actor_handle& childActor, bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const int id, child_actor_handle& childActor, bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to<Args...>(childActor->self_strand(), id, childActor.get_actor(), makeNew, fixedSize);
+		return connect_msg_notifer_to<Args...>(childActor->self_strand(), id, childActor.get_actor(), chekcLost, makeNew, fixedSize);
 	}
 
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const actor_handle& buddyActor, bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const actor_handle& buddyActor, bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to<Args...>(buddyActor->self_strand(), 0, buddyActor, makeNew, fixedSize);
+		return connect_msg_notifer_to<Args...>(buddyActor->self_strand(), 0, buddyActor, chekcLost, makeNew, fixedSize);
 	}
 
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(child_actor_handle& childActor, bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(child_actor_handle& childActor, bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to<Args...>(childActor->self_strand(), 0, childActor.get_actor(), makeNew, fixedSize);
+		return connect_msg_notifer_to<Args...>(childActor->self_strand(), 0, childActor.get_actor(), chekcLost, makeNew, fixedSize);
 	}
 
 	/*!
@@ -4236,27 +4520,27 @@ public:
 	@return 消息通知函数
 	*/
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to_self(const shared_strand& strand, const int id, bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to_self(const shared_strand& strand, const int id, bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to<Args...>(strand, id, shared_from_this(), makeNew, fixedSize);
+		return connect_msg_notifer_to<Args...>(strand, id, shared_from_this(), chekcLost, makeNew, fixedSize);
 	}
 
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to_self(const shared_strand& strand, bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to_self(const shared_strand& strand, bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to_self<Args...>(strand, 0, makeNew, fixedSize);
+		return connect_msg_notifer_to_self<Args...>(strand, 0, chekcLost, makeNew, fixedSize);
 	}
 
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to_self(const int id, bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to_self(const int id, bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to_self<Args...>(self_strand(), id, makeNew, fixedSize);
+		return connect_msg_notifer_to_self<Args...>(self_strand(), id, chekcLost, makeNew, fixedSize);
 	}
 
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to_self(bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to_self(bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer_to_self<Args...>(self_strand(), 0, makeNew, fixedSize);
+		return connect_msg_notifer_to_self<Args...>(self_strand(), 0, chekcLost, makeNew, fixedSize);
 	}
 
 	/*!
@@ -4267,7 +4551,7 @@ public:
 	@return 消息通知函数
 	*/
 	template <typename... Args>
-	post_actor_msg<Args...> connect_msg_notifer(const shared_strand& strand, const int id, size_t fixedSize = 16)
+	post_actor_msg<Args...> connect_msg_notifer(const shared_strand& strand, const int id, bool chekcLost = false, size_t fixedSize = 16)
 	{
 		typedef post_actor_msg<Args...> post_type;
 
@@ -4278,7 +4562,7 @@ public:
 			{
 				auto msgPck = msg_pool_pck<Args...>(id, this);
 				msgPck->_msgPool = pool_type::make(strand, fixedSize);
-				return post_type(msgPck->_msgPool, shared_from_this());
+				return post_type(msgPck->_msgPool, shared_from_this(), chekcLost);
 			}
 			assert(false);
 			return post_type();
@@ -4286,21 +4570,21 @@ public:
 	}
 
 	template <typename... Args>
-	post_actor_msg<Args...> connect_msg_notifer(const shared_strand& strand, size_t fixedSize = 16)
+	post_actor_msg<Args...> connect_msg_notifer(const shared_strand& strand, bool chekcLost = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer<Args...>(strand, 0, fixedSize);
+		return connect_msg_notifer<Args...>(strand, 0, chekcLost, fixedSize);
 	}
 
 	template <typename... Args>
-	post_actor_msg<Args...> connect_msg_notifer(const int id, size_t fixedSize = 16)
+	post_actor_msg<Args...> connect_msg_notifer(const int id, bool chekcLost = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer<Args...>(self_strand(), id, fixedSize);
+		return connect_msg_notifer<Args...>(self_strand(), id, chekcLost, fixedSize);
 	}
 
 	template <typename... Args>
-	post_actor_msg<Args...> connect_msg_notifer(size_t fixedSize = 16)
+	post_actor_msg<Args...> connect_msg_notifer(bool chekcLost = false, size_t fixedSize = 16)
 	{
-		return connect_msg_notifer<Args...>(self_strand(), 0, fixedSize);
+		return connect_msg_notifer<Args...>(self_strand(), 0, chekcLost, fixedSize);
 	}
 	//////////////////////////////////////////////////////////////////////////
 
@@ -4309,13 +4593,19 @@ public:
 	@return 返回消息泵句柄
 	*/
 	template <typename... Args>
-	__yield_interrupt msg_pump_handle<Args...> connect_msg_pump(const int id = 0)
+	__yield_interrupt msg_pump_handle<Args...> connect_msg_pump(const int id = 0, bool checkLost = false)
 	{
-		return _connect_msg_pump<Args...>(id, this);
+		return _connect_msg_pump<Args...>(id, this, checkLost);
+	}
+
+	template <typename... Args>
+	__yield_interrupt msg_pump_handle<Args...> connect_msg_pump(bool checkLost)
+	{
+		return _connect_msg_pump<Args...>(0, this, checkLost);
 	}
 private:
 	template <typename... Args>
-	static msg_pump_handle<Args...> _connect_msg_pump(const int id, my_actor* const host)
+	static msg_pump_handle<Args...> _connect_msg_pump(const int id, my_actor* const host, bool checkLost)
 	{
 		typedef MsgPump_<Args...> pump_type;
 		typedef MsgPool_<Args...> pool_type;
@@ -4336,14 +4626,19 @@ private:
 		auto& msgPool_ = msgPck->_msgPool;
 		if (!msgPump_)
 		{
-			msgPump_ = pump_type::make(host->shared_from_this());
+			msgPump_ = pump_type::make(host->shared_from_this(), checkLost);
+		}
+		else
+		{
+			msgPump_->_checkLost = checkLost;
 		}
 		if (msgPool_)
 		{
-			msgPump_->connect(host->send<pump_handler>(msgPool_->_strand, [&msgPck]()->pump_handler
+			bool losted = false;
+			msgPump_->connect(host->send<pump_handler>(msgPool_->_strand, [&msgPck, &losted]()->pump_handler
 			{
-				return msgPck->_msgPool->connect_pump(msgPck->_msgPump);
-			}));
+				return msgPck->_msgPool->connect_pump(msgPck->_msgPump, losted);
+			}), losted);
 		}
 		else
 		{
@@ -4356,8 +4651,8 @@ private:
 		return mh;
 	}
 private:
-	template <typename PUMP, typename DST>
-	bool _timed_pump_msg(const PUMP& pump, DST& dstRec, int tm, bool checkDis)
+	template <typename DST, typename... Args>
+	bool _timed_pump_msg(const msg_pump_handle<Args...>& pump, DST& dstRec, int tm, bool checkDis)
 	{
 		assert(!pump.check_closed());
 		assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
@@ -4369,7 +4664,11 @@ private:
 			});
 			if (checkDis && pump->isDisconnected())
 			{
-				throw pump_disconnected_exception();
+				throw pump_disconnected<Args...>();
+			}
+			if (pump->_checkLost && pump->_losted)
+			{
+				throw typename msg_pump_handle<Args...>::lost_exception();
 			}
 			pump->_checkDis = checkDis;
 			if (tm >= 0)
@@ -4394,31 +4693,42 @@ private:
 			if (pump->_checkDis)
 			{
 				assert(checkDis);
-				throw pump_disconnected_exception();
+				throw pump_disconnected<Args...>();
+			}
+			if (pump->_checkLost && pump->_losted)
+			{
+				throw typename msg_pump_handle<Args...>::lost_exception();
 			}
 		}
 		return true;
 	}
 
-	template <typename PUMP, typename DST>
-	bool _try_pump_msg(const PUMP& pump, DST& dstRec, bool checkDis)
+	template <typename DST, typename... Args>
+	bool _try_pump_msg(const msg_pump_handle<Args...>& pump, DST& dstRec, bool checkDis)
 	{
 		assert(!pump.check_closed());
 		assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
+		OUT_OF_SCOPE(
+		{
+			pump->stop_waiting();
+		});
 		if (!pump->try_read(dstRec))
 		{
-			assert(!pump->_waiting);
 			if (checkDis && pump->isDisconnected())
 			{
-				throw pump_disconnected_exception();
+				throw pump_disconnected<Args...>();
+			}
+			if (pump->_checkLost && pump->_losted)
+			{
+				throw typename msg_pump_handle<Args...>::lost_exception();
 			}
 			return false;
 		}
 		return true;
 	}
 
-	template <typename PUMP, typename DST>
-	void _pump_msg(const PUMP& pump, DST& dstRec, bool checkDis)
+	template <typename DST, typename... Args>
+	void _pump_msg(const msg_pump_handle<Args...>& pump, DST& dstRec, bool checkDis)
 	{
 		_timed_pump_msg(pump, dstRec, -1, checkDis);
 	}
@@ -4694,6 +5004,14 @@ private:
 		return false;
 	}
 
+	static void _mutex_check_lost(MutexBlock_** const mbs, const size_t N)
+	{
+		for (size_t i = 0; i < N; i++)
+		{
+			mbs[i]->check_lost();
+		}
+	}
+
 	static bool _mutex_go_count(size_t& runCount, MutexBlock_** const mbs, const size_t N)
 	{
 		for (size_t i = 0; i < N; i++)
@@ -4755,6 +5073,7 @@ private:
 				assert(yield_count() == nt);
 				qg.unlock();
 				push_yield();
+				_mutex_check_lost(mbList, N);
 				qg.lock();
 				DEBUG_OPERATION(nt = yield_count());
 			}
@@ -4800,6 +5119,7 @@ private:
 				{
 					push_yield();
 				}
+				_mutex_check_lost(mbList, N);
 				qg.lock();
 				DEBUG_OPERATION(nt = yield_count());
 			}
@@ -5202,10 +5522,10 @@ R ActorFunc_::send(my_actor* host, const shared_strand& exeStrand, H&& h)
 }
 
 template <typename... Args>
-msg_pump_handle<Args...> ActorFunc_::connect_msg_pump(const int id, my_actor* const host)
+msg_pump_handle<Args...> ActorFunc_::connect_msg_pump(const int id, my_actor* const host, bool checkLost)
 {
 	assert(host);
-	return my_actor::_connect_msg_pump<Args...>(id, host);
+	return my_actor::_connect_msg_pump<Args...>(id, host, checkLost);
 }
 
 template <typename DST, typename... ARGS>

@@ -296,4 +296,11 @@ inline R tuple_invoke(Handler&& h, Unknown&& unkown, Tuple&&... tups)
 	return TupleInvoke_<R, CheckClassFunc_<Handler>::value>::tuple_invoke(TRY_MOVE(h), TRY_MOVE(unkown), TRY_MOVE(tups)...);
 }
 
+template <typename R = void, typename Handler>
+inline R tuple_invoke(Handler&& h)
+{
+	static_assert(!CheckClassFunc_<Handler>::value, "");
+	return h();
+}
+
 #endif

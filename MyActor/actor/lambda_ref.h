@@ -390,11 +390,9 @@ struct\
 	try {
 
 #define CATCH_FOR(__exp__) }\
-	catch (__exp__&)\
-{\
-	__catched = true; \
-}\
-if (__catched){
+	catch (__exp__&) { __catched = true; }\
+	DEBUG_OPERATION(catch (...) { assert(false); })\
+if (__catched) {
 
 #define END_TRY_ }}
 

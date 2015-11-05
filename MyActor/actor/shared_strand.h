@@ -253,18 +253,21 @@ class boost_strand
 			_cb = std::move(s._cb);
 		}
 
-		void operator=(const wrap_async_invoke&)
+		void operator=(const wrap_async_invoke& s)
 		{
-			//static_assert(false, "no copy");//FIXME
+			_h = std::move(s._h);
+			_cb = std::move(s._cb);
 		}
 
 		void operator()()
 		{
+			BEGIN_CHECK_EXCEPTION;
 			_cb(_h());
+			END_CHECK_EXCEPTION;
 		}
 
-		H _h;
-		CB _cb;
+		mutable H _h;
+		mutable CB _cb;
 	};
 
 	template <typename H, typename CB>
@@ -286,19 +289,22 @@ class boost_strand
 			_cb = std::move(s._cb);
 		}
 
-		void operator=(const wrap_async_invoke_void&)
+		void operator=(const wrap_async_invoke_void& s)
 		{
-			//static_assert(false, "no copy");//FIXME
+			_h = std::move(s._h);
+			_cb = std::move(s._cb);
 		}
 
 		void operator()()
 		{
+			BEGIN_CHECK_EXCEPTION;
 			_h();
 			_cb();
+			END_CHECK_EXCEPTION;
 		}
 
-		H _h;
-		CB _cb;
+		mutable H _h;
+		mutable CB _cb;
 	};
 
 	FRIEND_SHARED_PTR(boost_strand);
@@ -561,7 +567,9 @@ public:
 		boost::unique_lock<boost::mutex> ul(mutex);
 		post([&]
 		{
+			BEGIN_CHECK_EXCEPTION;
 			h();
+			END_CHECK_EXCEPTION;
 			mutex.lock();
 			con.notify_one();
 			mutex.unlock();
@@ -582,7 +590,9 @@ public:
 		boost::unique_lock<boost::mutex> ul(mutex);
 		post([&]
 		{
+			BEGIN_CHECK_EXCEPTION;
 			new(r)R(h());
+			END_CHECK_EXCEPTION;
 			mutex.lock();
 			con.notify_one();
 			mutex.unlock();

@@ -10,6 +10,75 @@
 
 using namespace std;
 
+void wait_multi_msg()
+{
+	trace_line("begin wait_multi_msg");
+	io_engine ios;
+	ios.run();
+	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
+	{
+		actor_handle act1 = my_actor::create(self->self_strand(), [](my_actor* self)
+		{
+			self->run_mutex_blocks1(mutex_block_pump<int>(self, [&](int msg)
+			{
+				trace_comma(self->self_id(), "begin msg int");
+				self->sleep(500);
+				trace_comma(self->self_id(), msg);
+				self->sleep(500);
+				trace_comma(self->self_id(), "end msg int");
+				return false;
+			}), mutex_block_pump<move_test>(self, [&](const move_test& msg)
+			{
+				trace_comma(self->self_id(), "begin msg int");
+				self->sleep(500);
+				trace_comma(self->self_id(), msg);
+				self->sleep(500);
+				trace_comma(self->self_id(), "end msg int");
+				return false;
+			}), mutex_block_pump<>(self, [&]()
+			{
+				trace_comma(self->self_id(), "begin end");
+				self->sleep(1000);
+				return true;
+			}));
+		});
+		child_actor_handle ch2 = self->create_child_actor([&](my_actor* self)
+		{
+			auto ntf = self->connect_msg_notifer_to<int>(act1);
+			if (ntf)
+			{
+				self->sleep(1000);
+				for (int i = 0; i < 3; i++)
+				{
+					ntf(i);
+					self->sleep(500);
+				}
+			}
+		});
+		child_actor_handle ch3 = self->create_child_actor([&](my_actor* self)
+		{
+			auto ntf = self->connect_msg_notifer_to<move_test>(act1);
+			if (ntf)
+			{
+				for (int i = 0; i < 3; i++)
+				{
+					ntf(move_test(i));
+					self->sleep(500);
+				}
+			}
+		});
+		act1->notify_run();
+		self->child_actor_run(ch2, ch3);
+		self->child_actor_wait_quit(ch2, ch3);
+		self->connect_msg_notifer_to(act1)();
+		self->actor_wait_quit(act1);
+	});
+	ah->notify_run();
+	ah->outside_wait_quit();
+	ios.stop();
+	trace_line("end wait_multi_msg");
+}
+
 void async_buffer_test()
 {
 	trace_line("begin async_buffer_test");
@@ -218,18 +287,27 @@ void pump_test()
 	{
 		child_actor_handle ch = self->create_child_actor([&](my_actor* self)
 		{
-			msg_pump_handle<move_test> pp = self->connect_msg_pump<move_test>();
-			for (int i = 0; i < 3; i++)
+			msg_pump_handle<move_test> pp = self->connect_msg_pump<move_test>(true);
+			try
 			{
-				trace_comma(self->self_id(), self->pump_msg(pp));
+				while (true)
+				{
+					trace_comma(self->self_id(), self->pump_msg(pp));
+				}
+			}
+			catch (msg_lost_exception&)
+			{
+				trace_comma(self->self_id(), "notifer lost");
 			}
 		});
 		self->child_actor_run(ch);
-		auto ntf = self->connect_msg_notifer_to<move_test>(ch);
-		for (int i = 0; i < 3; i++)
 		{
-			ntf(move_test(i));
-			self->sleep(1000);
+			auto ntf = self->connect_msg_notifer_to<move_test>(ch, true);
+			for (int i = 0; i < 3; i++)
+			{
+				ntf(move_test(i));
+				self->sleep(1000);
+			}
 		}
 		self->child_actor_wait_quit(ch);
 	});
@@ -381,24 +459,26 @@ void socket_test()
 
 int main(int argc, char *argv[])
 {
-// 	trig_test();
-// 	trace_line("\r\n");
-// 	msg_test();
-// 	trace_line("\r\n");
-// 	pump_test();
-// 	trace_line("\r\n");
-// 	agent_test();
-// 	trace_line("\r\n");
-// 	mutex_test();
-// 	trace_line("\r\n");
-// 	csp_test();
-// 	trace_line("\r\n");
-// 	sync_msg_test();
-// 	trace_line("\r\n");
-// 	async_buffer_test();
-// 	trace_line("\r\n");
+	trig_test();
+	trace("\n");
+	msg_test();
+	trace("\n");
+	pump_test();
+	trace("\n");
+	agent_test();
+	trace("\n");
+	mutex_test();
+	trace("\n");
+	csp_test();
+	trace("\n");
+	sync_msg_test();
+	trace("\n");
+	async_buffer_test();
+	trace("\n");
 	socket_test();
-	trace_line("\r\n");
+	trace("\n");
+	wait_multi_msg();
+	trace("\n");
 	trace_line("end");
 	getchar();
 	return 0;

@@ -121,16 +121,18 @@ struct mem_alloc_mt : mem_alloc_base
 	void* allocate()
 	{
 		{
-			boost::lock_guard<MUTEX> lg(_mutex);
+			_mutex.lock();
 			_blockNumber++;
 			if (_pool)
 			{
 				_nodeCount--;
 				node_space* fixedSpace = _pool;
 				_pool = fixedSpace->_buff._link;
+				_mutex.unlock();
 				fixedSpace->set_af();
 				return fixedSpace->get_ptr();
 			}
+			_mutex.unlock();
 		}
 		node_space* p = (node_space*)malloc(sizeof(node_space));
 		p->set_head();
@@ -141,13 +143,13 @@ struct mem_alloc_mt : mem_alloc_base
 	{
 		node_space* space = node_space::get_node(p);
 		space->check_head();
+		space->set_bf();
 		{
 			boost::lock_guard<MUTEX> lg(_mutex);
 			_blockNumber--;
 			if (_nodeCount < _poolMaxSize)
 			{
 				_nodeCount++;
-				space->set_bf();
 				space->_buff._link = _pool;
 				_pool = space;
 				return;
@@ -170,12 +172,186 @@ struct mem_alloc_mt : mem_alloc_base
 	MUTEX _mutex;
 };
 
+template <typename MUTEX = boost::mutex>
+struct dymem_alloc_mt : mem_alloc_base
+{
+	struct dy_node 
+	{
+		static void* alloc(size_t spaceSize)
+		{
+#if (_DEBUG || DEBUG)
+			return malloc(sizeof(size_t) + spaceSize);
+#else
+			return malloc(spaceSize);
+#endif
+		}
+
+		static void set_next(size_t spaceSize, void* d, void* s)
+		{
+#if (_DEBUG || DEBUG)
+			*(void**)((char*)d + sizeof(size_t) + spaceSize - sizeof(void*)) = s;
+#else
+			*(void**)((char*)d + spaceSize - sizeof(void*)) = s;
+#endif
+		}
+
+		static void* get_next(size_t spaceSize, void* p)
+		{
+#if (_DEBUG || DEBUG)
+			return *(void**)((char*)p + sizeof(size_t) + spaceSize - sizeof(void*));
+#else
+			return *(void**)((char*)p + spaceSize - sizeof(void*));
+#endif
+		}
+
+		static void set_bf(size_t spaceSize, void* p)
+		{
+#if (_DEBUG || DEBUG)
+			memset(get_ptr(spaceSize, p), 0xBF, spaceSize);
+#endif
+		}
+
+		static void set_af(size_t spaceSize, void* p)
+		{
+#if (_DEBUG || DEBUG)
+			memset(get_ptr(spaceSize, p), 0xAF, spaceSize);
+#endif
+		}
+
+		static void* get_ptr(size_t spaceSize, void* p)
+		{
+#if (_DEBUG || DEBUG)
+			return (char*)p + sizeof(size_t);
+#else
+			return p;
+#endif
+		}
+
+		static void set_head(size_t spaceSize, void* p)
+		{
+#if (_DEBUG || DEBUG)
+			*(size_t*)p = spaceSize;
+#endif
+		}
+
+		static void check_head(size_t spaceSize, void* p)
+		{
+#if (_DEBUG || DEBUG)
+			assert(spaceSize == *(size_t*)p);
+#endif
+		}
+
+		static void* get_node(size_t spaceSize, void* p)
+		{
+#if (_DEBUG || DEBUG)
+			return (char*)p - sizeof(size_t);
+#else
+			return p;
+#endif
+		}
+	};
+
+	dymem_alloc_mt(size_t size, size_t poolSize)
+		:_spaceSize(size > sizeof(void*) ? size : sizeof(void*))
+	{
+		_nodeCount = 0;
+		_poolMaxSize = poolSize;
+		_pool = NULL;
+		_blockNumber = 0;
+	}
+
+	virtual ~dymem_alloc_mt()
+	{
+		boost::lock_guard<MUTEX> lg(_mutex);
+		void* pIt = _pool;
+		while (pIt)
+		{
+			assert(_nodeCount > 0);
+			_nodeCount--;
+			void* t = pIt;
+			pIt = dy_node::get_next(_spaceSize, pIt);
+			free(t);
+		}
+		assert(0 == _nodeCount);
+	}
+
+	void* allocate()
+	{
+		{
+			_mutex.lock();
+			_blockNumber++;
+			if (_pool)
+			{
+				_nodeCount--;
+				void* fixedSpace = _pool;
+				_pool = dy_node::get_next(_spaceSize, fixedSpace);
+				_mutex.unlock();
+				dy_node::set_af(_spaceSize, fixedSpace);
+				return dy_node::get_ptr(_spaceSize, fixedSpace);
+			}
+			_mutex.unlock();
+		}
+		void* p = dy_node::alloc(_spaceSize);
+		dy_node::set_head(_spaceSize, p);
+		return dy_node::get_ptr(_spaceSize, p);
+	}
+
+	void deallocate(void* p)
+	{
+		void* space = dy_node::get_node(_spaceSize, p);
+		dy_node::check_head(_spaceSize, space);
+		dy_node::set_bf(_spaceSize, space);
+		{
+			boost::lock_guard<MUTEX> lg(_mutex);
+			_blockNumber--;
+			if (_nodeCount < _poolMaxSize)
+			{
+				_nodeCount++;
+				dy_node::set_next(_spaceSize, space, _pool);
+				_pool = space;
+				return;
+			}
+		}
+		free(space);
+	}
+
+	size_t alloc_size() const
+	{
+		return _spaceSize;
+	}
+
+	virtual bool shared() const
+	{
+		return true;
+	}
+
+	const size_t _spaceSize;
+	void* _pool;
+	MUTEX _mutex;
+};
+
 //////////////////////////////////////////////////////////////////////////
 template <typename DATA>
 struct mem_alloc : public mem_alloc_mt<DATA, null_mutex>
 {
 	mem_alloc(size_t poolSize)
 	:mem_alloc_mt<DATA, null_mutex>(poolSize) {}
+	
+	bool shared() const
+	{
+		return false;
+	}
+};
+
+struct dymem_alloc : public dymem_alloc_mt<null_mutex>
+{
+	dymem_alloc(size_t size, size_t poolSize)
+	:dymem_alloc_mt<null_mutex>(size, poolSize) {}
+
+	bool shared() const
+	{
+		return false;
+	}
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -667,11 +843,17 @@ static shared_obj_pool<T>* create_shared_pool_mt(size_t poolSize, CREATER&& crea
 	});
 }
 
+struct RefAlloc_ 
+{
+	mem_alloc_base*& _refCountAlloc;
+	size_t _nodeCount;
+};
+
 template<typename _Tp, typename MUTEX>
-class CreateAlloc_;
+class CreateRefAlloc_;
 
 template<typename MUTEX>
-class CreateAlloc_<void, MUTEX>
+class CreateRefAlloc_<void, MUTEX>
 {
 public:
 	typedef size_t      size_type;
@@ -683,18 +865,17 @@ public:
 	template<typename _Tp1>
 	struct rebind
 	{
-		typedef CreateAlloc_<_Tp1, MUTEX> other;
+		typedef CreateRefAlloc_<_Tp1, MUTEX> other;
 	};
 
- 	CreateAlloc_(void*& refCountAlloc, size_t poolSize)
- 		:_refCountAlloc(refCountAlloc), _nodeCount(poolSize) {}
+	CreateRefAlloc_(RefAlloc_* refAll)
+ 		:_refAll(refAll) {}
 
-	void*& _refCountAlloc;
-	size_t _nodeCount;
+	RefAlloc_* _refAll;
 };
 
 template<typename _Tp, typename MUTEX>
-class CreateAlloc_
+class CreateRefAlloc_
 {
 public:
 	typedef size_t     size_type;
@@ -708,35 +889,33 @@ public:
 	template<typename _Tp1>
 	struct rebind
 	{
-		typedef CreateAlloc_<_Tp1, MUTEX> other;
+		typedef CreateRefAlloc_<_Tp1, MUTEX> other;
 	};
 
-	CreateAlloc_(void*& refCountAlloc, size_t poolSize)
-		:_refCountAlloc(refCountAlloc), _nodeCount(poolSize) {}
+	CreateRefAlloc_(RefAlloc_* refAll)
+		:_refAll(refAll) {}
 
-	CreateAlloc_(const CreateAlloc_& s)
-		:_refCountAlloc(s._refCountAlloc), _nodeCount(s._nodeCount) {}
+	CreateRefAlloc_(const CreateRefAlloc_& s)
+		:_refAll(s._refAll) {}
 
 	template<typename _Tp1>
-	CreateAlloc_(const CreateAlloc_<_Tp1, MUTEX>& s)
-		: _refCountAlloc(s._refCountAlloc), _nodeCount(s._nodeCount) {}
+	CreateRefAlloc_(const CreateRefAlloc_<_Tp1, MUTEX>& s)
+		: _refAll(s._refAll) {}
 
-	~CreateAlloc_()
+	~CreateRefAlloc_()
 	{}
 
 	pointer allocate(size_type n, const void* = 0)
 	{
 		assert(1 == n);
-		_refCountAlloc = new mem_alloc_mt<_Tp, MUTEX>(_nodeCount);
-		return (_Tp*)malloc(sizeof(_Tp));
+		_refAll->_refCountAlloc = new mem_alloc_mt<_Tp, MUTEX>(_refAll->_nodeCount);
+		throw bool();
+		return NULL;
 	}
 
 	void deallocate(pointer p, size_type n)
 	{
-		assert(1 == n);
-		free(p);
-		delete (mem_alloc_mt<_Tp, MUTEX>*)_refCountAlloc;
-		_refCountAlloc = NULL;
+		assert(false);
 	}
 
 	size_type max_size() const
@@ -755,15 +934,14 @@ public:
 		p->~_Tp();
 	}
 
-	void*& _refCountAlloc;
-	size_t _nodeCount;
+	RefAlloc_* _refAll;
 };
 
-template<typename _Tp, typename MUTEX>
-class RefCountAlloc_;
+template<typename _Tp>
+class ref_count_alloc;
 
-template<typename MUTEX>
-class RefCountAlloc_<void, MUTEX>
+template<>
+class ref_count_alloc<void>
 {
 public:
 	typedef size_t      size_type;
@@ -775,17 +953,20 @@ public:
 	template<typename _Tp1>
 	struct rebind
 	{
-		typedef RefCountAlloc_<_Tp1, MUTEX> other;
+		typedef ref_count_alloc<_Tp1> other;
 	};
 
-	RefCountAlloc_(void* refCountAlloc)
-		:_refCountAlloc(refCountAlloc) {}
+	ref_count_alloc(mem_alloc_base* refCountAlloc)
+		:_refCountAlloc(refCountAlloc)
+	{
+		static_assert(sizeof(ref_count_alloc<void>) == sizeof(CreateRefAlloc_<void, null_mutex>), "");
+	}
 
-	void* _refCountAlloc;
+	mem_alloc_base* _refCountAlloc;
 };
 
-template<typename _Tp, typename MUTEX>
-class RefCountAlloc_
+template<typename _Tp>
+class ref_count_alloc
 {
 public:
 	typedef size_t     size_type;
@@ -799,32 +980,35 @@ public:
 	template<typename _Tp1>
 	struct rebind
 	{
-		typedef RefCountAlloc_<_Tp1, MUTEX> other;
+		typedef ref_count_alloc<_Tp1> other;
 	};
 
-	RefCountAlloc_(void* refCountAlloc)
+	ref_count_alloc(mem_alloc_base* refCountAlloc)
 		:_refCountAlloc(refCountAlloc) {}
 
-	RefCountAlloc_(const RefCountAlloc_& s)
+	ref_count_alloc(const ref_count_alloc& s)
 		:_refCountAlloc(s._refCountAlloc) {}
 
 	template<typename _Tp1>
-	RefCountAlloc_(const RefCountAlloc_<_Tp1, MUTEX>& s)
+	ref_count_alloc(const ref_count_alloc<_Tp1>& s)
 		: _refCountAlloc(s._refCountAlloc) {}
 
-	~RefCountAlloc_()
-	{}
+	~ref_count_alloc()
+	{
+		static_assert(sizeof(ref_count_alloc<_Tp>) == sizeof(CreateRefAlloc_<_Tp, null_mutex>), "");
+	}
 
 	pointer allocate(size_type n, const void* = 0)
 	{
 		assert(1 == n);
-		return (_Tp*)((mem_alloc_mt<_Tp, MUTEX>*)_refCountAlloc)->allocate();
+		assert(_refCountAlloc->alloc_size() >= sizeof(_Tp));
+		return (pointer)_refCountAlloc->allocate();
 	}
 
 	void deallocate(pointer p, size_type n)
 	{
 		assert(1 == n);
-		((mem_alloc_mt<_Tp, MUTEX>*)_refCountAlloc)->deallocate(p);
+		_refCountAlloc->deallocate(p);
 	}
 
 	size_type max_size() const
@@ -843,8 +1027,21 @@ public:
 		p->~_Tp();
 	}
 
-	void* _refCountAlloc;
+	mem_alloc_base* _refCountAlloc;
 };
+
+template <typename T, typename MUTEX, typename DESTORY>
+mem_alloc_base* make_ref_count_alloc(size_t poolSize, DESTORY&& destory)
+{
+	mem_alloc_base* refCountAlloc = NULL;
+	try
+	{
+		RefAlloc_ refAll = { refCountAlloc, poolSize };
+		std::shared_ptr<T>(NULL, TRY_MOVE(destory), CreateRefAlloc_<void, MUTEX>(&refAll));
+	}
+	catch (...) {}
+	return refCountAlloc;
+}
 
 template <typename T, typename CREATER, typename DESTORY, typename MUTEX>
 class SharedObjPool_ : public shared_obj_pool<T>
@@ -854,23 +1051,21 @@ public:
 	SharedObjPool_(size_t poolSize, Creater&& creater, Destory&& destory)
 		:_dataAlloc(poolSize, TRY_MOVE(creater), TRY_MOVE(destory)), _refCountAlloc(NULL)
 	{
-		_lockAlloc = std::shared_ptr<T>(NULL, [](T*){}, CreateAlloc_<void, MUTEX>(_refCountAlloc, poolSize));
+		_refCountAlloc = make_ref_count_alloc<T, MUTEX>(poolSize, [this](T*){});
 	}
 public:
 	~SharedObjPool_()
 	{
-		_lockAlloc.reset();
-		assert(!_refCountAlloc);
+		delete _refCountAlloc;
 	}
 public:
 	std::shared_ptr<T> pick()
 	{
-		return std::shared_ptr<T>(_dataAlloc.pick(), [this](T* p){_dataAlloc.recycle(p); }, RefCountAlloc_<void, MUTEX>(_refCountAlloc));
+		return std::shared_ptr<T>(_dataAlloc.pick(), [this](T* p){_dataAlloc.recycle(p); }, ref_count_alloc<void>(_refCountAlloc));
 	}
 private:
 	ObjPool_<T, CREATER, DESTORY, MUTEX> _dataAlloc;
-	std::shared_ptr<T> _lockAlloc;
-	void* _refCountAlloc;
+	mem_alloc_base* _refCountAlloc;
 };
 
 #endif
