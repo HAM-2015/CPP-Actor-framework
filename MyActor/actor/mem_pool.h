@@ -991,7 +991,10 @@ public:
 
 	template<typename _Tp1>
 	ref_count_alloc(const ref_count_alloc<_Tp1>& s)
-		: _refCountAlloc(s._refCountAlloc) {}
+		: _refCountAlloc(s._refCountAlloc)
+	{
+		assert(_refCountAlloc->alloc_size() >= sizeof(_Tp));
+	}
 
 	~ref_count_alloc()
 	{
@@ -1001,7 +1004,6 @@ public:
 	pointer allocate(size_type n, const void* = 0)
 	{
 		assert(1 == n);
-		assert(_refCountAlloc->alloc_size() >= sizeof(_Tp));
 		return (pointer)_refCountAlloc->allocate();
 	}
 

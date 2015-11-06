@@ -59,8 +59,8 @@ struct makeLostRefCountAlloc
 
 //////////////////////////////////////////////////////////////////////////
 #ifdef ENABLE_CHECK_LOST
-CheckLost_::CheckLost_(const shared_strand& strand, actor_msg_handle_base* handle)
-:_strand(strand), _handle(handle), _closed(handle->_closed) {}
+CheckLost_::CheckLost_(const shared_strand& strand, actor_msg_handle_base* msgHandle)
+:_strand(strand), _handle(msgHandle), _closed(msgHandle->_closed) {}
 
 CheckLost_::~CheckLost_()
 {
@@ -257,7 +257,7 @@ void actor_msg_handle_base::check_lost(bool b)
 {
 	assert(_strand->running_in_this_thread());
 #ifndef ENABLE_CHECK_LOST
-	assert(b);
+	assert(!b);
 #endif
 	_checkLost = b;
 }
@@ -552,6 +552,9 @@ void MsgPoolVoid_::pump_handler::operator()(unsigned char pumpID)
 
 MsgPumpVoid_::MsgPumpVoid_(const actor_handle& hostActor, bool checkLost)
 {
+#ifndef ENABLE_CHECK_LOST
+	assert(!checkLost);
+#endif
 	_waiting = false;
 	_hasMsg = false;
 	_checkDis = false;
@@ -2357,7 +2360,7 @@ bool my_actor::timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<>& pu
 		}
 		if (pump->_checkLost && pump->_losted)
 		{
-			throw msg_pump_handle<>::lost_exception();
+			throw msg_pump_handle<>::lost_exception(pump.get_id());
 		}
 		pump->_checkDis = checkDis;
 		if (tm >= 0)
@@ -2386,7 +2389,7 @@ bool my_actor::timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<>& pu
 		}
 		if (pump->_checkLost && pump->_losted)
 		{
-			throw msg_pump_handle<>::lost_exception();
+			throw msg_pump_handle<>::lost_exception(pump.get_id());
 		}
 	}
 	return true;
@@ -2414,7 +2417,7 @@ bool my_actor::try_pump_msg(bool checkDis, const msg_pump_handle<>& pump)
 		}
 		if (pump->_checkLost && pump->_losted)
 		{
-			throw msg_pump_handle<>::lost_exception();
+			throw msg_pump_handle<>::lost_exception(pump.get_id());
 		}
 		return false;
 	}
@@ -2555,10 +2558,10 @@ std::shared_ptr<bool> ActorFunc_::new_bool(bool b)
 }
 
 #ifdef ENABLE_CHECK_LOST
-std::shared_ptr<CheckLost_> ActorFunc_::new_check_lost(const shared_strand& strand, actor_msg_handle_base* handle)
+std::shared_ptr<CheckLost_> ActorFunc_::new_check_lost(const shared_strand& strand, actor_msg_handle_base* msgHandle)
 {
 	auto& s_checkLostObjAlloc_ = s_checkLostObjAlloc;
-	return std::shared_ptr<CheckLost_>(new(s_checkLostObjAlloc.allocate())CheckLost_(strand, handle), [&s_checkLostObjAlloc_](CheckLost_* p)
+	return std::shared_ptr<CheckLost_>(new(s_checkLostObjAlloc.allocate())CheckLost_(strand, msgHandle), [&s_checkLostObjAlloc_](CheckLost_* p)
 	{
 		p->~CheckLost_();
 		s_checkLostObjAlloc_.deallocate(p);

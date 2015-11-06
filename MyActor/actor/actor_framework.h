@@ -87,7 +87,7 @@ struct ActorFunc_
 	template <typename DST, typename... ARGS>
 	static void _dispatch_handler2(my_actor* host, DST& dstRec, ARGS&&... args);
 #ifdef ENABLE_CHECK_LOST
-	static std::shared_ptr<CheckLost_> new_check_lost(const shared_strand& strand, actor_msg_handle_base* handle);
+	static std::shared_ptr<CheckLost_> new_check_lost(const shared_strand& strand, actor_msg_handle_base* msgHandle);
 	static std::shared_ptr<CheckPumpLost_> new_check_pump_lost(const actor_handle& hostActor, MsgPoolBase_* pool);
 #endif
 };
@@ -101,7 +101,7 @@ class CheckLost_
 	friend ActorFunc_;
 	FRIEND_SHARED_PTR(CheckLost_);
 private:
-	CheckLost_(const shared_strand& strand, actor_msg_handle_base* handle);
+	CheckLost_(const shared_strand& strand, actor_msg_handle_base* msgHandle);
 	~CheckLost_();
 private:
 	shared_strand _strand;
@@ -388,7 +388,7 @@ protected:
 			_autoCheckLost = ActorFunc_::new_check_lost(ActorFunc_::self_strand(_hostActor.get()), msgHandle);
 		}
 #else
-		assert(checkLost);
+		assert(!checkLost);
 #endif
 	}
 public:
@@ -1006,7 +1006,7 @@ private:
 	static std::shared_ptr<MsgPump_<ARGS...>> make(const actor_handle& hostActor, bool checkLost)
 	{
 #ifndef ENABLE_CHECK_LOST
-		assert(checkLost);
+		assert(!checkLost);
 #endif
 		std::shared_ptr<MsgPump_<ARGS...>> res(new MsgPump_<ARGS...>());
 		res->_weakThis = res;
@@ -1272,6 +1272,10 @@ class MsgPoolBase_
 	friend CheckPumpLost_;
 protected:
 	virtual void lost_msg(const actor_handle& hostActor) = 0;
+protected:
+#ifdef ENABLE_CHECK_LOST
+	std::weak_ptr<CheckPumpLost_> _weakCheckLost;
+#endif
 };
 
 template <typename... ARGS>
@@ -1765,9 +1769,6 @@ private:
 	MsgPump_(const actor_handle& hostActor, bool checkLost)
 		:MsgPumpVoid_(hostActor, checkLost)
 	{
-#ifndef ENABLE_CHECK_LOST
-		assert(checkLost);
-#endif
 		DEBUG_OPERATION(_pClosed = ActorFunc_::new_bool());
 	}
 
@@ -1794,6 +1795,9 @@ class msg_pump_handle
 
 	typedef MsgPump_<ARGS...> pump;
 
+	msg_pump_handle()
+		:_handle(NULL), _id(0) {}
+
 	pump* operator ->() const
 	{
 		assert(!*_pClosed);
@@ -1808,9 +1812,21 @@ class msg_pump_handle
 #endif
 
 	pump* _handle;
+	int _id;
 	DEBUG_OPERATION(std::shared_ptr<bool> _pClosed);
 public:
-	struct lost_exception : public msg_lost_exception {};
+	int get_id() const
+	{
+		return _id;
+	}
+
+	struct lost_exception : public msg_lost_exception 
+	{
+		lost_exception(int id)
+		:_id(id) {}
+
+		int _id;
+	};
 };
 
 template <typename... ARGS>
@@ -1819,18 +1835,13 @@ class post_actor_msg
 	typedef MsgPool_<ARGS...> msg_pool_type;
 public:
 	post_actor_msg(){}
-	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool, const actor_handle& hostActor, bool checkLost)
-		:_msgPool(msgPool), _hostActor(hostActor)
-	{
 #ifdef ENABLE_CHECK_LOST
-		if (checkLost)
-		{
-			_autoCheckLost = ActorFunc_::new_check_pump_lost(hostActor, msgPool.get());
-		}
+	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool, const actor_handle& hostActor, const std::shared_ptr<CheckPumpLost_>& autoCheckLost)
+		:_msgPool(msgPool), _hostActor(hostActor), _autoCheckLost(autoCheckLost) {}
 #else
-		assert(checkLost);
+	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool, const actor_handle& hostActor)
+		:_msgPool(msgPool), _hostActor(hostActor) {}
 #endif
-	}
 public:
 	template <typename... Args>
 	void operator()(Args&&... args) const
@@ -2077,7 +2088,7 @@ private:
 	{
 		if (_msgHandle->_checkLost && _msgHandle->_losted)
 		{
-			throw typename msg_pump_handle<ARGS...>::lost_exception();
+			throw typename msg_pump_handle<ARGS...>::lost_exception(_msgHandle.get_id());
 		}
 	}
 
@@ -2279,7 +2290,7 @@ private:
 	{
 		if (_msgHandle->_checkLost && _msgHandle->_losted)
 		{
-			throw msg_pump_handle<>::lost_exception();
+			throw msg_pump_handle<>::lost_exception(_msgHandle.get_id());
 		}
 	}
 
@@ -4379,6 +4390,9 @@ public:
 		typedef typename pool_type::pump_handler pump_handler;
 		typedef std::shared_ptr<msg_pool_status::pck<Args...>> pck_type;
 
+#ifndef ENABLE_CHECK_LOST
+		assert(!chekcLost);
+#endif
 		assert_enter();
 #if (_DEBUG || DEBUG)
 		{
@@ -4448,8 +4462,19 @@ public:
 					}
 				}
 			}
+#ifdef ENABLE_CHECK_LOST
+			std::shared_ptr<CheckPumpLost_> autoCheckLost;
+			if (chekcLost)
+			{
+				autoCheckLost = ActorFunc_::new_check_pump_lost(buddyActor, newPool.get());
+				newPool->_weakCheckLost = autoCheckLost;
+			}
 			msgPck->unlock(this);
-			return post_actor_msg<Args...>(newPool, buddyActor, chekcLost);
+			return post_actor_msg<Args...>(newPool, buddyActor, autoCheckLost);
+#else
+			msgPck->unlock(this);
+			return post_actor_msg<Args...>(newPool, buddyActor);
+#endif
 		}
 		if (buddyPck->_isHead)
 		{
@@ -4459,9 +4484,25 @@ public:
 				buddyPool = pool_type::make(strand, fixedSize);
 				update_msg_list<Args...>(buddyPck, buddyPool);
 			}
+#ifdef ENABLE_CHECK_LOST
+			std::shared_ptr<CheckPumpLost_> autoCheckLost;
+			if (chekcLost)
+			{
+				autoCheckLost = buddyPool->_weakCheckLost.lock();
+				if (!autoCheckLost)
+				{
+					autoCheckLost = ActorFunc_::new_check_pump_lost(buddyActor, buddyPool.get());
+					buddyPool->_weakCheckLost = autoCheckLost;
+				}
+			}
 			buddyPck->unlock(this);
 			msgPck->unlock(this);
-			return post_actor_msg<Args...>(buddyPool, buddyActor, chekcLost);
+			return post_actor_msg<Args...>(buddyPool, buddyActor, autoCheckLost);
+#else
+			buddyPck->unlock(this);
+			msgPck->unlock(this);
+			return post_actor_msg<Args...>(buddyPool, buddyActor);
+#endif
 		}
 		buddyPck->unlock(this);
 		msgPck->unlock(this);
@@ -4647,6 +4688,7 @@ private:
 		msgPck->unlock(host);
 		msg_pump_handle<Args...> mh;
 		mh._handle = msgPump_.get();
+		mh._id = id;
 		DEBUG_OPERATION(mh._pClosed = msgPump_->_pClosed);
 		return mh;
 	}
@@ -4668,7 +4710,7 @@ private:
 			}
 			if (pump->_checkLost && pump->_losted)
 			{
-				throw typename msg_pump_handle<Args...>::lost_exception();
+				throw typename msg_pump_handle<Args...>::lost_exception(pump.get_id());
 			}
 			pump->_checkDis = checkDis;
 			if (tm >= 0)
@@ -4697,7 +4739,7 @@ private:
 			}
 			if (pump->_checkLost && pump->_losted)
 			{
-				throw typename msg_pump_handle<Args...>::lost_exception();
+				throw typename msg_pump_handle<Args...>::lost_exception(pump.get_id());
 			}
 		}
 		return true;
@@ -4720,7 +4762,7 @@ private:
 			}
 			if (pump->_checkLost && pump->_losted)
 			{
-				throw typename msg_pump_handle<Args...>::lost_exception();
+				throw typename msg_pump_handle<Args...>::lost_exception(pump.get_id());
 			}
 			return false;
 		}
@@ -5072,6 +5114,7 @@ private:
 			{
 				assert(yield_count() == nt);
 				qg.unlock();
+				_mutex_check_lost(mbList, N);
 				push_yield();
 				_mutex_check_lost(mbList, N);
 				qg.lock();
@@ -5100,6 +5143,7 @@ private:
 			{
 				assert(yield_count() == nt);
 				qg.unlock();
+				_mutex_check_lost(mbList, N);
 				if (tm >= 0)
 				{
 					bool timed = false;
