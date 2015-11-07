@@ -254,7 +254,7 @@ protected:
 public:
 	virtual void close() = 0;
 	virtual size_t size() = 0;
-	void check_lost(bool b = true);
+	void check_lost(bool checkLost = true);
 private:
 	virtual void lost_msg();
 protected:
@@ -990,6 +990,7 @@ class MsgPump_ : public MsgPumpBase_
 	friend MsgPool_<ARGS...>;
 	friend mutex_block_pump<ARGS...>;
 	friend pump_handler;
+	friend msg_pump_handle<ARGS...>;
 	FRIEND_SHARED_PTR(MsgPump_<ARGS...>);
 private:
 	MsgPump_()
@@ -1055,9 +1056,10 @@ private:
 		if (_strand->running_in_this_thread())
 		{
 			_losted = true;
-			if (_waiting)
+			if (_waiting && _checkLost)
 			{
 				_waiting = false;
+				_checkDis = false;
 				ActorFunc_::pull_yield(_hostActor);
 			} 
 		}
@@ -1067,9 +1069,10 @@ private:
 			_strand->post([shared_this, hostActor]()
 			{
 				shared_this->_losted = true;
-				if (shared_this->_waiting)
+				if (shared_this->_waiting && shared_this->_checkLost)
 				{
 					shared_this->_waiting = false;
+					shared_this->_checkDis = false;
 					ActorFunc_::pull_yield(shared_this->_hostActor);
 				}
 			});
@@ -1762,6 +1765,7 @@ class MsgPump_<> : public MsgPumpVoid_
 {
 	friend my_actor;
 	friend mutex_block_pump<>;
+	friend msg_pump_handle<>;
 	FRIEND_SHARED_PTR(MsgPump_<>);
 public:
 	typedef MsgPump_* handle;
@@ -1794,11 +1798,58 @@ class msg_pump_handle
 	friend mutex_block_pump<ARGS...>;
 
 	typedef MsgPump_<ARGS...> pump;
+public:
+	struct lost_exception : public msg_lost_exception
+	{
+		lost_exception(int id)
+		:_id(id) {}
+
+		int _id;
+	};
 
 	msg_pump_handle()
 		:_handle(NULL), _id(0) {}
 
-	pump* operator ->() const
+	int get_id() const
+	{
+		return _id;
+	}
+
+	void check_lost(bool checkLost = true)
+	{
+		assert(_handle->_strand->running_in_this_thread());
+#ifndef ENABLE_CHECK_LOST
+		assert(!checkLost);
+#endif
+		_handle->_checkLost = checkLost;
+	}
+
+	void reset_lost()
+	{
+		assert(_handle->_strand->running_in_this_thread());
+		_handle->_losted = false;
+	}
+
+	void reset()
+	{
+		assert(_handle->_strand->running_in_this_thread());
+		_handle = NULL;
+		_id = 0;
+	}
+
+	bool empty() const
+	{
+		assert(_handle->_strand->running_in_this_thread());
+		return !_handle;
+	}
+
+	operator bool() const
+	{
+		assert(_handle->_strand->running_in_this_thread());
+		return !!_handle;
+	}
+private:
+	pump* get() const
 	{
 		assert(!*_pClosed);
 		return _handle;
@@ -1814,19 +1865,6 @@ class msg_pump_handle
 	pump* _handle;
 	int _id;
 	DEBUG_OPERATION(std::shared_ptr<bool> _pClosed);
-public:
-	int get_id() const
-	{
-		return _id;
-	}
-
-	struct lost_exception : public msg_lost_exception 
-	{
-		lost_exception(int id)
-		:_id(id) {}
-
-		int _id;
-	};
 };
 
 template <typename... ARGS>
@@ -2086,7 +2124,7 @@ private:
 
 	void check_lost()
 	{
-		if (_msgHandle->_checkLost && _msgHandle->_losted)
+		if (_msgHandle.get()->_checkLost && _msgHandle.get()->_losted)
 		{
 			throw typename msg_pump_handle<ARGS...>::lost_exception(_msgHandle.get_id());
 		}
@@ -2116,7 +2154,7 @@ private:
 
 	long long host_id()
 	{
-		return MutexBlock_::actor_id(_msgHandle->_hostActor);
+		return MutexBlock_::actor_id(_msgHandle.get()->_hostActor);
 	}
 private:
 	pump_handle _msgHandle;
@@ -2288,7 +2326,7 @@ private:
 
 	void check_lost()
 	{
-		if (_msgHandle->_checkLost && _msgHandle->_losted)
+		if (_msgHandle.get()->_checkLost && _msgHandle.get()->_losted)
 		{
 			throw msg_pump_handle<>::lost_exception(_msgHandle.get_id());
 		}
@@ -2317,7 +2355,7 @@ private:
 
 	long long host_id()
 	{
-		return MutexBlock_::actor_id(_msgHandle->_hostActor);
+		return MutexBlock_::actor_id(_msgHandle.get()->_hostActor);
 	}
 private:
 	pump_handle _msgHandle;
@@ -3752,10 +3790,12 @@ private:
 			{
 				amh.stop_waiting();
 			});
-			if (amh._checkLost && amh._losted)
+#ifdef ENABLE_CHECK_LOST
+			if (amh._losted && amh._checkLost)
 			{
 				amh.throw_lost_exception();
 			}
+#endif
 			if (tm > 0)
 			{
 				bool timed = false;
@@ -3779,10 +3819,12 @@ private:
 			{
 				return false;
 			}
-			if (amh._checkLost && amh._losted)
+#ifdef ENABLE_CHECK_LOST
+			if (amh._losted && amh._checkLost)
 			{
 				amh.throw_lost_exception();
 			}
+#endif
 		}
 		return true;
 	}
@@ -4697,22 +4739,24 @@ private:
 	bool _timed_pump_msg(const msg_pump_handle<Args...>& pump, DST& dstRec, int tm, bool checkDis)
 	{
 		assert(!pump.check_closed());
-		assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
-		if (!pump->read_msg(dstRec))
+		assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
+		if (!pump.get()->read_msg(dstRec))
 		{
 			OUT_OF_SCOPE(
 			{
-				pump->stop_waiting();
+				pump.get()->stop_waiting();
 			});
-			if (checkDis && pump->isDisconnected())
+			if (checkDis && pump.get()->isDisconnected())
 			{
 				throw pump_disconnected<Args...>();
 			}
-			if (pump->_checkLost && pump->_losted)
+#ifdef ENABLE_CHECK_LOST
+			if (pump.get()->_losted && pump.get()->_checkLost)
 			{
 				throw typename msg_pump_handle<Args...>::lost_exception(pump.get_id());
 			}
-			pump->_checkDis = checkDis;
+#endif
+			pump.get()->_checkDis = checkDis;
 			if (tm >= 0)
 			{
 				bool timed = false;
@@ -4732,15 +4776,17 @@ private:
 			{
 				push_yield();
 			}
-			if (pump->_checkDis)
+			if (pump.get()->_checkDis)
 			{
 				assert(checkDis);
 				throw pump_disconnected<Args...>();
 			}
-			if (pump->_checkLost && pump->_losted)
+#ifdef ENABLE_CHECK_LOST
+			if (pump.get()->_losted && pump.get()->_checkLost)
 			{
 				throw typename msg_pump_handle<Args...>::lost_exception(pump.get_id());
 			}
+#endif
 		}
 		return true;
 	}
@@ -4749,21 +4795,23 @@ private:
 	bool _try_pump_msg(const msg_pump_handle<Args...>& pump, DST& dstRec, bool checkDis)
 	{
 		assert(!pump.check_closed());
-		assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
+		assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
 		OUT_OF_SCOPE(
 		{
-			pump->stop_waiting();
+			pump.get()->stop_waiting();
 		});
-		if (!pump->try_read(dstRec))
+		if (!pump.get()->try_read(dstRec))
 		{
-			if (checkDis && pump->isDisconnected())
+			if (checkDis && pump.get()->isDisconnected())
 			{
 				throw pump_disconnected<Args...>();
 			}
-			if (pump->_checkLost && pump->_losted)
+#ifdef ENABLE_CHECK_LOST
+			if (pump.get()->_losted && pump.get()->_checkLost)
 			{
 				throw typename msg_pump_handle<Args...>::lost_exception(pump.get_id());
 			}
+#endif
 			return false;
 		}
 		return true;
@@ -5048,10 +5096,12 @@ private:
 
 	static void _mutex_check_lost(MutexBlock_** const mbs, const size_t N)
 	{
+#ifdef ENABLE_CHECK_LOST
 		for (size_t i = 0; i < N; i++)
 		{
 			mbs[i]->check_lost();
 		}
+#endif
 	}
 
 	static bool _mutex_go_count(size_t& runCount, MutexBlock_** const mbs, const size_t N)

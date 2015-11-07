@@ -237,24 +237,24 @@ void agent_test()
 {
 	trace_line("begin agent_test");
 	io_engine ios;
-	ios.run();
+	ios.run(4);
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
 	{
-		child_actor_handle ch = self->create_child_actor([](my_actor* self)
+		child_actor_handle ch = self->create_child_actor(self->self_strand()->clone(), [](my_actor* self)
 		{
-			child_actor_handle ch1 = self->create_child_actor([](my_actor* self)
+			child_actor_handle ch1 = self->create_child_actor(self->self_strand()->clone(), [](my_actor* self)
 			{
-				msg_pump_handle<move_test> pp = self->connect_msg_pump<move_test>();
+				msg_pump_handle<move_test> pp = self->connect_msg_pump<move_test>(true);
 				try
 				{
 					while (true)
 					{
-						trace_comma(self->self_id(), self->pump_msg(true, pp));
+						trace_comma(self->self_id(), self->pump_msg(pp));
 					}
 				}
-				catch (my_actor::pump_disconnected_exception)
+				catch (msg_lost_exception&)
 				{
-					trace_line("pump disconnected");
+					trace_comma(self->self_id(), "notifer lost");
 				}
 			});
 			self->child_actor_run(ch1);
@@ -262,14 +262,14 @@ void agent_test()
 			self->child_actor_wait_quit(ch1);
 		});
 		self->child_actor_run(ch);
-		auto ntf = self->connect_msg_notifer_to_self<move_test>();
-		self->msg_agent_to<move_test>(ch);
-		for (int i = 0; i < 3; i++)
 		{
-			ntf(move_test(i));
-			self->sleep(1000);
+			auto ntf = self->connect_msg_notifer_to<move_test>(ch, true);
+			for (int i = 0; i < 3; i++)
+			{
+				ntf(move_test(i));
+				self->sleep(1000);
+			}
 		}
-		self->reset_msg_pipe<move_test>();
 		self->child_actor_wait_quit(ch);
 	});
 	ah->notify_run();

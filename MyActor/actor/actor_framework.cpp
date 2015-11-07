@@ -253,13 +253,13 @@ void actor_msg_handle_base::set_actor(const actor_handle& hostActor)
 	DEBUG_OPERATION(_strand = hostActor->self_strand());
 }
 
-void actor_msg_handle_base::check_lost(bool b)
+void actor_msg_handle_base::check_lost(bool checkLost)
 {
 	assert(_strand->running_in_this_thread());
 #ifndef ENABLE_CHECK_LOST
-	assert(!b);
+	assert(!checkLost);
 #endif
-	_checkLost = b;
+	_checkLost = checkLost;
 }
 
 void actor_msg_handle_base::lost_msg()
@@ -661,9 +661,10 @@ void MsgPumpVoid_::lost_msg(const actor_handle& hostActor)
 	if (_strand->running_in_this_thread())
 	{
 		_losted = true;
-		if (_waiting)
+		if (_waiting && _checkLost)
 		{
 			_waiting = false;
+			_checkDis = false;
 			ActorFunc_::pull_yield(_hostActor);
 		}
 	}
@@ -673,9 +674,10 @@ void MsgPumpVoid_::lost_msg(const actor_handle& hostActor)
 		_strand->post([shared_this, hostActor]()
 		{
 			shared_this->_losted = true;
-			if (shared_this->_waiting)
+			if (shared_this->_waiting && shared_this->_checkLost)
 			{
 				shared_this->_waiting = false;
+				shared_this->_checkDis = false;
 				ActorFunc_::pull_yield(shared_this->_hostActor);
 			}
 		});
@@ -2298,10 +2300,12 @@ bool my_actor::timed_wait_msg(int tm, actor_msg_handle<>& amh)
 		{
 			amh.stop_waiting();
 		});
-		if (amh._checkLost && amh._losted)
+#ifdef ENABLE_CHECK_LOST
+		if (amh._losted && amh._checkLost)
 		{
 			amh.throw_lost_exception();
 		}
+#endif
 		if (tm > 0)
 		{
 			bool timed = false;
@@ -2325,10 +2329,12 @@ bool my_actor::timed_wait_msg(int tm, actor_msg_handle<>& amh)
 		{
 			return false;
 		}
-		if (amh._checkLost && amh._losted)
+#ifdef ENABLE_CHECK_LOST
+		if (amh._losted && amh._checkLost)
 		{
 			amh.throw_lost_exception();
 		}
+#endif
 	}
 	return true;
 }
@@ -2347,22 +2353,24 @@ bool my_actor::timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<>& pu
 {
 	assert_enter();
 	assert(!pump.check_closed());
-	assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
-	if (!pump->read_msg())
+	assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
+	if (!pump.get()->read_msg())
 	{
 		OUT_OF_SCOPE(
 		{
-			pump->stop_waiting();
+			pump.get()->stop_waiting();
 		});
-		if (checkDis && pump->isDisconnected())
+		if (checkDis && pump.get()->isDisconnected())
 		{
 			throw pump_disconnected<>();
 		}
-		if (pump->_checkLost && pump->_losted)
+#ifdef ENABLE_CHECK_LOST
+		if (pump.get()->_losted && pump.get()->_checkLost)
 		{
 			throw msg_pump_handle<>::lost_exception(pump.get_id());
 		}
-		pump->_checkDis = checkDis;
+#endif
+		pump.get()->_checkDis = checkDis;
 		if (tm >= 0)
 		{
 			bool timed = false;
@@ -2382,15 +2390,17 @@ bool my_actor::timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<>& pu
 		{
 			push_yield();
 		}
-		if (pump->_checkDis)
+		if (pump.get()->_checkDis)
 		{
 			assert(checkDis);
 			throw pump_disconnected<>();
 		}
-		if (pump->_checkLost && pump->_losted)
+#ifdef ENABLE_CHECK_LOST
+		if (pump.get()->_losted && pump.get()->_checkLost)
 		{
 			throw msg_pump_handle<>::lost_exception(pump.get_id());
 		}
+#endif
 	}
 	return true;
 }
@@ -2404,21 +2414,23 @@ bool my_actor::try_pump_msg(bool checkDis, const msg_pump_handle<>& pump)
 {
 	assert_enter();
 	assert(!pump.check_closed());
-	assert(pump->_hostActor && pump->_hostActor->self_id() == self_id());
+	assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
 	OUT_OF_SCOPE(
 	{
-		pump->stop_waiting();
+		pump.get()->stop_waiting();
 	});
-	if (!pump->try_read())
+	if (!pump.get()->try_read())
 	{
-		if (checkDis && pump->isDisconnected())
+		if (checkDis && pump.get()->isDisconnected())
 		{
 			throw pump_disconnected<>();
 		}
-		if (pump->_checkLost && pump->_losted)
+#ifdef ENABLE_CHECK_LOST
+		if (pump.get()->_losted && pump.get()->_checkLost)
 		{
 			throw msg_pump_handle<>::lost_exception(pump.get_id());
 		}
+#endif
 		return false;
 	}
 	return true;
@@ -2440,10 +2452,12 @@ bool my_actor::timed_wait_trig(int tm, actor_trig_handle<>& ath)
 		{
 			ath.stop_waiting();
 		});
-		if (ath._checkLost && ath._losted)
+#ifdef ENABLE_CHECK_LOST
+		if (ath._losted && ath._checkLost)
 		{
 			ath.throw_lost_exception();
 		}
+#endif
 		if (tm > 0)
 		{
 			bool timed = false;
@@ -2467,10 +2481,12 @@ bool my_actor::timed_wait_trig(int tm, actor_trig_handle<>& ath)
 		{
 			return false;
 		}
-		if (ath._checkLost && ath._losted)
+#ifdef ENABLE_CHECK_LOST
+		if (ath._losted && ath._checkLost)
 		{
 			ath.throw_lost_exception();
 		}
+#endif
 	}
 	return true;
 }

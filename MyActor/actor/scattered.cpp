@@ -276,15 +276,24 @@ int get_tick_s()
 
 void get_bp_sp_ip(void** pbp, void** psp, void** pip)
 {
+#ifdef __x86_64__
 	__asm__("movq %%rbp, %0": "=r"(*pbp));
 	__asm__("movq %%rsp, %0": "=r"(*psp));
+#elif __i386__
+	__asm__("movl %%ebp, %0": "=r"(*pbp));
+	__asm__("movl %%esp, %0": "=r"(*psp));
+#endif
 	*pip = NULL;
 }
 
 void* get_sp()
 {
 	void* result;
+#ifdef __x86_64__
 	__asm__("movq %%rsp, %0": "=r"(result));
+#elif __i386__
+	__asm__("movl %%esp, %0": "=r"(result));
+#endif
 	return result;
 }
 
@@ -292,7 +301,7 @@ unsigned long long cpu_tick()
 {
 	unsigned int __a, __d;
 	__asm__("rdtsc" : "=a" (__a), "=d" (__d));
-	return ((unsigned long)__a) | (((unsigned long)__d) << 32);
+	return ((unsigned long long)__a) | (((unsigned long long)__d) << 32);
 }
 
 #endif
