@@ -311,7 +311,7 @@ MsgPoolVoid_::pump_handler MsgPoolVoid_::connect_pump(const std::shared_ptr<msg_
 	compHandler._msgPump = msgPump;
 	_waiting = false;
 	_sendCount = 0;
-	losted = _losted;
+	losted = _losted && !_msgBuff;
 	return compHandler;
 }
 
@@ -356,10 +356,10 @@ void MsgPoolVoid_::send_msg(const actor_handle& hostActor)
 {
 	//if (_closed) return;
 
+	_losted = false;
 	if (_waiting)
 	{
 		_waiting = false;
-		_losted = false;
 		assert(_msgPump);
 		assert(0 == _msgBuff);
 		_sendCount++;
@@ -373,10 +373,10 @@ void MsgPoolVoid_::send_msg(const actor_handle& hostActor)
 
 void MsgPoolVoid_::post_msg(const actor_handle& hostActor)
 {
+	_losted = false;
 	if (_waiting)
 	{
 		_waiting = false;
-		_losted = false;
 		assert(_msgPump);
 		assert(0 == _msgBuff);
 		_sendCount++;
@@ -426,6 +426,12 @@ void MsgPoolVoid_::pump_handler::pump_msg(unsigned char pumpID, const actor_hand
 				_thisPool->_sendCount++;
 				_msgPump->receive_msg(hostActor);
 			}
+#ifdef ENABLE_CHECK_LOST
+			else if (_thisPool->_losted)
+			{
+				_msgPump->lost_msg(hostActor);
+			}
+#endif
 			else
 			{
 				_thisPool->_waiting = true;
@@ -462,6 +468,12 @@ bool MsgPoolVoid_::pump_handler::try_pump(my_actor* host, unsigned char pumpID, 
 					thisPool_->_msgBuff--;
 					ok = true;
 				}
+#ifdef ENABLE_CHECK_LOST
+				else// if (thisPool_->_losted)
+				{
+					wait = thisPool_->_losted;
+				}
+#endif
 			}
 			else
 			{//上次消息没取到，重新取，但实际中间已经post出去了
@@ -556,6 +568,7 @@ MsgPumpVoid_::MsgPumpVoid_(const actor_handle& hostActor, bool checkLost)
 	assert(!checkLost);
 #endif
 	_waiting = false;
+	_waitConnect = false;
 	_hasMsg = false;
 	_checkDis = false;
 	_losted = false;
@@ -589,6 +602,7 @@ void MsgPumpVoid_::close()
 	assert(_strand->running_in_this_thread());
 	_hasMsg = false;
 	_waiting = false;
+	_waitConnect = false;
 	_checkDis = false;
 	_losted = false;
 	_checkLost = false;
@@ -628,6 +642,11 @@ void MsgPumpVoid_::connect(const pump_handler& pumpHandler, const bool& losted)
 		{
 			_pumpHandler.post_pump(_pumpCount);
 		}
+	}
+	else if (_waitConnect)
+	{
+		_waitConnect = false;
+		ActorFunc_::pull_yield(_hostActor);
 	}
 }
 
@@ -743,7 +762,11 @@ bool MsgPumpVoid_::try_read()
 		_hasMsg = false;
 		return true;
 	}
+#ifdef ENABLE_CHECK_LOST
+	if (!_losted && !_pumpHandler.empty())
+#else
 	if (!_pumpHandler.empty())
+#endif
 	{
 		bool wait = false;
 		if (_pumpHandler.try_pump(_hostActor, _pumpCount, wait))
@@ -761,6 +784,9 @@ bool MsgPumpVoid_::try_read()
 			}
 			return true;
 		}
+#ifdef ENABLE_CHECK_LOST
+		_losted = wait;
+#endif
 	}
 	return false;
 }
@@ -788,6 +814,7 @@ size_t MsgPumpVoid_::snap_size()
 void MsgPumpVoid_::stop_waiting()
 {
 	_waiting = false;
+	_waitConnect = false;
 	_checkDis = false;
 	_dstRec = NULL;
 }

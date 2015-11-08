@@ -1015,6 +1015,7 @@ private:
 		res->_waiting = false;
 		res->_checkDis = false;
 		res->_losted = false;
+		res->_waitConnect = false;
 		res->_checkLost = checkLost;
 		res->_pumpCount = 0;
 		res->_dstRec = NULL;
@@ -1124,6 +1125,7 @@ private:
 		assert(_strand->running_in_this_thread());
 		assert(!_dstRec);
 		assert(!_waiting);
+		assert(!dst.has());
 		if (_hasMsg)
 		{
 			_hasMsg = false;
@@ -1131,7 +1133,11 @@ private:
 			((msg_type*)_msgSpace)->~msg_type();
 			return true;
 		}
+#ifdef ENABLE_CHECK_LOST
+		if (!_losted && !_pumpHandler.empty())
+#else
 		if (!_pumpHandler.empty())
+#endif
 		{
 			bool wait = false;
 			if (_pumpHandler.try_pump(_hostActor, dst, _pumpCount, wait))
@@ -1153,6 +1159,9 @@ private:
 				}
 				return true;
 			}
+#ifdef ENABLE_CHECK_LOST
+			_losted = wait;
+#endif
 		}
 		return false;
 	}
@@ -1180,6 +1189,7 @@ private:
 	void stop_waiting()
 	{
 		_waiting = false;
+		_waitConnect = false;
 		_checkDis = false;
 		_dstRec = NULL;
 	}
@@ -1205,6 +1215,11 @@ private:
 			{
 				_pumpHandler.post_pump(_pumpCount);
 			}
+		}
+		else if (_waitConnect)
+		{
+			_waitConnect = false;
+			ActorFunc_::pull_yield(_hostActor);
 		}
 	}
 
@@ -1243,6 +1258,7 @@ private:
 		_dstRec = NULL;
 		_pumpCount = 0;
 		_waiting = false;
+		_waitConnect = false;
 		_checkDis = false;
 		_losted = false;
 		_checkLost = false;
@@ -1261,12 +1277,13 @@ private:
 	shared_strand _strand;
 	dst_receiver* _dstRec;
 	unsigned char _pumpCount;
+	DEBUG_OPERATION(std::shared_ptr<bool> _pClosed);
 	bool _hasMsg : 1;
 	bool _waiting : 1;
+	bool _waitConnect : 1;
 	bool _checkDis : 1;
 	bool _checkLost : 1;
 	bool _losted : 1;
-	DEBUG_OPERATION(std::shared_ptr<bool> _pClosed);
 };
 
 class MsgPoolBase_
@@ -1306,6 +1323,12 @@ class MsgPool_ : public MsgPoolBase_
 						_thisPool->_sendCount++;
 						_msgPump->receive_msg(std::move(mt_), hostActor);
 					}
+#ifdef ENABLE_CHECK_LOST
+					else if (_thisPool->_losted)
+					{
+						_msgPump->lost_msg(hostActor);
+					}
+#endif
 					else
 					{
 						_thisPool->_waiting = true;
@@ -1361,6 +1384,12 @@ class MsgPool_ : public MsgPoolBase_
 							msgBuff.pop_front();
 							ok = true;
 						}
+#ifdef ENABLE_CHECK_LOST
+						else// if (thisPool_->_losted)
+						{
+							wait = thisPool_->_losted;
+						}
+#endif
 					}
 					else
 					{//上次消息没取到，重新取，但实际中间已经post出去了
@@ -1517,10 +1546,10 @@ private:
 	{
 		if (_closed) return;
 
+		_losted = false;
 		if (_waiting)
 		{
 			_waiting = false;
-			_losted = false;
 			assert(_msgPump);
 			assert(_msgBuff.empty());
 			_sendCount++;
@@ -1545,10 +1574,10 @@ private:
 
 	void post_msg(msg_type&& mt, const actor_handle& hostActor)
 	{
+		_losted = false;
 		if (_waiting)
 		{
 			_waiting = false;
-			_losted = false;
 			assert(_msgPump);
 			assert(_msgBuff.empty());
 			_sendCount++;
@@ -1613,7 +1642,7 @@ private:
 		compHandler._msgPump = msgPump;
 		_sendCount = 0;
 		_waiting = false;
-		losted = _losted;
+		losted = _losted && _msgBuff.empty();
 		return compHandler;
 	}
 
@@ -1733,6 +1762,7 @@ protected:
 	unsigned char _pumpCount;
 	bool* _dstRec;
 	bool _waiting : 1;
+	bool _waitConnect : 1;
 	bool _hasMsg : 1;
 	bool _checkDis : 1;
 	bool _checkLost : 1;
@@ -1812,12 +1842,13 @@ public:
 
 	int get_id() const
 	{
+		assert(_handle && _handle->_strand->running_in_this_thread());
 		return _id;
 	}
 
 	void check_lost(bool checkLost = true)
 	{
-		assert(_handle->_strand->running_in_this_thread());
+		assert(!_handle || _handle->_strand->running_in_this_thread());
 #ifndef ENABLE_CHECK_LOST
 		assert(!checkLost);
 #endif
@@ -1826,26 +1857,32 @@ public:
 
 	void reset_lost()
 	{
-		assert(_handle->_strand->running_in_this_thread());
+		assert(!_handle || _handle->_strand->running_in_this_thread());
 		_handle->_losted = false;
 	}
 
 	void reset()
 	{
-		assert(_handle->_strand->running_in_this_thread());
+		assert(!_handle || _handle->_strand->running_in_this_thread());
 		_handle = NULL;
 		_id = 0;
 	}
 
 	bool empty() const
 	{
-		assert(_handle->_strand->running_in_this_thread());
+		assert(!_handle || _handle->_strand->running_in_this_thread());
 		return !_handle;
+	}
+
+	bool is_connected() const
+	{
+		assert(_handle && _handle->_strand->running_in_this_thread());
+		return !_handle->isDisconnected();
 	}
 
 	operator bool() const
 	{
-		assert(_handle->_strand->running_in_this_thread());
+		assert(!_handle || _handle->_strand->running_in_this_thread());
 		return !!_handle;
 	}
 private:
@@ -4822,6 +4859,45 @@ private:
 	{
 		_timed_pump_msg(pump, dstRec, -1, checkDis);
 	}
+
+	template <typename... Args>
+	bool _timed_wait_connect(const msg_pump_handle<Args...>& pump, int tm)
+	{
+		assert(!pump.check_closed());
+		assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
+		if (!pump.is_connected())
+		{
+			if (0 == tm)
+			{
+				return false;
+			}
+			OUT_OF_SCOPE(
+			{
+				pump.get()->stop_waiting();
+			});
+			pump.get()->_waitConnect = true;
+			if (tm >= 0)
+			{
+				bool timed = false;
+				delay_trig(tm, [this, &timed]
+				{
+					timed = true;
+					pull_yield();
+				});
+				push_yield();
+				if (timed)
+				{
+					return false;
+				}
+				cancel_delay_trig();
+			}
+			else
+			{
+				push_yield();
+			}
+		}
+		return true;
+	}
 public:
 
 	/*!
@@ -4971,6 +5047,24 @@ public:
 	{
 		assert(!pump.check_closed());
 		return pump._handle->snap_size();
+	}
+
+	/*!
+	@brief 超时等待通知句柄连接
+	*/
+	template <typename... Args>
+	__yield_interrupt bool timed_wait_connect(int tm, msg_pump_handle<Args...>& pump)
+	{
+		return _timed_wait_connect(pump, tm);
+	}
+
+	/*!
+	@brief 等待通知句柄连接
+	*/
+	template <typename... Args>
+	__yield_interrupt void wait_connect(msg_pump_handle<Args...>& pump)
+	{
+		_timed_wait_connect(pump, -1);
 	}
 public:
 	/*!
@@ -5568,20 +5662,13 @@ public:
 	std::shared_ptr<list<stack_line_info>> _createStack;//当前Actor创建时的调用堆栈
 #endif
 private:
+	std::weak_ptr<my_actor> _weakThis;
+	shared_strand _strand;///<Actor调度器
 	void* _actorPull;///<Actor中断点恢复
 	void* _actorPush;///<Actor中断点
 	void* _stackTop;///<Actor栈顶
 	id _selfID;///<ActorID
 	size_t _stackSize;///<Actor栈大小
-	shared_strand _strand;///<Actor调度器
-	bool _inActor : 1;///<当前正在Actor内部执行标记
-	bool _started : 1;///<已经开始运行的标记
-	bool _quited : 1;///<_mainFunc已经不再执行
-	bool _exited : 1;///<完全退出
-	bool _suspended : 1;///<Actor挂起标记
-	bool _hasNotify : 1;///<当前Actor挂起，有外部触发准备进入Actor标记
-	bool _isForce : 1;///<是否是强制退出的标记，成功调用了force_quit
-	bool _notifyQuited : 1;///<当前Actor被锁定后，收到退出消息
 	size_t _lockQuit;///<锁定当前Actor，如果当前接收到退出消息，暂时不退，等到解锁后退出
 	size_t _yieldCount;//yield计数
 	size_t _lastYield;//记录上次try_yield的计数
@@ -5596,13 +5683,20 @@ private:
 	actor_handle _parentActor;///<父Actor，子Actor都析构后，父Actor才能析构
 	timer_state _timerState;///<定时器状态
 	ActorTimer_* _timer;///<定时器
-	std::weak_ptr<my_actor> _weakThis;
 #ifdef CHECK_SELF
 #ifndef ENALBE_TLS_CHECK_SELF
 	msg_map<void*, my_actor*>::iterator _btIt;
 	msg_map<void*, my_actor*>::iterator _topIt;
 #endif
 #endif
+	bool _inActor : 1;///<当前正在Actor内部执行标记
+	bool _started : 1;///<已经开始运行的标记
+	bool _quited : 1;///<_mainFunc已经不再执行
+	bool _exited : 1;///<完全退出
+	bool _suspended : 1;///<Actor挂起标记
+	bool _hasNotify : 1;///<当前Actor挂起，有外部触发准备进入Actor标记
+	bool _isForce : 1;///<是否是强制退出的标记，成功调用了force_quit
+	bool _notifyQuited : 1;///<当前Actor被锁定后，收到退出消息
 	static msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc _suspendResumeQueueAll;
 	static msg_list_shared_alloc<std::function<void()> >::shared_node_alloc _quitExitCallbackAll;
 	static msg_list_shared_alloc<actor_handle>::shared_node_alloc _childActorListAll;
