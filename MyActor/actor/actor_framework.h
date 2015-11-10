@@ -1112,7 +1112,7 @@ private:
 		_dstRec = &dst;
 		if (!_pumpHandler.empty())
 		{
-			_pumpHandler(_pumpCount);
+			_pumpHandler.start_pump(_pumpCount);
 			_waiting = !!_dstRec;
 			return !_dstRec;
 		}
@@ -1203,17 +1203,16 @@ private:
 		_losted = losted;
 		if (_waiting)
 		{
+#ifdef ENABLE_CHECK_LOST
 			if (_losted && _checkLost)
 			{
-				if (_waiting)
-				{
-					_waiting = false;
-					ActorFunc_::pull_yield(_hostActor);
-				}
+				_waiting = false;
+				ActorFunc_::pull_yield(_hostActor);
 			} 
 			else
+#endif
 			{
-				_pumpHandler.post_pump(_pumpCount);
+				_pumpHandler.start_pump(_pumpCount);
 			}
 		}
 		else if (_waitConnect)
@@ -1347,7 +1346,7 @@ class MsgPool_ : public MsgPoolBase_
 			}
 		}
 
-		void operator()(unsigned char pumpID)
+		void start_pump(unsigned char pumpID)
 		{
 			assert(_thisPool);
 			if (_thisPool->_strand->running_in_this_thread())
@@ -1686,7 +1685,7 @@ class MsgPoolVoid_ :public MsgPoolBase_
 
 	struct pump_handler
 	{
-		void operator()(unsigned char pumpID);
+		void start_pump(unsigned char pumpID);
 		void pump_msg(unsigned char pumpID, const actor_handle& hostActor);
 		bool try_pump(my_actor* host, unsigned char pumpID, bool& wait);
 		size_t size(my_actor* host, unsigned char pumpID);
@@ -2405,7 +2404,7 @@ class TrigOnceBase_
 {
 protected:
 	TrigOnceBase_()
-		DEBUG_OPERATION(:_pIsTrig(new boost::atomic<bool>(false)))
+		DEBUG_OPERATION(:_pIsTrig(new std::atomic<bool>(false)))
 	{}
 
 	TrigOnceBase_(const TrigOnceBase_& s)
@@ -2459,7 +2458,7 @@ private:
 	void operator =(const TrigOnceBase_&);
 protected:
 	mutable actor_handle _hostActor;
-	DEBUG_OPERATION(std::shared_ptr<boost::atomic<bool> > _pIsTrig);
+	DEBUG_OPERATION(std::shared_ptr<std::atomic<bool> > _pIsTrig);
 };
 
 
@@ -2661,7 +2660,7 @@ struct sync_result
 		assert(_res);
 		_res->create(TRY_MOVE(args)...);
 		{
-			boost::lock_guard<boost::mutex> lg(_mutex);
+			std::lock_guard<std::mutex> lg(_mutex);
 			_con.notify_one();
 		}
 		_res = NULL;
@@ -2673,14 +2672,14 @@ struct sync_result
 		assert(_res);
 		_res->create(TRY_MOVE(r));
 		{
-			boost::lock_guard<boost::mutex> lg(_mutex);
+			std::lock_guard<std::mutex> lg(_mutex);
 			_con.notify_one();
 		}
 		_res = NULL;
 	}
 
-	boost::mutex _mutex;
-	boost::condition_variable _con;
+	std::mutex _mutex;
+	std::condition_variable _con;
 	stack_obj<R>* _res;
 };
 
@@ -2694,14 +2693,14 @@ struct sync_result<void>
 	{
 		assert(_res);
 		{
-			boost::lock_guard<boost::mutex> lg(_mutex);
+			std::lock_guard<std::mutex> lg(_mutex);
 			_con.notify_one();
 		}
 		DEBUG_OPERATION(_res = false);
 	}
 
-	boost::mutex _mutex;
-	boost::condition_variable _con;
+	std::mutex _mutex;
+	std::condition_variable _con;
 	DEBUG_OPERATION(bool _res);
 };
 
@@ -2743,7 +2742,7 @@ public:
 		stack_obj<R> res;
 		_result._res = &res;
 		{
-			boost::unique_lock<boost::mutex> ul(_result._mutex);
+			std::unique_lock<std::mutex> ul(_result._mutex);
 			Parent::_dispatch_handler2(_dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
 			_result._con.wait(ul);
 		}
@@ -2757,7 +2756,7 @@ public:
 		stack_obj<R> res;
 		_result._res = &res;
 		{
-			boost::unique_lock<boost::mutex> ul(_result._mutex);
+			std::unique_lock<std::mutex> ul(_result._mutex);
 			Parent::dispatch_handler();
 			_result._con.wait(ul);
 		}
@@ -2816,7 +2815,7 @@ public:
 		assert(!ActorFunc_::self_strand(Parent::_hostActor.get())->in_this_ios());
 		DEBUG_OPERATION(_result._res = true);
 		{
-			boost::unique_lock<boost::mutex> ul(_result._mutex);
+			std::unique_lock<std::mutex> ul(_result._mutex);
 			Parent::_dispatch_handler2(_dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
 			_result._con.wait(ul);
 		}
@@ -2828,7 +2827,7 @@ public:
 		assert(!ActorFunc_::self_strand(Parent::_hostActor.get())->in_this_ios());
 		DEBUG_OPERATION(_result._res = true);
 		{
-			boost::unique_lock<boost::mutex> ul(_result._mutex);
+			std::unique_lock<std::mutex> ul(_result._mutex);
 			Parent::dispatch_handler();
 			_result._con.wait(ul);
 		}
@@ -2861,7 +2860,7 @@ public:
 	wrapped_sync_handler(H&& h, sync_result<R>& res)
 		:_handler(TRY_MOVE(h)), _result(&res)
 	{
-		DEBUG_OPERATION(_pIsTrig = std::shared_ptr<boost::atomic<bool> >(new boost::atomic<bool>(false)));
+		DEBUG_OPERATION(_pIsTrig = std::shared_ptr<std::atomic<bool> >(new std::atomic<bool>(false)));
 	}
 
 	wrapped_sync_handler(wrapped_sync_handler&& s)
@@ -2884,7 +2883,7 @@ public:
 		_result->_res = &res;
 		assert(!_pIsTrig->exchange(true));
 		{
-			boost::unique_lock<boost::mutex> ul(_result->_mutex);
+			std::unique_lock<std::mutex> ul(_result->_mutex);
 			_handler(TRY_MOVE(args)...);
 			_result->_con.wait(ul);
 		}
@@ -2899,7 +2898,7 @@ public:
 		_result->_res = &res;
 		assert(!_pIsTrig->exchange(true));
 		{
-			boost::unique_lock<boost::mutex> ul(_result->_mutex);
+			std::unique_lock<std::mutex> ul(_result->_mutex);
 			_handler(TRY_MOVE(args)...);
 			_result->_con.wait(ul);
 		}
@@ -2909,7 +2908,7 @@ public:
 private:
 	Handler _handler;
 	sync_result<R>* _result;
-	DEBUG_OPERATION(std::shared_ptr<boost::atomic<bool> > _pIsTrig);
+	DEBUG_OPERATION(std::shared_ptr<std::atomic<bool> > _pIsTrig);
 };
 
 template <typename Handler>
@@ -2920,7 +2919,7 @@ public:
 	wrapped_sync_handler(H&& h, sync_result<void>& res)
 		:_handler(TRY_MOVE(h)), _result(&res)
 	{
-		DEBUG_OPERATION(_pIsTrig = std::shared_ptr<boost::atomic<bool> >(new boost::atomic<bool>(false)));
+		DEBUG_OPERATION(_pIsTrig = std::shared_ptr<std::atomic<bool> >(new std::atomic<bool>(false)));
 	}
 
 	wrapped_sync_handler(wrapped_sync_handler&& s)
@@ -2942,7 +2941,7 @@ public:
 		DEBUG_OPERATION(_result->_res = true);
 		assert(!_pIsTrig->exchange(true));
 		{
-			boost::unique_lock<boost::mutex> ul(_result->_mutex);
+			std::unique_lock<std::mutex> ul(_result->_mutex);
 			_handler(TRY_MOVE(args)...);
 			_result->_con.wait(ul);
 		}
@@ -2955,7 +2954,7 @@ public:
 		DEBUG_OPERATION(_result->_res = true);
 		assert(!_pIsTrig->exchange(true));
 		{
-			boost::unique_lock<boost::mutex> ul(_result->_mutex);
+			std::unique_lock<std::mutex> ul(_result->_mutex);
 			_handler(TRY_MOVE(args)...);
 			_result->_con.wait(ul);
 		}
@@ -2964,7 +2963,7 @@ public:
 private:
 	Handler _handler;
 	sync_result<void>* _result;
-	DEBUG_OPERATION(std::shared_ptr<boost::atomic<bool> > _pIsTrig);
+	DEBUG_OPERATION(std::shared_ptr<std::atomic<bool> > _pIsTrig);
 };
 
 /*!

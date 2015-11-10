@@ -1,9 +1,8 @@
 #ifndef __SHARED_STRAND_H
 #define __SHARED_STRAND_H
 
+#include <algorithm>
 #include <boost/asio/io_service.hpp>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/condition_variable.hpp>
 #include <functional>
 #include <memory>
 #include "wrapped_post_handler.h"
@@ -562,9 +561,9 @@ public:
 	void syncInvoke(H&& h)
 	{
 		assert(!in_this_ios());
-		boost::mutex mutex;
-		boost::condition_variable con;
-		boost::unique_lock<boost::mutex> ul(mutex);
+		std::mutex mutex;
+		std::condition_variable con;
+		std::unique_lock<std::mutex> ul(mutex);
 		post([&]
 		{
 			BEGIN_CHECK_EXCEPTION;
@@ -585,9 +584,9 @@ public:
 	{
 		assert(!in_this_ios());
 		unsigned char r[sizeof(R)];
-		boost::mutex mutex;
-		boost::condition_variable con;
-		boost::unique_lock<boost::mutex> ul(mutex);
+		std::mutex mutex;
+		std::condition_variable con;
+		std::unique_lock<std::mutex> ul(mutex);
 		post([&]
 		{
 			BEGIN_CHECK_EXCEPTION;

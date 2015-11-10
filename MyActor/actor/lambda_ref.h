@@ -411,10 +411,14 @@ if (__catched) {
 	___host->actor_wait_quit(___actor); \
 }
 
-#define RUN_IN_TRHEAD_STACK(__host__, __exp__) __host__->run_in_thread_stack([&] {__exp__;})
+#define RUN_IN_TRHEAD_STACK(__host__, __exp__) {\
+my_actor::quit_guard qg(__host__); \
+__host__->run_in_thread_stack([&] {__exp__; });}
 
-#define begin_RUN_IN_TRHEAD_STACK(__host__)  __host__->run_in_thread_stack([&] {
+#define begin_RUN_IN_TRHEAD_STACK(__host__){\
+	my_actor::quit_guard qg(__host__); \
+	__host__->run_in_thread_stack([&] {
 
-#define end_RUN_IN_TRHEAD_STACK() })
+#define end_RUN_IN_TRHEAD_STACK() });}
 
 #endif

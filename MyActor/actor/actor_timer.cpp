@@ -1,9 +1,16 @@
 #include "actor_timer.h"
 #include "scattered.h"
 #include "actor_framework.h"
+#ifdef DISABLE_HIGH_RESOLUTION
+#include <boost/asio/deadline_timer.hpp>
+typedef boost::asio::deadline_timer timer_type;
+typedef boost::posix_time::microseconds micseconds;
+#else
+#include <boost/chrono/system_clocks.hpp>
 #include <boost/asio/high_resolution_timer.hpp>
-
 typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> timer_type;
+typedef boost::chrono::microseconds micseconds;
+#endif
 
 ActorTimer_::ActorTimer_(const shared_strand& strand)
 :_ios(strand->get_io_engine()), _looping(false), _weakStrand(strand), _timerCount(0),
@@ -95,7 +102,7 @@ void ActorTimer_::timer_loop(unsigned long long us)
 {
 	int tc = ++_timerCount;
 	boost::system::error_code ec;
-	((timer_type*)_timer)->expires_from_now(boost::chrono::microseconds(us), ec);
+	((timer_type*)_timer)->expires_from_now(micseconds(us), ec);
 	((timer_type*)_timer)->async_wait(_strand->wrap_asio([this, tc](const boost::system::error_code&)
 	{
 		assert(_strand->running_in_this_thread());

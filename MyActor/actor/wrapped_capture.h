@@ -2,7 +2,7 @@
 #define __WRAPPED_CAPTURE_H
 
 #include "tuple_option.h"
-#include <boost/atomic/atomic.hpp>
+#include <atomic>
 
 template <typename H, typename... ARGS>
 struct wrapped_capture 

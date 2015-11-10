@@ -391,14 +391,15 @@ void socket_test()
 		child_actor_handle srv = self->create_child_actor([&](my_actor* self)
 		{
 			boost::asio::ip::tcp::socket sck(self->self_io_service());
-			boost::asio::ip::tcp::acceptor acc(self->self_io_service(), boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 1234));
+			stack_obj<boost::asio::ip::tcp::acceptor> acc;
+			RUN_IN_TRHEAD_STACK(self, acc.create(self->self_io_service(), boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 1234)));//Actor堆栈内创建acceptor会出错，切换到线程堆栈内创建
 			boost::system::error_code ec;
-			acc.async_accept(sck, self->make_asio_context(ec));
+			acc->async_accept(sck, self->make_asio_context(ec));
 			if (!ec)
 			{
-				acc.close(ec);
+				acc->close(ec);
 				char buf[128];
-				size_t s;
+				size_t s = 0;
 				while (true)
 				{
 					//sck.async_read_some(boost::asio::buffer(buf, sizeof(buf)-1), self->make_asio_context(ec, s));

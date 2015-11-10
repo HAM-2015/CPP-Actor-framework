@@ -50,6 +50,7 @@ boost::asio::io_service& StrandEx_::get_io_service()
 
 bool StrandEx_::running_in_this_thread() const
 {
+	//return boost::asio::detail::call_stack<boost::asio::detail::strand_service::strand_impl>::contains(_impl) != 0;
 	return _service.running_in_this_thread(_impl);
 }
 

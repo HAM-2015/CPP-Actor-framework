@@ -1,9 +1,9 @@
 #ifndef __MEM_POOL_H
 #define __MEM_POOL_H
 
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/lock_guard.hpp>
+#include <mutex>
 #include <memory>
+#include <memory.h>
 #include "try_move.h"
 
 struct null_mutex
@@ -36,7 +36,7 @@ private:
 
 //////////////////////////////////////////////////////////////////////////
 
-template <typename DATA, typename MUTEX = boost::mutex>
+template <typename DATA, typename MUTEX = std::mutex>
 struct mem_alloc_mt : mem_alloc_base
 {
 	struct node_space;
@@ -105,7 +105,7 @@ struct mem_alloc_mt : mem_alloc_base
 
 	virtual ~mem_alloc_mt()
 	{
-		boost::lock_guard<MUTEX> lg(_mutex);
+		std::lock_guard<MUTEX> lg(_mutex);
 		node_space* pIt = _pool;
 		while (pIt)
 		{
@@ -145,7 +145,7 @@ struct mem_alloc_mt : mem_alloc_base
 		space->check_head();
 		space->set_bf();
 		{
-			boost::lock_guard<MUTEX> lg(_mutex);
+			std::lock_guard<MUTEX> lg(_mutex);
 			_blockNumber--;
 			if (_nodeCount < _poolMaxSize)
 			{
@@ -172,7 +172,7 @@ struct mem_alloc_mt : mem_alloc_base
 	MUTEX _mutex;
 };
 
-template <typename MUTEX = boost::mutex>
+template <typename MUTEX = std::mutex>
 struct dymem_alloc_mt : mem_alloc_base
 {
 	struct dy_node 
@@ -262,7 +262,7 @@ struct dymem_alloc_mt : mem_alloc_base
 
 	virtual ~dymem_alloc_mt()
 	{
-		boost::lock_guard<MUTEX> lg(_mutex);
+		std::lock_guard<MUTEX> lg(_mutex);
 		void* pIt = _pool;
 		while (pIt)
 		{
@@ -302,7 +302,7 @@ struct dymem_alloc_mt : mem_alloc_base
 		dy_node::check_head(_spaceSize, space);
 		dy_node::set_bf(_spaceSize, space);
 		{
-			boost::lock_guard<MUTEX> lg(_mutex);
+			std::lock_guard<MUTEX> lg(_mutex);
 			_blockNumber--;
 			if (_nodeCount < _poolMaxSize)
 			{
@@ -356,7 +356,7 @@ struct dymem_alloc : public dymem_alloc_mt<null_mutex>
 
 //////////////////////////////////////////////////////////////////////////
 
-template <typename MUTEX = boost::mutex>
+template <typename MUTEX = std::mutex>
 class reusable_mem_mt
 {
 	struct node
@@ -375,7 +375,7 @@ public:
 
 	virtual ~reusable_mem_mt()
 	{
-		boost::lock_guard<MUTEX> lg(_mutex);
+		std::lock_guard<MUTEX> lg(_mutex);
 		while (_top)
 		{
 			assert(_nodeCount-- > 0);
@@ -390,7 +390,7 @@ public:
 	{
 		void* freeMem = NULL;
 		{
-			boost::lock_guard<MUTEX> lg(_mutex);
+			std::lock_guard<MUTEX> lg(_mutex);
 			if (_top)
 			{
 				node* res = _top;
@@ -415,7 +415,7 @@ public:
 
 	void deallocate(void* p, size_t size)
 	{
-		boost::lock_guard<MUTEX> lg(_mutex);
+		std::lock_guard<MUTEX> lg(_mutex);
 		node* dp = (node*)p;
 		dp->_size = size < sizeof(node) ? sizeof(node) : (unsigned)size;
 		dp->_next = _top;
@@ -433,7 +433,7 @@ private:
 class reusable_mem : public reusable_mem_mt<null_mutex> {};
 
 //////////////////////////////////////////////////////////////////////////
-template<typename _Ty, typename _Mtx = boost::mutex>
+template<typename _Ty, typename _Mtx = std::mutex>
 class pool_alloc_mt
 {
 public:
@@ -669,10 +669,10 @@ public:
 };
 //////////////////////////////////////////////////////////////////////////
 
-template <typename T, typename CREATER, typename DESTORY, typename MUTEX = boost::mutex>
+template <typename T, typename CREATER, typename DESTORY, typename MUTEX = std::mutex>
 class SharedObjPool_;
 
-template <typename T, typename CREATER, typename DESTORY, typename MUTEX = boost::mutex>
+template <typename T, typename CREATER, typename DESTORY, typename MUTEX = std::mutex>
 class ObjPool_;
 
 template <typename T>
@@ -736,7 +736,7 @@ public:
 public:
 	~ObjPool_()
 	{
-		boost::lock_guard<MUTEX> lg(_mutex);
+		std::lock_guard<MUTEX> lg(_mutex);
 		assert(0 == _blockNumber);
 		node* it = _link;
 		while (it)
@@ -754,7 +754,7 @@ public:
 	T* pick()
 	{
 		{
-			boost::lock_guard<MUTEX> lg(_mutex);
+			std::lock_guard<MUTEX> lg(_mutex);
 #if (_DEBUG || DEBUG)
 			_blockNumber++;
 #endif
@@ -775,7 +775,7 @@ public:
 	void recycle(void* p)
 	{
 		{
-			boost::lock_guard<MUTEX> lg(_mutex);
+			std::lock_guard<MUTEX> lg(_mutex);
 #if (_DEBUG || DEBUG)
 			_blockNumber--;
 #endif
@@ -857,7 +857,6 @@ class CreateRefAlloc_<void, MUTEX>
 {
 public:
 	typedef size_t      size_type;
-	typedef ptrdiff_t   difference_type;
 	typedef void*       pointer;
 	typedef const void* const_pointer;
 	typedef void        value_type;
@@ -879,7 +878,6 @@ class CreateRefAlloc_
 {
 public:
 	typedef size_t     size_type;
-	typedef ptrdiff_t  difference_type;
 	typedef _Tp*       pointer;
 	typedef const _Tp* const_pointer;
 	typedef _Tp&       reference;
@@ -945,7 +943,6 @@ class ref_count_alloc<void>
 {
 public:
 	typedef size_t      size_type;
-	typedef ptrdiff_t   difference_type;
 	typedef void*       pointer;
 	typedef const void* const_pointer;
 	typedef void        value_type;
@@ -970,7 +967,6 @@ class ref_count_alloc
 {
 public:
 	typedef size_t     size_type;
-	typedef ptrdiff_t  difference_type;
 	typedef _Tp*       pointer;
 	typedef const _Tp* const_pointer;
 	typedef _Tp&       reference;

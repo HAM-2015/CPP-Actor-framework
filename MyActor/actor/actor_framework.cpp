@@ -1,94 +1,16 @@
 #define WIN32_LEAN_AND_MEAN
 
-#include <boost/coroutine/all.hpp>
 #include "actor_framework.h"
 #include "actor_stack.h"
 #include "async_buffer.h"
 #include "sync_msg.h"
 
+#ifndef DISABLE_BOOST_CORO
+
+#include <boost/coroutine/asymmetric_coroutine.hpp>
 typedef boost::coroutines::coroutine<void>::pull_type actor_pull_type;
 typedef boost::coroutines::coroutine<void>::push_type actor_push_type;
-
-#ifdef CHECK_SELF
-#ifndef ENALBE_TLS_CHECK_SELF
-msg_map<void*, my_actor*> s_stackLine(100000);
-boost::mutex s_stackLineMutex;
-struct initStackLine
-{
-	initStackLine()
-	{
-		s_stackLine.insert(make_pair((void*)NULL, (my_actor*)NULL));
-		s_stackLine.insert(make_pair((void*)-1, (my_actor*)NULL));
-	}
-} s_initStackLine;
-#endif
-#endif
-
-#define CORO_CONTEXT_STATE_SPACE	(4 kB)
-
-boost::atomic<my_actor::id> s_actorIDCount(0);//ID计数
-std::shared_ptr<shared_obj_pool<bool>> s_sharedBoolPool(create_shared_pool<bool>(100000, [](void*){}));
-msg_list_shared_alloc<actor_handle>::shared_node_alloc my_actor::_childActorListAll(100000);
-msg_list_shared_alloc<std::function<void()> >::shared_node_alloc my_actor::_quitExitCallbackAll(100000);
-msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc my_actor::_suspendResumeQueueAll(100000);
-msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc my_actor::msg_pool_status::_msgTypeMapAll(100000);
-
-#ifdef ENABLE_CHECK_LOST
-mem_alloc_mt<CheckLost_> s_checkLostObjAlloc(100000);
-mem_alloc_mt<CheckPumpLost_> s_checkPumpLostObjAlloc(100000);
-mem_alloc_base* s_checkLostRefCountAlloc = NULL;
-mem_alloc_base* s_checkPumpLostRefCountAlloc = NULL;
-
-struct makeLostRefCountAlloc
-{
-	makeLostRefCountAlloc()
-	{
-		auto& s_checkLostObjAlloc_ = s_checkLostObjAlloc;
-		auto& s_checkPumpLostObjAlloc_ = s_checkPumpLostObjAlloc;
-		s_checkLostRefCountAlloc = make_ref_count_alloc<CheckLost_, boost::mutex>(100000, [&s_checkLostObjAlloc_](CheckLost_*){});
-		s_checkPumpLostRefCountAlloc = make_ref_count_alloc<CheckPumpLost_, boost::mutex>(100000, [&s_checkPumpLostObjAlloc_](CheckPumpLost_*){});
-	}
-
-	~makeLostRefCountAlloc()
-	{
-		delete s_checkLostRefCountAlloc;
-		delete s_checkPumpLostRefCountAlloc;
-	}
-} s_makeLostRefCountAlloc;
-#endif
-
-//////////////////////////////////////////////////////////////////////////
-#ifdef ENABLE_CHECK_LOST
-CheckLost_::CheckLost_(const shared_strand& strand, actor_msg_handle_base* msgHandle)
-:_strand(strand), _handle(msgHandle), _closed(msgHandle->_closed) {}
-
-CheckLost_::~CheckLost_()
-{
-	if (!(*_closed))
-	{
-		auto& closed_ = _closed;
-		auto& handle_ = _handle;
-		_strand->try_tick([closed_, handle_]()
-		{
-			if (!(*closed_))
-			{
-				handle_->lost_msg();
-			}
-		});
-	}
-}
-
-//////////////////////////////////////////////////////////////////////////
-CheckPumpLost_::CheckPumpLost_(const actor_handle& hostActor, MsgPoolBase_* pool)
-:_hostActor(hostActor), _pool(pool) {}
-
-CheckPumpLost_::~CheckPumpLost_()
-{
-	_pool->lost_msg(_hostActor);
-}
-#endif
-
-//////////////////////////////////////////////////////////////////////////
+typedef boost::coroutines::attributes coro_attributes;
 
 /*!
 @brief Actor栈分配器
@@ -99,6 +21,7 @@ struct actor_stack_pool_allocate
 
 	actor_stack_pool_allocate(void* sp, size_t size)
 	{
+		assert(0 == ((size_t)sp % sizeof(void*)));
 		_stack.sp = sp;
 		_stack.size = size;
 	}
@@ -143,6 +66,156 @@ struct actor_stack_allocate
 	void** _sp;
 	size_t* _size;
 };
+
+#else
+
+#include "context_yield.h"
+
+struct coro_attributes 
+{
+	coro_attributes(size_t s) {}
+};
+
+struct actor_stack_pool_allocate
+{
+	actor_stack_pool_allocate() {}
+
+	actor_stack_pool_allocate(void* sp, size_t size)
+	{
+		assert(0 == ((size_t)sp % sizeof(void*)));
+		_sp = sp;
+		_size = size;
+	}
+
+	void* _sp;
+	size_t _size;
+};
+
+struct actor_push_type
+{
+	void operator()()
+	{
+		(*_push)();
+	}
+
+	context_yield::coro_push_interface* _push;
+};
+
+struct actor_pull_type
+{
+	template <typename Handler>
+	actor_pull_type(void* interSpace, Handler&& h, coro_attributes, const actor_stack_pool_allocate& all)
+		:_h(TRY_MOVE(h))
+	{
+		_pull = context_yield::make_coro2(interSpace, [](context_yield::coro_push_interface& push, void* p)
+		{
+			actor_push_type push_ = { &push };
+			actor_pull_type* this_ = (actor_pull_type*)p;
+			this_->_h(push_);
+		}, all._sp, all._size, this);
+	}
+
+	~actor_pull_type()
+	{
+		_pull->destory();
+	}
+
+	void operator()()
+	{
+		(*_pull)();
+	}
+
+	std::function<void(actor_push_type&)> _h;
+	context_yield::coro_pull_interface* _pull;
+};
+
+static size_t coro_internal_space_size()
+{
+	return context_yield::obj_space_size();
+}
+
+#endif
+//////////////////////////////////////////////////////////////////////////
+
+#ifdef CHECK_SELF
+#ifndef ENALBE_TLS_CHECK_SELF
+msg_map<void*, my_actor*> s_stackLine(100000);
+std::mutex s_stackLineMutex;
+struct initStackLine
+{
+	initStackLine()
+	{
+		s_stackLine.insert(make_pair((void*)NULL, (my_actor*)NULL));
+		s_stackLine.insert(make_pair((void*)-1, (my_actor*)NULL));
+	}
+} s_initStackLine;
+#endif
+#endif
+
+#define CORO_CONTEXT_STATE_SPACE	(4 kB)
+
+std::atomic<my_actor::id> s_actorIDCount(0);//ID计数
+std::shared_ptr<shared_obj_pool<bool>> s_sharedBoolPool(create_shared_pool<bool>(100000, [](void*){}));
+msg_list_shared_alloc<actor_handle>::shared_node_alloc my_actor::_childActorListAll(100000);
+msg_list_shared_alloc<std::function<void()> >::shared_node_alloc my_actor::_quitExitCallbackAll(100000);
+msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc my_actor::_suspendResumeQueueAll(100000);
+msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc my_actor::msg_pool_status::_msgTypeMapAll(100000);
+
+#ifdef ENABLE_CHECK_LOST
+mem_alloc_mt<CheckLost_> s_checkLostObjAlloc(100000);
+mem_alloc_mt<CheckPumpLost_> s_checkPumpLostObjAlloc(100000);
+mem_alloc_base* s_checkLostRefCountAlloc = NULL;
+mem_alloc_base* s_checkPumpLostRefCountAlloc = NULL;
+
+struct makeLostRefCountAlloc
+{
+	makeLostRefCountAlloc()
+	{
+		auto& s_checkLostObjAlloc_ = s_checkLostObjAlloc;
+		auto& s_checkPumpLostObjAlloc_ = s_checkPumpLostObjAlloc;
+		s_checkLostRefCountAlloc = make_ref_count_alloc<CheckLost_, std::mutex>(100000, [&s_checkLostObjAlloc_](CheckLost_*){});
+		s_checkPumpLostRefCountAlloc = make_ref_count_alloc<CheckPumpLost_, std::mutex>(100000, [&s_checkPumpLostObjAlloc_](CheckPumpLost_*){});
+	}
+
+	~makeLostRefCountAlloc()
+	{
+		delete s_checkLostRefCountAlloc;
+		delete s_checkPumpLostRefCountAlloc;
+	}
+} s_makeLostRefCountAlloc;
+#endif
+
+//////////////////////////////////////////////////////////////////////////
+#ifdef ENABLE_CHECK_LOST
+CheckLost_::CheckLost_(const shared_strand& strand, actor_msg_handle_base* msgHandle)
+:_strand(strand), _handle(msgHandle), _closed(msgHandle->_closed) {}
+
+CheckLost_::~CheckLost_()
+{
+	if (!(*_closed))
+	{
+		auto& closed_ = _closed;
+		auto& handle_ = _handle;
+		_strand->try_tick([closed_, handle_]()
+		{
+			if (!(*closed_))
+			{
+				handle_->lost_msg();
+			}
+		});
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+CheckPumpLost_::CheckPumpLost_(const actor_handle& hostActor, MsgPoolBase_* pool)
+:_hostActor(hostActor), _pool(pool) {}
+
+CheckPumpLost_::~CheckPumpLost_()
+{
+	_pool->lost_msg(_hostActor);
+}
+#endif
+
 //////////////////////////////////////////////////////////////////////////
 
 #if (_DEBUG || DEBUG)
@@ -545,7 +618,7 @@ void MsgPoolVoid_::pump_handler::post_pump(unsigned char pumpID)
 	});
 }
 
-void MsgPoolVoid_::pump_handler::operator()(unsigned char pumpID)
+void MsgPoolVoid_::pump_handler::start_pump(unsigned char pumpID)
 {
 	assert(_thisPool);
 	if (_thisPool->_strand->running_in_this_thread())
@@ -630,17 +703,16 @@ void MsgPumpVoid_::connect(const pump_handler& pumpHandler, const bool& losted)
 	_losted = losted;
 	if (_waiting)
 	{
+#ifdef ENABLE_CHECK_LOST
 		if (_losted && _checkLost)
 		{
-			if (_waiting)
-			{
-				_waiting = false;
-				ActorFunc_::pull_yield(_hostActor);
-			}
+			_waiting = false;
+			ActorFunc_::pull_yield(_hostActor);
 		} 
 		else
+#endif
 		{
-			_pumpHandler.post_pump(_pumpCount);
+			_pumpHandler.start_pump(_pumpCount);
 		}
 	}
 	else if (_waitConnect)
@@ -715,7 +787,7 @@ bool MsgPumpVoid_::read_msg()
 	}
 	if (!_pumpHandler.empty())
 	{
-		_pumpHandler(_pumpCount);
+		_pumpHandler.start_pump(_pumpCount);
 		_waiting = !_hasMsg;
 		_hasMsg = false;
 		return !_waiting;
@@ -738,7 +810,7 @@ bool MsgPumpVoid_::read_msg(bool& dst)
 	_dstRec = &dst;
 	if (!_pumpHandler.empty())
 	{
-		_pumpHandler(_pumpCount);
+		_pumpHandler.start_pump(_pumpCount);
 		_waiting = !_hasMsg;
 		if (_hasMsg)
 		{
@@ -880,7 +952,6 @@ class actor_ref_count_alloc<void>
 {
 public:
 	typedef size_t      size_type;
-	typedef ptrdiff_t   difference_type;
 	typedef void*       pointer;
 	typedef const void* const_pointer;
 	typedef void        value_type;
@@ -904,7 +975,6 @@ template <typename _Ty>
 struct actor_ref_count_alloc
 {
 	typedef size_t     size_type;
-	typedef ptrdiff_t  difference_type;
 	typedef _Ty*       pointer;
 	typedef const _Ty* const_pointer;
 	typedef _Ty&       reference;
@@ -1011,28 +1081,46 @@ public:
 			assert(!_actor._inActor);
 			_actor._inActor = true;
 		}
-#if (_DEBUG || DEBUG)
 		catch (my_actor::pump_disconnected_exception&)
 		{
 			assert(false);
+			exit(11);
+		}
+		catch (std::shared_ptr<std::string> msg)
+		{
+			assert(false);
+			exit(12);
 		}
 		catch (async_buffer_close_exception&)
 		{
 			assert(false);
+			exit(13);
 		}
 		catch (sync_csp_exception&)
 		{
 			assert(false);
+			exit(14);
 		}
 		catch (msg_lost_exception&)
 		{
 			assert(false);
+			exit(15);
+		}
+		catch (boost::exception&)
+		{
+			assert(false);
+			exit(16);
+		}
+		catch (std::exception&)
+		{
+			assert(false);
+			exit(17);
 		}
 		catch (...)
 		{
 			assert(false);
+			exit(-1);
 		}
-#endif
 		_actor._quited = true;
 		_actor._notifyQuited = true;
 		clear_function(_actor._mainFunc);
@@ -1129,7 +1217,7 @@ my_actor::~my_actor()
 		stack_overflow_format(STACK_RESERVED_SPACE_SIZE - (int)i, _createStack);
 	}
 #endif
-	delete (actor_pull_type*)_actorPull;
+	((actor_pull_type*)_actorPull)->~actor_pull_type();
 }
 
 my_actor& my_actor::operator =(const my_actor&)
@@ -1140,22 +1228,32 @@ my_actor& my_actor::operator =(const my_actor&)
 actor_handle my_actor::create(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize)
 {
 	assert(stackSize && stackSize <= 1024 kB && 0 == stackSize % (4 kB));
-	assert(ActorStackPool_::isEnable());
-	/*内存结构(L:H):|------Actor Stack------|---shared_ptr_ref_count---|--Actor Obj--|*/
+	/*内存结构(L:H):|------Actor Stack------|--coro_obj--|---shared_ptr_ref_count---|--Actor Obj--|*/
 	const size_t actorSize = MEM_ALIGN(sizeof(my_actor), sizeof(void*));
 	StackPck_ stackMem = ActorStackPool_::getStack(stackSize + STACK_RESERVED_SPACE_SIZE);
-	unsigned char* refTop = (unsigned char*)stackMem._stack.sp - actorSize;
+	unsigned char* refTop = (unsigned char*)stackMem._stackTop - actorSize;
 	actor_handle newActor(new(refTop)my_actor, [](my_actor* p){p->~my_actor(); },
 		actor_ref_count_alloc<void>(stackMem, (void**)&refTop));
-	newActor->_stackTop = refTop;
-	newActor->_stackSize = stackMem._stack.size - ((size_t)stackMem._stack.sp - (size_t)newActor->_stackTop);
+	newActor->_weakThis = newActor;
 	newActor->_mainFunc = mainFunc;
 	newActor->_strand = actorStrand;
 	newActor->_timer = actorStrand->get_timer();
-	newActor->_actorPull = new actor_pull_type(boost_actor_run(*newActor),
-		boost::coroutines::attributes(newActor->_stackSize), actor_stack_pool_allocate(newActor->_stackTop, newActor->_stackSize));
+	refTop -= MEM_ALIGN(sizeof(actor_pull_type), sizeof(void*));
+	void* pullPtr = refTop;
+#ifdef DISABLE_BOOST_CORO
+	refTop -= coro_internal_space_size();
+	void* coroInterPtr = refTop;
+	newActor->_stackTop = refTop;
+	newActor->_stackSize = stackMem._stackSize - ((size_t)stackMem._stackTop - (size_t)newActor->_stackTop);
+	newActor->_actorPull = new(pullPtr)actor_pull_type(coroInterPtr, boost_actor_run(*newActor),
+		coro_attributes(newActor->_stackSize), actor_stack_pool_allocate(newActor->_stackTop, newActor->_stackSize));
+#else
+	newActor->_stackTop = refTop;
+	newActor->_stackSize = stackMem._stackSize - ((size_t)stackMem._stackTop - (size_t)newActor->_stackTop);
+	newActor->_actorPull = new(pullPtr)actor_pull_type(boost_actor_run(*newActor),
+		coro_attributes(newActor->_stackSize), actor_stack_pool_allocate(newActor->_stackTop, newActor->_stackSize));
+#endif
 	newActor->_stackSize -= STACK_RESERVED_SPACE_SIZE;
-	newActor->_weakThis = newActor;
 
 #ifdef CHECK_SELF
 #ifndef ENALBE_TLS_CHECK_SELF
@@ -1871,16 +1969,16 @@ void my_actor::switch_pause_play(const std::function<void(bool)>& h)
 void my_actor::outside_wait_quit()
 {
 	assert(!_strand->in_this_ios());
-	boost::mutex mutex;
-	boost::condition_variable conVar;
-	boost::unique_lock<boost::mutex> ul(mutex);
+	std::mutex mutex;
+	std::condition_variable conVar;
+	std::unique_lock<std::mutex> ul(mutex);
 	LAMBDA_THIS_REF2(ref2, conVar, mutex);
 	_strand->post([&ref2]
 	{
 		assert(ref2->_strand->running_in_this_thread());
 		if (ref2->_exited)
 		{
-			boost::lock_guard<boost::mutex> lg(ref2.mutex);
+			std::lock_guard<std::mutex> lg(ref2.mutex);
 			ref2.conVar.notify_one();
 		}
 		else
@@ -1888,7 +1986,7 @@ void my_actor::outside_wait_quit()
 			auto& ref2_ = ref2;
 			ref2->_exitCallback.push_back([&ref2_]()
 			{
-				boost::lock_guard<boost::mutex> lg(ref2_.mutex);
+				std::lock_guard<std::mutex> lg(ref2_.mutex);
 				ref2_.conVar.notify_one();
 			});
 		}
@@ -2279,7 +2377,7 @@ my_actor* my_actor::self_actor()
 #ifdef ENALBE_TLS_CHECK_SELF
 	return (my_actor*)io_engine::getTlsValue(0);
 #else
-	boost::lock_guard<boost::mutex> lg(s_stackLineMutex);
+	std::lock_guard<std::mutex> lg(s_stackLineMutex);
 	auto eit = s_stackLine.insert(make_pair(get_sp(), (my_actor*)NULL));
 	if (eit.second)
 	{

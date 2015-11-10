@@ -1,5 +1,7 @@
 #include "actor_stack.h"
 #include "scattered.h"
+#include <chrono>
+#include <assert.h>
 
 //堆栈清理最小周期(秒)
 #define STACK_MIN_CLEAR_CYCLE		30
@@ -8,8 +10,8 @@
 //测试堆栈释放后是否又被修改了
 #define CHECK_STACK(__st__)\
 {\
-	size_t* p = (size_t*)((char*)(__st__)._stack.sp - (__st__)._stack.size); \
-	size_t length = (__st__)._stack.size / sizeof(size_t); \
+	size_t* p = (size_t*)((char*)(__st__)._stackTop - (__st__)._stackSize); \
+	size_t length = (__st__)._stackSize / sizeof(size_t); \
 	for (size_t i = 0; i < length; i++)\
 	{\
 		assert((size_t)0xCDCDCDCDCDCDCDCD == p[i]);\
@@ -19,23 +21,19 @@
 #define CHECK_STACK(__st__)
 #endif
 
-std::shared_ptr<ActorStackPool_> ActorStackPool_::_actorStackPool;
+ActorStackPool_ _actorStackPool;
 
 ActorStackPool_::ActorStackPool_()
+:_exitSign(false), _clearWait(false), _stackCount(0), _stackTotalSize(0),
+_clearThread(&ActorStackPool_::clearThread, this)
 {
-	_exit = false;
-	_clearWait = false;
-	_stackCount = 0;
-	_stackTotalSize = 0;
-	boost::thread rh(&ActorStackPool_::clearThread, this);
-	_clearThread.swap(rh);
 }
 
 ActorStackPool_::~ActorStackPool_()
 {
 	{
-		boost::lock_guard<boost::mutex> lg(_clearMutex);
-		_exit = true;
+		std::lock_guard<std::mutex> lg(_clearMutex);
+		_exitSign = true;
 		if (_clearWait)
 		{
 			_clearWait = false;
@@ -49,12 +47,12 @@ ActorStackPool_::~ActorStackPool_()
 	tempPool.resize(_stackCount);
 	for (int i = 0; i < 256; i++)
 	{
-		boost::lock_guard<boost::mutex> lg1(_stackPool[i]._mutex);
+		std::lock_guard<std::mutex> lg1(_stackPool[i]._mutex);
 		while (!_stackPool[i]._pool.empty())
 		{
 			StackPck_ pck = _stackPool[i]._pool.back();
 			_stackPool[i]._pool.pop_back();
-			tempPool[ic++] = ((char*)pck._stack.sp) - pck._stack.size;
+			tempPool[ic++] = ((char*)pck._stackTop) - pck._stackSize;
 			CHECK_STACK(pck);
 			_stackCount--;
 		}
@@ -67,21 +65,11 @@ ActorStackPool_::~ActorStackPool_()
 	}
 }
 
-void ActorStackPool_::enable()
-{
-	_actorStackPool = std::shared_ptr<ActorStackPool_>(new ActorStackPool_());
-}
-
-bool ActorStackPool_::isEnable()
-{
-	return (bool)_actorStackPool;
-}
-
 StackPck_ ActorStackPool_::getStack( size_t size )
 {
 	assert(size && size % 4096 == 0 && size <= 1024*1024);
 	{
-		stack_pool_pck& pool = _actorStackPool->_stackPool[size/4096-1];
+		stack_pool_pck& pool = _actorStackPool._stackPool[size/4096-1];
 		pool._mutex.lock();
 		if (!pool._pool.empty())
 		{
@@ -94,15 +82,13 @@ StackPck_ ActorStackPool_::getStack( size_t size )
 		}
 		pool._mutex.unlock();
 	}
-	_actorStackPool->_stackCount++;
-	_actorStackPool->_stackTotalSize += size;
-	StackPck_ r;
-	r._tick = 0;
-	r._stack.size = size;
-	r._stack.sp = ((char*)malloc(size))+size;
-	if (r._stack.sp)
+	_actorStackPool._stackCount++;
+	_actorStackPool._stackTotalSize += size;
+	StackPck_ sp = { ((char*)malloc(size)) + size, size, 0 };
+	if (sp._stackTop)
 	{
-		return r;
+		assert(0 == ((size_t)sp._stackTop % sizeof(void*)));
+		return sp;
 	}
 	throw std::shared_ptr<string>(new string("Actor栈内存不足"));
 }
@@ -110,11 +96,11 @@ StackPck_ ActorStackPool_::getStack( size_t size )
 void ActorStackPool_::recovery( StackPck_& stack )
 {
 #if (_DEBUG || DEBUG)
-	memset((char*)stack._stack.sp-stack._stack.size, 0xCD, stack._stack.size);
+	memset((char*)stack._stackTop-stack._stackSize, 0xCD, stack._stackSize);
 #endif
 	stack._tick = get_tick_s();
-	stack_pool_pck& pool = _actorStackPool->_stackPool[stack._stack.size/4096-1];
-	boost::lock_guard<boost::mutex> lg(pool._mutex);
+	stack_pool_pck& pool = _actorStackPool._stackPool[stack._stackSize/4096-1];
+	std::lock_guard<std::mutex> lg(pool._mutex);
 	pool._pool.push_back(stack);
 }
 
@@ -123,13 +109,13 @@ void ActorStackPool_::clearThread()
 	while (true)
 	{
 		{
-			boost::unique_lock<boost::mutex> ul(_clearMutex);
-			if (_exit)
+			std::unique_lock<std::mutex> ul(_clearMutex);
+			if (_exitSign)
 			{
 				break;
 			}
 			_clearWait = true;
-			if (_clearVar.timed_wait(ul, boost::posix_time::seconds(STACK_MIN_CLEAR_CYCLE)))
+			if (std::cv_status::no_timeout == _clearVar.wait_for(ul, std::chrono::seconds(STACK_MIN_CLEAR_CYCLE)))
 			{
 				break;
 			}
@@ -140,13 +126,13 @@ void ActorStackPool_::clearThread()
 		do
 		{
 			{
-				boost::unique_lock<boost::mutex> ul(_clearMutex);
-				if (_exit)
+				std::unique_lock<std::mutex> ul(_clearMutex);
+				if (_exitSign)
 				{
 					break;
 				}
 				_clearWait = true;
-				if (_clearVar.timed_wait(ul, boost::posix_time::millisec(100)))
+				if (std::cv_status::no_timeout == _clearVar.wait_for(ul, std::chrono::milliseconds(100)))
 				{
 					break;
 				}
@@ -165,9 +151,9 @@ void ActorStackPool_::clearThread()
 					_stackPool[i]._mutex.unlock();
 
 					CHECK_STACK(pck);
-					free(((char*)pck._stack.sp) - pck._stack.size);
+					free(((char*)pck._stackTop) - pck._stackSize);
 					_stackCount--;
-					_stackTotalSize -= pck._stack.size;
+					_stackTotalSize -= pck._stackSize;
 					freeCount++;
 				}
 				else
@@ -178,13 +164,3 @@ void ActorStackPool_::clearThread()
 		} while (freeCount);
 	}
 }
-
-//////////////////////////////////////////////////////////////////////////
-
-struct enable_stack_pool 
-{
-	enable_stack_pool()
-	{
-		ActorStackPool_::enable();
-	}
-}  _enable_stack_pool;

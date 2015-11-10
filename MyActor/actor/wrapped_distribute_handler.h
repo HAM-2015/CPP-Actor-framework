@@ -54,7 +54,7 @@ public:
 		: _distributier(distributier),
 		_handler(TRY_MOVE(handler))
 #if (_DEBUG || DEBUG)
-		, _checkOnce(new boost::atomic<bool>(false))
+		, _checkOnce(new std::atomic<bool>(false))
 #endif
 	{
 	}
@@ -88,7 +88,7 @@ public:
 	Distributier* _distributier;
 	Handler _handler;
 #if (_DEBUG || DEBUG)
-	std::shared_ptr<boost::atomic<bool> > _checkOnce;
+	std::shared_ptr<std::atomic<bool> > _checkOnce;
 #endif
 };
 

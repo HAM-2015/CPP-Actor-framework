@@ -486,7 +486,7 @@ public:
 };
 //////////////////////////////////////////////////////////////////////////
 
-template <typename T, typename TMtx = boost::mutex>
+template <typename T, typename TMtx = std::mutex>
 class msg_list_shared_alloc : public msg_list<T, pool_alloc_mt<typename msg_list<T>::node_type, TMtx>>
 {
 	typedef pool_alloc_mt<typename msg_list<T>::node_type, TMtx> AlNod;
@@ -518,7 +518,7 @@ public:
 };
 //////////////////////////////////////////////////////////////////////////
 
-template <typename Tkey, typename Tval, typename TMtx = boost::mutex>
+template <typename Tkey, typename Tval, typename TMtx = std::mutex>
 class msg_map_shared_alloc : public msg_map<Tkey, Tval, pool_alloc_mt<typename msg_map<Tkey, Tval>::node_type, TMtx>>
 {
 	typedef pool_alloc_mt<typename msg_map<Tkey, Tval>::node_type, TMtx> AlNod;
@@ -550,7 +550,7 @@ public:
 };
 //////////////////////////////////////////////////////////////////////////
 
-template <typename Tkey, typename Tval, typename TMtx = boost::mutex>
+template <typename Tkey, typename Tval, typename TMtx = std::mutex>
 class msg_multimap_shared_alloc : public msg_multimap<Tkey, Tval, pool_alloc_mt<typename msg_multimap<Tkey, Tval>::node_type, TMtx>>
 {
 	typedef pool_alloc_mt<typename msg_multimap<Tkey, Tval>::node_type, TMtx> AlNod;
@@ -582,7 +582,7 @@ public:
 };
 //////////////////////////////////////////////////////////////////////////
 
-template <typename Tkey, typename TMtx = boost::mutex>
+template <typename Tkey, typename TMtx = std::mutex>
 class msg_set_shared_alloc : public msg_set<Tkey, pool_alloc_mt<typename msg_set<Tkey>::node_type, TMtx>>
 {
 	typedef pool_alloc_mt<typename msg_set<Tkey>::node_type, TMtx> AlNod;
@@ -614,7 +614,7 @@ public:
 };
 //////////////////////////////////////////////////////////////////////////
 
-template <typename Tkey, typename TMtx = boost::mutex>
+template <typename Tkey, typename TMtx = std::mutex>
 class msg_multiset_shared_alloc : public msg_multiset<Tkey, pool_alloc_mt<typename msg_multiset<Tkey>::node_type, TMtx>>
 {
 	typedef pool_alloc_mt<typename msg_multiset<Tkey>::node_type, TMtx> AlNod;

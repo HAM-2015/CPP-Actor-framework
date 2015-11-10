@@ -122,5 +122,8 @@
     <ClInclude Include="actor\check_actor_stack.h">
       <Filter>头文件\actor</Filter>
     </ClInclude>
+    <ClInclude Include="actor\context_yield.h">
+      <Filter>头文件\actor</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

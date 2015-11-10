@@ -1,13 +1,21 @@
 #include "io_engine.h"
 #include "mem_pool.h"
-#include <boost/asio/high_resolution_timer.hpp>
 #include <boost/asio/detail/strand_service.hpp>
 #include <memory>
+#ifdef DISABLE_HIGH_RESOLUTION
+#include <boost/asio/deadline_timer.hpp>
+typedef boost::asio::deadline_timer timer_type;
+#else
+#include <boost/chrono/system_clocks.hpp>
+#include <boost/asio/high_resolution_timer.hpp>
+typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> timer_type;
+#endif
 
 typedef boost::asio::detail::strand_service::strand_impl impl_type;
-typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> timer_type;
 
+#ifdef ENALBE_TLS_CHECK_SELF
 boost::thread_specific_ptr<void*> io_engine::_tls(NULL);
+#endif
 
 io_engine::io_engine()
 {
@@ -32,28 +40,31 @@ io_engine::io_engine()
 io_engine::~io_engine()
 {
 	assert(!_opend);
+	delete (obj_pool<impl_type>*)_implPool;
+	delete (obj_pool<timer_type>*)_timerPool;
 }
 
 void io_engine::run(size_t threadNum, sched policy)
 {
 	assert(threadNum >= 1);
-	boost::lock_guard<boost::mutex> lg(_runMutex);
+	std::lock_guard<std::mutex> lg(_runMutex);
 	if (!_opend)
 	{
 		_opend = true;
 		_runCount = 0;
 		_runLock = new boost::asio::io_service::work(_ios);
 		_handleList.resize(threadNum);
+		_runThreads.resize(threadNum);
 #ifdef __GNUG__
 		_policy = policy;
 #endif
 		size_t rc = 0;
-		std::shared_ptr<boost::mutex> blockMutex(new boost::mutex);
-		std::shared_ptr<boost::condition_variable> blockConVar(new boost::condition_variable);
-		boost::unique_lock<boost::mutex> ul(*blockMutex);
+		std::shared_ptr<std::mutex> blockMutex(new std::mutex);
+		std::shared_ptr<std::condition_variable> blockConVar(new std::condition_variable);
+		std::unique_lock<std::mutex> ul(*blockMutex);
 		for (size_t i = 0; i < threadNum; i++)
 		{
-			boost::thread* newThread = new boost::thread([&, i]
+			std::thread* newThread = new std::thread([&, i]
 			{
 				try
 				{
@@ -67,7 +78,7 @@ void io_engine::run(size_t threadNum, sched policy)
 #endif
 						auto lockMutex = blockMutex;
 						auto lockConVar = blockConVar;
-						boost::unique_lock<boost::mutex> ul(*lockMutex);
+						std::unique_lock<std::mutex> ul(*lockMutex);
 						if (threadNum == ++rc)
 						{
 							lockConVar->notify_all();
@@ -77,10 +88,14 @@ void io_engine::run(size_t threadNum, sched policy)
 							lockConVar->wait(ul);
 						}
 					}
+#ifdef ENALBE_TLS_CHECK_SELF
 					void* tssBuff[64] = { 0 };
 					_tls.reset(tssBuff);
 					_runCount += _ios.run();
 					_tls.release();
+#else
+					_runCount += _ios.run();
+#endif
 				}
 				catch (boost::exception&)
 				{
@@ -100,7 +115,7 @@ void io_engine::run(size_t threadNum, sched policy)
 				}
 			});
 			_threadsID.insert(newThread->get_id());
-			_runThreads.add_thread(newThread);
+			_runThreads[i] = newThread;
 		}
 		blockConVar->wait(ul);
 #ifdef __GNUG__
@@ -113,15 +128,20 @@ void io_engine::run(size_t threadNum, sched policy)
 
 void io_engine::stop()
 {
-	boost::lock_guard<boost::mutex> lg(_runMutex);
+	std::lock_guard<std::mutex> lg(_runMutex);
 	if (_opend)
 	{
 		assert(!runningInThisIos());
 		delete _runLock;
 		_runLock = NULL;
-		_runThreads.join_all();
+		for (auto& ele : _runThreads)
+		{
+			ele->join();
+			delete ele;
+		}
 		_opend = false;
 		_ios.reset();
+		_runThreads.clear();
 		_threadsID.clear();
 		_ctrlMutex.lock();
 		for (auto& ele : _handleList)
@@ -140,7 +160,7 @@ void io_engine::stop()
 bool io_engine::runningInThisIos()
 {
 	assert(_opend);
-	return _threadsID.find(boost::this_thread::get_id()) != _threadsID.end();
+	return _threadsID.find(std::this_thread::get_id()) != _threadsID.end();
 }
 
 size_t io_engine::threadNumber()
@@ -152,7 +172,7 @@ size_t io_engine::threadNumber()
 #ifdef _MSC_VER
 void io_engine::suspend()
 {
-	boost::lock_guard<boost::mutex> lg(_ctrlMutex);
+	std::lock_guard<std::mutex> lg(_ctrlMutex);
 	for (auto& ele : _handleList)
 	{
 		SuspendThread(ele);
@@ -161,7 +181,7 @@ void io_engine::suspend()
 
 void io_engine::resume()
 {
-	boost::lock_guard<boost::mutex> lg(_ctrlMutex);
+	std::lock_guard<std::mutex> lg(_ctrlMutex);
 	for (auto& ele : _handleList)
 	{
 		ResumeThread(ele);
@@ -171,7 +191,7 @@ void io_engine::resume()
 
 void io_engine::runPriority(priority pri)
 {
-	boost::lock_guard<boost::mutex> lg(_ctrlMutex);
+	std::lock_guard<std::mutex> lg(_ctrlMutex);
 #ifdef _MSC_VER
 	_priority = pri;
 	for (auto& ele : _handleList)
@@ -201,17 +221,7 @@ long long io_engine::getRunCount()
 	return _runCount;
 }
 
-unsigned io_engine::physicalConcurrency()
-{
-	return boost::thread::physical_concurrency();
-}
-
-unsigned io_engine::hardwareConcurrency()
-{
-	return boost::thread::hardware_concurrency();
-}
-
-const std::set<boost::thread::id>& io_engine::threadsID()
+const std::set<std::thread::id>& io_engine::threadsID()
 {
 	return _threadsID;
 }
@@ -241,6 +251,7 @@ void io_engine::freeTimer(void* timer)
 	((obj_pool<timer_type>*)_timerPool)->recycle(timer);
 }
 
+#ifdef ENALBE_TLS_CHECK_SELF
 void* io_engine::getTlsValue(int i)
 {
 	assert(i >= 0 && i < 64);
@@ -258,3 +269,4 @@ void** io_engine::getTlsValuePtr(int i)
 	assert(i >= 0 && i < 64);
 	return _tls.get() + i;
 }
+#endif

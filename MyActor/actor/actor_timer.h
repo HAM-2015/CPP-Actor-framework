@@ -1,9 +1,9 @@
 #ifndef __ACTOR_TIMER_H
 #define __ACTOR_TIMER_H
 
+#include <algorithm>
 #include "shared_strand.h"
 #include "msg_queue.h"
-#include <boost/thread/mutex.hpp>
 
 class boost_strand;
 class mfc_strand;

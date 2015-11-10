@@ -1,6 +1,7 @@
 #ifndef __SCATTERED_H
 #define __SCATTERED_H
 
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <list>
