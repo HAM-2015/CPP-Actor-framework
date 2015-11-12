@@ -12,6 +12,9 @@ oschina url:
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
+2015-11-11
+添加在QT-UI线程中运行Actor.
+
 2015-11-05
 添加"通知句柄"丢失检测，消息等待时可以捕获通知句柄丢失异常.
 

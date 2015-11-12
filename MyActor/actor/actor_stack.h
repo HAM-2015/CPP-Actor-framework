@@ -2,11 +2,11 @@
 #define __ACTOR_STACK_H
 
 #include <algorithm>
-#include <mutex>
 #include <thread>
 #include <condition_variable>
 #include <atomic>
 #include <vector>
+#include <boost/thread/thread.hpp>
 #include "msg_queue.h"
 
 using namespace std;
@@ -43,9 +43,9 @@ private:
 	bool _clearWait;
 	stack_pool_pck _stackPool[256];
 	std::mutex _clearMutex;
-	std::thread _clearThread;
-	std::condition_variable _clearVar;
+	boost::thread _clearThread;
 	std::atomic<int> _stackCount;
+	std::condition_variable _clearVar;
 	std::atomic<size_t> _stackTotalSize;
 };
 

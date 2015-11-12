@@ -86,6 +86,45 @@ private:
 //内存边界对齐
 #define MEM_ALIGN(__o, __a) (((__o) + ((__a)-1)) & (((__a)-1) ^ -1))
 
+//////////////////////////////////////////////////////////////////////////
+
+#define BEGIN_TRY_ {\
+	bool __catched = false; \
+	try {
+
+#define CATCH_FOR(__exp__) }\
+	catch (__exp__&) { __catched = true; }\
+	DEBUG_OPERATION(catch (...) { assert(false); })\
+if (__catched) {
+
+#define END_TRY_ }}
+
+#define RUN_IN_STRAND(__host__, __strand__, __exp__) __host__->send(__strand__, [&] {__exp__;})
+
+#define begin_RUN_IN_STRAND(__host__, __strand__) __host__->send(__strand__, [&] {
+
+#define end_RUN_IN_STRAND() })
+
+#define begin_ACTOR_RUN_IN_STRAND(__host__, __strand__) {\
+	my_actor* ___host = __host__; \
+	actor_handle ___actor = my_actor::create(__strand__, [&](my_actor* __host__) {
+
+#define end_ACTOR_RUN_IN_STRAND() });\
+	___actor->notify_run(); \
+	___host->actor_wait_quit(___actor); \
+}
+
+#define RUN_IN_TRHEAD_STACK(__host__, __exp__) {\
+my_actor::quit_guard qg(__host__); \
+__host__->run_in_thread_stack([&] {__exp__; });}
+
+#define begin_RUN_IN_TRHEAD_STACK(__host__){\
+	my_actor::quit_guard qg(__host__); \
+	__host__->run_in_thread_stack([&] {
+
+#define end_RUN_IN_TRHEAD_STACK() });}
+
+
 /*!
 @brief 这个类在测试消息传递时使用
 */

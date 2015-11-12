@@ -3395,6 +3395,7 @@ public:
 	@param stackSize Actor栈大小，默认64k字节，必须是4k的整数倍，最小4k，最大1M
 	*/
 	static actor_handle create(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	static actor_handle create(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 public:
 	/*!
 	@brief 创建一个子Actor，父Actor终止时，子Actor也终止（在子Actor都完全退出后，父Actor才结束）
@@ -3561,6 +3562,7 @@ public:
 	@brief 注册一个资源释放函数，在强制退出Actor时调用
 	*/
 	quit_iterator regist_quit_handler(const std::function<void()>& quitHandler);
+	quit_iterator regist_quit_handler(std::function<void()>&& quitHandler);
 
 	/*!
 	@brief 注销资源释放函数
@@ -5515,6 +5517,7 @@ public:
 	@brief 强制退出该Actor，完成后回调
 	*/
 	void notify_quit(const std::function<void()>& h);
+	void notify_quit(std::function<void()>&& h);
 
 	/*!
 	@brief Actor是否已经开始运行
@@ -5561,18 +5564,21 @@ public:
 	*/
 	void notify_suspend();
 	void notify_suspend(const std::function<void()>& h);
+	void notify_suspend(std::function<void()>&& h);
 
 	/*!
 	@brief 恢复已暂停Actor
 	*/
 	void notify_resume();
 	void notify_resume(const std::function<void()>& h);
+	void notify_resume(std::function<void()>&& h);
 
 	/*!
 	@brief 切换挂起/非挂起状态
 	*/
 	void switch_pause_play();
 	void switch_pause_play(const std::function<void(bool)>& h);
+	void switch_pause_play(std::function<void(bool)>&& h);
 
 	/*!
 	@brief 等待Actor退出，在Actor所依赖的ios无关线程中使用
@@ -5583,6 +5589,7 @@ public:
 	@brief 添加一个Actor结束回调
 	*/
 	void append_quit_callback(const std::function<void()>& h);
+	void append_quit_callback(std::function<void()>&& h);
 
 	/*!
 	@brief 启动一堆Actor
@@ -5641,8 +5648,11 @@ private:
 	void suspend_timer();
 	void resume_timer();
 	void force_quit(const std::function<void()>& h);
+	void force_quit(std::function<void()>&& h);
 	void suspend(const std::function<void()>& h);
+	void suspend(std::function<void()>&& h);
 	void resume(const std::function<void()>& h);
+	void resume(std::function<void()>&& h);
 	void suspend();
 	void resume();
 	void run_one();

@@ -54,7 +54,6 @@ void io_engine::run(size_t threadNum, sched policy)
 		_runCount = 0;
 		_runLock = new boost::asio::io_service::work(_ios);
 		_handleList.resize(threadNum);
-		_runThreads.resize(threadNum);
 #ifdef __GNUG__
 		_policy = policy;
 #endif
@@ -64,7 +63,7 @@ void io_engine::run(size_t threadNum, sched policy)
 		std::unique_lock<std::mutex> ul(*blockMutex);
 		for (size_t i = 0; i < threadNum; i++)
 		{
-			std::thread* newThread = new std::thread([&, i]
+			boost::thread* newThread = new boost::thread([&, i]
 			{
 				try
 				{
@@ -115,7 +114,7 @@ void io_engine::run(size_t threadNum, sched policy)
 				}
 			});
 			_threadsID.insert(newThread->get_id());
-			_runThreads[i] = newThread;
+			_runThreads.add_thread(newThread);
 		}
 		blockConVar->wait(ul);
 #ifdef __GNUG__
@@ -134,14 +133,9 @@ void io_engine::stop()
 		assert(!runningInThisIos());
 		delete _runLock;
 		_runLock = NULL;
-		for (auto& ele : _runThreads)
-		{
-			ele->join();
-			delete ele;
-		}
+		_runThreads.join_all();
 		_opend = false;
 		_ios.reset();
-		_runThreads.clear();
 		_threadsID.clear();
 		_ctrlMutex.lock();
 		for (auto& ele : _handleList)
@@ -160,7 +154,7 @@ void io_engine::stop()
 bool io_engine::runningInThisIos()
 {
 	assert(_opend);
-	return _threadsID.find(std::this_thread::get_id()) != _threadsID.end();
+	return _threadsID.find(boost::this_thread::get_id()) != _threadsID.end();
 }
 
 size_t io_engine::threadNumber()
@@ -221,7 +215,7 @@ long long io_engine::getRunCount()
 	return _runCount;
 }
 
-const std::set<std::thread::id>& io_engine::threadsID()
+const std::set<boost::thread::id>& io_engine::threadsID()
 {
 	return _threadsID;
 }

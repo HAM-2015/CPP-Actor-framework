@@ -340,6 +340,8 @@ public:
 		UI_DISPATCH();
 #elif ENABLE_WX_ACTOR
 		UI_DISPATCH();
+#elif ENABLE_QT_ACTOR
+		UI_DISPATCH();
 #else
 		_strand->dispatch(RUN_HANDLER);
 #endif
@@ -354,6 +356,8 @@ public:
 #ifdef ENABLE_MFC_ACTOR
 		UI_POST();
 #elif ENABLE_WX_ACTOR
+		UI_POST();
+#elif ENABLE_QT_ACTOR
 		UI_POST();
 #else
 		_strand->post(RUN_HANDLER);
@@ -373,6 +377,8 @@ public:
 #ifdef ENABLE_MFC_ACTOR
 		UI_NEXT_TICK();
 #elif ENABLE_WX_ACTOR
+		UI_NEXT_TICK();
+#elif ENABLE_QT_ACTOR
 		UI_NEXT_TICK();
 #else
 		APPEND_TICK();
@@ -528,7 +534,7 @@ public:
 	@brief 获取定时器
 	*/
 	ActorTimer_* get_timer();
-private:
+protected:
 #ifdef ENABLE_NEXT_TICK
 	bool ready_empty();
 	bool waiting_empty();
@@ -545,8 +551,9 @@ private:
 	msg_queue<wrap_next_tick_base*>* _frontTickQueue;
 #endif //ENABLE_NEXT_TICK
 protected:
-#if (defined ENABLE_MFC_ACTOR || defined ENABLE_WX_ACTOR)
+#if (defined ENABLE_MFC_ACTOR || defined ENABLE_WX_ACTOR || defined ENABLE_QT_ACTOR)
 	virtual void _post(const std::function<void()>& h);
+	virtual void _post(std::function<void()>&& h);
 #endif
 	ActorTimer_* _timer;
 	io_engine* _ioEngine;

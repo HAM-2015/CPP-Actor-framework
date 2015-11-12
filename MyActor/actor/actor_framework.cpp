@@ -104,15 +104,14 @@ struct actor_push_type
 struct actor_pull_type
 {
 	template <typename Handler>
-	actor_pull_type(void* interSpace, Handler&& h, coro_attributes, const actor_stack_pool_allocate& all)
-		:_h(TRY_MOVE(h))
+	actor_pull_type(void* interSpace, Handler&& handler, coro_attributes, const actor_stack_pool_allocate& all)
 	{
 		_pull = context_yield::make_coro2(interSpace, [](context_yield::coro_push_interface& push, void* p)
 		{
+			std::function<void(actor_push_type&)> mh((Handler&&)(*(Handler*)p));
 			actor_push_type push_ = { &push };
-			actor_pull_type* this_ = (actor_pull_type*)p;
-			this_->_h(push_);
-		}, all._sp, all._size, this);
+			mh(push_);
+		}, all._sp, all._size, &handler);
 	}
 
 	~actor_pull_type()
@@ -125,7 +124,6 @@ struct actor_pull_type
 		(*_pull)();
 	}
 
-	std::function<void(actor_push_type&)> _h;
 	context_yield::coro_pull_interface* _pull;
 };
 
@@ -1227,6 +1225,11 @@ my_actor& my_actor::operator =(const my_actor&)
 
 actor_handle my_actor::create(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize)
 {
+	return my_actor::create(actorStrand, main_func(mainFunc), stackSize);
+}
+
+actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize)
+{
 	assert(stackSize && stackSize <= 1024 kB && 0 == stackSize % (4 kB));
 	/*内存结构(L:H):|------Actor Stack------|--coro_obj--|---shared_ptr_ref_count---|--Actor Obj--|*/
 	const size_t actorSize = MEM_ALIGN(sizeof(my_actor), sizeof(void*));
@@ -1235,7 +1238,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, const main_func&
 	actor_handle newActor(new(refTop)my_actor, [](my_actor* p){p->~my_actor(); },
 		actor_ref_count_alloc<void>(stackMem, (void**)&refTop));
 	newActor->_weakThis = newActor;
-	newActor->_mainFunc = mainFunc;
+	newActor->_mainFunc = std::move(mainFunc);
 	newActor->_strand = actorStrand;
 	newActor->_timer = actorStrand->get_timer();
 	refTop -= MEM_ALIGN(sizeof(actor_pull_type), sizeof(void*));
@@ -1573,8 +1576,13 @@ const msg_list_shared_alloc<actor_handle>& my_actor::child_actors()
 
 my_actor::quit_iterator my_actor::regist_quit_handler(const std::function<void()>& quitHandler)
 {
+	return regist_quit_handler(std::function<void()>(quitHandler));
+}
+
+my_actor::quit_iterator my_actor::regist_quit_handler(std::function<void()>&& quitHandler)
+{
 	assert_enter();
-	_quitHandlerList.push_front(quitHandler);//后注册的先执行
+	_quitHandlerList.push_front(std::move(quitHandler));//后注册的先执行
 	return _quitHandlerList.begin();
 }
 
@@ -1677,11 +1685,36 @@ void my_actor::notify_quit()
 
 void my_actor::notify_quit(const std::function<void()>& h)
 {
-	actor_handle shared_this = shared_from_this();
-	_strand->try_tick([=]{shared_this->force_quit(h); });
+	notify_quit(std::function<void()>(h));
+}
+
+void my_actor::notify_quit(std::function<void()>&& h)
+{
+	struct wrap_quit
+	{
+		wrap_quit(const actor_handle& host, std::function<void()>&& h)
+		:_sharedThis(host), _h(std::move(h)) {}
+
+		wrap_quit(wrap_quit&& s)
+			:_sharedThis(s._sharedThis), _h(std::move(s._h)) {}
+
+		void operator()()
+		{
+			_sharedThis->force_quit(std::move(_h));
+		}
+
+		actor_handle _sharedThis;
+		std::function<void()> _h;
+	};
+	_strand->try_tick(wrap_quit(shared_from_this(), std::move(h)));
 }
 
 void my_actor::force_quit(const std::function<void()>& h)
+{
+	force_quit(std::function<void()>(h));
+}
+
+void my_actor::force_quit(std::function<void()>&& h)
 {
 	assert(_strand->running_in_this_thread());
 	assert(!_inActor);
@@ -1692,7 +1725,7 @@ void my_actor::force_quit(const std::function<void()>& h)
 		{
 			_isForce = true;
 			_quited = true;
-			if (h) _exitCallback.push_back(h);
+			if (h) _exitCallback.push_back(std::move(h));
 			if (!_childActorList.empty())
 			{
 				_childOverCount = _childActorList.size();
@@ -1719,7 +1752,7 @@ void my_actor::force_quit(const std::function<void()>& h)
 		}
 		else if (h)
 		{
-			_exitCallback.push_back(h);
+			_exitCallback.push_back(std::move(h));
 		}
 	}
 	else if (h)
@@ -1732,7 +1765,7 @@ void my_actor::force_quit(const std::function<void()>& h)
 		}
 		else
 		{
-			_exitCallback.push_back(h);
+			_exitCallback.push_back(std::move(h));
 		}
 	}
 }
@@ -1798,11 +1831,36 @@ void my_actor::notify_suspend()
 
 void my_actor::notify_suspend(const std::function<void()>& h)
 {
-	actor_handle shared_this = shared_from_this();
-	_strand->try_tick([=]{shared_this->suspend(h); });
+	notify_suspend(std::function<void()>(h));
+}
+
+void my_actor::notify_suspend(std::function<void()>&& h)
+{
+	struct wrap_suspend
+	{
+		wrap_suspend(const actor_handle& host, std::function<void()>&& h)
+		:_sharedThis(host), _h(std::move(h)) {}
+
+		wrap_suspend(wrap_suspend&& s)
+			:_sharedThis(s._sharedThis), _h(std::move(s._h)) {}
+
+		void operator()()
+		{
+			_sharedThis->suspend(std::move(_h));
+		}
+
+		actor_handle _sharedThis;
+		std::function<void()> _h;
+	};
+	_strand->try_tick(wrap_suspend(shared_from_this(), std::move(h)));
 }
 
 void my_actor::suspend(const std::function<void()>& h)
+{
+	suspend(std::function<void()>(h));
+}
+
+void my_actor::suspend(std::function<void()>&& h)
 {
 	assert(_strand->running_in_this_thread());
 	assert(!_inActor);
@@ -1810,7 +1868,7 @@ void my_actor::suspend(const std::function<void()>& h)
 	_suspendResumeQueue.push_back(suspend_resume_option());
 	suspend_resume_option& tmp = _suspendResumeQueue.back();
 	tmp._isSuspend = true;
-	tmp._h = h;
+	tmp._h = std::move(h);
 	if (_suspendResumeQueue.size() == 1)
 	{
 		suspend();
@@ -1862,11 +1920,36 @@ void my_actor::notify_resume()
 
 void my_actor::notify_resume(const std::function<void()>& h)
 {
-	actor_handle shared_this = shared_from_this();
-	_strand->try_tick([=]{shared_this->resume(h); });
+	notify_resume(std::function<void()>(h));
+}
+
+void my_actor::notify_resume(std::function<void()>&& h)
+{
+	struct wrap_resume
+	{
+		wrap_resume(const actor_handle& host, std::function<void()>&& h)
+		:_sharedThis(host), _h(std::move(h)) {}
+
+		wrap_resume(wrap_resume&& s)
+			:_sharedThis(s._sharedThis), _h(std::move(s._h)) {}
+
+		void operator()()
+		{
+			_sharedThis->resume(std::move(_h));
+		}
+
+		actor_handle _sharedThis;
+		std::function<void()> _h;
+	};
+	_strand->try_tick(wrap_resume(shared_from_this(), std::move(h)));
 }
 
 void my_actor::resume(const std::function<void()>& h)
+{
+	resume(std::function<void()>(h));
+}
+
+void my_actor::resume(std::function<void()>&& h)
 {
 	assert(_strand->running_in_this_thread());
 	assert(!_inActor);
@@ -1874,7 +1957,7 @@ void my_actor::resume(const std::function<void()>& h)
 	_suspendResumeQueue.push_back(suspend_resume_option());
 	suspend_resume_option& tmp = _suspendResumeQueue.back();
 	tmp._isSuspend = false;
-	tmp._h = h;
+	tmp._h = std::move(h);
 	if (_suspendResumeQueue.size() == 1)
 	{
 		resume();
@@ -1926,44 +2009,98 @@ void my_actor::switch_pause_play()
 
 void my_actor::switch_pause_play(const std::function<void(bool)>& h)
 {
-	actor_handle shared_this = shared_from_this();
-	_strand->try_tick([shared_this, h]
+	switch_pause_play(std::function<void(bool)>(h));
+}
+
+void my_actor::switch_pause_play(std::function<void(bool)>&& h)
+{
+	struct wrap_switch
 	{
-		assert(shared_this->_strand->running_in_this_thread());
-		if (!shared_this->_quited)
+		wrap_switch(const actor_handle& host, std::function<void(bool)>&& h)
+		:_sharedThis(host), _h(std::move(h)) {}
+
+		wrap_switch(wrap_switch&& s)
+			:_sharedThis(s._sharedThis), _h(std::move(s._h)) {}
+
+		void operator()()
 		{
-			if (shared_this->_suspended)
+			assert(_sharedThis->_strand->running_in_this_thread());
+			if (!_sharedThis->_quited)
 			{
-				if (h)
+				if (_sharedThis->_suspended)
 				{
-					auto& h_ = h;
-					shared_this->resume([h_]{h_(false); });
+					if (_h)
+					{
+#ifdef _MSC_VER
+						struct wrap_resume
+						{
+							wrap_resume(std::function<void(bool)>&& h)
+							:_h(std::move(h)) {}
+
+							wrap_resume(wrap_resume&& s)
+								:_h(std::move(s._h)) {}
+
+							void operator()()
+							{
+								_h(false);
+							}
+
+							std::function<void(bool)> _h;
+						};
+						_sharedThis->resume(wrap_resume(std::move(_h)));
+#elif __GNUG__
+						_sharedThis->resume([=](){_h(false); });
+#endif
+					}
+					else
+					{
+						_sharedThis->resume(std::function<void()>());
+					}
 				}
 				else
 				{
-					shared_this->resume(std::function<void()>());
+					if (_h)
+					{
+#ifdef _MSC_VER
+						struct wrap_suspend
+						{
+							wrap_suspend(std::function<void(bool)>&& h)
+							:_h(std::move(h)) {}
+
+							wrap_suspend(wrap_suspend&& s)
+								:_h(std::move(s._h)) {}
+
+							void operator()()
+							{
+								_h(true);
+							}
+
+							std::function<void(bool)> _h;
+						};
+						_sharedThis->suspend(wrap_suspend(std::move(_h)));
+#elif __GNUG__
+						_sharedThis->suspend([=](){_h(true); });
+#endif
+					}
+					else
+					{
+						_sharedThis->suspend(std::function<void()>());
+					}
 				}
 			}
-			else
+			else if (_h)
 			{
-				if (h)
-				{
-					auto& h_ = h;
-					shared_this->suspend([h_]{h_(true); });
-				}
-				else
-				{
-					shared_this->suspend(std::function<void()>());
-				}
+				DEBUG_OPERATION(size_t yc = _sharedThis->yield_count());
+				CHECK_EXCEPTION1(_h, true);
+				assert(_sharedThis->yield_count() == yc);
 			}
 		}
-		else if (h)
-		{
-			DEBUG_OPERATION(size_t yc = shared_this->yield_count());
-			CHECK_EXCEPTION1(h, true);
-			assert(shared_this->yield_count() == yc);
-		}
-	});
+
+		actor_handle _sharedThis;
+		std::function<void(bool)> _h;
+	};
+
+ 	_strand->try_tick(wrap_switch(shared_from_this(), std::move(h)));
 }
 
 void my_actor::outside_wait_quit()
@@ -1996,6 +2133,11 @@ void my_actor::outside_wait_quit()
 
 void my_actor::append_quit_callback(const std::function<void()>& h)
 {
+	append_quit_callback(std::function<void()>(h));
+}
+
+void my_actor::append_quit_callback(std::function<void()>&& h)
+{
 	if (_strand->running_in_this_thread())
 	{
 		if (_exited)
@@ -2006,13 +2148,28 @@ void my_actor::append_quit_callback(const std::function<void()>& h)
 		}
 		else
 		{
-			_exitCallback.push_back(h);
+			_exitCallback.push_back(std::move(h));
 		}
 	}
 	else
 	{
-		actor_handle shared_this = shared_from_this();
-		_strand->post([=]{shared_this->append_quit_callback(h); });
+		struct wrap_append 
+		{
+			wrap_append(const actor_handle& host, std::function<void()>&& h)
+			:_sharedThis(host), _h(std::move(h)) {}
+
+			wrap_append(wrap_append&& s)
+				:_sharedThis(s._sharedThis), _h(std::move(s._h)) {}
+
+			void operator()()
+			{
+				_sharedThis->append_quit_callback(std::move(_h));
+			}
+
+			actor_handle _sharedThis;
+			std::function<void()> _h;
+		};
+		_strand->post(wrap_append(shared_from_this(), std::move(h)));
 	}
 }
 

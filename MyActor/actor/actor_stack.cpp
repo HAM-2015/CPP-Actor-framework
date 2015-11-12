@@ -26,7 +26,8 @@ ActorStackPool_ _actorStackPool;
 ActorStackPool_::ActorStackPool_()
 :_exitSign(false), _clearWait(false), _stackCount(0), _stackTotalSize(0)
 {
-	_clearThread.swap(std::thread(&ActorStackPool_::clearThread, this));
+	boost::thread th(&ActorStackPool_::clearThread, this);
+	_clearThread.swap(th);
 }
 
 ActorStackPool_::~ActorStackPool_()

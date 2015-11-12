@@ -768,7 +768,20 @@ public:
 		}
 		node* newNode = (node*)malloc(sizeof(node));
 		assert((void*)newNode == (void*)newNode->_data);
-		_creater(newNode);
+		try
+		{
+			_creater(newNode);
+		}
+		catch (...)
+		{
+#if (_DEBUG || DEBUG)
+			_mutex.lock();
+			_blockNumber--;
+			_mutex.unlock();
+#endif
+			free(newNode);
+			throw;
+		}
 		return (T*)newNode->_data;
 	}
 

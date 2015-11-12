@@ -3,11 +3,11 @@
 
 #include <algorithm>
 #include <boost/asio/io_service.hpp>
+#include <boost/thread/thread.hpp>
 #ifdef ENALBE_TLS_CHECK_SELF
 #include <boost/thread/tss.hpp>
 #endif
 #include <condition_variable>
-#include <thread>
 #include <atomic>
 #include <mutex>
 #include <set>
@@ -114,7 +114,7 @@ public:
 	/*!
 	@brief 运行线程ID
 	*/
-	const std::set<std::thread::id>& threadsID();
+	const std::set<boost::thread::id>& threadsID();
 
 	/*!
 	@brief 调度器对象引用
@@ -153,8 +153,8 @@ private:
 	std::mutex _runMutex;
 	std::mutex _ctrlMutex;
 	std::atomic<long long> _runCount;
-	std::set<std::thread::id> _threadsID;
-	std::vector<std::thread*> _runThreads;
+	std::set<boost::thread::id> _threadsID;
+	boost::thread_group _runThreads;
 	boost::asio::io_service _ios;
 	boost::asio::io_service::work* _runLock;
 #ifdef ENALBE_TLS_CHECK_SELF
