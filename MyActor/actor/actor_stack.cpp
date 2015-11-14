@@ -1,3 +1,6 @@
+#include "coro_choice.h"
+#if (defined LIB_CORO) || (defined BOOST_CORO)
+
 #include "actor_stack.h"
 #include "scattered.h"
 #include <chrono>
@@ -21,7 +24,7 @@
 #define CHECK_STACK(__st__)
 #endif
 
-ActorStackPool_ _actorStackPool;
+ActorStackPool_ s_actorStackPool;
 
 ActorStackPool_::ActorStackPool_()
 :_exitSign(false), _clearWait(false), _stackCount(0), _stackTotalSize(0)
@@ -70,7 +73,7 @@ StackPck_ ActorStackPool_::getStack( size_t size )
 {
 	assert(size && size % 4096 == 0 && size <= 1024*1024);
 	{
-		stack_pool_pck& pool = _actorStackPool._stackPool[size/4096-1];
+		stack_pool_pck& pool = s_actorStackPool._stackPool[size/4096-1];
 		pool._mutex.lock();
 		if (!pool._pool.empty())
 		{
@@ -83,8 +86,8 @@ StackPck_ ActorStackPool_::getStack( size_t size )
 		}
 		pool._mutex.unlock();
 	}
-	_actorStackPool._stackCount++;
-	_actorStackPool._stackTotalSize += size;
+	s_actorStackPool._stackCount++;
+	s_actorStackPool._stackTotalSize += size;
 	StackPck_ sp = { ((char*)malloc(size)) + size, size, 0 };
 	if (sp._stackTop)
 	{
@@ -100,7 +103,7 @@ void ActorStackPool_::recovery( StackPck_& stack )
 	memset((char*)stack._stackTop-stack._stackSize, 0xCD, stack._stackSize);
 #endif
 	stack._tick = get_tick_s();
-	stack_pool_pck& pool = _actorStackPool._stackPool[stack._stackSize/4096-1];
+	stack_pool_pck& pool = s_actorStackPool._stackPool[stack._stackSize/4096-1];
 	std::lock_guard<std::mutex> lg(pool._mutex);
 	pool._pool.push_back(stack);
 }
@@ -165,3 +168,4 @@ void ActorStackPool_::clearThread()
 		} while (freeCount);
 	}
 }
+#endif

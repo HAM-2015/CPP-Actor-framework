@@ -4,8 +4,9 @@
 #include "actor_stack.h"
 #include "async_buffer.h"
 #include "sync_msg.h"
+#include "coro_choice.h"
 
-#ifndef DISABLE_BOOST_CORO
+#ifdef BOOST_CORO
 
 #include <boost/coroutine/asymmetric_coroutine.hpp>
 typedef boost::coroutines::coroutine<void>::pull_type actor_pull_type;
@@ -67,7 +68,40 @@ struct actor_stack_allocate
 	size_t* _size;
 };
 
-#else
+#elif (defined FIBER_CORO)
+
+#include "fiber_pool.h"
+
+typedef FiberPool_::coro_push_interface actor_push_type;
+typedef FiberPool_::coro_pull_interface actor_pull_type;
+
+template <typename Handler>
+actor_pull_type* make_coro(size_t stackSize, void** sp, Handler&& handler)
+{
+	return FiberPool_::getFiber(stackSize, sp, [](actor_push_type& push, void* p)
+	{
+		std::function<void(actor_push_type&)> mh((Handler&&)(*(Handler*)p));
+		mh(push);
+	}, &handler);
+}
+
+mem_alloc_mt<my_actor> s_myActorAlloc(100000);
+mem_alloc_base* s_myActorRefCountAlloc = NULL;
+
+struct makeActorRefCountAlloc 
+{
+	makeActorRefCountAlloc()
+	{
+		s_myActorRefCountAlloc = make_ref_count_alloc<my_actor, std::mutex>(100000, [](void*){});
+	}
+
+	~makeActorRefCountAlloc()
+	{
+		delete s_myActorRefCountAlloc;
+	}
+} s_makeActorRefCountAlloc;
+
+#elif (defined LIB_CORO)
 
 #include "context_yield.h"
 
@@ -131,6 +165,10 @@ static size_t coro_internal_space_size()
 {
 	return context_yield::obj_space_size();
 }
+
+#else
+
+#error "no coro lib"
 
 #endif
 //////////////////////////////////////////////////////////////////////////
@@ -941,7 +979,7 @@ void TrigOnceBase_::operator =(const TrigOnceBase_&)
 	assert(false);
 }
 //////////////////////////////////////////////////////////////////////////
-
+#if (defined BOOST_CORO) || (defined LIB_CORO)
 template <typename _Ty>
 struct actor_ref_count_alloc;
 
@@ -1039,6 +1077,98 @@ struct actor_ref_count_alloc
 	StackPck_ _stackMem;
 	void** _ptr;
 };
+
+#elif (defined FIBER_CORO)
+
+template <typename _Ty>
+struct actor_ref_count_alloc;
+
+template<>
+class actor_ref_count_alloc<void>
+{
+public:
+	typedef size_t      size_type;
+	typedef void*       pointer;
+	typedef const void* const_pointer;
+	typedef void        value_type;
+
+	template<class Other>
+	struct rebind
+	{
+		typedef actor_ref_count_alloc<Other> other;
+	};
+};
+
+template <typename _Ty>
+struct actor_ref_count_alloc
+{
+	typedef size_t     size_type;
+	typedef _Ty*       pointer;
+	typedef const _Ty* const_pointer;
+	typedef _Ty&       reference;
+	typedef const _Ty& const_reference;
+	typedef _Ty        value_type;
+
+	template<class Other>
+	struct rebind
+	{
+		typedef actor_ref_count_alloc<Other> other;
+	};
+
+	actor_ref_count_alloc()
+	{
+	}
+
+	template<class Other>
+	actor_ref_count_alloc(const actor_ref_count_alloc<Other>& s)
+	{
+	}
+
+	template<class Other>
+	bool operator==(const actor_ref_count_alloc<Other>& s)
+	{
+		return true;
+	}
+
+	void deallocate(pointer _Ptr, size_type _Count)
+	{
+		assert(1 == _Count);
+		s_myActorRefCountAlloc->deallocate(_Ptr);
+	}
+
+	pointer allocate(size_type _Count)
+	{
+		assert(1 == _Count);
+		return (pointer)s_myActorRefCountAlloc->allocate();
+	}
+
+	void construct(_Ty *_Ptr, const _Ty& _Val)
+	{
+		new ((void *)_Ptr) _Ty(_Val);
+	}
+
+	void construct(_Ty *_Ptr, _Ty&& _Val)
+	{
+		new ((void *)_Ptr) _Ty(std::move(_Val));
+	}
+
+	template<class _Uty>
+	void destroy(_Uty *_Ptr)
+	{
+		_Ptr->~_Uty();
+	}
+
+	size_t max_size() const
+	{
+		return ((size_t)(-1) / sizeof (_Ty));
+	}
+};
+
+#else
+
+#error "no coro lib"
+
+#endif
 //////////////////////////////////////////////////////////////////////////
 
 class my_actor::boost_actor_run
@@ -1215,7 +1345,11 @@ my_actor::~my_actor()
 		stack_overflow_format(STACK_RESERVED_SPACE_SIZE - (int)i, _createStack);
 	}
 #endif
+#if (defined BOOST_CORO) || (defined LIB_CORO)
 	((actor_pull_type*)_actorPull)->~actor_pull_type();
+#elif (defined FIBER_CORO)
+	FiberPool_::recovery((actor_pull_type*)_actorPull);
+#endif
 }
 
 my_actor& my_actor::operator =(const my_actor&)
@@ -1230,6 +1364,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, const main_func&
 
 actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize)
 {
+#if (defined BOOST_CORO) || (defined LIB_CORO)
 	assert(stackSize && stackSize <= 1024 kB && 0 == stackSize % (4 kB));
 	/*ÄÚ´æ½á¹¹(L:H):|------Actor Stack------|--coro_obj--|---shared_ptr_ref_count---|--Actor Obj--|*/
 	const size_t actorSize = MEM_ALIGN(sizeof(my_actor), sizeof(void*));
@@ -1243,20 +1378,30 @@ actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& main
 	newActor->_timer = actorStrand->get_timer();
 	refTop -= MEM_ALIGN(sizeof(actor_pull_type), sizeof(void*));
 	void* pullPtr = refTop;
-#ifdef DISABLE_BOOST_CORO
+#if (defined LIB_CORO)
 	refTop -= coro_internal_space_size();
 	void* coroInterPtr = refTop;
 	newActor->_stackTop = refTop;
 	newActor->_stackSize = stackMem._stackSize - ((size_t)stackMem._stackTop - (size_t)newActor->_stackTop);
 	newActor->_actorPull = new(pullPtr)actor_pull_type(coroInterPtr, boost_actor_run(*newActor),
 		coro_attributes(newActor->_stackSize), actor_stack_pool_allocate(newActor->_stackTop, newActor->_stackSize));
-#else
+#elif (defined BOOST_CORO)
 	newActor->_stackTop = refTop;
 	newActor->_stackSize = stackMem._stackSize - ((size_t)stackMem._stackTop - (size_t)newActor->_stackTop);
 	newActor->_actorPull = new(pullPtr)actor_pull_type(boost_actor_run(*newActor),
 		coro_attributes(newActor->_stackSize), actor_stack_pool_allocate(newActor->_stackTop, newActor->_stackSize));
 #endif
 	newActor->_stackSize -= STACK_RESERVED_SPACE_SIZE;
+#elif (defined FIBER_CORO)
+	actor_handle newActor(new(s_myActorAlloc.allocate())my_actor, [](my_actor* p){p->~my_actor(); s_myActorAlloc.deallocate(p); },
+		actor_ref_count_alloc<void>());
+	newActor->_weakThis = newActor;
+	newActor->_mainFunc = std::move(mainFunc);
+	newActor->_strand = actorStrand;
+	newActor->_timer = actorStrand->get_timer();
+	newActor->_actorPull = make_coro(stackSize + STACK_RESERVED_SPACE_SIZE, &newActor->_stackTop, boost_actor_run(*newActor));
+	newActor->_stackSize = stackSize;
+#endif
 
 #ifdef CHECK_SELF
 #ifndef ENALBE_TLS_CHECK_SELF

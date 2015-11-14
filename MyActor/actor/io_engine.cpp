@@ -1,5 +1,6 @@
 #include "io_engine.h"
 #include "mem_pool.h"
+#include "coro_choice.h"
 #include <boost/asio/detail/strand_service.hpp>
 #include <memory>
 #ifdef DISABLE_HIGH_RESOLUTION
@@ -87,6 +88,9 @@ void io_engine::run(size_t threadNum, sched policy)
 							lockConVar->wait(ul);
 						}
 					}
+#ifdef FIBER_CORO
+					ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH);
+#endif
 #ifdef ENALBE_TLS_CHECK_SELF
 					void* tssBuff[64] = { 0 };
 					_tls.reset(tssBuff);
@@ -94,6 +98,9 @@ void io_engine::run(size_t threadNum, sched policy)
 					_tls.release();
 #else
 					_runCount += _ios.run();
+#endif
+#ifdef FIBER_CORO
+					ConvertFiberToThread();
 #endif
 				}
 				catch (boost::exception&)

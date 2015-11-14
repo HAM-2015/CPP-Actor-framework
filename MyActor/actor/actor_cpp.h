@@ -6,7 +6,9 @@
 CHECK_SELF 启用检测当前代码运行在哪个Actor下
 ENABLE_QT_ACTOR 启用在QT-UI线程中运行Actor
 ENABLE_NEXT_TICK 启用next_tick加速 
+ENABLE_WIN_FIBER windows下启用fiber
 ENABLE_CHECK_LOST 启用通知句柄丢失检测
+CHECK_ACTOR_STACK 检测actor堆栈，打印日志
 DISABLE_BOOST_CORO 禁用boost::coroutine
 ENALBE_TLS_CHECK_SELF 启用TLS技术检测当前代码运行在哪个Actor下
 DISABLE_HIGH_RESOLUTION 禁用高精度计时
@@ -23,5 +25,6 @@ DISABLE_HIGH_RESOLUTION 禁用高精度计时
 #include "strand_ex.cpp"
 #include "qt_strand.cpp"
 #include "bind_qt_run.cpp"
+#include "fiber_pool.cpp"
 
 #endif

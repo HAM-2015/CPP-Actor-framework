@@ -5,7 +5,7 @@
 #include <Windows.h>
 #include <MMSystem.h>
 #endif
-#include <thread>
+#include <boost/thread.hpp>
 #include <boost/asio/io_service.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #ifdef CHECK_ACTOR_STACK
@@ -562,7 +562,7 @@ struct init_mod
 		{
 			_stackLogIos = new boost::asio::io_service;
 			_stackLogWork = new boost::asio::io_service::work(*_stackLogIos);
-			_thread = new std::thread([&]
+			_thread = new boost::thread([&]
 			{
 				boost::system::error_code ec;
 				_stackLogIos->run(ec);
@@ -588,7 +588,7 @@ struct init_mod
 		}
 	}
 
-	std::thread* _thread;
+	boost::thread* _thread;
 	boost::asio::io_service::work* _stackLogWork;
 } _init_ms;
 #elif __GNUG__
@@ -622,7 +622,7 @@ struct init_mod
 	{
 	}
 
-	std::thread* _thread;
+	boost:thread* _thread;
 	boost::asio::io_service::work* _stackLogWork;
 } _init_gcc;
 

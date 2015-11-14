@@ -12,6 +12,9 @@ oschina url:
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
+2015-11-13
+添加对windows-fiber的支持.
+
 2015-11-11
 添加在QT-UI线程中运行Actor.
 

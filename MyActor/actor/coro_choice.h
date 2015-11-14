@@ -1,0 +1,26 @@
+#ifndef __CORO_CHOICE_H
+#define __CORO_CHOICE_H
+
+#ifdef DISABLE_BOOST_CORO
+
+#ifdef ENABLE_WIN_FIBER
+
+#if _WIN32_WINNT >= 0x0600
+#define FIBER_CORO
+#else //_WIN32_WINNT >= 0x0600
+#error "ENABLE_WIN_FIBER error, _WIN32_WINNT < 0x0600"
+#endif //_WIN32_WINNT >= 0x0600
+
+#else //ENABLE_WIN_FIBER
+
+#define LIB_CORO
+
+#endif //ENABLE_WIN_FIBER
+
+#else //DISABLE_BOOST_CORO
+
+#define BOOST_CORO
+
+#endif //DISABLE_BOOST_CORO
+
+#endif

@@ -1,6 +1,9 @@
 #ifndef __ACTOR_STACK_H
 #define __ACTOR_STACK_H
 
+#include "coro_choice.h"
+#if (defined LIB_CORO) || (defined BOOST_CORO)
+
 #include <algorithm>
 #include <thread>
 #include <condition_variable>
@@ -48,5 +51,6 @@ private:
 	std::condition_variable _clearVar;
 	std::atomic<size_t> _stackTotalSize;
 };
+#endif
 
 #endif

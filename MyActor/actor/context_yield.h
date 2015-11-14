@@ -1,7 +1,8 @@
 #ifndef __CONTEXT_YIELD_H
 #define __CONTEXT_YIELD_H
+#include "coro_choice.h"
 
-#ifdef DISABLE_BOOST_CORO
+#ifdef LIB_CORO
 #include "scattered.h"
 
 #ifdef _MSC_VER

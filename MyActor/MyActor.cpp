@@ -392,7 +392,7 @@ void socket_test()
 		{
 			boost::asio::ip::tcp::socket sck(self->self_io_service());
 			stack_obj<boost::asio::ip::tcp::acceptor> acc;
-			RUN_IN_TRHEAD_STACK(self, acc.create(self->self_io_service(), boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 1234)));//Actor堆栈内创建acceptor会出错，切换到线程堆栈内创建
+			self, acc.create(self->self_io_service(), boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 1234));
 			boost::system::error_code ec;
 			acc->async_accept(sck, self->make_asio_context(ec));
 			if (!ec)
@@ -458,6 +458,61 @@ void socket_test()
 	trace_line("end socket_test");
 }
 
+void perfor_test()
+{
+	trace_line("begin perfor_test");
+	io_engine ios;
+	ios.run(4);
+	actor_handle ah = my_actor::create(boost_strand::create(ios), [&](my_actor* self)
+	{
+		self->check_stack();
+		vector<shared_strand> strands;
+		strands.resize(ios.threadNumber());
+		for (size_t i = 0; i < strands.size(); i++)
+		{
+			strands[i] = boost_strand::create(ios);
+		}
+
+		for (int n = 1; n < 200; n++)
+		{
+			int num = n*n;
+			list<child_actor_handle::ptr> childList;
+			vector<int> count;
+			count.resize(num);
+			for (int i = 0; i < num; i++)
+			{
+				count[i] = 0;
+				auto newactor = child_actor_handle::make_ptr();
+				*newactor = self->create_child_actor(strands[i%strands.size()], [&count, i](my_actor* self)
+				{
+					while (true)
+					{
+						count[i]++;
+						self->yield_guard();
+					}
+				}, STACK_SIZE_REL(12 kB));
+				childList.push_front(newactor);
+			}
+			long long tk = get_tick_us();
+			self->child_actors_run(childList);
+			self->sleep(1000);
+			self->child_actors_force_quit(childList);
+			int ct = 0;
+			for (int i = 0; i < num; i++)
+			{
+				ct += count[i];
+			}
+			double f = (double)ct * 1000000 / (get_tick_us() - tk);
+			trace_line("Actor数=", num, ", ", "切换频率=", (int)f);
+		}
+	});
+	ah->notify_run();
+	ah->outside_wait_quit();
+	ios.stop();
+	trace_line("end perfor_test");
+}
+
+
 int main(int argc, char *argv[])
 {
 	trig_test();
@@ -480,6 +535,8 @@ int main(int argc, char *argv[])
 	trace("\n");
 	wait_multi_msg();
 	trace("\n");
+// 	perfor_test();
+// 	trace("\n");
 	trace_line("end");
 	getchar();
 	return 0;
