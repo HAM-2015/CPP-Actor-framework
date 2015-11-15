@@ -1,7 +1,7 @@
 #include "actor_timer.h"
 #include "scattered.h"
 #include "actor_framework.h"
-#ifdef DISABLE_HIGH_RESOLUTION
+#ifdef DISABLE_HIGH_TIMER
 #include <boost/asio/deadline_timer.hpp>
 typedef boost::asio::deadline_timer timer_type;
 typedef boost::posix_time::microseconds micseconds;

@@ -93,7 +93,7 @@ struct ActorFunc_
 };
 //////////////////////////////////////////////////////////////////////////
 
-struct msg_lost_exception {};
+struct ntf_lost_exception {};
 
 #ifdef ENABLE_CHECK_LOST
 class CheckLost_
@@ -127,17 +127,17 @@ template <size_t N>
 struct TupleTec_
 {
 	template <typename DTuple, typename SRC, typename... Args>
-	static inline void receive(DTuple& dst, SRC&& src, Args&&... args)
+	static inline void receive(DTuple&& dst, SRC&& src, Args&&... args)
 	{
-		std::get<std::tuple_size<DTuple>::value - N>(dst) = TRY_MOVE(src);
-		TupleTec_<N - 1>::receive(dst, TRY_MOVE(args)...);
+		std::get<std::tuple_size<RM_CREF(DTuple)>::value - N>(dst) = TRY_MOVE(src);
+		TupleTec_<N - 1>::receive(TRY_MOVE(dst), TRY_MOVE(args)...);
 	}
 
 	template <typename DTuple, typename STuple>
-	static inline void receive_ref(DTuple& dst, STuple&& src)
+	static inline void receive_ref(DTuple&& dst, STuple&& src)
 	{
 		std::get<N - 1>(dst) = tuple_move<N - 1, STuple&&>::get(TRY_MOVE(src));
-		TupleTec_<N - 1>::receive_ref(dst, TRY_MOVE(src));
+		TupleTec_<N - 1>::receive_ref(TRY_MOVE(dst), TRY_MOVE(src));
 	}
 };
 
@@ -148,21 +148,21 @@ struct TupleTec_<0>
 	static inline void receive(DTuple&) {}
 
 	template <typename DTuple, typename STuple>
-	static inline void receive_ref(DTuple&, STuple&&) {}
+	static inline void receive_ref(DTuple&&, STuple&&) {}
 };
 
 template <typename DTuple, typename... Args>
-void TupleReceiver_(DTuple& dst, Args&&... args)
+void TupleReceiver_(DTuple&& dst, Args&&... args)
 {
-	static_assert(std::tuple_size<DTuple>::value == sizeof...(Args), "");
-	TupleTec_<sizeof...(Args)>::receive(dst, TRY_MOVE(args)...);
+	static_assert(std::tuple_size<RM_CREF(DTuple)>::value == sizeof...(Args), "");
+	TupleTec_<sizeof...(Args)>::receive(TRY_MOVE(dst), TRY_MOVE(args)...);
 }
 
 template <typename DTuple, typename STuple>
-void TupleReceiverRef_(DTuple& dst, STuple&& src)
+void TupleReceiverRef_(DTuple&& dst, STuple&& src)
 {
-	static_assert(std::tuple_size<DTuple>::value == std::tuple_size<STuple>::value, "");
-	TupleTec_<std::tuple_size<DTuple>::value>::receive_ref(dst, TRY_MOVE(src));
+	static_assert(std::tuple_size<RM_CREF(DTuple)>::value == std::tuple_size<RM_CREF(STuple)>::value, "");
+	TupleTec_<std::tuple_size<RM_CREF(DTuple)>::value>::receive_ref(TRY_MOVE(dst), TRY_MOVE(src));
 }
 //////////////////////////////////////////////////////////////////////////
 
@@ -484,7 +484,7 @@ class actor_msg_handle : public ActorMsgHandlePush_<ARGS...>
 	friend mutex_block_msg<ARGS...>;
 	friend my_actor;
 public:
-	struct lost_exception : msg_lost_exception {};
+	struct lost_exception : ntf_lost_exception {};
 public:
 	actor_msg_handle(size_t fixedSize = 16)
 		:_msgBuff(fixedSize), _dstRec(NULL) {}
@@ -583,7 +583,7 @@ class actor_msg_handle<> : public ActorMsgHandlePush_<>
 	friend mutex_block_msg<>;
 	friend my_actor;
 public:
-	struct lost_exception : msg_lost_exception {};
+	struct lost_exception : ntf_lost_exception {};
 public:
 	~actor_msg_handle()
 	{
@@ -698,7 +698,7 @@ class actor_trig_handle : public ActorMsgHandlePush_<ARGS...>
 	friend mutex_block_trig<ARGS...>;
 	friend my_actor;
 public:
-	struct lost_exception : msg_lost_exception {};
+	struct lost_exception : ntf_lost_exception {};
 public:
 	actor_trig_handle()
 		:_hasMsg(false), _dstRec(NULL) {}
@@ -810,7 +810,7 @@ class actor_trig_handle<> : public ActorMsgHandlePush_<>
 	friend mutex_block_trig<>;
 	friend my_actor;
 public:
-	struct lost_exception : msg_lost_exception {};
+	struct lost_exception : ntf_lost_exception {};
 public:
 	actor_trig_handle()
 		:_hasMsg(false){}
@@ -1828,7 +1828,7 @@ class msg_pump_handle
 
 	typedef MsgPump_<ARGS...> pump;
 public:
-	struct lost_exception : public msg_lost_exception
+	struct lost_exception : public ntf_lost_exception
 	{
 		lost_exception(int id)
 		:_id(id) {}

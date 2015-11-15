@@ -252,7 +252,7 @@ void agent_test()
 						trace_comma(self->self_id(), self->pump_msg(pp));
 					}
 				}
-				catch (msg_lost_exception&)
+				catch (ntf_lost_exception&)
 				{
 					trace_comma(self->self_id(), "notifer lost");
 				}
@@ -295,7 +295,7 @@ void pump_test()
 					trace_comma(self->self_id(), self->pump_msg(pp));
 				}
 			}
-			catch (msg_lost_exception&)
+			catch (ntf_lost_exception&)
 			{
 				trace_comma(self->self_id(), "notifer lost");
 			}
@@ -391,13 +391,12 @@ void socket_test()
 		child_actor_handle srv = self->create_child_actor([&](my_actor* self)
 		{
 			boost::asio::ip::tcp::socket sck(self->self_io_service());
-			stack_obj<boost::asio::ip::tcp::acceptor> acc;
-			self, acc.create(self->self_io_service(), boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 1234));
+			boost::asio::ip::tcp::acceptor acc(self->self_io_service(), boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 1234));
 			boost::system::error_code ec;
-			acc->async_accept(sck, self->make_asio_context(ec));
+			acc.async_accept(sck, self->make_asio_context(ec));
 			if (!ec)
 			{
-				acc->close(ec);
+				acc.close(ec);
 				char buf[128];
 				size_t s = 0;
 				while (true)

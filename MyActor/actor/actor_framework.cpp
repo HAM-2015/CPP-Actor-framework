@@ -1229,7 +1229,7 @@ public:
 			assert(false);
 			exit(14);
 		}
-		catch (msg_lost_exception&)
+		catch (ntf_lost_exception&)
 		{
 			assert(false);
 			exit(15);

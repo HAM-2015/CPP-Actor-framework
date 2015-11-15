@@ -124,23 +124,23 @@ template <typename R, size_t N>
 struct ApplyArg_
 {
 	template <typename Handler, typename Tuple, typename... Args>
-	static inline R append(Handler& h, Tuple&& tup, Args&&... args)
+	static inline R append(Handler&& h, Tuple&& tup, Args&&... args)
 	{
-		return ApplyArg_<R, N - 1>::append(h, TRY_MOVE(tup), tuple_move<N - 1, Tuple&&>::get(TRY_MOVE(tup)), TRY_MOVE(args)...);
+		return ApplyArg_<R, N - 1>::append(TRY_MOVE(h), TRY_MOVE(tup), tuple_move<N - 1, Tuple&&>::get(TRY_MOVE(tup)), TRY_MOVE(args)...);
 	}
 
 	template <typename Tuple, typename First, typename... Args>
 	static inline void to_args(Tuple&& tup, First& fst, Args&... dsts)
 	{
-		fst = tuple_move<std::tuple_size<RM_REF(Tuple)>::value - N, Tuple&&>::get(TRY_MOVE(tup));
+		fst = tuple_move<std::tuple_size<RM_CREF(Tuple)>::value - N, Tuple&&>::get(TRY_MOVE(tup));
 		ApplyArg_<R, N - 1>::to_args(TRY_MOVE(tup), dsts...);
 	}
 
 	template <typename Tuple, typename First, typename... Args>
-	static inline void to_tuple(Tuple& dst, First&& fst, Args&&... args)
+	static inline void to_tuple(Tuple&& dst, First&& fst, Args&&... args)
 	{
-		std::get<std::tuple_size<Tuple>::value - N>(dst) = TRY_MOVE(fst);
-		ApplyArg_<R, N - 1>::to_tuple(dst, TRY_MOVE(args)...);
+		std::get<std::tuple_size<RM_CREF(Tuple)>::value - N>(dst) = TRY_MOVE(fst);
+		ApplyArg_<R, N - 1>::to_tuple(TRY_MOVE(dst), TRY_MOVE(args)...);
 	}
 };
 
@@ -148,7 +148,7 @@ template <typename R>
 struct ApplyArg_<R, 0>
 {
 	template <typename Handler, typename Tuple, typename... Args>
-	static inline R append(Handler& h, Tuple&&, Args&&... args)
+	static inline R append(Handler&& h, Tuple&&, Args&&... args)
 	{
 		return h(TRY_MOVE(args)...);
 	}
@@ -160,7 +160,7 @@ struct ApplyArg_<R, 0>
 	}
 
 	template <typename Tuple>
-	static inline void to_tuple(Tuple&)
+	static inline void to_tuple(Tuple&&)
 	{
 
 	}
@@ -283,6 +283,12 @@ struct CheckClassFunc_
 
 template <typename R, typename C>
 struct CheckClassFunc_<R(C::*)>
+{
+	enum { value = true };
+};
+
+template <typename R, typename C, typename... Types>
+struct CheckClassFunc_<R(C::*)(Types...) const>
 {
 	enum { value = true };
 };

@@ -3,7 +3,7 @@
 #include "coro_choice.h"
 #include <boost/asio/detail/strand_service.hpp>
 #include <memory>
-#ifdef DISABLE_HIGH_RESOLUTION
+#ifdef DISABLE_HIGH_TIMER
 #include <boost/asio/deadline_timer.hpp>
 typedef boost::asio::deadline_timer timer_type;
 #else

@@ -88,7 +88,7 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0600;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0501;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -101,7 +101,7 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0600;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0501;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

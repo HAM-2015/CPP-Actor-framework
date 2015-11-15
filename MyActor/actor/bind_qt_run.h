@@ -121,14 +121,16 @@ public:
 	actor_handle create_qt_actor(const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 protected:
 	virtual void postTaskEvent() = 0;
+	virtual void runOneTask();
+
 	virtual void userEvent(QEvent* e);
 	void notifyUiClosed();
-	void runOneTask();
-protected:
+private:
 	msg_queue<std::function<void()> > _tasksQueue;
 	boost::shared_mutex _postMutex;
 	boost::thread::id _threadID;
 	std::mutex _mutex;
+protected:
 	bool _isClosed;
 };
 
@@ -147,20 +149,20 @@ protected:
 		: FRAME(TRY_MOVE(args)...)
 	{
 	}
-public:
+
 	virtual ~bind_qt_run()
 	{
-		assert(boost::this_thread::get_id() == _threadID);
+
 	}
 private:
-	void closeEvent(QCloseEvent *)
-	{
-
-	}
-
-	void postTaskEvent()
+	void postTaskEvent() override final
 	{
 		QCoreApplication::postEvent(this, new task_event(QEvent::Type(QT_POST_TASK)));
+	}
+
+	void runOneTask() override final
+	{
+
 	}
 
 	void customEvent(QEvent* e) override final
@@ -170,7 +172,7 @@ private:
 			if (!_isClosed)
 			{
 				assert(dynamic_cast<task_event*>(e));
-				runOneTask();
+				bind_qt_run_base::runOneTask();
 			}
 		}
 		else

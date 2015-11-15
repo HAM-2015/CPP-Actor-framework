@@ -10,8 +10,8 @@ ENABLE_WIN_FIBER windows下启用fiber
 ENABLE_CHECK_LOST 启用通知句柄丢失检测
 CHECK_ACTOR_STACK 检测actor堆栈，打印日志
 DISABLE_BOOST_CORO 禁用boost::coroutine
+DISABLE_HIGH_TIMER 禁用高精度计时
 ENALBE_TLS_CHECK_SELF 启用TLS技术检测当前代码运行在哪个Actor下
-DISABLE_HIGH_RESOLUTION 禁用高精度计时
 
 */
 
