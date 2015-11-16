@@ -23,7 +23,7 @@ error:
 	$(error Invalid configuration, please check your inputs)
 endif
 
-SOURCEFILES := actor/actor_framework.cpp actor/actor_mutex.cpp actor/actor_stack.cpp actor/actor_timer.cpp actor/io_engine.cpp actor/scattered.cpp actor/shared_strand.cpp actor/strand_ex.cpp MyActor.cpp
+SOURCEFILES := actor/actor_framework.cpp actor/actor_mutex.cpp actor/actor_stack.cpp actor/actor_timer.cpp actor/async_timer.cpp actor/io_engine.cpp actor/scattered.cpp actor/shared_strand.cpp actor/strand_ex.cpp MyActor.cpp
 EXTERNAL_LIBS := 
 EXTERNAL_LIBS_COPIED := $(foreach lib, $(EXTERNAL_LIBS),$(BINARYDIR)/$(notdir $(lib)))
 
@@ -178,6 +178,10 @@ $(BINARYDIR)/actor_stack.o : actor/actor_stack.cpp $(all_make_files) |$(BINARYDI
 
 
 $(BINARYDIR)/actor_timer.o : actor/actor_timer.cpp $(all_make_files) |$(BINARYDIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@ -MD -MF $(@:.o=.dep)
+
+
+$(BINARYDIR)/async_timer.o : actor/async_timer.cpp $(all_make_files) |$(BINARYDIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@ -MD -MF $(@:.o=.dep)
 
 

@@ -26,5 +26,6 @@ ENALBE_TLS_CHECK_SELF 启用TLS技术检测当前代码运行在哪个Actor下
 #include "qt_strand.cpp"
 #include "bind_qt_run.cpp"
 #include "fiber_pool.cpp"
+#include "async_timer.cpp"
 
 #endif

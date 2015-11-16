@@ -15,11 +15,13 @@
 
 class StrandEx_;
 class ActorTimer_;
+class timer_boost;
 
 class io_engine
 {
 	friend StrandEx_;
 	friend ActorTimer_;
+	friend timer_boost;
 public:
 #ifdef _MSC_VER
 	enum priority

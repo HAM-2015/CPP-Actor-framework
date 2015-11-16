@@ -88,7 +88,7 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0501;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0501;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;DISABLE_HIGH_TIMER;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -101,7 +101,7 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0501;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0501;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;DISABLE_HIGH_TIMER;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -116,7 +116,7 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0600;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0600;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;DISABLE_HIGH_TIMER;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -134,7 +134,7 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0600;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0600;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;DISABLE_HIGH_TIMER;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -149,6 +149,7 @@
     <ClCompile Include="actor\actor_mutex.cpp" />
     <ClCompile Include="actor\actor_stack.cpp" />
     <ClCompile Include="actor\actor_timer.cpp" />
+    <ClCompile Include="actor\async_timer.cpp" />
     <ClCompile Include="actor\fiber_pool.cpp" />
     <ClCompile Include="actor\io_engine.cpp" />
     <ClCompile Include="actor\scattered.cpp" />
@@ -162,6 +163,7 @@
     <ClInclude Include="actor\actor_stack.h" />
     <ClInclude Include="actor\actor_timer.h" />
     <ClInclude Include="actor\async_buffer.h" />
+    <ClInclude Include="actor\async_timer.h" />
     <ClInclude Include="actor\check_actor_stack.h" />
     <ClInclude Include="actor\context_yield.h" />
     <ClInclude Include="actor\coro_choice.h" />

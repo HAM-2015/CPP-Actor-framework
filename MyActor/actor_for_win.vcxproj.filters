@@ -51,6 +51,9 @@
     <ClCompile Include="actor\fiber_pool.cpp">
       <Filter>源文件\actor</Filter>
     </ClCompile>
+    <ClCompile Include="actor\async_timer.cpp">
+      <Filter>源文件\actor</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="actor\actor_stack.h">
@@ -132,6 +135,9 @@
       <Filter>头文件\actor</Filter>
     </ClInclude>
     <ClInclude Include="actor\coro_choice.h">
+      <Filter>头文件\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="actor\async_timer.h">
       <Filter>头文件\actor</Filter>
     </ClInclude>
   </ItemGroup>
