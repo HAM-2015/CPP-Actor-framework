@@ -79,13 +79,13 @@ struct ActorFunc_
 	template <typename... Args>
 	static msg_pump_handle<Args...> connect_msg_pump(const int id, my_actor* const host, bool checkLost);
 	template <typename DST, typename... ARGS>
-	static void _trig_handler(my_actor* host, DST& dstRec, ARGS&&... args);
+	static void _trig_handler(my_actor* host, bool* sign, DST& dstRec, ARGS&&... args);
 	template <typename DST, typename... ARGS>
-	static void _trig_handler2(my_actor* host, DST& dstRec, ARGS&&... args);
+	static void _trig_handler2(my_actor* host, bool* sign, DST& dstRec, ARGS&&... args);
 	template <typename DST, typename... ARGS>
-	static void _dispatch_handler(my_actor* host, DST& dstRec, ARGS&&... args);
+	static void _dispatch_handler(my_actor* host, bool* sign, DST& dstRec, ARGS&&... args);
 	template <typename DST, typename... ARGS>
-	static void _dispatch_handler2(my_actor* host, DST& dstRec, ARGS&&... args);
+	static void _dispatch_handler2(my_actor* host, bool* sign, DST& dstRec, ARGS&&... args);
 #ifdef ENABLE_CHECK_LOST
 	static std::shared_ptr<CheckLost_> new_check_lost(const shared_strand& strand, actor_msg_handle_base* msgHandle);
 	static std::shared_ptr<CheckPumpLost_> new_check_pump_lost(const actor_handle& hostActor, MsgPoolBase_* pool);
@@ -517,6 +517,7 @@ private:
 				ActorFunc_::pull_yield(Parent::_hostActor);
 				return;
 			}
+			assert(_msgBuff.size() < _msgBuff.fixed_size());
 			_msgBuff.push_back(std::move(msg));
 		}
 	}
@@ -1567,6 +1568,7 @@ private:
 		}
 		else
 		{
+			assert(_msgBuff.size() < _msgBuff.fixed_size());
 			_msgBuff.push_back(std::move(mt));
 		}
 	}
@@ -1594,6 +1596,7 @@ private:
 		}
 		else
 		{
+			assert(_msgBuff.size() < _msgBuff.fixed_size());
 			_msgBuff.push_back(std::move(mt));
 		}
 	}
@@ -2416,43 +2419,43 @@ protected:
 	virtual ~TrigOnceBase_() {}
 protected:
 	template <typename DST, typename... Args>
-	void _trig_handler(DST& dstRec, Args&&... args) const
+	void _trig_handler(bool* sign, DST& dstRec, Args&&... args) const
 	{
 		assert(!_pIsTrig->exchange(true));
 		assert(_hostActor);
-		ActorFunc_::_trig_handler(_hostActor.get(), dstRec, TRY_MOVE(args)...);
+		ActorFunc_::_trig_handler(_hostActor.get(), sign, dstRec, TRY_MOVE(args)...);
 		reset();
 	}
 
 	template <typename DST, typename... Args>
-	void _trig_handler2(DST& dstRec, Args&&... args) const
+	void _trig_handler2(bool* sign, DST& dstRec, Args&&... args) const
 	{
 		assert(!_pIsTrig->exchange(true));
 		assert(_hostActor);
-		ActorFunc_::_trig_handler2(_hostActor.get(), dstRec, TRY_MOVE(args)...);
+		ActorFunc_::_trig_handler2(_hostActor.get(), sign, dstRec, TRY_MOVE(args)...);
 		reset();
 	}
 
 	template <typename DST, typename... Args>
-	void _dispatch_handler(DST& dstRec, Args&&... args) const
+	void _dispatch_handler(bool* sign, DST& dstRec, Args&&... args) const
 	{
 		assert(!_pIsTrig->exchange(true));
 		assert(_hostActor);
-		ActorFunc_::_dispatch_handler(_hostActor.get(), dstRec, TRY_MOVE(args)...);
+		ActorFunc_::_dispatch_handler(_hostActor.get(), sign, dstRec, TRY_MOVE(args)...);
 		reset();
 	}
 
 	template <typename DST, typename... Args>
-	void _dispatch_handler2(DST& dstRec, Args&&... args) const
+	void _dispatch_handler2(bool* sign, DST& dstRec, Args&&... args) const
 	{
 		assert(!_pIsTrig->exchange(true));
 		assert(_hostActor);
-		ActorFunc_::_dispatch_handler2(_hostActor.get(), dstRec, TRY_MOVE(args)...);
+		ActorFunc_::_dispatch_handler2(_hostActor.get(), sign, dstRec, TRY_MOVE(args)...);
 		reset();
 	}
 
-	void tick_handler() const;
-	void dispatch_handler() const;
+	void tick_handler(bool* sign) const;
+	void dispatch_handler(bool* sign) const;
 	virtual void reset() const = 0;
 private:
 	void operator =(const TrigOnceBase_&);
@@ -2472,8 +2475,9 @@ public:
 	trig_once_notifer() :_dstRec(0) {}
 	~trig_once_notifer() {}
 private:
-	trig_once_notifer(const actor_handle& hostActor, dst_receiver* dstRec)
-		:_dstRec(dstRec) {
+	trig_once_notifer(const actor_handle& hostActor, dst_receiver* dstRec, bool* sign)
+		:_dstRec(dstRec), _sign(sign)
+	{
 		_hostActor = hostActor;
 	}
 public:
@@ -2481,24 +2485,24 @@ public:
 	void operator()(Args&&... args) const
 	{
 		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
-		_trig_handler(*_dstRec, TRY_MOVE(args)...);
+		_trig_handler(_sign, *_dstRec, TRY_MOVE(args)...);
 	}
 
 	void operator()() const
 	{
 		static_assert(sizeof...(ARGS) == 0, "");
-		tick_handler();
+		tick_handler(_sign);
 	}
 
 	template <typename... Args>
 	void dispatch(Args&&... args) const
 	{
-		_dispatch_handler(*_dstRec, TRY_MOVE(args)...);
+		_dispatch_handler(_sign, *_dstRec, TRY_MOVE(args)...);
 	}
 
 	void dispatch() const
 	{
-		dispatch_handler();
+		dispatch_handler(_sign);
 	}
 
 	std::function<void(ARGS...)> case_func() const
@@ -2511,6 +2515,7 @@ private:
 		_hostActor.reset();
 	}
 private:
+	bool* _sign;
 	dst_receiver* _dstRec;
 };
 //////////////////////////////////////////////////////////////////////////
@@ -2537,7 +2542,7 @@ class callback_handler<types_pck<ARGS...>, types_pck<OUTS...>>: public TrigOnceB
 public:
 	template <typename... Outs>
 	callback_handler(my_actor* host, Outs&... outs)
-		:_early(true), _dstRef(outs...)
+		:_early(true), _bsign(false), _sign(&_bsign), _dstRef(outs...)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
 	}
@@ -2546,25 +2551,32 @@ public:
 	{
 		if (_early)
 		{
-			ActorFunc_::push_yield(Parent::_hostActor.get());
+			if (!ActorFunc_::is_quited(Parent::_hostActor.get()))
+			{
+				if (!_bsign)
+				{
+					_bsign = true;
+					ActorFunc_::push_yield(Parent::_hostActor.get());
+				}
+			}
 			Parent::_hostActor.reset();
 		}
 	}
 
 	callback_handler(const callback_handler& s)
-		:TrigOnceBase_(s), _early(false), _dstRef(s._dstRef) {}
+		:TrigOnceBase_(s), _early(false), _bsign(false), _sign(s._sign), _dstRef(s._dstRef) {}
 public:
 	template <typename... Args>
 	void operator()(Args&&... args) const
 	{
 		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
-		Parent::_trig_handler2(_dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
+		Parent::_trig_handler2(_sign, _dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
 	}
 
 	void operator()() const
 	{
 		static_assert(sizeof...(ARGS) == 0, "");
-		Parent::tick_handler();
+		Parent::tick_handler(_sign);
 	}
 private:
 	void reset() const
@@ -2581,6 +2593,8 @@ private:
 	}
 private:
 	dst_receiver _dstRef;
+	bool* _sign;
+	bool _bsign;
 	const bool _early;
 };
 
@@ -2597,7 +2611,7 @@ class asio_cb_handler<types_pck<ARGS...>, types_pck<OUTS...>> : public TrigOnceB
 public:
 	template <typename... Outs>
 	asio_cb_handler(my_actor* host, Outs&... outs)
-		:_early(true), _dstRef(outs...)
+		:_early(true), _bsign(false), _sign(&_bsign), _dstRef(outs...)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
 	}
@@ -2606,25 +2620,32 @@ public:
 	{
 		if (_early)
 		{
-			ActorFunc_::push_yield(Parent::_hostActor.get());
+			if (!ActorFunc_::is_quited(Parent::_hostActor.get()))
+			{
+				if (!_bsign)
+				{
+					_bsign = true;
+					ActorFunc_::push_yield(Parent::_hostActor.get());
+				}
+			}
 			Parent::_hostActor.reset();
 		}
 	}
 
 	asio_cb_handler(const asio_cb_handler& s)
-		:TrigOnceBase_(s), _early(false), _dstRef(s._dstRef) {}
+		:TrigOnceBase_(s), _early(false), _bsign(false), _sign(s._sign), _dstRef(s._dstRef) {}
 public:
 	template <typename... Args>
 	void operator()(Args&&... args) const
 	{
 		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
-		Parent::_dispatch_handler2(_dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
+		Parent::_dispatch_handler2(_sign, _dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
 	}
 
 	void operator()() const
 	{
 		static_assert(sizeof...(ARGS) == 0, "");
-		Parent::dispatch_handler();
+		Parent::dispatch_handler(_sign);
 	}
 private:
 	void reset() const
@@ -2641,6 +2662,8 @@ private:
 	}
 private:
 	dst_receiver _dstRef;
+	bool* _sign;
+	bool _bsign;
 	const bool _early;
 };
 //////////////////////////////////////////////////////////////////////////
@@ -2652,7 +2675,7 @@ template <typename R = void>
 struct sync_result
 {
 	sync_result()
-	:_res(NULL) {}
+	:_res(NULL), _mutex(NULL), _con(NULL), _sign(false) {}
 
 	template <typename... Args>
 	void return_(Args&&... args)
@@ -2660,10 +2683,11 @@ struct sync_result
 		assert(_res);
 		_res->create(TRY_MOVE(args)...);
 		{
-			std::lock_guard<std::mutex> lg(_mutex);
-			_con.notify_one();
+			assert(_mutex && _con);
+			std::lock_guard<std::mutex> lg(*_mutex);
+			_con->notify_one();
 		}
-		_res = NULL;
+		reset();
 	}
 
 	template <typename T>
@@ -2672,35 +2696,60 @@ struct sync_result
 		assert(_res);
 		_res->create(TRY_MOVE(r));
 		{
-			std::lock_guard<std::mutex> lg(_mutex);
-			_con.notify_one();
+			assert(_mutex && _con);
+			std::lock_guard<std::mutex> lg(*_mutex);
+			_con->notify_one();
 		}
-		_res = NULL;
+		reset();
 	}
 
-	std::mutex _mutex;
-	std::condition_variable _con;
+	void reset()
+	{
+		_mutex = NULL;
+		_con = NULL;
+		_res = NULL;
+		_sign = false;
+	}
+
+	std::mutex* _mutex;
+	std::condition_variable* _con;
 	stack_obj<R>* _res;
+	bool _sign;
 };
 
 template <>
 struct sync_result<void>
 {
 	sync_result()
-	DEBUG_OPERATION(:_res(false)){}
+	{
+		_mutex = NULL;
+		_con = NULL;
+		_sign = false;
+		DEBUG_OPERATION(_res = false);
+	}
 
 	void return_()
 	{
 		assert(_res);
 		{
-			std::lock_guard<std::mutex> lg(_mutex);
-			_con.notify_one();
+			assert(_mutex && _con);
+			std::lock_guard<std::mutex> lg(*_mutex);
+			_con->notify_one();
 		}
+		reset();
+	}
+
+	void reset()
+	{
+		_mutex = NULL;
+		_con = NULL;
+		_sign = false;
 		DEBUG_OPERATION(_res = false);
 	}
 
-	std::mutex _mutex;
-	std::condition_variable _con;
+	std::mutex* _mutex;
+	std::condition_variable* _con;
+	bool _sign;
 	DEBUG_OPERATION(bool _res);
 };
 
@@ -2720,13 +2769,21 @@ public:
 		:_early(true), _result(res), _dstRef(outs...)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
+		_result.reset();
 	}
 
 	~sync_cb_handler()
 	{
 		if (_early)
 		{
-			ActorFunc_::push_yield(Parent::_hostActor.get());
+			if (!ActorFunc_::is_quited(Parent::_hostActor.get()))
+			{
+				if (!_result._sign)
+				{
+					_result._sign = true;
+					ActorFunc_::push_yield(Parent::_hostActor.get());
+				}
+			}
 			Parent::_hostActor.reset();
 		}
 	}
@@ -2742,9 +2799,13 @@ public:
 		stack_obj<R> res;
 		_result._res = &res;
 		{
-			std::unique_lock<std::mutex> ul(_result._mutex);
-			Parent::_dispatch_handler2(_dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
-			_result._con.wait(ul);
+			std::mutex mutex;
+			std::condition_variable con;
+			_result._mutex = &mutex;
+			_result._con = &con;
+			std::unique_lock<std::mutex> ul(mutex);
+			Parent::_dispatch_handler2(&_result._sign, _dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
+			con.wait(ul);
 		}
 		return (R&&)res.get();
 	}
@@ -2756,9 +2817,13 @@ public:
 		stack_obj<R> res;
 		_result._res = &res;
 		{
-			std::unique_lock<std::mutex> ul(_result._mutex);
-			Parent::dispatch_handler();
-			_result._con.wait(ul);
+			std::mutex mutex;
+			std::condition_variable con;
+			_result._mutex = &mutex;
+			_result._con = &con;
+			std::unique_lock<std::mutex> ul(mutex);
+			Parent::dispatch_handler(&_result._sign);
+			con.wait(ul);
 		}
 		return (R&&)res.get();
 	}
@@ -2794,13 +2859,21 @@ public:
 		:_early(true), _result(res), _dstRef(outs...)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
+		_result.reset();
 	}
 
 	~sync_cb_handler()
 	{
 		if (_early)
 		{
-			ActorFunc_::push_yield(Parent::_hostActor.get());
+			if (!ActorFunc_::is_quited(Parent::_hostActor.get()))
+			{
+				if (!_result._sign)
+				{
+					_result._sign = true;
+					ActorFunc_::push_yield(Parent::_hostActor.get());
+				}
+			}
 			Parent::_hostActor.reset();
 		}
 	}
@@ -2815,9 +2888,13 @@ public:
 		assert(!ActorFunc_::self_strand(Parent::_hostActor.get())->in_this_ios());
 		DEBUG_OPERATION(_result._res = true);
 		{
-			std::unique_lock<std::mutex> ul(_result._mutex);
-			Parent::_dispatch_handler2(_dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
-			_result._con.wait(ul);
+			std::mutex mutex;
+			std::condition_variable con;
+			_result._mutex = &mutex;
+			_result._con = &con;
+			std::unique_lock<std::mutex> ul(mutex);
+			Parent::_dispatch_handler2(&_result._sign, _dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
+			con.wait(ul);
 		}
 	}
 
@@ -2827,9 +2904,13 @@ public:
 		assert(!ActorFunc_::self_strand(Parent::_hostActor.get())->in_this_ios());
 		DEBUG_OPERATION(_result._res = true);
 		{
-			std::unique_lock<std::mutex> ul(_result._mutex);
-			Parent::dispatch_handler();
-			_result._con.wait(ul);
+			std::mutex mutex;
+			std::condition_variable con;
+			_result._mutex = &mutex;
+			_result._con = &con;
+			std::unique_lock<std::mutex> ul(mutex);
+			Parent::dispatch_handler(&_result._sign);
+			con.wait(ul);
 		}
 	}
 private:
@@ -2883,9 +2964,13 @@ public:
 		_result->_res = &res;
 		assert(!_pIsTrig->exchange(true));
 		{
-			std::unique_lock<std::mutex> ul(_result->_mutex);
+			std::mutex mutex;
+			std::condition_variable con;
+			_result->_mutex = &mutex;
+			_result->_con = &con;
+			std::unique_lock<std::mutex> ul(mutex);
 			_handler(TRY_MOVE(args)...);
-			_result->_con.wait(ul);
+			con.wait(ul);
 		}
 		DEBUG_OPERATION(_pIsTrig->exchange(false));
 		return (R&&)res.get();
@@ -2898,9 +2983,13 @@ public:
 		_result->_res = &res;
 		assert(!_pIsTrig->exchange(true));
 		{
-			std::unique_lock<std::mutex> ul(_result->_mutex);
+			std::mutex mutex;
+			std::condition_variable con;
+			_result->_mutex = &mutex;
+			_result->_con = &con;
+			std::unique_lock<std::mutex> ul(mutex);
 			_handler(TRY_MOVE(args)...);
-			_result->_con.wait(ul);
+			con.wait(ul);
 		}
 		DEBUG_OPERATION(_pIsTrig->exchange(false));
 		return (R&&)res.get();
@@ -2941,9 +3030,13 @@ public:
 		DEBUG_OPERATION(_result->_res = true);
 		assert(!_pIsTrig->exchange(true));
 		{
-			std::unique_lock<std::mutex> ul(_result->_mutex);
+			std::mutex mutex;
+			std::condition_variable con;
+			_result->_mutex = &mutex;
+			_result->_con = &con;
+			std::unique_lock<std::mutex> ul(mutex);
 			_handler(TRY_MOVE(args)...);
-			_result->_con.wait(ul);
+			con.wait(ul);
 		}
 		DEBUG_OPERATION(_pIsTrig->exchange(false));
 	}
@@ -2954,9 +3047,13 @@ public:
 		DEBUG_OPERATION(_result->_res = true);
 		assert(!_pIsTrig->exchange(true));
 		{
-			std::unique_lock<std::mutex> ul(_result->_mutex);
+			std::mutex mutex;
+			std::condition_variable con;
+			_result->_mutex = &mutex;
+			_result->_con = &con;
+			std::unique_lock<std::mutex> ul(mutex);
 			_handler(TRY_MOVE(args)...);
-			_result->_con.wait(ul);
+			con.wait(ul);
 		}
 		DEBUG_OPERATION(_pIsTrig->exchange(false));
 	}
@@ -2966,13 +3063,155 @@ private:
 	DEBUG_OPERATION(std::shared_ptr<std::atomic<bool> > _pIsTrig);
 };
 
+template <typename R, typename Handler>
+class wrapped_sync_handler2
+{
+	struct sync_st
+	{
+		std::mutex mutex;
+		std::condition_variable con;
+	};
+public:
+	template <typename H>
+	wrapped_sync_handler2(H&& h, sync_result<R>& res)
+		:_handler(TRY_MOVE(h)), _result(&res), _syncSt(new sync_st)
+	{
+		DEBUG_OPERATION(_pIsTrig = std::shared_ptr<std::atomic<bool> >(new std::atomic<bool>(false)));
+	}
+
+	wrapped_sync_handler2(wrapped_sync_handler2&& s)
+		:_handler(std::move(s._handler)), _result(s._result), _syncSt(std::move(s._syncSt))
+	{
+		DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
+	}
+
+	void operator =(wrapped_sync_handler2&& s)
+	{
+		_handler = std::move(s._handler);
+		_result = s._result;
+		_syncSt = std::move(s._syncSt);
+		DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
+	}
+
+	template <typename... Args>
+	R operator()(Args&&... args)
+	{
+		stack_obj<R> res;
+		_result->_res = &res;
+		assert(!_pIsTrig->exchange(true));
+		{
+			_result->_mutex = &_syncSt->mutex;
+			_result->_con = &_syncSt->con;
+			std::unique_lock<std::mutex> ul(_syncSt->mutex);
+			_handler(TRY_MOVE(args)...);
+			_syncSt->con.wait(ul);
+		}
+		DEBUG_OPERATION(_pIsTrig->exchange(false));
+		return (R&&)res.get();
+	}
+
+	template <typename... Args>
+	R operator()(Args&&... args) const
+	{
+		stack_obj<R> res;
+		_result->_res = &res;
+		assert(!_pIsTrig->exchange(true));
+		{
+			_result->_mutex = &_syncSt->mutex;
+			_result->_con = &_syncSt->con;
+			std::unique_lock<std::mutex> ul(_syncSt->mutex);
+			_handler(TRY_MOVE(args)...);
+			_syncSt->con.wait(ul);
+		}
+		DEBUG_OPERATION(_pIsTrig->exchange(false));
+		return (R&&)res.get();
+	}
+private:
+	Handler _handler;
+	sync_result<R>* _result;
+	std::shared_ptr<sync_st> _syncSt;
+	DEBUG_OPERATION(std::shared_ptr<std::atomic<bool> > _pIsTrig);
+};
+
+template <typename Handler>
+class wrapped_sync_handler2<void, Handler>
+{
+	struct sync_st
+	{
+		std::mutex mutex;
+		std::condition_variable con;
+	};
+public:
+	template <typename H>
+	wrapped_sync_handler2(H&& h, sync_result<void>& res)
+		:_handler(TRY_MOVE(h)), _result(&res), _syncSt(new sync_st)
+	{
+		DEBUG_OPERATION(_pIsTrig = std::shared_ptr<std::atomic<bool> >(new std::atomic<bool>(false)));
+	}
+
+	wrapped_sync_handler2(wrapped_sync_handler2&& s)
+		:_handler(std::move(s._handler)), _result(s._result), _syncSt(std::move(s._syncSt))
+	{
+		DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
+	}
+
+	void operator =(wrapped_sync_handler2&& s)
+	{
+		_handler = std::move(s._handler);
+		_result = s._result;
+		_syncSt = std::move(s._syncSt);
+		DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
+	}
+
+	template <typename... Args>
+	void operator()(Args&&... args)
+	{
+		DEBUG_OPERATION(_result->_res = true);
+		assert(!_pIsTrig->exchange(true));
+		{
+			_result->_mutex = &_syncSt->mutex;
+			_result->_con = &_syncSt->con;
+			std::unique_lock<std::mutex> ul(_syncSt->mutex);
+			_handler(TRY_MOVE(args)...);
+			_syncSt->con.wait(ul);
+		}
+		DEBUG_OPERATION(_pIsTrig->exchange(false));
+	}
+
+	template <typename... Args>
+	void operator()(Args&&... args) const
+	{
+		DEBUG_OPERATION(_result->_res = true);
+		assert(!_pIsTrig->exchange(true));
+		{
+			_result->_mutex = &_syncSt->mutex;
+			_result->_con = &_syncSt->con;
+			std::unique_lock<std::mutex> ul(_syncSt->mutex);
+			_handler(TRY_MOVE(args)...);
+			_syncSt->con.wait(ul);
+		}
+		DEBUG_OPERATION(_pIsTrig->exchange(false));
+	}
+private:
+	Handler _handler;
+	sync_result<void>* _result;
+	std::shared_ptr<sync_st> _syncSt;
+	DEBUG_OPERATION(std::shared_ptr<std::atomic<bool> > _pIsTrig);
+};
+
 /*!
 @brief 包装一个handler到与当前ios无关的线程中同步调用
 */
 template <typename R = void, typename Handler>
-wrapped_sync_handler<R, Handler> wrap_sync(sync_result<R>& res, Handler&& h)
+wrapped_sync_handler<R, RM_CREF(Handler)> wrap_sync(sync_result<R>& res, Handler&& h)
 {
-	return wrapped_sync_handler<R, Handler>(TRY_MOVE(h), res);
+	return wrapped_sync_handler<R, RM_CREF(Handler)>(TRY_MOVE(h), res);
+}
+
+template <typename R = void, typename Handler>
+wrapped_sync_handler2<R, RM_CREF(Handler)> wrap_sync2(sync_result<R>& res, Handler&& h)
+{
+	return wrapped_sync_handler2<R, RM_CREF(Handler)>(TRY_MOVE(h), res);
 }
 //////////////////////////////////////////////////////////////////////////
 
@@ -3176,54 +3415,64 @@ class my_actor
 	template <typename DST, typename ARG>
 	struct async_invoke_handler
 	{
-		async_invoke_handler(const actor_handle& host, DST& dst)
-		:_sharedThis(host), _dstRec(dst) {}
+		async_invoke_handler(const actor_handle& host, bool* sign, DST& dst)
+		:_sharedThis(host), _sign(sign), _dstRec(dst) {}
 
 		template <typename Arg>
 		void operator ()(Arg&& arg)
 		{
-			_sharedThis->_trig_handler(_dstRec, TRY_MOVE(arg));
+			_sharedThis->_trig_handler(_sign, _dstRec, TRY_MOVE(arg));
 		}
 
 		actor_handle _sharedThis;
 		DST& _dstRec;
+		bool* _sign;
 	};
 
 	template <typename DST, typename ARG>
 	struct async_invoke_handler<DST, ARG&>
 	{
-		async_invoke_handler(const actor_handle& host, DST& dst)
-		:_sharedThis(host), _dstRec(dst) {}
+		async_invoke_handler(const actor_handle& host, bool* sign, DST& dst)
+		:_sharedThis(host), _sign(sign), _dstRec(dst) {}
 
 		void operator ()(const TYPE_PIPE(ARG&)& arg)
 		{
-			_sharedThis->_trig_handler(_dstRec, arg);
+			_sharedThis->_trig_handler(_sign, _dstRec, arg);
 		}
 
 		actor_handle _sharedThis;
 		DST& _dstRec;
+		bool* _sign;
 	};
 
 	template <typename DST, typename... ARGS>
 	struct trig_cb_handler
 	{
 		template <typename Dst, typename... Args>
-		trig_cb_handler(const actor_handle& host, Dst& dst, Args&&... args)
-			:_sharedThis(host), _dst(dst), _args(TRY_MOVE(args)...) {}
+		trig_cb_handler(const actor_handle& host, bool* sign, Dst& dst, Args&&... args)
+			:_sharedThis(host), _sign(sign), _dst(dst), _args(TRY_MOVE(args)...) {}
 
 		trig_cb_handler(const trig_cb_handler& s)
-			:_sharedThis(std::move(s._sharedThis)), _dst(s._dst), _args(std::move(s._args)) {}
+			:_sharedThis(std::move(s._sharedThis)), _sign(s._sign), _dst(s._dst), _args(std::move(s._args)) {}
 
 		void operator ()()
 		{
 			if (!_sharedThis->_quited)
 			{
 				TupleReceiverRef_(_dst, std::move(_args));
-				_sharedThis->pull_yield();
+				if (*_sign)
+				{
+					_sharedThis->pull_yield();
+				}
+				else
+				{
+					*_sign = true;
+				}
 			}
 		}
 
 		DST& _dst;
+		bool* _sign;
 		mutable std::tuple<ARGS...> _args;
 		mutable actor_handle _sharedThis;
 	};
@@ -3232,22 +3481,30 @@ class my_actor
 	struct trig_cb_handler2
 	{
 		template <typename Dst, typename... Args>
-		trig_cb_handler2(const actor_handle& host, Dst& dst, Args&&... args)
-			:_sharedThis(host), _dst(dst), _args(TRY_MOVE(args)...) {}
+		trig_cb_handler2(const actor_handle& host, bool* sign, Dst& dst, Args&&... args)
+			:_sharedThis(host), _sign(sign), _dst(dst), _args(TRY_MOVE(args)...) {}
 
 		trig_cb_handler2(const trig_cb_handler2& s)
-			:_sharedThis(std::move(s._sharedThis)), _dst(s._dst), _args(std::move(s._args)) {}
+			:_sharedThis(std::move(s._sharedThis)), _sign(s._sign), _dst(s._dst), _args(std::move(s._args)) {}
 
 		void operator ()()
 		{
 			if (!_sharedThis->_quited)
 			{
 				TupleReceiverRef_(_dst, std::move(_args));
-				_sharedThis->pull_yield();
+				if (*_sign)
+				{
+					_sharedThis->pull_yield();
+				}
+				else
+				{
+					*_sign = true;
+				}
 			}
 		}
 
 		DST _dst;
+		bool* _sign;
 		mutable std::tuple<ARGS...> _args;
 		mutable actor_handle _sharedThis;
 	};
@@ -3290,6 +3547,30 @@ class my_actor
 		}
 
 		actor_handle _lockSelf;
+	};
+
+	struct wrap_trig_run_one
+	{
+		wrap_trig_run_one(const actor_handle& self, bool* sign)
+		:_lockSelf(self), _sign(sign) {}
+
+		void operator()()
+		{
+			if (!_lockSelf->_quited)
+			{
+				if (*_sign)
+				{
+					_lockSelf->pull_yield();
+				}
+				else
+				{
+					*_sign = true;
+				}
+			}
+		}
+
+		actor_handle _lockSelf;
+		bool* _sign;
 	};
 
 	struct timer_state
@@ -3610,12 +3891,17 @@ public:
 		assert_enter();
 		if (exeStrand != _strand)
 		{
+			bool sign = false;
 			actor_handle shared_this = shared_from_this();
-			exeStrand->asyncInvokeVoid(TRY_MOVE(h), [shared_this]
+			exeStrand->asyncInvokeVoid(TRY_MOVE(h), [&sign, shared_this]
 			{
-				shared_this->_strand->post(wrap_run_one(shared_this));
+				shared_this->_strand->post(wrap_trig_run_one(shared_this, &sign));
 			});
-			push_yield();
+			if (!sign)
+			{
+				sign = true;
+				push_yield();
+			}
 			return;
 		}
 		h();
@@ -3627,9 +3913,14 @@ public:
 		assert_enter();
 		if (exeStrand != _strand)
 		{
+			bool sign = false;
 			std::tuple<stack_obj<TYPE_PIPE(R)>> dstRec;
-			exeStrand->asyncInvoke(TRY_MOVE(h), async_invoke_handler<std::tuple<stack_obj<TYPE_PIPE(R)>>, R>(shared_from_this(), dstRec));
-			push_yield();
+			exeStrand->asyncInvoke(TRY_MOVE(h), async_invoke_handler<std::tuple<stack_obj<TYPE_PIPE(R)>>, R>(shared_from_this(), &sign, dstRec));
+			if (!sign)
+			{
+				sign = true;
+				push_yield();
+			}
 			return std::move(std::get<0>(dstRec).get());
 		}
 		return h();
@@ -3642,12 +3933,17 @@ public:
 	__yield_interrupt void run_in_thread_stack(H&& h)
 	{
 		assert_enter();
+		bool sign = false;
 		actor_handle shared_this = shared_from_this();
-		_strand->asyncInvokeVoid(TRY_MOVE(h), [shared_this]
+		_strand->asyncInvokeVoid(TRY_MOVE(h), [&sign, shared_this]
 		{
-			shared_this->_strand->next_tick(wrap_run_one(shared_this));
+			shared_this->_strand->next_tick(wrap_trig_run_one(shared_this, &sign));
 		});
-		push_yield();
+		if (!sign)
+		{
+			sign = true;
+			push_yield();
+		}
 	}
 
 	template <typename R, typename H>
@@ -3664,21 +3960,31 @@ public:
 	__yield_interrupt void async_send(const shared_strand& exeStrand, H&& h)
 	{
 		assert_enter();
+		bool sign = false;
 		actor_handle shared_this = shared_from_this();
-		exeStrand->asyncInvokeVoid(TRY_MOVE(h), [shared_this]
+		exeStrand->asyncInvokeVoid(TRY_MOVE(h), [&sign, shared_this]
 		{
-			shared_this->_strand->try_tick(wrap_run_one(shared_this));
+			shared_this->_strand->try_tick(wrap_trig_run_one(shared_this, &sign));
 		});
-		push_yield();
+		if (!sign)
+		{
+			sign = true;
+			push_yield();
+		}
 	}
 
 	template <typename R, typename H>
 	__yield_interrupt R async_send(const shared_strand& exeStrand, H&& h)
 	{
 		assert_enter();
+		bool sign = false;
 		std::tuple<stack_obj<TYPE_PIPE(R)>> dstRec;
-		exeStrand->asyncInvoke(TRY_MOVE(h), async_invoke_handler<std::tuple<stack_obj<TYPE_PIPE(R)>>, R>(shared_from_this(), dstRec));
-		push_yield();
+		exeStrand->asyncInvoke(TRY_MOVE(h), async_invoke_handler<std::tuple<stack_obj<TYPE_PIPE(R)>>, R>(shared_from_this(), &sign, dstRec));
+		if (!sign)
+		{
+			sign = true;
+			push_yield();
+		}
 		return std::move(std::get<0>(dstRec).get());
 	}
 
@@ -3724,17 +4030,27 @@ public:
 	__yield_interrupt void trig(const H& h)
 	{
 		assert_enter();
-		h(trig_once_notifer<>(shared_from_this(), NULL));
-		push_yield();
+		bool sign = false;
+		h(trig_once_notifer<>(shared_from_this(), NULL, &sign));
+		if (!sign)
+		{
+			sign = true;
+			push_yield();
+		}
 	}
 
 	template <typename... DArgs, typename H>
 	__yield_interrupt void trig(DArgs&... dargs, const H& h)
 	{
 		assert_enter();
+		bool sign = false;
 		std::tuple<DArgs&...> res(dargs...);
-		h(trig_once_notifer<DArgs...>(shared_from_this(), &res));
-		push_yield();
+		h(trig_once_notifer<DArgs...>(shared_from_this(), &res, &sign));
+		if (!sign)
+		{
+			sign = true;
+			push_yield();
+		}
 	}
 
 	template <typename R, typename H>
@@ -3745,76 +4061,75 @@ public:
 		return res;
 	}
 private:
-	void post_handler();
-	void dispatch_handler();
-	void tick_handler();
-	void next_tick_handler();
+	void dispatch_handler(bool* sign);
+	void tick_handler(bool* sign);
+	void next_tick_handler(bool* sign);
 
 	template <typename DST, typename... ARGS>
-	void _trig_handler(DST& dstRec, ARGS&&... args)
+	void _trig_handler(bool* sign, DST& dstRec, ARGS&&... args)
 	{
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited)
 			{
 				TupleReceiver_(dstRec, TRY_MOVE(args)...);
-				next_tick_handler();
+				next_tick_handler(sign);
 			}
 		}
 		else
 		{
-			_strand->post(trig_cb_handler<DST, RM_CREF(ARGS)...>(shared_from_this(), dstRec, TRY_MOVE(args)...));
+			_strand->post(trig_cb_handler<DST, RM_CREF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
 		}
 	}
 
 	template <typename DST, typename... ARGS>
-	void _trig_handler2(DST& dstRec, ARGS&&... args)
+	void _trig_handler2(bool* sign, DST& dstRec, ARGS&&... args)
 	{
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited)
 			{
 				TupleReceiver_(dstRec, TRY_MOVE(args)...);
-				next_tick_handler();
+				next_tick_handler(sign);
 			}
 		}
 		else
 		{
-			_strand->post(trig_cb_handler2<DST, RM_CREF(ARGS)...>(shared_from_this(), dstRec, TRY_MOVE(args)...));
+			_strand->post(trig_cb_handler2<DST, RM_CREF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
 		}
 	}
 
 	template <typename DST, typename... ARGS>
-	void _dispatch_handler(DST& dstRec, ARGS&&... args)
+	void _dispatch_handler(bool* sign, DST& dstRec, ARGS&&... args)
 	{
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited)
 			{
 				TupleReceiver_(dstRec, TRY_MOVE(args)...);
-				next_tick_handler();
+				next_tick_handler(sign);
 			}
 		}
 		else
 		{
-			_strand->dispatch(trig_cb_handler<DST, RM_CREF(ARGS)...>(shared_from_this(), dstRec, TRY_MOVE(args)...));
+			_strand->dispatch(trig_cb_handler<DST, RM_CREF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
 		}
 	}
 
 	template <typename DST, typename... ARGS>
-	void _dispatch_handler2(DST& dstRec, ARGS&&... args)
+	void _dispatch_handler2(bool* sign, DST& dstRec, ARGS&&... args)
 	{
 		if (_strand->running_in_this_thread())
 		{
 			if (!_quited)
 			{
 				TupleReceiver_(dstRec, TRY_MOVE(args)...);
-				next_tick_handler();
+				next_tick_handler(sign);
 			}
 		}
 		else
 		{
-			_strand->dispatch(trig_cb_handler2<DST, RM_CREF(ARGS)...>(shared_from_this(), dstRec, TRY_MOVE(args)...));
+			_strand->dispatch(trig_cb_handler2<DST, RM_CREF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
 		}
 	}
 private:
@@ -5726,31 +6041,31 @@ msg_pump_handle<Args...> ActorFunc_::connect_msg_pump(const int id, my_actor* co
 }
 
 template <typename DST, typename... ARGS>
-void ActorFunc_::_trig_handler(my_actor* host, DST& dstRec, ARGS&&... args)
+void ActorFunc_::_trig_handler(my_actor* host, bool* sign, DST& dstRec, ARGS&&... args)
 {
 	assert(host);
-	host->_trig_handler(dstRec, TRY_MOVE(args)...);
+	host->_trig_handler(sign, dstRec, TRY_MOVE(args)...);
 }
 
 template <typename DST, typename... ARGS>
-void ActorFunc_::_trig_handler2(my_actor* host, DST& dstRec, ARGS&&... args)
+void ActorFunc_::_trig_handler2(my_actor* host, bool* sign, DST& dstRec, ARGS&&... args)
 {
 	assert(host);
-	host->_trig_handler2(dstRec, TRY_MOVE(args)...);
+	host->_trig_handler2(sign, dstRec, TRY_MOVE(args)...);
 }
 
 template <typename DST, typename... ARGS>
-void ActorFunc_::_dispatch_handler(my_actor* host, DST& dstRec, ARGS&&... args)
+void ActorFunc_::_dispatch_handler(my_actor* host, bool* sign, DST& dstRec, ARGS&&... args)
 {
 	assert(host);
-	host->_dispatch_handler(dstRec, TRY_MOVE(args)...);
+	host->_dispatch_handler(sign, dstRec, TRY_MOVE(args)...);
 }
 
 template <typename DST, typename... ARGS>
-void ActorFunc_::_dispatch_handler2(my_actor* host, DST& dstRec, ARGS&&... args)
+void ActorFunc_::_dispatch_handler2(my_actor* host, bool* sign, DST& dstRec, ARGS&&... args)
 {
 	assert(host);
-	host->_dispatch_handler2(dstRec, TRY_MOVE(args)...);
+	host->_dispatch_handler2(sign, dstRec, TRY_MOVE(args)...);
 }
 
 #endif

@@ -1,6 +1,7 @@
 #ifndef __QT_STRAND_H
 #define __QT_STRAND_H
 
+#ifdef ENABLE_QT_UI
 #ifdef ENABLE_QT_ACTOR
 #include <thread>
 #include "shared_strand.h"
@@ -27,6 +28,7 @@ private:
 	bind_qt_run_base* _qt;
 	boost::thread::id _qtThreadID;
 };
+#endif
 #endif
 
 #endif

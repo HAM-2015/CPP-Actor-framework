@@ -1,6 +1,7 @@
 #include "qt_strand.h"
 #include "bind_qt_run.h"
 
+#ifdef ENABLE_QT_UI
 #ifdef ENABLE_QT_ACTOR
 qt_strand::qt_strand()
 {
@@ -61,4 +62,5 @@ void qt_strand::_post(std::function<void()>&& h)
 	_qt->post(std::move(h));
 }
 
+#endif
 #endif

@@ -151,7 +151,7 @@ void boost_strand::run_tick_back()
 }
 #endif //ENABLE_NEXT_TICK
 
-#if (defined ENABLE_MFC_ACTOR || defined ENABLE_WX_ACTOR || defined ENABLE_QT_ACTOR)
+#ifdef ENABLE_QT_ACTOR
 void boost_strand::_post(const std::function<void()>& h)
 {
 	assert(false);

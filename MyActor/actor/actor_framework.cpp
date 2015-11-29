@@ -1,176 +1,22 @@
-#define WIN32_LEAN_AND_MEAN
-
 #include "actor_framework.h"
-#include "actor_stack.h"
 #include "async_buffer.h"
 #include "sync_msg.h"
-#include "coro_choice.h"
+#include "context_pool.h"
 
-#ifdef BOOST_CORO
-
-#include <boost/coroutine/asymmetric_coroutine.hpp>
-typedef boost::coroutines::coroutine<void>::pull_type actor_pull_type;
-typedef boost::coroutines::coroutine<void>::push_type actor_push_type;
-typedef boost::coroutines::attributes coro_attributes;
-
-/*!
-@brief Actor栈分配器
-*/
-struct actor_stack_pool_allocate
-{
-	actor_stack_pool_allocate() {}
-
-	actor_stack_pool_allocate(void* sp, size_t size)
-	{
-		assert(0 == ((size_t)sp % sizeof(void*)));
-		_stack.sp = sp;
-		_stack.size = size;
-	}
-
-	void allocate(boost::coroutines::stack_context & stackCon, size_t size)
-	{
-		stackCon = _stack;
-	}
-
-	void deallocate(boost::coroutines::stack_context & stackCon)
-	{
-
-	}
-
-	boost::coroutines::stack_context _stack;
-};
-
-struct actor_stack_allocate
-{
-	actor_stack_allocate() {}
-
-	actor_stack_allocate(void** sp, size_t* size)
-	{
-		_sp = sp;
-		_size = size;
-	}
-
-	void allocate(boost::coroutines::stack_context & stackCon, size_t size)
-	{
-		boost::coroutines::stack_allocator all;
-		all.allocate(stackCon, size);
-		*_sp = stackCon.sp;
-		*_size = stackCon.size;
-	}
-
-	void deallocate(boost::coroutines::stack_context & stackCon)
-	{
-		boost::coroutines::stack_allocator all;
-		all.deallocate(stackCon);
-	}
-
-	void** _sp;
-	size_t* _size;
-};
-
-#elif (defined FIBER_CORO)
-
-#include "fiber_pool.h"
-
-typedef FiberPool_::coro_push_interface actor_push_type;
-typedef FiberPool_::coro_pull_interface actor_pull_type;
+typedef ContextPool_::coro_push_interface actor_push_type;
+typedef ContextPool_::coro_pull_interface actor_pull_type;
 
 template <typename Handler>
-actor_pull_type* make_coro(size_t stackSize, void** sp, Handler&& handler)
+void make_coro(actor_pull_type* pull, Handler&& handler)
 {
-	return FiberPool_::getFiber(stackSize, sp, [](actor_push_type& push, void* p)
+	pull->_param = &handler;
+	pull->_currentHandler = [](actor_push_type& push, void* p)
 	{
 		std::function<void(actor_push_type&)> mh((Handler&&)(*(Handler*)p));
 		mh(push);
-	}, &handler);
+	};
+	(*pull)();
 }
-
-mem_alloc_mt<my_actor> s_myActorAlloc(100000);
-mem_alloc_base* s_myActorRefCountAlloc = NULL;
-
-struct makeActorRefCountAlloc 
-{
-	makeActorRefCountAlloc()
-	{
-		s_myActorRefCountAlloc = make_ref_count_alloc<my_actor, std::mutex>(100000, [](void*){});
-	}
-
-	~makeActorRefCountAlloc()
-	{
-		delete s_myActorRefCountAlloc;
-	}
-} s_makeActorRefCountAlloc;
-
-#elif (defined LIB_CORO)
-
-#include "context_yield.h"
-
-struct coro_attributes 
-{
-	coro_attributes(size_t s) {}
-};
-
-struct actor_stack_pool_allocate
-{
-	actor_stack_pool_allocate() {}
-
-	actor_stack_pool_allocate(void* sp, size_t size)
-	{
-		assert(0 == ((size_t)sp % sizeof(void*)));
-		_sp = sp;
-		_size = size;
-	}
-
-	void* _sp;
-	size_t _size;
-};
-
-struct actor_push_type
-{
-	void operator()()
-	{
-		(*_push)();
-	}
-
-	context_yield::coro_push_interface* _push;
-};
-
-struct actor_pull_type
-{
-	template <typename Handler>
-	actor_pull_type(void* interSpace, Handler&& handler, coro_attributes, const actor_stack_pool_allocate& all)
-	{
-		_pull = context_yield::make_coro2(interSpace, [](context_yield::coro_push_interface& push, void* p)
-		{
-			std::function<void(actor_push_type&)> mh((Handler&&)(*(Handler*)p));
-			actor_push_type push_ = { &push };
-			mh(push_);
-		}, all._sp, all._size, &handler);
-	}
-
-	~actor_pull_type()
-	{
-		_pull->destory();
-	}
-
-	void operator()()
-	{
-		(*_pull)();
-	}
-
-	context_yield::coro_pull_interface* _pull;
-};
-
-static size_t coro_internal_space_size()
-{
-	return context_yield::obj_space_size();
-}
-
-#else
-
-#error "no coro lib"
-
-#endif
 //////////////////////////////////////////////////////////////////////////
 
 #ifdef CHECK_SELF
@@ -958,19 +804,19 @@ bool MsgPumpVoid_::isDisconnected()
 }
 //////////////////////////////////////////////////////////////////////////
 
-void TrigOnceBase_::tick_handler() const
+void TrigOnceBase_::tick_handler(bool* sign) const
 {
 	assert(!_pIsTrig->exchange(true));
 	assert(_hostActor);
-	_hostActor->tick_handler();
+	_hostActor->tick_handler(sign);
 	reset();
 }
 
-void TrigOnceBase_::dispatch_handler() const
+void TrigOnceBase_::dispatch_handler(bool* sign) const
 {
 	assert(!_pIsTrig->exchange(true));
 	assert(_hostActor);
-	_hostActor->dispatch_handler();
+	_hostActor->dispatch_handler(sign);
 	reset();
 }
 
@@ -979,7 +825,6 @@ void TrigOnceBase_::operator =(const TrigOnceBase_&)
 	assert(false);
 }
 //////////////////////////////////////////////////////////////////////////
-#if (defined BOOST_CORO) || (defined LIB_CORO)
 template <typename _Ty>
 struct actor_ref_count_alloc;
 
@@ -998,105 +843,10 @@ public:
 		typedef actor_ref_count_alloc<Other> other;
 	};
 
-	actor_ref_count_alloc(StackPck_& stackMem, void** ptr)
-		:_stackMem(stackMem), _ptr(ptr)
-	{
-	}
+	actor_ref_count_alloc(ContextPool_::coro_pull_interface* pull)
+		:_pull(pull) {}
 
-	StackPck_ _stackMem;
-	void** _ptr;
-};
-
-template <typename _Ty>
-struct actor_ref_count_alloc
-{
-	typedef size_t     size_type;
-	typedef _Ty*       pointer;
-	typedef const _Ty* const_pointer;
-	typedef _Ty&       reference;
-	typedef const _Ty& const_reference;
-	typedef _Ty        value_type;
-
-	template<class Other>
-	struct rebind
-	{
-		typedef actor_ref_count_alloc<Other> other;
-	};
-
-	actor_ref_count_alloc(StackPck_& stackMem, void** ptr)
-		:_stackMem(stackMem), _ptr(ptr)
-	{
-	}
-
-	template<class Other>
-	actor_ref_count_alloc(const actor_ref_count_alloc<Other>& s)
-		: _stackMem(s._stackMem), _ptr(s._ptr)
-	{
-	}
-
-	template<class Other>
-	bool operator==(const actor_ref_count_alloc<Other>& s)
-	{
-		return true;
-	}
-
-	void deallocate(pointer _Ptr, size_type _Count)
-	{
-		assert(1 == _Count);
-		ActorStackPool_::recovery(_stackMem);
-	}
-
-	pointer allocate(size_type _Count)
-	{
-		assert(1 == _Count);
-		*_ptr = (unsigned char*)*_ptr - MEM_ALIGN(sizeof(_Ty), sizeof(void*));
-		return (pointer)*_ptr;
-	}
-
-	void construct(_Ty *_Ptr, const _Ty& _Val)
-	{
-		new ((void *)_Ptr) _Ty(_Val);
-	}
-
-	void construct(_Ty *_Ptr, _Ty&& _Val)
-	{
-		new ((void *)_Ptr) _Ty(std::move(_Val));
-	}
-
-	template<class _Uty>
-	void destroy(_Uty *_Ptr)
-	{
-		_Ptr->~_Uty();
-	}
-
-	size_t max_size() const
-	{
-		return ((size_t)(-1) / sizeof (_Ty));
-	}
-
-	StackPck_ _stackMem;
-	void** _ptr;
-};
-
-#elif (defined FIBER_CORO)
-
-template <typename _Ty>
-struct actor_ref_count_alloc;
-
-template<>
-class actor_ref_count_alloc<void>
-{
-public:
-	typedef size_t      size_type;
-	typedef void*       pointer;
-	typedef const void* const_pointer;
-	typedef void        value_type;
-
-	template<class Other>
-	struct rebind
-	{
-		typedef actor_ref_count_alloc<Other> other;
-	};
+	ContextPool_::coro_pull_interface* _pull;
 };
 
 template <typename _Ty>
@@ -1121,25 +871,28 @@ struct actor_ref_count_alloc
 
 	template<class Other>
 	actor_ref_count_alloc(const actor_ref_count_alloc<Other>& s)
+		:_pull(s._pull)
 	{
 	}
 
 	template<class Other>
 	bool operator==(const actor_ref_count_alloc<Other>& s)
 	{
+		_pull = s._pull;
 		return true;
 	}
 
 	void deallocate(pointer _Ptr, size_type _Count)
 	{
 		assert(1 == _Count);
-		s_myActorRefCountAlloc->deallocate(_Ptr);
+		ContextPool_::recovery(_pull);
 	}
 
 	pointer allocate(size_type _Count)
 	{
 		assert(1 == _Count);
-		return (pointer)s_myActorRefCountAlloc->allocate();
+		assert(sizeof(my_actor)+sizeof(_Ty) <= _pull->_spaceSize);
+		return (pointer)((char*)_pull->_space + sizeof(my_actor));
 	}
 
 	void construct(_Ty *_Ptr, const _Ty& _Val)
@@ -1162,13 +915,9 @@ struct actor_ref_count_alloc
 	{
 		return ((size_t)(-1) / sizeof (_Ty));
 	}
+
+	ContextPool_::coro_pull_interface* _pull;
 };
-
-#else
-
-#error "no coro lib"
-
-#endif
 //////////////////////////////////////////////////////////////////////////
 
 class my_actor::boost_actor_run
@@ -1345,11 +1094,6 @@ my_actor::~my_actor()
 		stack_overflow_format(STACK_RESERVED_SPACE_SIZE - (int)i, _createStack);
 	}
 #endif
-#if (defined BOOST_CORO) || (defined LIB_CORO)
-	((actor_pull_type*)_actorPull)->~actor_pull_type();
-#elif (defined FIBER_CORO)
-	FiberPool_::recovery((actor_pull_type*)_actorPull);
-#endif
 }
 
 my_actor& my_actor::operator =(const my_actor&)
@@ -1364,44 +1108,16 @@ actor_handle my_actor::create(const shared_strand& actorStrand, const main_func&
 
 actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize)
 {
-#if (defined BOOST_CORO) || (defined LIB_CORO)
-	assert(stackSize && stackSize <= 1024 kB && 0 == stackSize % (4 kB));
-	/*内存结构(L:H):|------Actor Stack------|--coro_obj--|---shared_ptr_ref_count---|--Actor Obj--|*/
-	const size_t actorSize = MEM_ALIGN(sizeof(my_actor), sizeof(void*));
-	StackPck_ stackMem = ActorStackPool_::getStack(stackSize + STACK_RESERVED_SPACE_SIZE);
-	unsigned char* refTop = (unsigned char*)stackMem._stackTop - actorSize;
-	actor_handle newActor(new(refTop)my_actor, [](my_actor* p){p->~my_actor(); },
-		actor_ref_count_alloc<void>(stackMem, (void**)&refTop));
+	actor_pull_type* pull = ContextPool_::getContext(stackSize + STACK_RESERVED_SPACE_SIZE);
+	actor_handle newActor(new(pull->_space)my_actor(), [](my_actor* p){p->~my_actor(); }, actor_ref_count_alloc<void>(pull));
 	newActor->_weakThis = newActor;
 	newActor->_mainFunc = std::move(mainFunc);
 	newActor->_strand = actorStrand;
 	newActor->_timer = actorStrand->get_timer();
-	refTop -= MEM_ALIGN(sizeof(actor_pull_type), sizeof(void*));
-	void* pullPtr = refTop;
-#if (defined LIB_CORO)
-	refTop -= coro_internal_space_size();
-	void* coroInterPtr = refTop;
-	newActor->_stackTop = refTop;
-	newActor->_stackSize = stackMem._stackSize - ((size_t)stackMem._stackTop - (size_t)newActor->_stackTop);
-	newActor->_actorPull = new(pullPtr)actor_pull_type(coroInterPtr, boost_actor_run(*newActor),
-		coro_attributes(newActor->_stackSize), actor_stack_pool_allocate(newActor->_stackTop, newActor->_stackSize));
-#elif (defined BOOST_CORO)
-	newActor->_stackTop = refTop;
-	newActor->_stackSize = stackMem._stackSize - ((size_t)stackMem._stackTop - (size_t)newActor->_stackTop);
-	newActor->_actorPull = new(pullPtr)actor_pull_type(boost_actor_run(*newActor),
-		coro_attributes(newActor->_stackSize), actor_stack_pool_allocate(newActor->_stackTop, newActor->_stackSize));
-#endif
-	newActor->_stackSize -= STACK_RESERVED_SPACE_SIZE;
-#elif (defined FIBER_CORO)
-	actor_handle newActor(new(s_myActorAlloc.allocate())my_actor, [](my_actor* p){p->~my_actor(); s_myActorAlloc.deallocate(p); },
-		actor_ref_count_alloc<void>());
-	newActor->_weakThis = newActor;
-	newActor->_mainFunc = std::move(mainFunc);
-	newActor->_strand = actorStrand;
-	newActor->_timer = actorStrand->get_timer();
-	newActor->_actorPull = make_coro(stackSize + STACK_RESERVED_SPACE_SIZE, &newActor->_stackTop, boost_actor_run(*newActor));
+	newActor->_stackTop = pull->_coroInfo->stackTop;
+	newActor->_actorPull = pull;
 	newActor->_stackSize = stackSize;
-#endif
+	make_coro(pull, boost_actor_run(*newActor));
 
 #ifdef CHECK_SELF
 #ifndef ENALBE_TLS_CHECK_SELF
@@ -1743,24 +1459,19 @@ void my_actor::cancel_delay_trig()
 	cancel_timer();
 }
 
-void my_actor::post_handler()
+void my_actor::dispatch_handler(bool* sign)
 {
-	_strand->post(wrap_run_one(shared_from_this()));
+	_strand->dispatch(wrap_trig_run_one(shared_from_this(), sign));
 }
 
-void my_actor::dispatch_handler()
+void my_actor::tick_handler(bool* sign)
 {
-	_strand->dispatch(wrap_run_one(shared_from_this()));
+	_strand->try_tick(wrap_trig_run_one(shared_from_this(), sign));
 }
 
-void my_actor::tick_handler()
+void my_actor::next_tick_handler(bool* sign)
 {
-	_strand->try_tick(wrap_run_one(shared_from_this()));
-}
-
-void my_actor::next_tick_handler()
-{
-	_strand->next_tick(wrap_run_one(shared_from_this()));
+	_strand->next_tick(wrap_trig_run_one(shared_from_this(), sign));
 }
 
 const shared_strand& my_actor::self_strand()

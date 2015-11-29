@@ -25,28 +25,24 @@ public:
 
 	void push_back(const T& p)
 	{
-		assert(_size < 256);
 		_size++;
 		new(new_back()->_data)T(p);
 	}
 
 	void push_back(T&& p)
 	{
-		assert(_size < 256);
 		_size++;
 		new(new_back()->_data)T(std::move(p));
 	}
 
 	void push_front(const T& p)
 	{
-		assert(_size < 256);
 		_size++;
 		new(new_front()->_data)T(p);
 	}
 
 	void push_front(T&& p)
 	{
-		assert(_size < 256);
 		_size++;
 		new(new_front()->_data)T(std::move(p));
 	}
@@ -110,6 +106,11 @@ public:
 		{
 			_alloc._poolMaxSize = fixedSize;
 		}
+	}
+
+	size_t fixed_size()
+	{
+		return _alloc._poolMaxSize;
 	}
 private:
 	node* new_back()

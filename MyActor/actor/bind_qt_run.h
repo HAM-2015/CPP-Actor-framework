@@ -1,7 +1,7 @@
 #ifndef __BIND_QT_RUN_H
 #define __BIND_QT_RUN_H
 
-#ifdef ENABLE_QT_ACTOR
+#ifdef ENABLE_QT_UI
 #include <boost/thread/shared_mutex.hpp>
 #include <boost/thread/locks.hpp>
 #include <functional>
@@ -14,27 +14,27 @@
 
 #define QT_POST_TASK	(QEvent::MaxUser-1)
 
-//开始在Actor中，嵌入一段在qt线程中执行的连续逻辑
-#define begin_RUN_IN_QT_FOR(__qt__, __host__) (__qt__)->send(__host__, [&]() {
-#define begin_RUN_IN_QT() begin_RUN_IN_QT_FOR(this, self)
-//结束在qt线程中执行的一段连续逻辑，只有当这段逻辑执行完毕后才会执行END后续代码
-#define end_RUN_IN_QT() })
+//开始在Actor中，嵌入一段在qt-ui线程中执行的连续逻辑
+#define begin_RUN_IN_QT_UI_FOR(__qt__, __host__) (__qt__)->send(__host__, [&]() {
+#define begin_RUN_IN_QT_UI() begin_RUN_IN_QT_UI_FOR(this, self)
+//结束在qt-ui线程中执行的一段连续逻辑，只有当这段逻辑执行完毕后才会执行END后续代码
+#define end_RUN_IN_QT_UI() })
 //////////////////////////////////////////////////////////////////////////
-//在Actor中，嵌入一段在qt线程中执行的语句
-#define RUN_IN_QT_FOR(__qt__, __host__, __exp__) (__qt__)->send(__host__, [&]() {__exp__;})
-#define RUN_IN_QT(__exp__) RUN_IN_QT_FOR(this, self, __exp__)
+//在Actor中，嵌入一段在qt-ui线程中执行的语句
+#define RUN_IN_QT_UI_FOR(__qt__, __host__, __exp__) (__qt__)->send(__host__, [&]() {__exp__;})
+#define RUN_IN_QT_UI(__exp__) RUN_IN_QT_UI_FOR(this, self, __exp__)
 //////////////////////////////////////////////////////////////////////////
-//在Actor中，嵌入一段在qt线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用begin_RUN_IN_QT_FOR）
-#define begin_ACTOR_RUN_IN_QT_FOR(__qt__, __host__, __ios__) {\
+//在Actor中，嵌入一段在qt-ui线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用begin_RUN_IN_QT_UI_FOR）
+#define begin_ACTOR_RUN_IN_QT_UI_FOR(__qt__, __host__, __ios__) {\
 	auto ___host = __host__; \
 	my_actor::quit_guard ___qg(__host__); \
 	auto ___tactor = (__qt__)->create_qt_actor(__ios__, [&](my_actor* __host__) {
 
-//在Actor中，嵌入一段在qt线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用begin_RUN_IN_QT）
-#define begin_ACTOR_RUN_IN_QT(__ios__) begin_ACTOR_RUN_IN_QT_FOR(this, self, __ios__)
+//在Actor中，嵌入一段在qt-ui线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用begin_RUN_IN_QT_UI）
+#define begin_ACTOR_RUN_IN_QT_UI(__ios__) begin_ACTOR_RUN_IN_QT_UI_FOR(this, self, __ios__)
 
-//结束在qt线程中执行的Actor，只有当Actor内逻辑执行完毕后才会执行END后续代码
-#define end_ACTOR_RUN_IN_QT()\
+//结束在qt-ui线程中执行的Actor，只有当Actor内逻辑执行完毕后才会执行END后续代码
+#define end_ACTOR_RUN_IN_QT_UI()\
 	}); \
 	___tactor->notify_run(); \
 	___host->actor_wait_quit(___tactor); \
@@ -48,9 +48,6 @@ protected:
 	bind_qt_run_base();
 	virtual ~bind_qt_run_base();
 public:
-	shared_qt_strand make_qt_strand();
-	shared_qt_strand make_qt_strand(io_engine& ios);
-
 	/*!
 	@brief 获取主线程ID
 	*/
@@ -113,12 +110,20 @@ public:
 		return wrapped_post_handler<bind_qt_run_base, RM_CREF(Handler)>(this, TRY_MOVE(handler));
 	}
 
+#ifdef ENABLE_QT_ACTOR
+	/*!
+	@brief 
+	*/
+	shared_qt_strand make_qt_strand();
+	shared_qt_strand make_qt_strand(io_engine& ios);
+
 	/*!
 	@brief 在UI线程中创建一个Actor
 	@param ios Actor内部timer使用的调度器，没有就不能用timer
 	*/
 	actor_handle create_qt_actor(io_engine& ios, const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 	actor_handle create_qt_actor(const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+#endif
 protected:
 	virtual void postTaskEvent() = 0;
 	virtual void runOneTask();
@@ -162,7 +167,7 @@ private:
 
 	void runOneTask() override final
 	{
-
+		assert(false);
 	}
 
 	void customEvent(QEvent* e) override final

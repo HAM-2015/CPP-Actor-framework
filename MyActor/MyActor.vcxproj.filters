@@ -34,9 +34,6 @@
     <ClCompile Include="actor\actor_mutex.cpp">
       <Filter>Source files\actor</Filter>
     </ClCompile>
-    <ClCompile Include="actor\actor_stack.cpp">
-      <Filter>Source files\actor</Filter>
-    </ClCompile>
     <ClCompile Include="actor\actor_timer.cpp">
       <Filter>Source files\actor</Filter>
     </ClCompile>
@@ -53,6 +50,12 @@
       <Filter>Source files\actor</Filter>
     </ClCompile>
     <ClCompile Include="actor\async_timer.cpp">
+      <Filter>Source files\actor</Filter>
+    </ClCompile>
+    <ClCompile Include="actor\context_yield.cpp">
+      <Filter>Source files\actor</Filter>
+    </ClCompile>
+    <ClCompile Include="actor\context_pool.cpp">
       <Filter>Source files\actor</Filter>
     </ClCompile>
   </ItemGroup>
@@ -117,9 +120,6 @@
     <ClInclude Include="actor\stack_object.h">
       <Filter>Header files\actor</Filter>
     </ClInclude>
-    <ClInclude Include="actor\actor_stack.h">
-      <Filter>Header files\actor</Filter>
-    </ClInclude>
     <ClInclude Include="actor\lambda_ref.h">
       <Filter>Header files\actor</Filter>
     </ClInclude>
@@ -139,6 +139,12 @@
       <Filter>Header files\actor</Filter>
     </ClInclude>
     <ClInclude Include="actor\async_timer.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="actor\context_pool.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="actor\context_yield.h">
       <Filter>Header files\actor</Filter>
     </ClInclude>
   </ItemGroup>

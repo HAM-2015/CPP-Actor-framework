@@ -75,6 +75,12 @@ void io_engine::run(size_t threadNum, sched policy)
 #elif __GNUG__
 						pthread_attr_init(&_handleList[i]);
 						pthread_attr_setschedpolicy (&_handleList[i], _policy);
+						if (0 == i)
+						{
+							struct sched_param pm;
+							int rs = pthread_attr_getschedparam(&_handleList[i], &pm);
+							_priority = (priority)pm.__sched_priority;
+						}
 #endif
 						auto lockMutex = blockMutex;
 						auto lockConVar = blockConVar;
@@ -124,11 +130,6 @@ void io_engine::run(size_t threadNum, sched policy)
 			_runThreads.add_thread(newThread);
 		}
 		blockConVar->wait(ul);
-#ifdef __GNUG__
-		struct sched_param pm;
-		int rs = pthread_attr_getschedparam(&_handleList[0], &pm);
-		_priority = (priority)pm.__sched_priority;
-#endif
 	}
 }
 

@@ -1,7 +1,6 @@
 #include "bind_qt_run.h"
 
-#ifdef ENABLE_QT_ACTOR
-
+#ifdef ENABLE_QT_UI
 bind_qt_run_base::bind_qt_run_base()
 :_isClosed(false), _tasksQueue(16)
 {
@@ -13,28 +12,6 @@ bind_qt_run_base::~bind_qt_run_base()
 	assert(boost::this_thread::get_id() == _threadID);
 	assert(_isClosed);
 	assert(_tasksQueue.empty());
-}
-
-actor_handle bind_qt_run_base::create_qt_actor(io_engine& ios, const my_actor::main_func& mainFunc, size_t stackSize /*= DEFAULT_STACKSIZE*/)
-{
-	assert(!_isClosed);
-	return my_actor::create(make_qt_strand(ios), mainFunc, stackSize);
-}
-
-actor_handle bind_qt_run_base::create_qt_actor(const my_actor::main_func& mainFunc, size_t stackSize /*= DEFAULT_STACKSIZE*/)
-{
-	assert(!_isClosed);
-	return my_actor::create(make_qt_strand(), mainFunc, stackSize);
-}
-
-shared_qt_strand bind_qt_run_base::make_qt_strand()
-{
-	return qt_strand::create(this);
-}
-
-shared_qt_strand bind_qt_run_base::make_qt_strand(io_engine& ios)
-{
-	return qt_strand::create(ios, this);
 }
 
 boost::thread::id bind_qt_run_base::thread_id()
@@ -104,7 +81,7 @@ void bind_qt_run_base::notifyUiClosed()
 	}
 	while (!_tasksQueue.empty())
 	{
-		runOneTask();
+		bind_qt_run_base::runOneTask();
 	}
 }
 
@@ -112,4 +89,28 @@ void bind_qt_run_base::userEvent(QEvent* e)
 {
 
 }
+
+#ifdef ENABLE_QT_ACTOR
+actor_handle bind_qt_run_base::create_qt_actor(io_engine& ios, const my_actor::main_func& mainFunc, size_t stackSize /*= DEFAULT_STACKSIZE*/)
+{
+	assert(!_isClosed);
+	return my_actor::create(make_qt_strand(ios), mainFunc, stackSize);
+}
+
+actor_handle bind_qt_run_base::create_qt_actor(const my_actor::main_func& mainFunc, size_t stackSize /*= DEFAULT_STACKSIZE*/)
+{
+	assert(!_isClosed);
+	return my_actor::create(make_qt_strand(), mainFunc, stackSize);
+}
+
+shared_qt_strand bind_qt_run_base::make_qt_strand()
+{
+	return qt_strand::create(this);
+}
+
+shared_qt_strand bind_qt_run_base::make_qt_strand(io_engine& ios)
+{
+	return qt_strand::create(ios, this);
+}
+#endif
 #endif

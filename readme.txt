@@ -1,7 +1,7 @@
 并发逻辑控制框架(Actor Model)，适用于复杂业务逻辑，有问题或BUG反馈至591170887@qq.com;
 依赖于boost 1.59;
 暂无开发文档，等作者认为可以定型后开放文档;
-目前仅在 VS2013,GCC4.9.2-linux 编译器中测试;
+目前仅在 VS2013,GCC4.9-linux 编译器中测试;
 使用前需要具有一定的异步编程基础，希望解决async-callback和multithread-mutex编程中遇到的问题（本框架主旨绝不是async->sync那么简单）;
 你可以任意使用或编辑源码，而不需通知作者，当然作者也不对你用本框架造成的任何损失负责.
 
@@ -22,7 +22,7 @@ http://www.oschina.net/code/snippet_2274073_45577
 添加"通知句柄"丢失检测，消息等待时可以捕获通知句柄丢失异常.
 
 2015-10-31
-移植到gcc4.9.2 for Linux.
+移植到gcc4.9 for Linux.
 
 2015-09-24
 改进采用TLS技术检测当前代码运行在哪个Actor下.
@@ -76,9 +76,6 @@ http://www.oschina.net/code/snippet_2274073_45577
 2015-05-15
 添加可以检测当前代码运行在哪个Actor下.
 
-2015-05-09
-添加在wxWidgets库UI线程中运行Actor.
-
 2015-04-14
 核心功能整体优化;
 添加actor_mutex;
@@ -90,9 +87,6 @@ http://www.oschina.net/code/snippet_2274073_45577
 
 2015-03-19
 添加消息传递的右值优化.
-
-2015-03-05
-添加可以在MFC线程中运行Actor.
 
 2015-02-11
 添加定时清理Actor栈池.

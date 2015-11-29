@@ -1,43 +1,23 @@
 #ifndef __CONTEXT_YIELD_H
 #define __CONTEXT_YIELD_H
 #include "coro_choice.h"
-
-#ifdef LIB_CORO
-#include "scattered.h"
-
-#ifdef _MSC_VER
-#ifdef _WIN64
-#pragma comment(lib, NAME_BOND(__FILE__, "./../context_yield64.lib"))
-#else
-#pragma comment(lib, NAME_BOND(__FILE__, "./../context_yield.lib"))
-#endif // _WIN64
-#endif
+#include <stddef.h>
 
 namespace context_yield
 {
-	struct coro_pull_interface;
-	struct coro_push_interface;
-
-	typedef void(__stdcall *coro_push_handler)(coro_push_interface&, void* param);
-
-	struct coro_push_interface
+	struct coro_info
 	{
-		virtual void operator()() = 0;
+		void* obj = 0;
+		void* stackTop = 0;
+		void* nc = 0;
+		size_t stackSize = 0;
 	};
 
-	struct coro_pull_interface
-	{
-		virtual void operator()() = 0;
-		virtual void destory() = 0;
-	};
-
-	extern "C"
-	{
-		size_t obj_space_size();
-		coro_pull_interface* make_coro(coro_push_handler ch, void* stackTop, size_t size, void* param = 0);
-		coro_pull_interface* make_coro2(void* space, coro_push_handler ch, void* stackTop, size_t size, void* param = 0);
-	}
+	typedef void(*context_handler)(coro_info* info, void* p);
+	coro_info* make_context(size_t stackSize, context_handler handler, void* p);
+	void push_yield(coro_info* info);
+	void pull_yield(coro_info* info);
+	void delete_context(coro_info* info);
 }
-#endif
 
 #endif
