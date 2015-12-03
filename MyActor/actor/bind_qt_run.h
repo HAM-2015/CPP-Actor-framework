@@ -39,6 +39,17 @@
 	___tactor->notify_run(); \
 	___host->actor_wait_quit(___tactor); \
 }
+//////////////////////////////////////////////////////////////////////////
+
+//在qt-ui中执行一段绘制代码
+#define begin_QT_UI_PAINT_FOR(__qt__, __host__) (__qt__)->paint(__host__, [&]() {
+#define begin_QT_UI_PAINT() begin_QT_UI_PAINT_FOR(this, self)
+//结束在qt-ui中执行一段绘制代码，只有当绘制代码执行完毕后才会执行END后续代码
+#define end_QT_PAINT() })
+//////////////////////////////////////////////////////////////////////////
+//在qt-ui中执行一段绘制语句
+#define QT_UI_PAINT_FOR(__qt__, __host__, __exp__) (__qt__)->paint(__host__, [&]() {__exp__;})
+#define QT_UI_PAINT(__exp__) QT_UI_PAINT_FOR(this, self, __exp__)
 
 struct qt_ui_closed_exception {};
 
@@ -102,6 +113,43 @@ public:
 	}
 
 	/*!
+	@brief 启动一段代码绘制图形
+	*/
+	template <typename Handler>
+	void paint(my_actor* host, Handler&& h)
+	{
+		host->lock_quit();
+		bool closed = false;
+		host->trig([&](const trig_once_notifer<>& cb)
+		{
+			boost::shared_lock<boost::shared_mutex> sl(_postMutex);
+			if (!_isClosed)
+			{
+				_mutex.lock();
+				_paintTasks.push_back([&h, cb]()
+				{
+					h();
+					cb();
+				});
+				_mutex.unlock();
+				sl.unlock();
+				paintUpdate();
+			}
+			else
+			{
+				sl.unlock();
+				closed = true;
+				cb();
+			}
+		});
+		host->unlock_quit();
+		if (closed)
+		{
+			throw qt_ui_closed_exception();
+		}
+	}
+
+	/*!
 	@brief 绑定一个函数到UI队列执行
 	*/
 	template <typename Handler>
@@ -126,21 +174,23 @@ public:
 #endif
 protected:
 	virtual void postTaskEvent() = 0;
-	virtual void runOneTask();
-
-	virtual void userEvent(QEvent* e);
+	virtual void paintUpdate() = 0;
+	void runOneTask();
+	void paintTask();
 	void notifyUiClosed();
 private:
 	msg_queue<std::function<void()> > _tasksQueue;
+	msg_queue<std::function<void()> > _paintTasks;
 	boost::shared_mutex _postMutex;
 	boost::thread::id _threadID;
 	std::mutex _mutex;
 protected:
 	bool _isClosed;
+	bool _updated;
 };
 
 template <typename FRAME>
-class bind_qt_run : public FRAME, public bind_qt_run_base
+class bind_qt_run : public FRAME, private bind_qt_run_base
 {
 	struct task_event : public QEvent
 	{
@@ -159,15 +209,88 @@ protected:
 	{
 
 	}
+public:
+	boost::thread::id thread_id()
+	{
+		return bind_qt_run_base::thread_id();
+	}
+
+	void post_queue_size(size_t fixedSize)
+	{
+		return bind_qt_run_base::post_queue_size(fixedSize);
+	}
+
+	void post(const std::function<void()>& h)
+	{
+		bind_qt_run_base::post(h);
+	}
+
+	void post(std::function<void()>&& h)
+	{
+		bind_qt_run_base::post(TRY_MOVE(h));
+	}
+
+	template <typename Handler>
+	void send(my_actor* host, Handler&& h)
+	{
+		bind_qt_run_base::send(host, TRY_MOVE(h));
+	}
+
+	template <typename Handler>
+	void paint(my_actor* host, Handler&& h)
+	{
+		bind_qt_run_base::paint(host, TRY_MOVE(h));
+	}
+
+	template <typename Handler>
+	wrapped_post_handler<bind_qt_run_base, Handler> wrap(Handler&& handler)
+	{
+		return bind_qt_run_base::wrap(TRY_MOVE(handler));
+	}
+#ifdef ENABLE_QT_ACTOR
+	shared_qt_strand make_qt_strand()
+	{
+		return bind_qt_run_base::make_qt_strand();
+	}
+
+	shared_qt_strand make_qt_strand(io_engine& ios)
+	{
+		return bind_qt_run_base::make_qt_strand(ios);
+	}
+
+	actor_handle create_qt_actor(io_engine& ios, const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE)
+	{
+		return bind_qt_run_base::create_qt_actor(ios, mainFunc, stackSize);
+	}
+
+	actor_handle create_qt_actor(const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE)
+	{
+		return bind_qt_run_base::create_qt_actor(mainFunc, stackSize);
+	}
+#endif
 private:
 	void postTaskEvent() override final
 	{
 		QCoreApplication::postEvent(this, new task_event(QEvent::Type(QT_POST_TASK)));
 	}
 
-	void runOneTask() override final
+	void paintUpdate() override final
 	{
-		assert(false);
+		_updated = true;
+		FRAME::update();
+	}
+
+	void paintEvent(QPaintEvent* e) override final
+	{
+		if (_updated)
+		{
+			_updated = false;
+			bind_qt_run_base::paintTask();
+		} 
+		else
+		{
+			paintEvent_(e);
+		}
 	}
 
 	void customEvent(QEvent* e) override final
@@ -182,8 +305,23 @@ private:
 		}
 		else
 		{
-			userEvent(e);
+			customEvent_(e);
 		}
+	}
+protected:
+	virtual void customEvent_(QEvent*)
+	{
+
+	}
+
+	virtual void paintEvent_(QPaintEvent*)
+	{
+
+	}
+
+	void notifyUiClosed()
+	{
+		bind_qt_run_base::notifyUiClosed();
 	}
 };
 #endif

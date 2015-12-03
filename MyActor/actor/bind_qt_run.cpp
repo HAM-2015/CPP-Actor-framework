@@ -2,7 +2,7 @@
 
 #ifdef ENABLE_QT_UI
 bind_qt_run_base::bind_qt_run_base()
-:_isClosed(false), _tasksQueue(16)
+:_isClosed(false), _updated(false), _tasksQueue(16)
 {
 	_threadID = boost::this_thread::get_id();
 }
@@ -72,6 +72,15 @@ void bind_qt_run_base::runOneTask()
 	h();
 }
 
+void bind_qt_run_base::paintTask()
+{
+	while (!_paintTasks.empty())
+	{
+		_paintTasks.front()();
+		_paintTasks.pop_front();
+	}
+}
+
 void bind_qt_run_base::notifyUiClosed()
 {
 	assert(boost::this_thread::get_id() == _threadID);
@@ -83,11 +92,7 @@ void bind_qt_run_base::notifyUiClosed()
 	{
 		bind_qt_run_base::runOneTask();
 	}
-}
-
-void bind_qt_run_base::userEvent(QEvent* e)
-{
-
+	bind_qt_run_base::paintTask();
 }
 
 #ifdef ENABLE_QT_ACTOR

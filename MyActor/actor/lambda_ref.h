@@ -384,4 +384,14 @@ struct\
 	BOND_LINE(type9, __LINE__)& __P9__; \
 } __NAME__ = { this, __P0__, __P1__, __P2__, __P3__, __P4__, __P5__, __P6__, __P7__, __P8__, __P9__ };
 
+#define PP_CAT(a, b) a##b
+#define PP_ARG_N(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, N, ...) N
+#define PP_NARG(...) PP_CAT(PP_ARG_N(__VA_ARGS__, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0),)
+
+#define LR__(a, b) a##b
+#define LR_(a, b) LR__(a, b)
+#define LR(a, b) LR_(a, b)
+#define LAMBDA_REF(__NAME__, ...) LR(LAMBDA_REF, PP_NARG(__VA_ARGS__))(__NAME__, __VA_ARGS__)
+#define LAMBDA_THIS_REF(__NAME__, ...) LR(LAMBDA_THIS_REF, PP_NARG(__VA_ARGS__))(__NAME__, __VA_ARGS__)
+
 #endif
