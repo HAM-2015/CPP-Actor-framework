@@ -5893,7 +5893,6 @@ public:
 	*/
 	void switch_pause_play();
 	void switch_pause_play(const std::function<void(bool)>& h);
-	void switch_pause_play(std::function<void(bool)>&& h);
 
 	/*!
 	@brief 等待Actor退出，在Actor所依赖的ios无关线程中使用

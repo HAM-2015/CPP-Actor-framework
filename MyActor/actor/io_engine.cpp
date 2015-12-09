@@ -3,6 +3,7 @@
 #include "coro_choice.h"
 #include <boost/asio/detail/strand_service.hpp>
 #include <memory>
+#ifndef DISABLE_BOOST_TIMER
 #ifdef DISABLE_HIGH_TIMER
 #include <boost/asio/deadline_timer.hpp>
 typedef boost::asio::deadline_timer timer_type;
@@ -10,6 +11,10 @@ typedef boost::asio::deadline_timer timer_type;
 #include <boost/chrono/system_clocks.hpp>
 #include <boost/asio/high_resolution_timer.hpp>
 typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> timer_type;
+#endif
+#else
+#include "waitable_timer.h"
+typedef WaitableTimerEvent_ timer_type;
 #endif
 
 typedef boost::asio::detail::strand_service::strand_impl impl_type;
@@ -32,10 +37,21 @@ io_engine::io_engine()
 	{
 		new(p)impl_type();
 	});
-	_timerPool = create_pool<timer_type>(64, [this](void* p)
+#ifdef DISABLE_BOOST_TIMER
+	_waitableTimer = new WaitableTimer_;
+	_timerPool = create_pool<timer_type>(1024, [this](void* p)
+	{
+		new(p)timer_type(*this, (WaitableTimer_*)_waitableTimer);
+	}, [](void* p)
+	{
+		((timer_type*)p)->~timer_type();
+	});
+#else
+	_timerPool = create_pool<timer_type>(1024, [this](void* p)
 	{
 		new(p)timer_type(_ios);
 	});
+#endif
 }
 
 io_engine::~io_engine()
@@ -43,6 +59,9 @@ io_engine::~io_engine()
 	assert(!_opend);
 	delete (obj_pool<impl_type>*)_implPool;
 	delete (obj_pool<timer_type>*)_timerPool;
+#ifdef DISABLE_BOOST_TIMER
+	delete (WaitableTimer_*)_waitableTimer;
+#endif
 }
 
 void io_engine::run(size_t threadNum, sched policy)

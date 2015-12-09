@@ -88,7 +88,7 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0501;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;DISABLE_HIGH_TIMER;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0501;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;DISABLE_BOOST_TIMER;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -101,7 +101,7 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0501;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;DISABLE_HIGH_TIMER;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0501;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;DISABLE_BOOST_TIMER;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -116,7 +116,7 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0600;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;DISABLE_HIGH_TIMER;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0600;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;DISABLE_BOOST_TIMER;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -134,7 +134,7 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0600;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;DISABLE_HIGH_TIMER;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_LIB;_WIN32_WINNT=0x0600;ENABLE_NEXT_TICK;ENABLE_CHECK_LOST;DISABLE_BOOST_CORO;DISABLE_BOOST_TIMER;ENABLE_WIN_FIBER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -206,6 +206,12 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="actor\waitable_timer.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="MyActor.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -230,6 +236,7 @@
     <ClInclude Include="actor\trace.h" />
     <ClInclude Include="actor\try_move.h" />
     <ClInclude Include="actor\tuple_option.h" />
+    <ClInclude Include="actor\waitable_timer.h" />
     <ClInclude Include="actor\wrapped_capture.h" />
     <ClInclude Include="actor\wrapped_dispatch_handler.h" />
     <ClInclude Include="actor\wrapped_distribute_handler.h" />

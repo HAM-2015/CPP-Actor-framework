@@ -115,7 +115,7 @@ void ContextPool_::contextHandler(context_yield::coro_info* info, void* param)
 #endif
 #elif __GNUG__
 #ifdef __x86_64__
-	char space[sizeof(my_actor)+48];
+	char space[sizeof(my_actor)+32];
 #elif __i386__
 	char space[sizeof(my_actor)+20];
 #endif

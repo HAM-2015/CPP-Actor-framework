@@ -1865,98 +1865,44 @@ void my_actor::switch_pause_play()
 
 void my_actor::switch_pause_play(const std::function<void(bool)>& h)
 {
-	switch_pause_play(std::function<void(bool)>(h));
-}
-
-void my_actor::switch_pause_play(std::function<void(bool)>&& h)
-{
-	struct wrap_switch
+	actor_handle shared_this = shared_from_this();
+	_strand->try_tick([shared_this, h]
 	{
-		wrap_switch(const actor_handle& host, std::function<void(bool)>&& h)
-		:_sharedThis(host), _h(std::move(h)) {}
-
-		wrap_switch(wrap_switch&& s)
-			:_sharedThis(s._sharedThis), _h(std::move(s._h)) {}
-
-		void operator()()
+		assert(shared_this->_strand->running_in_this_thread());
+		if (!shared_this->_quited)
 		{
-			assert(_sharedThis->_strand->running_in_this_thread());
-			if (!_sharedThis->_quited)
+			if (shared_this->_suspended)
 			{
-				if (_sharedThis->_suspended)
+				if (h)
 				{
-					if (_h)
-					{
-#ifdef _MSC_VER
-						struct wrap_resume
-						{
-							wrap_resume(std::function<void(bool)>&& h)
-							:_h(std::move(h)) {}
-
-							wrap_resume(wrap_resume&& s)
-								:_h(std::move(s._h)) {}
-
-							void operator()()
-							{
-								_h(false);
-							}
-
-							std::function<void(bool)> _h;
-						};
-						_sharedThis->resume(wrap_resume(std::move(_h)));
-#elif __GNUG__
-						_sharedThis->resume([=](){_h(false); });
-#endif
-					}
-					else
-					{
-						_sharedThis->resume(std::function<void()>());
-					}
+					auto& h_ = h;
+					shared_this->resume([h_]{h_(false); });
 				}
 				else
 				{
-					if (_h)
-					{
-#ifdef _MSC_VER
-						struct wrap_suspend
-						{
-							wrap_suspend(std::function<void(bool)>&& h)
-							:_h(std::move(h)) {}
-
-							wrap_suspend(wrap_suspend&& s)
-								:_h(std::move(s._h)) {}
-
-							void operator()()
-							{
-								_h(true);
-							}
-
-							std::function<void(bool)> _h;
-						};
-						_sharedThis->suspend(wrap_suspend(std::move(_h)));
-#elif __GNUG__
-						_sharedThis->suspend([=](){_h(true); });
-#endif
-					}
-					else
-					{
-						_sharedThis->suspend(std::function<void()>());
-					}
+					shared_this->resume(std::function<void()>());
 				}
 			}
-			else if (_h)
+			else
 			{
-				DEBUG_OPERATION(size_t yc = _sharedThis->yield_count());
-				CHECK_EXCEPTION1(_h, true);
-				assert(_sharedThis->yield_count() == yc);
+				if (h)
+				{
+					auto& h_ = h;
+					shared_this->suspend([h_]{h_(true); });
+				}
+				else
+				{
+					shared_this->suspend(std::function<void()>());
+				}
 			}
 		}
-
-		actor_handle _sharedThis;
-		std::function<void(bool)> _h;
-	};
-
- 	_strand->try_tick(wrap_switch(shared_from_this(), std::move(h)));
+		else if (h)
+		{
+			DEBUG_OPERATION(size_t yc = shared_this->yield_count());
+			CHECK_EXCEPTION1(h, true);
+			assert(shared_this->yield_count() == yc);
+		}
+	});
 }
 
 void my_actor::outside_wait_quit()

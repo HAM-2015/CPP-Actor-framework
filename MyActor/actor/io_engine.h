@@ -151,6 +151,9 @@ private:
 	bool _opend;
 	void* _implPool;
 	void* _timerPool;
+#ifdef DISABLE_BOOST_TIMER
+	void* _waitableTimer;
+#endif
 	priority _priority;
 	std::mutex _runMutex;
 	std::mutex _ctrlMutex;

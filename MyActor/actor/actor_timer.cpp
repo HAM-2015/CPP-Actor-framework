@@ -1,6 +1,7 @@
 #include "actor_timer.h"
 #include "scattered.h"
 #include "actor_framework.h"
+#ifndef DISABLE_BOOST_TIMER
 #ifdef DISABLE_HIGH_TIMER
 #include <boost/asio/deadline_timer.hpp>
 typedef boost::asio::deadline_timer timer_type;
@@ -11,17 +12,22 @@ typedef boost::posix_time::microseconds micseconds;
 typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> timer_type;
 typedef boost::chrono::microseconds micseconds;
 #endif
+#else
+#include "waitable_timer.h"
+typedef WaitableTimerEvent_ timer_type;
+typedef long long micseconds;
+#endif
 
 ActorTimer_::ActorTimer_(const shared_strand& strand)
 :_ios(strand->get_io_engine()), _looping(false), _weakStrand(strand), _timerCount(0),
-_extMaxTick(0), _extFinishTime(-1), _timer(_ios.getTimer()), _handlerTable(65536)
+_extMaxTick(0), _extFinishTime(-1), _timer(_ios.getTimer()), _handlerQueue(65536)
 {
 
 }
 
 ActorTimer_::~ActorTimer_()
 {
-	assert(_handlerTable.empty());
+	assert(_handlerQueue.empty());
 	assert(!_strand);
 	_ios.freeTimer(_timer);
 }
@@ -40,17 +46,17 @@ ActorTimer_::timer_handle ActorTimer_::timeout(unsigned long long us, const acto
 	if (et >= _extMaxTick)
 	{
 		_extMaxTick = et;
-		timerHandle._tableNode = _handlerTable.insert(_handlerTable.end(), make_pair(et, host));
+		timerHandle._queueNode = _handlerQueue.insert(_handlerQueue.end(), make_pair(et, host));
 	}
 	else
 	{
-		timerHandle._tableNode = _handlerTable.insert(make_pair(et, host));
+		timerHandle._queueNode = _handlerQueue.insert(make_pair(et, host));
 	}
 	
 	if (!_looping)
 	{//定时器已经退出循环，重新启动定时器
 		_looping = true;
-		assert(_handlerTable.size() == 1);
+		assert(_handlerQueue.size() == 1);
 		_extFinishTime = et;
 		timer_loop(us);
 	}
@@ -71,11 +77,11 @@ void ActorTimer_::cancel(timer_handle& th)
 	{//删除当前定时器节点
 		assert(_strand && _strand->running_in_this_thread());
 		th._null = true;
-		auto itNode = th._tableNode;
-		if (_handlerTable.size() == 1)
+		auto itNode = th._queueNode;
+		if (_handlerQueue.size() == 1)
 		{
 			_extMaxTick = 0;
-			_handlerTable.erase(itNode);
+			_handlerQueue.erase(itNode);
 			//如果没有定时任务就退出定时循环
 			boost::system::error_code ec;
 			((timer_type*)_timer)->cancel(ec);
@@ -84,8 +90,8 @@ void ActorTimer_::cancel(timer_handle& th)
 		} 
 		else if (itNode->first == _extMaxTick)
 		{
-			_handlerTable.erase(itNode++);
-			if (_handlerTable.end() == itNode)
+			_handlerQueue.erase(itNode++);
+			if (_handlerQueue.end() == itNode)
 			{
 				itNode--;
 			}
@@ -93,7 +99,7 @@ void ActorTimer_::cancel(timer_handle& th)
 		}
 		else
 		{
-			_handlerTable.erase(itNode);
+			_handlerQueue.erase(itNode);
 		}
 	}
 }
@@ -103,16 +109,20 @@ void ActorTimer_::timer_loop(unsigned long long us)
 	int tc = ++_timerCount;
 	boost::system::error_code ec;
 	((timer_type*)_timer)->expires_from_now(micseconds(us), ec);
+#ifdef DISABLE_BOOST_TIMER
+	((timer_type*)_timer)->async_wait(_strand->wrap_post([this, tc](const boost::system::error_code&)
+#else
 	((timer_type*)_timer)->async_wait(_strand->wrap_asio([this, tc](const boost::system::error_code&)
+#endif
 	{
 		assert(_strand->running_in_this_thread());
 		if (tc == _timerCount)
 		{
 			_extFinishTime = 0;
 			unsigned long long nt = get_tick_us();
-			while (!_handlerTable.empty())
+			while (!_handlerQueue.empty())
 			{
-				auto iter = _handlerTable.begin();
+				auto iter = _handlerQueue.begin();
 				if (iter->first > nt + 500)
 				{
 					_extFinishTime = iter->first;
@@ -122,7 +132,7 @@ void ActorTimer_::timer_loop(unsigned long long us)
 				else
 				{
 					iter->second->timeout_handler();
-					_handlerTable.erase(iter);
+					_handlerQueue.erase(iter);
 				}
 			}
 			_looping = false;

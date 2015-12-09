@@ -11,7 +11,7 @@ class async_timer;
 class timer_boost
 {
 	typedef std::shared_ptr<async_timer> async_handle;
-	typedef msg_multimap<unsigned long long, async_handle> handler_table;
+	typedef msg_multimap<unsigned long long, async_handle> handler_queue;
 
 	friend async_timer;
 	FRIEND_SHARED_PTR(timer_boost);
@@ -25,8 +25,8 @@ class timer_boost
 			_null = true;
 		}
 	private:
-		bool _null : true;
-		handler_table::iterator _tableNode;
+		bool _null = true;
+		handler_queue::iterator _queueNode;
 	};
 private:
 	timer_boost(const shared_strand& strand);
@@ -44,7 +44,7 @@ private:
 	bool _looping;
 	int _timerCount;
 	shared_strand _strand;
-	handler_table _handlerTable;
+	handler_queue _handlerQueue;
 	unsigned long long _extMaxTick;
 	unsigned long long _extFinishTime;
 	std::weak_ptr<timer_boost> _weakThis;

@@ -57,6 +57,9 @@
     <ClCompile Include="actor.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="actor\waitable_timer.cpp">
+      <Filter>源文件\actor</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="actor\actor_timer.h">
@@ -138,6 +141,9 @@
       <Filter>头文件\actor</Filter>
     </ClInclude>
     <ClInclude Include="actor\context_pool.h">
+      <Filter>头文件\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="actor\waitable_timer.h">
       <Filter>头文件\actor</Filter>
     </ClInclude>
   </ItemGroup>

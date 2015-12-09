@@ -17,7 +17,7 @@ class my_actor;
 class ActorTimer_
 {
 	typedef std::shared_ptr<my_actor> actor_handle;
-	typedef msg_multimap<unsigned long long, actor_handle> handler_table;
+	typedef msg_multimap<unsigned long long, actor_handle> handler_queue;
 
 	friend boost_strand;
 	friend mfc_strand;
@@ -34,8 +34,8 @@ class ActorTimer_
 			_null = true;
 		}
 	private:
-		bool _null : true;
-		handler_table::iterator _tableNode;
+		bool _null = true;
+		handler_queue::iterator _queueNode;
 	};
 private:
 	ActorTimer_(const shared_strand& strand);
@@ -64,7 +64,7 @@ private:
 	bool _looping;
 	int _timerCount;
 	shared_strand _strand;
-	handler_table _handlerTable;
+	handler_queue _handlerQueue;
 	unsigned long long _extMaxTick;
 	unsigned long long _extFinishTime;
 	std::weak_ptr<boost_strand> _weakStrand;

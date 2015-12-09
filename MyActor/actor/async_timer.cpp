@@ -1,6 +1,7 @@
 #include "async_timer.h"
 #include "scattered.h"
 #include "io_engine.h"
+#ifndef DISABLE_BOOST_TIMER
 #ifdef DISABLE_HIGH_TIMER
 #include <boost/asio/deadline_timer.hpp>
 typedef boost::asio::deadline_timer timer_type;
@@ -11,17 +12,22 @@ typedef boost::posix_time::microseconds micseconds;
 typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> timer_type;
 typedef boost::chrono::microseconds micseconds;
 #endif
+#else
+#include "waitable_timer.h"
+typedef WaitableTimerEvent_ timer_type;
+typedef long long micseconds;
+#endif
 
 timer_boost::timer_boost(const shared_strand& strand)
 :_ios(strand->get_io_engine()), _strand(strand), _looping(false), _timerCount(0),
-_extMaxTick(0), _extFinishTime(-1), _timer(_ios.getTimer()), _handlerTable(65536)
+_extMaxTick(0), _extFinishTime(-1), _timer(_ios.getTimer()), _handlerQueue(65536)
 {
 
 }
 
 timer_boost::~timer_boost()
 {
-	assert(_handlerTable.empty());
+	assert(_handlerQueue.empty());
 	_ios.freeTimer(_timer);
 }
 
@@ -47,17 +53,17 @@ timer_boost::timer_handle timer_boost::timeout(unsigned long long us, const asyn
 	if (et >= _extMaxTick)
 	{
 		_extMaxTick = et;
-		timerHandle._tableNode = _handlerTable.insert(_handlerTable.end(), make_pair(et, host));
+		timerHandle._queueNode = _handlerQueue.insert(_handlerQueue.end(), make_pair(et, host));
 	}
 	else
 	{
-		timerHandle._tableNode = _handlerTable.insert(make_pair(et, host));
+		timerHandle._queueNode = _handlerQueue.insert(make_pair(et, host));
 	}
 
 	if (!_looping)
 	{
 		_looping = true;
-		assert(_handlerTable.size() == 1);
+		assert(_handlerQueue.size() == 1);
 		_extFinishTime = et;
 		timer_loop(us);
 	}
@@ -78,11 +84,11 @@ void timer_boost::cancel(timer_handle& th)
 	{
 		assert(_strand && _strand->running_in_this_thread());
 		th._null = true;
-		auto itNode = th._tableNode;
-		if (_handlerTable.size() == 1)
+		auto itNode = th._queueNode;
+		if (_handlerQueue.size() == 1)
 		{
 			_extMaxTick = 0;
-			_handlerTable.erase(itNode);
+			_handlerQueue.erase(itNode);
 			boost::system::error_code ec;
 			((timer_type*)_timer)->cancel(ec);
 			_timerCount++;
@@ -90,8 +96,8 @@ void timer_boost::cancel(timer_handle& th)
 		}
 		else if (itNode->first == _extMaxTick)
 		{
-			_handlerTable.erase(itNode++);
-			if (_handlerTable.end() == itNode)
+			_handlerQueue.erase(itNode++);
+			if (_handlerQueue.end() == itNode)
 			{
 				itNode--;
 			}
@@ -99,7 +105,7 @@ void timer_boost::cancel(timer_handle& th)
 		}
 		else
 		{
-			_handlerTable.erase(itNode);
+			_handlerQueue.erase(itNode);
 		}
 	}
 }
@@ -110,7 +116,11 @@ void timer_boost::timer_loop(unsigned long long us)
 	auto sharedThis = _weakThis.lock();
 	boost::system::error_code ec;
 	((timer_type*)_timer)->expires_from_now(micseconds(us), ec);
+#ifdef DISABLE_BOOST_TIMER
+	((timer_type*)_timer)->async_wait(_strand->wrap_post([sharedThis, tc](const boost::system::error_code&)
+#else
 	((timer_type*)_timer)->async_wait(_strand->wrap_asio([sharedThis, tc](const boost::system::error_code&)
+#endif
 	{
 		timer_boost* this_ = sharedThis.get();
 		assert(this_->_strand->running_in_this_thread());
@@ -118,9 +128,9 @@ void timer_boost::timer_loop(unsigned long long us)
 		{
 			this_->_extFinishTime = 0;
 			unsigned long long nt = get_tick_us();
-			while (!this_->_handlerTable.empty())
+			while (!this_->_handlerQueue.empty())
 			{
-				auto iter = this_->_handlerTable.begin();
+				auto iter = this_->_handlerQueue.begin();
 				if (iter->first > nt + 500)
 				{
 					this_->_extFinishTime = iter->first;
@@ -130,7 +140,7 @@ void timer_boost::timer_loop(unsigned long long us)
 				else
 				{
 					iter->second->timeout_handler();
-					this_->_handlerTable.erase(iter);
+					this_->_handlerQueue.erase(iter);
 				}
 			}
 			this_->_looping = false;
