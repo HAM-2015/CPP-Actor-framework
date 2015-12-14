@@ -12,7 +12,7 @@ AR := ar
 OBJCOPY := objcopy
 
 #Additional flags
-PREPROCESSOR_MACROS := NDEBUG RELEASE ENABLE_NEXT_TICK ENABLE_CHECK_LOST
+PREPROCESSOR_MACROS := NDEBUG RELEASE ENABLE_NEXT_TICK ENABLE_CHECK_LOST DISABLE_BOOST_CORO
 INCLUDE_DIRS := 
 LIBRARY_DIRS := /home/ham/boost/lib
 LIBRARY_NAMES := pthread boost_thread-gcc49-mt-s-1_59 boost_system-gcc49-mt-s-1_59 boost_chrono-gcc49-mt-s-1_59 boost_context-gcc49-mt-s-1_59 boost_coroutine-gcc49-mt-s-1_59

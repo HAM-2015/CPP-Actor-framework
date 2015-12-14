@@ -101,7 +101,7 @@ CheckPumpLost_::~CheckPumpLost_()
 //////////////////////////////////////////////////////////////////////////
 
 #if (_DEBUG || DEBUG)
-child_actor_param& child_actor_param::operator=(const child_actor_param& s)
+ChildActorParam_& ChildActorParam_::operator=(const ChildActorParam_& s)
 {
 	_actor = s._actor;
 	_actorIt = s._actorIt;
@@ -110,17 +110,17 @@ child_actor_param& child_actor_param::operator=(const child_actor_param& s)
 	return *this;
 }
 
-child_actor_param::~child_actor_param()
+ChildActorParam_::~ChildActorParam_()
 {
 	assert(_isCopy);//检测创建后有没有接收子Actor句柄
 }
 
-child_actor_param::child_actor_param(const child_actor_param& s)
+ChildActorParam_::ChildActorParam_(const ChildActorParam_& s)
 {
 	*this = s;
 }
 
-child_actor_param::child_actor_param()
+ChildActorParam_::ChildActorParam_()
 {
 	_isCopy = true;
 }
@@ -136,7 +136,7 @@ child_actor_handle::child_actor_handle()
 	_quited = true;
 }
 
-child_actor_handle::child_actor_handle(const child_actor_param& s)
+child_actor_handle::child_actor_handle(const ChildActorParam_& s)
 {
 	_quited = true;
 	*this = s;
@@ -147,7 +147,7 @@ void child_actor_handle::operator=(const child_actor_handle&)
 	assert(false);
 }
 
-void child_actor_handle::operator=(const child_actor_param& s)
+void child_actor_handle::operator=(const ChildActorParam_& s)
 {
 	assert(_quited);
 	_quited = false;
@@ -162,12 +162,12 @@ child_actor_handle::~child_actor_handle()
 	assert(_quited);
 }
 
-const actor_handle& child_actor_handle::get_actor()
+const actor_handle& child_actor_handle::get_actor() const
 {
 	return _param._actor;
 }
 
-my_actor* child_actor_handle::operator ->()
+my_actor* child_actor_handle::operator ->() const
 {
 	return _param._actor.get();
 }
@@ -190,7 +190,7 @@ child_actor_handle::ptr child_actor_handle::make_ptr()
 	return ptr(new child_actor_handle);
 }
 
-bool child_actor_handle::empty()
+bool child_actor_handle::empty() const
 {
 	return !_param._actor;
 }
@@ -1136,10 +1136,10 @@ actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& main
 	return newActor;
 }
 
-child_actor_param my_actor::create_child_actor(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize)
+ChildActorParam_ my_actor::create_child_actor(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize)
 {
 	assert_enter();
-	child_actor_param actorHandle;
+	ChildActorParam_ actorHandle;
 	actorHandle._actor = my_actor::create(actorStrand, mainFunc, stackSize);
 	actorHandle._actor->_parentActor = shared_from_this();
 	_childActorList.push_front(actorHandle._actor);
@@ -1148,7 +1148,7 @@ child_actor_param my_actor::create_child_actor(const shared_strand& actorStrand,
 	return actorHandle;
 }
 
-child_actor_param my_actor::create_child_actor(const main_func& mainFunc, size_t stackSize)
+ChildActorParam_ my_actor::create_child_actor(const main_func& mainFunc, size_t stackSize)
 {
 	return create_child_actor(_strand, mainFunc, stackSize);
 }

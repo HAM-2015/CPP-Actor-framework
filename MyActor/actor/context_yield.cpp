@@ -10,6 +10,7 @@ typedef boost::coroutines::attributes coro_attributes;
 
 #elif (defined LIB_CORO)
 
+#ifdef _MSC_VER
 #include "scattered.h"
 
 #ifdef _MSC_VER
@@ -40,6 +41,11 @@ extern "C"
 {
 	coro_pull_interface* make_coro(coro_push_handler ch, void* stackTop, size_t size, void* param = 0);
 }
+
+#elif __GNUG__
+#include <ucontext.h>
+#include <malloc.h>
+#endif
 
 #elif (defined FIBER_CORO)
 
@@ -116,15 +122,16 @@ namespace context_yield
 
 #elif (defined LIB_CORO)
 
+#ifdef _MSC_VER
 	context_yield::coro_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
 	{
-		void* sp = (char*)malloc(stackSize) + stackSize;
-		if (!sp)
+		void* stack = malloc(stackSize);
+		if (!stack)
 		{
 			return NULL;
 		}
 		context_yield::coro_info* info = new context_yield::coro_info;
-		info->stackTop = sp;
+		info->stackTop = (char*)stack + stackSize;
 		info->stackSize = stackSize;
 		struct local_ref
 		{
@@ -157,6 +164,54 @@ namespace context_yield
 		free((char*)info->stackTop - info->stackSize);
 		delete info;
 	}
+#elif __GNUG__
+	context_yield::coro_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
+	{
+		void* stack = malloc(stackSize);
+		if (!stack)
+		{
+			return NULL;
+		}
+		context_yield::coro_info* info = new context_yield::coro_info;
+		info->stackTop = (char*)stack + stackSize;
+		info->stackSize = stackSize;
+		info->obj = new ucontext_t;
+		info->nc = new ucontext_t;
+		ucontext_t* returnCt = (ucontext_t*)info->nc;
+		ucontext_t* callCt = (ucontext_t*)info->obj;
+		getcontext(callCt);
+		callCt->uc_link = returnCt;
+		callCt->uc_stack.ss_sp = stack;
+		callCt->uc_stack.ss_size = stackSize;
+		makecontext(callCt, (void(*)())handler, 2, info, p);
+		swapcontext(returnCt, callCt);
+		return info;
+	}
+
+	void push_yield(context_yield::coro_info* info)
+	{
+		ucontext_t* returnCt = (ucontext_t*)info->nc;
+		ucontext_t* callCt = (ucontext_t*)info->obj;
+		swapcontext(callCt, returnCt);
+	}
+
+	void pull_yield(context_yield::coro_info* info)
+	{
+		ucontext_t* returnCt = (ucontext_t*)info->nc;
+		ucontext_t* callCt = (ucontext_t*)info->obj;
+		swapcontext(returnCt, callCt);
+	}
+
+	void delete_context(context_yield::coro_info* info)
+	{
+		ucontext_t* returnCt = (ucontext_t*)info->nc;
+		ucontext_t* callCt = (ucontext_t*)info->obj;
+		free((char*)info->stackTop - info->stackSize);
+		delete info;
+		delete callCt;
+		delete returnCt;
+	}
+#endif
 
 #elif (defined FIBER_CORO)
 

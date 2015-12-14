@@ -107,11 +107,11 @@ void ActorTimer_::cancel(timer_handle& th)
 void ActorTimer_::timer_loop(unsigned long long us)
 {
 	int tc = ++_timerCount;
+#ifdef DISABLE_BOOST_TIMER
+	((timer_type*)_timer)->async_wait(us, _strand->wrap_post([this, tc](const boost::system::error_code&)
+#else
 	boost::system::error_code ec;
 	((timer_type*)_timer)->expires_from_now(micseconds(us), ec);
-#ifdef DISABLE_BOOST_TIMER
-	((timer_type*)_timer)->async_wait(_strand->wrap_post([this, tc](const boost::system::error_code&)
-#else
 	((timer_type*)_timer)->async_wait(_strand->wrap_asio([this, tc](const boost::system::error_code&)
 #endif
 	{

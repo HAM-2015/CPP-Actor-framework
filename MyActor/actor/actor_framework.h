@@ -3220,16 +3220,16 @@ class child_actor_handle;
 /*!
 @brief 子Actor句柄参数，child_actor_handle内使用
 */
-struct child_actor_param
+struct ChildActorParam_
 {
 	friend my_actor;
 	friend child_actor_handle;
 #if (_DEBUG || DEBUG)
-	~child_actor_param();
+	~ChildActorParam_();
 private:
-	child_actor_param();
-	child_actor_param(const child_actor_param& s);
-	child_actor_param& operator =(const child_actor_param& s);
+	ChildActorParam_();
+	ChildActorParam_(const ChildActorParam_& s);
+	ChildActorParam_& operator =(const ChildActorParam_& s);
 	mutable bool _isCopy;
 #endif
 	mutable actor_handle _actor;///<本Actor
@@ -3241,26 +3241,27 @@ private:
 */
 class child_actor_handle
 {
+	friend my_actor;
 public:
 	typedef std::shared_ptr<child_actor_handle> ptr;
-	friend my_actor;
 public:
 	child_actor_handle();
 	child_actor_handle(const child_actor_handle&);
-	child_actor_handle(const child_actor_param& s);
+	child_actor_handle(const ChildActorParam_& s);
 	~child_actor_handle();
-	void operator =(const child_actor_param& s);
-	const actor_handle& get_actor();
-	my_actor* operator ->();
-	static ptr make_ptr();
-	bool empty();
+	void operator =(const ChildActorParam_& s);
 	void operator =(const child_actor_handle&);
+	const actor_handle& get_actor() const;
+	my_actor* operator ->() const;
+	bool empty() const;
+	static ptr make_ptr();
+private:
 	void peel();
 private:
 	DEBUG_OPERATION(msg_list_shared_alloc<std::function<void()> >::iterator _qh);
 	bool _quited;///<检测是否已经关闭
 	actor_trig_handle<> _quiteAth;
-	child_actor_param _param;
+	ChildActorParam_ _param;
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -3685,8 +3686,8 @@ public:
 	@param stackSize Actor栈大小，4k的整数倍（最大1MB）
 	@return 子Actor句柄，使用 child_actor_handle 接收返回值
 	*/
-	child_actor_param create_child_actor(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	child_actor_param create_child_actor(const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	ChildActorParam_ create_child_actor(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	ChildActorParam_ create_child_actor(const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 
 	/*!
 	@brief 开始运行子Actor，只能调用一次
@@ -4683,9 +4684,9 @@ public:
 	@return 返回处理该消息的子Actor句柄
 	*/
 	template <typename... Args, typename Handler>
-	__yield_interrupt child_actor_param msg_agent_to_actor(const int id, const shared_strand& strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt ChildActorParam_ msg_agent_to_actor(const int id, const shared_strand& strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
-		child_actor_param childActor = create_child_actor(strand, [id, agentActor](my_actor* self)
+		ChildActorParam_ childActor = create_child_actor(strand, [id, agentActor](my_actor* self)
 		{
 			msg_pump_handle<Args...> pump = my_actor::_connect_msg_pump<Args...>(id, self);
 			agentActor(self, pump);
@@ -4699,19 +4700,19 @@ public:
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt child_actor_param msg_agent_to_actor(const int id, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt ChildActorParam_ msg_agent_to_actor(const int id, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return msg_agent_to_actor<Args...>(id, self_strand(), autoRun, agentActor, stackSize);
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt child_actor_param msg_agent_to_actor(const shared_strand& strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt ChildActorParam_ msg_agent_to_actor(const shared_strand& strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return msg_agent_to_actor<Args...>(0, strand, autoRun, agentActor, stackSize);
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt child_actor_param msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt ChildActorParam_ msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return msg_agent_to_actor<Args...>(0, self_strand(), autoRun, agentActor, stackSize);
 	}

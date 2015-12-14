@@ -93,20 +93,18 @@ private:
 	~WaitableTimerEvent_();
 private:
 	void eventHandler();
-	void expires_from_now(long long us, boost::system::error_code& ec);
 	void cancel(boost::system::error_code& ec);
 
 	template <typename Handler>
-	void async_wait(Handler&& handler)
+	void async_wait(long long us, Handler&& handler)
 	{
 		assert(!_handler);
 		typedef wrap_handler<RM_CREF(Handler)> wrap_type;
 		_handler = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(_ios, TRY_MOVE(handler));
-		_timer->appendEvent(_eus, this);
+		_timer->appendEvent(us, this);
 	}
 private:
 	io_engine& _ios;
-	long long _eus;
 	wrap_base* _handler;
 	reusable_mem _reuMem;
 	WaitableTimer_* _timer;

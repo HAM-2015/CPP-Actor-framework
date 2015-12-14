@@ -38,7 +38,7 @@ std::shared_ptr<timer_boost> timer_boost::create(const shared_strand& strand)
 	return res;
 }
 
-const shared_strand& timer_boost::self_strand()
+const shared_strand& timer_boost::self_strand() const
 {
 	return _strand;
 }
@@ -60,6 +60,10 @@ timer_boost::timer_handle timer_boost::timeout(unsigned long long us, const asyn
 		timerHandle._queueNode = _handlerQueue.insert(make_pair(et, host));
 	}
 
+	if (!_lockThis)
+	{
+		_lockThis = _weakThis.lock();
+	}
 	if (!_looping)
 	{
 		_looping = true;
@@ -80,9 +84,9 @@ timer_boost::timer_handle timer_boost::timeout(unsigned long long us, const asyn
 
 void timer_boost::cancel(timer_handle& th)
 {
+	assert(_strand->running_in_this_thread());
 	if (!th._null)
 	{
-		assert(_strand && _strand->running_in_this_thread());
 		th._null = true;
 		auto itNode = th._queueNode;
 		if (_handlerQueue.size() == 1)
@@ -113,44 +117,47 @@ void timer_boost::cancel(timer_handle& th)
 void timer_boost::timer_loop(unsigned long long us)
 {
 	int tc = ++_timerCount;
-	auto sharedThis = _weakThis.lock();
+#ifdef DISABLE_BOOST_TIMER
+	((timer_type*)_timer)->async_wait(us, _strand->wrap_post([this, tc](const boost::system::error_code&)
+#else
 	boost::system::error_code ec;
 	((timer_type*)_timer)->expires_from_now(micseconds(us), ec);
-#ifdef DISABLE_BOOST_TIMER
-	((timer_type*)_timer)->async_wait(_strand->wrap_post([sharedThis, tc](const boost::system::error_code&)
-#else
-	((timer_type*)_timer)->async_wait(_strand->wrap_asio([sharedThis, tc](const boost::system::error_code&)
+	((timer_type*)_timer)->async_wait(_strand->wrap_asio([this, tc](const boost::system::error_code&)
 #endif
 	{
-		timer_boost* this_ = sharedThis.get();
-		assert(this_->_strand->running_in_this_thread());
-		if (tc == this_->_timerCount)
+		assert(_strand->running_in_this_thread());
+		if (tc == _timerCount)
 		{
-			this_->_extFinishTime = 0;
+			_extFinishTime = 0;
 			unsigned long long nt = get_tick_us();
-			while (!this_->_handlerQueue.empty())
+			while (!_handlerQueue.empty())
 			{
-				auto iter = this_->_handlerQueue.begin();
+				auto iter = _handlerQueue.begin();
 				if (iter->first > nt + 500)
 				{
-					this_->_extFinishTime = iter->first;
-					this_->timer_loop(iter->first - nt);
+					_extFinishTime = iter->first;
+					timer_loop(iter->first - nt);
 					return;
 				}
 				else
 				{
 					iter->second->timeout_handler();
-					this_->_handlerQueue.erase(iter);
+					_handlerQueue.erase(iter);
 				}
 			}
-			this_->_looping = false;
+			_looping = false;
+			_lockThis.reset();
+		}
+		else if (tc == _timerCount - 1)
+		{
+			_lockThis.reset();
 		}
 	}));
 }
 //////////////////////////////////////////////////////////////////////////
 
-async_timer::async_timer(const std::shared_ptr<timer_boost>& timer)
-:_timer(timer), _handler(NULL)
+async_timer::async_timer(const std::shared_ptr<timer_boost>& timerBoost)
+:_timerBoost(timerBoost), _handler(NULL)
 {
 
 }
@@ -160,9 +167,9 @@ async_timer::~async_timer()
 	assert(!_handler);
 }
 
-std::shared_ptr<async_timer> async_timer::create(const std::shared_ptr<timer_boost>& timer)
+std::shared_ptr<async_timer> async_timer::create(const std::shared_ptr<timer_boost>& timerBoost)
 {
-	std::shared_ptr<async_timer> res(new async_timer(timer));
+	std::shared_ptr<async_timer> res(new async_timer(timerBoost));
 	res->_weakThis = res;
 	return res;
 }
@@ -174,17 +181,17 @@ void async_timer::cancel()
 		_handler->destory(_reuMem);
 		_handler = NULL;
 	}
-	_timer->cancel(_timerHandle);
+	_timerBoost->cancel(_timerHandle);
 }
 
-const shared_strand& async_timer::self_strand()
+const shared_strand& async_timer::self_strand() const
 {
-	return _timer->_strand;
+	return _timerBoost->_strand;
 }
 
-const std::shared_ptr<timer_boost>& async_timer::self_timer()
+const std::shared_ptr<timer_boost>& async_timer::self_timer_boost() const
 {
-	return _timer;
+	return _timerBoost;
 }
 
 void async_timer::timeout_handler()

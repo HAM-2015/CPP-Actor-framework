@@ -12,6 +12,12 @@ oschina url:
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
+2015-12-14
+添加对linux-ucontext库的支持.
+
+2015-12-09
+扩展对windows平台下的稳定定时器支持.
+
 2015-11-13
 添加对windows-fiber的支持.
 
@@ -22,7 +28,7 @@ http://www.oschina.net/code/snippet_2274073_45577
 添加"通知句柄"丢失检测，消息等待时可以捕获通知句柄丢失异常.
 
 2015-10-31
-移植到gcc4.9 for Linux.
+移植到linux系统.
 
 2015-09-24
 改进采用TLS技术检测当前代码运行在哪个Actor下.

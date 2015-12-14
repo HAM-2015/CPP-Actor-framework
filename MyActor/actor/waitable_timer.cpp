@@ -121,7 +121,7 @@ void WaitableTimer_::timerThread()
 //////////////////////////////////////////////////////////////////////////
 
 WaitableTimerEvent_::WaitableTimerEvent_(io_engine& ios, WaitableTimer_* timer)
-:_ios(ios), _timer(timer), _eus(0), _handler(NULL)
+:_ios(ios), _timer(timer), _handler(NULL)
 {
 
 }
@@ -142,7 +142,6 @@ void WaitableTimerEvent_::eventHandler()
 void WaitableTimerEvent_::cancel(boost::system::error_code& ec)
 {
 	ec.clear();
-	_eus = 0;
 	_timer->removeEvent(_timerHandle);
 	if (_handler)
 	{
@@ -150,12 +149,6 @@ void WaitableTimerEvent_::cancel(boost::system::error_code& ec)
 		_handler = NULL;
 		cb->invoke_err(_reuMem);
 	}
-}
-
-void WaitableTimerEvent_::expires_from_now(long long us, boost::system::error_code& ec)
-{
-	ec.clear();
-	_eus = us;
 }
 #elif __GNUG__
 #error "do not define DISABLE_BOOST_TIMER"
