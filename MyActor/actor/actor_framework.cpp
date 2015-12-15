@@ -1680,6 +1680,18 @@ bool my_actor::is_locked_quit()
 	return 0 != _lockQuit;
 }
 
+void my_actor::try_quit()
+{
+#ifdef __GNUG__
+	if (_notifyQuited && 0 == _lockQuit)
+	{
+		throw force_quit_exception();
+	}
+#elif _MSC_VER
+	assert(!(_notifyQuited && 0 == _lockQuit));
+#endif
+}
+
 void my_actor::notify_suspend()
 {
 	notify_suspend(std::function<void()>());

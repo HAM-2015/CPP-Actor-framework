@@ -461,7 +461,7 @@ void perfor_test()
 {
 	trace_line("begin perfor_test");
 	io_engine ios;
-	ios.run(4);
+	ios.run(8);
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [&](my_actor* self)
 	{
 		self->check_stack();
@@ -488,6 +488,7 @@ void perfor_test()
 					{
 						count[i]++;
 						self->yield_guard();
+						self->try_quit();
 					}
 				}, STACK_SIZE_REL(12 kB));
 				childList.push_front(newactor);

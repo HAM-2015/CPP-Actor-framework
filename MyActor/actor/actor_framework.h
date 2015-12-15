@@ -1368,7 +1368,18 @@ class MsgPool_ : public MsgPoolBase_
 			assert(_thisPool);
 			auto& refThis_ = *this;
 			ActorFunc_::lock_quit(host);
+#ifdef _MSC_VER
 			OUT_OF_SCOPE({ ActorFunc_::unlock_quit(host); });
+#elif __GNUG__
+			OUT_OF_SCOPE(
+			{
+				try
+				{
+					ActorFunc_::unlock_quit(host);
+				}
+				catch (...) {}
+			});
+#endif
 			return ActorFunc_::send<bool>(host, _thisPool->_strand, [&dst, &wait, pumpID, refThis_]()->bool
 			{
 				bool ok = false;
@@ -1408,7 +1419,18 @@ class MsgPool_ : public MsgPoolBase_
 			assert(_thisPool);
 			auto& refThis_ = *this;
 			ActorFunc_::lock_quit(host);
+#ifdef _MSC_VER
 			OUT_OF_SCOPE({ ActorFunc_::unlock_quit(host); });
+#elif __GNUG__
+			OUT_OF_SCOPE(
+			{
+				try
+				{
+					ActorFunc_::unlock_quit(host);
+				}
+				catch (...) {}
+			});
+#endif
 			return ActorFunc_::send<size_t>(host, _thisPool->_strand, [pumpID, refThis_]()->size_t
 			{
 				auto& thisPool_ = refThis_._thisPool;
@@ -2556,7 +2578,15 @@ public:
 				if (!_bsign)
 				{
 					_bsign = true;
+#ifdef _MSC_VER
 					ActorFunc_::push_yield(Parent::_hostActor.get());
+#elif __GNUG__
+					try
+					{
+						ActorFunc_::push_yield(Parent::_hostActor.get());
+					}
+					catch (...) {}
+#endif
 				}
 			}
 			Parent::_hostActor.reset();
@@ -2625,7 +2655,15 @@ public:
 				if (!_bsign)
 				{
 					_bsign = true;
+#ifdef _MSC_VER
 					ActorFunc_::push_yield(Parent::_hostActor.get());
+#elif __GNUG__
+					try
+					{
+						ActorFunc_::push_yield(Parent::_hostActor.get());
+					}
+					catch (...) {}
+#endif
 				}
 			}
 			Parent::_hostActor.reset();
@@ -2781,7 +2819,15 @@ public:
 				if (!_result._sign)
 				{
 					_result._sign = true;
+#ifdef _MSC_VER
 					ActorFunc_::push_yield(Parent::_hostActor.get());
+#elif __GNUG__
+					try
+					{
+						ActorFunc_::push_yield(Parent::_hostActor.get());
+					}
+					catch (...) {}
+#endif
 				}
 			}
 			Parent::_hostActor.reset();
@@ -2871,7 +2917,15 @@ public:
 				if (!_result._sign)
 				{
 					_result._sign = true;
+#ifdef _MSC_VER
 					ActorFunc_::push_yield(Parent::_hostActor.get());
+#elif __GNUG__
+					try
+					{
+						ActorFunc_::push_yield(Parent::_hostActor.get());
+					}
+					catch (...) {}
+#endif
 				}
 			}
 			Parent::_hostActor.reset();
@@ -3617,8 +3671,17 @@ public:
 		{
 			if (_locked)
 			{
+#ifdef _MSC_VER
 				//可能在此析构函数内抛出 force_quit_exception 异常，但在 unlock_quit 已经切换出堆栈，在切换回来后会安全的释放资源
 				_self->unlock_quit();
+#elif __GNUG__
+				try
+				{
+					_self->unlock_quit();
+				}
+				catch (my_actor::force_quit_exception&) {}
+				DEBUG_OPERATION(catch (...) { assert(false); })
+#endif
 			}
 		}
 
@@ -5874,6 +5937,11 @@ public:
 	@brief 是否锁定了退出
 	*/
 	bool is_locked_quit();
+
+	/*!
+	@brief 检测退出消息，尝试退出
+	*/
+	void try_quit();
 
 	/*!
 	@brief 暂停Actor

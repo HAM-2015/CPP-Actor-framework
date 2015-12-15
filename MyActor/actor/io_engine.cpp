@@ -68,6 +68,11 @@ void io_engine::run(size_t threadNum, sched policy)
 {
 	assert(threadNum >= 1);
 	std::lock_guard<std::mutex> lg(_runMutex);
+	_run(threadNum, policy);
+}
+
+void io_engine::_run(size_t threadNum, sched policy)
+{
 	if (!_opend)
 	{
 		_opend = true;
@@ -155,6 +160,11 @@ void io_engine::run(size_t threadNum, sched policy)
 void io_engine::stop()
 {
 	std::lock_guard<std::mutex> lg(_runMutex);
+	_stop();
+}
+
+void io_engine::_stop()
+{
 	if (_opend)
 	{
 		assert(!runningInThisIos());
@@ -175,6 +185,23 @@ void io_engine::stop()
 		}
 		_handleList.clear();
 		_ctrlMutex.unlock();
+	}
+}
+
+void io_engine::changeThreadNumber(size_t threadNum)
+{
+	std::lock_guard<std::mutex> lg(_runMutex);
+	if (_opend && threadNum != threadNumber())
+	{
+		_ios.stop();
+#ifdef _MSC_VER
+		_stop();
+		_run(threadNum, sched_other);
+#elif __GNUG__
+		auto policy = _policy;
+		_stop();
+		_run(threadNum, policy);
+#endif
 	}
 }
 

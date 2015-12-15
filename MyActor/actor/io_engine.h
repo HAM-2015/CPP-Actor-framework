@@ -77,6 +77,11 @@ public:
 	void stop();
 
 	/*!
+	@brief 改变调度线程数，之前的线程将退出
+	*/
+	void changeThreadNumber(size_t threadNum);
+
+	/*!
 	@brief 检测当前函数是否在本调度器中执行
 	*/
 	bool runningInThisIos();
@@ -143,6 +148,8 @@ public:
 	static void** getTlsValuePtr(int i);
 #endif
 private:
+	void _run(size_t threadNum, sched policy);
+	void _stop();
 	void* getImpl();
 	void freeImpl(void* impl);
 	void* getTimer();
