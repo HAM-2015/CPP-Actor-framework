@@ -16,16 +16,16 @@
 
 #if (_DEBUG || DEBUG)
 #	if (defined _WIN64) || (defined __x86_64__)
-#define STACK_SIZE64(__debug32__, _debug64__, __release32, __release64__) (_debug64__)
+#define STACK_SIZE64(__debug32__, __debug64__, __release32, __release64__) (__debug64__)
 #	else
-#define STACK_SIZE64(__debug32__, _debug64__, __release32, __release64__) (__debug32__)
+#define STACK_SIZE64(__debug32__, __debug64__, __release32, __release64__) (__debug32__)
 #	endif
 #else
 #	if (defined _WIN64) || (defined __x86_64__)
-#define STACK_SIZE64(__debug32__, _debug64__, __release32, __release64__) (__release64__)
+#define STACK_SIZE64(__debug32__, __debug64__, __release32, __release64__) (__release64__)
 #define STACK_SIZE_REL64(__release32__, __release64__) (__release64__)
 #	else
-#define STACK_SIZE64(__debug32__, _debug64__, __release32, __release64__) (__release32)
+#define STACK_SIZE64(__debug32__, __debug64__, __release32, __release64__) (__release32)
 #define STACK_SIZE_REL64(__release32__, __release64__) (__release32__)
 #	endif
 #endif

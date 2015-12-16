@@ -191,6 +191,7 @@ template <typename First>
 void trace(First&& fst)
 {
 	trace_match<RM_CREF(First)>::trace(fst);
+	std::cout << std::flush;
 }
 
 template <typename First>

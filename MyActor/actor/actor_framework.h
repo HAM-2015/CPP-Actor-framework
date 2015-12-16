@@ -4368,10 +4368,10 @@ public:
 	}
 
 	template <typename... Outs>
-	callback_handler<types_pck<Outs...>, types_pck<Outs...>> make_context(Outs&... outs)
+	callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_context(Outs&... outs)
 	{
 		assert_enter();
-		return callback_handler<types_pck<Outs...>, types_pck<Outs...>>(this, outs...);
+		return callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, outs...);
 	}
 
 	/*!
@@ -4386,28 +4386,28 @@ public:
 	}
 
 	template <typename... Outs>
-	asio_cb_handler<types_pck<Outs...>, types_pck<Outs...>> make_asio_context(Outs&... outs)
+	asio_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_asio_context(Outs&... outs)
 	{
 		assert_enter();
-		return asio_cb_handler<types_pck<Outs...>, types_pck<Outs...>>(this, outs...);
+		return asio_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, outs...);
 	}
 
 	/*!
 	@brief 创建同步上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_sync_context(sync_result, ...))
 	*/
 	template <typename R = void, typename... Args, typename... Outs>
-	sync_cb_handler<R, types_pck<Outs...>, types_pck<Outs...>> make_sync_context_as_type(sync_result<R>& res, Outs&... outs)
+	sync_cb_handler<R, types_pck<Args...>, types_pck<Outs...>> make_sync_context_as_type(sync_result<R>& res, Outs&... outs)
 	{
 		static_assert(sizeof...(Args) == sizeof...(Outs), "");
 		assert_enter();
-		return sync_cb_handler<R, types_pck<Outs...>, types_pck<Outs...>>(this, res, outs...);
+		return sync_cb_handler<R, types_pck<Args...>, types_pck<Outs...>>(this, res, outs...);
 	}
 
 	template <typename R = void, typename... Outs>
-	sync_cb_handler<R, types_pck<Outs...>, types_pck<Outs...>> make_sync_context(sync_result<R>& res, Outs&... outs)
+	sync_cb_handler<R, types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_sync_context(sync_result<R>& res, Outs&... outs)
 	{
 		assert_enter();
-		return sync_cb_handler<R, types_pck<Outs...>, types_pck<Outs...>>(this, res, outs...);
+		return sync_cb_handler<R, types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, res, outs...);
 	}
 
 	/*!

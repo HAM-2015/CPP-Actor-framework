@@ -6,10 +6,10 @@
 /*!
 @brief 在栈上分配一段临时空间用于构造临时对象
 */
-template <typename OBJ = void, bool AUTO = true>
+template <typename Type = void, bool AUTO = true>
 class stack_obj
 {
-	typedef TYPE_PIPE(OBJ) type;
+	typedef TYPE_PIPE(Type) type;
 public:
 	stack_obj()
 	{
@@ -78,13 +78,13 @@ public:
 		}
 	}
 
-	OBJ& get()
+	Type& get()
 	{
 		assert(!_null);
 		return *(type*)_buff;
 	}
 
-	OBJ& operator *()
+	Type& operator *()
 	{
 		assert(!_null);
 		return *(type*)_buff;
@@ -93,7 +93,7 @@ public:
 	/*!
 	@brief 调用该临时对象方法
 	*/
-	RM_REF(OBJ)* operator -> ()
+	RM_REF(Type)* operator -> ()
 	{
 		assert(!_null);
 		return &get();
@@ -112,10 +112,10 @@ private:
 	bool _null;
 };
 
-template <typename OBJ>
-class stack_obj<OBJ, false>
+template <typename Type>
+class stack_obj<Type, false>
 {
-	typedef TYPE_PIPE(OBJ) type;
+	typedef TYPE_PIPE(Type) type;
 public:
 	stack_obj()
 	{
@@ -171,13 +171,13 @@ public:
 #endif
 	}
 
-	OBJ& get()
+	Type& get()
 	{
 		assert(!_null);
 		return *(type*)_buff;
 	}
 
-	OBJ& operator *()
+	Type& operator *()
 	{
 		assert(!_null);
 		return *(type*)_buff;
@@ -186,7 +186,7 @@ public:
 	/*!
 	@brief 调用该临时对象方法
 	*/
-	RM_REF(OBJ)* operator -> ()
+	RM_REF(Type)* operator -> ()
 	{
 		assert(!_null);
 		return &get();
@@ -229,6 +229,18 @@ public:
 	}
 
 	bool _null;
+};
+
+template <typename Type>
+struct check_stack_obj_type
+{
+	typedef Type type;
+};
+
+template <typename Type, bool AUTO>
+struct check_stack_obj_type<stack_obj<Type, AUTO>>
+{
+	typedef Type type;
 };
 
 #endif
