@@ -313,6 +313,7 @@ public:
 				_popWait.pop_front();
 			}
 		});
+		qg.unlock();
 	}
 
 	void reset()
@@ -375,6 +376,7 @@ private:
 			}
 			if (!isFull)
 			{
+				qg.unlock();
 				return;
 			}
 			if (host->wait_trig(ath))
@@ -383,6 +385,7 @@ private:
 				throw close_exception();
 			}
 		}
+		qg.unlock();
 	}
 
 	template <typename H>
@@ -423,6 +426,7 @@ private:
 			qg.unlock();
 			throw close_exception();
 		}
+		qg.unlock();
 		return pushCount;
 	}
 
@@ -477,6 +481,7 @@ private:
 			{
 				if (!isFull)
 				{
+					qg.unlock();
 					return pushCount;
 				}
 				long long bt = get_tick_us();
@@ -497,6 +502,7 @@ private:
 				utm -= get_tick_us() - bt;
 				if (utm < 1000)
 				{
+					qg.unlock();
 					return pushCount;
 				}
 			}
@@ -506,6 +512,7 @@ private:
 				throw close_exception();
 			}
 		}
+		qg.unlock();
 		return pushCount;
 	}
 
@@ -547,6 +554,7 @@ private:
 			qg.unlock();
 			throw close_exception();
 		}
+		qg.unlock();
 		return lostCount;
 	}
 
@@ -600,6 +608,7 @@ private:
 			}
 			if (!isEmpty)
 			{
+				qg.unlock();
 				return;
 			}
 			if (host->wait_trig(ath))
@@ -608,6 +617,7 @@ private:
 				throw close_exception();
 			}
 		}
+		qg.unlock();
 	}
 
 	template <typename H>
@@ -649,6 +659,7 @@ private:
 			qg.unlock();
 			throw close_exception();
 		}
+		qg.unlock();
 		return popCount;
 	}
 
@@ -704,6 +715,7 @@ private:
 			{
 				if (!isEmpty)
 				{
+					qg.unlock();
 					return popCount;
 				}
 				long long bt = get_tick_us();
@@ -724,6 +736,7 @@ private:
 				utm -= get_tick_us() - bt;
 				if (utm < 1000)
 				{
+					qg.unlock();
 					return popCount;
 				}
 			}
@@ -733,6 +746,7 @@ private:
 				throw close_exception();
 			}
 		}
+		qg.unlock();
 		return popCount;
 	}
 private:

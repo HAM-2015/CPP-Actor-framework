@@ -3269,29 +3269,8 @@ wrapped_sync_handler2<R, RM_CREF(Handler)> wrap_sync2(sync_result<R>& res, Handl
 }
 //////////////////////////////////////////////////////////////////////////
 
-class child_actor_handle;
-
 /*!
-@brief 子Actor句柄参数，child_actor_handle内使用
-*/
-struct ChildActorParam_
-{
-	friend my_actor;
-	friend child_actor_handle;
-#if (_DEBUG || DEBUG)
-	~ChildActorParam_();
-private:
-	ChildActorParam_();
-	ChildActorParam_(const ChildActorParam_& s);
-	ChildActorParam_& operator =(const ChildActorParam_& s);
-	mutable bool _isCopy;
-#endif
-	mutable actor_handle _actor;///<本Actor
-	mutable msg_list_shared_alloc<actor_handle>::iterator _actorIt;///<保存在父Actor集合中的节点
-};
-
-/*!
-@brief 子Actor句柄，不可拷贝
+@brief 子Actor句柄
 */
 class child_actor_handle
 {
@@ -3300,22 +3279,25 @@ public:
 	typedef std::shared_ptr<child_actor_handle> ptr;
 public:
 	child_actor_handle();
-	child_actor_handle(const child_actor_handle&);
-	child_actor_handle(const ChildActorParam_& s);
+	child_actor_handle(const actor_handle& actor);
+	child_actor_handle(child_actor_handle&& s);
 	~child_actor_handle();
-	void operator =(const ChildActorParam_& s);
-	void operator =(const child_actor_handle&);
+	void operator =(child_actor_handle&& s);
 	const actor_handle& get_actor() const;
 	my_actor* operator ->() const;
 	bool empty() const;
 	static ptr make_ptr();
 private:
 	void peel();
+	child_actor_handle(const child_actor_handle&);
+	void operator =(const child_actor_handle&);
 private:
-	DEBUG_OPERATION(msg_list_shared_alloc<std::function<void()> >::iterator _qh);
-	bool _quited;///<检测是否已经关闭
+	actor_handle _actor;
 	actor_trig_handle<> _quiteAth;
-	ChildActorParam_ _param;
+	msg_list_shared_alloc<actor_handle>::iterator _actorIt;
+	msg_list_shared_alloc<std::function<void()> >::iterator _athIt;
+	bool _started : 1;
+	bool _quited : 1;
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -3747,10 +3729,10 @@ public:
 	@param actorStrand 子Actor依赖的strand
 	@param mainFunc 子Actor入口函数
 	@param stackSize Actor栈大小，4k的整数倍（最大1MB）
-	@return 子Actor句柄，使用 child_actor_handle 接收返回值
+	@return 子Actor句柄
 	*/
-	ChildActorParam_ create_child_actor(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	ChildActorParam_ create_child_actor(const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_actor_handle create_child_actor(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_actor_handle create_child_actor(const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 
 	/*!
 	@brief 开始运行子Actor，只能调用一次
@@ -3771,7 +3753,8 @@ public:
 	/*!
 	@brief 开始运行一组子Actor，只能调用一次
 	*/
-	void child_actors_run(const list<child_actor_handle::ptr>& actorHandles);
+	void child_actors_run(list<child_actor_handle::ptr>& actorHandles);
+	void child_actors_run(list<child_actor_handle>& actorHandles);
 
 	/*!
 	@brief 强制终止一个子Actor
@@ -3789,7 +3772,8 @@ public:
 		}
 	}
 
-	__yield_interrupt void child_actors_force_quit(const list<child_actor_handle::ptr>& actorHandles);
+	__yield_interrupt void child_actors_force_quit(list<child_actor_handle::ptr>& actorHandles);
+	__yield_interrupt void child_actors_force_quit(list<child_actor_handle>& actorHandles);
 
 	/*!
 	@brief 等待一个子Actor完成后返回
@@ -3814,7 +3798,8 @@ public:
 	@brief 等待一组子Actor完成后返回
 	@return 都正常退出的返回true，否则false
 	*/
-	__yield_interrupt void child_actors_wait_quit(const list<child_actor_handle::ptr>& actorHandles);
+	__yield_interrupt void child_actors_wait_quit(list<child_actor_handle::ptr>& actorHandles);
+	__yield_interrupt void child_actors_wait_quit(list<child_actor_handle>& actorHandles);
 
 	/*!
 	@brief 挂起子Actor
@@ -3835,7 +3820,8 @@ public:
 	/*!
 	@brief 挂起一组子Actor
 	*/
-	__yield_interrupt void child_actors_suspend(const list<child_actor_handle::ptr>& actorHandles);
+	__yield_interrupt void child_actors_suspend(list<child_actor_handle::ptr>& actorHandles);
+	__yield_interrupt void child_actors_suspend(list<child_actor_handle>& actorHandles);
 
 	/*!
 	@brief 恢复子Actor
@@ -3856,7 +3842,8 @@ public:
 	/*!
 	@brief 恢复一组子Actor
 	*/
-	__yield_interrupt void child_actors_resume(const list<child_actor_handle::ptr>& actorHandles);
+	__yield_interrupt void child_actors_resume(list<child_actor_handle::ptr>& actorHandles);
+	__yield_interrupt void child_actors_resume(list<child_actor_handle>& actorHandles);
 
 	/*!
 	@brief 创建另一个Actor，Actor执行完成后返回
@@ -3912,7 +3899,7 @@ public:
 	/*!
 	@brief 注销资源释放函数
 	*/
-	void cancel_quit_handler(quit_iterator qh);
+	void cancel_quit_handler(const quit_iterator& qh);
 public:
 	/*!
 	@brief 使用内部定时器延时触发某个函数，在触发完成之前不能多次调用
@@ -4695,6 +4682,7 @@ private:
 			if (!childPck || msgPck->_next == childPck)
 			{
 				msgPck->unlock(this);
+				qg.unlock();
 				return false;
 			}
 			childPck->lock(this);
@@ -4727,6 +4715,7 @@ private:
 		childPck->_isHead = false;
 		childPck->unlock(this);
 		msgPck->unlock(this);
+		qg.unlock();
 		return true;
 	}
 public:
@@ -4747,35 +4736,36 @@ public:
 	@return 返回处理该消息的子Actor句柄
 	*/
 	template <typename... Args, typename Handler>
-	__yield_interrupt ChildActorParam_ msg_agent_to_actor(const int id, const shared_strand& strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_actor_handle msg_agent_to_actor(const int id, const shared_strand& strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
-		ChildActorParam_ childActor = create_child_actor(strand, [id, agentActor](my_actor* self)
+		actor_handle childActor = my_actor::create(strand, [id, agentActor](my_actor* self)
 		{
-			msg_pump_handle<Args...> pump = my_actor::_connect_msg_pump<Args...>(id, self);
+			msg_pump_handle<Args...> pump = my_actor::_connect_msg_pump<Args...>(id, self, false);
 			agentActor(self, pump);
 		}, stackSize);
-		msg_agent_to<Args...>(id, childActor._actor);
+		childActor->_parentActor = shared_from_this();
+		msg_agent_to<Args...>(id, childActor);
 		if (autoRun)
 		{
-			childActor._actor->notify_run();
+			childActor->notify_run();
 		}
-		return childActor;
+		return child_actor_handle(childActor);
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt ChildActorParam_ msg_agent_to_actor(const int id, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_actor_handle msg_agent_to_actor(const int id, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return msg_agent_to_actor<Args...>(id, self_strand(), autoRun, agentActor, stackSize);
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt ChildActorParam_ msg_agent_to_actor(const shared_strand& strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_actor_handle msg_agent_to_actor(const shared_strand& strand, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return msg_agent_to_actor<Args...>(0, strand, autoRun, agentActor, stackSize);
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt ChildActorParam_ msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_actor_handle msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return msg_agent_to_actor<Args...>(0, self_strand(), autoRun, agentActor, stackSize);
 	}
@@ -4803,6 +4793,7 @@ public:
 				next_.reset();
 			}
 			msgPck->unlock(this);
+			qg.unlock();
 		}
 	}
 
@@ -4828,6 +4819,7 @@ public:
 			msgPck->clear();
 			_msgPoolStatus._msgTypeMap.erase(it);
 			msgPck->unlock(this);
+			qg.unlock();
 			return true;
 		}
 		return false;
@@ -4881,6 +4873,7 @@ public:
 			if (!buddyPck)
 			{
 				msgPck->unlock(this);
+				qg.unlock();
 				return post_actor_msg<Args...>();
 			}
 			buddyPck->lock(this);
@@ -4929,9 +4922,11 @@ public:
 				newPool->_weakCheckLost = autoCheckLost;
 			}
 			msgPck->unlock(this);
+			qg.unlock();
 			return post_actor_msg<Args...>(newPool, buddyActor, autoCheckLost);
 #else
 			msgPck->unlock(this);
+			qg.unlock();
 			return post_actor_msg<Args...>(newPool, buddyActor);
 #endif
 		}
@@ -4956,15 +4951,18 @@ public:
 			}
 			buddyPck->unlock(this);
 			msgPck->unlock(this);
+			qg.unlock();
 			return post_actor_msg<Args...>(buddyPool, buddyActor, autoCheckLost);
 #else
 			buddyPck->unlock(this);
 			msgPck->unlock(this);
+			qg.unlock();
 			return post_actor_msg<Args...>(buddyPool, buddyActor);
 #endif
 		}
 		buddyPck->unlock(this);
 		msgPck->unlock(this);
+		qg.unlock();
 		return post_actor_msg<Args...>();
 	}
 
@@ -5149,6 +5147,7 @@ private:
 		mh._handle = msgPump_.get();
 		mh._id = id;
 		DEBUG_OPERATION(mh._pClosed = msgPump_->_pClosed);
+		qg.unlock();
 		return mh;
 	}
 private:
@@ -5491,10 +5490,12 @@ public:
 						uStack[--stackl]->unlock(this);
 					}
 					msgPck->unlock(this);
+					qg.unlock();
 					return r;
 				}
 			}
 		}
+		qg.unlock();
 		return actor_handle();
 	}
 
@@ -5647,6 +5648,7 @@ private:
 			_mutex_cancel(mbList, N);
 			assert(yield_count() == nt);
 		} while (!_mutex_go(mbList, N));
+		qg.unlock();
 	}
 
 	template <typename Ready>
@@ -5694,6 +5696,7 @@ private:
 			_mutex_cancel(mbList, N);
 			assert(yield_count() == nt);
 		} while (!_mutex_go_count(runCount, mbList, N));
+		qg.unlock();
 		return runCount;
 	}
 public:

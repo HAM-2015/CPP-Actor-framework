@@ -25,7 +25,7 @@ boost_strand::~boost_strand()
 	delete _timer;
 }
 
-shared_strand boost_strand::create(io_engine& ioEngine, bool makeTimer /* = true */)
+shared_strand boost_strand::create(io_engine& ioEngine, bool makeTimer)
 {
 	shared_strand res(new boost_strand);
 	res->_ioEngine = &ioEngine;
@@ -37,6 +37,46 @@ shared_strand boost_strand::create(io_engine& ioEngine, bool makeTimer /* = true
 	res->_weakThis = res;
 	assert(!res->running_in_this_thread());
 	return res;
+}
+
+vector<shared_strand> boost_strand::create_multi(size_t n, io_engine& ioEngine, bool makeTimer)
+{
+	assert(0 != n);
+	vector<shared_strand> res(n);
+	for (size_t i = 0; i < n; i++)
+	{
+		res[i] = boost_strand::create(ioEngine, makeTimer);
+	}
+	return res;
+}
+
+void boost_strand::create_multi(shared_strand* res, size_t n, io_engine& ioEngine, bool makeTimer)
+{
+	assert(0 != n);
+	for (size_t i = 0; i < n; i++)
+	{
+		res[i] = boost_strand::create(ioEngine, makeTimer);
+	}
+}
+
+void boost_strand::create_multi(vector<shared_strand>& res, size_t n, io_engine& ioEngine, bool makeTimer)
+{
+	assert(0 != n);
+	res.resize(n);
+	for (size_t i = 0; i < n; i++)
+	{
+		res[i] = boost_strand::create(ioEngine, makeTimer);
+	}
+}
+
+void boost_strand::create_multi(list<shared_strand>& res, size_t n, io_engine& ioEngine, bool makeTimer)
+{
+	assert(0 != n);
+	res.clear();
+	for (size_t i = 0; i < n; i++)
+	{
+		res.push_front(boost_strand::create(ioEngine, makeTimer));
+	}
 }
 
 shared_strand boost_strand::clone()

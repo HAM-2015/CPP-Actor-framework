@@ -174,6 +174,7 @@ public:
 			qg.unlock();
 			throw close_exception();
 		}
+		qg.unlock();
 	}
 
 	/*!
@@ -221,6 +222,7 @@ public:
 			qg.unlock();
 			throw close_exception();
 		}
+		qg.unlock();
 		return ok;
 	}
 
@@ -289,6 +291,7 @@ public:
 			qg.unlock();
 			throw close_exception();
 		}
+		qg.unlock();
 		return notified;
 	}
 
@@ -342,6 +345,7 @@ public:
 				((TP_*)msgBuf)->~TP_();
 				ntf(false);
 			});
+			qg.unlock();
 			return std::move((RT&)*(RT*)msgBuf);
 		}
 		qg.unlock();
@@ -414,6 +418,7 @@ public:
 				_sendWait.pop_front();
 			}
 		});
+		qg.unlock();
 	}
 
 	/*!
@@ -458,6 +463,7 @@ private:
 			qg.unlock();
 			throw close_exception();
 		}
+		qg.unlock();
 		return ok;
 	}
 
@@ -532,6 +538,7 @@ private:
 			qg.unlock();
 			throw close_exception();
 		}
+		qg.unlock();
 		return ok;
 	}
 
@@ -627,6 +634,7 @@ public:
 			typedef R TP_;
 			((TP_*)resBuf)->~TP_();
 		});
+		qg.unlock();
 		return std::move(*(R*)resBuf);
 	}
 
@@ -684,6 +692,7 @@ public:
 			typedef R TP_;
 			((TP_*)resBuf)->~TP_();
 		});
+		qg.unlock();
 		return std::move(*(R*)resBuf);
 	}
 
@@ -769,6 +778,7 @@ public:
 			typedef R TP_;
 			((TP_*)resBuf)->~TP_();
 		});
+		qg.unlock();
 		return std::move(*(R*)resBuf);
 	}
 
@@ -834,6 +844,7 @@ public:
 			}
 			END_TRY_;
 			ok = true;
+			qg.unlock();
 			return;
 		}
 		qg.unlock();
@@ -901,6 +912,7 @@ public:
 		}
 		END_TRY_;
 		ok = true;
+		qg.unlock();
 	}
 
 	/*!
@@ -992,6 +1004,7 @@ public:
 		}
 		END_TRY_;
 		ok = true;
+		qg.unlock();
 	}
 
 	/*!
@@ -1019,6 +1032,7 @@ public:
 				_sendWait.pop_front();
 			}
 		});
+		qg.unlock();
 	}
 
 	/*!
@@ -1138,15 +1152,42 @@ public:
 	}
 
 	template <typename... Args>
+	R invoke_rval(my_actor* host, Args&&... args)
+	{
+		return try_rval_invoke<R>([&](ARGS&... nargs)
+		{
+			return invoke(host, nargs...);
+		}, TRY_MOVE(args)...);
+	}
+
+	template <typename... Args>
 	R try_invoke(my_actor* host, Args&&... args)
 	{
 		return (typename CspInvokeBaseFunc_<R>::result_type)base_csp_channel::try_send(host, std::tuple<Args&...>(args...));
 	}
 
 	template <typename... Args>
+	R try_invoke_rval(my_actor* host, Args&&... args)
+	{
+		return try_rval_invoke<R>([&](ARGS&... nargs)
+		{
+			return try_invoke(host, nargs...);
+		}, TRY_MOVE(args)...);
+	}
+
+	template <typename... Args>
 	R timed_invoke(int tm, my_actor* host, Args&&... args)
 	{
 		return (typename CspInvokeBaseFunc_<R>::result_type)base_csp_channel::timed_send(tm, host, std::tuple<Args&...>(args...));
+	}
+
+	template <typename... Args>
+	R timed_invoke_rval(int tm, my_actor* host, Args&&... args)
+	{
+		return try_rval_invoke<R>([&](ARGS&... nargs)
+		{
+			return timed_invoke(tm, host, nargs...);
+		}, TRY_MOVE(args)...);
 	}
 };
 

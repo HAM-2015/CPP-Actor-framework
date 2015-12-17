@@ -221,6 +221,7 @@ public:
 		{
 			ath.wait();
 		}
+		qg.unlock();
 	}
 
 	void quited_lock(my_actor* host)
@@ -267,6 +268,7 @@ public:
 				ref2.complete = false;
 			}
 		});
+		qg.unlock();
 		return complete;
 	}
 
@@ -317,11 +319,13 @@ public:
 				});
 				if (!complete)
 				{
+					qg.unlock();
 					return false;
 				}
 				ath.wait();
 			}
 		}
+		qg.unlock();
 		return true;
 	}
 
@@ -347,6 +351,7 @@ public:
 				}
 			}
 		});
+		qg.unlock();
 	}
 	
 	void quited_unlock(my_actor* host)
@@ -499,6 +504,7 @@ public:
 		mutex.unlock();
 		ath.wait();
 		mutex.lock();
+		qg.unlock();
 	}
 
 	bool timed_wait(int tm, my_actor* host, actor_lock_guard& mutex)
@@ -535,6 +541,7 @@ public:
 			}
 		}
 		mutex.lock();
+		qg.unlock();
 		return !timed;
 	}
 
@@ -555,6 +562,7 @@ public:
 				waitQueue_.pop_back();
 			}
 		});
+		qg.unlock();
 		return complete;
 	}
 
@@ -574,6 +582,7 @@ public:
 				waitQueue_.pop_back();
 			}
 		});
+		qg.unlock();
 		return count;
 	}
 private:
@@ -665,6 +674,7 @@ public:
 		{
 			ath.wait();
 		}
+		qg.unlock();
 	}
 
 	bool try_lock(my_actor* host)
@@ -683,6 +693,7 @@ public:
 				ref2->_inSet[ref2.host->self_id()] = false;
 			}
 		});
+		qg.unlock();
 		return complete;
 	}
 
@@ -733,11 +744,13 @@ public:
 				});
 				if (!complete)
 				{
+					qg.unlock();
 					return false;
 				}
 				ath.wait();
 			}
 		}
+		qg.unlock();
 		return true;
 	}
 
@@ -770,6 +783,7 @@ public:
 		{
 			ath.wait();
 		}
+		qg.unlock();
 	}
 
 	bool try_lock_shared(my_actor* host)
@@ -787,6 +801,7 @@ public:
 				ref2->_inSet[ref2.host->self_id()] = true;
 			}
 		});
+		qg.unlock();
 		return complete;
 	}
 
@@ -835,11 +850,13 @@ public:
 				});
 				if (!complete)
 				{
+					qg.unlock();
 					return false;
 				}
 				ath.wait();
 			}
 		}
+		qg.unlock();
 		return true;
 	}
 
@@ -875,6 +892,7 @@ public:
 		{
 			ath.wait();
 		}
+		qg.unlock();
 	}
 
 	bool try_lock_upgrade(my_actor* host)
@@ -894,6 +912,7 @@ public:
 				ref2->_inSet[ref2.host->self_id()] = true;
 			}
 		});
+		qg.unlock();
 		return complete;
 	}
 
@@ -945,11 +964,13 @@ public:
 				});
 				if (!complete)
 				{
+					qg.unlock();
 					return false;
 				}
 				ath.wait();
 			}
 		}
+		qg.unlock();
 		return true;
 	}
 
@@ -972,6 +993,7 @@ public:
 				_waitQueue.pop_back();
 			}
 		});
+		qg.unlock();
 	}
 
 	void unlock_shared(my_actor* host)
@@ -993,6 +1015,7 @@ public:
 				_waitQueue.pop_back();
 			}
 		});
+		qg.unlock();
 	}
 
 	void unlock_upgrade(my_actor* host)
@@ -1013,6 +1036,7 @@ public:
 				_waitQueue.pop_back();
 			}
 		});
+		qg.unlock();
 	}
 private:
 	shared_strand _strand;

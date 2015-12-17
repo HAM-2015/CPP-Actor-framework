@@ -154,15 +154,15 @@ void csp_test()
 	ios.run();
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
 	{
-		csp_invoke<int(move_test)> csp(self->self_strand());
+		csp_invoke<int(move_test&, bool)> csp(self->self_strand());
 		child_actor_handle ch1 = self->create_child_actor([&](my_actor* self)
 		{
-			for (int i = 0; i < 3; i++)
+			for (int i = 0; i < 6; i++)
 			{
 				self->sleep(1000);
-				csp.wait_invoke(self, [&](move_test msg)->int
+				csp.wait_invoke(self, [&](move_test& msg, bool rval)->int
 				{
-					trace_comma(self->self_id(), "csp msg", msg);
+					trace_comma(self->self_id(), "csp msg", msg, "rval", rval);
 					return -i;
 				});
 			}
@@ -171,7 +171,13 @@ void csp_test()
 		{
 			for (int i = 0; i < 3; i++)
 			{
-				int r = csp.invoke(self, move_test(i));
+				int r = csp.invoke_rval(self, move_test(i));
+				trace_comma(self->self_id(), "csp return ", r);
+			}
+			for (int i = 0; i < 3; i++)
+			{
+				move_test t(i);
+				int r = csp.invoke_rval(self, t);
 				trace_comma(self->self_id(), "csp return ", r);
 			}
 		});
@@ -465,33 +471,23 @@ void perfor_test()
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [&](my_actor* self)
 	{
 		self->check_stack();
-		vector<shared_strand> strands;
-		strands.resize(ios.threadNumber());
-		for (size_t i = 0; i < strands.size(); i++)
-		{
-			strands[i] = boost_strand::create(ios);
-		}
-
+		vector<shared_strand> strands = boost_strand::create_multi(ios.threadNumber(), ios);
 		for (int n = 1; n < 200; n++)
 		{
 			int num = n*n;
-			list<child_actor_handle::ptr> childList;
-			vector<int> count;
-			count.resize(num);
+			list<child_actor_handle> childList;
+			vector<int> count(num);
 			for (int i = 0; i < num; i++)
 			{
 				count[i] = 0;
-				auto newactor = child_actor_handle::make_ptr();
-				*newactor = self->create_child_actor(strands[i%strands.size()], [&count, i](my_actor* self)
+				childList.push_front(self->create_child_actor(strands[i%strands.size()], [&count, i](my_actor* self)
 				{
 					while (true)
 					{
 						count[i]++;
 						self->yield_guard();
-						self->try_quit();
 					}
-				}, STACK_SIZE_REL(12 kB));
-				childList.push_front(newactor);
+				}, STACK_SIZE_REL(12 kB)));
 			}
 			long long tk = get_tick_us();
 			self->child_actors_run(childList);

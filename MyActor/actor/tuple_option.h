@@ -309,4 +309,76 @@ inline R tuple_invoke(Handler&& h)
 	return h();
 }
 
+template <typename R, size_t N>
+struct ApplyRval_ 
+{
+	template <typename Handler, typename Arg>
+	struct wrap_handler
+	{
+		template <typename... Args>
+		R operator ()(Args&&... args)
+		{
+			bool rval = 0 != try_move<Arg>::can_move;
+			return _h(_arg, rval, TRY_MOVE(args)...);
+		}
+
+		Handler& _h;
+		Arg& _arg;
+	};
+
+	template <typename Handler, typename First, typename... Args>
+	static inline R append(Handler&& h, First&& fst, Args&&... args)
+	{
+		wrap_handler<Handler, First&&> wrap = { h, fst };
+		return ApplyRval_<R, N - 1>::append(wrap, TRY_MOVE(args)...);
+	}
+};
+
+template <typename R>
+struct ApplyRval_<R, 0>
+{
+	template <typename Handler>
+	static inline R append(Handler&& h)
+	{
+		return h();
+	}
+};
+
+template <typename R, bool>
+struct RvalInvoke_
+{
+	template <typename Handler, typename... Args>
+	static inline R invoke(Handler&& h, Args&&... args)
+	{
+		return ApplyRval_<R, sizeof...(Args)>::append(TRY_MOVE(h), TRY_MOVE(args)...);
+	}
+};
+
+template <typename R>
+struct RvalInvoke_<R, true>
+{
+	template <typename F, typename C, typename... Args>
+	static inline R invoke(F pf, C* obj, Args&&... args)
+	{
+		InvokeWrapObj_<R, F, C> wrap = { pf, obj };
+		return RvalInvoke_<R, false>::invoke(wrap, TRY_MOVE(args)...);
+	}
+};
+
+/*!
+@brief 动态传入当前调用是否是右值
+*/
+template <typename R = void, typename Handler, typename Unknown, typename... Args>
+inline R try_rval_invoke(Handler&& h, Unknown&& unkown, Args&&... args)
+{
+	return RvalInvoke_<R, CheckClassFunc_<Handler>::value>::invoke(TRY_MOVE(h), TRY_MOVE(unkown), TRY_MOVE(args)...);
+}
+
+template <typename R = void, typename Handler>
+inline R try_rval_invoke(Handler&& h)
+{
+	static_assert(!CheckClassFunc_<Handler>::value, "");
+	return h();
+}
+
 #endif
