@@ -2,7 +2,7 @@
 #define __WAITABLE_TIMER_H
 
 #ifdef DISABLE_BOOST_TIMER
-#ifdef _MSC_VER
+#ifdef WIN32
 #include "msg_queue.h"
 #include "mem_pool.h"
 #include "io_engine.h"
@@ -110,7 +110,7 @@ private:
 	WaitableTimer_* _timer;
 	WaitableTimer_::timer_handle _timerHandle;
 };
-#elif __GNUG__
+#elif __linux__
 #error "do not define DISABLE_BOOST_TIMER"
 #endif
 #endif

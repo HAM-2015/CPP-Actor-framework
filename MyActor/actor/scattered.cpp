@@ -1,6 +1,6 @@
 #include "scattered.h"
 #include <assert.h>
-#ifdef _MSC_VER
+#ifdef WIN32
 #include <winsock2.h>
 #include <Windows.h>
 #include <MMSystem.h>
@@ -9,23 +9,27 @@
 #include <boost/asio/io_service.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #ifdef CHECK_ACTOR_STACK
-#ifdef _MSC_VER
+#ifdef WIN32
 #include <WinDNS.h>
 #include <DbgHelp.h>
 #include <Psapi.h>
 #include <fstream>
 #include <direct.h>
+#ifdef _MSC_VER
 #pragma comment( lib, "Dbghelp.lib" )
 #pragma comment( lib, "Psapi.lib" )
-#elif __GNUG__
+#endif
+#elif __linux__
 #include <boost/date_time.hpp>
 #include <time.h>
 #include <execinfo.h>
 #endif
 #endif
 
+#ifdef WIN32
 #ifdef _MSC_VER
 #pragma comment( lib, "Winmm.lib" )
+#endif
 typedef LONG(__stdcall * NT_SET_TIMER_RESOLUTION)
 (
 IN ULONG DesiredTime,
@@ -92,11 +96,11 @@ std::ostream& operator <<(std::ostream& out, const move_test& s)
 {
 	if (s._count)
 	{
-		std::cout << "(id:" << s._count->_id << ", generation:" << s._generation << ", move:" << s._count->_moveCount << ", copy:" << s._count->_copyCount << ")";
+		out << "(id:" << s._count->_id << ", generation:" << s._generation << ", move:" << s._count->_moveCount << ", copy:" << s._count->_copyCount << ")";
 	}
 	else
 	{
-		std::cout << "(id:null, generation:null, move:null, copy:null)";
+		out << "(id:null, generation:null, move:null, copy:null)";
 	}
 	return out;
 }
@@ -186,7 +190,7 @@ std::string get_time_string_s_file()
 	return buff;
 }
 
-#ifdef _MSC_VER
+#ifdef WIN32
 
 void enable_high_resolution()
 {
@@ -215,16 +219,6 @@ void enable_high_resolution()
 	timeBeginPeriod(1);
 }
 
-void* get_sp()
-{
-	void* bp;
-	void* sp;
-	void* ip;
-
-	get_bp_sp_ip(&bp, &sp, &ip);
-	return sp;
-}
-
 long long get_tick_us()
 {
 	LARGE_INTEGER quadPart;
@@ -246,7 +240,7 @@ int get_tick_s()
 	return (int)((double)quadPart.QuadPart*_pcCycle._sCycle);
 }
 
-#elif __GNUG__
+#elif __linux__
 
 void enable_high_resolution()
 {
@@ -273,6 +267,24 @@ int get_tick_s()
 	return (int)ts.tv_sec;
 }
 
+#endif
+
+#ifdef _MSC_VER
+extern "C" void __fastcall get_bp_sp_ip(void** pbp, void** psp, void** pip);
+
+void* get_sp()
+{
+	void* bp;
+	void* sp;
+	void* ip;
+
+	get_bp_sp_ip(&bp, &sp, &ip);
+	return sp;
+}
+#elif __GNUG__
+#ifdef WIN32
+extern "C" void __fastcall get_bp_sp_ip(void** pbp, void** psp, void** pip);
+#elif __linux__
 void get_bp_sp_ip(void** pbp, void** psp, void** pip)
 {
 #ifdef __x86_64__
@@ -284,6 +296,7 @@ void get_bp_sp_ip(void** pbp, void** psp, void** pip)
 #endif
 	*pip = NULL;
 }
+#endif
 
 void* get_sp()
 {
@@ -302,7 +315,6 @@ unsigned long long cpu_tick()
 	__asm__("rdtsc" : "=a" (__a), "=d" (__d));
 	return ((unsigned long long)__a) | (((unsigned long long)__d) << 32);
 }
-
 #endif
 
 #ifdef CHECK_ACTOR_STACK
@@ -329,7 +341,7 @@ void stack_overflow_format(int size, std::shared_ptr<list<stack_line_info>> crea
 	}
 }
 
-#ifdef _MSC_VER
+#ifdef WIN32
 
 bool _loadAllModules()
 {
@@ -394,8 +406,9 @@ size_t _stackwalk(QWORD *pTrace, size_t maxDepth, CONTEXT *pContext)
 	size_t depth = 0;
 
 	::ZeroMemory(&stackFrame64, sizeof(stackFrame64));
-
+#ifdef _MSC_VER
 	__try
+#endif
 	{
 #ifdef _WIN64
 		stackFrame64.AddrPC.Offset = pContext->Rip;
@@ -447,9 +460,11 @@ size_t _stackwalk(QWORD *pTrace, size_t maxDepth, CONTEXT *pContext)
 			++depth;
 		}
 	}
+#ifdef _MSC_VER
 	__except (EXCEPTION_EXECUTE_HANDLER)
 	{
 	}
+#endif
 	return depth;
 }
 
@@ -591,7 +606,7 @@ struct init_mod
 	boost::thread* _thread;
 	boost::asio::io_service::work* _stackLogWork;
 } _init_ms;
-#elif __GNUG__
+#elif __linux__
 
 list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool module, bool symbolName)
 {

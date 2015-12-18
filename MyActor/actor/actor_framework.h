@@ -3688,6 +3688,24 @@ public:
 	};
 
 	/*!
+	@brief Actor栈信息
+	*/
+	struct stack_info 
+	{
+		void* stackTop;
+		void* spReg;
+		size_t stackSize;
+		size_t consumeSize;
+		int idleSize;
+	private:
+		friend std::ostream& operator <<(std::ostream& out, const stack_info& s)
+		{
+			out << "(stackTop:" << s.stackTop << ", spReg:" << s.spReg << ", stackSize:" << s.stackSize << ", consumeSize:" << s.consumeSize << ", idleSize:" << s.idleSize << ")";
+			return out;
+		}
+	};
+
+	/*!
 	@brief Actor被强制退出的异常类型
 	*/
 	struct force_quit_exception { };
@@ -3732,7 +3750,9 @@ public:
 	@return 子Actor句柄
 	*/
 	child_actor_handle create_child_actor(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_actor_handle create_child_actor(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 	child_actor_handle create_child_actor(const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_actor_handle create_child_actor(main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 
 	/*!
 	@brief 开始运行子Actor，只能调用一次
@@ -5851,9 +5871,25 @@ public:
 	void check_stack();
 
 	/*!
+	@brief 当前栈信息
+	*/
+	stack_info self_stack();
+
+	/*!
+	@brief 开始检测一串语句的栈消耗
+	*/
+	void begin_check_func_stack();
+
+	/*!
+	@brief 结束检测一串语句的栈消耗
+	@return 消耗的字节数
+	*/
+	size_t end_check_func_stack();
+
+	/*!
 	@brief 获取当前Actor剩余安全栈空间
 	*/
-	size_t stack_free_space();
+	size_t stack_idle_space();
 
 	/*!
 	@brief 获取当前Actor调度器
@@ -6078,8 +6114,11 @@ private:
 	actor_handle _parentActor;///<父Actor，子Actor都析构后，父Actor才能析构
 	timer_state _timerState;///<定时器状态
 	ActorTimer_* _timer;///<定时器
+#ifdef ENABLE_CHECK_FUNC_STACK
+	size_t _checkStackDepth;///<函数调用栈消耗测试
+#endif
 #ifdef CHECK_SELF
-#ifndef ENALBE_TLS_CHECK_SELF
+#ifndef ENABLE_TLS_CHECK_SELF
 	msg_map<void*, my_actor*>::iterator _btIt;
 	msg_map<void*, my_actor*>::iterator _topIt;
 #endif

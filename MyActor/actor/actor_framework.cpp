@@ -20,7 +20,7 @@ void make_coro(actor_pull_type* pull, Handler&& handler)
 //////////////////////////////////////////////////////////////////////////
 
 #ifdef CHECK_SELF
-#ifndef ENALBE_TLS_CHECK_SELF
+#ifndef ENABLE_TLS_CHECK_SELF
 msg_map<void*, my_actor*> s_stackLine(100000);
 std::mutex s_stackLineMutex;
 struct initStackLine
@@ -34,7 +34,10 @@ struct initStackLine
 #endif
 #endif
 
-#define CORO_CONTEXT_STATE_SPACE	(4 kB)
+#define CORO_CONTEXT_STATE_SPACE	(8 kB)
+
+typedef unsigned long long dirty_data_type;
+#define DIRTY_DATA ((dirty_data_type)0xF7F6F5F4F3F2F1F0LL)
 
 std::atomic<my_actor::id> s_actorIDCount(0);//ID¼ÆÊý
 std::shared_ptr<shared_obj_pool<bool>> s_sharedBoolPool(create_shared_pool<bool>(100000, [](void*){}));
@@ -1095,6 +1098,9 @@ _childActorList(_childActorListAll)
 	_lastYield = -1;
 	_childOverCount = 0;
 	_childSuspendResumeCount = 0;
+#ifdef ENABLE_CHECK_FUNC_STACK
+	_checkStackDepth = 0;
+#endif
 	_timerState._timerCount = 0;
 	_timerState._timerTime = 0;
 	_timerState._timerStampBegin = 0;
@@ -1121,7 +1127,7 @@ my_actor::~my_actor()
 	assert(_exitCallback.empty());
 	assert(_childActorList.empty());
 #ifdef CHECK_SELF
-#ifndef ENALBE_TLS_CHECK_SELF
+#ifndef ENABLE_TLS_CHECK_SELF
 	s_stackLineMutex.lock();
 	s_stackLine.erase(_btIt);
 	s_stackLine.erase(_topIt);
@@ -1129,9 +1135,12 @@ my_actor::~my_actor()
 #endif
 #endif
 #ifdef CHECK_ACTOR_STACK
-	unsigned char* bt = (unsigned char*)_stackTop - _stackSize - STACK_RESERVED_SPACE_SIZE;
+	dirty_data_type* sp = (dirty_data_type*)((char*)_stackTop - _stackSize - STACK_RESERVED_SPACE_SIZE);
 	size_t i = 0;
-	for (; i < _stackSize + STACK_RESERVED_SPACE_SIZE - CORO_CONTEXT_STATE_SPACE && bt[i] == 0xFD; i++) {}
+	while (DIRTY_DATA == *(sp++))
+	{
+		i += sizeof(dirty_data_type);
+	}
 	if (_checkStackFree || STACK_RESERVED_SPACE_SIZE >= i)
 	{
 		stack_overflow_format(STACK_RESERVED_SPACE_SIZE - (int)i, _createStack);
@@ -1163,7 +1172,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& main
 	make_coro(pull, boost_actor_run(*newActor));
 
 #ifdef CHECK_SELF
-#ifndef ENALBE_TLS_CHECK_SELF
+#ifndef ENABLE_TLS_CHECK_SELF
 	s_stackLineMutex.lock();
 	newActor->_topIt = s_stackLine.insert(make_pair((char*)newActor->_stackTop, (my_actor*)NULL)).first;
 	newActor->_btIt = s_stackLine.insert(newActor->_topIt, make_pair((char*)newActor->_stackTop - newActor->_stackSize - STACK_RESERVED_SPACE_SIZE, newActor.get()));
@@ -1173,7 +1182,12 @@ actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& main
 
 #ifdef CHECK_ACTOR_STACK
 	newActor->_checkStackFree = false;
-	memset((char*)newActor->_stackTop - newActor->_stackSize - STACK_RESERVED_SPACE_SIZE, 0xFD, newActor->_stackSize + STACK_RESERVED_SPACE_SIZE - CORO_CONTEXT_STATE_SPACE);
+	size_t sl = (newActor->_stackSize + STACK_RESERVED_SPACE_SIZE - CORO_CONTEXT_STATE_SPACE) / sizeof(dirty_data_type);
+	dirty_data_type* sp = (dirty_data_type*)((char*)newActor->_stackTop - newActor->_stackSize - STACK_RESERVED_SPACE_SIZE);
+	for (size_t i = 0; i < sl; i++)
+	{
+		sp[i] = DIRTY_DATA;
+	}
 	newActor->_createStack = std::shared_ptr<list<stack_line_info>>(new list<stack_line_info>(get_stack_list(8, 1)));
 #endif
 	return newActor;
@@ -1187,9 +1201,22 @@ child_actor_handle my_actor::create_child_actor(const shared_strand& actorStrand
 	return child_actor_handle(childActor);
 }
 
+child_actor_handle my_actor::create_child_actor(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize)
+{
+	assert_enter();
+	actor_handle childActor = my_actor::create(actorStrand, std::move(mainFunc), stackSize);
+	childActor->_parentActor = shared_from_this();
+	return child_actor_handle(childActor);
+}
+
 child_actor_handle my_actor::create_child_actor(const main_func& mainFunc, size_t stackSize)
 {
 	return create_child_actor(_strand, mainFunc, stackSize);
+}
+
+child_actor_handle my_actor::create_child_actor(main_func&& mainFunc, size_t stackSize)
+{
+	return create_child_actor(_strand, std::move(mainFunc), stackSize);
 }
 
 void my_actor::child_actor_run(child_actor_handle& actorHandle)
@@ -2268,7 +2295,7 @@ void my_actor::run_one()
 
 void my_actor::pull_yield_tls()
 {
-#if (defined CHECK_SELF) && (defined ENALBE_TLS_CHECK_SELF)
+#if (defined CHECK_SELF) && (defined ENABLE_TLS_CHECK_SELF)
 	void** pval = io_engine::getTlsValuePtr(0);
 	my_actor* old = (my_actor*)*pval;
 	*pval = this;
@@ -2486,7 +2513,7 @@ void my_actor::check_stack()
 my_actor* my_actor::self_actor()
 {
 #ifdef CHECK_SELF
-#ifdef ENALBE_TLS_CHECK_SELF
+#ifdef ENABLE_TLS_CHECK_SELF
 	return (my_actor*)io_engine::getTlsValue(0);
 #else
 	std::lock_guard<std::mutex> lg(s_stackLineMutex);
@@ -2511,14 +2538,53 @@ void my_actor::check_self()
 #endif
 }
 
-size_t my_actor::stack_free_space()
+my_actor::stack_info my_actor::self_stack()
 {
-	int s = (int)((size_t)get_sp() - ((size_t)_stackTop - _stackSize));
-	if (s < 0)
+	assert_enter();
+	void* sp = get_sp();
+	stack_info si = { _stackTop, sp, _stackSize, (size_t)_stackTop - (size_t)sp, (int)(_stackSize - ((size_t)_stackTop - (size_t)sp)) };
+	return si;
+}
+
+void my_actor::begin_check_func_stack()
+{
+	assert_enter();
+#ifdef ENABLE_CHECK_FUNC_STACK
+	_checkStackDepth = _stackSize - ((size_t)_stackTop - (size_t)((size_t)get_sp() & (-1 & (0-sizeof(dirty_data_type)))));
+	assert((int)_checkStackDepth > 0);
+	const size_t dp = _checkStackDepth / sizeof(dirty_data_type);
+	dirty_data_type* sb = (dirty_data_type*)((char*)_stackTop - _stackSize);
+	for (int i = 0; i < (int)dp; i++)
+	{
+		sb[i] = DIRTY_DATA;
+	}
+#endif
+}
+
+size_t my_actor::end_check_func_stack()
+{
+	assert_enter();
+#ifdef ENABLE_CHECK_FUNC_STACK
+	dirty_data_type* sb = (dirty_data_type*)((char*)_stackTop - _stackSize);
+	while (DIRTY_DATA == *(sb++) && _checkStackDepth)
+	{
+		_checkStackDepth -= sizeof(dirty_data_type);
+	}
+	return _checkStackDepth;
+#else
+	return 0;
+#endif
+}
+
+size_t my_actor::stack_idle_space()
+{
+	assert_enter();
+	size_t s = _stackSize - ((size_t)_stackTop - (size_t)get_sp());
+	if ((int)s < 0)
 	{
 		return 0;
 	}
-	return (size_t)s;
+	return s;
 }
 
 void my_actor::close_msg_notifer(actor_msg_handle_base& amh)

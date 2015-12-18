@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <boost/asio/io_service.hpp>
 #include <boost/thread/thread.hpp>
-#ifdef ENALBE_TLS_CHECK_SELF
+#ifdef ENABLE_TLS_CHECK_SELF
 #include <boost/thread/tss.hpp>
 #endif
 #include <condition_variable>
@@ -23,7 +23,7 @@ class io_engine
 	friend ActorTimer_;
 	friend timer_boost;
 public:
-#ifdef _MSC_VER
+#ifdef WIN32
 	enum priority
 	{
 		time_critical = THREAD_PRIORITY_TIME_CRITICAL,
@@ -41,7 +41,7 @@ public:
 		sched_rr = 0,
 		sched_other = 0
 	};
-#elif __GNUG__
+#elif __linux__
 	enum priority
 	{
 		time_critical = 99,
@@ -91,7 +91,7 @@ public:
 	*/
 	size_t threadNumber();
 
-#ifdef _MSC_VER
+#ifdef WIN32
 	/*!
 	@brief 挂起调度器所有线程（仅在win下有效）
 	*/
@@ -128,7 +128,7 @@ public:
 	*/
 	operator boost::asio::io_service& () const;
 
-#ifdef ENALBE_TLS_CHECK_SELF
+#ifdef ENABLE_TLS_CHECK_SELF
 	/*!
 	@brief 获取tls值
 	@param 0 <= i < 64
@@ -169,12 +169,12 @@ private:
 	boost::thread_group _runThreads;
 	boost::asio::io_service _ios;
 	boost::asio::io_service::work* _runLock;
-#ifdef ENALBE_TLS_CHECK_SELF
+#ifdef ENABLE_TLS_CHECK_SELF
 	static boost::thread_specific_ptr<void*> _tls;///<64位void*
 #endif
-#ifdef _MSC_VER
+#ifdef WIN32
 	std::vector<HANDLE> _handleList;
-#elif __GNUG__
+#elif __linux__
 	sched _policy;
 	std::vector<pthread_attr_t> _handleList;
 #endif

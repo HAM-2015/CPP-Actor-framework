@@ -10,7 +10,7 @@ typedef boost::coroutines::attributes coro_attributes;
 
 #elif (defined LIB_CORO)
 
-#ifdef _MSC_VER
+#ifdef WIN32
 #include "scattered.h"
 
 #ifdef _MSC_VER
@@ -42,7 +42,7 @@ extern "C"
 	coro_pull_interface* make_coro(coro_push_handler ch, void* stackTop, size_t size, void* param = 0);
 }
 
-#elif __GNUG__
+#elif __linux__
 #include <ucontext.h>
 #include <malloc.h>
 #endif
@@ -122,7 +122,7 @@ namespace context_yield
 
 #elif (defined LIB_CORO)
 
-#ifdef _MSC_VER
+#ifdef WIN32
 	context_yield::coro_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
 	{
 		void* stack = malloc(stackSize);
@@ -164,7 +164,7 @@ namespace context_yield
 		free((char*)info->stackTop - info->stackSize);
 		delete info;
 	}
-#elif __GNUG__
+#elif __linux__
 	context_yield::coro_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
 	{
 		void* stack = malloc(stackSize);

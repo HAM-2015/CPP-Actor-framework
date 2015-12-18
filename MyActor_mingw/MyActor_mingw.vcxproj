@@ -1,0 +1,104 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{27FDE187-1B88-4A88-BED2-5B8FFCD4C0D0}</ProjectGuid>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <NMakeIncludeSearchPath>E:\cpplib\boost\mingw64;C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\lib\gcc\x86_64-w64-mingw32\4.9.2\include;C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\lib\gcc\x86_64-w64-mingw32\4.9.2\include-fixed;C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\x86_64-w64-mingw32\include;C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\x86_64-w64-mingw32\include\c++;C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\x86_64-w64-mingw32\include\c++\x86_64-w64-mingw32;C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\x86_64-w64-mingw32\include\c++\backward;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <NMakeForcedIncludes>$(ProjectDir)\gcc_Debug.h;$(VISUALGDB_DIR)\gcc_compat.h;$(NMakeForcedIncludes)</NMakeForcedIncludes>
+    <NMakeBuildCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /build "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeBuildCommandLine>
+    <NMakeCleanCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /clean "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeCleanCommandLine>
+    <NMakeReBuildCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /rebuild "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeReBuildCommandLine>
+    <NMakeOutput>$(ProjectDir)MyActor_mingw-Debug.vgdbsettings</NMakeOutput>
+    <IncludePath />
+    <ReferencePath />
+    <LibraryPath />
+    <NMakePreprocessorDefinitions>__VisualGDB_CFG_Debug;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <NMakeIncludeSearchPath>C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\lib\gcc\x86_64-w64-mingw32\4.9.2\include;C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\lib\gcc\x86_64-w64-mingw32\4.9.2\include-fixed;C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\x86_64-w64-mingw32\include;C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\x86_64-w64-mingw32\include\c++;C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\x86_64-w64-mingw32\include\c++\x86_64-w64-mingw32;C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\x86_64-w64-mingw32\include\c++\backward;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <NMakeForcedIncludes>$(ProjectDir)\gcc_Release.h;$(VISUALGDB_DIR)\gcc_compat.h;$(NMakeForcedIncludes)</NMakeForcedIncludes>
+    <NMakeBuildCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /build "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeBuildCommandLine>
+    <NMakeCleanCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /clean "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeCleanCommandLine>
+    <NMakeReBuildCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /rebuild "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeReBuildCommandLine>
+    <NMakeOutput>$(ProjectDir)MyActor_mingw-Release.vgdbsettings</NMakeOutput>
+    <IncludePath />
+    <ReferencePath />
+    <LibraryPath />
+    <NMakePreprocessorDefinitions>__VisualGDB_CFG_Release;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <None Include="debug.mak" />
+    <None Include="Makefile" />
+    <None Include="release.mak" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\MyActor\actor\actor_framework.h" />
+    <ClInclude Include="..\MyActor\actor\actor_mutex.h" />
+    <ClInclude Include="..\MyActor\actor\actor_timer.h" />
+    <ClInclude Include="..\MyActor\actor\async_buffer.h" />
+    <ClInclude Include="..\MyActor\actor\async_timer.h" />
+    <ClInclude Include="..\MyActor\actor\context_pool.h" />
+    <ClInclude Include="..\MyActor\actor\context_yield.h" />
+    <ClInclude Include="..\MyActor\actor\coro_choice.h" />
+    <ClInclude Include="..\MyActor\actor\io_engine.h" />
+    <ClInclude Include="..\MyActor\actor\lambda_ref.h" />
+    <ClInclude Include="..\MyActor\actor\mem_pool.h" />
+    <ClInclude Include="..\MyActor\actor\msg_queue.h" />
+    <ClInclude Include="..\MyActor\actor\scattered.h" />
+    <ClInclude Include="..\MyActor\actor\shared_strand.h" />
+    <ClInclude Include="..\MyActor\actor\stack_object.h" />
+    <ClInclude Include="..\MyActor\actor\strand_ex.h" />
+    <ClInclude Include="..\MyActor\actor\sync_msg.h" />
+    <ClInclude Include="..\MyActor\actor\trace.h" />
+    <ClInclude Include="..\MyActor\actor\try_move.h" />
+    <ClInclude Include="..\MyActor\actor\tuple_option.h" />
+    <ClInclude Include="..\MyActor\actor\waitable_timer.h" />
+    <ClInclude Include="..\MyActor\actor\wrapped_capture.h" />
+    <ClInclude Include="..\MyActor\actor\wrapped_dispatch_handler.h" />
+    <ClInclude Include="..\MyActor\actor\wrapped_distribute_handler.h" />
+    <ClInclude Include="..\MyActor\actor\wrapped_next_tick_handler.h" />
+    <ClInclude Include="..\MyActor\actor\wrapped_post_handler.h" />
+    <ClInclude Include="..\MyActor\actor\wrapped_try_tick_handler.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\MyActor\actor.cpp" />
+    <ClCompile Include="..\MyActor\MyActor.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

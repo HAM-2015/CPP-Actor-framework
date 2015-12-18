@@ -167,10 +167,8 @@ int get_tick_s();
 
 #ifdef _MSC_VER
 void* get_sp();
-extern "C" void __fastcall get_bp_sp_ip(void** pbp, void** psp, void** pip);
 extern "C" unsigned long long __fastcall cpu_tick();
 #elif __GNUG__
-void get_bp_sp_ip(void** pbp, void** psp, void** pip);
 void* get_sp();
 unsigned long long cpu_tick();
 #endif
@@ -185,6 +183,12 @@ struct stack_line_info
 		file(std::move(s.file)),
 		module(std::move(s.module)),
 		symbolName(std::move(s.symbolName)) {}
+
+	friend std::ostream& operator <<(std::ostream& out, const stack_line_info& s)
+	{
+		out << "(line:" << s.line << ", file:" << s.file << ", module:" << s.module << ", symbolName:" << s.symbolName << ")";
+		return out;
+	}
 
 	int line;
 	std::string file;

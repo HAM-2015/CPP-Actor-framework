@@ -19,7 +19,7 @@ typedef WaitableTimerEvent_ timer_type;
 
 typedef boost::asio::detail::strand_service::strand_impl impl_type;
 
-#ifdef ENALBE_TLS_CHECK_SELF
+#ifdef ENABLE_TLS_CHECK_SELF
 boost::thread_specific_ptr<void*> io_engine::_tls(NULL);
 #endif
 
@@ -27,9 +27,9 @@ io_engine::io_engine()
 {
 	_opend = false;
 	_runLock = NULL;
-#ifdef _MSC_VER
+#ifdef WIN32
 	_priority = normal;
-#elif __GNUG__
+#elif __linux__
 	_priority = idle;
 	_policy = sched_other;
 #endif
@@ -79,7 +79,7 @@ void io_engine::_run(size_t threadNum, sched policy)
 		_runCount = 0;
 		_runLock = new boost::asio::io_service::work(_ios);
 		_handleList.resize(threadNum);
-#ifdef __GNUG__
+#ifdef __linux__
 		_policy = policy;
 #endif
 		size_t rc = 0;
@@ -93,10 +93,10 @@ void io_engine::_run(size_t threadNum, sched policy)
 				try
 				{
 					{
-#ifdef _MSC_VER
+#ifdef WIN32
 						SetThreadPriority(GetCurrentThread(), _priority);
 						DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &_handleList[i], 0, FALSE, DUPLICATE_SAME_ACCESS);
-#elif __GNUG__
+#elif __linux__
 						pthread_attr_init(&_handleList[i]);
 						pthread_attr_setschedpolicy (&_handleList[i], _policy);
 						if (0 == i)
@@ -121,7 +121,7 @@ void io_engine::_run(size_t threadNum, sched policy)
 #ifdef FIBER_CORO
 					ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH);
 #endif
-#ifdef ENALBE_TLS_CHECK_SELF
+#ifdef ENABLE_TLS_CHECK_SELF
 					void* tssBuff[64] = { 0 };
 					_tls.reset(tssBuff);
 					_runCount += _ios.run();
@@ -179,7 +179,7 @@ void io_engine::_stop()
 		{
 #ifdef _MSC_VER
 			CloseHandle(ele);
-#elif __GNUG__
+#elif __linux__
 			pthread_attr_destroy(&ele);
 #endif
 		}
@@ -194,10 +194,10 @@ void io_engine::changeThreadNumber(size_t threadNum)
 	if (_opend && threadNum != threadNumber())
 	{
 		_ios.stop();
-#ifdef _MSC_VER
+#ifdef WIN32
 		_stop();
 		_run(threadNum, sched_other);
-#elif __GNUG__
+#elif __linux__
 		auto policy = _policy;
 		_stop();
 		_run(threadNum, policy);
@@ -217,7 +217,7 @@ size_t io_engine::threadNumber()
 	return _threadsID.size();
 }
 
-#ifdef _MSC_VER
+#ifdef WIN32
 void io_engine::suspend()
 {
 	std::lock_guard<std::mutex> lg(_ctrlMutex);
@@ -240,13 +240,13 @@ void io_engine::resume()
 void io_engine::runPriority(priority pri)
 {
 	std::lock_guard<std::mutex> lg(_ctrlMutex);
-#ifdef _MSC_VER
+#ifdef WIN32
 	_priority = pri;
 	for (auto& ele : _handleList)
 	{
 		SetThreadPriority(ele, _priority);
 	}
-#elif __GNUG__
+#elif __linux__
 	if (sched_fifo == _policy || sched_rr == _policy)
 	{
 		_priority = pri;
@@ -299,7 +299,7 @@ void io_engine::freeTimer(void* timer)
 	((obj_pool<timer_type>*)_timerPool)->recycle(timer);
 }
 
-#ifdef ENALBE_TLS_CHECK_SELF
+#ifdef ENABLE_TLS_CHECK_SELF
 void* io_engine::getTlsValue(int i)
 {
 	assert(i >= 0 && i < 64);

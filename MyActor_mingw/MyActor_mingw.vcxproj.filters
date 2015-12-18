@@ -1,0 +1,127 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source files">
+      <UniqueIdentifier>{2924f8cc-41f7-443b-9b5e-255ec92637de}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header files">
+      <UniqueIdentifier>{de7b2b90-e3fc-4755-b211-90118788f1ea}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource files">
+      <UniqueIdentifier>{4ae17d84-fe72-4e05-9ac9-5919cfbaebfb}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav</Extensions>
+    </Filter>
+    <Filter Include="Make files">
+      <UniqueIdentifier>{151f90fe-b32b-4094-97ae-193508ec421a}</UniqueIdentifier>
+      <Extensions>*.mak</Extensions>
+    </Filter>
+    <Filter Include="Source files\actor">
+      <UniqueIdentifier>{f019726f-fbe4-4394-86ed-dda77ac1165e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header files\actor">
+      <UniqueIdentifier>{b3d7c49a-94c8-4db0-807e-77510b265593}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Makefile" />
+    <None Include="debug.mak">
+      <Filter>Make files</Filter>
+    </None>
+    <None Include="release.mak">
+      <Filter>Make files</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\MyActor\actor\actor_framework.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\actor_mutex.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\actor_timer.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\async_buffer.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\async_timer.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\context_pool.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\context_yield.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\coro_choice.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\io_engine.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\lambda_ref.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\mem_pool.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\msg_queue.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\scattered.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\shared_strand.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\stack_object.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\strand_ex.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\sync_msg.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\trace.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\try_move.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\tuple_option.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\waitable_timer.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\wrapped_capture.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\wrapped_dispatch_handler.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\wrapped_distribute_handler.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\wrapped_next_tick_handler.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\wrapped_post_handler.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MyActor\actor\wrapped_try_tick_handler.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\MyActor\MyActor.cpp">
+      <Filter>Source files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\MyActor\actor.cpp">
+      <Filter>Source files\actor</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

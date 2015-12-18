@@ -1,5 +1,5 @@
 #ifdef DISABLE_BOOST_TIMER
-#ifdef _MSC_VER
+#ifdef WIN32
 #include "waitable_timer.h"
 #include "scattered.h"
 #include <Windows.h>
@@ -150,7 +150,7 @@ void WaitableTimerEvent_::cancel(boost::system::error_code& ec)
 		cb->invoke_err(_reuMem);
 	}
 }
-#elif __GNUG__
+#elif __linux__
 #error "do not define DISABLE_BOOST_TIMER"
 #endif
 #endif

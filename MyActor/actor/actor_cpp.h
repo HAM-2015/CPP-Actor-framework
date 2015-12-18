@@ -13,7 +13,8 @@ CHECK_ACTOR_STACK 检测actor堆栈，打印日志
 DISABLE_BOOST_CORO 禁用boost::coroutine
 DISABLE_HIGH_TIMER 禁用high_resolution_timer计时，将启用deadline_timer计时
 DISABLE_BOOST_TIMER 禁用boost计时器，用waitable_timer计时
-ENALBE_TLS_CHECK_SELF 启用TLS技术检测当前代码运行在哪个Actor下
+ENABLE_TLS_CHECK_SELF 启用TLS技术检测当前代码运行在哪个Actor下
+ENABLE_CHECK_FUNC_STACK 启用函数堆栈消耗检测
 
 */
 
