@@ -5912,6 +5912,16 @@ public:
 	id self_id();
 
 	/*!
+	@brief 设置退出码
+	*/
+	void return_code(size_t cd);
+
+	/*!
+	@brief 获取退出码
+	*/
+	size_t return_code();
+
+	/*!
 	@brief 获取Actor切换计数
 	*/
 	size_t yield_count();
@@ -6105,6 +6115,7 @@ private:
 	size_t _lastYield;//记录上次try_yield的计数
 	size_t _childOverCount;///<子Actor退出时计数
 	size_t _childSuspendResumeCount;///<子Actor挂起/恢复计数
+	size_t _returnCode;///<退出码
 	main_func _mainFunc;///<Actor入口
 	msg_list_shared_alloc<suspend_resume_option> _suspendResumeQueue;///<挂起/恢复操作队列
 	msg_list_shared_alloc<std::function<void()> > _exitCallback;///<Actor结束后的回调函数，强制退出返回false，正常退出返回true

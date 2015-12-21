@@ -284,18 +284,6 @@ void* get_sp()
 #elif __GNUG__
 #ifdef WIN32
 extern "C" void __fastcall get_bp_sp_ip(void** pbp, void** psp, void** pip);
-#elif __linux__
-void get_bp_sp_ip(void** pbp, void** psp, void** pip)
-{
-#ifdef __x86_64__
-	__asm__("movq %%rbp, %0": "=r"(*pbp));
-	__asm__("movq %%rsp, %0": "=r"(*psp));
-#elif __i386__
-	__asm__("movl %%ebp, %0": "=r"(*pbp));
-	__asm__("movl %%esp, %0": "=r"(*psp));
-#endif
-	*pip = NULL;
-}
 #endif
 
 void* get_sp()

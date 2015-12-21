@@ -94,7 +94,7 @@ namespace context_yield
 			{
 				info->nc = &push;
 				handler(info, p);
-			}, boost::coroutines::attributes(stackSize), actor_stack_allocate(&info->stackTop, &info->stackSize));
+			}, coro_attributes(stackSize), actor_stack_allocate(&info->stackTop, &info->stackSize));
 			return info;
 		}
 		catch (...)
@@ -233,11 +233,7 @@ namespace context_yield
 			void* p;
 			context_yield::coro_info* info;
 		} ref = { handler, p, info };
-#ifdef _WIN64
-		info->obj = CreateFiberEx(stackSize, 64 * 1024, FIBER_FLAG_FLOAT_SWITCH, [](void* param)
-#else
-		info->obj = CreateFiberEx(stackSize, 0, FIBER_FLAG_FLOAT_SWITCH, [](void* param)
-#endif
+		info->obj = CreateFiberEx(0, stackSize, FIBER_FLAG_FLOAT_SWITCH, [](void* param)
 		{
 			local_ref* ref = (local_ref*)param;
 			ref->handler(ref->info, ref->p);

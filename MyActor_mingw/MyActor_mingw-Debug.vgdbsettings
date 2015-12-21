@@ -6,7 +6,7 @@
       <Directories>
         <SourceDirMappingEntry>
           <RemoteDir>/mingw</RemoteDir>
-          <LocalDir>C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64</LocalDir>
+          <LocalDir>C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64</LocalDir>
         </SourceDirMappingEntry>
       </Directories>
       <PathStyle>MinGWUnixSlash</PathStyle>
@@ -19,16 +19,16 @@
     <AdditionalMakeArguments />
     <Toolchain>
       <Name>MinGW</Name>
-      <Location>C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64</Location>
+      <Location>C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64</Location>
       <UnixSystem>false</UnixSystem>
-      <GCC>C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\bin\gcc.exe</GCC>
-      <GXX>C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\bin\g++.exe</GXX>
-      <GDB>C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\bin\gdb.exe</GDB>
-      <AR>C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\bin\ar.exe</AR>
-      <Make>C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\bin\mingw32-make.exe</Make>
+      <GCC>C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\bin\gcc.exe</GCC>
+      <GXX>C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\bin\g++.exe</GXX>
+      <GDB>C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\bin\gdb.exe</GDB>
+      <AR>C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\bin\ar.exe</AR>
+      <Make>C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\bin\mingw32-make.exe</Make>
       <AdditionalPathDirectories>
-        <string>C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\bin</string>
-        <string>C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\msys\1.0\bin</string>
+        <string>C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\bin</string>
+        <string>C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\msys\1.0\bin</string>
       </AdditionalPathDirectories>
       <RequireCmdExe>true</RequireCmdExe>
       <RequireCtrlBreak>false</RequireCtrlBreak>
@@ -37,7 +37,7 @@
         <Directories>
           <SourceDirMappingEntry>
             <RemoteDir>/mingw</RemoteDir>
-            <LocalDir>C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64</LocalDir>
+            <LocalDir>C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64</LocalDir>
           </SourceDirMappingEntry>
         </Directories>
         <PathStyle>MinGWUnixSlash</PathStyle>
@@ -46,7 +46,7 @@
     <MakeCommandTemplate>
       <SkipWhenRunningCommandList>false</SkipWhenRunningCommandList>
       <Command>cmd.exe</Command>
-      <Arguments>/c "C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\bin\mingw32-make.exe"</Arguments>
+      <Arguments>/c "C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\bin\mingw32-make.exe"</Arguments>
       <WorkingDirectory>$(BuildDir)</WorkingDirectory>
       <Environment>
         <Records>
@@ -56,7 +56,7 @@
           </Record>
           <Record>
             <VariableName>PATH</VariableName>
-            <Value>%PATH%;C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\bin;C:\mingw-w64\x86_64-4.9.2-posix-seh-rt_v3-rev1\mingw64\msys\1.0\bin</Value>
+            <Value>%PATH%;C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\bin;C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\msys\1.0\bin</Value>
           </Record>
         </Records>
       </Environment>

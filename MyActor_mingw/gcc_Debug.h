@@ -36,8 +36,9 @@
 #define __UINT_FAST64_MAX__ 18446744073709551615ULL
 #define __SIG_ATOMIC_TYPE__ int
 #define __DBL_MIN_10_EXP__ (-307)
+#define ENABLE_WIN_FIBER 1
 #define __FINITE_MATH_ONLY__ 0
-#define __GNUC_PATCHLEVEL__ 2
+#define __GNUC_PATCHLEVEL__ 3
 #define __UINT_FAST8_MAX__ 255
 #define __DEC64_MAX_EXP__ 385
 #define __UINT_LEAST64_MAX__ 18446744073709551615ULL
@@ -130,7 +131,7 @@
 #define __UINT8_TYPE__ unsigned char
 #define __NO_INLINE__ 1
 #define __FLT_MANT_DIG__ 24
-#define __VERSION__ "4.9.2"
+#define __VERSION__ "4.9.3"
 #define __cpp_unicode_characters 200704
 #define __GCC_ATOMIC_INT_LOCK_FREE 2
 #define __FLOAT_WORD_ORDER__ __ORDER_LITTLE_ENDIAN__
@@ -198,6 +199,7 @@
 #define __UINT_FAST64_TYPE__ long long unsigned int
 #define __INT_MAX__ 2147483647
 #define __amd64__ 1
+#define DISABLE_BOOST_TIMER 1
 #define WIN32 1
 #define __nocona 1
 #define __code_model_medium__ 1
@@ -279,21 +281,21 @@
 
 // --- Include directories begin --- //
 //E:\cpplib\boost\mingw64
-//C:/mingw-w64/x86_64-4.9.2-posix-seh-rt_v3-rev1/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/4.9.2/include
-//C:/mingw-w64/x86_64-4.9.2-posix-seh-rt_v3-rev1/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/4.9.2/include-fixed
-//C:/mingw-w64/x86_64-4.9.2-posix-seh-rt_v3-rev1/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/4.9.2/../../../../x86_64-w64-mingw32/include
-//C:/mingw-w64/x86_64-4.9.2-posix-seh-rt_v3-rev1/mingw64/lib/gcc/../../x86_64-w64-mingw32/include/c++
-//C:/mingw-w64/x86_64-4.9.2-posix-seh-rt_v3-rev1/mingw64/lib/gcc/../../x86_64-w64-mingw32/include/c++/x86_64-w64-mingw32
-//C:/mingw-w64/x86_64-4.9.2-posix-seh-rt_v3-rev1/mingw64/lib/gcc/../../x86_64-w64-mingw32/include/c++/backward
+//C:/mingw64/x86_64-4.9.3-release-posix-seh-rt_v4-rev1/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/4.9.3/include
+//C:/mingw64/x86_64-4.9.3-release-posix-seh-rt_v4-rev1/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/4.9.3/include-fixed
+//C:/mingw64/x86_64-4.9.3-release-posix-seh-rt_v4-rev1/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/4.9.3/../../../../x86_64-w64-mingw32/include
+//C:/mingw64/x86_64-4.9.3-release-posix-seh-rt_v4-rev1/mingw64/lib/gcc/../../x86_64-w64-mingw32/include/c++
+//C:/mingw64/x86_64-4.9.3-release-posix-seh-rt_v4-rev1/mingw64/lib/gcc/../../x86_64-w64-mingw32/include/c++/x86_64-w64-mingw32
+//C:/mingw64/x86_64-4.9.3-release-posix-seh-rt_v4-rev1/mingw64/lib/gcc/../../x86_64-w64-mingw32/include/c++/backward
 // --- Library directories end --- //
 
 
 // --- Library directories begin --- //
-//C:/mingw-w64/x86_64-4.9.2-posix-seh-rt_v3-rev1/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/4.9.2/
-//C:/mingw-w64/x86_64-4.9.2-posix-seh-rt_v3-rev1/mingw64/bin/../lib/gcc/
-//C:/mingw-w64/x86_64-4.9.2-posix-seh-rt_v3-rev1/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/4.9.2/../../../../x86_64-w64-mingw32/lib/../lib/
-//C:/mingw-w64/x86_64-4.9.2-posix-seh-rt_v3-rev1/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/4.9.2/../../../../lib/
-//C:/mingw-w64/x86_64-4.9.2-posix-seh-rt_v3-rev1/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/4.9.2/../../../../x86_64-w64-mingw32/lib/
-//C:/mingw-w64/x86_64-4.9.2-posix-seh-rt_v3-rev1/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/4.9.2/../../../
+//C:/mingw64/x86_64-4.9.3-release-posix-seh-rt_v4-rev1/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/4.9.3/
+//C:/mingw64/x86_64-4.9.3-release-posix-seh-rt_v4-rev1/mingw64/bin/../lib/gcc/
+//C:/mingw64/x86_64-4.9.3-release-posix-seh-rt_v4-rev1/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/4.9.3/../../../../x86_64-w64-mingw32/lib/../lib/
+//C:/mingw64/x86_64-4.9.3-release-posix-seh-rt_v4-rev1/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/4.9.3/../../../../lib/
+//C:/mingw64/x86_64-4.9.3-release-posix-seh-rt_v4-rev1/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/4.9.3/../../../../x86_64-w64-mingw32/lib/
+//C:/mingw64/x86_64-4.9.3-release-posix-seh-rt_v4-rev1/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/4.9.3/../../../
 // --- Library directories begin --- //
 

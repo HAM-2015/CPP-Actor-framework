@@ -1098,6 +1098,7 @@ _childActorList(_childActorListAll)
 	_lastYield = -1;
 	_childOverCount = 0;
 	_childSuspendResumeCount = 0;
+	_returnCode = 0;
 #ifdef ENABLE_CHECK_FUNC_STACK
 	_checkStackDepth = 0;
 #endif
@@ -1660,6 +1661,17 @@ actor_handle my_actor::shared_from_this()
 my_actor::id my_actor::self_id()
 {
 	return _selfID;
+}
+
+void my_actor::return_code(size_t cd)
+{
+	_returnCode = cd;
+}
+
+size_t my_actor::return_code()
+{
+	assert(_exited);
+	return _returnCode;
 }
 
 size_t my_actor::yield_count()

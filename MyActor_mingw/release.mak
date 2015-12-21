@@ -5,10 +5,10 @@
 BINARYDIR := Release
 
 #Toolchain
-CC := C:/mingw-w64/x86_64-4.9.2-posix-seh-rt_v3-rev1/mingw64/bin/gcc.exe
-CXX := C:/mingw-w64/x86_64-4.9.2-posix-seh-rt_v3-rev1/mingw64/bin/g++.exe
+CC := C:/mingw64/x86_64-4.9.3-release-posix-seh-rt_v4-rev1/mingw64/bin/gcc.exe
+CXX := C:/mingw64/x86_64-4.9.3-release-posix-seh-rt_v4-rev1/mingw64/bin/g++.exe
 LD := $(CXX)
-AR := C:/mingw-w64/x86_64-4.9.2-posix-seh-rt_v3-rev1/mingw64/bin/ar.exe
+AR := C:/mingw64/x86_64-4.9.3-release-posix-seh-rt_v4-rev1/mingw64/bin/ar.exe
 OBJCOPY := 
 
 #Additional flags
