@@ -99,9 +99,9 @@ if (__catched) {
 
 #define END_TRY_ }}
 
-#define RUN_IN_STRAND(__host__, __strand__, __exp__) __host__->send(__strand__, [&] {__exp__;})
+#define RUN_IN_STRAND(__host__, __strand__, __exp__) (__host__)->send(__strand__, [&] {__exp__;})
 
-#define begin_RUN_IN_STRAND(__host__, __strand__) __host__->send(__strand__, [&] {
+#define begin_RUN_IN_STRAND(__host__, __strand__) (__host__)->send(__strand__, [&] {
 
 #define end_RUN_IN_STRAND() })
 
@@ -115,14 +115,17 @@ if (__catched) {
 }
 
 #define RUN_IN_TRHEAD_STACK(__host__, __exp__) {\
-my_actor::quit_guard qg(__host__); \
-__host__->run_in_thread_stack([&] {__exp__; });}
+(__host__)->lock_quit(); \
+(__host__)->run_in_thread_stack([&] {__exp__; });}\
+(__host__)->unlock_quit();
 
-#define begin_RUN_IN_TRHEAD_STACK(__host__){\
-	my_actor::quit_guard qg(__host__); \
-	__host__->run_in_thread_stack([&] {
+#define begin_RUN_IN_TRHEAD_STACK(__host__) {\
+	my_actor* ___host = __host__; \
+	___host->lock_quit(); \
+	___host->run_in_thread_stack([&] {
 
-#define end_RUN_IN_TRHEAD_STACK() });}
+#define end_RUN_IN_TRHEAD_STACK() });\
+	___host->unlock_quit(); }
 
 
 /*!
@@ -166,14 +169,14 @@ long long get_tick_ms();
 int get_tick_s();
 
 #ifdef _MSC_VER
-void* get_sp();
+extern "C" void* __fastcall get_sp();
 extern "C" unsigned long long __fastcall cpu_tick();
 #elif __GNUG__
 void* get_sp();
 unsigned long long cpu_tick();
 #endif
 
-#ifdef CHECK_ACTOR_STACK
+#ifdef PRINT_ACTOR_STACK
 struct stack_line_info
 {
 	stack_line_info(){}
@@ -221,13 +224,13 @@ list<stack_line_info> get_stack_list(size_t maxDepth = 32, size_t offset = 0, bo
 */
 void stack_overflow_format(int size, std::shared_ptr<list<stack_line_info>> createStack);
 
-#else //CHECK_ACTOR_STACK
+#else
 
 //记录当前Actor入口信息
 #define ACTOR_POSITION(__host__)
 #define SELF_POSITION
 
-#endif //CHECK_ACTOR_STACK
+#endif
 
 /*!
 @brief 清空std::function
@@ -242,6 +245,28 @@ inline void clear_function(F& f)
 #define snPrintf sprintf_s
 #elif __GNUG__
 #define snPrintf snprintf
+#endif
+
+#ifdef WIN32
+struct tls_space 
+{
+	tls_space();
+	~tls_space();
+	void set_space(void** val);
+	void** get_space();
+private:
+	DWORD _index;
+};
+#elif __linux__
+struct tls_space
+{
+	tls_space();
+	~tls_space();
+	void set_space(void** val);
+	void** get_space();
+private:
+	pthread_key_t _key;
+};
 #endif
 
 #endif

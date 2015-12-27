@@ -11,6 +11,7 @@ namespace context_yield
 		void* stackTop = 0;
 		void* nc = 0;
 		size_t stackSize = 0;
+		size_t reserveSize = 0;
 	};
 
 	typedef void(*context_handler)(coro_info* info, void* p);

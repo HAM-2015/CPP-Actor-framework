@@ -239,6 +239,133 @@ void mutex_test()
 	trace_line("end mutex_test");
 }
 
+void shared_mutex_test()
+{
+	trace_line("begin shared_mutex_test");
+	io_engine ios;
+	ios.run();
+	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
+	{
+		actor_shared_mutex smtx(self->self_strand());
+		child_actor_handle ch1 = self->create_child_actor([&](my_actor* self)
+		{
+			for (int i = 0; i < 10; i++)
+			{
+				smtx.lock(self);
+				trace_comma(self->self_id(), "A-", "mutex in");
+				trace_comma(self->self_id(), "A-", i, 0);
+				self->sleep(10);
+				trace_comma(self->self_id(), "A-", i, 1);
+				self->sleep(10);
+				trace_comma(self->self_id(), "A-", i, 2);
+				self->sleep(10);
+				trace_comma(self->self_id(), "A-", "mutex out");
+				smtx.unlock(self);
+				self->sleep(10);
+			}
+		});
+		child_actor_handle ch2 = self->create_child_actor([&](my_actor* self)
+		{
+			for (int i = 0; i < 10; i++)
+			{
+				smtx.lock(self);
+				trace_comma(self->self_id(), "A+", "mutex in");
+				trace_comma(self->self_id(), "A+", i, 0);
+				self->sleep(10);
+				trace_comma(self->self_id(), "A+", i, 1);
+				self->sleep(10);
+				trace_comma(self->self_id(), "A+", i, 2);
+				self->sleep(10);
+				trace_comma(self->self_id(), "A+", i, 3);
+				self->sleep(10);
+				trace_comma(self->self_id(), "A+", i, 4);
+				self->sleep(10);
+				trace_comma(self->self_id(), "A+", i, 5);
+				self->sleep(10);
+				trace_comma(self->self_id(), "A+", "mutex out");
+				smtx.unlock(self);
+				self->sleep(10);
+			}
+		});
+		child_actor_handle ch3 = self->create_child_actor([&](my_actor* self)
+		{
+			for (int i = 0; i < 10; i++)
+			{
+				smtx.lock_shared(self);
+				trace_comma(self->self_id(), "B", "mutex in");
+				trace_comma(self->self_id(), "B", i, 0);
+				self->sleep(10);
+				trace_comma(self->self_id(), "B", i, 1);
+				self->sleep(10);
+				trace_comma(self->self_id(), "B", i, 2);
+				self->sleep(10);
+				smtx.lock_upgrade(self);
+				trace_comma(self->self_id(), "B-", "-mutex in");
+				trace_comma(self->self_id(), "B-", i, 3);
+				self->sleep(10);
+				trace_comma(self->self_id(), "B-", i, 4);
+				self->sleep(10);
+				trace_comma(self->self_id(), "B-", i, 5);
+				self->sleep(10);
+				trace_comma(self->self_id(), "B-", i, 6);
+				self->sleep(10);
+				trace_comma(self->self_id(), "B-", "-mutex out");
+				smtx.unlock_upgrade(self);
+				trace_comma(self->self_id(), "B", i, 7);
+				self->sleep(10);
+				trace_comma(self->self_id(), "B", i, 8);
+				self->sleep(10);
+				trace_comma(self->self_id(), "B", i, 9);
+				self->sleep(10);
+				trace_comma(self->self_id(), "B", "mutex out");
+				smtx.unlock_shared(self);
+				self->sleep(10);
+			}
+		});
+		child_actor_handle ch4 = self->create_child_actor([&](my_actor* self)
+		{
+			for (int i = 0; i < 10; i++)
+			{
+				smtx.lock_shared(self);
+				trace_comma(self->self_id(), "C", "mutex in");
+				trace_comma(self->self_id(), "C", i, 0);
+				self->sleep(10);
+				trace_comma(self->self_id(), "C", i, 1);
+				self->sleep(10);
+				smtx.lock_upgrade(self);
+				trace_comma(self->self_id(), "C-", "-mutex in");
+				trace_comma(self->self_id(), "C-", i, 2);
+				self->sleep(10);
+				trace_comma(self->self_id(), "C-", i, 3);
+				self->sleep(10);
+				trace_comma(self->self_id(), "C-", i, 4);
+				self->sleep(10);
+				trace_comma(self->self_id(), "C-", "-mutex out");
+				smtx.unlock_upgrade(self);
+				trace_comma(self->self_id(), "C", i, 5);
+				self->sleep(10);
+				trace_comma(self->self_id(), "C", i, 6);
+				self->sleep(10);
+				trace_comma(self->self_id(), "C", i, 7);
+				self->sleep(10);
+				trace_comma(self->self_id(), "C", i, 8);
+				self->sleep(10);
+				trace_comma(self->self_id(), "C", i, 9);
+				self->sleep(10);
+				trace_comma(self->self_id(), "C", "mutex out");
+				smtx.unlock_shared(self);
+				self->sleep(10);
+			}
+		});
+		self->child_actor_run(ch1, ch2, ch3, ch4);
+		self->child_actor_wait_quit(ch1, ch2, ch3, ch4);
+	});
+	ah->notify_run();
+	ah->outside_wait_quit();
+	ios.stop();
+	trace_line("end shared_mutex_test");
+}
+
 void agent_test()
 {
 	trace_line("begin agent_test");
@@ -480,14 +607,14 @@ void perfor_test()
 			for (int i = 0; i < num; i++)
 			{
 				count[i] = 0;
-				childList.push_front(self->create_child_actor(strands[i%strands.size()], [&count, i](my_actor* self)
+				childList.push_front(self->create_child_actor(strands[i%strands.size()], auto_stack(([&count, i](my_actor* self)
 				{
 					while (true)
 					{
 						count[i]++;
 						self->yield_guard();
 					}
-				}, STACK_SIZE_REL(12 kB)));
+				}))));
 			}
 			long long tk = get_tick_us();
 			self->child_actors_run(childList);
@@ -508,9 +635,29 @@ void perfor_test()
 	trace_line("end perfor_test");
 }
 
+void auto_stack_test()
+{
+	trace_line("begin auto_stack_test");
+	io_engine ios;
+	ios.run();
+	for (int i = 0; i < 3; i++)
+	{
+		actor_handle ah = my_actor::create(boost_strand::create(ios), auto_stack([](my_actor* self)
+		{
+			self->sleep(1000);
+		}));
+		ah->notify_run();
+		ah->outside_wait_quit();
+		trace_line("stack size:", ah->stack_size(), ", using size:", ah->using_stack_size());
+	}
+	ios.stop();
+	trace_line("end auto_stack_test");
+}
 
 int main(int argc, char *argv[])
 {
+	auto_stack_test();
+	trace("\n");
 	trig_test();
 	trace("\n");
 	msg_test();
@@ -520,6 +667,8 @@ int main(int argc, char *argv[])
 	agent_test();
 	trace("\n");
 	mutex_test();
+	trace("\n");
+	shared_mutex_test();
 	trace("\n");
 	csp_test();
 	trace("\n");

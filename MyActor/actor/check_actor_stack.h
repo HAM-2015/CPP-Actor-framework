@@ -3,7 +3,8 @@
 
 //Ä¬ÈÏ¶ÑÕ»´óÐ¡64k
 #define kB	*1024
-#define DEFAULT_STACKSIZE	(64 kB)
+
+#define DEFAULT_STACKSIZE	(64 kB - STACK_RESERVED_SPACE_SIZE)
 
 #if (_DEBUG || DEBUG)
 #define STACK_SIZE(__debug__, __release__) (__debug__)
@@ -32,7 +33,6 @@
 //////////////////////////////////////////////////////////////////////////
 
 //¶ÑÕ»µ×Ô¤Áô¿Õ¼ä£¬¼ì²â¶ÑÕ»Òç³ö
-#ifdef CHECK_ACTOR_STACK
 #if (_DEBUG || DEBUG)
 #		if (defined _WIN64) || (defined __x86_64__)
 #define STACK_RESERVED_SPACE_SIZE		(24 kB)
@@ -46,8 +46,19 @@
 #define STACK_RESERVED_SPACE_SIZE		(8 kB)
 #		endif
 #	endif
-#else //CHECK_ACTOR_STACK
-#define STACK_RESERVED_SPACE_SIZE		0
-#endif //CHECK_ACTOR_STACK
+
+//Ò³Ãæ´óÐ¡
+#define PAGE_SIZE					(4 kB)
+
+//Õ»×´Ì¬±£Áô¿Õ¼ä
+#ifdef WIN32
+#if (_DEBUG || DEBUG)
+#define CORO_CONTEXT_STATE_SPACE	(3 * PAGE_SIZE)
+#else
+#define CORO_CONTEXT_STATE_SPACE	(2 * PAGE_SIZE)
+#endif
+#elif __linux__
+#define CORO_CONTEXT_STATE_SPACE	(1 * PAGE_SIZE)
+#endif
 
 #endif

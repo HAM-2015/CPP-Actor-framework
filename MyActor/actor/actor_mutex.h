@@ -127,8 +127,7 @@ public:
 	bool timed_lock_shared(int tm, my_actor* host) const;
 
 	/*!
-	@brief 共享锁提升为独占锁，如果当前还被其他Actor共享，则等待其他Actor都解除占用，
-	如果多个Actor在共享锁中同时调用，将陷入死锁(多Actor下建议用try_lock_upgrade，timed_lock_upgrade)
+	@brief 共享锁提升为独占锁
 	*/
 	void lock_upgrade(my_actor* host) const;
 	bool try_lock_upgrade(my_actor* host) const;

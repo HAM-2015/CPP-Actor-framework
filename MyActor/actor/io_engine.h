@@ -4,14 +4,12 @@
 #include <algorithm>
 #include <boost/asio/io_service.hpp>
 #include <boost/thread/thread.hpp>
-#ifdef ENABLE_TLS_CHECK_SELF
-#include <boost/thread/tss.hpp>
-#endif
 #include <condition_variable>
 #include <atomic>
 #include <mutex>
 #include <set>
 #include <vector>
+#include "scattered.h"
 
 class StrandEx_;
 class ActorTimer_;
@@ -128,7 +126,6 @@ public:
 	*/
 	operator boost::asio::io_service& () const;
 
-#ifdef ENABLE_TLS_CHECK_SELF
 	/*!
 	@brief 获取tls值
 	@param 0 <= i < 64
@@ -142,11 +139,16 @@ public:
 	static void setTlsValue(int i, void* val);
 
 	/*!
+	@brief 交换tls值
+	@param 0 <= i < 64
+	*/
+	static void* swapTlsValue(int i, void* val);
+
+	/*!
 	@brief 获取某个tls变量空间
 	@param 0 <= i < 64
 	*/
 	static void** getTlsValuePtr(int i);
-#endif
 private:
 	void _run(size_t threadNum, sched policy);
 	void _stop();
@@ -169,15 +171,13 @@ private:
 	boost::thread_group _runThreads;
 	boost::asio::io_service _ios;
 	boost::asio::io_service::work* _runLock;
-#ifdef ENABLE_TLS_CHECK_SELF
-	static boost::thread_specific_ptr<void*> _tls;///<64位void*
-#endif
 #ifdef WIN32
 	std::vector<HANDLE> _handleList;
 #elif __linux__
 	sched _policy;
 	std::vector<pthread_attr_t> _handleList;
 #endif
+	static tls_space _tls;
 };
 
 #endif

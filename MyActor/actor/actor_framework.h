@@ -442,6 +442,43 @@ public:
 	{
 		return !empty();
 	}
+protected:
+	MsgNotiferBase_(const MsgNotiferBase_<ARGS...>& s)
+		:_msgHandle(s._msgHandle), _hostActor(s._hostActor), _closed(s._closed)
+#ifdef ENABLE_CHECK_LOST
+		, _autoCheckLost(s._autoCheckLost)
+#endif
+	{}
+
+	MsgNotiferBase_(MsgNotiferBase_<ARGS...>&& s)
+		:_msgHandle(s._msgHandle), _hostActor(std::move(s._hostActor)), _closed(std::move(s._closed))
+#ifdef ENABLE_CHECK_LOST
+		, _autoCheckLost(std::move(s._autoCheckLost))
+#endif
+	{
+		s._msgHandle = NULL;
+	}
+
+	void copy(const MsgNotiferBase_<ARGS...>& s)
+	{
+		_msgHandle = s._msgHandle;
+		_hostActor = s._hostActor;
+		_closed = s._closed;
+#ifdef ENABLE_CHECK_LOST
+		_autoCheckLost = s._autoCheckLost;
+#endif
+	}
+
+	void move(MsgNotiferBase_<ARGS...>&& s)
+	{
+		_msgHandle = s._msgHandle;
+		_hostActor = std::move(s._hostActor);
+		_closed = std::move(s._closed);
+#ifdef ENABLE_CHECK_LOST
+		_autoCheckLost = std::move(s._autoCheckLost);
+#endif
+		s._msgHandle = NULL;
+	}
 private:
 	msg_handle* _msgHandle;
 	actor_handle _hostActor;
@@ -460,6 +497,22 @@ public:
 private:
 	actor_msg_notifer(ActorMsgHandlePush_<ARGS...>* msgHandle, bool checkLost)
 		:MsgNotiferBase_<ARGS...>(msgHandle, checkLost) {}
+public:
+	actor_msg_notifer(const actor_msg_notifer<ARGS...>& s)
+		:MsgNotiferBase_<ARGS...>(s) {}
+
+	actor_msg_notifer(actor_msg_notifer<ARGS...>&& s)
+		:MsgNotiferBase_<ARGS...>(std::move(s)) {}
+
+	void operator=(const actor_msg_notifer<ARGS...>& s)
+	{
+		MsgNotiferBase_<ARGS...>::copy(s);
+	}
+
+	void operator=(actor_msg_notifer<ARGS...>&& s)
+	{
+		MsgNotiferBase_<ARGS...>::move(std::move(s));
+	}
 };
 
 template <typename... ARGS>
@@ -471,6 +524,22 @@ public:
 private:
 	actor_trig_notifer(ActorMsgHandlePush_<ARGS...>* msgHandle, bool checkLost)
 		:MsgNotiferBase_<ARGS...>(msgHandle, checkLost) {}
+public:
+	actor_trig_notifer(const actor_trig_notifer<ARGS...>& s)
+		:MsgNotiferBase_<ARGS...>(s) {}
+
+	actor_trig_notifer(actor_trig_notifer<ARGS...>&& s)
+		:MsgNotiferBase_<ARGS...>(std::move(s)) {}
+
+	void operator=(const actor_trig_notifer<ARGS...>& s)
+	{
+		MsgNotiferBase_<ARGS...>::copy(s);
+	}
+
+	void operator=(actor_trig_notifer<ARGS...>&& s)
+	{
+		MsgNotiferBase_<ARGS...>::move(std::move(s));
+	}
 };
 
 template <typename... ARGS>
@@ -1941,6 +2010,37 @@ public:
 	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool, const actor_handle& hostActor)
 		:_msgPool(msgPool), _hostActor(hostActor) {}
 #endif
+	post_actor_msg(const post_actor_msg<ARGS...>& s)
+		:_hostActor(s._hostActor), _msgPool(s._msgPool)
+#ifdef ENABLE_CHECK_LOST
+		, _autoCheckLost(s._autoCheckLost)
+#endif
+	{}
+
+	post_actor_msg(post_actor_msg<ARGS...>&& s)
+		:_hostActor(std::move(s._hostActor)), _msgPool(std::move(s._msgPool))
+#ifdef ENABLE_CHECK_LOST
+		, _autoCheckLost(std::move(s._autoCheckLost))
+#endif
+	{}
+
+	void operator =(const post_actor_msg<ARGS...>& s)
+	{
+		_hostActor = s._hostActor;
+		_msgPool = s._msgPool;
+#ifdef ENABLE_CHECK_LOST
+		_autoCheckLost = s._autoCheckLost;
+#endif
+	}
+
+	void operator =(post_actor_msg<ARGS...>&& s)
+	{
+		_hostActor = std::move(s._hostActor);
+		_msgPool = std::move(s._msgPool);
+#ifdef ENABLE_CHECK_LOST
+		_autoCheckLost = std::move(s._autoCheckLost);
+#endif
+	}
 public:
 	template <typename... Args>
 	void operator()(Args&&... args) const
@@ -2438,6 +2538,12 @@ protected:
 		DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
 	}
 
+	TrigOnceBase_(TrigOnceBase_&& s)
+		:_hostActor(std::move(s._hostActor))
+	{
+		DEBUG_OPERATION(_pIsTrig = std::move(s._pIsTrig));
+	}
+
 	virtual ~TrigOnceBase_() {}
 protected:
 	template <typename DST, typename... Args>
@@ -2479,8 +2585,9 @@ protected:
 	void tick_handler(bool* sign) const;
 	void dispatch_handler(bool* sign) const;
 	virtual void reset() const = 0;
-private:
-	void operator =(const TrigOnceBase_&);
+protected:
+	void copy(const TrigOnceBase_& s);
+	void move(TrigOnceBase_&& s);
 protected:
 	mutable actor_handle _hostActor;
 	DEBUG_OPERATION(std::shared_ptr<std::atomic<bool> > _pIsTrig);
@@ -2501,6 +2608,32 @@ private:
 		:_dstRec(dstRec), _sign(sign)
 	{
 		_hostActor = hostActor;
+	}
+public:
+	trig_once_notifer(trig_once_notifer&& s)
+		:TrigOnceBase_(std::move(s)), _dstRec(s._dstRec), _sign(s._sign)
+	{
+		s._dstRec = NULL;
+		s._sign = NULL;
+	}
+
+	trig_once_notifer(const trig_once_notifer& s)
+		:TrigOnceBase_(s), _dstRec(s._dstRec), _sign(s._sign) {}
+
+	void operator =(trig_once_notifer&& s)
+	{
+		TrigOnceBase_::move(std::move(s));
+		_dstRec = s._dstRec;
+		_sign = s._sign;
+		s._dstRec = NULL;
+		s._sign = NULL;
+	}
+
+	void operator =(const trig_once_notifer& s)
+	{
+		TrigOnceBase_::copy(s);
+		_dstRec = s._dstRec;
+		_sign = s._sign;
 	}
 public:
 	template <typename...  Args>
@@ -2564,26 +2697,26 @@ class callback_handler<types_pck<ARGS...>, types_pck<OUTS...>>: public TrigOnceB
 public:
 	template <typename... Outs>
 	callback_handler(my_actor* host, Outs&... outs)
-		:_early(true), _bsign(false), _sign(&_bsign), _dstRef(outs...)
+		:_selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
 	}
 
 	~callback_handler()
 	{
-		if (_early)
+		if (_selfEarly)
 		{
-			if (!ActorFunc_::is_quited(Parent::_hostActor.get()))
+			if (!ActorFunc_::is_quited(_selfEarly))
 			{
 				if (!_bsign)
 				{
 					_bsign = true;
 #ifdef _MSC_VER
-					ActorFunc_::push_yield(Parent::_hostActor.get());
+					ActorFunc_::push_yield(_selfEarly);
 #elif __GNUG__
 					try
 					{
-						ActorFunc_::push_yield(Parent::_hostActor.get());
+						ActorFunc_::push_yield(_selfEarly);
 					}
 					catch (...) {}
 #endif
@@ -2594,7 +2727,13 @@ public:
 	}
 
 	callback_handler(const callback_handler& s)
-		:TrigOnceBase_(s), _early(false), _bsign(false), _sign(s._sign), _dstRef(s._dstRef) {}
+		:TrigOnceBase_(s), _selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef) {}
+
+	callback_handler(callback_handler&& s)
+		:TrigOnceBase_(std::move(s)), _selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef)
+	{
+		s._sign = NULL;
+	}
 public:
 	template <typename... Args>
 	void operator()(Args&&... args) const
@@ -2611,7 +2750,7 @@ public:
 private:
 	void reset() const
 	{
-		if (!_early)
+		if (!_selfEarly)
 		{
 			Parent::_hostActor.reset();
 		}
@@ -2624,8 +2763,8 @@ private:
 private:
 	dst_receiver _dstRef;
 	bool* _sign;
+	my_actor* const _selfEarly;
 	bool _bsign;
-	const bool _early;
 };
 
 /*!
@@ -2641,26 +2780,26 @@ class asio_cb_handler<types_pck<ARGS...>, types_pck<OUTS...>> : public TrigOnceB
 public:
 	template <typename... Outs>
 	asio_cb_handler(my_actor* host, Outs&... outs)
-		:_early(true), _bsign(false), _sign(&_bsign), _dstRef(outs...)
+		:_selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
 	}
 
 	~asio_cb_handler()
 	{
-		if (_early)
+		if (_selfEarly)
 		{
-			if (!ActorFunc_::is_quited(Parent::_hostActor.get()))
+			if (!ActorFunc_::is_quited(_selfEarly))
 			{
 				if (!_bsign)
 				{
 					_bsign = true;
 #ifdef _MSC_VER
-					ActorFunc_::push_yield(Parent::_hostActor.get());
+					ActorFunc_::push_yield(_selfEarly);
 #elif __GNUG__
 					try
 					{
-						ActorFunc_::push_yield(Parent::_hostActor.get());
+						ActorFunc_::push_yield(_selfEarly);
 					}
 					catch (...) {}
 #endif
@@ -2671,7 +2810,13 @@ public:
 	}
 
 	asio_cb_handler(const asio_cb_handler& s)
-		:TrigOnceBase_(s), _early(false), _bsign(false), _sign(s._sign), _dstRef(s._dstRef) {}
+		:TrigOnceBase_(std::move((asio_cb_handler&)s)), _selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef) {}
+
+	asio_cb_handler(asio_cb_handler&& s)
+		:TrigOnceBase_(std::move(s)), _selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef)
+	{
+		s._sign = NULL;
+	}
 public:
 	template <typename... Args>
 	void operator()(Args&&... args) const
@@ -2688,7 +2833,7 @@ public:
 private:
 	void reset() const
 	{
-		if (!_early)
+		if (!_selfEarly)
 		{
 			Parent::_hostActor.reset();
 		}
@@ -2701,8 +2846,8 @@ private:
 private:
 	dst_receiver _dstRef;
 	bool* _sign;
+	my_actor* const _selfEarly;
 	bool _bsign;
-	const bool _early;
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -2804,7 +2949,7 @@ class sync_cb_handler<R, types_pck<ARGS...>, types_pck<OUTS...>> : public TrigOn
 public:
 	template <typename... Outs>
 	sync_cb_handler(my_actor* host, sync_result<R>& res, Outs&... outs)
-		:_early(true), _result(res), _dstRef(outs...)
+		:_selfEarly(host), _result(res), _dstRef(outs...)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
 		_result.reset();
@@ -2812,19 +2957,19 @@ public:
 
 	~sync_cb_handler()
 	{
-		if (_early)
+		if (_selfEarly)
 		{
-			if (!ActorFunc_::is_quited(Parent::_hostActor.get()))
+			if (!ActorFunc_::is_quited(_selfEarly))
 			{
 				if (!_result._sign)
 				{
 					_result._sign = true;
 #ifdef _MSC_VER
-					ActorFunc_::push_yield(Parent::_hostActor.get());
+					ActorFunc_::push_yield(_selfEarly);
 #elif __GNUG__
 					try
 					{
-						ActorFunc_::push_yield(Parent::_hostActor.get());
+						ActorFunc_::push_yield(_selfEarly);
 					}
 					catch (...) {}
 #endif
@@ -2835,7 +2980,10 @@ public:
 	}
 
 	sync_cb_handler(const sync_cb_handler& s)
-		:TrigOnceBase_(s), _early(false), _result(s._result), _dstRef(s._dstRef) {}
+		:TrigOnceBase_(s), _selfEarly(NULL), _result(s._result), _dstRef(s._dstRef) {}
+
+	sync_cb_handler(sync_cb_handler&& s)
+		:TrigOnceBase_(std::move(s)), _selfEarly(NULL), _result(s._result), _dstRef(s._dstRef) {}
 public:
 	template <typename... Args>
 	R operator()(Args&&... args) const
@@ -2876,7 +3024,7 @@ public:
 private:
 	void reset() const
 	{
-		if (!_early)
+		if (!_selfEarly)
 		{
 			Parent::_hostActor.reset();
 		}
@@ -2888,7 +3036,7 @@ private:
 	}
 private:
 	dst_receiver _dstRef;
-	const bool _early;
+	my_actor* const _selfEarly;
 	sync_result<R>& _result;
 };
 
@@ -2902,7 +3050,7 @@ class sync_cb_handler<void, types_pck<ARGS...>, types_pck<OUTS...>> : public Tri
 public:
 	template <typename... Outs>
 	sync_cb_handler(my_actor* host, sync_result<void>& res, Outs&... outs)
-		:_early(true), _result(res), _dstRef(outs...)
+		:_selfEarly(host), _result(res), _dstRef(outs...)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
 		_result.reset();
@@ -2910,19 +3058,19 @@ public:
 
 	~sync_cb_handler()
 	{
-		if (_early)
+		if (_selfEarly)
 		{
-			if (!ActorFunc_::is_quited(Parent::_hostActor.get()))
+			if (!ActorFunc_::is_quited(_selfEarly))
 			{
 				if (!_result._sign)
 				{
 					_result._sign = true;
 #ifdef _MSC_VER
-					ActorFunc_::push_yield(Parent::_hostActor.get());
+					ActorFunc_::push_yield(_selfEarly);
 #elif __GNUG__
 					try
 					{
-						ActorFunc_::push_yield(Parent::_hostActor.get());
+						ActorFunc_::push_yield(_selfEarly);
 					}
 					catch (...) {}
 #endif
@@ -2933,7 +3081,10 @@ public:
 	}
 
 	sync_cb_handler(const sync_cb_handler& s)
-		:TrigOnceBase_(s), _early(false), _result(s._result), _dstRef(s._dstRef) {}
+		:TrigOnceBase_(s), _selfEarly(NULL), _result(s._result), _dstRef(s._dstRef) {}
+
+	sync_cb_handler(sync_cb_handler&& s)
+		:TrigOnceBase_(std::move(s)), _selfEarly(NULL), _result(s._result), _dstRef(s._dstRef) {}
 public:
 	template <typename... Args>
 	void operator()(Args&&... args) const
@@ -2970,7 +3121,7 @@ public:
 private:
 	void reset() const
 	{
-		if (!_early)
+		if (!_selfEarly)
 		{
 			Parent::_hostActor.reset();
 		}
@@ -2982,7 +3133,7 @@ private:
 	}
 private:
 	dst_receiver _dstRef;
-	const bool _early;
+	my_actor* const _selfEarly;
 	sync_result<void>& _result;
 };
 //////////////////////////////////////////////////////////////////////////
@@ -3301,6 +3452,102 @@ private:
 };
 //////////////////////////////////////////////////////////////////////////
 
+struct AutoStackActorFace_ 
+{
+	virtual size_t key() = 0;
+	virtual size_t stack_size() = 0;
+	virtual void suck(std::function<void(my_actor*)>& sk) = 0;
+};
+
+template <typename Handler>
+struct AutoStackActor_ : public AutoStackActorFace_
+{
+	AutoStackActor_(Handler& h, size_t stackSize, size_t key)
+	:_h(h), _stackSize(stackSize), _key(key) {}
+
+	size_t key()
+	{
+		return _key;
+	}
+
+	size_t stack_size()
+	{
+		return _stackSize;
+	}
+
+	void suck(std::function<void(my_actor*)>& sk)
+	{
+		sk = (Handler)_h;
+	}
+
+	size_t _key;
+	size_t _stackSize;
+	Handler& _h;
+};
+
+template <typename Handler>
+struct AutoStackMsgAgentActor_
+{
+	AutoStackMsgAgentActor_(Handler& h, size_t stackSize, size_t key)
+	:_h(h), _stackSize(stackSize), _key(key) {}
+
+	size_t _key;
+	size_t _stackSize;
+	Handler& _h;
+};
+
+template <typename Handler>
+AutoStackActor_<Handler&&> __auto_stack_actor(Handler&& handler, size_t stackSize, size_t key)
+{
+	return AutoStackActor_<Handler&&>(handler, stackSize, key);
+}
+
+template <typename Handler>
+AutoStackMsgAgentActor_<Handler&&> __auto_stack_msg_agent_actor(Handler&& handler, size_t stackSize, size_t key)
+{
+	return AutoStackMsgAgentActor_<Handler&&>(handler, stackSize, key);
+}
+
+#define _auto_stack1(__h__) __auto_stack_actor(__h__, 0, __COUNTER__)
+#define _auto_stack2(__h__, __s__) __auto_stack_actor(__h__, __s__, __COUNTER__)
+#define _auto_stack3(__h__, __s__, __k__) __auto_stack_actor(__h__, __s__, __k__)
+
+#define _auto_stack_msg_agent1(__h__) __auto_stack_msg_agent_actor(__h__, 0, __COUNTER__)
+#define _auto_stack_msg_agent2(__h__, __s__) __auto_stack_msg_agent_actor(__h__, __s__, __COUNTER__)
+#define _auto_stack_msg_agent3(__h__, __s__, __k__) __auto_stack_msg_agent_actor(__h__, __s__, __k__)
+
+#ifdef DISABLE_AUTO_STACK
+
+template <typename Handler>
+Handler&& auto_stack(Handler&& h, ...)
+{
+	return (Handler&&)h;
+}
+
+template <typename Handler>
+Handler&& auto_stack_msg_agent(Handler&& h, ...)
+{
+	return (Handler&&)h;
+}
+
+#else
+#ifdef _MSC_VER
+#define _auto_stack(__pl__, ...) _BOND_LR__(_auto_stack, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
+#define _auto_stack_msg_agent(__pl__, ...) _BOND_LR__(_auto_stack_msg_agent, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
+//自动栈空间控制
+#define auto_stack(__h__, ...) _auto_stack(__pl__, __h__, __VA_ARGS__)
+#define auto_stack_msg_agent(__h__, ...) _auto_stack_msg_agent(__pl__, __h__, __VA_ARGS__)
+
+#elif __GNUG__
+//自动栈空间控制
+#define auto_stack(...) _BOND_LR__(_auto_stack, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
+#define auto_stack_msg_agent(...) _BOND_LR__(_auto_stack_msg_agent, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
+
+#endif
+#endif
+
+//////////////////////////////////////////////////////////////////////////
+
 /*!
 @brief Actor对象
 */
@@ -3455,6 +3702,15 @@ class my_actor
 		async_invoke_handler(const actor_handle& host, bool* sign, DST& dst)
 		:_sharedThis(host), _sign(sign), _dstRec(dst) {}
 
+		async_invoke_handler(const async_invoke_handler<DST, ARG>& s)
+			:_sharedThis(s._sharedThis), _dstRec(s._dstRec), _sign(s._sign) {}
+
+		async_invoke_handler(async_invoke_handler<DST, ARG>&& s)
+			:_sharedThis(std::move(s._sharedThis)), _dstRec(s._dstRec), _sign(s._sign)
+		{
+			s._sign = NULL;
+		}
+
 		template <typename Arg>
 		void operator ()(Arg&& arg)
 		{
@@ -3471,6 +3727,15 @@ class my_actor
 	{
 		async_invoke_handler(const actor_handle& host, bool* sign, DST& dst)
 		:_sharedThis(host), _sign(sign), _dstRec(dst) {}
+
+		async_invoke_handler(const async_invoke_handler<DST, ARG&>& s)
+			:_sharedThis(s._sharedThis), _dstRec(s._dstRec), _sign(s._sign) {}
+
+		async_invoke_handler(async_invoke_handler<DST, ARG&>&& s)
+			:_sharedThis(std::move(s._sharedThis)), _dstRec(s._dstRec), _sign(s._sign)
+		{
+			s._sign = NULL;
+		}
 
 		void operator ()(const TYPE_PIPE(ARG&)& arg)
 		{
@@ -3489,8 +3754,14 @@ class my_actor
 		trig_cb_handler(const actor_handle& host, bool* sign, Dst& dst, Args&&... args)
 			:_sharedThis(host), _sign(sign), _dst(dst), _args(TRY_MOVE(args)...) {}
 
-		trig_cb_handler(const trig_cb_handler& s)
-			:_sharedThis(std::move(s._sharedThis)), _sign(s._sign), _dst(s._dst), _args(std::move(s._args)) {}
+		trig_cb_handler(const trig_cb_handler<DST, ARGS...>& s)
+			:_sharedThis(s._sharedThis), _sign(s._sign), _dst(s._dst), _args(s._args) {}
+
+		trig_cb_handler(trig_cb_handler<DST, ARGS...>&& s)
+			:_sharedThis(std::move(s._sharedThis)), _sign(s._sign), _dst(s._dst), _args(std::move(s._args))
+		{
+			s._sign = NULL;
+		}
 
 		void operator ()()
 		{
@@ -3510,8 +3781,8 @@ class my_actor
 
 		DST& _dst;
 		bool* _sign;
-		mutable std::tuple<ARGS...> _args;
-		mutable actor_handle _sharedThis;
+		std::tuple<ARGS...> _args;
+		actor_handle _sharedThis;
 	};
 
 	template <typename DST, typename... ARGS>
@@ -3521,8 +3792,14 @@ class my_actor
 		trig_cb_handler2(const actor_handle& host, bool* sign, Dst& dst, Args&&... args)
 			:_sharedThis(host), _sign(sign), _dst(dst), _args(TRY_MOVE(args)...) {}
 
-		trig_cb_handler2(const trig_cb_handler2& s)
-			:_sharedThis(std::move(s._sharedThis)), _sign(s._sign), _dst(s._dst), _args(std::move(s._args)) {}
+		trig_cb_handler2(const trig_cb_handler2<DST, ARGS...>& s)
+			:_sharedThis(s._sharedThis), _sign(s._sign), _dst(s._dst), _args(s._args) {}
+
+		trig_cb_handler2(trig_cb_handler2<DST, ARGS...>&& s)
+			:_sharedThis(std::move(s._sharedThis)), _sign(s._sign), _dst(s._dst), _args(std::move(s._args))
+		{
+			s._sign = NULL;
+		}
 
 		void operator ()()
 		{
@@ -3542,8 +3819,8 @@ class my_actor
 
 		DST _dst;
 		bool* _sign;
-		mutable std::tuple<ARGS...> _args;
-		mutable actor_handle _sharedThis;
+		std::tuple<ARGS...> _args;
+		actor_handle _sharedThis;
 	};
 
 	template <typename Handler>
@@ -3554,10 +3831,10 @@ class my_actor
 			:_count(self->_timerState._timerCount), _lockSelf(self), _h(TRY_MOVE(h)) {}
 
 		wrap_delay_trig(wrap_delay_trig&& s)
-			:_count(s._count), _lockSelf(s._lockSelf), _h(TRY_MOVE(s._h)) {}
+			:_count(s._count), _lockSelf(std::move(s._lockSelf)), _h(std::move(s._h)) {}
 
 		wrap_delay_trig(const wrap_delay_trig& s)
-			:_count(s._count), _lockSelf(s._lockSelf), _h(TRY_MOVE(s._h)) {}
+			:_count(s._count), _lockSelf(s._lockSelf), _h(s._h) {}
 
 		void operator ()()
 		{
@@ -3570,7 +3847,7 @@ class my_actor
 
 		const int _count;
 		actor_handle _lockSelf;
-		mutable Handler _h;
+		Handler _h;
 	};
 
 	struct wrap_run_one
@@ -3582,6 +3859,12 @@ class my_actor
 		{
 			_lockSelf->run_one();
 		}
+
+		wrap_run_one(const wrap_run_one& s)
+			:_lockSelf(s._lockSelf) {}
+
+		wrap_run_one(wrap_run_one&& s)
+			:_lockSelf(std::move(s._lockSelf)) {}
 
 		actor_handle _lockSelf;
 	};
@@ -3606,6 +3889,15 @@ class my_actor
 			}
 		}
 
+		wrap_trig_run_one(const wrap_trig_run_one& s)
+			:_lockSelf(s._lockSelf), _sign(s._sign) {}
+
+		wrap_trig_run_one(wrap_trig_run_one&& s)
+			:_lockSelf(std::move(s._lockSelf)), _sign(s._sign)
+		{
+			s._sign = NULL;
+		}
+
 		actor_handle _lockSelf;
 		bool* _sign;
 	};
@@ -3622,8 +3914,8 @@ class my_actor
 		bool _timerCompleted : 1;
 	};
 
-	class boost_actor_run;
-	friend boost_actor_run;
+	class actor_run;
+	friend actor_run;
 	friend child_actor_handle;
 	friend MsgPumpBase_;
 	friend actor_msg_handle_base;
@@ -3741,6 +4033,7 @@ public:
 	*/
 	static actor_handle create(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 	static actor_handle create(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	static actor_handle create(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor);
 public:
 	/*!
 	@brief 创建一个子Actor，父Actor终止时，子Actor也终止（在子Actor都完全退出后，父Actor才结束）
@@ -3753,6 +4046,8 @@ public:
 	child_actor_handle create_child_actor(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 	child_actor_handle create_child_actor(const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 	child_actor_handle create_child_actor(main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_actor_handle create_child_actor(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor);
+	child_actor_handle create_child_actor(AutoStackActorFace_&& wrapActor);
 
 	/*!
 	@brief 开始运行子Actor，只能调用一次
@@ -4773,6 +5068,24 @@ public:
 	}
 
 	template <typename... Args, typename Handler>
+	__yield_interrupt child_actor_handle msg_agent_to_actor(const int id, const shared_strand& strand, bool autoRun, AutoStackMsgAgentActor_<Handler>&& wrapActor)
+	{
+		RM_CREF(Handler) agentActor = (Handler)wrapActor._h;
+		actor_handle childActor = my_actor::create(strand, __auto_stack_actor([id, agentActor](my_actor* self)
+		{
+			msg_pump_handle<Args...> pump = my_actor::_connect_msg_pump<Args...>(id, self, false);
+			agentActor(self, pump);
+		}, wrapActor._stackSize, wrapActor._key));
+		childActor->_parentActor = shared_from_this();
+		msg_agent_to<Args...>(id, childActor);
+		if (autoRun)
+		{
+			childActor->notify_run();
+		}
+		return child_actor_handle(childActor);
+	}
+
+	template <typename... Args, typename Handler>
 	__yield_interrupt child_actor_handle msg_agent_to_actor(const int id, bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return msg_agent_to_actor<Args...>(id, self_strand(), autoRun, agentActor, stackSize);
@@ -4788,6 +5101,24 @@ public:
 	__yield_interrupt child_actor_handle msg_agent_to_actor(bool autoRun, const Handler& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return msg_agent_to_actor<Args...>(0, self_strand(), autoRun, agentActor, stackSize);
+	}
+
+	template <typename... Args, typename Handler>
+	__yield_interrupt child_actor_handle msg_agent_to_actor(const int id, bool autoRun, AutoStackMsgAgentActor_<Handler>&& wrapActor)
+	{
+		return msg_agent_to_actor<Args...>(id, self_strand(), autoRun, std::move(wrapActor));
+	}
+
+	template <typename... Args, typename Handler>
+	__yield_interrupt child_actor_handle msg_agent_to_actor(const shared_strand& strand, bool autoRun, AutoStackMsgAgentActor_<Handler>&& wrapActor)
+	{
+		return msg_agent_to_actor<Args...>(0, strand, autoRun, std::move(wrapActor));
+	}
+
+	template <typename... Args, typename Handler>
+	__yield_interrupt child_actor_handle msg_agent_to_actor(bool autoRun, AutoStackMsgAgentActor_<Handler>&& wrapActor)
+	{
+		return msg_agent_to_actor<Args...>(0, self_strand(), autoRun, std::move(wrapActor));
 	}
 public:
 	/*!
@@ -5912,6 +6243,11 @@ public:
 	id self_id();
 
 	/*!
+	@brief 当前Actor执行体预设的key
+	*/
+	size_t self_key();
+
+	/*!
 	@brief 设置退出码
 	*/
 	void return_code(size_t cd);
@@ -5920,6 +6256,16 @@ public:
 	@brief 获取退出码
 	*/
 	size_t return_code();
+
+	/*!
+	@brief Actor退出后，获取栈消耗大小
+	*/
+	size_t using_stack_size();
+
+	/*!
+	@brief Actor栈大小
+	*/
+	size_t stack_size();
 
 	/*!
 	@brief 获取Actor切换计数
@@ -6098,40 +6444,41 @@ private:
 	void child_suspend_cb_handler();
 	void child_resume_cb_handler();
 public:
-#ifdef CHECK_ACTOR_STACK
-	bool _checkStackFree;//是否检测堆栈过多
+#ifdef PRINT_ACTOR_STACK
 	std::shared_ptr<list<stack_line_info>> _createStack;//当前Actor创建时的调用堆栈
 #endif
 private:
 	std::weak_ptr<my_actor> _weakThis;
 	shared_strand _strand;///<Actor调度器
+	id _selfID;///<ActorID
 	void* _actorPull;///<Actor中断点恢复
 	void* _actorPush;///<Actor中断点
-	void* _stackTop;///<Actor栈顶
-	id _selfID;///<ActorID
-	size_t _stackSize;///<Actor栈大小
+	size_t _actorKey;///<该Actor处理模块的全局唯一key
 	size_t _lockQuit;///<锁定当前Actor，如果当前接收到退出消息，暂时不退，等到解锁后退出
 	size_t _yieldCount;//yield计数
 	size_t _lastYield;//记录上次try_yield的计数
 	size_t _childOverCount;///<子Actor退出时计数
 	size_t _childSuspendResumeCount;///<子Actor挂起/恢复计数
 	size_t _returnCode;///<退出码
+	size_t _usingStackSize;///<栈消耗
+#ifdef ENABLE_CHECK_FUNC_STACK
+	size_t _checkStackDepth;///<函数调用栈消耗测试
+#endif
+	msg_pool_status _msgPoolStatus;//消息池列表
+	actor_handle _parentActor;///<父Actor，子Actor都析构后，父Actor才能析构
+	timer_state _timerState;///<定时器状态
+	ActorTimer_* _timer;///<定时器
 	main_func _mainFunc;///<Actor入口
 	msg_list_shared_alloc<suspend_resume_option> _suspendResumeQueue;///<挂起/恢复操作队列
 	msg_list_shared_alloc<std::function<void()> > _exitCallback;///<Actor结束后的回调函数，强制退出返回false，正常退出返回true
 	msg_list_shared_alloc<std::function<void()> > _quitHandlerList;///<Actor退出时强制调用的函数，后注册的先执行
 	msg_list_shared_alloc<actor_handle> _childActorList;///<子Actor集合，子Actor都退出后，父Actor才能退出
-	msg_pool_status _msgPoolStatus;//消息池列表
-	actor_handle _parentActor;///<父Actor，子Actor都析构后，父Actor才能析构
-	timer_state _timerState;///<定时器状态
-	ActorTimer_* _timer;///<定时器
-#ifdef ENABLE_CHECK_FUNC_STACK
-	size_t _checkStackDepth;///<函数调用栈消耗测试
-#endif
+#ifdef WIN32
 #ifdef CHECK_SELF
 #ifndef ENABLE_TLS_CHECK_SELF
 	msg_map<void*, my_actor*>::iterator _btIt;
 	msg_map<void*, my_actor*>::iterator _topIt;
+#endif
 #endif
 #endif
 	bool _inActor : 1;///<当前正在Actor内部执行标记
@@ -6142,6 +6489,12 @@ private:
 	bool _hasNotify : 1;///<当前Actor挂起，有外部触发准备进入Actor标记
 	bool _isForce : 1;///<是否是强制退出的标记，成功调用了force_quit
 	bool _notifyQuited : 1;///<当前Actor被锁定后，收到退出消息
+	bool _autoStack : 1;///<是否自动调整栈空间
+#ifdef PRINT_ACTOR_STACK
+public:
+	bool _checkStackFree : 1;///<是否检测堆栈过多
+private:
+#endif
 	static msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc _suspendResumeQueueAll;
 	static msg_list_shared_alloc<std::function<void()> >::shared_node_alloc _quitExitCallbackAll;
 	static msg_list_shared_alloc<actor_handle>::shared_node_alloc _childActorListAll;

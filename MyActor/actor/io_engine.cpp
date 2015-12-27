@@ -19,9 +19,7 @@ typedef WaitableTimerEvent_ timer_type;
 
 typedef boost::asio::detail::strand_service::strand_impl impl_type;
 
-#ifdef ENABLE_TLS_CHECK_SELF
-boost::thread_specific_ptr<void*> io_engine::_tls(NULL);
-#endif
+tls_space io_engine::_tls;
 
 io_engine::io_engine()
 {
@@ -125,14 +123,10 @@ void io_engine::_run(size_t threadNum, sched policy)
 #ifdef FIBER_CORO
 					ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH);
 #endif
-#ifdef ENABLE_TLS_CHECK_SELF
-					void* tssBuff[64] = { 0 };
-					_tls.reset(tssBuff);
+					void* tlsBuff[64] = { 0 };
+					_tls.set_space(tlsBuff);
 					_runCount += _ios.run();
-					_tls.release();
-#else
-					_runCount += _ios.run();
-#endif
+					_tls.set_space(NULL);
 #ifdef FIBER_CORO
 					ConvertFiberToThread();
 #endif
@@ -309,22 +303,29 @@ void io_engine::freeTimer(void* timer)
 	((obj_pool<timer_type>*)_timerPool)->recycle(timer);
 }
 
-#ifdef ENABLE_TLS_CHECK_SELF
 void* io_engine::getTlsValue(int i)
 {
 	assert(i >= 0 && i < 64);
-	return _tls.get()[i];
+	return _tls.get_space()[i];
 }
 
 void io_engine::setTlsValue(int i, void* val)
 {
 	assert(i >= 0 && i < 64);
-	_tls.get()[i] = val;
+	_tls.get_space()[i] = val;
+}
+
+void* io_engine::swapTlsValue(int i, void* val)
+{
+	assert(i >= 0 && i < 64);
+	void** sp = _tls.get_space();
+	void* old = sp[i];
+	sp[i] = val;
+	return old;
 }
 
 void** io_engine::getTlsValuePtr(int i)
 {
 	assert(i >= 0 && i < 64);
-	return _tls.get() + i;
+	return _tls.get_space() + i;
 }
-#endif

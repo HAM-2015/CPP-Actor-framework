@@ -1,5 +1,6 @@
 #include "coro_choice.h"
 #include "context_yield.h"
+#include "check_actor_stack.h"
 
 #ifdef BOOST_CORO
 
@@ -61,28 +62,44 @@ namespace context_yield
 	{
 		actor_stack_allocate() {}
 
-		actor_stack_allocate(void** sp, size_t* size)
-		{
-			_sp = sp;
-			_size = size;
-		}
+		actor_stack_allocate(context_yield::coro_info* info)
+			:_info(info) {}
 
 		void allocate(boost::coroutines::stack_context & stackCon, size_t size)
 		{
+#ifdef WIN32
+			size_t allocSize = MEM_ALIGN(size + STACK_RESERVED_SPACE_SIZE, 64 kB);
+			void* stack = VirtualAlloc(NULL, allocSize, MEM_RESERVE, PAGE_READWRITE);
+			if (!stack)
+			{
+				throw size_t(allocSize);
+			}
+			_info->stackSize = size;
+			_info->reserveSize = allocSize - _info->stackSize;
+			_info->stackTop = (char*)stack + allocSize;
+			VirtualAlloc((char*)stack + _info->reserveSize, _info->stackSize, MEM_COMMIT, PAGE_READWRITE);
+			stackCon.sp = _info->stackTop;
+			stackCon.size = allocSize;
+#else
 			boost::coroutines::stack_allocator all;
 			all.allocate(stackCon, size);
-			*_sp = stackCon.sp;
-			*_size = stackCon.size;
+			_info->stackTop = stackCon.sp;
+			_info->stackSize = stackCon.size;
+			_info->reserveSize = 0;
+#endif
 		}
 
 		void deallocate(boost::coroutines::stack_context & stackCon)
 		{
+#ifdef WIN32
+			VirtualFree((char*)stackCon.sp - stackCon.size, 0, MEM_RELEASE);
+#else
 			boost::coroutines::stack_allocator all;
 			all.deallocate(stackCon);
+#endif
 		}
 
-		void** _sp;
-		size_t* _size;
+		context_yield::coro_info* _info;
 	};
 
 	context_yield::coro_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
@@ -94,7 +111,7 @@ namespace context_yield
 			{
 				info->nc = &push;
 				handler(info, p);
-			}, coro_attributes(stackSize), actor_stack_allocate(&info->stackTop, &info->stackSize));
+			}, coro_attributes(stackSize), actor_stack_allocate(info));
 			return info;
 		}
 		catch (...)
@@ -125,14 +142,16 @@ namespace context_yield
 #ifdef WIN32
 	context_yield::coro_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
 	{
-		void* stack = malloc(stackSize);
+		size_t allocSize = MEM_ALIGN(stackSize, 64 kB);
+		void* stack = VirtualAlloc(NULL, allocSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 		if (!stack)
 		{
 			return NULL;
 		}
 		context_yield::coro_info* info = new context_yield::coro_info;
-		info->stackTop = (char*)stack + stackSize;
 		info->stackSize = stackSize;
+		info->reserveSize = allocSize - info->stackSize;
+		info->stackTop = (char*)stack + allocSize;
 		struct local_ref
 		{
 			context_yield::context_handler handler;
@@ -161,7 +180,7 @@ namespace context_yield
 	void delete_context(context_yield::coro_info* info)
 	{
 		((coro_pull_interface*)info->obj)->destory();
-		free((char*)info->stackTop - info->stackSize);
+		VirtualFree((char*)info->stackTop - info->stackSize - info->reserveSize, 0, MEM_RELEASE);
 		delete info;
 	}
 #elif __linux__
@@ -225,15 +244,17 @@ namespace context_yield
 
 	context_yield::coro_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
 	{
+		size_t allocSize = MEM_ALIGN(stackSize + STACK_RESERVED_SPACE_SIZE, 64 kB);
 		context_yield::coro_info* info = new context_yield::coro_info;
 		info->stackSize = stackSize;
+		info->reserveSize = allocSize - info->stackSize;
 		struct local_ref
 		{
 			context_yield::context_handler handler;
 			void* p;
 			context_yield::coro_info* info;
 		} ref = { handler, p, info };
-		info->obj = CreateFiberEx(0, stackSize, FIBER_FLAG_FLOAT_SWITCH, [](void* param)
+		info->obj = CreateFiberEx(0, allocSize, FIBER_FLAG_FLOAT_SWITCH, [](void* param)
 		{
 			local_ref* ref = (local_ref*)param;
 			ref->handler(ref->info, ref->p);

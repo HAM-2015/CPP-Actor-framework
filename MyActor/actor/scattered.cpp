@@ -8,7 +8,7 @@
 #include <boost/thread.hpp>
 #include <boost/asio/io_service.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
-#ifdef CHECK_ACTOR_STACK
+#ifdef PRINT_ACTOR_STACK
 #ifdef WIN32
 #include <WinDNS.h>
 #include <DbgHelp.h>
@@ -271,16 +271,6 @@ int get_tick_s()
 
 #ifdef _MSC_VER
 extern "C" void __fastcall get_bp_sp_ip(void** pbp, void** psp, void** pip);
-
-void* get_sp()
-{
-	void* bp;
-	void* sp;
-	void* ip;
-
-	get_bp_sp_ip(&bp, &sp, &ip);
-	return sp;
-}
 #elif __GNUG__
 #ifdef WIN32
 extern "C" void __fastcall get_bp_sp_ip(void** pbp, void** psp, void** pip);
@@ -304,8 +294,52 @@ unsigned long long cpu_tick()
 	return ((unsigned long long)__a) | (((unsigned long long)__d) << 32);
 }
 #endif
+//////////////////////////////////////////////////////////////////////////
 
-#ifdef CHECK_ACTOR_STACK
+#ifdef WIN32
+tls_space::tls_space()
+{
+	_index = TlsAlloc();
+}
+
+tls_space::~tls_space()
+{
+	TlsFree(_index);
+}
+
+void tls_space::set_space(void** val)
+{
+	TlsSetValue(_index, (LPVOID)val);
+}
+
+void** tls_space::get_space()
+{
+	return (void**)TlsGetValue(_index);
+}
+#elif __linux__
+tls_space::tls_space()
+{
+	pthread_key_create(&_key, NULL);
+}
+
+tls_space::~tls_space()
+{
+	pthread_key_delete(_key);
+}
+
+void tls_space::set_space(void** val)
+{
+	pthread_setspecific(_key, val);
+}
+
+void** tls_space::get_space()
+{
+	return (void**)pthread_getspecific(_key);
+}
+#endif
+//////////////////////////////////////////////////////////////////////////
+
+#ifdef PRINT_ACTOR_STACK
 boost::asio::io_service* _stackLogIos;
 std::ofstream _stackLogFile;
 

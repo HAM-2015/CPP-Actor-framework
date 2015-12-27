@@ -625,15 +625,22 @@ size_t actor_condition_variable::notify_all(my_actor* host) const
 
 class ActorSharedMutex
 {
+	enum lock_status
+	{
+		st_shared,
+		st_unique,
+		st_upgrade
+	};
+
 	struct wait_node
 	{
 		mutex_trig_notifer& ntf;
 		my_actor::id _waitHostID;
-		bool _isShared;
+		lock_status _status;
 	};
 public:
 	ActorSharedMutex(const shared_strand& strand)
-		:_strand(strand), _waitQueue(4), _inSet(4), _shared(true)
+		:_strand(strand), _waitQueue(4), _inSet(4), _status(st_shared)
 	{
 
 	}
@@ -658,15 +665,15 @@ public:
 			if (inSet_.empty())
 			{
 				ref4.complete = true;
-				ref4->_shared = false;
-				inSet_[ref4.host->self_id()] = false;
+				ref4->_status = st_unique;
+				inSet_[ref4.host->self_id()] = st_unique;
 			}
 			else
 			{
 				auto& ntf_ = ref4.ntf;
 				ref4.complete = false;
 				ntf_ = ref4.ath.make_notifer();
-				wait_node wn = { ntf_, ref4.host->self_id(), false };
+				wait_node wn = { ntf_, ref4.host->self_id(), st_unique };
 				ref4->_waitQueue.push_front(wn);
 			}
 		});
@@ -674,6 +681,7 @@ public:
 		{
 			ath.wait();
 		}
+		assert(st_unique == _status);
 		qg.unlock();
 	}
 
@@ -689,10 +697,11 @@ public:
 			if (ref2->_inSet.empty())
 			{
 				ref2.complete = true;
-				ref2->_shared = false;
-				ref2->_inSet[ref2.host->self_id()] = false;
+				ref2->_status = st_unique;
+				ref2->_inSet[ref2.host->self_id()] = st_unique;
 			}
 		});
+		assert(!complete || st_unique == _status);
 		qg.unlock();
 		return complete;
 	}
@@ -713,16 +722,15 @@ public:
 			if (inSet_.empty())
 			{
 				ref5.complete = true;
-				ref5->_shared = false;
-				inSet_[ref5.host->self_id()] = false;
+				ref5->_status = st_unique;
+				inSet_[ref5.host->self_id()] = st_unique;
 			}
 			else
 			{
 				auto& ntf_ = ref5.ntf;
 				auto& waitQueue_ = ref5->_waitQueue;
-				ref5.complete = false;
 				ntf_ = ref5.ath.make_notifer();
-				wait_node wn = { ntf_, ref5.host->self_id(), false };
+				wait_node wn = { ntf_, ref5.host->self_id(), st_unique };
 				waitQueue_.push_front(wn);
 				ref5.nit = waitQueue_.begin();
 			}
@@ -750,6 +758,7 @@ public:
 				ath.wait();
 			}
 		}
+		assert(complete && st_unique == _status);
 		qg.unlock();
 		return true;
 	}
@@ -765,17 +774,16 @@ public:
 		host->send(_strand, [&ref4]
 		{
 			assert(ref4->_inSet.find(ref4.host->self_id()) == ref4->_inSet.end());
-			if (ref4->_shared)
+			if (st_shared == ref4->_status)
 			{
 				ref4.complete = true;
-				ref4->_inSet[ref4.host->self_id()] = true;
+				ref4->_inSet[ref4.host->self_id()] = st_shared;
 			}
 			else
 			{
 				auto& ntf_ = ref4.ntf;
-				ref4.complete = false;
 				ntf_ = ref4.ath.make_notifer();
-				wait_node wn = { ntf_, ref4.host->self_id(), true };
+				wait_node wn = { ntf_, ref4.host->self_id(), st_shared };
 				ref4->_waitQueue.push_front(wn);
 			}
 		});
@@ -783,6 +791,7 @@ public:
 		{
 			ath.wait();
 		}
+		assert(st_shared == _status);
 		qg.unlock();
 	}
 
@@ -795,12 +804,13 @@ public:
 		host->send(_strand, [&ref2]
 		{
 			assert(ref2->_inSet.find(ref2.host->self_id()) == ref2->_inSet.end());
-			if (ref2->_shared)
+			if (st_shared == ref2->_status)
 			{
 				ref2.complete = true;
-				ref2->_inSet[ref2.host->self_id()] = true;
+				ref2->_inSet[ref2.host->self_id()] = st_shared;
 			}
 		});
+		assert(!complete || st_shared == _status);
 		qg.unlock();
 		return complete;
 	}
@@ -817,18 +827,17 @@ public:
 		host->send(_strand, [&ref5]
 		{
 			assert(ref5->_inSet.find(ref5.host->self_id()) == ref5->_inSet.end());
-			if (ref5->_shared)
+			if (st_shared == ref5->_status)
 			{
 				ref5.complete = true;
-				ref5->_inSet[ref5.host->self_id()] = true;
+				ref5->_inSet[ref5.host->self_id()] = st_shared;
 			}
 			else
 			{
 				auto& ntf_ = ref5.ntf;
 				auto& waitQueue_ = ref5->_waitQueue;
-				ref5.complete = false;
 				ntf_ = ref5.ath.make_notifer();
-				wait_node wn = { ntf_, ref5.host->self_id(), true };
+				wait_node wn = { ntf_, ref5.host->self_id(), st_shared };
 				waitQueue_.push_front(wn);
 				ref5.nit = waitQueue_.begin();
 			}
@@ -856,6 +865,7 @@ public:
 				ath.wait();
 			}
 		}
+		assert(complete && st_shared == _status);
 		qg.unlock();
 		return true;
 	}
@@ -870,21 +880,23 @@ public:
 		LAMBDA_THIS_REF4(ref4, host, complete, ath, ntf);
 		host->send(_strand, [&ref4]
 		{
-			assert(ref4->_shared);
-			assert(ref4->_inSet.find(ref4.host->self_id()) != ref4->_inSet.end());
-			assert(ref4->_inSet.find(ref4.host->self_id())->second);
 			auto& inSet_ = ref4->_inSet;
+			auto it = inSet_.find(ref4.host->self_id());
+			assert(st_shared == ref4->_status);
+			assert(it != ref4->_inSet.end());
+			assert(st_shared == it->second);
 			if (inSet_.size() == 1)
 			{
 				ref4.complete = true;
-				inSet_[ref4.host->self_id()] = true;
+				ref4->_status = st_upgrade;
+				inSet_[ref4.host->self_id()] = st_upgrade;
 			}
 			else
 			{
+				inSet_.erase(it);
 				auto& ntf_ = ref4.ntf;
-				ref4.complete = false;
 				ntf_ = ref4.ath.make_notifer();
-				wait_node wn = { ntf_, ref4.host->self_id(), false };
+				wait_node wn = { ntf_, ref4.host->self_id(), st_upgrade };
 				ref4->_waitQueue.push_front(wn);
 			}
 		});
@@ -892,6 +904,7 @@ public:
 		{
 			ath.wait();
 		}
+		assert(st_upgrade == _status);
 		qg.unlock();
 	}
 
@@ -903,15 +916,17 @@ public:
 		LAMBDA_THIS_REF2(ref2, host, complete);
 		host->send(_strand, [&ref2]
 		{
-			assert(ref2->_shared);
+			assert(st_shared == ref2->_status);
 			assert(ref2->_inSet.find(ref2.host->self_id()) != ref2->_inSet.end());
-			assert(ref2->_inSet.find(ref2.host->self_id())->second);
+			assert(st_shared == ref2->_inSet.find(ref2.host->self_id())->second);
 			if (ref2->_inSet.size() == 1)
 			{
 				ref2.complete = true;
-				ref2->_inSet[ref2.host->self_id()] = true;
+				ref2->_status = st_upgrade;
+				ref2->_inSet[ref2.host->self_id()] = st_upgrade;
 			}
 		});
+		assert(!complete || st_upgrade == _status);
 		qg.unlock();
 		return complete;
 	}
@@ -927,22 +942,24 @@ public:
 		LAMBDA_THIS_REF5(ref5, host, complete, ath, ntf, nit);
 		host->send(_strand, [&ref5]
 		{
-			assert(ref5->_shared);
-			assert(ref5->_inSet.find(ref5.host->self_id()) != ref5->_inSet.end());
-			assert(ref5->_inSet.find(ref5.host->self_id())->second);
 			auto& inSet_ = ref5->_inSet;
+			auto it = inSet_.find(ref5.host->self_id());
+			assert(st_shared == ref5->_status);
+			assert(it != inSet_.end());
+			assert(st_shared == it->second);
 			if (inSet_.size() == 1)
 			{
 				ref5.complete = true;
-				inSet_[ref5.host->self_id()] = true;
+				ref5->_status = st_upgrade;
+				inSet_[ref5.host->self_id()] = st_upgrade;
 			}
 			else
 			{
-				auto& ntf_ = ref5.ntf;
+				inSet_.erase(it);
 				auto& waitQueue_ = ref5->_waitQueue;
-				ref5.complete = false;
+				auto& ntf_ = ref5.ntf;
 				ntf_ = ref5.ath.make_notifer();
-				wait_node wn = { ntf_, ref5.host->self_id(), false };
+				wait_node wn = { ntf_, ref5.host->self_id(), st_upgrade };
 				waitQueue_.push_front(wn);
 				ref5.nit = waitQueue_.begin();
 			}
@@ -970,6 +987,7 @@ public:
 				ath.wait();
 			}
 		}
+		assert(complete && st_upgrade == _status);
 		qg.unlock();
 		return true;
 	}
@@ -980,17 +998,35 @@ public:
 		my_actor::quit_guard qg(host);
 		host->send(_strand, [&]
 		{
-			assert(!_shared);
+			assert(st_unique == _status);
 			auto it = _inSet.find(host->self_id());
 			assert(it != _inSet.end());
-			assert(!it->second);
+			assert(st_unique == it->second);
 			_inSet.erase(it);
+			assert(_inSet.empty());
 			if (!_waitQueue.empty())
 			{
-				_shared = _waitQueue.back()._isShared;
-				_inSet[_waitQueue.back()._waitHostID] = _shared;
-				_waitQueue.back().ntf();
+				auto& queueBack_ = _waitQueue.back();
+				_status = queueBack_._status;
+				_inSet[queueBack_._waitHostID] = _status;
+				queueBack_.ntf();
 				_waitQueue.pop_back();
+				if (st_shared == _status)
+				{
+					for (auto it = _waitQueue.begin(); it != _waitQueue.end();)
+					{
+						if (st_shared == it->_status)
+						{
+							_inSet[it->_waitHostID] = st_shared;
+							it->ntf();
+							_waitQueue.erase(it++);
+						}
+						else
+						{
+							it++;
+						}
+					}
+				}
 			}
 		});
 		qg.unlock();
@@ -1002,17 +1038,22 @@ public:
 		my_actor::quit_guard qg(host);
 		host->send(_strand, [&]
 		{
-			assert(_shared);
+			assert(st_shared == _status);
 			auto it = _inSet.find(host->self_id());
 			assert(it != _inSet.end());
-			assert(it->second);
+			assert(st_shared == it->second);
 			_inSet.erase(it);
-			if (!_waitQueue.empty())
+			if (_inSet.empty())
 			{
-				_shared = _waitQueue.back()._isShared;
-				_inSet[_waitQueue.back()._waitHostID] = _shared;
-				_waitQueue.back().ntf();
-				_waitQueue.pop_back();
+				if (!_waitQueue.empty())
+				{
+					auto& queueBack_ = _waitQueue.back();
+					_status = queueBack_._status;
+					_inSet[queueBack_._waitHostID] = _status;
+					queueBack_.ntf();
+					_waitQueue.pop_back();
+					assert(st_shared != _status);
+				}
 			}
 		});
 		qg.unlock();
@@ -1024,25 +1065,34 @@ public:
 		my_actor::quit_guard qg(host);
 		host->send(_strand, [&]
 		{
-			assert(_inSet.find(host->self_id()) != _inSet.end());
-			assert(_inSet.find(host->self_id())->second);
 			assert(_inSet.size() == 1);
-			_inSet[host->self_id()] = true;
-			if (!_waitQueue.empty())
+			assert(_inSet.find(host->self_id()) != _inSet.end());
+			assert(st_upgrade == _inSet.find(host->self_id())->second);
+			assert(st_upgrade == _status);
+			_status = st_shared;
+			_inSet[host->self_id()] = st_shared;
+			for (auto it = _waitQueue.begin(); it != _waitQueue.end();)
 			{
-				_shared = _waitQueue.back()._isShared;
-				_inSet[_waitQueue.back()._waitHostID] = _shared;
-				_waitQueue.back().ntf();
-				_waitQueue.pop_back();
+				if (st_shared == it->_status)
+				{
+					_inSet[it->_waitHostID] = st_shared;
+					it->ntf();
+					_waitQueue.erase(it++);
+				}
+				else
+				{
+					it++;
+				}
 			}
 		});
 		qg.unlock();
+		assert(st_shared == _status);
 	}
 private:
+	lock_status _status;
 	shared_strand _strand;
 	msg_list<wait_node> _waitQueue;
-	msg_map<my_actor::id, bool> _inSet;
-	bool _shared;
+	msg_map<my_actor::id, lock_status> _inSet;
 };
 //////////////////////////////////////////////////////////////////////////
 

@@ -60,39 +60,44 @@ ContextPool_::~ContextPool_()
 ContextPool_::coro_pull_interface* ContextPool_::getContext(size_t size)
 {
 	assert(size && size % 4096 == 0 && size <= 1024 * 1024);
+	size = std::max(size, (size_t)CORO_CONTEXT_STATE_SPACE);
+	do
+	{
 #ifdef FIBER_CORO
 #if _WIN32_WINNT >= 0x0600
-	if (!IsThreadAFiber())
-	{
-		ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH);
-	}
-#else//#elif _MSC_VER >= 0x0501
-	ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH);
-#endif
-#endif
-	{
-		context_pool_pck& pool = s_fiberPool._contextPool[size / 4096 - 1];
-		pool._mutex.lock();
-		if (!pool._pool.empty())
+		if (!IsThreadAFiber())
 		{
-			coro_pull_interface* oldFiber = pool._pool.back();
-			pool._pool.pop_back();
-			pool._mutex.unlock();
-			oldFiber->_tick = 0;
-			return oldFiber;
+			ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH);
 		}
-		pool._mutex.unlock();
-	}
-	s_fiberPool._stackCount++;
-	s_fiberPool._stackTotalSize += size;
-	coro_pull_interface* newFiber = new coro_pull_interface;
-	newFiber->_tick = 0;
-	newFiber->_coroInfo = context_yield::make_context(size, ContextPool_::contextHandler, newFiber);
-	if (newFiber->_coroInfo)
-	{
-		return newFiber;
-	}
-	delete newFiber;
+#else//#elif _MSC_VER >= 0x0501
+		ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH);
+#endif
+#endif
+		{
+			context_pool_pck& pool = s_fiberPool._contextPool[size / 4096 - 1];
+			pool._mutex.lock();
+			if (!pool._pool.empty())
+			{
+				coro_pull_interface* oldFiber = pool._pool.back();
+				pool._pool.pop_back();
+				pool._mutex.unlock();
+				oldFiber->_tick = 0;
+				return oldFiber;
+			}
+			pool._mutex.unlock();
+		}
+		coro_pull_interface* newFiber = new coro_pull_interface;
+		newFiber->_tick = 0;
+		newFiber->_coroInfo = context_yield::make_context(size, ContextPool_::contextHandler, newFiber);
+		if (newFiber->_coroInfo)
+		{
+			s_fiberPool._stackCount++;
+			s_fiberPool._stackTotalSize += size;
+			return newFiber;
+		}
+		delete newFiber;
+		size += PAGE_SIZE;
+	} while (size <= 1024 * 1024);
 	throw std::shared_ptr<string>(new string("context ¿Õ¼ä²»×ã"));
 }
 
