@@ -3456,7 +3456,7 @@ struct AutoStackActorFace_
 {
 	virtual size_t key() = 0;
 	virtual size_t stack_size() = 0;
-	virtual void suck(std::function<void(my_actor*)>& sk) = 0;
+	virtual void swap(std::function<void(my_actor*)>& sk) = 0;
 };
 
 template <typename Handler>
@@ -3475,7 +3475,7 @@ struct AutoStackActor_ : public AutoStackActorFace_
 		return _stackSize;
 	}
 
-	void suck(std::function<void(my_actor*)>& sk)
+	void swap(std::function<void(my_actor*)>& sk)
 	{
 		sk = (Handler)_h;
 	}

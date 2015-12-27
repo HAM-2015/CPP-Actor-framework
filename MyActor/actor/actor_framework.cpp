@@ -6,19 +6,6 @@
 typedef ContextPool_::coro_push_interface actor_push_type;
 typedef ContextPool_::coro_pull_interface actor_pull_type;
 
-template <typename Handler>
-void make_coro(actor_pull_type* pull, Handler&& handler)
-{
-	pull->_param = &handler;
-	pull->_currentHandler = [](actor_push_type& push, void* p)
-	{
-		std::function<void(actor_push_type&)> mh((Handler&&)(*(Handler*)p));
-		mh(push);
-	};
-	(*pull)();
-}
-//////////////////////////////////////////////////////////////////////////
-
 #ifdef WIN32
 #ifdef CHECK_SELF
 #ifndef ENABLE_TLS_CHECK_SELF
@@ -1196,6 +1183,7 @@ public:
 private:
 	my_actor& _actor;
 };
+//////////////////////////////////////////////////////////////////////////
 
 my_actor::my_actor()
 :_suspendResumeQueue(_suspendResumeQueueAll),
@@ -1301,14 +1289,21 @@ actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& main
 #ifdef WIN32
 #ifdef CHECK_SELF
 #ifndef ENABLE_TLS_CHECK_SELF
+	context_yield::coro_info* info = pull->_coroInfo;
 	s_stackLineMutex.lock();
-	newActor->_topIt = s_stackLine.insert(make_pair((char*)newActor->_stackTop, (my_actor*)NULL)).first;
-	newActor->_btIt = s_stackLine.insert(newActor->_topIt, make_pair((char*)newActor->_stackTop - newActor->_stackSize, newActor.get()));
+	newActor->_topIt = s_stackLine.insert(make_pair((char*)info->stackTop, (my_actor*)NULL)).first;
+	newActor->_btIt = s_stackLine.insert(newActor->_topIt, make_pair((char*)info->stackTop - info->stackSize - info->reserveSize, newActor.get()));
 	s_stackLineMutex.unlock();
 #endif
 #endif
 #endif
-	make_coro(pull, actor_run(*newActor));
+	pull->_param = newActor.get();
+	pull->_currentHandler = [](actor_push_type& push, void* p)
+	{
+		actor_run entrance(*(my_actor*)p);
+		entrance(push);
+	};
+	(*pull)();
 	return newActor;
 }
 
@@ -1332,7 +1327,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 	newActor->_weakThis = newActor;
 	newActor->_strand = actorStrand;
 	newActor->_autoStack = true;
-	wrapActor.suck(newActor->_mainFunc);
+	wrapActor.swap(newActor->_mainFunc);
 	newActor->_actorKey = wrapActor.key();
 	newActor->_timer = actorStrand->get_timer();
 	newActor->_actorPull = pull;
@@ -1343,14 +1338,21 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 #ifdef WIN32
 #ifdef CHECK_SELF
 #ifndef ENABLE_TLS_CHECK_SELF
+	context_yield::coro_info* info = pull->_coroInfo;
 	s_stackLineMutex.lock();
-	newActor->_topIt = s_stackLine.insert(make_pair((char*)newActor->_stackTop, (my_actor*)NULL)).first;
-	newActor->_btIt = s_stackLine.insert(newActor->_topIt, make_pair((char*)newActor->_stackTop - newActor->_stackSize, newActor.get()));
+	newActor->_topIt = s_stackLine.insert(make_pair((char*)info->stackTop, (my_actor*)NULL)).first;
+	newActor->_btIt = s_stackLine.insert(newActor->_topIt, make_pair((char*)info->stackTop - info->stackSize - info->reserveSize, newActor.get()));
 	s_stackLineMutex.unlock();
 #endif
 #endif
 #endif
-	make_coro(pull, actor_run(*newActor));
+	pull->_param = newActor.get();
+	pull->_currentHandler = [](actor_push_type& push, void* p)
+	{
+		actor_run entrance(*(my_actor*)p);
+		entrance(push);
+	};
+	(*pull)();
 	return newActor;
 }
 
