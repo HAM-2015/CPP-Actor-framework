@@ -28,6 +28,7 @@
         <string>*.cxx</string>
         <string>*.mak</string>
         <string>Makefile</string>
+        <string>*.a</string>
       </FileMasks>
       <TransferNewFilesOnly>true</TransferNewFilesOnly>
       <IncludeSubdirectories>true</IncludeSubdirectories>

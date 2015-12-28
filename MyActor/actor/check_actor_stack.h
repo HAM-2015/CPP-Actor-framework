@@ -4,7 +4,11 @@
 //Ä¬ÈÏ¶ÑÕ»´óÐ¡64k
 #define kB	*1024
 
+#ifdef WIN32
 #define DEFAULT_STACKSIZE	(64 kB - STACK_RESERVED_SPACE_SIZE)
+#elif __linux__
+#define DEFAULT_STACKSIZE	CORO_CONTEXT_STATE_SPACE
+#endif
 
 #if (_DEBUG || DEBUG)
 #define STACK_SIZE(__debug__, __release__) (__debug__)

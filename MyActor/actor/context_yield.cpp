@@ -1,6 +1,7 @@
 #include "coro_choice.h"
 #include "context_yield.h"
 #include "check_actor_stack.h"
+#include "scattered.h"
 
 #ifdef BOOST_CORO
 
@@ -9,10 +10,13 @@ typedef boost::coroutines::coroutine<void>::pull_type boost_pull_type;
 typedef boost::coroutines::coroutine<void>::push_type boost_push_type;
 typedef boost::coroutines::attributes coro_attributes;
 
+#ifdef __linux__
+#include <sys/mman.h>
+#endif
+
 #elif (defined LIB_CORO)
 
 #ifdef WIN32
-#include "scattered.h"
 
 #ifdef _MSC_VER
 #ifdef _WIN64
@@ -53,7 +57,7 @@ extern "C"
 #include <Windows.h>
 
 #endif
-
+#include <boost/coroutine/protected_stack_allocator.hpp>
 namespace context_yield
 {
 #ifdef BOOST_CORO
@@ -67,8 +71,8 @@ namespace context_yield
 
 		void allocate(boost::coroutines::stack_context & stackCon, size_t size)
 		{
-#ifdef WIN32
 			size_t allocSize = MEM_ALIGN(size + STACK_RESERVED_SPACE_SIZE, 64 kB);
+#ifdef WIN32
 			void* stack = VirtualAlloc(NULL, allocSize, MEM_RESERVE, PAGE_READWRITE);
 			if (!stack)
 			{
@@ -81,11 +85,22 @@ namespace context_yield
 			stackCon.sp = _info->stackTop;
 			stackCon.size = allocSize;
 #else
-			boost::coroutines::stack_allocator all;
-			all.allocate(stackCon, size);
-			_info->stackTop = stackCon.sp;
-			_info->stackSize = stackCon.size;
-			_info->reserveSize = 0;
+			void* stack = mmap(0, allocSize, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+			if (!stack)
+			{
+				throw size_t(allocSize);
+			}
+			_info->stackTop = (char*)stack + allocSize;
+#if (_DEBUG || DEBUG)
+			_info->stackSize = allocSize - PAGE_SIZE;
+			_info->reserveSize = PAGE_SIZE;
+#else
+			_info->stackSize = size;
+			_info->reserveSize = allocSize - _info->stackSize;
+#endif
+			mprotect((char*)stack + _info->reserveSize, _info->stackSize, PROT_READ | PROT_WRITE);
+			stackCon.sp = _info->stackTop;
+			stackCon.size = allocSize;
 #endif
 		}
 
@@ -94,8 +109,7 @@ namespace context_yield
 #ifdef WIN32
 			VirtualFree((char*)stackCon.sp - stackCon.size, 0, MEM_RELEASE);
 #else
-			boost::coroutines::stack_allocator all;
-			all.deallocate(stackCon);
+			munmap((char*)stackCon.sp - stackCon.size, stackCon.size);
 #endif
 		}
 
@@ -186,14 +200,22 @@ namespace context_yield
 #elif __linux__
 	context_yield::coro_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
 	{
-		void* stack = malloc(stackSize);
+		size_t allocSize = MEM_ALIGN(stackSize + STACK_RESERVED_SPACE_SIZE, 64 kB);
+		void* stack = mmap(0, allocSize, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 		if (!stack)
 		{
 			return NULL;
 		}
 		context_yield::coro_info* info = new context_yield::coro_info;
-		info->stackTop = (char*)stack + stackSize;
+		info->stackTop = (char*)stack + allocSize;
+#if (_DEBUG || DEBUG)
+		info->stackSize = allocSize - PAGE_SIZE;
+		info->reserveSize = PAGE_SIZE;
+#else
 		info->stackSize = stackSize;
+		info->reserveSize = allocSize - info->stackSize;
+#endif
+		mprotect((char*)stack + info->reserveSize, info->stackSize, PROT_READ | PROT_WRITE);
 		info->obj = new ucontext_t;
 		info->nc = new ucontext_t;
 		ucontext_t* returnCt = (ucontext_t*)info->nc;
@@ -201,7 +223,7 @@ namespace context_yield
 		getcontext(callCt);
 		callCt->uc_link = returnCt;
 		callCt->uc_stack.ss_sp = stack;
-		callCt->uc_stack.ss_size = stackSize;
+		callCt->uc_stack.ss_size = allocSize;
 		makecontext(callCt, (void(*)())handler, 2, info, p);
 		swapcontext(returnCt, callCt);
 		return info;
@@ -225,7 +247,7 @@ namespace context_yield
 	{
 		ucontext_t* returnCt = (ucontext_t*)info->nc;
 		ucontext_t* callCt = (ucontext_t*)info->obj;
-		free((char*)info->stackTop - info->stackSize);
+		munmap((char*)info->stackTop - info->stackSize - info->reserveSize, info->stackSize);
 		delete info;
 		delete callCt;
 		delete returnCt;

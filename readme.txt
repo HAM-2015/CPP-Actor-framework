@@ -12,6 +12,10 @@ oschina url:
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
+2015-12-28
+添加linux平台下的自动栈空间伸缩管理;
+感谢libsigsegv(http://www.gnu.org/software/libsigsegv/).
+
 2015-12-25
 添加windows平台下的自动栈空间伸缩管理.
 

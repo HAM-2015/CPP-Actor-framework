@@ -147,5 +147,11 @@
     <ClInclude Include="actor\context_yield.h">
       <Filter>Header files\actor</Filter>
     </ClInclude>
+    <ClInclude Include="actor\sigsegv.h">
+      <Filter>Header files\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

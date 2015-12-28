@@ -145,10 +145,9 @@ public:
 	static void* swapTlsValue(int i, void* val);
 
 	/*!
-	@brief 获取某个tls变量空间
-	@param 0 <= i < 64
+	@brief 获取tls变量空间
 	*/
-	static void** getTlsValuePtr(int i);
+	static void** getTlsValueBuff();
 private:
 	void _run(size_t threadNum, sched policy);
 	void _stop();

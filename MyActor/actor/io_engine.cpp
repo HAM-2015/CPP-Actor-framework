@@ -1,6 +1,7 @@
 #include "io_engine.h"
 #include "mem_pool.h"
 #include "coro_choice.h"
+#include "actor_framework.h"
 #include <boost/asio/detail/strand_service.hpp>
 #include <memory>
 #ifndef DISABLE_BOOST_TIMER
@@ -90,6 +91,9 @@ void io_engine::_run(size_t threadNum, sched policy)
 		{
 			boost::thread* newThread = new boost::thread([&, i]
 			{
+#ifdef __linux__
+				char actorExtraStack[16 kB];
+#endif
 				try
 				{
 					{
@@ -111,6 +115,9 @@ void io_engine::_run(size_t threadNum, sched policy)
 						auto lockMutex = blockMutex;
 						auto lockConVar = blockConVar;
 						std::unique_lock<std::mutex> ul(*lockMutex);
+#ifdef __linux__
+						my_actor::regist_sigsegv_handler(actorExtraStack, sizeof(actorExtraStack));
+#endif
 						if (threadNum == ++rc)
 						{
 							lockConVar->notify_all();
@@ -324,8 +331,7 @@ void* io_engine::swapTlsValue(int i, void* val)
 	return old;
 }
 
-void** io_engine::getTlsValuePtr(int i)
+void** io_engine::getTlsValueBuff()
 {
-	assert(i >= 0 && i < 64);
-	return _tls.get_space() + i;
+	return _tls.get_space();
 }

@@ -3984,15 +3984,18 @@ public:
 	*/
 	struct stack_info 
 	{
-		void* stackTop;
-		void* spReg;
-		size_t stackSize;
-		size_t consumeSize;
-		int idleSize;
+		void* stackTop;///<栈顶
+		void* spReg;///<esp/rsp寄存器
+		size_t stackSize;///<栈预定大小
+		size_t consumeSize;///<当前函数到栈顶的距离
+		size_t usingSize;///<当前消耗的栈
+		size_t reserveSize;///<栈底预留大小
+		int idleSize;///<当前函数到栈底的距离
 	private:
 		friend std::ostream& operator <<(std::ostream& out, const stack_info& s)
 		{
-			out << "(stackTop:" << s.stackTop << ", spReg:" << s.spReg << ", stackSize:" << s.stackSize << ", consumeSize:" << s.consumeSize << ", idleSize:" << s.idleSize << ")";
+			out << "(stackTop:" << s.stackTop << ", spReg:" << s.spReg << ", stackSize:" << s.stackSize << ", consumeSize:"<< s.consumeSize 
+				<< ", usingSize:" << s.usingSize << ", reserveSize" << s.reserveSize << ", idleSize:" << s.idleSize << ")";
 			return out;
 		}
 	};
@@ -6443,6 +6446,9 @@ private:
 	void exit_callback();
 	void child_suspend_cb_handler();
 	void child_resume_cb_handler();
+#ifdef __linux__
+	static void regist_sigsegv_handler(void* actorExtraStack, size_t size);
+#endif
 public:
 #ifdef PRINT_ACTOR_STACK
 	std::shared_ptr<list<stack_line_info>> _createStack;//当前Actor创建时的调用堆栈

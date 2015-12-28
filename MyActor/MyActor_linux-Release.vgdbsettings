@@ -28,6 +28,7 @@
         <string>*.cxx</string>
         <string>*.mak</string>
         <string>Makefile</string>
+        <string>*.a</string>
       </FileMasks>
       <TransferNewFilesOnly>true</TransferNewFilesOnly>
       <IncludeSubdirectories>true</IncludeSubdirectories>
@@ -73,6 +74,11 @@
     </Toolchain>
     <MakeCommandTemplate>
       <SkipWhenRunningCommandList>false</SkipWhenRunningCommandList>
+      <RemoteHost>
+        <HostName>192.168.1.69</HostName>
+        <Transport>SSH</Transport>
+        <UserName>ham</UserName>
+      </RemoteHost>
       <Command>make</Command>
       <WorkingDirectory>$(BuildDir)</WorkingDirectory>
       <Environment>

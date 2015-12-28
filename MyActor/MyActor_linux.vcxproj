@@ -141,6 +141,7 @@
     <ClInclude Include="actor\msg_queue.h" />
     <ClInclude Include="actor\scattered.h" />
     <ClInclude Include="actor\shared_strand.h" />
+    <ClInclude Include="actor\sigsegv.h" />
     <ClInclude Include="actor\stack_object.h" />
     <ClInclude Include="actor\strand_ex.h" />
     <ClInclude Include="actor\sync_msg.h" />
@@ -153,6 +154,7 @@
     <ClInclude Include="actor\wrapped_next_tick_handler.h" />
     <ClInclude Include="actor\wrapped_post_handler.h" />
     <ClInclude Include="actor\wrapped_try_tick_handler.h" />
+    <ClInclude Include="resource.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

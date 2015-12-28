@@ -2,6 +2,10 @@
 #include "async_buffer.h"
 #include "sync_msg.h"
 #include "context_pool.h"
+#ifdef __linux__
+#include "sigsegv.h"
+#include <sys/mman.h>
+#endif
 
 typedef ContextPool_::coro_push_interface actor_push_type;
 typedef ContextPool_::coro_pull_interface actor_pull_type;
@@ -1175,14 +1179,66 @@ public:
 #elif __linux__
 	void operator ()(actor_push_type& actorPush)
 	{
+		context_yield::coro_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
+		char* const sp = (char*)((size_t)get_sp() & (1 - PAGE_SIZE));
+		_actor._usingStackSize = info->stackSize;
 		actor_handler(actorPush);
+		if (_actor._autoStack)
+		{
+			s_autoActorStackMng.update_stack_size(_actor._actorKey, _actor._usingStackSize);
+		}
 		exit_notify();
+		if (_actor._usingStackSize > info->stackSize)
+		{
+			mprotect((char*)info->stackTop - info->stackSize - info->reserveSize, info->reserveSize, PROT_NONE);
+		}
+	}
+
+	static int sigsegv_handler(void* fault_address, int serious)
+	{
+		my_actor* self = my_actor::self_actor();
+		if (self)
+		{
+			context_yield::coro_info* const info = ((actor_pull_type*)self->_actorPull)->_coroInfo;
+			char* const violationAddr = (char*)((size_t)fault_address & (1 - PAGE_SIZE));
+			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
+			if (violationAddr >= sb && violationAddr < info->stackTop)
+			{
+				mprotect(violationAddr, PAGE_SIZE, PROT_READ | PROT_WRITE);
+				if (violationAddr < (char*)info->stackTop - self->_usingStackSize)
+				{
+					self->_usingStackSize = (char*)info->stackTop - violationAddr;
+				}
+				return -1;
+			}
+		}
+		exit(100);
+		return 0;
+	}
+
+	static void stackoverflow_handler(int emergency, stackoverflow_context_t scp)
+	{
+
+	}
+
+	static void regist_sigsegv_handler(void* actorExtraStack, size_t size)
+	{
+		stackoverflow_install_handler(stackoverflow_handler, actorExtraStack, size);
+		sigsegv_install_handler(sigsegv_handler);
 	}
 #endif
 
 private:
 	my_actor& _actor;
 };
+
+#ifdef __linux__
+void my_actor::regist_sigsegv_handler(void* actorExtraStack, size_t size)
+{
+	actor_run::regist_sigsegv_handler(actorExtraStack, size);
+}
+#endif
+
 //////////////////////////////////////////////////////////////////////////
 
 my_actor::my_actor()
@@ -1310,7 +1366,6 @@ actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& main
 actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor)
 {
 	actor_pull_type* pull = NULL;
-#ifdef WIN32
 	if (wrapActor.stack_size())
 	{
 		pull = ContextPool_::getContext(wrapActor.stack_size());
@@ -1320,9 +1375,6 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 		size_t s = s_autoActorStackMng.get_stack_size(wrapActor.key());
 		pull = ContextPool_::getContext(s ? s : DEFAULT_STACKSIZE);
 	}
-#elif __linux__
-	pull = ContextPool_::getContext(64 kB);
-#endif
 	actor_handle newActor(new(pull->_space)my_actor(), [](my_actor* p){p->~my_actor(); }, actor_ref_count_alloc<void>(pull));
 	newActor->_weakThis = newActor;
 	newActor->_strand = actorStrand;
@@ -2717,7 +2769,12 @@ my_actor* my_actor::self_actor()
 #ifdef WIN32
 #ifdef CHECK_SELF
 #ifdef ENABLE_TLS_CHECK_SELF
-	return (my_actor*)io_engine::getTlsValue(ACTOR_TLS_INDEX);
+	void** buff = io_engine::getTlsValueBuff();
+	if (buff)
+	{
+		return (my_actor*)buff[ACTOR_TLS_INDEX];
+	}
+	return NULL;
 #else
 	std::lock_guard<std::mutex> lg(s_stackLineMutex);
 	auto eit = s_stackLine.insert(make_pair(get_sp(), (my_actor*)NULL));
@@ -2731,7 +2788,12 @@ my_actor* my_actor::self_actor()
 #endif
 	return NULL;
 #elif __linux__
-	return (my_actor*)io_engine::getTlsValue(ACTOR_TLS_INDEX);
+	void** buff = io_engine::getTlsValueBuff();
+	if (buff)
+	{
+		return (my_actor*)buff[ACTOR_TLS_INDEX];
+	}
+	return NULL;
 #endif
 }
 
@@ -2749,7 +2811,11 @@ my_actor::stack_info my_actor::self_stack()
 	assert_enter();
 	void* sp = get_sp();
 	context_yield::coro_info* info = ((actor_pull_type*)_actorPull)->_coroInfo;
-	stack_info si = { info->stackTop, sp, info->stackSize, (size_t)info->stackTop - (size_t)sp, 
+	stack_info si = { info->stackTop,
+		sp, info->stackSize,
+		(size_t)info->stackTop - (size_t)sp,
+		_usingStackSize,
+		info->reserveSize,
 		(int)(info->stackSize - ((size_t)info->stackTop - (size_t)sp)) };
 	return si;
 }
