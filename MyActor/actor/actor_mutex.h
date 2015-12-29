@@ -16,7 +16,13 @@ class actor_mutex
 	friend my_actor;
 public:
 	actor_mutex(const shared_strand& strand);
+	actor_mutex(const actor_mutex& s);
+	actor_mutex(actor_mutex&& s);
+	actor_mutex();
 	~actor_mutex();
+public:
+	void operator=(const actor_mutex& s);
+	void operator=(actor_mutex&& s);
 public:
 	/*!
 	@brief 锁定资源，如果被别的Actor持有，等待，直到被调度，用 unlock 解除持有；可递归调用；lock期间Actor将锁定强制退出
@@ -77,7 +83,13 @@ class actor_condition_variable
 {
 public:
 	actor_condition_variable(const shared_strand& strand);
+	actor_condition_variable(const actor_condition_variable& s);
+	actor_condition_variable(actor_condition_variable&& s);
+	actor_condition_variable();
 	~actor_condition_variable();
+public:
+	void operator=(const actor_condition_variable& s);
+	void operator=(actor_condition_variable&& s);
 public:
 	/*!
 	@brief 等待一个通知
@@ -110,7 +122,13 @@ class actor_shared_mutex
 {
 public:
 	actor_shared_mutex(const shared_strand& strand);
+	actor_shared_mutex(const actor_shared_mutex& s);
+	actor_shared_mutex(actor_shared_mutex&& s);
+	actor_shared_mutex();
 	~actor_shared_mutex();
+public:
+	void operator=(const actor_shared_mutex& s);
+	void operator=(actor_shared_mutex&& s);
 public:
 	/*!
 	@brief 独占锁

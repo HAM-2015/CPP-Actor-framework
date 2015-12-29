@@ -295,13 +295,16 @@ public:
 		});
 	}
 
-	void close(my_actor* host)
+	void close(my_actor* host, bool clearBuff = true)
 	{
 		my_actor::quit_guard qg(host);
-		host->send(_strand, [this]
+		host->send(_strand, [&]
 		{
 			_closed = true;
-			_buffer.clear();
+			if (clearBuff)
+			{
+				_buffer.clear();
+			}
 			while (!_pushWait.empty())
 			{
 				_pushWait.front()(true);
@@ -316,12 +319,27 @@ public:
 		qg.unlock();
 	}
 
+	size_t length(my_actor* host)
+	{
+		my_actor::quit_guard qg(host);
+		size_t l = 0;
+		host->send(_strand, [&]
+		{
+			l = _buffer.size();
+		});
+		qg.unlock();
+		return l;
+	}
+
+	size_t snap_length()
+	{
+		return _buffer.size();
+	}
+
 	void reset()
 	{
+		assert(_closed);
 		_closed = false;
-		_buffer.clear();
-		_pushWait.clear();
-		_popWait.clear();
 	}
 private:
 	async_buffer(const async_buffer&){};

@@ -38,7 +38,7 @@ public:
 	static std::shared_ptr<timer_boost> create(const shared_strand& strand);
 	const shared_strand& self_strand() const;
 private:
-	timer_handle timeout(unsigned long long us, const async_handle& host);
+	timer_handle timeout(unsigned long long us, async_handle&& host);
 	void cancel(timer_handle& th);
 	void timer_loop(unsigned long long us);
 private:

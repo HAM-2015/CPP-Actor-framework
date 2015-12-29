@@ -32,7 +32,7 @@ ActorTimer_::~ActorTimer_()
 	_ios.freeTimer(_timer);
 }
 
-ActorTimer_::timer_handle ActorTimer_::timeout(unsigned long long us, const actor_handle& host)
+ActorTimer_::timer_handle ActorTimer_::timeout(unsigned long long us, actor_handle&& host)
 {
 	if (!_strand)
 	{
@@ -46,11 +46,11 @@ ActorTimer_::timer_handle ActorTimer_::timeout(unsigned long long us, const acto
 	if (et >= _extMaxTick)
 	{
 		_extMaxTick = et;
-		timerHandle._queueNode = _handlerQueue.insert(_handlerQueue.end(), make_pair(et, host));
+		timerHandle._queueNode = _handlerQueue.insert(_handlerQueue.end(), make_pair(et, std::move(host)));
 	}
 	else
 	{
-		timerHandle._queueNode = _handlerQueue.insert(make_pair(et, host));
+		timerHandle._queueNode = _handlerQueue.insert(make_pair(et, std::move(host)));
 	}
 	
 	if (!_looping)

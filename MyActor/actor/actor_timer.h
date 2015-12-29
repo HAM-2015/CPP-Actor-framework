@@ -47,7 +47,7 @@ private:
 	@param host 准备计时的Actor
 	@return 计时句柄，用于cancel
 	*/
-	timer_handle timeout(unsigned long long us, const actor_handle& host);
+	timer_handle timeout(unsigned long long us, actor_handle&& host);
 
 	/*!
 	@brief 取消计时

@@ -43,7 +43,7 @@ const shared_strand& timer_boost::self_strand() const
 	return _strand;
 }
 
-timer_boost::timer_handle timer_boost::timeout(unsigned long long us, const async_handle& host)
+timer_boost::timer_handle timer_boost::timeout(unsigned long long us, async_handle&& host)
 {
 	assert(_strand->running_in_this_thread());
 	assert(us < 0x80000000LL * 1000);
@@ -53,11 +53,11 @@ timer_boost::timer_handle timer_boost::timeout(unsigned long long us, const asyn
 	if (et >= _extMaxTick)
 	{
 		_extMaxTick = et;
-		timerHandle._queueNode = _handlerQueue.insert(_handlerQueue.end(), make_pair(et, host));
+		timerHandle._queueNode = _handlerQueue.insert(_handlerQueue.end(), make_pair(et, std::move(host)));
 	}
 	else
 	{
-		timerHandle._queueNode = _handlerQueue.insert(make_pair(et, host));
+		timerHandle._queueNode = _handlerQueue.insert(make_pair(et, std::move(host)));
 	}
 
 	if (!_lockThis)

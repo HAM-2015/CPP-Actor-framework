@@ -387,7 +387,15 @@ private:
 //////////////////////////////////////////////////////////////////////////
 
 actor_mutex::actor_mutex(const shared_strand& strand)
-:_amutex(new ActorMutex_(strand))
+:_amutex(new ActorMutex_(strand)) {}
+
+actor_mutex::actor_mutex(const actor_mutex& s)
+: _amutex(s._amutex) {}
+
+actor_mutex::actor_mutex(actor_mutex&& s)
+: _amutex(std::move(s._amutex)) {}
+
+actor_mutex::actor_mutex()
 {
 
 }
@@ -426,6 +434,17 @@ void actor_mutex::quited_unlock(my_actor* host) const
 {
 	_amutex->quited_unlock(host);
 }
+
+void actor_mutex::operator=(const actor_mutex& s)
+{
+	_amutex = s._amutex;
+}
+
+void actor_mutex::operator=(actor_mutex&& s)
+{
+	_amutex = std::move(s._amutex);
+}
+
 //////////////////////////////////////////////////////////////////////////
 
 actor_lock_guard::actor_lock_guard(const actor_mutex& amutex, my_actor* host)
@@ -592,7 +611,15 @@ private:
 //////////////////////////////////////////////////////////////////////////
 
 actor_condition_variable::actor_condition_variable(const shared_strand& strand)
-:_aconVar(new ActorConditionVariable_(strand))
+:_aconVar(new ActorConditionVariable_(strand)) {}
+
+actor_condition_variable::actor_condition_variable(const actor_condition_variable& s)
+: _aconVar(s._aconVar) {}
+
+actor_condition_variable::actor_condition_variable(actor_condition_variable&& s)
+: _aconVar(std::move(s._aconVar)) {}
+
+actor_condition_variable::actor_condition_variable()
 {
 
 }
@@ -621,6 +648,17 @@ size_t actor_condition_variable::notify_all(my_actor* host) const
 {
 	return _aconVar->notify_all(host);
 }
+
+void actor_condition_variable::operator=(const actor_condition_variable& s)
+{
+	_aconVar = s._aconVar;
+}
+
+void actor_condition_variable::operator=(actor_condition_variable&& s)
+{
+	_aconVar = std::move(s._aconVar);
+}
+
 //////////////////////////////////////////////////////////////////////////
 
 class ActorSharedMutex
@@ -1102,6 +1140,17 @@ actor_shared_mutex::actor_shared_mutex(const shared_strand& strand)
 
 }
 
+actor_shared_mutex::actor_shared_mutex(const actor_shared_mutex& s)
+: _amutex(s._amutex) {}
+
+actor_shared_mutex::actor_shared_mutex(actor_shared_mutex&& s)
+: _amutex(std::move(s._amutex)) {}
+
+actor_shared_mutex::actor_shared_mutex()
+{
+
+}
+
 actor_shared_mutex::~actor_shared_mutex()
 {
 
@@ -1166,6 +1215,17 @@ void actor_shared_mutex::unlock_upgrade(my_actor* host) const
 {
 	_amutex->unlock_upgrade(host);
 }
+
+void actor_shared_mutex::operator=(const actor_shared_mutex& s)
+{
+	_amutex = s._amutex;
+}
+
+void actor_shared_mutex::operator=(actor_shared_mutex&& s)
+{
+	_amutex = std::move(s._amutex);
+}
+
 //////////////////////////////////////////////////////////////////////////
 
 actor_unique_lock::actor_unique_lock(const actor_shared_mutex& amutex, my_actor* host)

@@ -535,14 +535,18 @@ void socket_test()
 				while (true)
 				{
 					//sck.async_read_some(boost::asio::buffer(buf, sizeof(buf)-1), self->make_asio_context(ec, s));
-					actor_trig_handle<boost::system::error_code, size_t> ath;
-					sck.async_read_some(boost::asio::buffer(buf, sizeof(buf)-1), self->make_trig_notifer_to_self(ath));
-					if (self->timed_wait_trig(2000, ath, ec, s) && !ec)
+					bool timed = false;
+					sck.async_read_some(boost::asio::buffer(buf, sizeof(buf)-1), self->make_timed_context(2000, [&]()
+					{
+						timed = true;
+						sck.close(ec);
+					}, ec, s));
+					if (!timed && !ec)
 					{
 						buf[s] = 0;
 						trace_comma(self->self_id(), "received", buf);
 					} 
-					else if (!ec)
+					else if (timed)
 					{
 						trace_comma(self->self_id(), "receive timeout");
 						break;
