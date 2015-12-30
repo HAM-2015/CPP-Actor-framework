@@ -77,7 +77,7 @@ class WaitableTimerEvent_
 		void destory(reusable_mem& reuMem)
 		{
 			this->~wrap_handler();
-			reuMem.deallocate(this, sizeof(*this));
+			reuMem.deallocate(this);
 		}
 
 		boost::asio::io_service::work _lockWork;

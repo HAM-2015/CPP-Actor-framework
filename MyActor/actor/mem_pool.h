@@ -359,11 +359,17 @@ struct dymem_alloc : public dymem_alloc_mt<null_mutex>
 template <typename MUTEX = std::mutex>
 class reusable_mem_mt
 {
+#pragma pack(1)
 	struct node
 	{
-		unsigned _size;
-		node* _next;
+		size_t _size;
+		union
+		{
+			node* _next;
+			void* _addr[1];
+		};
 	};
+#pragma pack()
 public:
 	reusable_mem_mt()
 	{
@@ -397,7 +403,7 @@ public:
 				_top = _top->_next;
 				if (res->_size >= size)
 				{
-					return res;
+					return res->_addr;
 				}
 				assert(_nodeCount-- > 0);
 				freeMem = res;
@@ -410,14 +416,15 @@ public:
 		{
 			free(freeMem);
 		}
-		return malloc(size < sizeof(node) ? sizeof(node) : size);
+		node* newNode = (node*)malloc(sizeof(_top->_size) + (size < sizeof(_top->_next) ? sizeof(_top->_next) : size));
+		newNode->_size = size;
+		return newNode->_addr;
 	}
 
-	void deallocate(void* p, size_t size)
+	void deallocate(void* p)
 	{
+		node* dp = (node*)((char*)p - sizeof(_top->_size));
 		std::lock_guard<MUTEX> lg(_mutex);
-		node* dp = (node*)p;
-		dp->_size = size < sizeof(node) ? sizeof(node) : (unsigned)size;
 		dp->_next = _top;
 		_top = dp;
 	}

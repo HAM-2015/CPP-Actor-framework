@@ -536,7 +536,7 @@ void socket_test()
 				{
 					//sck.async_read_some(boost::asio::buffer(buf, sizeof(buf)-1), self->make_asio_context(ec, s));
 					bool timed = false;
-					sck.async_read_some(boost::asio::buffer(buf, sizeof(buf)-1), self->make_timed_context(2000, [&]()
+					sck.async_read_some(boost::asio::buffer(buf, sizeof(buf)-1), self->make_asio_timed_context(2000, [&]()
 					{
 						timed = true;
 						sck.close(ec);

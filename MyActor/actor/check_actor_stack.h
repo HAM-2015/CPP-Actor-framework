@@ -1,14 +1,20 @@
 #ifndef __CHECK_ACTOR_STACK_H
 #define __CHECK_ACTOR_STACK_H
 
-//默认堆栈大小64k
 #define kB	*1024
 
 #ifdef WIN32
-#define DEFAULT_STACKSIZE	(64 kB - STACK_RESERVED_SPACE_SIZE)
+#define STACK_BLOCK_SIZE	(64 kB)
 #elif __linux__
-#define DEFAULT_STACKSIZE	CORO_CONTEXT_STATE_SPACE
+#define STACK_BLOCK_SIZE	(32 kB)
 #endif
+
+//默认堆栈
+#define DEFAULT_STACKSIZE	(STACK_BLOCK_SIZE - STACK_RESERVED_SPACE_SIZE)
+
+#define TRY_SIZE(__s__) (0x80000000 | (__s__))
+#define IS_TRY_SIZE(__s__) (0x80000000 & (__s__))
+#define GET_TRY_SIZE(__s__) (0xFFE00000 & (__s__))
 
 #if (_DEBUG || DEBUG)
 #define STACK_SIZE(__debug__, __release__) (__debug__)

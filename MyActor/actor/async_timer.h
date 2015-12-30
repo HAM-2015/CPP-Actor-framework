@@ -85,7 +85,7 @@ class async_timer
 		void destory(reusable_mem& reuMem)
 		{
 			this->~wrap_handler();
-			reuMem.deallocate(this, sizeof(*this));
+			reuMem.deallocate(this);
 		}
 
 		Handler _h;

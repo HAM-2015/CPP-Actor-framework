@@ -1207,18 +1207,13 @@ public:
 			assert(false);
 			exit(-1);
 		}
+		clear_function(_actor._mainFunc);
+		if (_actor._timer)
+		{
+			_actor.cancel_timer();
+		}
 		_actor._quited = true;
 		_actor._notifyQuited = true;
-		clear_function(_actor._mainFunc);
-		clear_function(_actor._timerState._timerCb);
-		if (_actor._timer && !_actor._timerState._timerCompleted)
-		{
-			_actor._timerState._timerCompleted = true;
-			if (_actor._timerState._timerTime)
-			{
-				_actor._timer->cancel(_actor._timerState._timerHandle);
-			}
-		}
 		_actor._msgPoolStatus.clear(&_actor);//yield now
 		_actor._inActor = false;
 		_actor._exited = true;
@@ -1509,14 +1504,36 @@ actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& main
 actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor)
 {
 	actor_pull_type* pull = NULL;
-	if (wrapActor.stack_size())
+	const size_t nsize = wrapActor.stack_size();
+	if (nsize)
 	{
-		pull = ContextPool_::getContext(wrapActor.stack_size());
+		if (IS_TRY_SIZE(nsize))
+		{
+			size_t lasts = s_autoActorStackMng.get_stack_size(wrapActor.key());
+			pull = ContextPool_::getContext(lasts ? lasts : GET_TRY_SIZE(nsize));
+#ifdef __linux__
+#if (_DEBUG || DEBUG)
+#else
+			if (!lasts && GET_TRY_SIZE(nsize) > CORO_CONTEXT_STATE_SPACE)
+			{
+				mprotect((char*)info->stackTop - info->stackSize, GET_TRY_SIZE(nsize) - CORO_CONTEXT_STATE_SPACE, PROT_NONE);
+			}
+#endif
+#endif
+		}
+		else
+		{
+			pull = ContextPool_::getContext(nsize);
+		}
 	}
 	else
 	{
-		size_t s = s_autoActorStackMng.get_stack_size(wrapActor.key());
-		pull = ContextPool_::getContext(s ? s : DEFAULT_STACKSIZE);
+		size_t lasts = s_autoActorStackMng.get_stack_size(wrapActor.key());
+#ifdef WIN32
+		pull = ContextPool_::getContext(lasts ? lasts : DEFAULT_STACKSIZE);
+#elif __linux__
+		pull = ContextPool_::getContext(lasts ? lasts : CORO_CONTEXT_STATE_SPACE);
+#endif
 	}
 	actor_handle newActor(new(pull->_space)my_actor(), [](my_actor* p){p->~my_actor(); }, actor_ref_count_alloc<void>(pull));
 	newActor->_weakThis = newActor;
@@ -2671,9 +2688,9 @@ void my_actor::timeout_handler()
 	assert(_timerState._timerCb);
 	_timerState._timerCompleted = true;
 	_timerState._timerHandle.reset();
-	auto h = std::move(_timerState._timerCb);
-	assert(!_timerState._timerCb);
-	h();
+	wrap_timer_handler_face* h = _timerState._timerCb;
+	_timerState._timerCb = NULL;
+	h->invoke(_timerState._reuMem);
 }
 
 void my_actor::cancel_timer()
@@ -2686,7 +2703,8 @@ void my_actor::cancel_timer()
 		if (_timerState._timerTime)
 		{
 			_timer->cancel(_timerState._timerHandle);
-			clear_function(_timerState._timerCb);
+			_timerState._timerCb->destory(_timerState._reuMem);
+			_timerState._timerCb = NULL;
 		}
 	}
 }
@@ -2876,51 +2894,10 @@ void my_actor::close_msg_notifer(actor_msg_handle_base& amh)
 
 bool my_actor::timed_wait_msg(int tm, actor_msg_handle<>& amh)
 {
-	assert_enter();
-	assert(amh._hostActor && amh._hostActor->self_id() == self_id());
-	if (!amh.read_msg())
+	return timed_wait_msg(tm, [this]
 	{
-		OUT_OF_SCOPE(
-		{
-			amh.stop_waiting();
-		});
-#ifdef ENABLE_CHECK_LOST
-		if (amh._losted && amh._checkLost)
-		{
-			amh.throw_lost_exception();
-		}
-#endif
-		if (tm > 0)
-		{
-			bool timed = false;
-			delay_trig(tm, [this, &timed]
-			{
-				timed = true;
-				pull_yield();
-			});
-			push_yield();
-			if (timed)
-			{
-				return false;
-			}
-			cancel_delay_trig();
-		}
-		else if (tm < 0)
-		{
-			push_yield();
-		}
-		else
-		{
-			return false;
-		}
-#ifdef ENABLE_CHECK_LOST
-		if (amh._losted && amh._checkLost)
-		{
-			amh.throw_lost_exception();
-		}
-#endif
-	}
-	return true;
+		pull_yield();
+	}, amh);
 }
 
 bool my_actor::try_wait_msg(actor_msg_handle<>& amh)
@@ -2935,58 +2912,10 @@ bool my_actor::timed_pump_msg(int tm, const msg_pump_handle<>& pump)
 
 bool my_actor::timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<>& pump)
 {
-	assert_enter();
-	assert(!pump.check_closed());
-	assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
-	if (!pump.get()->read_msg())
+	return timed_pump_msg(tm, [this]
 	{
-		OUT_OF_SCOPE(
-		{
-			pump.get()->stop_waiting();
-		});
-		if (checkDis && pump.get()->isDisconnected())
-		{
-			throw pump_disconnected<>();
-		}
-#ifdef ENABLE_CHECK_LOST
-		if (pump.get()->_losted && pump.get()->_checkLost)
-		{
-			throw msg_pump_handle<>::lost_exception(pump.get_id());
-		}
-#endif
-		pump.get()->_checkDis = checkDis;
-		if (tm >= 0)
-		{
-			bool timed = false;
-			delay_trig(tm, [this, &timed]
-			{
-				timed = true;
-				pull_yield();
-			});
-			push_yield();
-			if (timed)
-			{
-				return false;
-			}
-			cancel_delay_trig();
-		}
-		else
-		{
-			push_yield();
-		}
-		if (pump.get()->_checkDis)
-		{
-			assert(checkDis);
-			throw pump_disconnected<>();
-		}
-#ifdef ENABLE_CHECK_LOST
-		if (pump.get()->_losted && pump.get()->_checkLost)
-		{
-			throw msg_pump_handle<>::lost_exception(pump.get_id());
-		}
-#endif
-	}
-	return true;
+		pull_yield();
+	}, checkDis, pump);
 }
 
 bool my_actor::try_pump_msg(const msg_pump_handle<>& pump)
@@ -3028,51 +2957,10 @@ void my_actor::close_trig_notifer(actor_msg_handle_base& ath)
 
 bool my_actor::timed_wait_trig(int tm, actor_trig_handle<>& ath)
 {
-	assert_enter();
-	assert(ath._hostActor && ath._hostActor->self_id() == self_id());
-	if (!ath.read_msg())
+	return timed_wait_trig(tm, [this]
 	{
-		OUT_OF_SCOPE(
-		{
-			ath.stop_waiting();
-		});
-#ifdef ENABLE_CHECK_LOST
-		if (ath._losted && ath._checkLost)
-		{
-			ath.throw_lost_exception();
-		}
-#endif
-		if (tm > 0)
-		{
-			bool timed = false;
-			delay_trig(tm, [this, &timed]
-			{
-				timed = true;
-				pull_yield();
-			});
-			push_yield();
-			if (timed)
-			{
-				return false;
-			}
-			cancel_delay_trig();
-		}
-		else if (tm < 0)
-		{
-			push_yield();
-		}
-		else
-		{
-			return false;
-		}
-#ifdef ENABLE_CHECK_LOST
-		if (ath._losted && ath._checkLost)
-		{
-			ath.throw_lost_exception();
-		}
-#endif
-	}
-	return true;
+		pull_yield();
+	}, ath);
 }
 
 bool my_actor::try_wait_trig(actor_trig_handle<>& ath)

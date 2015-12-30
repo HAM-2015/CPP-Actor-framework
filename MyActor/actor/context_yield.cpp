@@ -57,7 +57,7 @@ extern "C"
 #include <Windows.h>
 
 #endif
-#include <boost/coroutine/protected_stack_allocator.hpp>
+
 namespace context_yield
 {
 #ifdef BOOST_CORO
@@ -71,7 +71,7 @@ namespace context_yield
 
 		void allocate(boost::coroutines::stack_context & stackCon, size_t size)
 		{
-			size_t allocSize = MEM_ALIGN(size + STACK_RESERVED_SPACE_SIZE, 64 kB);
+			size_t allocSize = MEM_ALIGN(size + STACK_RESERVED_SPACE_SIZE, STACK_BLOCK_SIZE);
 #ifdef WIN32
 			void* stack = VirtualAlloc(NULL, allocSize, MEM_RESERVE, PAGE_READWRITE);
 			if (!stack)
@@ -156,7 +156,7 @@ namespace context_yield
 #ifdef WIN32
 	context_yield::coro_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
 	{
-		size_t allocSize = MEM_ALIGN(stackSize, 64 kB);
+		size_t allocSize = MEM_ALIGN(stackSize, STACK_BLOCK_SIZE);
 		void* stack = VirtualAlloc(NULL, allocSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 		if (!stack)
 		{
@@ -200,7 +200,7 @@ namespace context_yield
 #elif __linux__
 	context_yield::coro_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
 	{
-		size_t allocSize = MEM_ALIGN(stackSize + STACK_RESERVED_SPACE_SIZE, 64 kB);
+		size_t allocSize = MEM_ALIGN(stackSize + STACK_RESERVED_SPACE_SIZE, STACK_BLOCK_SIZE);
 		void* stack = mmap(0, allocSize, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 		if (!stack)
 		{
@@ -266,7 +266,7 @@ namespace context_yield
 
 	context_yield::coro_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
 	{
-		size_t allocSize = MEM_ALIGN(stackSize + STACK_RESERVED_SPACE_SIZE, 64 kB);
+		size_t allocSize = MEM_ALIGN(stackSize + STACK_RESERVED_SPACE_SIZE, STACK_BLOCK_SIZE);
 		context_yield::coro_info* info = new context_yield::coro_info;
 		info->stackSize = stackSize;
 		info->reserveSize = allocSize - info->stackSize;

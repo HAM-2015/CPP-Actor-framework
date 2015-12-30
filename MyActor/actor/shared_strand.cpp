@@ -156,7 +156,7 @@ void boost_strand::run_tick_front()
 		}
 		else
 		{
-			_reuMemAlloc.deallocate(res._ptr, res._size);
+			_reuMemAlloc.deallocate(res._ptr);
 		}
 	}
 }
@@ -179,7 +179,7 @@ void boost_strand::run_tick_back()
 			}
 			else
 			{
-				_reuMemAlloc.deallocate(res._ptr, res._size);
+				_reuMemAlloc.deallocate(res._ptr);
 			}
 		} while (!_backTickQueue->empty() && ++tickCount <= _thisRoundCount);
 		std::swap(_frontTickQueue, _backTickQueue);

@@ -80,7 +80,7 @@ struct ActorFunc_
 	template <typename... Args>
 	static msg_pump_handle<Args...> connect_msg_pump(const int id, my_actor* const host, bool checkLost);
 	template <typename H>
-	static void timeout(my_actor* host, int ms, H&& h);
+	static void delay_trig(my_actor* host, int ms, H&& h);
 	static void cancel_timer(my_actor* host);
 	template <typename DST, typename... ARGS>
 	static void _trig_handler(my_actor* host, bool* sign, DST& dstRec, ARGS&&... args);
@@ -3054,11 +3054,11 @@ public:
 	}
 
 	template <typename TimedHandler, typename... Outs>
-	callback_handler(int tm, const TimedHandler& th, my_actor* host, Outs&... outs)
+	callback_handler(my_actor* host, int tm, const TimedHandler& th, Outs&... outs)
 		: _selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
-		ActorFunc_::timeout(host, tm, th);
+		ActorFunc_::delay_trig(host, tm, th);
 	}
 
 	~callback_handler()
@@ -3079,8 +3079,8 @@ public:
 					}
 					catch (...) {}
 #endif
-					ActorFunc_::cancel_timer(_selfEarly);
 				}
+				ActorFunc_::cancel_timer(_selfEarly);
 			}
 			Parent::_hostActor.reset();
 		}
@@ -3140,13 +3140,12 @@ class tm_callback__handler<types_pck<ARGS...>, types_pck<OUTS...>> : public Trig
 public:
 	template <typename... Outs>
 	tm_callback__handler(my_actor* host, int tm, bool& timed, Outs&... outs)
-		:_closed(ActorFunc_::new_bool(false)), _timed(timed), _selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
+		:_closed(ActorFunc_::new_bool(false)), _selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
 	{
-		_timed = false;
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
-		ActorFunc_::timeout(host, tm, [this]
+		ActorFunc_::delay_trig(host, tm, [this, &timed]
 		{
-			_timed = true;
+			timed = true;
 			ActorFunc_::pull_yield(_selfEarly);
 		});
 	}
@@ -3169,23 +3168,20 @@ public:
 					}
 					catch (...) {}
 #endif
-					*_closed = true;
-					if (!_timed)
-					{
-						ActorFunc_::cancel_timer(_selfEarly);
-					}
 				}
+				*_closed = true;
+				ActorFunc_::cancel_timer(_selfEarly);
 			}
 			Parent::_hostActor.reset();
 		}
 	}
 
 	tm_callback__handler(const tm_callback__handler& s)
-		:TrigOnceBase_(s), _closed(s._closed), _timed(s._timed), _selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef) {}
+		:TrigOnceBase_(s), _closed(s._closed), _selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef) {}
 
 	tm_callback__handler(tm_callback__handler&& s)
 		:TrigOnceBase_(std::move(s)), _closed(s._selfEarly ? s._closed : std::move(s._closed)),
-		_timed(s._timed), _selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef)
+		_selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef)
 	{
 		s._sign = NULL;
 	}
@@ -3233,10 +3229,9 @@ private:
 	}
 private:
 	SharedBool_ _closed;
-	dst_receiver _dstRef;
-	bool& _timed;
-	bool* _sign;
 	my_actor* const _selfEarly;
+	dst_receiver _dstRef;
+	bool* _sign;
 	bool _bsign;
 };
 
@@ -3259,11 +3254,14 @@ public:
 	}
 
 	template <typename TimedHandler, typename... Outs>
-	asio_cb_handler(int tm, const TimedHandler& th, my_actor* host, Outs&... outs)
+	asio_cb_handler(my_actor* host, int tm, const TimedHandler& th, Outs&... outs)
 		: _selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
-		ActorFunc_::timeout(host, tm, th);
+		ActorFunc_::delay_trig(host, tm, [&th]
+		{
+			th();
+		});
 	}
 
 	~asio_cb_handler()
@@ -3284,8 +3282,8 @@ public:
 					}
 					catch (...) {}
 #endif
-					ActorFunc_::cancel_timer(_selfEarly);
 				}
+				ActorFunc_::cancel_timer(_selfEarly);
 			}
 			Parent::_hostActor.reset();
 		}
@@ -3345,13 +3343,12 @@ class asio_tm_cb_handler<types_pck<ARGS...>, types_pck<OUTS...>> : public TrigOn
 public:
 	template <typename... Outs>
 	asio_tm_cb_handler(my_actor* host, int tm, bool& timed, Outs&... outs)
-		:_closed(ActorFunc_::new_bool(false)), _timed(timed), _selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
+		:_closed(ActorFunc_::new_bool(false)), _selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
 	{
-		_timed = false;
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
-		ActorFunc_::timeout(host, tm, [this]
+		ActorFunc_::delay_trig(host, tm, [this, &timed]
 		{
-			_timed = true;
+			timed = true;
 			ActorFunc_::pull_yield(_selfEarly);
 		});
 	}
@@ -3374,12 +3371,9 @@ public:
 					}
 					catch (...) {}
 #endif
-					*_closed = true;
-					if (!_timed)
-					{
-						ActorFunc_::cancel_timer(_selfEarly);
-					}
 				}
+				*_closed = true;
+				ActorFunc_::cancel_timer(_selfEarly);
 			}
 			Parent::_hostActor.reset();
 		}
@@ -3387,11 +3381,11 @@ public:
 
 	asio_tm_cb_handler(const asio_tm_cb_handler& s)
 		:TrigOnceBase_(std::move((asio_tm_cb_handler&)s)), _closed(s._selfEarly ? s._closed : std::move(s._closed)),
-		_timed(s._timed), _selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef) {}
+		_selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef) {}
 
 	asio_tm_cb_handler(asio_tm_cb_handler&& s)
 		:TrigOnceBase_(std::move(s)), _closed(s._selfEarly ? s._closed : std::move(s._closed)),
-		_timed(s._timed), _selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef)
+		_selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef)
 	{
 		s._sign = NULL;
 	}
@@ -3439,10 +3433,9 @@ private:
 	}
 private:
 	mutable SharedBool_ _closed;
-	dst_receiver _dstRef;
-	bool& _timed;
-	bool* _sign;
 	my_actor* const _selfEarly;
+	dst_receiver _dstRef;
+	bool* _sign;
 	bool _bsign;
 };
 //////////////////////////////////////////////////////////////////////////
@@ -4174,6 +4167,18 @@ AutoStackMsgAgentActor_<Handler&&> __auto_stack_msg_agent_actor(Handler&& handle
 #define _auto_stack_msg_agent2(__h__, __s__) __auto_stack_msg_agent_actor(__h__, __s__, __COUNTER__)
 #define _auto_stack_msg_agent3(__h__, __s__, __k__) __auto_stack_msg_agent_actor(__h__, __s__, __k__)
 
+template <typename Handler>
+Handler&& no_auto_stack(Handler&& h, ...)
+{
+	return (Handler&&)h;
+}
+
+template <typename Handler>
+Handler&& no_auto_stack_msg_agent(Handler&& h, ...)
+{
+	return (Handler&&)h;
+}
+
 #ifdef DISABLE_AUTO_STACK
 
 template <typename Handler>
@@ -4640,16 +4645,45 @@ class my_actor
 		bool* _sign;
 	};
 
+	struct wrap_timer_handler_face
+	{
+		virtual void invoke(reusable_mem& reuMem) = 0;
+		virtual void destory(reusable_mem& reuMem) = 0;
+	};
+
+	template <typename Handler>
+	struct wrap_timer_handler : public wrap_timer_handler_face
+	{
+		template <typename H>
+		wrap_timer_handler(H&& h)
+			:_h(TRY_MOVE(h)) {}
+
+		void invoke(reusable_mem& reuMem)
+		{
+			_h();
+			destory(reuMem);
+		}
+
+		void destory(reusable_mem& reuMem)
+		{
+			this->~wrap_timer_handler();
+			reuMem.deallocate(this);
+		}
+
+		Handler _h;
+	};
+
 	struct timer_state
 	{
 		int _timerCount;
 		long long _timerTime;
 		long long _timerStampBegin;
 		long long _timerStampEnd;
-		std::function<void()> _timerCb;
 		ActorTimer_::timer_handle _timerHandle;
+		wrap_timer_handler_face* _timerCb = NULL;
 		bool _timerSuspend : 1;
 		bool _timerCompleted : 1;
+		reusable_mem _reuMem;
 	};
 
 	class actor_run;
@@ -5159,21 +5193,21 @@ public:
 	@param ms 触发延时(毫秒)
 	@param h 触发函数
 	*/
-	template <typename H>
-	void delay_trig(int ms, H&& h)
+	template <typename Handler>
+	void delay_trig(int ms, Handler&& handler)
 	{
 		assert_enter();
 		if (ms > 0)
 		{
 			assert(_timer);
-			timeout(ms, TRY_MOVE(h));
+			timeout(ms, TRY_MOVE(handler));
 		}
 		else if (0 == ms)
 		{
 			assert(_timerState._timerCompleted);
 			_timerState._timerTime = 0;
 			_timerState._timerCompleted = false;
-			_strand->post(wrap_delay_trig<RM_CREF(H)>(shared_from_this(), TRY_MOVE(h)));
+			_strand->post(wrap_delay_trig<RM_CREF(Handler)>(shared_from_this(), TRY_MOVE(handler)));
 		}
 		else
 		{
@@ -5477,55 +5511,6 @@ private:
 		}
 	}
 private:
-	template <typename DST, typename... Args>
-	bool _timed_wait_msg(ActorMsgHandlePush_<Args...>& amh, DST& dstRec, const int tm)
-	{
-		assert(amh._hostActor && amh._hostActor->self_id() == self_id());
-		if (!amh.read_msg(dstRec))
-		{
-			OUT_OF_SCOPE(
-			{
-				amh.stop_waiting();
-			});
-#ifdef ENABLE_CHECK_LOST
-			if (amh._losted && amh._checkLost)
-			{
-				amh.throw_lost_exception();
-			}
-#endif
-			if (tm > 0)
-			{
-				bool timed = false;
-				delay_trig(tm, [this, &timed]
-				{
-					timed = true;
-					pull_yield();
-				});
-				push_yield();
-				if (timed)
-				{
-					return false;
-				}
-				cancel_delay_trig();
-			}
-			else if (tm < 0)
-			{
-				push_yield();
-			}
-			else
-			{
-				return false;
-			}
-#ifdef ENABLE_CHECK_LOST
-			if (amh._losted && amh._checkLost)
-			{
-				amh.throw_lost_exception();
-			}
-#endif
-		}
-		return true;
-	}
-
 	template <typename TimedHandler, typename DST, typename... Args>
 	bool _timed_wait_msg(ActorMsgHandlePush_<Args...>& amh, const TimedHandler& th, DST& dstRec, const int tm)
 	{
@@ -5573,6 +5558,15 @@ private:
 #endif
 		}
 		return true;
+	}
+
+	template <typename DST, typename... Args>
+	bool _timed_wait_msg(ActorMsgHandlePush_<Args...>& amh, DST& dstRec, const int tm)
+	{
+		return _timed_wait_msg(amh, [this]
+		{
+			pull_yield();
+		}, dstRec, tm);
 	}
 
 	template <typename DST, typename... Args>
@@ -5781,7 +5775,7 @@ public:
 	@brief 创建带超时的上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_timed_context(...))
 	*/
 	template <typename... Outs>
-	tm_callback__handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_context(bool& timed, int tm, Outs&... outs)
+	tm_callback__handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_context(int tm, bool& timed, Outs&... outs)
 	{
 		assert_enter();
 		return tm_callback__handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, tm, timed, outs...);
@@ -5794,7 +5788,7 @@ public:
 	callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_context(int tm, const TimedHandler& th, Outs&... outs)
 	{
 		assert_enter();
-		return callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(tm, th, this, outs...);
+		return callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, tm, th, outs...);
 	}
 
 	/*!
@@ -5822,7 +5816,7 @@ public:
 	@brief 创建带超时的ASIO库上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_asio_timed_context(...))
 	*/
 	template <typename... Outs>
-	asio_tm_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_asio_timed_context(bool& timed, int tm, Outs&... outs)
+	asio_tm_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_asio_timed_context(int tm, bool& timed, Outs&... outs)
 	{
 		assert_enter();
 		return asio_tm_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, tm, timed, outs...);
@@ -5835,7 +5829,7 @@ public:
 	asio_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_asio_timed_context(int tm, const TimedHandler& th, Outs&... outs)
 	{
 		assert_enter();
-		return asio_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(tm, th, this, outs...);
+		return asio_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, tm, th, outs...);
 	}
 
 	/*!
@@ -6718,62 +6712,6 @@ private:
 		return mh;
 	}
 private:
-	template <typename DST, typename... Args>
-	bool _timed_pump_msg(const msg_pump_handle<Args...>& pump, DST& dstRec, int tm, bool checkDis)
-	{
-		assert(!pump.check_closed());
-		assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
-		if (!pump.get()->read_msg(dstRec))
-		{
-			OUT_OF_SCOPE(
-			{
-				pump.get()->stop_waiting();
-			});
-			if (checkDis && pump.get()->isDisconnected())
-			{
-				throw pump_disconnected<Args...>();
-			}
-#ifdef ENABLE_CHECK_LOST
-			if (pump.get()->_losted && pump.get()->_checkLost)
-			{
-				throw typename msg_pump_handle<Args...>::lost_exception(pump.get_id());
-			}
-#endif
-			pump.get()->_checkDis = checkDis;
-			if (tm >= 0)
-			{
-				bool timed = false;
-				delay_trig(tm, [this, &timed]
-				{
-					timed = true;
-					pull_yield();
-				});
-				push_yield();
-				if (timed)
-				{
-					return false;
-				}
-				cancel_delay_trig();
-			}
-			else
-			{
-				push_yield();
-			}
-			if (pump.get()->_checkDis)
-			{
-				assert(checkDis);
-				throw pump_disconnected<Args...>();
-			}
-#ifdef ENABLE_CHECK_LOST
-			if (pump.get()->_losted && pump.get()->_checkLost)
-			{
-				throw typename msg_pump_handle<Args...>::lost_exception(pump.get_id());
-			}
-#endif
-		}
-		return true;
-	}
-
 	template <typename TimedHandler, typename DST, typename... Args>
 	bool _timed_pump_msg(const msg_pump_handle<Args...>& pump, const TimedHandler& th, DST& dstRec, int tm, bool checkDis)
 	{
@@ -6828,6 +6766,15 @@ private:
 #endif
 		}
 		return true;
+	}
+
+	template <typename DST, typename... Args>
+	bool _timed_pump_msg(const msg_pump_handle<Args...>& pump, DST& dstRec, int tm, bool checkDis)
+	{
+		return _timed_pump_msg(pump, [this]
+		{
+			pull_yield();
+		}, dstRec, tm, checkDis);
 	}
 
 	template <typename DST, typename... Args>
@@ -7776,14 +7723,16 @@ public:
 
 	void assert_enter();
 private:
-	template <typename H>
-	void timeout(int ms, H&& h)
+	template <typename Handler>
+	void timeout(int ms, Handler&& handler)
 	{
 		assert_enter();
 		assert(ms > 0);
 		assert(_timerState._timerCompleted);
+		assert(!_timerState._timerCb);
+		typedef wrap_timer_handler<RM_CREF(Handler)> wrap_type;
 		_timerState._timerTime = (long long)ms * 1000;
-		_timerState._timerCb = TRY_MOVE(h);
+		_timerState._timerCb = new(_timerState._reuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
 		_timerState._timerStampBegin = get_tick_us();
 		_timerState._timerCompleted = false;
 		_timerState._timerHandle = _timer->timeout(_timerState._timerTime, shared_from_this());
@@ -7886,10 +7835,10 @@ msg_pump_handle<Args...> ActorFunc_::connect_msg_pump(const int id, my_actor* co
 }
 
 template <typename H>
-void ActorFunc_::timeout(my_actor* host, int ms, H&& h)
+void ActorFunc_::delay_trig(my_actor* host, int ms, H&& h)
 {
 	assert(host);
-	host->timeout(ms, TRY_MOVE(h));
+	host->delay_trig(ms, TRY_MOVE(h));
 }
 
 template <typename DST, typename... ARGS>
