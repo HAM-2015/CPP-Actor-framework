@@ -77,6 +77,8 @@ struct ActorFunc_
 	static SharedBool_ new_bool(bool b = false);
 	template <typename R, typename H>
 	static R send(my_actor* host, const shared_strand& exeStrand, H&& h);
+	template <typename R, typename H>
+	static R async_send(my_actor* host, const shared_strand& exeStrand, H&& h);
 	template <typename... Args>
 	static msg_pump_handle<Args...> connect_msg_pump(const int id, my_actor* const host, bool checkLost);
 	template <typename H>
@@ -1058,80 +1060,10 @@ class MsgPump_ : public MsgPumpBase_
 	typedef MsgPool_<ARGS...> msg_pool_type;
 	typedef typename msg_pool_type::pump_handler pump_handler;
 
-	struct msg_capture
-	{
-		template <typename ActorHandle, typename MsgPump>
-		msg_capture(ActorHandle&& hostActor, MsgPump&& sharedThis, msg_type&& msg)
-		:_hostActor(TRY_MOVE(hostActor)), _sharedThis(TRY_MOVE(sharedThis)), _msg(std::move(msg)) {}
-
-		msg_capture(const msg_capture& s)
-			:_hostActor(s._hostActor), _sharedThis(s._sharedThis), _msg(s._msg) {}
-
-		msg_capture(msg_capture&& s)
-			:_hostActor(std::move(s._hostActor)), _sharedThis(std::move(s._sharedThis)), _msg(std::move(s._msg)) {}
-
-		void operator =(const msg_capture& s)
-		{
-			_hostActor = s._hostActor;
-			_sharedThis = s._sharedThis;
-			_msg = s._msg;
-		}
-
-		void operator =(msg_capture&& s)
-		{
-			_hostActor = std::move(s._hostActor);
-			_sharedThis = std::move(s._sharedThis);
-			_msg = std::move(s._msg);
-		}
-
-		void operator()()
-		{
-			_sharedThis->receiver(std::move(_msg));
-		}
-
-		msg_type _msg;
-		actor_handle _hostActor;
-		shared_ptr<MsgPump_> _sharedThis;
-	};
-
-	struct lost_capture
-	{
-		template <typename ActorHandle, typename MsgPump>
-		lost_capture(ActorHandle&& hostActor, MsgPump&& sharedThis)
-			:_hostActor(TRY_MOVE(hostActor)), _sharedThis(TRY_MOVE(sharedThis)) {}
-
-		lost_capture(const lost_capture& s)
-			:_hostActor(s._hostActor), _sharedThis(s._sharedThis) {}
-
-		lost_capture(lost_capture&& s)
-			:_hostActor(std::move(s._hostActor)), _sharedThis(std::move(s._sharedThis)) {}
-
-		void operator =(const lost_capture& s)
-		{
-			_hostActor = s._hostActor;
-			_sharedThis = s._sharedThis;
-		}
-
-		void operator =(msg_capture&& s)
-		{
-			_hostActor = std::move(s._hostActor);
-			_sharedThis = std::move(s._sharedThis);
-		}
-
-		void operator()()
-		{
-			_sharedThis->_lost_msg();
-		}
-
-		actor_handle _hostActor;
-		shared_ptr<MsgPump_> _sharedThis;
-	};
-
 	friend my_actor;
 	friend MsgPool_<ARGS...>;
 	friend mutex_block_pump<ARGS...>;
 	friend pump_handler;
-	friend typename pump_handler::wrap_pump;
 	friend msg_pump_handle<ARGS...>;
 	FRIEND_SHARED_PTR(MsgPump_<ARGS...>);
 private:
@@ -1214,14 +1146,20 @@ private:
 		}
 		else
 		{
-			_strand->post(lost_capture(TRY_MOVE(hostActor), _weakThis.lock()));
+			_strand->post(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPump_> sharedThis)
+			{
+				sharedThis->_lost_msg();
+			}, TRY_MOVE(hostActor), _weakThis.lock()));
 		}
 	}
 
 	template <typename ActorHandle>
 	void receive_msg_tick(msg_type&& msg, ActorHandle&& hostActor)
 	{
-		_strand->try_tick(msg_capture(TRY_MOVE(hostActor), _weakThis.lock(), std::move(msg)));
+		_strand->try_tick(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPump_> sharedThis, const msg_type& msg)
+		{
+			sharedThis->receiver(std::move((msg_type&)msg));
+		}, TRY_MOVE(hostActor), _weakThis.lock(), std::move(msg)));
 	}
 
 	template <typename ActorHandle>
@@ -1233,7 +1171,10 @@ private:
 		}
 		else
 		{
-			_strand->post(msg_capture(TRY_MOVE(hostActor), _weakThis.lock(), std::move(msg)));
+			_strand->post(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPump_> sharedThis, const msg_type& msg)
+			{
+				sharedThis->receiver(std::move((msg_type&)msg));
+			}, TRY_MOVE(hostActor), _weakThis.lock(), std::move(msg)));
 		}
 	}
 
@@ -1448,121 +1389,6 @@ class MsgPool_ : public MsgPoolBase_
 
 	struct pump_handler
 	{
-		struct wrap_pump
-		{
-			wrap_pump(const pump_handler& pump, unsigned char pumpID)
-			:_pump(pump), _pumpID(pumpID) {}
-
-			wrap_pump(pump_handler&& pump, unsigned char pumpID)
-				:_pump(std::move(pump)), _pumpID(pumpID) {}
-
-			wrap_pump(const wrap_pump& s)
-				:_pump(s._pump), _pumpID(s._pumpID) {}
-
-			wrap_pump(wrap_pump&& s)
-				:_pump(std::move(s._pump)), _pumpID(s._pumpID) {}
-
-			void operator()()
-			{
-				if (_pump._msgPump == _pump._thisPool->_msgPump)
-				{
-					_pump.pump_msg(_pumpID, _pump._msgPump->_hostActor->shared_from_this());
-				}
-			}
-
-			pump_handler _pump;
-			unsigned char _pumpID;
-		};
-
-		struct wrap_try_pump 
-		{
-			wrap_try_pump(const pump_handler& pump, unsigned char pumpID, dst_receiver& dst, bool& wait)
-			:_pump(pump), _pumpID(pumpID), _dst(dst), _wait(wait) {}
-
-			wrap_try_pump(pump_handler&& pump, unsigned char pumpID, dst_receiver& dst, bool& wait)
-				:_pump(std::move(pump)), _pumpID(pumpID), _dst(dst), _wait(wait) {}
-
-			wrap_try_pump(const wrap_try_pump& s)
-				:_pump(s._pump), _pumpID(s._pumpID), _dst(s._dst), _wait(s._wait) {}
-
-			wrap_try_pump(wrap_try_pump&& s)
-				:_pump(std::move(s._pump)), _pumpID(s._pumpID), _dst(s._dst), _wait(s._wait) {}
-
-			bool operator()()
-			{
-				bool ok = false;
-				auto& thisPool_ = _pump._thisPool;
-				if (_pump._msgPump == thisPool_->_msgPump)
-				{
-					auto& msgBuff = thisPool_->_msgBuff;
-					if (_pumpID == thisPool_->_sendCount)
-					{
-						if (!msgBuff.empty())
-						{
-							_dst.move_from(msgBuff.front());
-							msgBuff.pop_front();
-							ok = true;
-						}
-#ifdef ENABLE_CHECK_LOST
-						else// if (thisPool_->_losted)
-						{
-							_wait = thisPool_->_losted;
-						}
-#endif
-					}
-					else
-					{//上次消息没取到，重新取，但实际中间已经post出去了
-						assert(!thisPool_->_waiting);
-						assert(_pumpID + 1 == thisPool_->_sendCount);
-						_wait = true;
-						ok = true;
-					}
-				}
-				return ok;
-			}
-
-			bool& _wait;
-			dst_receiver& _dst;
-			pump_handler _pump;
-			unsigned char _pumpID;
-		};
-
-		struct wrap_size
-		{
-			wrap_size(const pump_handler& pump, unsigned char pumpID)
-			:_pump(pump), _pumpID(pumpID) {}
-
-			wrap_size(pump_handler&& pump, unsigned char pumpID)
-				:_pump(std::move(pump)), _pumpID(pumpID) {}
-
-			wrap_size(const wrap_size& s)
-				:_pump(s._pump), _pumpID(s._pumpID) {}
-
-			wrap_size(wrap_size&& s)
-				:_pump(std::move(s._pump)), _pumpID(s._pumpID) {}
-
-			size_t operator()()
-			{
-				auto& thisPool_ = _pump._thisPool;
-				if (_pump._msgPump == thisPool_->_msgPump)
-				{
-					auto& msgBuff = thisPool_->_msgBuff;
-					if (_pumpID == thisPool_->_sendCount)
-					{
-						return msgBuff.size();
-					}
-					else
-					{
-						return msgBuff.size() + 1;
-					}
-				}
-				return 0;
-			}
-
-			pump_handler _pump;
-			unsigned char _pumpID;
-		};
-
 		pump_handler()
 		{}
 
@@ -1642,39 +1468,84 @@ class MsgPool_ : public MsgPoolBase_
 		bool try_pump(my_actor* host, dst_receiver& dst, unsigned char pumpID, bool& wait)
 		{
 			assert(_thisPool);
-			ActorFunc_::lock_quit(host);
-#ifdef _MSC_VER
-			OUT_OF_SCOPE({ ActorFunc_::unlock_quit(host); });
-#elif __GNUG__
-			OUT_OF_SCOPE(
+			auto h = [](pump_handler& pump, unsigned char pumpID, dst_receiver& dst, bool& wait)->bool
 			{
-				try
+				bool ok = false;
+				auto& thisPool_ = pump._thisPool;
+				if (pump._msgPump == thisPool_->_msgPump)
 				{
-					ActorFunc_::unlock_quit(host);
-				}
-				catch (...) {}
-			});
+					auto& msgBuff = thisPool_->_msgBuff;
+					if (pumpID == thisPool_->_sendCount)
+					{
+						if (!msgBuff.empty())
+						{
+							dst.move_from(msgBuff.front());
+							msgBuff.pop_front();
+							ok = true;
+						}
+#ifdef ENABLE_CHECK_LOST
+						else// if (thisPool_->_losted)
+						{
+							wait = thisPool_->_losted;
+						}
 #endif
-			return ActorFunc_::send<bool>(host, _thisPool->_strand, wrap_try_pump(*this, pumpID, dst, wait));
+					}
+					else
+					{//上次消息没取到，重新取，但实际中间已经post出去了
+						assert(!thisPool_->_waiting);
+						assert(pumpID + 1 == thisPool_->_sendCount);
+						wait = true;
+						ok = true;
+					}
+				}
+				return ok;
+			};
+			bool r = false;
+			if (ActorFunc_::self_strand(host) == _thisPool->_strand)
+			{
+				r = h(*this, pumpID, dst, wait);
+			} 
+			else
+			{
+				ActorFunc_::lock_quit(host);
+				r = ActorFunc_::async_send<bool>(host, _thisPool->_strand, std::bind(h, *this, pumpID, std::reference_wrapper<dst_receiver>(dst), std::reference_wrapper<bool>(wait)));
+				ActorFunc_::unlock_quit(host);
+			}
+			return r;
 		}
 
 		size_t size(my_actor* host, unsigned char pumpID)
 		{
 			assert(_thisPool);
-			ActorFunc_::lock_quit(host);
-#ifdef _MSC_VER
-			OUT_OF_SCOPE({ ActorFunc_::unlock_quit(host); });
-#elif __GNUG__
-			OUT_OF_SCOPE(
+			auto h = [](pump_handler& pump, unsigned char pumpID)->size_t
 			{
-				try
+				auto& thisPool_ = pump._thisPool;
+				if (pump._msgPump == thisPool_->_msgPump)
 				{
-					ActorFunc_::unlock_quit(host);
+					auto& msgBuff = thisPool_->_msgBuff;
+					if (pumpID == thisPool_->_sendCount)
+					{
+						return msgBuff.size();
+					}
+					else
+					{
+						return msgBuff.size() + 1;
+					}
 				}
-				catch (...) {}
-			});
-#endif
-			return ActorFunc_::send<size_t>(host, _thisPool->_strand, wrap_size(*this, pumpID));
+				return 0;
+			};
+			size_t r = 0;
+			if (ActorFunc_::self_strand(host) == _thisPool->_strand)
+			{
+				r = h(*this, pumpID);
+			}
+			else
+			{
+				ActorFunc_::lock_quit(host);
+				r = ActorFunc_::async_send<size_t>(host, _thisPool->_strand, std::bind(h, *this, pumpID));
+				ActorFunc_::unlock_quit(host);
+			}
+			return r;
 		}
 
 		size_t snap_size(unsigned char pumpID)
@@ -1702,7 +1573,13 @@ class MsgPool_ : public MsgPoolBase_
 		void post_pump(unsigned char pumpID)
 		{
 			assert(!empty());
-			_thisPool->_strand->post(wrap_pump(*this, pumpID));
+			_thisPool->_strand->post(std::bind([](pump_handler& pump, unsigned char pumpID)
+			{
+				if (pump._msgPump == pump._thisPool->_msgPump)
+				{
+					pump.pump_msg(pumpID, pump._msgPump->_hostActor->shared_from_this());
+				}
+			}, *this, pumpID));
 		}
 
 		bool empty()
@@ -1718,82 +1595,6 @@ class MsgPool_ : public MsgPoolBase_
 
 		std::shared_ptr<MsgPool_> _thisPool;
 		std::shared_ptr<msg_pump_type> _msgPump;
-	};
-
-	struct msg_capture
-	{
-		template <typename ActorHandle, typename MsgPool>
-		msg_capture(ActorHandle&& hostActor, MsgPool&& sharedThis, msg_type&& msg)
-		:_hostActor(TRY_MOVE(hostActor)), _sharedThis(TRY_MOVE(sharedThis)), _msg(std::move(msg)) {}
-
-		msg_capture(const msg_capture& s)
-			:_hostActor(s._hostActor), _sharedThis(s._sharedThis), _msg(s._msg) {}
-
-		msg_capture(msg_capture&& s)
-			:_hostActor(std::move(s._hostActor)), _sharedThis(std::move(s._sharedThis)), _msg(std::move(s._msg)) {}
-
-		void operator =(const msg_capture& s)
-		{
-			_hostActor = s._hostActor;
-			_sharedThis = s._sharedThis;
-			_msg = s._msg;
-		}
-
-		void operator =(msg_capture&& s)
-		{
-			_hostActor = std::move(s._hostActor);
-			_sharedThis = std::move(s._sharedThis);
-			_msg = std::move(s._msg);
-		}
-
-		void operator()()
-		{
-			_sharedThis->send_msg(std::move(_msg), std::move(_hostActor));
-		}
-
-		msg_type _msg;
-		actor_handle _hostActor;
-		shared_ptr<MsgPool_> _sharedThis;
-	};
-
-	struct lost_capture
-	{
-		template <typename ActorHandle, typename MsgPool>
-		lost_capture(ActorHandle&& hostActor, MsgPool&& sharedThis)
-		:_hostActor(TRY_MOVE(hostActor)), _sharedThis(TRY_MOVE(sharedThis)) {}
-
-		lost_capture(const lost_capture& s)
-			:_hostActor(s._hostActor), _sharedThis(s._sharedThis) {}
-
-		lost_capture(lost_capture&& s)
-			:_hostActor(std::move(s._hostActor)), _sharedThis(std::move(s._sharedThis)) {}
-
-		void operator =(const lost_capture& s)
-		{
-			_hostActor = s._hostActor;
-			_sharedThis = s._sharedThis;
-		}
-
-		void operator =(lost_capture&& s)
-		{
-			_hostActor = std::move(s._hostActor);
-			_sharedThis = std::move(s._sharedThis);
-		}
-
-		void operator()()
-		{
-			if (!_sharedThis->_closed && _sharedThis->_msgPump)
-			{
-				_sharedThis->_msgPump->lost_msg(std::move(_hostActor));
-			}
-			else
-			{
-				_sharedThis->_losted = true;
-			}
-		}
-
-		actor_handle _hostActor;
-		shared_ptr<MsgPool_> _sharedThis;
 	};
 
 	friend my_actor;
@@ -1893,7 +1694,10 @@ private:
 		}
 		else
 		{
-			_strand->post(msg_capture(hostActor, _weakThis.lock(), std::move(mt)));
+			_strand->post(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPool_>& sharedThis, const msg_type& msg)
+			{
+				sharedThis->send_msg(std::move((msg_type&)msg), std::move((actor_handle&)hostActor));
+			}, hostActor, _weakThis.lock(), std::move(mt)));
 		}
 	}
 
@@ -1901,7 +1705,17 @@ private:
 	{
 		if (!_closed)
 		{
-			_strand->try_tick(lost_capture(hostActor, _weakThis.lock()));
+			_strand->try_tick(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPool_>& sharedThis)
+			{
+				if (!sharedThis->_closed && sharedThis->_msgPump)
+				{
+					sharedThis->_msgPump->lost_msg(std::move((actor_handle&)hostActor));
+				}
+				else
+				{
+					sharedThis->_losted = true;
+				}
+			}, hostActor, _weakThis.lock()));
 		}
 	}
 
@@ -1909,7 +1723,17 @@ private:
 	{
 		if (!_closed)
 		{
-			_strand->try_tick(lost_capture(std::move(hostActor), _weakThis.lock()));
+			_strand->try_tick(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPool_>& sharedThis)
+			{
+				if (!sharedThis->_closed && sharedThis->_msgPump)
+				{
+					sharedThis->_msgPump->lost_msg(std::move((actor_handle&)hostActor));
+				}
+				else
+				{
+					sharedThis->_losted = true;
+				}
+			}, std::move(hostActor), _weakThis.lock()));
 		}
 	}
 
@@ -1987,63 +1811,6 @@ class MsgPoolVoid_ :public MsgPoolBase_
 		std::shared_ptr<msg_pump_type> _msgPump;
 	};
 
-	struct wrap_pump
-	{
-		wrap_pump(const pump_handler& pump, unsigned char pumpID);
-		wrap_pump(pump_handler&& pump, unsigned char pumpID);
-		wrap_pump(const wrap_pump& s);
-		wrap_pump(wrap_pump&& s);
-		void operator()();
-
-		MsgPoolVoid_::pump_handler _pump;
-		unsigned char _pumpID;
-	};
-
-	struct wrap_try_pump
-	{
-		wrap_try_pump(const pump_handler& pump, unsigned char pumpID, bool& wait);
-		wrap_try_pump(pump_handler&& pump, unsigned char pumpID, bool& wait);
-		wrap_try_pump(const wrap_try_pump& s);
-		wrap_try_pump(wrap_try_pump&& s);
-		bool operator()();
-
-		bool& _wait;
-		pump_handler _pump;
-		unsigned char _pumpID;
-	};
-
-	struct msg_capture
-	{
-		template <typename ActorHandle, typename MsgPool>
-		msg_capture(ActorHandle&& hostActor, MsgPool&& sharedThis)
-			:_hostActor(TRY_MOVE(hostActor)), _sharedThis(TRY_MOVE(sharedThis)) {}
-
-		msg_capture(const msg_capture& s);
-		msg_capture(msg_capture&& s);
-		void operator =(const msg_capture& s);
-		void operator =(msg_capture&& s);
-		void operator()();
-
-		actor_handle _hostActor;
-		shared_ptr<MsgPoolVoid_> _sharedThis;
-	};
-
-	struct lost_capture
-	{
-		template <typename ActorHandle, typename MsgPool>
-		lost_capture(ActorHandle&& hostActor, MsgPool&& sharedThis)
-			:_hostActor(TRY_MOVE(hostActor)), _sharedThis(TRY_MOVE(sharedThis)) {}
-
-		lost_capture(const lost_capture& s);
-		lost_capture(lost_capture&& s);
-		void operator =(const lost_capture& s);
-		void operator =(lost_capture&& s);
-		void operator()();
-
-		actor_handle _hostActor;
-		shared_ptr<MsgPoolVoid_> _sharedThis;
-	};
-
 	friend my_actor;
 	friend MsgPumpVoid_;
 	friend post_type;
@@ -2077,77 +1844,10 @@ class MsgPumpVoid_ : public MsgPumpBase_
 	typedef void msg_type;
 	typedef MsgPoolVoid_::pump_handler pump_handler;
 
-	struct msg_capture
-	{
-		template <typename ActorHandle, typename MsgPump>
-		msg_capture(ActorHandle&& hostActor, MsgPump&& sharedThis)
-			:_hostActor(TRY_MOVE(hostActor)), _sharedThis(TRY_MOVE(sharedThis)) {}
-
-		msg_capture(const msg_capture& s)
-			:_hostActor(s._hostActor), _sharedThis(s._sharedThis) {}
-
-		msg_capture(msg_capture&& s)
-			:_hostActor(std::move(s._hostActor)), _sharedThis(std::move(s._sharedThis)) {}
-
-		void operator =(const msg_capture& s)
-		{
-			_hostActor = s._hostActor;
-			_sharedThis = s._sharedThis;
-		}
-
-		void operator =(msg_capture&& s)
-		{
-			_hostActor = std::move(s._hostActor);
-			_sharedThis = std::move(s._sharedThis);
-		}
-
-		void operator()()
-		{
-			_sharedThis->receiver();
-		}
-
-		actor_handle _hostActor;
-		shared_ptr<MsgPumpVoid_> _sharedThis;
-	};
-
-	struct lost_capture
-	{
-		template <typename ActorHandle, typename MsgPump>
-		lost_capture(ActorHandle&& hostActor, MsgPump&& sharedThis)
-			:_hostActor(TRY_MOVE(hostActor)), _sharedThis(TRY_MOVE(sharedThis)) {}
-
-		lost_capture(const lost_capture& s)
-			:_hostActor(s._hostActor), _sharedThis(s._sharedThis) {}
-
-		lost_capture(lost_capture&& s)
-			:_hostActor(std::move(s._hostActor)), _sharedThis(std::move(s._sharedThis)) {}
-
-		void operator =(const lost_capture& s)
-		{
-			_hostActor = s._hostActor;
-			_sharedThis = s._sharedThis;
-		}
-
-		void operator =(msg_capture&& s)
-		{
-			_hostActor = std::move(s._hostActor);
-			_sharedThis = std::move(s._sharedThis);
-		}
-
-		void operator()()
-		{
-			_sharedThis->_lost_msg();
-		}
-
-		actor_handle _hostActor;
-		shared_ptr<MsgPumpVoid_> _sharedThis;
-	};
-
 	friend my_actor;
 	friend MsgPoolVoid_;
 	friend mutex_block_pump<>;
 	friend pump_handler;
-	friend MsgPoolVoid_::wrap_pump;
 protected:
 	MsgPumpVoid_(const actor_handle& hostActor, bool checkLost);
 	virtual ~MsgPumpVoid_();
@@ -4555,26 +4255,6 @@ class my_actor
 		Handler _h;
 	};
 
-	struct wrap_run_one
-	{
-		template <typename ActorHandle>
-		wrap_run_one(ActorHandle&& self)
-			:_lockSelf(TRY_MOVE(self)) {}
-
-		void operator()()
-		{
-			_lockSelf->run_one();
-		}
-
-		wrap_run_one(const wrap_run_one& s)
-			:_lockSelf(s._lockSelf) {}
-
-		wrap_run_one(wrap_run_one&& s)
-			:_lockSelf(std::move(s._lockSelf)) {}
-
-		actor_handle _lockSelf;
-	};
-
 	struct wrap_trig_run_one
 	{
 		template <typename ActorHandle>
@@ -5230,11 +4910,11 @@ public:
 		if (exeStrand != _strand)
 		{
 			bool sign = false;
-			actor_handle shared_this = shared_from_this();
-			exeStrand->asyncInvokeVoid(TRY_MOVE(h), [&sign, shared_this]
+			exeStrand->asyncInvokeVoid(TRY_MOVE(h), std::bind([](const actor_handle& self, bool* const sign)
 			{
-				shared_this->_strand->post(wrap_trig_run_one(shared_this, &sign));
-			});
+				my_actor* this_ = self.get();
+				this_->_strand->post(wrap_trig_run_one(std::move((actor_handle&)self), sign));
+			}, shared_from_this(), &sign));
 			if (!sign)
 			{
 				sign = true;
@@ -5272,11 +4952,11 @@ public:
 	{
 		assert_enter();
 		bool sign = false;
-		actor_handle shared_this = shared_from_this();
-		_strand->asyncInvokeVoid(TRY_MOVE(h), [&sign, shared_this]
+		_strand->asyncInvokeVoid(TRY_MOVE(h), std::bind([](const actor_handle& self, bool* const sign)
 		{
-			shared_this->_strand->next_tick(wrap_trig_run_one(shared_this, &sign));
-		});
+			my_actor* this_ = self.get();
+			this_->_strand->next_tick(wrap_trig_run_one(std::move((actor_handle&)self), sign));
+		}, shared_from_this(), &sign));
 		if (!sign)
 		{
 			sign = true;
@@ -5299,11 +4979,11 @@ public:
 	{
 		assert_enter();
 		bool sign = false;
-		actor_handle shared_this = shared_from_this();
-		exeStrand->asyncInvokeVoid(TRY_MOVE(h), [&sign, shared_this]
+		exeStrand->asyncInvokeVoid(TRY_MOVE(h), std::bind([](const actor_handle& self, bool* const sign)
 		{
-			shared_this->_strand->try_tick(wrap_trig_run_one(shared_this, &sign));
-		});
+			my_actor* this_ = self.get();
+			this_->_strand->try_tick(wrap_trig_run_one(std::move((actor_handle&)self), sign));
+		}, shared_from_this(), &sign));
 		if (!sign)
 		{
 			sign = true;
@@ -5343,19 +5023,28 @@ private:
 	{
 		if (exeStrand != _strand)
 		{
-			DEBUG_OPERATION(bool setb = false);
-			actor_handle shared_this = shared_from_this();
-			exeStrand->asyncInvokeVoid(TRY_MOVE(h), [&, shared_this]
+			bool sign = false;
+			exeStrand->asyncInvokeVoid(TRY_MOVE(h), std::bind([](const actor_handle& self, bool* const sign)
 			{
-				shared_this->_strand->post([&, shared_this]
+				my_actor* this_ = self.get();
+				this_->_strand->post(std::bind([](const actor_handle& self, bool* const sign)
 				{
-					assert(!shared_this->_inActor);
-					DEBUG_OPERATION(setb = true);
-					shared_this->pull_yield_after_quited();
-				});
-			});
-			push_yield_after_quited();
-			assert(setb);
+					assert(!self->_inActor);
+					if (*sign)
+					{
+						self->pull_yield_after_quited();
+					}
+					else
+					{
+						*sign = true;
+					}
+				}, std::move((actor_handle&)self), sign));
+			}, shared_from_this(), &sign));
+			if (!sign)
+			{
+				sign = true;
+				push_yield_after_quited();
+			}
 			return;
 		}
 		h();
@@ -7538,6 +7227,11 @@ public:
 	size_t stack_idle_space();
 
 	/*!
+	@brief 释放当前以下的栈页
+	*/
+	void stack_decommit();
+
+	/*!
 	@brief 获取当前Actor调度器
 	*/
 	const shared_strand& self_strand();
@@ -7687,39 +7381,123 @@ public:
 	/*!
 	@brief 启动一堆Actor
 	*/
-	void actors_start_run(const list<actor_handle>& anotherActors);
+	template <typename Alloc>
+	void actors_start_run(const list<actor_handle, Alloc>& anotherActors)
+	{
+		assert_enter();
+		for (auto& actorHandle : anotherActors)
+		{
+			actorHandle->notify_run();
+		}
+	}
 
 	/*!
 	@brief 强制退出另一个Actor，并且等待完成
 	*/
 	__yield_interrupt void actor_force_quit(const actor_handle& anotherActor);
-	__yield_interrupt void actors_force_quit(const list<actor_handle>& anotherActors);
+
+	template <typename Alloc>
+	__yield_interrupt void actors_force_quit(const list<actor_handle, Alloc>& anotherActors)
+	{
+		assert_enter();
+		actor_msg_handle<> amh;
+		auto h = make_msg_notifer_to_self(amh);
+		for (auto& actorHandle : anotherActors)
+		{
+			actorHandle->notify_quit(h);
+		}
+		for (size_t i = anotherActors.size(); i > 0; i--)
+		{
+			wait_msg(amh);
+		}
+		close_msg_notifer(amh);
+	}
 
 	/*!
 	@brief 等待另一个Actor结束后返回
 	*/
 	__yield_interrupt void actor_wait_quit(const actor_handle& anotherActor);
-	__yield_interrupt void actors_wait_quit(const list<actor_handle>& anotherActors);
+
+	template <typename Alloc>
+	__yield_interrupt void actors_wait_quit(const list<actor_handle, Alloc>& anotherActors)
+	{
+		assert_enter();
+		for (auto& actorHandle : anotherActors)
+		{
+			actor_wait_quit(actorHandle);
+		}
+	}
+
 	__yield_interrupt bool timed_actor_wait_quit(int tm, const actor_handle& anotherActor);
 
 	/*!
 	@brief 挂起另一个Actor，等待其所有子Actor都调用后才返回
 	*/
 	__yield_interrupt void actor_suspend(const actor_handle& anotherActor);
-	__yield_interrupt void actors_suspend(const list<actor_handle>& anotherActors);
+
+	template <typename Alloc>
+	__yield_interrupt void actors_suspend(const list<actor_handle, Alloc>& anotherActors)
+	{
+		assert_enter();
+		actor_msg_handle<> amh;
+		auto h = make_msg_notifer_to_self(amh);
+		for (auto& actorHandle : anotherActors)
+		{
+			actorHandle->notify_suspend(h);
+		}
+		for (size_t i = anotherActors.size(); i > 0; i--)
+		{
+			wait_msg(amh);
+		}
+		close_msg_notifer(amh);
+	}
 
 	/*!
 	@brief 恢复另一个Actor，等待其所有子Actor都调用后才返回
 	*/
 	__yield_interrupt void actor_resume(const actor_handle& anotherActor);
-	__yield_interrupt void actors_resume(const list<actor_handle>& anotherActors);
+
+	template <typename Alloc>
+	__yield_interrupt void actors_resume(const list<actor_handle, Alloc>& anotherActors)
+	{
+		assert_enter();
+		actor_msg_handle<> amh;
+		auto h = make_msg_notifer_to_self(amh);
+		for (auto& actorHandle : anotherActors)
+		{
+			actorHandle->notify_resume(h);
+		}
+		for (size_t i = anotherActors.size(); i > 0; i--)
+		{
+			wait_msg(amh);
+		}
+		close_msg_notifer(amh);
+	}
 
 	/*!
 	@brief 对另一个Actor进行挂起/恢复状态切换
 	@return 都已挂起返回true，否则false
 	*/
 	__yield_interrupt bool actor_switch(const actor_handle& anotherActor);
-	__yield_interrupt bool actors_switch(const list<actor_handle>& anotherActors);
+
+	template <typename Alloc>
+	__yield_interrupt bool actors_switch(const list<actor_handle, Alloc>& anotherActors)
+	{
+		assert_enter();
+		bool isPause = true;
+		actor_msg_handle<bool> amh;
+		auto h = make_msg_notifer_to_self(amh);
+		for (auto& actorHandle : anotherActors)
+		{
+			actorHandle->switch_pause_play(h);
+		}
+		for (size_t i = anotherActors.size(); i > 0; i--)
+		{
+			isPause &= wait_msg(amh);
+		}
+		close_msg_notifer(amh);
+		return isPause;
+	}
 
 	void assert_enter();
 private:
@@ -7825,6 +7603,13 @@ R ActorFunc_::send(my_actor* host, const shared_strand& exeStrand, H&& h)
 {
 	assert(host);
 	return host->send<R>(exeStrand, TRY_MOVE(h));
+}
+
+template <typename R, typename H>
+R ActorFunc_::async_send(my_actor* host, const shared_strand& exeStrand, H&& h)
+{
+	assert(host);
+	return host->async_send<R>(exeStrand, TRY_MOVE(h));
 }
 
 template <typename... Args>
