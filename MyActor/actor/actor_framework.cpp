@@ -345,20 +345,25 @@ void MsgPoolVoid_::push_msg(const actor_handle& hostActor)
 	}
 }
 
+void MsgPoolVoid_::_lost_msg(const actor_handle& hostActor)
+{
+	if (!_closed && _msgPump)
+	{
+		_msgPump->lost_msg(std::move((actor_handle&)hostActor));
+	}
+	else
+	{
+		_losted = true;
+	}
+}
+
 void MsgPoolVoid_::lost_msg(const actor_handle& hostActor)
 {
 	if (!_closed)
 	{
 		_strand->try_tick(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPoolVoid_>& sharedThis)
 		{
-			if (!sharedThis->_closed && sharedThis->_msgPump)
-			{
-				sharedThis->_msgPump->lost_msg(std::move((actor_handle&)hostActor));
-			}
-			else
-			{
-				sharedThis->_losted = true;
-			}
+			sharedThis->_lost_msg(hostActor);
 		}, hostActor, _weakThis.lock()));
 	}
 }
@@ -369,14 +374,7 @@ void MsgPoolVoid_::lost_msg(actor_handle&& hostActor)
 	{
 		_strand->try_tick(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPoolVoid_>& sharedThis)
 		{
-			if (!sharedThis->_closed && sharedThis->_msgPump)
-			{
-				sharedThis->_msgPump->lost_msg(std::move((actor_handle&)hostActor));
-			}
-			else
-			{
-				sharedThis->_losted = true;
-			}
+			sharedThis->_lost_msg(hostActor);
 		}, std::move(hostActor), _weakThis.lock()));
 	}
 }
@@ -483,7 +481,7 @@ bool MsgPoolVoid_::pump_handler::try_pump(my_actor* host, unsigned char pumpID, 
 {
 	assert(_thisPool);
 	host->lock_quit();
-	auto h = [](pump_handler& pump, unsigned char pumpID, bool& wait)->bool
+	auto h = [&wait, pumpID](pump_handler& pump)->bool
 	{
 		bool ok = false;
 		auto& thisPool_ = pump._thisPool;
@@ -516,11 +514,11 @@ bool MsgPoolVoid_::pump_handler::try_pump(my_actor* host, unsigned char pumpID, 
 	bool r = false;
 	if (host->self_strand() == _thisPool->_strand)
 	{
-		r = h(*this, pumpID, wait);
+		r = h(*this);
 	}
 	else
 	{
-		r = host->async_send<bool>(_thisPool->_strand, std::bind(h, *this, pumpID, std::reference_wrapper<bool>(wait)));
+		r = host->async_send<bool>(_thisPool->_strand, std::bind(h, *this));
 	}
 	host->unlock_quit();
 	return r;
@@ -529,7 +527,7 @@ bool MsgPoolVoid_::pump_handler::try_pump(my_actor* host, unsigned char pumpID, 
 size_t MsgPoolVoid_::pump_handler::size(my_actor* host, unsigned char pumpID)
 {
 	assert(_thisPool);
-	auto h = [](pump_handler& pump, unsigned char pumpID)->size_t
+	auto h = [pumpID](pump_handler& pump)->size_t
 	{
 		auto& thisPool_ = pump._thisPool;
 		if (pump._msgPump == thisPool_->_msgPump)
@@ -548,12 +546,12 @@ size_t MsgPoolVoid_::pump_handler::size(my_actor* host, unsigned char pumpID)
 	size_t r = 0;
 	if (host->self_strand() == _thisPool->_strand)
 	{
-		r = h(*this, pumpID);
+		r = h(*this);
 	}
 	else
 	{
 		host->lock_quit();
-		r = host->async_send<size_t>(_thisPool->_strand, std::bind(h, *this, pumpID));
+		r = host->async_send<size_t>(_thisPool->_strand, std::bind(h, *this));
 		host->unlock_quit();
 	}
 	return r;
@@ -583,13 +581,13 @@ size_t MsgPoolVoid_::pump_handler::snap_size(unsigned char pumpID)
 void MsgPoolVoid_::pump_handler::post_pump(unsigned char pumpID)
 {
 	assert(!empty());
-	_thisPool->_strand->post(std::bind([](pump_handler& pump, unsigned char pumpID)
+	_thisPool->_strand->post(std::bind([pumpID](pump_handler& pump)
 	{
 		if (pump._msgPump == pump._thisPool->_msgPump)
 		{
 			pump.pump_msg(pumpID, pump._msgPump->_hostActor->shared_from_this());
 		}
-	}, *this, pumpID));
+	}, *this));
 }
 
 void MsgPoolVoid_::pump_handler::start_pump(unsigned char pumpID)
