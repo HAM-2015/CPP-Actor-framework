@@ -128,12 +128,12 @@ boost::asio::io_service& boost_strand::get_io_service()
 	return *_ioEngine;
 }
 
-ActorTimer_* boost_strand::get_timer()
+ActorTimer_* boost_strand::actor_timer()
 {
 	return _actorTimer;
 }
 
-std::shared_ptr<AsyncTimer_> boost_strand::make_async_timer()
+std::shared_ptr<AsyncTimer_> boost_strand::make_timer()
 {
 	std::shared_ptr<AsyncTimer_> res(new AsyncTimer_(*_timerBoost));
 	res->_weakThis = res;

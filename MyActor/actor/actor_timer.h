@@ -57,13 +57,13 @@ private:
 private:
 	io_engine& _ios;
 	void* _timer;
-	bool _looping;
-	int _timerCount;
 	shared_strand _strand;
 	handler_queue _handlerQueue;
 	unsigned long long _extMaxTick;
 	unsigned long long _extFinishTime;
 	std::weak_ptr<boost_strand> _weakStrand;
+	int _timerCount;
+	bool _looping;
 };
 
 #endif

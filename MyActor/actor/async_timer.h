@@ -7,6 +7,7 @@
 #include "mem_pool.h"
 
 class AsyncTimer_;
+class qt_strand;
 class boost_strand;
 typedef std::shared_ptr<AsyncTimer_> async_timer;
 
@@ -18,6 +19,7 @@ class TimerBoost_
 	typedef msg_multimap<unsigned long long, async_timer> handler_queue;
 
 	friend AsyncTimer_;
+	friend qt_strand;
 	friend boost_strand;
 
 	class timer_handle
@@ -56,13 +58,13 @@ private:
 private:
 	io_engine& _ios;
 	void* _timer;
-	bool _looping;
-	int _timerCount;
 	shared_strand _strand;
 	handler_queue _handlerQueue;
 	unsigned long long _extMaxTick;
 	unsigned long long _extFinishTime;
 	std::weak_ptr<boost_strand> _weakStrand;
+	int _timerCount;
+	bool _looping;
 };
 
 /*!

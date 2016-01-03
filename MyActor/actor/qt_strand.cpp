@@ -22,7 +22,8 @@ shared_qt_strand qt_strand::create(io_engine& ioEngine, bind_qt_run_base* qt)
 	res->_ioEngine = &ioEngine;
 	res->_qt = qt;
 	res->_qtThreadID = qt->thread_id();
-	res->_timer = new ActorTimer_(res);
+	res->_actorTimer = new ActorTimer_(res);
+	res->_timerBoost = new TimerBoost_(res);
 	res->_weakThis = res;
 	return res;
 }

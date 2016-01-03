@@ -1378,8 +1378,8 @@ _childActorList(_childActorListAll)
 	_checkStackFree = false;
 #endif
 	_autoStack = false;
-	_timerState._timerSuspend = false;
-	_timerState._timerCompleted = true;
+	_timerStateSuspend = false;
+	_timerStateCompleted = true;
 	_selfID = ++s_actorIDCount;
 	_actorKey = -1;
 	_lockQuit = 0;
@@ -1392,10 +1392,11 @@ _childActorList(_childActorListAll)
 #ifdef ENABLE_CHECK_FUNC_STACK
 	_checkStackDepth = 0;
 #endif
-	_timerState._timerCount = 0;
-	_timerState._timerTime = 0;
-	_timerState._timerStampBegin = 0;
-	_timerState._timerStampEnd = 0;
+	_timerStateCount = 0;
+	_timerStateTime = 0;
+	_timerStateStampBegin = 0;
+	_timerStateStampEnd = 0;
+	_timerStateCb = NULL;
 }
 
 my_actor::my_actor(const my_actor&)
@@ -1452,7 +1453,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& main
 	newActor->_weakThis = newActor;
 	newActor->_strand = actorStrand;
 	newActor->_mainFunc = std::move(mainFunc);
-	newActor->_timer = actorStrand->get_timer();
+	newActor->_timer = actorStrand->actor_timer();
 	newActor->_actorPull = pull;
 #ifdef PRINT_ACTOR_STACK
 	newActor->_createStack = std::shared_ptr<list<stack_line_info>>(new list<stack_line_info>(get_stack_list(8, 1)));
@@ -1519,7 +1520,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 	newActor->_autoStack = true;
 	wrapActor.swap(newActor->_mainFunc);
 	newActor->_actorKey = wrapActor.key();
-	newActor->_timer = actorStrand->get_timer();
+	newActor->_timer = actorStrand->actor_timer();
 	newActor->_actorPull = pull;
 #ifdef PRINT_ACTOR_STACK
 	newActor->_createStack = std::shared_ptr<list<stack_line_info>>(new list<stack_line_info>(get_stack_list(8, 1)));
@@ -2588,43 +2589,43 @@ void my_actor::exit_callback()
 
 void my_actor::timeout_handler()
 {
-	assert(_timerState._timerCb);
-	_timerState._timerCompleted = true;
-	_timerState._timerHandle.reset();
-	wrap_timer_handler_face* h = _timerState._timerCb;
-	_timerState._timerCb = NULL;
-	h->invoke(_timerState._reuMem);
+	assert(_timerStateCb);
+	_timerStateCompleted = true;
+	_timerStateHandle.reset();
+	wrap_timer_handler_face* h = _timerStateCb;
+	_timerStateCb = NULL;
+	h->invoke(_timerStateReuMem);
 }
 
 void my_actor::cancel_timer()
 {
 	assert(_timer);
-	if (!_timerState._timerCompleted)
+	if (!_timerStateCompleted)
 	{
-		_timerState._timerCompleted = true;
-		_timerState._timerCount++;
-		if (_timerState._timerTime)
+		_timerStateCompleted = true;
+		_timerStateCount++;
+		if (_timerStateTime)
 		{
-			_timer->cancel(_timerState._timerHandle);
-			_timerState._timerCb->destory(_timerState._reuMem);
-			_timerState._timerCb = NULL;
+			_timer->cancel(_timerStateHandle);
+			_timerStateCb->destory(_timerStateReuMem);
+			_timerStateCb = NULL;
 		}
 	}
 }
 
 void my_actor::suspend_timer()
 {
-	if (!_timerState._timerSuspend)
+	if (!_timerStateSuspend)
 	{
-		_timerState._timerSuspend = true;
-		if (!_timerState._timerCompleted && _timerState._timerTime)
+		_timerStateSuspend = true;
+		if (!_timerStateCompleted && _timerStateTime)
 		{
-			_timer->cancel(_timerState._timerHandle);
-			_timerState._timerStampEnd = get_tick_us();
-			long long tt = _timerState._timerStampBegin + _timerState._timerTime;
-			if (_timerState._timerStampEnd > tt)
+			_timer->cancel(_timerStateHandle);
+			_timerStateStampEnd = get_tick_us();
+			long long tt = _timerStateStampBegin + _timerStateTime;
+			if (_timerStateStampEnd > tt)
 			{
-				_timerState._timerStampEnd = tt;
+				_timerStateStampEnd = tt;
 			}
 		}
 	}
@@ -2632,15 +2633,15 @@ void my_actor::suspend_timer()
 
 void my_actor::resume_timer()
 {
-	if (_timerState._timerSuspend)
+	if (_timerStateSuspend)
 	{
-		_timerState._timerSuspend = false;
-		if (!_timerState._timerCompleted && _timerState._timerTime)
+		_timerStateSuspend = false;
+		if (!_timerStateCompleted && _timerStateTime)
 		{
-			assert(_timerState._timerTime >= _timerState._timerStampEnd - _timerState._timerStampBegin);
-			_timerState._timerTime -= _timerState._timerStampEnd - _timerState._timerStampBegin;
-			_timerState._timerStampBegin = get_tick_us();
-			_timerState._timerHandle = _timer->timeout(_timerState._timerTime, shared_from_this());
+			assert(_timerStateTime >= _timerStateStampEnd - _timerStateStampBegin);
+			_timerStateTime -= _timerStateStampEnd - _timerStateStampBegin;
+			_timerStateStampBegin = get_tick_us();
+			_timerStateHandle = _timer->timeout(_timerStateTime, shared_from_this());
 		}
 	}
 }

@@ -1356,8 +1356,8 @@ private:
 	pump_handler _pumpHandler;
 	shared_strand _strand;
 	dst_receiver* _dstRec;
-	unsigned char _pumpCount;
 	DEBUG_OPERATION(SharedBool_ _pClosed);
+	unsigned char _pumpCount;
 	bool _hasMsg : 1;
 	bool _waiting : 1;
 	bool _waitConnect : 1;
@@ -1874,8 +1874,8 @@ protected:
 	std::weak_ptr<MsgPumpVoid_> _weakThis;
 	pump_handler _pumpHandler;
 	shared_strand _strand;
-	unsigned char _pumpCount;
 	bool* _dstRec;
+	unsigned char _pumpCount;
 	bool _waiting : 1;
 	bool _waitConnect : 1;
 	bool _hasMsg : 1;
@@ -2014,9 +2014,9 @@ private:
 	}
 #endif
 
+	DEBUG_OPERATION(SharedBool_ _pClosed);
 	pump* _handle;
 	int _id;
-	DEBUG_OPERATION(SharedBool_ _pClosed);
 };
 
 template <typename... ARGS>
@@ -4232,7 +4232,7 @@ class my_actor
 	{
 		template <typename ActorHandle, typename H>
 		wrap_delay_trig(ActorHandle&& self, H&& h)
-			: _count(self->_timerState._timerCount), _lockSelf(TRY_MOVE(self)), _h(TRY_MOVE(h)) {}
+			: _count(self->_timerStateCount), _lockSelf(TRY_MOVE(self)), _h(TRY_MOVE(h)) {}
 
 		wrap_delay_trig(wrap_delay_trig&& s)
 			:_count(s._count), _lockSelf(std::move(s._lockSelf)), _h(std::move(s._h)) {}
@@ -4243,7 +4243,7 @@ class my_actor
 		void operator ()()
 		{
 			assert(_lockSelf->self_strand()->running_in_this_thread());
-			if (!_lockSelf->_quited && _count == _lockSelf->_timerState._timerCount)
+			if (!_lockSelf->_quited && _count == _lockSelf->_timerStateCount)
 			{
 				_h();
 			}
@@ -4350,19 +4350,6 @@ class my_actor
 		}
 
 		Handler _h;
-	};
-
-	struct timer_state
-	{
-		int _timerCount;
-		long long _timerTime;
-		long long _timerStampBegin;
-		long long _timerStampEnd;
-		ActorTimer_::timer_handle _timerHandle;
-		wrap_timer_handler_face* _timerCb = NULL;
-		bool _timerSuspend : 1;
-		bool _timerCompleted : 1;
-		reusable_mem _reuMem;
 	};
 
 	class actor_run;
@@ -4883,9 +4870,9 @@ public:
 		}
 		else if (0 == ms)
 		{
-			assert(_timerState._timerCompleted);
-			_timerState._timerTime = 0;
-			_timerState._timerCompleted = false;
+			assert(_timerStateCompleted);
+			_timerStateTime = 0;
+			_timerStateCompleted = false;
 			_strand->post(wrap_delay_trig<RM_CREF(Handler)>(shared_from_this(), TRY_MOVE(handler)));
 		}
 		else
@@ -7505,14 +7492,14 @@ private:
 	{
 		assert_enter();
 		assert(ms > 0);
-		assert(_timerState._timerCompleted);
-		assert(!_timerState._timerCb);
+		assert(_timerStateCompleted);
+		assert(!_timerStateCb);
 		typedef wrap_timer_handler<RM_CREF(Handler)> wrap_type;
-		_timerState._timerTime = (long long)ms * 1000;
-		_timerState._timerCb = new(_timerState._reuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
-		_timerState._timerStampBegin = get_tick_us();
-		_timerState._timerCompleted = false;
-		_timerState._timerHandle = _timer->timeout(_timerState._timerTime, shared_from_this());
+		_timerStateTime = (long long)ms * 1000;
+		_timerStateCb = new(_timerStateReuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
+		_timerStateStampBegin = get_tick_us();
+		_timerStateCompleted = false;
+		_timerStateHandle = _timer->timeout(_timerStateTime, shared_from_this());
 	}
 
 	void timeout_handler();
@@ -7550,6 +7537,7 @@ private:
 	id _selfID;///<ActorID
 	void* _actorPull;///<Actor中断点恢复
 	void* _actorPush;///<Actor中断点
+	wrap_timer_handler_face* _timerStateCb = NULL;///<定时器触发回调
 	size_t _actorKey;///<该Actor处理模块的全局唯一key
 	size_t _lockQuit;///<锁定当前Actor，如果当前接收到退出消息，暂时不退，等到解锁后退出
 	size_t _yieldCount;///<yield计数
@@ -7561,9 +7549,13 @@ private:
 #ifdef ENABLE_CHECK_FUNC_STACK
 	size_t _checkStackDepth;///<函数调用栈消耗测试
 #endif
+	long long _timerStateTime;///<当前定时时间
+	long long _timerStateStampBegin;///<定时起始时间
+	long long _timerStateStampEnd;///<定时结束时间
 	msg_pool_status _msgPoolStatus;///<消息池列表
 	actor_handle _parentActor;///<父Actor，子Actor都析构后，父Actor才能析构
-	timer_state _timerState;///<定时器状态
+	ActorTimer_::timer_handle _timerStateHandle;///<定时器句柄
+	reusable_mem _timerStateReuMem;///<定时器内存管理
 	ActorTimer_* _timer;///<定时器
 	main_func _mainFunc;///<Actor入口
 	msg_list_shared_alloc<suspend_resume_option> _suspendResumeQueue;///<挂起/恢复操作队列
@@ -7578,6 +7570,9 @@ private:
 #endif
 #endif
 #endif
+	int _timerStateCount;///<定时器计数
+	bool _timerStateSuspend : 1;///<定时器是否挂起
+	bool _timerStateCompleted : 1;///<定时器是否完成
 	bool _inActor : 1;///<当前正在Actor内部执行标记
 	bool _started : 1;///<已经开始运行的标记
 	bool _quited : 1;///<_mainFunc已经不再执行

@@ -18,6 +18,7 @@
 class ActorTimer_;
 class TimerBoost_;
 class AsyncTimer_;
+class my_actor;
 
 class boost_strand;
 typedef std::shared_ptr<boost_strand> shared_strand;
@@ -308,6 +309,7 @@ class boost_strand
 		mutable CB _cb;
 	};
 
+	friend my_actor;
 	FRIEND_SHARED_PTR(boost_strand);
 protected:
 	boost_strand();
@@ -525,14 +527,14 @@ public:
 	boost::asio::io_service& get_io_service();
 
 	/*!
-	@brief 获取定时器
-	*/
-	ActorTimer_* get_timer();
-
-	/*!
 	@brief 创建一个定时器
 	*/
-	std::shared_ptr<AsyncTimer_> make_async_timer();
+	std::shared_ptr<AsyncTimer_> make_timer();
+private:
+	/*!
+	@brief 获取Actor定时器
+	*/
+	ActorTimer_* actor_timer();
 protected:
 #ifdef ENABLE_NEXT_TICK
 	bool ready_empty();
