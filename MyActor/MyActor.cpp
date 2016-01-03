@@ -7,6 +7,7 @@
 #include "./actor/msg_queue.h"
 #include "./actor/sync_msg.h"
 #include "./actor/trace.h"
+#include "./actor/async_timer.h"
 
 using namespace std;
 

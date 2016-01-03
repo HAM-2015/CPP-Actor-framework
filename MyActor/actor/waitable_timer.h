@@ -9,7 +9,7 @@
 #include <boost/thread/thread.hpp>
 
 class ActorTimer_;
-class timer_boost;
+class TimerBoost_;
 class WaitableTimerEvent_;
 
 class WaitableTimer_
@@ -86,7 +86,7 @@ class WaitableTimerEvent_
 
 	friend io_engine;
 	friend ActorTimer_;
-	friend timer_boost;
+	friend TimerBoost_;
 	friend WaitableTimer_;
 private:
 	WaitableTimerEvent_(io_engine& ios, WaitableTimer_* timer);

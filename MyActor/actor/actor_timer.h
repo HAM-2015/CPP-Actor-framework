@@ -6,8 +6,6 @@
 #include "msg_queue.h"
 
 class boost_strand;
-class mfc_strand;
-class wx_strand;
 class qt_strand;
 class my_actor;
 
@@ -20,8 +18,6 @@ class ActorTimer_
 	typedef msg_multimap<unsigned long long, actor_handle> handler_queue;
 
 	friend boost_strand;
-	friend mfc_strand;
-	friend wx_strand;
 	friend qt_strand;
 	friend my_actor;
 

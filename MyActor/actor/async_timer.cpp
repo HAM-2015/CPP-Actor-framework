@@ -18,33 +18,26 @@ typedef WaitableTimerEvent_ timer_type;
 typedef long long micseconds;
 #endif
 
-timer_boost::timer_boost(const shared_strand& strand)
-:_ios(strand->get_io_engine()), _strand(strand), _looping(false), _timerCount(0),
+TimerBoost_::TimerBoost_(const shared_strand& strand)
+:_ios(strand->get_io_engine()), _looping(false), _weakStrand(strand), _timerCount(0),
 _extMaxTick(0), _extFinishTime(-1), _timer(_ios.getTimer()), _handlerQueue(65536)
 {
 
 }
 
-timer_boost::~timer_boost()
+TimerBoost_::~TimerBoost_()
 {
 	assert(_handlerQueue.empty());
+	assert(!_strand);
 	_ios.freeTimer(_timer);
 }
 
-std::shared_ptr<timer_boost> timer_boost::create(const shared_strand& strand)
+TimerBoost_::timer_handle TimerBoost_::timeout(unsigned long long us, async_timer&& host)
 {
-	std::shared_ptr<timer_boost> res(new timer_boost(strand));
-	res->_weakThis = res;
-	return res;
-}
-
-const shared_strand& timer_boost::self_strand() const
-{
-	return _strand;
-}
-
-timer_boost::timer_handle timer_boost::timeout(unsigned long long us, async_handle&& host)
-{
+	if (!_strand)
+	{
+		_strand = _weakStrand.lock();
+	}
 	assert(_strand->running_in_this_thread());
 	assert(us < 0x80000000LL * 1000);
 	unsigned long long et = (get_tick_us() + us) & -256;
@@ -60,19 +53,15 @@ timer_boost::timer_handle timer_boost::timeout(unsigned long long us, async_hand
 		timerHandle._queueNode = _handlerQueue.insert(make_pair(et, std::move(host)));
 	}
 
-	if (!_lockThis)
-	{
-		_lockThis = _weakThis.lock();
-	}
 	if (!_looping)
-	{
+	{//定时器已经退出循环，重新启动定时器
 		_looping = true;
 		assert(_handlerQueue.size() == 1);
 		_extFinishTime = et;
 		timer_loop(us);
 	}
 	else if (et < _extFinishTime)
-	{
+	{//定时期限前于当前定时器期限，取消后重新计时
 		boost::system::error_code ec;
 		((timer_type*)_timer)->cancel(ec);
 		_timerCount++;
@@ -82,17 +71,18 @@ timer_boost::timer_handle timer_boost::timeout(unsigned long long us, async_hand
 	return timerHandle;
 }
 
-void timer_boost::cancel(timer_handle& th)
+void TimerBoost_::cancel(timer_handle& th)
 {
-	assert(_strand->running_in_this_thread());
 	if (!th._null)
-	{
+	{//删除当前定时器节点
+		assert(_strand && _strand->running_in_this_thread());
 		th._null = true;
 		auto itNode = th._queueNode;
 		if (_handlerQueue.size() == 1)
 		{
 			_extMaxTick = 0;
 			_handlerQueue.erase(itNode);
+			//如果没有定时任务就退出定时循环
 			boost::system::error_code ec;
 			((timer_type*)_timer)->cancel(ec);
 			_timerCount++;
@@ -114,11 +104,11 @@ void timer_boost::cancel(timer_handle& th)
 	}
 }
 
-void timer_boost::timer_loop(unsigned long long us)
+void TimerBoost_::timer_loop(unsigned long long us)
 {
 	int tc = ++_timerCount;
 #ifdef DISABLE_BOOST_TIMER
-	((timer_type*)_timer)->async_wait(us, _strand->wrap_post([this, tc](const boost::system::error_code&)
+	((timer_type*)_timer)->async_wait(micseconds(us), _strand->wrap_post([this, tc](const boost::system::error_code&)
 #else
 	boost::system::error_code ec;
 	((timer_type*)_timer)->expires_from_now(micseconds(us), ec);
@@ -146,55 +136,40 @@ void timer_boost::timer_loop(unsigned long long us)
 				}
 			}
 			_looping = false;
-			_lockThis.reset();
+			_strand.reset();
 		}
 		else if (tc == _timerCount - 1)
 		{
-			_lockThis.reset();
+			_strand.reset();
 		}
 	}));
 }
 //////////////////////////////////////////////////////////////////////////
 
-async_timer::async_timer(const std::shared_ptr<timer_boost>& timerBoost)
-:_timerBoost(timerBoost), _handler(NULL)
-{
+AsyncTimer_::AsyncTimer_(TimerBoost_& timerBoost)
+:_timerBoost(timerBoost), _handler(NULL) {}
 
-}
-
-async_timer::~async_timer()
+AsyncTimer_::~AsyncTimer_()
 {
 	assert(!_handler);
 }
 
-std::shared_ptr<async_timer> async_timer::create(const std::shared_ptr<timer_boost>& timerBoost)
-{
-	std::shared_ptr<async_timer> res(new async_timer(timerBoost));
-	res->_weakThis = res;
-	return res;
-}
-
-void async_timer::cancel()
+void AsyncTimer_::cancel()
 {
 	if (_handler)
 	{
 		_handler->destory(_reuMem);
 		_handler = NULL;
 	}
-	_timerBoost->cancel(_timerHandle);
+	_timerBoost.cancel(_timerHandle);
 }
 
-const shared_strand& async_timer::self_strand() const
+shared_strand AsyncTimer_::self_strand() const
 {
-	return _timerBoost->_strand;
+	return _timerBoost._weakStrand.lock();
 }
 
-const std::shared_ptr<timer_boost>& async_timer::self_timer_boost() const
-{
-	return _timerBoost;
-}
-
-void async_timer::timeout_handler()
+void AsyncTimer_::timeout_handler()
 {
 	_timerHandle.reset();
 	wrap_base* cb = _handler;

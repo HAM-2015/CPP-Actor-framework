@@ -6,22 +6,23 @@
 #include "msg_queue.h"
 #include "mem_pool.h"
 
-class async_timer;
+class AsyncTimer_;
+class boost_strand;
+typedef std::shared_ptr<AsyncTimer_> async_timer;
 
 /*!
 @brief 定时器性能加速器
 */
-class timer_boost
+class TimerBoost_
 {
-	typedef std::shared_ptr<async_timer> async_handle;
-	typedef msg_multimap<unsigned long long, async_handle> handler_queue;
+	typedef msg_multimap<unsigned long long, async_timer> handler_queue;
 
-	friend async_timer;
-	FRIEND_SHARED_PTR(timer_boost);
+	friend AsyncTimer_;
+	friend boost_strand;
 
 	class timer_handle
 	{
-		friend timer_boost;
+		friend TimerBoost_;
 	public:
 		void reset()
 		{
@@ -32,14 +33,25 @@ class timer_boost
 		handler_queue::iterator _queueNode;
 	};
 private:
-	timer_boost(const shared_strand& strand);
-	~timer_boost();
-public:
-	static std::shared_ptr<timer_boost> create(const shared_strand& strand);
-	const shared_strand& self_strand() const;
+	TimerBoost_(const shared_strand& strand);
+	~TimerBoost_(); 
 private:
-	timer_handle timeout(unsigned long long us, async_handle&& host);
+	/*!
+	@brief 开始计时
+	@param us 微秒
+	@param host 准备计时的AsyncTimer_
+	@return 计时句柄，用于cancel
+	*/
+	timer_handle timeout(unsigned long long us, async_timer&& host);
+
+	/*!
+	@brief 取消计时
+	*/
 	void cancel(timer_handle& th);
+
+	/*!
+	@brief timer循环
+	*/
 	void timer_loop(unsigned long long us);
 private:
 	io_engine& _ios;
@@ -50,17 +62,17 @@ private:
 	handler_queue _handlerQueue;
 	unsigned long long _extMaxTick;
 	unsigned long long _extFinishTime;
-	std::weak_ptr<timer_boost> _weakThis;
-	std::shared_ptr<timer_boost> _lockThis;
+	std::weak_ptr<boost_strand> _weakStrand;
 };
 
 /*!
-@brief 异步定时器，依赖于timer_boost，一个定时循环一个async_timer
+@brief 异步定时器，依赖于TimerBoost_，一个定时循环一个AsyncTimer_
 */
-class async_timer
+class AsyncTimer_
 {
-	friend timer_boost;
-	FRIEND_SHARED_PTR(async_timer);
+	friend TimerBoost_;
+	friend boost_strand;
+	FRIEND_SHARED_PTR(AsyncTimer_);
 
 	struct wrap_base
 	{
@@ -77,9 +89,8 @@ class async_timer
 
 		void invoke(reusable_mem& reuMem)
 		{
-			Handler cb(std::move(_h));
+			_h();
 			destory(reuMem);
-			cb();
 		}
 
 		void destory(reusable_mem& reuMem)
@@ -91,43 +102,35 @@ class async_timer
 		Handler _h;
 	};
 private:
-	async_timer(const std::shared_ptr<timer_boost>& timer);
-	~async_timer();
+	AsyncTimer_(TimerBoost_& timerBoost);
+	~AsyncTimer_();
 public:
 	/*!
-	@brief 创建一个定时器
-	@param timerBoost timer_boost定时器加速器
-	*/
-	static std::shared_ptr<async_timer> create(const std::shared_ptr<timer_boost>& timerBoost);
-public:
-	/*!
-	@brief 开启一个定时循环，在timer_boost strand线程中调用
+	@brief 开启一个定时循环，在依赖的strand线程中调用
 	*/
 	template <typename Handler>
 	void timeout(int tm, Handler&& handler)
 	{
-		assert(_timerBoost->_strand->running_in_this_thread());
 		assert(!_handler);
 		typedef wrap_handler<RM_CREF(Handler)> wrap_type;
 		_handler = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
-		_timerHandle = _timerBoost->timeout(tm * 1000, _weakThis.lock());
+		_timerHandle = _timerBoost.timeout(tm * 1000, _weakThis.lock());
 	}
 
 	/*!
-	@brief 取消本次计时，在timer_boost strand线程中调用
+	@brief 取消本次计时，在依赖的strand线程中调用
 	*/
 	void cancel();
 
-	const shared_strand& self_strand() const;
-	const std::shared_ptr<timer_boost>& self_timer_boost() const;
+	shared_strand self_strand() const;
 private:
 	void timeout_handler();
 private:
 	wrap_base* _handler;
 	reusable_mem _reuMem;
-	std::weak_ptr<async_timer> _weakThis;
-	std::shared_ptr<timer_boost> _timerBoost;
-	timer_boost::timer_handle _timerHandle;
+	TimerBoost_& _timerBoost;
+	std::weak_ptr<AsyncTimer_> _weakThis;
+	TimerBoost_::timer_handle _timerHandle;
 };
 
 #endif

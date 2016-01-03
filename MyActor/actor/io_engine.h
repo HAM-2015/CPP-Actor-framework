@@ -13,13 +13,13 @@
 
 class StrandEx_;
 class ActorTimer_;
-class timer_boost;
+class TimerBoost_;
 
 class io_engine
 {
 	friend StrandEx_;
 	friend ActorTimer_;
-	friend timer_boost;
+	friend TimerBoost_;
 public:
 #ifdef WIN32
 	enum priority

@@ -8,7 +8,8 @@ boost_strand::boost_strand()
 {
 	_ioEngine = NULL;
 	_strand = NULL;
-	_timer = NULL;
+	_actorTimer = NULL;
+	_timerBoost = NULL;
 }
 
 boost_strand::~boost_strand()
@@ -22,7 +23,8 @@ boost_strand::~boost_strand()
 	}
 #endif //ENABLE_NEXT_TICK
 	delete _strand;
-	delete _timer;
+	delete _actorTimer;
+	delete _timerBoost;
 }
 
 shared_strand boost_strand::create(io_engine& ioEngine, bool makeTimer)
@@ -32,7 +34,8 @@ shared_strand boost_strand::create(io_engine& ioEngine, bool makeTimer)
 	res->_strand = new strand_type(ioEngine);
 	if (makeTimer)
 	{
-		res->_timer = new ActorTimer_(res);
+		res->_actorTimer = new ActorTimer_(res);
+		res->_timerBoost = new TimerBoost_(res);
 	}
 	res->_weakThis = res;
 	assert(!res->running_in_this_thread());
@@ -127,7 +130,14 @@ boost::asio::io_service& boost_strand::get_io_service()
 
 ActorTimer_* boost_strand::get_timer()
 {
-	return _timer;
+	return _actorTimer;
+}
+
+std::shared_ptr<AsyncTimer_> boost_strand::make_async_timer()
+{
+	std::shared_ptr<AsyncTimer_> res(new AsyncTimer_(*_timerBoost));
+	res->_weakThis = res;
+	return res;
 }
 
 #ifdef ENABLE_NEXT_TICK

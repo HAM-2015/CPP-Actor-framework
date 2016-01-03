@@ -16,6 +16,8 @@
 #include "scattered.h"
 
 class ActorTimer_;
+class TimerBoost_;
+class AsyncTimer_;
 
 class boost_strand;
 typedef std::shared_ptr<boost_strand> shared_strand;
@@ -526,6 +528,11 @@ public:
 	@brief 获取定时器
 	*/
 	ActorTimer_* get_timer();
+
+	/*!
+	@brief 创建一个定时器
+	*/
+	std::shared_ptr<AsyncTimer_> make_async_timer();
 protected:
 #ifdef ENABLE_NEXT_TICK
 	bool ready_empty();
@@ -547,7 +554,8 @@ protected:
 	virtual void _post(const std::function<void()>& h);
 	virtual void _post(std::function<void()>&& h);
 #endif
-	ActorTimer_* _timer;
+	ActorTimer_* _actorTimer;
+	TimerBoost_* _timerBoost;
 	io_engine* _ioEngine;
 	strand_type* _strand;
 	std::weak_ptr<boost_strand> _weakThis;
