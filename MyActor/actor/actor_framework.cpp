@@ -1495,6 +1495,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 #else
 			if (!lasts && GET_TRY_SIZE(nsize) > CORO_CONTEXT_STATE_SPACE)
 			{
+				context_yield::coro_info* info = pull->_coroInfo;
 				mprotect((char*)info->stackTop - info->stackSize, GET_TRY_SIZE(nsize) - CORO_CONTEXT_STATE_SPACE, PROT_NONE);
 			}
 #endif

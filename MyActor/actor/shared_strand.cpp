@@ -1,5 +1,6 @@
 #include "shared_strand.h"
 #include "actor_timer.h"
+#include "async_timer.h"
 
 boost_strand::boost_strand()
 #ifdef ENABLE_NEXT_TICK
