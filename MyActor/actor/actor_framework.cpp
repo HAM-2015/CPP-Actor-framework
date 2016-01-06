@@ -1204,13 +1204,6 @@ public:
 	}
 
 #ifdef WIN32
-#ifdef LIB_CORO
-	void operator ()(actor_push_type& actorPush)
-	{
-		actor_handler(actorPush);
-		exit_notify();
-	}
-#else
 #ifndef _MSC_VER
 	void operator ()(actor_push_type& actorPush)
 	{
@@ -1218,45 +1211,67 @@ public:
 		exit_notify();
 	}
 #else
+	void guard_stack()
+	{
+		context_yield::coro_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
+		char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
+		char* const sm = (char*)info->stackTop - info->stackSize;
+		//分页加PAGE_GUARD标记
+		size_t l = PAGE_SIZE;
+		while (sp - l >= sm)
+		{
+			DWORD oldPro = 0;
+			BOOL ok = VirtualProtect(sp - l, PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
+			if (!ok || (PAGE_READWRITE | PAGE_GUARD) == oldPro)
+			{
+				break;
+			}
+			l += PAGE_SIZE;
+		}
+	}
+
+	void check_stack()
+	{
+		context_yield::coro_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
+		char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
+		char* const sm = (char*)info->stackTop - info->stackSize;
+		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
+		size_t cleanSize = 0;
+		while (sb + cleanSize < info->stackTop)
+		{
+			MEMORY_BASIC_INFORMATION mbi;
+			VirtualQuery(sb + cleanSize, &mbi, sizeof(mbi));
+			if (MEM_RESERVE != mbi.State && (PAGE_READWRITE | PAGE_GUARD) != mbi.Protect)
+			{
+				break;
+			}
+			cleanSize += PAGE_SIZE;
+		}
+		_actor._usingStackSize = info->stackSize + info->reserveSize - cleanSize;
+		if (_actor._autoStack)
+		{
+			//记录本次实际消耗的栈空间
+			s_autoActorStackMng.update_stack_size(_actor._actorKey, _actor._usingStackSize);
+		}
+		if (cleanSize < info->reserveSize - PAGE_SIZE)
+		{
+			//预留内存页释放物理内存，保留地址空间
+			VirtualFree(sb + cleanSize - PAGE_SIZE, info->reserveSize - cleanSize, MEM_DECOMMIT);
+			DWORD oldPro = 0;
+			VirtualProtect(sb + info->reserveSize - PAGE_SIZE, PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
+		}
+	}
+
 	void operator ()(actor_push_type& actorPush)
 	{
 		__try
 		{
-			context_yield::coro_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
-			char* const sp = (char*)((size_t)get_sp() & (1 - PAGE_SIZE));
-			char* const sm = (char*)info->stackTop - info->stackSize;
-			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
-			//分页加PAGE_GUARD标记
-			if (sp > sm)
-			{
-				DWORD oldPro = 0;
-				VirtualProtect(sb + info->reserveSize, sp - sm, PAGE_READWRITE | PAGE_GUARD, &oldPro);
-			}
 			actor_handler(actorPush);
 			//从实际栈底查看有多少个PAGE的PAGE_GUARD标记消失和用了多少栈预留空间
-			size_t cleanSize = 0;
-			while (sb + cleanSize < info->stackTop)
-			{
-				MEMORY_BASIC_INFORMATION mbi;
-				VirtualQuery(sb + cleanSize, &mbi, sizeof(mbi));
-				if (MEM_RESERVE != mbi.State && (PAGE_READWRITE | PAGE_GUARD) != mbi.Protect)
-				{
-					break;
-				}
-				cleanSize += PAGE_SIZE;
-			}
-			_actor._usingStackSize = info->stackSize + info->reserveSize - cleanSize;
-			if (_actor._autoStack)
-			{
-				//记录本次实际消耗的栈空间
-				s_autoActorStackMng.update_stack_size(_actor._actorKey, _actor._usingStackSize);
-			}
+			check_stack();
 			exit_notify();
-			if (cleanSize < info->reserveSize)
-			{
-				//预留内存页释放物理内存，保留地址空间
-				VirtualFree(sb + cleanSize, info->reserveSize - cleanSize, MEM_DECOMMIT);
-			}
+			//分页加PAGE_GUARD标记
+			guard_stack();
 		}
 		__except (seh_exception_handler(GetExceptionCode(), GetExceptionInformation()))
 		{
@@ -1268,7 +1283,12 @@ public:
 	{
 		context_yield::coro_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
 		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
-		LPVOID const violationAddr = (LPVOID)((size_t)eInfo->ExceptionRecord->ExceptionInformation[1] & (1 - PAGE_SIZE));
+#ifdef _WIN64
+		char* const sp = (char*)((size_t)eInfo->ContextRecord->Rsp & (0 - PAGE_SIZE));
+#else
+		char* const sp = (char*)((size_t)eInfo->ContextRecord->Esp & (0 - PAGE_SIZE));
+#endif
+		char* const violationAddr = (char*)((size_t)eInfo->ExceptionRecord->ExceptionInformation[1] & (0 - PAGE_SIZE));
 		if (violationAddr >= sb && violationAddr < info->stackTop)
 		{
 			if (STATUS_STACK_OVERFLOW == ecd)
@@ -1277,11 +1297,28 @@ public:
 			}
 			else if (STATUS_ACCESS_VIOLATION == ecd)
 			{
-				//尝试是不是一个页面地址，是就分配物理内存，继续执行
-				if (VirtualAlloc(violationAddr, PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE))
+				VirtualAlloc(violationAddr - PAGE_SIZE, PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD);
+				size_t l = 0;
+				while (violationAddr + l < sp)
 				{
-					return EXCEPTION_CONTINUE_EXECUTION;
+					DWORD oldPro = 0;
+					MEMORY_BASIC_INFORMATION mbi;
+					VirtualQuery(violationAddr + l, &mbi, sizeof(mbi));
+					if (MEM_RESERVE == mbi.State)
+					{
+						VirtualAlloc(violationAddr + l, PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE);
+					}
+					else
+					{
+						VirtualProtect(violationAddr + l, PAGE_SIZE, PAGE_READWRITE, &oldPro);
+						if ((PAGE_READWRITE | PAGE_GUARD) == oldPro)
+						{
+							break;
+						}
+					}
+					l += PAGE_SIZE;
 				}
+				return EXCEPTION_CONTINUE_EXECUTION;
 			}
 			else if (STATUS_GUARD_PAGE_VIOLATION == ecd)
 			{
@@ -1291,12 +1328,11 @@ public:
 		return EXCEPTION_CONTINUE_SEARCH;
 	}
 #endif
-#endif
 #elif __linux__
 	void operator ()(actor_push_type& actorPush)
 	{
 		context_yield::coro_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
-		char* const sp = (char*)((size_t)get_sp() & (1 - PAGE_SIZE));
+		char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
 		_actor._usingStackSize = info->stackSize;
 		actor_handler(actorPush);
 		if (_actor._autoStack)
@@ -1316,7 +1352,7 @@ public:
 		if (self)
 		{
 			context_yield::coro_info* const info = ((actor_pull_type*)self->_actorPull)->_coroInfo;
-			char* const violationAddr = (char*)((size_t)fault_address & (1 - PAGE_SIZE));
+			char* const violationAddr = (char*)((size_t)fault_address & (0 - PAGE_SIZE));
 			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 			if (violationAddr >= sb && violationAddr < info->stackTop)
 			{
@@ -1339,19 +1375,40 @@ public:
 
 	static void regist_sigsegv_handler(void* actorExtraStack, size_t size)
 	{
+		_mutex.lock();
 		stackoverflow_install_handler(stackoverflow_handler, actorExtraStack, size);
 		sigsegv_install_handler(sigsegv_handler);
+		_mutex.unlock();
+	}
+
+	static void sigsegv_deinstall_handler()
+	{
+		_mutex.lock();
+		sigsegv_deinstall_handler();
+		stackoverflow_deinstall_handler();
+		_mutex.unlock();
 	}
 #endif
 
 private:
 	my_actor& _actor;
+#ifdef __linux__
+	static std::mutex _mutex;
+#endif
 };
 
 #ifdef __linux__
+
+std::mutex my_actor::actor_run::_mutex;
+
 void my_actor::regist_sigsegv_handler(void* actorExtraStack, size_t size)
 {
 	actor_run::regist_sigsegv_handler(actorExtraStack, size);
+}
+
+void my_actor::sigsegv_deinstall_handler()
+{
+	actor_run::sigsegv_deinstall_handler();
 }
 #endif
 
@@ -2806,7 +2863,7 @@ void my_actor::stack_decommit()
 #if (_DEBUG || DEBUG)
 #else
 	context_yield::coro_info* info = ((actor_pull_type*)_actorPull)->_coroInfo;
-	char* const sp = (char*)((size_t)get_sp() & (1 - PAGE_SIZE)) - PAGE_SIZE;
+	char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE)) - PAGE_SIZE;
 	char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 	if (sp > sb)
 	{

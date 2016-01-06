@@ -359,7 +359,7 @@ struct dymem_alloc : public dymem_alloc_mt<null_mutex>
 template <typename MUTEX = std::mutex>
 class reusable_mem_mt
 {
-#pragma pack(1)
+#pragma pack(push, 1)
 	struct node
 	{
 		size_t _size;
@@ -369,7 +369,7 @@ class reusable_mem_mt
 			void* _addr[1];
 		};
 	};
-#pragma pack()
+#pragma pack(pop)
 public:
 	reusable_mem_mt()
 	{

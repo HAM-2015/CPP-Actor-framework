@@ -18,33 +18,10 @@ typedef boost::coroutines::attributes coro_attributes;
 
 #ifdef WIN32
 
-#ifdef _MSC_VER
-#ifdef _WIN64
-#pragma comment(lib, NAME_BOND(__FILE__, "./../context_yield64.lib"))
-#else
-#pragma comment(lib, NAME_BOND(__FILE__, "./../context_yield.lib"))
-#endif // _WIN64
-#endif
-
-struct coro_pull_interface;
-struct coro_push_interface;
-
-typedef void(__stdcall *coro_push_handler)(coro_push_interface&, void* param);
-
-struct coro_push_interface
-{
-	virtual void operator()() = 0;
-};
-
-struct coro_pull_interface
-{
-	virtual void operator()() = 0;
-	virtual void destory() = 0;
-};
-
 extern "C"
 {
-	coro_pull_interface* make_coro(coro_push_handler ch, void* stackTop, size_t size, void* param = 0);
+	void* __cdecl makefcontext(void* sp, size_t size, void(*fn)(void*));
+	void* __cdecl jumpfcontext(void** ofc, void* nfc, void* vp, bool preserve_fpu);
 }
 
 #elif __linux__
@@ -156,8 +133,8 @@ namespace context_yield
 #ifdef WIN32
 	context_yield::coro_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
 	{
-		size_t allocSize = MEM_ALIGN(stackSize, STACK_BLOCK_SIZE);
-		void* stack = VirtualAlloc(NULL, allocSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+		size_t allocSize = MEM_ALIGN(stackSize + STACK_RESERVED_SPACE_SIZE, STACK_BLOCK_SIZE);
+		void* stack = VirtualAlloc(NULL, allocSize, MEM_RESERVE, PAGE_READWRITE);
 		if (!stack)
 		{
 			return NULL;
@@ -166,34 +143,34 @@ namespace context_yield
 		info->stackSize = stackSize;
 		info->reserveSize = allocSize - info->stackSize;
 		info->stackTop = (char*)stack + allocSize;
+		VirtualAlloc((char*)stack + info->reserveSize, info->stackSize, MEM_COMMIT, PAGE_READWRITE);
 		struct local_ref
 		{
 			context_yield::context_handler handler;
-			void* p;
 			context_yield::coro_info* info;
-		} ref = { handler, p, info };
-		info->obj = make_coro([](coro_push_interface& push, void* param)
+			void* p;
+		} ref = { handler, info, p };
+		info->obj = makefcontext(info->stackTop, stackSize, [](void* param)
 		{
 			local_ref* ref = (local_ref*)param;
-			ref->info->nc = &push;
 			ref->handler(ref->info, ref->p);
-		}, info->stackTop, info->stackSize, &ref);
+		});
+		jumpfcontext(&info->nc, info->obj, &ref, true);
 		return info;
 	}
 
 	void push_yield(context_yield::coro_info* info)
 	{
-		(*(coro_push_interface*)info->nc)();
+		jumpfcontext(&info->obj, info->nc, NULL, true);
 	}
 
 	void pull_yield(context_yield::coro_info* info)
 	{
-		(*(coro_pull_interface*)info->obj)();
+		jumpfcontext(&info->nc, info->obj, NULL, true);
 	}
 
 	void delete_context(context_yield::coro_info* info)
 	{
-		((coro_pull_interface*)info->obj)->destory();
 		VirtualFree((char*)info->stackTop - info->stackSize - info->reserveSize, 0, MEM_RELEASE);
 		delete info;
 	}
@@ -256,6 +233,7 @@ namespace context_yield
 
 #elif (defined FIBER_CORO)
 
+#pragma pack(push, 1)
 	struct fiber_struct
 	{
 		void* _param;
@@ -263,6 +241,23 @@ namespace context_yield
 		void* _stackTop;
 		void* _stackBottom;
 	};
+#pragma pack(pop)
+
+	void adjust_stack(context_yield::coro_info* info)
+	{
+		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
+		char* sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE)) - 2 * PAGE_SIZE;
+		while (sp >= sb)
+		{
+			MEMORY_BASIC_INFORMATION mbi;
+			if (sizeof(mbi) != VirtualQuery(sp, &mbi, sizeof(mbi)) || MEM_RESERVE == mbi.State)
+			{
+				break;
+			}
+			VirtualFree(sp, PAGE_SIZE, MEM_DECOMMIT);
+			sp -= PAGE_SIZE;
+		}
+	}
 
 	context_yield::coro_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
 	{
@@ -273,12 +268,13 @@ namespace context_yield
 		struct local_ref
 		{
 			context_yield::context_handler handler;
-			void* p;
 			context_yield::coro_info* info;
-		} ref = { handler, p, info };
+			void* p;
+		} ref = { handler, info, p };
 		info->obj = CreateFiberEx(0, allocSize, FIBER_FLAG_FLOAT_SWITCH, [](void* param)
 		{
 			local_ref* ref = (local_ref*)param;
+			adjust_stack(ref->info);
 			ref->handler(ref->info, ref->p);
 		}, &ref);
 		if (!info->obj)

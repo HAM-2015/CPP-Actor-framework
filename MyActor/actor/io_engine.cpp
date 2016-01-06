@@ -91,9 +91,6 @@ void io_engine::_run(size_t threadNum, sched policy)
 		{
 			boost::thread* newThread = new boost::thread([&, i]
 			{
-#ifdef __linux__
-				char actorExtraStack[16 kB];
-#endif
 				try
 				{
 					{
@@ -115,9 +112,6 @@ void io_engine::_run(size_t threadNum, sched policy)
 						auto lockMutex = blockMutex;
 						auto lockConVar = blockConVar;
 						std::unique_lock<std::mutex> ul(*lockMutex);
-#ifdef __linux__
-						my_actor::regist_sigsegv_handler(actorExtraStack, sizeof(actorExtraStack));
-#endif
 						if (threadNum == ++rc)
 						{
 							lockConVar->notify_all();
@@ -127,6 +121,10 @@ void io_engine::_run(size_t threadNum, sched policy)
 							lockConVar->wait(ul);
 						}
 					}
+#ifdef __linux__
+					char actorExtraStack[16 kB];
+					my_actor::regist_sigsegv_handler(actorExtraStack, sizeof(actorExtraStack));
+#endif
 #ifdef FIBER_CORO
 					ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH);
 #endif
@@ -136,6 +134,9 @@ void io_engine::_run(size_t threadNum, sched policy)
 					_tls.set_space(NULL);
 #ifdef FIBER_CORO
 					ConvertFiberToThread();
+#endif
+#ifdef __linux__
+					//my_actor::sigsegv_deinstall_handler();
 #endif
 				}
 				catch (boost::exception&)

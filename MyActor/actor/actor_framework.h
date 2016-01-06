@@ -7526,6 +7526,7 @@ private:
 	void child_resume_cb_handler();
 #ifdef __linux__
 	static void regist_sigsegv_handler(void* actorExtraStack, size_t size);
+	static void sigsegv_deinstall_handler();
 #endif
 public:
 #ifdef PRINT_ACTOR_STACK

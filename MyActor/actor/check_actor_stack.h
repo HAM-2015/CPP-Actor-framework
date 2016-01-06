@@ -14,7 +14,7 @@
 
 #define TRY_SIZE(__s__) (0x80000000 | (__s__))
 #define IS_TRY_SIZE(__s__) (0x80000000 & (__s__))
-#define GET_TRY_SIZE(__s__) (0xFFE00000 & (__s__))
+#define GET_TRY_SIZE(__s__) (0x1FFFFF & (__s__))
 
 #if (_DEBUG || DEBUG)
 #define STACK_SIZE(__debug__, __release__) (__debug__)
@@ -61,14 +61,6 @@
 #define PAGE_SIZE					(4 kB)
 
 //Õ»×´Ì¬±£Áô¿Õ¼ä
-#ifdef WIN32
-#if (_DEBUG || DEBUG)
-#define CORO_CONTEXT_STATE_SPACE	(3 * PAGE_SIZE)
-#else
-#define CORO_CONTEXT_STATE_SPACE	(2 * PAGE_SIZE)
-#endif
-#elif __linux__
 #define CORO_CONTEXT_STATE_SPACE	(1 * PAGE_SIZE)
-#endif
 
 #endif
