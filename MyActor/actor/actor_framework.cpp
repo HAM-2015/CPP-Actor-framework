@@ -1297,7 +1297,10 @@ public:
 			}
 			else if (STATUS_ACCESS_VIOLATION == ecd)
 			{
-				VirtualAlloc(violationAddr - PAGE_SIZE, PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD);
+				if (violationAddr - PAGE_SIZE >= sb)
+				{
+					VirtualAlloc(violationAddr - PAGE_SIZE, PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD);
+				}
 				size_t l = 0;
 				while (violationAddr + l < sp)
 				{
@@ -1373,7 +1376,7 @@ public:
 
 	}
 
-	static void regist_sigsegv_handler(void* actorExtraStack, size_t size)
+	static void install_sigsegv(void* actorExtraStack, size_t size)
 	{
 		_mutex.lock();
 		stackoverflow_install_handler(stackoverflow_handler, actorExtraStack, size);
@@ -1381,7 +1384,7 @@ public:
 		_mutex.unlock();
 	}
 
-	static void sigsegv_deinstall_handler()
+	static void deinstall_sigsegv()
 	{
 		_mutex.lock();
 		sigsegv_deinstall_handler();
@@ -1401,14 +1404,14 @@ private:
 
 std::mutex my_actor::actor_run::_mutex;
 
-void my_actor::regist_sigsegv_handler(void* actorExtraStack, size_t size)
+void my_actor::install_sigsegv(void* actorExtraStack, size_t size)
 {
-	actor_run::regist_sigsegv_handler(actorExtraStack, size);
+	actor_run::install_sigsegv(actorExtraStack, size);
 }
 
-void my_actor::sigsegv_deinstall_handler()
+void my_actor::deinstall_sigsegv()
 {
-	actor_run::sigsegv_deinstall_handler();
+	actor_run::deinstall_sigsegv();
 }
 #endif
 
@@ -1446,9 +1449,6 @@ _childActorList(_childActorListAll)
 	_childSuspendResumeCount = 0;
 	_returnCode = 0;
 	_usingStackSize = 0;
-#ifdef ENABLE_CHECK_FUNC_STACK
-	_checkStackDepth = 0;
-#endif
 	_timerStateCount = 0;
 	_timerStateTime = 0;
 	_timerStateStampBegin = 0;
@@ -1519,7 +1519,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& main
 #ifdef WIN32
 #ifdef CHECK_SELF
 #ifndef ENABLE_TLS_CHECK_SELF
-	context_yield::coro_info* info = pull->_coroInfo;
+	context_yield::coro_info* const info = pull->_coroInfo;
 	s_stackLineMutex.lock();
 	newActor->_topIt = s_stackLine.insert(make_pair((char*)info->stackTop, (my_actor*)NULL)).first;
 	newActor->_btIt = s_stackLine.insert(newActor->_topIt, make_pair((char*)info->stackTop - info->stackSize - info->reserveSize, newActor.get()));
@@ -1552,7 +1552,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 #else
 			if (!lasts && GET_TRY_SIZE(nsize) > CORO_CONTEXT_STATE_SPACE)
 			{
-				context_yield::coro_info* info = pull->_coroInfo;
+				context_yield::coro_info* const info = pull->_coroInfo;
 				mprotect((char*)info->stackTop - info->stackSize, GET_TRY_SIZE(nsize) - CORO_CONTEXT_STATE_SPACE, PROT_NONE);
 			}
 #endif
@@ -1587,7 +1587,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 #ifdef WIN32
 #ifdef CHECK_SELF
 #ifndef ENABLE_TLS_CHECK_SELF
-	context_yield::coro_info* info = pull->_coroInfo;
+	context_yield::coro_info* const info = pull->_coroInfo;
 	s_stackLineMutex.lock();
 	newActor->_topIt = s_stackLine.insert(make_pair((char*)info->stackTop, (my_actor*)NULL)).first;
 	newActor->_btIt = s_stackLine.insert(newActor->_topIt, make_pair((char*)info->stackTop - info->stackSize - info->reserveSize, newActor.get()));
@@ -1983,7 +1983,7 @@ void my_actor::assert_enter()
 	assert(_strand->running_in_this_thread());
 	assert(!_quited);
 	assert(_inActor);
-	context_yield::coro_info* info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	assert((size_t)get_sp() >= (size_t)info->stackTop - info->stackSize - info->reserveSize + 1024);
 	check_self();
 }
@@ -2761,7 +2761,7 @@ my_actor::stack_info my_actor::self_stack()
 {
 	assert_enter();
 	void* sp = get_sp();
-	context_yield::coro_info* info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	stack_info si = { info->stackTop,
 		sp, info->stackSize,
 		(size_t)info->stackTop - (size_t)sp,
@@ -2771,85 +2771,10 @@ my_actor::stack_info my_actor::self_stack()
 	return si;
 }
 
-void my_actor::begin_check_func_stack()
-{
-	assert_enter();
-#ifdef ENABLE_CHECK_FUNC_STACK
-	char* sp = (char*)(((size_t)get_sp() - sizeof(void*)) & (1 - sizeof(dirty_data_type)));
-	context_yield::coro_info* info = ((actor_pull_type*)_actorPull)->_coroInfo;
-	dirty_data_type* sb = (dirty_data_type*)((char*)info->stackTop - info->stackSize);
-#ifdef WIN32
-	size_t freeSpace = 0;
-	for (; (char*)sb + freeSpace < sp; freeSpace += PAGE_SIZE)
-	{
-		MEMORY_BASIC_INFORMATION mbi;
-		VirtualQuery(sb + freeSpace, &mbi, sizeof(mbi));
-		if (MEM_RESERVE != mbi.State && (PAGE_READWRITE | PAGE_GUARD) != mbi.Protect)
-		{
-			break;
-		}
-	}
-#elif __linux__
-	//
-#endif
-	_checkStackDepth = info->stackSize - ((size_t)info->stackTop - (size_t)sp);
-	assert((int)_checkStackDepth > 0);
-	const size_t dp = _checkStackDepth / sizeof(dirty_data_type);
-	for (int i = 0; i < (int)dp; i++)
-	{
-		sb[i] = DIRTY_DATA;
-	}
-#ifdef WIN32
-	DWORD oldPro = 0;
-	BOOL ok = VirtualProtect(sb, freeSpace, PAGE_READWRITE | PAGE_GUARD, &oldPro);
-#elif __linux__
-	//
-#endif
-#endif
-}
-
-size_t my_actor::end_check_func_stack()
-{
-	assert_enter();
-#ifdef ENABLE_CHECK_FUNC_STACK
-	char* sp = (char*)(((size_t)get_sp() - sizeof(void*)) & (1 - sizeof(dirty_data_type)));
-	context_yield::coro_info* info = ((actor_pull_type*)_actorPull)->_coroInfo;
-	dirty_data_type* sb = (dirty_data_type*)((char*)info->stackTop - info->stackSize);
-#ifdef WIN32
-	size_t freeSpace = 0;
-	for (; (char*)sb + freeSpace < sp; freeSpace += PAGE_SIZE)
-	{
-		MEMORY_BASIC_INFORMATION mbi;
-		VirtualQuery(sb + freeSpace, &mbi, sizeof(mbi));
-		if (MEM_RESERVE != mbi.State && (PAGE_READWRITE | PAGE_GUARD) != mbi.Protect)
-		{
-			break;
-		}
-	}
-#elif __linux__
-	//
-#endif
-	const size_t dp = _checkStackDepth / sizeof(dirty_data_type);
-	for (int i = 0; i < (int)dp && DIRTY_DATA == sb[i]; i++)
-	{
-		_checkStackDepth -= sizeof(dirty_data_type);
-	}
-#ifdef WIN32
-	DWORD oldPro = 0;
-	BOOL ok = VirtualProtect(sb, freeSpace, PAGE_READWRITE | PAGE_GUARD, &oldPro);
-#elif __linux__
-	//
-#endif
-	return _checkStackDepth;
-#else
-	return 0;
-#endif
-}
-
 size_t my_actor::stack_idle_space()
 {
 	assert_enter();
-	context_yield::coro_info* info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	size_t s = info->stackSize - ((size_t)info->stackTop - (size_t)get_sp());
 	if ((int)s < 0)
 	{
@@ -2860,21 +2785,36 @@ size_t my_actor::stack_idle_space()
 
 void my_actor::stack_decommit()
 {
-#if (_DEBUG || DEBUG)
-#else
-	context_yield::coro_info* info = ((actor_pull_type*)_actorPull)->_coroInfo;
-	char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE)) - PAGE_SIZE;
+	char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
+	begin_RUN_IN_TRHEAD_STACK(this);
+	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
-	if (sp > sb)
-	{
 #ifdef WIN32
-		VirtualFree(sb, sp - sb, MEM_DECOMMIT);
-#elif __linux__
-		_usingStackSize = std::max(_usingStackSize, (size_t)info->stackTop - (size_t)sp);
-		mprotect(sb, sp - sb, PROT_NONE);
-#endif
+	DWORD oldPro = 0;
+	VirtualProtect(sp - PAGE_SIZE, PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
+	size_t l = 2 * PAGE_SIZE;
+	while (sp - l >= sb)
+	{
+		MEMORY_BASIC_INFORMATION mbi;
+		VirtualQuery(sp - l, &mbi, sizeof(mbi));
+		if (MEM_RESERVE != mbi.State)
+		{
+			VirtualFree(sp - l, PAGE_SIZE, MEM_DECOMMIT);
+			l += PAGE_SIZE;
+		}
+		else
+		{
+			break;
+		}
 	}
+#elif __linux__
+#if !(_DEBUG || DEBUG)
+	assert(sp >= sb);
+	_usingStackSize = (size_t)info->stackTop - (size_t)sp;
+	mprotect(sb, sp - sb, PROT_NONE);
 #endif
+#endif
+	end_RUN_IN_TRHEAD_STACK();
 }
 
 void my_actor::close_msg_notifer(actor_msg_handle_base& amh)

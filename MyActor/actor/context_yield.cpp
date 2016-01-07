@@ -16,22 +16,23 @@ typedef boost::coroutines::attributes coro_attributes;
 
 #elif (defined LIB_CORO)
 
-#ifdef WIN32
-
 extern "C"
 {
-	void* __cdecl makefcontext(void* sp, size_t size, void(*fn)(void*));
-	void* __cdecl jumpfcontext(void** ofc, void* nfc, void* vp, bool preserve_fpu);
+	void* makefcontext(void* sp, size_t size, void(*fn)(void*));
+	void* jumpfcontext(void** ofc, void* nfc, void* vp, bool preserve_fpu);
 }
-
-#elif __linux__
-#include <ucontext.h>
-#include <malloc.h>
+#ifdef __linux__
+#include <sys/mman.h>
 #endif
 
 #elif (defined FIBER_CORO)
 
 #include <Windows.h>
+
+#elif (defined LINUX_UCONTEXT)
+
+#include <ucontext.h>
+#include <sys/mman.h>
 
 #endif
 
@@ -175,13 +176,14 @@ namespace context_yield
 		delete info;
 	}
 #elif __linux__
+
 	context_yield::coro_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
 	{
 		size_t allocSize = MEM_ALIGN(stackSize + STACK_RESERVED_SPACE_SIZE, STACK_BLOCK_SIZE);
 		void* stack = mmap(0, allocSize, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 		if (!stack)
 		{
-			return NULL;
+			throw size_t(allocSize);
 		}
 		context_yield::coro_info* info = new context_yield::coro_info;
 		info->stackTop = (char*)stack + allocSize;
@@ -189,45 +191,39 @@ namespace context_yield
 		info->stackSize = allocSize - PAGE_SIZE;
 		info->reserveSize = PAGE_SIZE;
 #else
-		info->stackSize = stackSize;
+		info->stackSize = size;
 		info->reserveSize = allocSize - info->stackSize;
 #endif
 		mprotect((char*)stack + info->reserveSize, info->stackSize, PROT_READ | PROT_WRITE);
-		info->obj = new ucontext_t;
-		info->nc = new ucontext_t;
-		ucontext_t* returnCt = (ucontext_t*)info->nc;
-		ucontext_t* callCt = (ucontext_t*)info->obj;
-		getcontext(callCt);
-		callCt->uc_link = returnCt;
-		callCt->uc_stack.ss_sp = stack;
-		callCt->uc_stack.ss_size = allocSize;
-		makecontext(callCt, (void(*)())handler, 2, info, p);
-		swapcontext(returnCt, callCt);
+		struct local_ref
+		{
+			context_yield::context_handler handler;
+			context_yield::coro_info* info;
+			void* p;
+		} ref = { handler, info, p };
+		info->obj = makefcontext(info->stackTop, stackSize, [](void* param)
+		{
+			local_ref* ref = (local_ref*)param;
+			ref->handler(ref->info, ref->p);
+		});
+		jumpfcontext(&info->nc, info->obj, &ref, true);
 		return info;
 	}
 
 	void push_yield(context_yield::coro_info* info)
 	{
-		ucontext_t* returnCt = (ucontext_t*)info->nc;
-		ucontext_t* callCt = (ucontext_t*)info->obj;
-		swapcontext(callCt, returnCt);
+		jumpfcontext(&info->obj, info->nc, NULL, true);
 	}
 
 	void pull_yield(context_yield::coro_info* info)
 	{
-		ucontext_t* returnCt = (ucontext_t*)info->nc;
-		ucontext_t* callCt = (ucontext_t*)info->obj;
-		swapcontext(returnCt, callCt);
+		jumpfcontext(&info->nc, info->obj, NULL, true);
 	}
 
 	void delete_context(context_yield::coro_info* info)
 	{
-		ucontext_t* returnCt = (ucontext_t*)info->nc;
-		ucontext_t* callCt = (ucontext_t*)info->obj;
-		munmap((char*)info->stackTop - info->stackSize - info->reserveSize, info->stackSize);
+		munmap((char*)info->stackTop - info->stackSize - info->reserveSize, info->stackSize + info->reserveSize);
 		delete info;
-		delete callCt;
-		delete returnCt;
 	}
 #endif
 
@@ -303,6 +299,60 @@ namespace context_yield
 		DeleteFiber(info->obj);
 		delete info;
 	}
+#elif (defined LINUX_UCONTEXT)
+	context_yield::coro_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
+	{
+		size_t allocSize = MEM_ALIGN(stackSize + STACK_RESERVED_SPACE_SIZE, STACK_BLOCK_SIZE);
+		void* stack = mmap(0, allocSize, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+		if (!stack)
+		{
+			return NULL;
+		}
+		context_yield::coro_info* info = new context_yield::coro_info;
+		info->stackTop = (char*)stack + allocSize;
+	#if (_DEBUG || DEBUG)
+		info->stackSize = allocSize - PAGE_SIZE;
+		info->reserveSize = PAGE_SIZE;
+	#else
+		info->stackSize = stackSize;
+		info->reserveSize = allocSize - info->stackSize;
+	#endif
+		mprotect((char*)stack + info->reserveSize, info->stackSize, PROT_READ | PROT_WRITE);
+		info->obj = new ucontext_t;
+		info->nc = new ucontext_t;
+		ucontext_t* returnCt = (ucontext_t*)info->nc;
+		ucontext_t* callCt = (ucontext_t*)info->obj;
+		getcontext(callCt);
+		callCt->uc_link = returnCt;
+		callCt->uc_stack.ss_sp = stack;
+		callCt->uc_stack.ss_size = allocSize;
+		makecontext(callCt, (void(*)())handler, 2, info, p);
+		swapcontext(returnCt, callCt);
+		return info;
+	}
 
+	void push_yield(context_yield::coro_info* info)
+	{
+		ucontext_t* returnCt = (ucontext_t*)info->nc;
+		ucontext_t* callCt = (ucontext_t*)info->obj;
+		swapcontext(callCt, returnCt);
+	}
+
+	void pull_yield(context_yield::coro_info* info)
+	{
+		ucontext_t* returnCt = (ucontext_t*)info->nc;
+		ucontext_t* callCt = (ucontext_t*)info->obj;
+		swapcontext(returnCt, callCt);
+	}
+
+	void delete_context(context_yield::coro_info* info)
+	{
+		ucontext_t* returnCt = (ucontext_t*)info->nc;
+		ucontext_t* callCt = (ucontext_t*)info->obj;
+		munmap((char*)info->stackTop - info->stackSize - info->reserveSize, info->stackSize);
+		delete info;
+		delete callCt;
+		delete returnCt;
+	}
 #endif
 }

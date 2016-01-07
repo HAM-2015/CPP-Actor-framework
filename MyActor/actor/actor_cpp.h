@@ -15,7 +15,6 @@ DISABLE_AUTO_STACK 禁用栈空间自动伸缩控制
 DISABLE_HIGH_TIMER 禁用high_resolution_timer计时，将启用deadline_timer计时
 DISABLE_BOOST_TIMER 禁用boost计时器，用waitable_timer计时
 ENABLE_TLS_CHECK_SELF 启用TLS技术检测当前代码运行在哪个Actor下
-ENABLE_CHECK_FUNC_STACK 启用函数堆栈消耗检测
 
 windows推荐配置:
 

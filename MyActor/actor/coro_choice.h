@@ -7,6 +7,10 @@
 
 #define FIBER_CORO
 
+#elif ENABLE_LINUX_UCONTEXT  //ENABLE_WIN_FIBER
+
+#define LINUX_UCONTEXT
+
 #else //ENABLE_WIN_FIBER
 
 #define LIB_CORO

@@ -7197,17 +7197,6 @@ public:
 	stack_info self_stack();
 
 	/*!
-	@brief 开始检测一串语句的栈消耗
-	*/
-	void begin_check_func_stack();
-
-	/*!
-	@brief 结束检测一串语句的栈消耗
-	@return 消耗的字节数
-	*/
-	size_t end_check_func_stack();
-
-	/*!
 	@brief 获取当前Actor剩余安全栈空间
 	*/
 	size_t stack_idle_space();
@@ -7525,8 +7514,8 @@ private:
 	void child_suspend_cb_handler();
 	void child_resume_cb_handler();
 #ifdef __linux__
-	static void regist_sigsegv_handler(void* actorExtraStack, size_t size);
-	static void sigsegv_deinstall_handler();
+	static void install_sigsegv(void* actorExtraStack, size_t size);
+	static void deinstall_sigsegv();
 #endif
 public:
 #ifdef PRINT_ACTOR_STACK
@@ -7547,9 +7536,6 @@ private:
 	size_t _childSuspendResumeCount;///<子Actor挂起/恢复计数
 	size_t _returnCode;///<退出码
 	size_t _usingStackSize;///<栈消耗
-#ifdef ENABLE_CHECK_FUNC_STACK
-	size_t _checkStackDepth;///<函数调用栈消耗测试
-#endif
 	long long _timerStateTime;///<当前定时时间
 	long long _timerStateStampBegin;///<定时起始时间
 	long long _timerStateStampEnd;///<定时结束时间

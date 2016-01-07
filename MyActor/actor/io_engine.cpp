@@ -123,7 +123,7 @@ void io_engine::_run(size_t threadNum, sched policy)
 					}
 #ifdef __linux__
 					char actorExtraStack[16 kB];
-					my_actor::regist_sigsegv_handler(actorExtraStack, sizeof(actorExtraStack));
+					my_actor::install_sigsegv(actorExtraStack, sizeof(actorExtraStack));
 #endif
 #ifdef FIBER_CORO
 					ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH);
@@ -136,7 +136,7 @@ void io_engine::_run(size_t threadNum, sched policy)
 					ConvertFiberToThread();
 #endif
 #ifdef __linux__
-					//my_actor::sigsegv_deinstall_handler();
+					my_actor::deinstall_sigsegv();
 #endif
 				}
 				catch (boost::exception&)
