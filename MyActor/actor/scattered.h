@@ -171,13 +171,9 @@ int get_tick_s();
 #ifdef _MSC_VER
 extern "C" void* __fastcall get_sp();
 extern "C" unsigned long long __fastcall cpu_tick();
-extern "C" void* __fastcall salloc(size_t s);
-extern "C" void __fastcall sdealloc();
 #elif __GNUG__
 void* get_sp();
 unsigned long long cpu_tick();
-extern "C" void* __attribute__((regparm(1))) salloc(size_t s);
-extern "C" void __attribute__((regparm(0))) sdealloc();
 #endif
 
 #ifdef PRINT_ACTOR_STACK

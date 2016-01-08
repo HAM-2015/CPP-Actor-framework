@@ -7202,9 +7202,10 @@ public:
 	size_t stack_idle_space();
 
 	/*!
-	@brief 释放当前以下的栈页
+	@brief 释放已经被使用过的栈空间
+	@param calcUsingStack 是否计算已经使用的空间大小
 	*/
-	void stack_decommit();
+	void stack_decommit(bool calcUsingStack = true);
 
 	/*!
 	@brief 获取当前Actor调度器

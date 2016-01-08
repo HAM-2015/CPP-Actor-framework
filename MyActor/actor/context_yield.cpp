@@ -191,7 +191,7 @@ namespace context_yield
 		info->stackSize = allocSize - PAGE_SIZE;
 		info->reserveSize = PAGE_SIZE;
 #else
-		info->stackSize = size;
+		info->stackSize = stackSize;
 		info->reserveSize = allocSize - info->stackSize;
 #endif
 		mprotect((char*)stack + info->reserveSize, info->stackSize, PROT_READ | PROT_WRITE);

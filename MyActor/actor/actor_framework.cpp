@@ -1204,13 +1204,6 @@ public:
 	}
 
 #ifdef WIN32
-#ifndef _MSC_VER
-	void operator ()(actor_push_type& actorPush)
-	{
-		actor_handler(actorPush);
-		exit_notify();
-	}
-#else
 	void guard_stack()
 	{
 		context_yield::coro_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
@@ -1230,11 +1223,8 @@ public:
 		}
 	}
 
-	void check_stack()
+	static size_t clean_size(context_yield::coro_info* const info)
 	{
-		context_yield::coro_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
-		char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
-		char* const sm = (char*)info->stackTop - info->stackSize;
 		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 		size_t cleanSize = 0;
 		while (sb + cleanSize < info->stackTop)
@@ -1247,7 +1237,15 @@ public:
 			}
 			cleanSize += PAGE_SIZE;
 		}
-		_actor._usingStackSize = info->stackSize + info->reserveSize - cleanSize;
+		return cleanSize;
+	}
+
+	void check_stack()
+	{
+		context_yield::coro_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
+		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
+		const size_t cleanSize = clean_size(info);
+		_actor._usingStackSize = std::max(_actor._usingStackSize, info->stackSize + info->reserveSize - cleanSize);
 		if (_actor._autoStack)
 		{
 			//记录本次实际消耗的栈空间
@@ -1261,7 +1259,15 @@ public:
 			VirtualProtect(sb + info->reserveSize - PAGE_SIZE, PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
 		}
 	}
-
+#ifndef _MSC_VER
+	void operator ()(actor_push_type& actorPush)
+	{
+		actor_handler(actorPush);
+		check_stack();
+		exit_notify();
+		guard_stack();
+	}
+#else
 	void operator ()(actor_push_type& actorPush)
 	{
 		__try
@@ -1359,7 +1365,13 @@ public:
 			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 			if (violationAddr >= sb && violationAddr < info->stackTop)
 			{
-				mprotect(violationAddr, PAGE_SIZE, PROT_READ | PROT_WRITE);
+				size_t l = 0;
+				char* const st = (char*)info->stackTop - self->_usingStackSize;
+				while (violationAddr + l < st)
+				{
+					mprotect(violationAddr + l, PAGE_SIZE, PROT_READ | PROT_WRITE);
+					l += PAGE_SIZE;
+				}
 				if (violationAddr < (char*)info->stackTop - self->_usingStackSize)
 				{
 					self->_usingStackSize = (char*)info->stackTop - violationAddr;
@@ -1521,7 +1533,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& main
 #ifndef ENABLE_TLS_CHECK_SELF
 	context_yield::coro_info* const info = pull->_coroInfo;
 	s_stackLineMutex.lock();
-	newActor->_topIt = s_stackLine.insert(make_pair((char*)info->stackTop, (my_actor*)NULL)).first;
+	newActor->_topIt = s_stackLine.insert(make_pair((char*)info->stackTop-1, (my_actor*)NULL)).first;
 	newActor->_btIt = s_stackLine.insert(newActor->_topIt, make_pair((char*)info->stackTop - info->stackSize - info->reserveSize, newActor.get()));
 	s_stackLineMutex.unlock();
 #endif
@@ -1589,7 +1601,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 #ifndef ENABLE_TLS_CHECK_SELF
 	context_yield::coro_info* const info = pull->_coroInfo;
 	s_stackLineMutex.lock();
-	newActor->_topIt = s_stackLine.insert(make_pair((char*)info->stackTop, (my_actor*)NULL)).first;
+	newActor->_topIt = s_stackLine.insert(make_pair((char*)info->stackTop-1, (my_actor*)NULL)).first;
 	newActor->_btIt = s_stackLine.insert(newActor->_topIt, make_pair((char*)info->stackTop - info->stackSize - info->reserveSize, newActor.get()));
 	s_stackLineMutex.unlock();
 #endif
@@ -2783,13 +2795,17 @@ size_t my_actor::stack_idle_space()
 	return s;
 }
 
-void my_actor::stack_decommit()
+void my_actor::stack_decommit(bool calcUsingStack)
 {
 	char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
 	begin_RUN_IN_TRHEAD_STACK(this);
 	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 #ifdef WIN32
+	if (calcUsingStack)
+	{
+		_usingStackSize = std::max(_usingStackSize, info->stackSize + info->reserveSize - actor_run::clean_size(info));
+	}
 	DWORD oldPro = 0;
 	VirtualProtect(sp - PAGE_SIZE, PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
 	size_t l = 2 * PAGE_SIZE;
@@ -2810,7 +2826,10 @@ void my_actor::stack_decommit()
 #elif __linux__
 #if !(_DEBUG || DEBUG)
 	assert(sp >= sb);
-	_usingStackSize = (size_t)info->stackTop - (size_t)sp;
+	if (calcUsingStack)
+	{
+		_usingStackSize = std::max(_usingStackSize, (size_t)info->stackTop - (size_t)sp);
+	}
 	mprotect(sb, sp - sb, PROT_NONE);
 #endif
 #endif
