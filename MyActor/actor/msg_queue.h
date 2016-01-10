@@ -6,7 +6,7 @@
 #include <set>
 #include <list>
 
-template <typename T>
+template <typename T, typename TAlloc = mem_alloc<>>
 class msg_queue
 {
 	struct node
@@ -14,6 +14,8 @@ class msg_queue
 		char _data[sizeof(T)];
 		node* _next;
 	};
+
+	typedef typename TAlloc::template rebind<node>::other allocator;
 public:
 	msg_queue(size_t poolSize = sizeof(void*))
 		:_alloc(poolSize), _size(0), _head(NULL), _tail(NULL) {}
@@ -144,7 +146,7 @@ private:
 	node* _head;
 	node* _tail;
 	size_t _size;
-	mem_alloc<node> _alloc;
+	allocator _alloc;
 };
 //////////////////////////////////////////////////////////////////////////
 

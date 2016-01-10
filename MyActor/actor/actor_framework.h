@@ -4428,7 +4428,7 @@ public:
 		size_t consumeSize;///<当前函数到栈顶的距离
 		size_t usingSize;///<当前消耗的栈
 		size_t reserveSize;///<栈底预留大小
-		int idleSize;///<当前函数到栈底的距离
+		size_t idleSize;///<当前函数到栈底的距离
 	private:
 		friend std::ostream& operator <<(std::ostream& out, const stack_info& s)
 		{
@@ -7197,6 +7197,11 @@ public:
 	stack_info self_stack();
 
 	/*!
+	@brief 当前还未使用过的栈空间
+	*/
+	__yield_interrupt size_t clean_stack_size();
+
+	/*!
 	@brief 获取当前Actor剩余安全栈空间
 	*/
 	size_t stack_idle_space();
@@ -7205,7 +7210,7 @@ public:
 	@brief 释放已经被使用过的栈空间
 	@param calcUsingStack 是否计算已经使用的空间大小
 	*/
-	void stack_decommit(bool calcUsingStack = true);
+	__yield_interrupt void stack_decommit(bool calcUsingStack = true);
 
 	/*!
 	@brief 获取当前Actor调度器
@@ -7251,6 +7256,11 @@ public:
 	@brief Actor栈大小
 	*/
 	size_t stack_size();
+
+	/*!
+	@brief Actor栈总大小
+	*/
+	size_t stack_total_size();
 
 	/*!
 	@brief 获取Actor切换计数
@@ -7570,6 +7580,9 @@ private:
 	bool _isForce : 1;///<是否是强制退出的标记，成功调用了force_quit
 	bool _notifyQuited : 1;///<当前Actor被锁定后，收到退出消息
 	bool _autoStack : 1;///<是否自动调整栈空间
+#ifdef __linux__
+	bool _sigsegvSign : 1;///<sigsegv信号检测栈标记
+#endif
 #ifdef PRINT_ACTOR_STACK
 public:
 	bool _checkStackFree : 1;///<是否检测堆栈过多

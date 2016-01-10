@@ -1338,6 +1338,29 @@ public:
 	}
 #endif
 #elif __linux__
+#pragma GCC push_options
+#pragma GCC optimize("O0")
+	static size_t clean_size(my_actor* self)
+	{
+		context_yield::coro_info* const info = ((actor_pull_type*)self->_actorPull)->_coroInfo;
+		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
+		size_t cleanSize = 0;
+		while (sb + cleanSize < info->stackTop)
+		{
+			self->_sigsegvSign = true;
+			char t = *(sb + cleanSize);
+			if (self->_sigsegvSign)
+			{
+				self->_sigsegvSign = false;
+				break;
+			}
+			mprotect(sb + cleanSize, PAGE_SIZE, PROT_NONE);
+			cleanSize += PAGE_SIZE;
+		}
+		return cleanSize;
+	}
+#pragma GCC pop_options
+
 	void operator ()(actor_push_type& actorPush)
 	{
 		context_yield::coro_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
@@ -1365,18 +1388,27 @@ public:
 			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 			if (violationAddr >= sb && violationAddr < info->stackTop)
 			{
-				size_t l = 0;
-				char* const st = (char*)info->stackTop - self->_usingStackSize;
-				while (violationAddr + l < st)
+				if (!self->_sigsegvSign)
 				{
-					mprotect(violationAddr + l, PAGE_SIZE, PROT_READ | PROT_WRITE);
-					l += PAGE_SIZE;
-				}
-				if (violationAddr < (char*)info->stackTop - self->_usingStackSize)
+					size_t l = 0;
+					char* const st = (char*)info->stackTop - self->_usingStackSize;
+					while (violationAddr + l < st)
+					{
+						mprotect(violationAddr + l, PAGE_SIZE, PROT_READ | PROT_WRITE);
+						l += PAGE_SIZE;
+					}
+					if (violationAddr < (char*)info->stackTop - self->_usingStackSize)
+					{
+						self->_usingStackSize = (char*)info->stackTop - violationAddr;
+					}
+					return -1;
+				} 
+				else
 				{
-					self->_usingStackSize = (char*)info->stackTop - violationAddr;
+					self->_sigsegvSign = false;
+					mprotect(violationAddr, PAGE_SIZE, PROT_READ | PROT_WRITE);
+					return -1;
 				}
-				return -1;
 			}
 		}
 		exit(100);
@@ -1452,6 +1484,9 @@ _childActorList(_childActorListAll)
 	_autoStack = false;
 	_timerStateSuspend = false;
 	_timerStateCompleted = true;
+#ifdef __linux__
+	_sigsegvSign = false;
+#endif
 	_selfID = ++s_actorIDCount;
 	_actorKey = -1;
 	_lockQuit = 0;
@@ -1960,7 +1995,14 @@ size_t my_actor::using_stack_size()
 
 size_t my_actor::stack_size()
 {
-	return ((actor_pull_type*)_actorPull)->_coroInfo->stackSize;
+	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	return info->stackSize;
+}
+
+size_t my_actor::stack_total_size()
+{
+	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	return info->stackSize + info->reserveSize;
 }
 
 size_t my_actor::yield_count()
@@ -2514,9 +2556,11 @@ void my_actor::run_one()
 void my_actor::pull_yield_tls()
 {
 #if ((defined CHECK_SELF) && (defined ENABLE_TLS_CHECK_SELF)) || __linux__
-	my_actor* old = (my_actor*)io_engine::swapTlsValue(ACTOR_TLS_INDEX, this);
+	void** tlsBuff = io_engine::getTlsValueBuff();
+	void* old = tlsBuff[ACTOR_TLS_INDEX];
+	tlsBuff[ACTOR_TLS_INDEX] = this;
 	(*(actor_pull_type*)_actorPull)();
-	io_engine::setTlsValue(ACTOR_TLS_INDEX, old);
+	tlsBuff[ACTOR_TLS_INDEX] = old;
 #else
 	(*(actor_pull_type*)_actorPull)();
 #endif
@@ -2772,68 +2816,93 @@ void my_actor::check_self()
 my_actor::stack_info my_actor::self_stack()
 {
 	assert_enter();
-	void* sp = get_sp();
+	void* const sp = get_sp();
 	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
-	stack_info si = { info->stackTop,
+	return { info->stackTop,
 		sp, info->stackSize,
 		(size_t)info->stackTop - (size_t)sp,
 		_usingStackSize,
 		info->reserveSize,
-		(int)(info->stackSize - ((size_t)info->stackTop - (size_t)sp)) };
-	return si;
+		info->stackSize + info->reserveSize - ((size_t)info->stackTop - (size_t)sp) };
 }
 
 size_t my_actor::stack_idle_space()
 {
 	assert_enter();
 	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
-	size_t s = info->stackSize - ((size_t)info->stackTop - (size_t)get_sp());
-	if ((int)s < 0)
-	{
-		return 0;
-	}
+	return info->stackSize + info->reserveSize - ((size_t)info->stackTop - (size_t)get_sp());
+}
+
+size_t my_actor::clean_stack_size()
+{
+#ifdef WIN32
+	size_t s = 0;
+	begin_RUN_IN_THREAD_STACK(this);
+	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	s = actor_run::clean_size(info);
+	end_RUN_IN_THREAD_STACK();
 	return s;
+#elif __linux__
+	size_t s = 0;
+	begin_RUN_IN_THREAD_STACK(this);
+	void** tlsBuff = io_engine::getTlsValueBuff();
+	void* old = tlsBuff[ACTOR_TLS_INDEX];
+	tlsBuff[ACTOR_TLS_INDEX] = this;
+	s = actor_run::clean_size(this);
+	tlsBuff[ACTOR_TLS_INDEX] = old;
+	end_RUN_IN_THREAD_STACK();
+	return s;
+#endif
 }
 
 void my_actor::stack_decommit(bool calcUsingStack)
 {
 	char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
-	begin_RUN_IN_TRHEAD_STACK(this);
+	begin_RUN_IN_THREAD_STACK(this);
 	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 #ifdef WIN32
-	if (calcUsingStack)
+	if (sp > sb)
 	{
-		_usingStackSize = std::max(_usingStackSize, info->stackSize + info->reserveSize - actor_run::clean_size(info));
-	}
-	DWORD oldPro = 0;
-	VirtualProtect(sp - PAGE_SIZE, PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
-	size_t l = 2 * PAGE_SIZE;
-	while (sp - l >= sb)
-	{
-		MEMORY_BASIC_INFORMATION mbi;
-		VirtualQuery(sp - l, &mbi, sizeof(mbi));
-		if (MEM_RESERVE != mbi.State)
+		if (calcUsingStack)
 		{
-			VirtualFree(sp - l, PAGE_SIZE, MEM_DECOMMIT);
-			l += PAGE_SIZE;
+			_usingStackSize = std::max(_usingStackSize, info->stackSize + info->reserveSize - actor_run::clean_size(info));
 		}
-		else
+		DWORD oldPro = 0;
+		VirtualProtect(sp - PAGE_SIZE, PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
+		size_t l = 2 * PAGE_SIZE;
+		while (sp - l >= sb)
 		{
-			break;
+			MEMORY_BASIC_INFORMATION mbi;
+			VirtualQuery(sp - l, &mbi, sizeof(mbi));
+			if (MEM_RESERVE != mbi.State)
+			{
+				VirtualFree(sp - l, PAGE_SIZE, MEM_DECOMMIT);
+				l += PAGE_SIZE;
+			}
+			else
+			{
+				break;
+			}
 		}
 	}
 #elif __linux__
 #if !(_DEBUG || DEBUG)
-	assert(sp >= sb);
-	if (calcUsingStack)
+	if (sp > sb)
 	{
-		_usingStackSize = std::max(_usingStackSize, (size_t)info->stackTop - (size_t)sp);
+		if (calcUsingStack)
+		{
+			_usingStackSize = std::max(_usingStackSize, (size_t)info->stackTop - (size_t)sp);
+		}
+		else
+		{
+			_usingStackSize = (size_t)info->stackTop - (size_t)sp;
+		}
+		mprotect(sb, sp - sb, PROT_NONE);
 	}
-	mprotect(sb, sp - sb, PROT_NONE);
 #endif
 #endif
-	end_RUN_IN_TRHEAD_STACK();
+	end_RUN_IN_THREAD_STACK();
 }
 
 void my_actor::close_msg_notifer(actor_msg_handle_base& amh)

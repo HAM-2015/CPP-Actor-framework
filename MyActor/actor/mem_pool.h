@@ -5,6 +5,7 @@
 #include <memory>
 #include <memory.h>
 #include "try_move.h"
+#include "scattered.h"
 
 struct null_mutex
 {
@@ -21,14 +22,14 @@ struct mem_alloc_base
 	virtual bool shared() const = 0;
 	virtual size_t alloc_size() const = 0;
 
-	bool full() const
+	bool overflow() const
 	{
-		return _blockNumber >= _poolMaxSize;
+		return _freeNumber >= _poolMaxSize;
 	}
 
 	size_t _nodeCount;
 	size_t _poolMaxSize;
-	size_t _blockNumber;
+	size_t _freeNumber;
 private:
 	mem_alloc_base(const mem_alloc_base&){}
 	void operator=(const mem_alloc_base&){}
@@ -36,14 +37,33 @@ private:
 
 //////////////////////////////////////////////////////////////////////////
 
-template <typename DATA, typename MUTEX = std::mutex>
-struct mem_alloc_mt : mem_alloc_base
+template <typename DATA = void, typename MUTEX = std::mutex>
+struct mem_alloc_mt;
+
+template <typename MUTEX>
+struct mem_alloc_mt<void, MUTEX>
+{
+	template <typename _Other>
+	struct rebind
+	{
+		typedef mem_alloc_mt<_Other, MUTEX> other;
+	};
+};
+
+template <typename DATA, typename MUTEX>
+struct mem_alloc_mt : protected MUTEX, public mem_alloc_base
 {
 	struct node_space;
 
+	template <typename _Other>
+	struct rebind 
+	{
+		typedef mem_alloc_mt<_Other, MUTEX> other;
+	};
+
 	union BUFFER
 	{
-		unsigned char _space[sizeof(DATA)];
+		unsigned char _space[MEM_ALIGN(sizeof(DATA), sizeof(void*))];
 		node_space* _link;
 	};
 
@@ -52,14 +72,14 @@ struct mem_alloc_mt : mem_alloc_base
 		void set_bf()
 		{
 #if (_DEBUG || DEBUG)
-			memset(get_ptr(), 0xBF, sizeof(DATA));
+			memset(get_ptr(), 0xBF, sizeof(_buff._space));
 #endif
 		}
 
 		void set_af()
 		{
 #if (_DEBUG || DEBUG)
-			memset(get_ptr(), 0xAF, sizeof(DATA));
+			memset(get_ptr(), 0xAF, sizeof(_buff._space));
 #endif
 		}
 
@@ -99,13 +119,13 @@ struct mem_alloc_mt : mem_alloc_base
 	{
 		_nodeCount = 0;
 		_poolMaxSize = poolSize;
+		_freeNumber = 0;
 		_pool = NULL;
-		_blockNumber = 0;
 	}
 
 	virtual ~mem_alloc_mt()
 	{
-		std::lock_guard<MUTEX> lg(_mutex);
+		std::lock_guard<MUTEX> lg(*this);
 		node_space* pIt = _pool;
 		while (pIt)
 		{
@@ -121,18 +141,18 @@ struct mem_alloc_mt : mem_alloc_base
 	void* allocate()
 	{
 		{
-			_mutex.lock();
-			_blockNumber++;
+			MUTEX::lock();
+			_freeNumber++;
 			if (_pool)
 			{
 				_nodeCount--;
 				node_space* fixedSpace = _pool;
 				_pool = fixedSpace->_buff._link;
-				_mutex.unlock();
+				MUTEX::unlock();
 				fixedSpace->set_af();
 				return fixedSpace->get_ptr();
 			}
-			_mutex.unlock();
+			MUTEX::unlock();
 		}
 		node_space* p = (node_space*)malloc(sizeof(node_space));
 		p->set_head();
@@ -145,8 +165,8 @@ struct mem_alloc_mt : mem_alloc_base
 		space->check_head();
 		space->set_bf();
 		{
-			std::lock_guard<MUTEX> lg(_mutex);
-			_blockNumber--;
+			std::lock_guard<MUTEX> lg(*this);
+			_freeNumber--;
 			if (_nodeCount < _poolMaxSize)
 			{
 				_nodeCount++;
@@ -169,11 +189,124 @@ struct mem_alloc_mt : mem_alloc_base
 	}
 
 	node_space* _pool;
-	MUTEX _mutex;
+};
+
+template <typename DATA = void, typename MUTEX = std::mutex>
+struct mem_alloc_mt2;
+
+template <typename MUTEX>
+struct mem_alloc_mt2<void, MUTEX>
+{
+	template <typename _Other>
+	struct rebind
+	{
+		typedef mem_alloc_mt2<_Other, MUTEX> other;
+	};
+};
+
+template <typename DATA, typename MUTEX>
+struct mem_alloc_mt2 : protected MUTEX, public mem_alloc_base
+{
+	typedef typename mem_alloc_mt<DATA>::node_space node_space;
+
+	template <typename _Other>
+	struct rebind
+	{
+		typedef mem_alloc_mt2<_Other, MUTEX> other;
+	};
+
+	mem_alloc_mt2(size_t poolSize)
+	{
+		_nodeCount = poolSize;
+		_poolMaxSize = poolSize;
+		_freeNumber = 0;
+		_pool = NULL;
+		static_assert(sizeof(node_space) % sizeof(void*) == 0, "");
+		_pblock = (node_space*)malloc(sizeof(node_space) * poolSize);
+		for (size_t i = 0; i < poolSize; i++)
+		{
+			node_space* t = _pool;
+			_pool = _pblock + i;
+			_pool->set_head();
+			_pool->_buff._link = t;
+		}
+	}
+
+	~mem_alloc_mt2()
+	{
+		std::lock_guard<MUTEX> lg(*this);
+		node_space* pIt = _pool;
+		while (pIt)
+		{
+			assert(_nodeCount > 0);
+			_nodeCount--;
+			node_space* t = pIt;
+			pIt = pIt->_buff._link;
+			if (t < _pblock || t >= _pblock + _poolMaxSize)
+			{
+				free(t);
+			}
+		}
+		free(_pblock);
+		assert(0 == _nodeCount);
+	}
+
+	void* allocate()
+	{
+		{
+			MUTEX::lock();
+			_freeNumber++;
+			if (_pool)
+			{
+				_nodeCount--;
+				node_space* fixedSpace = _pool;
+				_pool = fixedSpace->_buff._link;
+				MUTEX::unlock();
+				fixedSpace->set_af();
+				return fixedSpace->get_ptr();
+			}
+			MUTEX::unlock();
+		}
+		node_space* p = (node_space*)malloc(sizeof(node_space));
+		p->set_head();
+		return p->get_ptr();
+	}
+
+	void deallocate(void* p)
+	{
+		node_space* space = node_space::get_node(p);
+		space->check_head();
+		space->set_bf();
+		{
+			std::lock_guard<MUTEX> lg(*this);
+			_freeNumber--;
+			if (_nodeCount < _poolMaxSize || (space >= _pblock && space < _pblock + _poolMaxSize))
+			{
+				_nodeCount++;
+				space->_buff._link = _pool;
+				_pool = space;
+				return;
+			}
+		}
+		free(space);
+	}
+
+	size_t alloc_size() const
+	{
+		return sizeof(DATA);
+	}
+
+	bool shared() const
+	{
+		return true;
+	}
+
+	node_space* _pblock;
+	node_space* _pool;
 };
 
 template <typename MUTEX = std::mutex>
-struct dymem_alloc_mt : mem_alloc_base
+struct dymem_alloc_mt : protected MUTEX, public mem_alloc_base
 {
 	struct dy_node 
 	{
@@ -257,12 +390,12 @@ struct dymem_alloc_mt : mem_alloc_base
 		_nodeCount = 0;
 		_poolMaxSize = poolSize;
 		_pool = NULL;
-		_blockNumber = 0;
+		_freeNumber = 0;
 	}
 
 	virtual ~dymem_alloc_mt()
 	{
-		std::lock_guard<MUTEX> lg(_mutex);
+		std::lock_guard<MUTEX> lg(*this);
 		void* pIt = _pool;
 		while (pIt)
 		{
@@ -278,18 +411,18 @@ struct dymem_alloc_mt : mem_alloc_base
 	void* allocate()
 	{
 		{
-			_mutex.lock();
-			_blockNumber++;
+			MUTEX::lock();
+			_freeNumber++;
 			if (_pool)
 			{
 				_nodeCount--;
 				void* fixedSpace = _pool;
 				_pool = dy_node::get_next(_spaceSize, fixedSpace);
-				_mutex.unlock();
+				MUTEX::unlock();
 				dy_node::set_af(_spaceSize, fixedSpace);
 				return dy_node::get_ptr(_spaceSize, fixedSpace);
 			}
-			_mutex.unlock();
+			MUTEX::unlock();
 		}
 		void* p = dy_node::alloc(_spaceSize);
 		dy_node::set_head(_spaceSize, p);
@@ -302,8 +435,8 @@ struct dymem_alloc_mt : mem_alloc_base
 		dy_node::check_head(_spaceSize, space);
 		dy_node::set_bf(_spaceSize, space);
 		{
-			std::lock_guard<MUTEX> lg(_mutex);
-			_blockNumber--;
+			std::lock_guard<MUTEX> lg(*this);
+			_freeNumber--;
 			if (_nodeCount < _poolMaxSize)
 			{
 				_nodeCount++;
@@ -327,16 +460,65 @@ struct dymem_alloc_mt : mem_alloc_base
 
 	const size_t _spaceSize;
 	void* _pool;
-	MUTEX _mutex;
 };
 
 //////////////////////////////////////////////////////////////////////////
+template <typename DATA = void>
+struct mem_alloc;
+
+template <>
+struct mem_alloc<void>
+{
+	template <typename _Other>
+	struct rebind
+	{
+		typedef mem_alloc<_Other> other;
+	};
+};
+
 template <typename DATA>
 struct mem_alloc : public mem_alloc_mt<DATA, null_mutex>
 {
+	template <typename _Other>
+	struct rebind
+	{
+		typedef mem_alloc<_Other> other;
+	};
+
 	mem_alloc(size_t poolSize)
 	:mem_alloc_mt<DATA, null_mutex>(poolSize) {}
 	
+	bool shared() const
+	{
+		return false;
+	}
+};
+
+template <typename DATA = void>
+struct mem_alloc2;
+
+template <>
+struct mem_alloc2<void>
+{
+	template <typename _Other>
+	struct rebind
+	{
+		typedef mem_alloc2<_Other> other;
+	};
+};
+
+template <typename DATA>
+struct mem_alloc2 : public mem_alloc_mt2<DATA, null_mutex>
+{
+	template <typename _Other>
+	struct rebind
+	{
+		typedef mem_alloc2<_Other> other;
+	};
+
+	mem_alloc2(size_t poolSize)
+	:mem_alloc_mt2<DATA, null_mutex>(poolSize) {}
+
 	bool shared() const
 	{
 		return false;
@@ -357,7 +539,7 @@ struct dymem_alloc : public dymem_alloc_mt<null_mutex>
 //////////////////////////////////////////////////////////////////////////
 
 template <typename MUTEX = std::mutex>
-class reusable_mem_mt
+class reusable_mem_mt : protected MUTEX
 {
 #pragma pack(push, 1)
 	struct node
@@ -381,7 +563,7 @@ public:
 
 	virtual ~reusable_mem_mt()
 	{
-		std::lock_guard<MUTEX> lg(_mutex);
+		std::lock_guard<MUTEX> lg(*this);
 		while (_top)
 		{
 			assert(_nodeCount-- > 0);
@@ -396,7 +578,7 @@ public:
 	{
 		void* freeMem = NULL;
 		{
-			std::lock_guard<MUTEX> lg(_mutex);
+			std::lock_guard<MUTEX> lg(*this);
 			if (_top)
 			{
 				node* res = _top;
@@ -424,13 +606,12 @@ public:
 	void deallocate(void* p)
 	{
 		node* dp = (node*)((char*)p - sizeof(_top->_size));
-		std::lock_guard<MUTEX> lg(_mutex);
+		std::lock_guard<MUTEX> lg(*this);
 		dp->_next = _top;
 		_top = dp;
 	}
 private:
 	node* _top;
-	MUTEX _mutex;
 #if (_DEBUG || DEBUG)
 	size_t _nodeCount;
 #endif
@@ -455,7 +636,7 @@ public:
 	typedef typename std::allocator<_Ty>::size_type size_type;
 	typedef typename std::allocator<_Ty>::value_type value_type;
 
-	template<class _Other>
+	template<typename _Other>
 	struct rebind
 	{
 		typedef pool_alloc_mt<_Other, _Mtx> other;
@@ -489,7 +670,7 @@ public:
 		}
 	}
 
-	template<class _Other>
+	template<typename _Other>
 	pool_alloc_mt(const pool_alloc_mt<_Other, _Mtx>& s)
 	{
 		if (s.is_shared())
@@ -516,7 +697,7 @@ public:
 		return *this;
 	}
 
-	template<class _Other>
+	template<typename _Other>
 	pool_alloc_mt& operator=(const pool_alloc_mt<_Other, _Mtx>& s)
 	{
 		assert(false);
@@ -591,7 +772,7 @@ public:
 	typedef typename std::allocator<_Ty>::size_type size_type;
 	typedef typename std::allocator<_Ty>::value_type value_type;
 
-	template<class _Other>
+	template<typename _Other>
 	struct rebind
 	{
 		typedef pool_alloc<_Other> other;
@@ -611,7 +792,7 @@ public:
 	{
 	}
 
-	template<class _Other>
+	template<typename _Other>
 	pool_alloc(const pool_alloc<_Other>& s)
 		: _memAlloc(s._memAlloc._poolMaxSize)
 	{
@@ -623,7 +804,7 @@ public:
 		return *this;
 	}
 
-	template<class _Other>
+	template<typename _Other>
 	pool_alloc& operator=(const pool_alloc<_Other>& s)
 	{
 		assert(false);
@@ -724,7 +905,7 @@ static obj_pool<T>* create_pool_mt(size_t poolSize, CREATER&& creater)
 }
 
 template <typename T, typename CREATER, typename DESTORY, typename MUTEX>
-class ObjPool_ : public obj_pool<T>
+class ObjPool_ : protected MUTEX, public obj_pool<T>
 {
 	struct node
 	{
@@ -743,7 +924,7 @@ public:
 public:
 	~ObjPool_()
 	{
-		std::lock_guard<MUTEX> lg(_mutex);
+		std::lock_guard<MUTEX> lg(*this);
 		assert(0 == _blockNumber);
 		node* it = _link;
 		while (it)
@@ -761,7 +942,7 @@ public:
 	T* pick()
 	{
 		{
-			std::lock_guard<MUTEX> lg(_mutex);
+			std::lock_guard<MUTEX> lg(*this);
 #if (_DEBUG || DEBUG)
 			_blockNumber++;
 #endif
@@ -782,9 +963,9 @@ public:
 		catch (...)
 		{
 #if (_DEBUG || DEBUG)
-			_mutex.lock();
+			MUTEX::lock();
 			_blockNumber--;
-			_mutex.unlock();
+			MUTEX::unlock();
 #endif
 			free(newNode);
 			throw;
@@ -795,7 +976,7 @@ public:
 	void recycle(void* p)
 	{
 		{
-			std::lock_guard<MUTEX> lg(_mutex);
+			std::lock_guard<MUTEX> lg(*this);
 #if (_DEBUG || DEBUG)
 			_blockNumber--;
 #endif
@@ -813,7 +994,6 @@ public:
 private:
 	CREATER _creater;
 	DESTORY _destory;
-	MUTEX _mutex;
 	node* _link;
 	size_t _poolMaxSize;
 	size_t _nodeCount;

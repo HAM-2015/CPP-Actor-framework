@@ -188,7 +188,7 @@ class boost_strand
 		template <typename Handler>
 		static inline wrap_next_tick_base* create(Handler&& handler, mem_alloc_base& alloc, reusable_mem& reuAlloc)
 		{
-			if (!alloc.full())
+			if (!alloc.overflow())
 			{
 				return new(alloc.allocate())wrap_next_tick_handler<RM_REF(Handler)>(TRY_MOVE(handler));
 			}
@@ -202,8 +202,7 @@ class boost_strand
 		{
 			(*(H*)space)();
 			this->~wrap_next_tick_handler();
-			wrap_next_tick_base::result res = { this, -1 };
-			return res;
+			return { this, -1 };
 		}
 	};
 
@@ -228,8 +227,7 @@ class boost_strand
 		{
 			_h();
 			this->~wrap_next_tick_handler();
-			result res = { this, sizeof(wrap_next_tick_handler) };
-			return res;
+			return { this, sizeof(wrap_next_tick_handler) };
 		}
 
 		H _h;
@@ -545,11 +543,11 @@ protected:
 	bool _beginNextRound;
 	size_t _thisRoundCount;
 	reusable_mem _reuMemAlloc;
-	mem_alloc<wrap_next_tick_space> _nextTickAlloc;
-	msg_queue<wrap_next_tick_base*> _nextTickQueue1;
-	msg_queue<wrap_next_tick_base*> _nextTickQueue2;
-	msg_queue<wrap_next_tick_base*>* _backTickQueue;
-	msg_queue<wrap_next_tick_base*>* _frontTickQueue;
+	mem_alloc2<wrap_next_tick_space> _nextTickAlloc;
+	msg_queue<wrap_next_tick_base*, mem_alloc2<>> _nextTickQueue1;
+	msg_queue<wrap_next_tick_base*, mem_alloc2<>> _nextTickQueue2;
+	msg_queue<wrap_next_tick_base*, mem_alloc2<>>* _backTickQueue;
+	msg_queue<wrap_next_tick_base*, mem_alloc2<>>* _frontTickQueue;
 #endif //ENABLE_NEXT_TICK
 protected:
 #ifdef ENABLE_QT_ACTOR

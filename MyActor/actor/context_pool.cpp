@@ -47,14 +47,17 @@ ContextPool_::~ContextPool_()
 		std::lock_guard<std::mutex> lg1(_contextPool[i]._mutex);
 		while (!_contextPool[i]._pool.empty())
 		{
-			coro_pull_interface* pull = _contextPool[i]._pool.back();
+			coro_pull_interface* const pull = _contextPool[i]._pool.back();
 			_contextPool[i]._pool.pop_back();
-			context_yield::delete_context(pull->_coroInfo);
-			delete pull;
+			context_yield::coro_info* const info = pull->_coroInfo;
 			_stackCount--;
+			_stackTotalSize -= info->stackSize + info->reserveSize;
+			context_yield::delete_context(info);
+			delete pull;
 		}
 	}
 	assert(0 == _stackCount);
+	assert(0 == _stackTotalSize);
 }
 
 ContextPool_::coro_pull_interface* ContextPool_::getContext(size_t size)
@@ -92,7 +95,7 @@ ContextPool_::coro_pull_interface* ContextPool_::getContext(size_t size)
 		if (newFiber->_coroInfo)
 		{
 			s_fiberPool._stackCount++;
-			s_fiberPool._stackTotalSize += size;
+			s_fiberPool._stackTotalSize += newFiber->_coroInfo->stackSize + newFiber->_coroInfo->reserveSize;
 			return newFiber;
 		}
 		delete newFiber;
@@ -168,7 +171,7 @@ void ContextPool_::clearThread()
 					break;
 				}
 				_clearWait = true;
-				if (std::cv_status::no_timeout == _clearVar.wait_for(ul, std::chrono::milliseconds(100)))
+				if (std::cv_status::no_timeout == _clearVar.wait_for(ul, std::chrono::milliseconds(10)))
 				{
 					break;
 				}
@@ -177,20 +180,19 @@ void ContextPool_::clearThread()
 		_checkFree:;
 			freeCount = 0;
 			int extTick = get_tick_s();
-			for (int i = 0; i < 256; i++)
+			for (int i = 255; i >= 0; i--)
 			{
 				_contextPool[i]._mutex.lock();
 				if (!_contextPool[i]._pool.empty() && extTick - _contextPool[i]._pool.front()->_tick >= CONTEXT_MIN_CLEAR_CYCLE)
 				{
-					coro_pull_interface* pull = _contextPool[i]._pool.front();
+					coro_pull_interface* const pull = _contextPool[i]._pool.front();
 					_contextPool[i]._pool.pop_front();
 					_contextPool[i]._mutex.unlock();
-
-					context_yield::delete_context(pull->_coroInfo);
-
-					_stackCount--;
-					_stackTotalSize -= pull->_coroInfo->stackSize;
+					context_yield::coro_info* const info = pull->_coroInfo;
 					freeCount++;
+					_stackCount--;
+					_stackTotalSize -= info->stackSize + info->reserveSize;
+					context_yield::delete_context(info);
 					delete pull;
 				}
 				else

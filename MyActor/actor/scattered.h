@@ -84,7 +84,7 @@ private:
 #endif
 
 //ÄÚ´æ±ß½ç¶ÔÆë
-#define MEM_ALIGN(__o, __a) (((__o) + ((__a)-1)) & (((__a)-1) ^ -1))
+#define MEM_ALIGN(__o, __a) (((__o) + ((__a)-1)) & (0-__a))
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -106,7 +106,7 @@ if (__catched) {
 #define end_RUN_IN_STRAND() })
 
 #define begin_ACTOR_RUN_IN_STRAND(__host__, __strand__) {\
-	my_actor* ___host = __host__; \
+	my_actor* const ___host = __host__; \
 	actor_handle ___actor = my_actor::create(__strand__, [&](my_actor* __host__) {
 
 #define end_ACTOR_RUN_IN_STRAND() });\
@@ -114,17 +114,17 @@ if (__catched) {
 	___host->actor_wait_quit(___actor); \
 }
 
-#define RUN_IN_TRHEAD_STACK(__host__, __exp__) {\
+#define RUN_IN_THREAD_STACK(__host__, __exp__) {\
 (__host__)->lock_quit(); \
 (__host__)->run_in_thread_stack([&] {__exp__; });}\
 (__host__)->unlock_quit();
 
-#define begin_RUN_IN_TRHEAD_STACK(__host__) {\
-	my_actor* ___host = __host__; \
+#define begin_RUN_IN_THREAD_STACK(__host__) {\
+	my_actor* const ___host = __host__; \
 	___host->lock_quit(); \
 	___host->run_in_thread_stack([&] {
 
-#define end_RUN_IN_TRHEAD_STACK() });\
+#define end_RUN_IN_THREAD_STACK() });\
 	___host->unlock_quit(); }
 
 
