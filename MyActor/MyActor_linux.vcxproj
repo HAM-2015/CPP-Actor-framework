@@ -109,52 +109,13 @@
   <ItemDefinitionGroup>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="actor\actor_framework.cpp" />
-    <ClCompile Include="actor\actor_mutex.cpp" />
-    <ClCompile Include="actor\actor_timer.cpp" />
-    <ClCompile Include="actor\async_timer.cpp" />
-    <ClCompile Include="actor\context_pool.cpp" />
-    <ClCompile Include="actor\context_yield.cpp" />
-    <ClCompile Include="actor\io_engine.cpp" />
-    <ClCompile Include="actor\scattered.cpp" />
-    <ClCompile Include="actor\shared_strand.cpp" />
-    <ClCompile Include="actor\strand_ex.cpp" />
+    <ClCompile Include="actor.cpp" />
     <ClCompile Include="MyActor.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="debug.mak" />
     <None Include="Makefile" />
     <None Include="release.mak" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="actor\actor_framework.h" />
-    <ClInclude Include="actor\actor_mutex.h" />
-    <ClInclude Include="actor\actor_timer.h" />
-    <ClInclude Include="actor\async_buffer.h" />
-    <ClInclude Include="actor\async_timer.h" />
-    <ClInclude Include="actor\check_actor_stack.h" />
-    <ClInclude Include="actor\context_pool.h" />
-    <ClInclude Include="actor\context_yield.h" />
-    <ClInclude Include="actor\io_engine.h" />
-    <ClInclude Include="actor\lambda_ref.h" />
-    <ClInclude Include="actor\mem_pool.h" />
-    <ClInclude Include="actor\msg_queue.h" />
-    <ClInclude Include="actor\scattered.h" />
-    <ClInclude Include="actor\shared_strand.h" />
-    <ClInclude Include="actor\sigsegv.h" />
-    <ClInclude Include="actor\stack_object.h" />
-    <ClInclude Include="actor\strand_ex.h" />
-    <ClInclude Include="actor\sync_msg.h" />
-    <ClInclude Include="actor\trace.h" />
-    <ClInclude Include="actor\try_move.h" />
-    <ClInclude Include="actor\tuple_option.h" />
-    <ClInclude Include="actor\wrapped_capture.h" />
-    <ClInclude Include="actor\wrapped_dispatch_handler.h" />
-    <ClInclude Include="actor\wrapped_distribute_handler.h" />
-    <ClInclude Include="actor\wrapped_next_tick_handler.h" />
-    <ClInclude Include="actor\wrapped_post_handler.h" />
-    <ClInclude Include="actor\wrapped_try_tick_handler.h" />
-    <ClInclude Include="resource.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

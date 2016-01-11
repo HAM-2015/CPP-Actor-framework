@@ -23,7 +23,7 @@ error:
 	$(error Invalid configuration, please check your inputs)
 endif
 
-SOURCEFILES := actor/actor_framework.cpp actor/actor_mutex.cpp actor/actor_timer.cpp actor/async_timer.cpp actor/context_pool.cpp actor/context_yield.cpp actor/io_engine.cpp actor/scattered.cpp actor/shared_strand.cpp actor/strand_ex.cpp MyActor.cpp
+SOURCEFILES := actor.cpp MyActor.cpp
 EXTERNAL_LIBS := 
 EXTERNAL_LIBS_COPIED := $(foreach lib, $(EXTERNAL_LIBS),$(BINARYDIR)/$(notdir $(lib)))
 
@@ -163,44 +163,3 @@ $(BINARYDIR)/%.o : %.cxx $(all_make_files) |$(BINARYDIR)
 	$(CC) $(CFLAGS) $(CXXFLAGS) -c $< -o $@ -MD -MF $(@:.o=.dep)
 
 #VisualGDB: GeneratedRules				#<--- All lines below are auto-generated
-
-
-$(BINARYDIR)/actor_framework.o : actor/actor_framework.cpp $(all_make_files) |$(BINARYDIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@ -MD -MF $(@:.o=.dep)
-
-
-$(BINARYDIR)/actor_mutex.o : actor/actor_mutex.cpp $(all_make_files) |$(BINARYDIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@ -MD -MF $(@:.o=.dep)
-
-
-$(BINARYDIR)/actor_timer.o : actor/actor_timer.cpp $(all_make_files) |$(BINARYDIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@ -MD -MF $(@:.o=.dep)
-
-
-$(BINARYDIR)/async_timer.o : actor/async_timer.cpp $(all_make_files) |$(BINARYDIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@ -MD -MF $(@:.o=.dep)
-
-
-$(BINARYDIR)/context_pool.o : actor/context_pool.cpp $(all_make_files) |$(BINARYDIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@ -MD -MF $(@:.o=.dep)
-
-
-$(BINARYDIR)/context_yield.o : actor/context_yield.cpp $(all_make_files) |$(BINARYDIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@ -MD -MF $(@:.o=.dep)
-
-
-$(BINARYDIR)/io_engine.o : actor/io_engine.cpp $(all_make_files) |$(BINARYDIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@ -MD -MF $(@:.o=.dep)
-
-
-$(BINARYDIR)/scattered.o : actor/scattered.cpp $(all_make_files) |$(BINARYDIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@ -MD -MF $(@:.o=.dep)
-
-
-$(BINARYDIR)/shared_strand.o : actor/shared_strand.cpp $(all_make_files) |$(BINARYDIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@ -MD -MF $(@:.o=.dep)
-
-
-$(BINARYDIR)/strand_ex.o : actor/strand_ex.cpp $(all_make_files) |$(BINARYDIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@ -MD -MF $(@:.o=.dep)
-

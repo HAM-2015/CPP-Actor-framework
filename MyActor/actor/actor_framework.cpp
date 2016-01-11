@@ -1128,6 +1128,10 @@ public:
 				_actor._inActor = true;
 			}
 			assert(_actor._strand->running_in_this_thread());
+			if (_actor._checkStack)
+			{
+				_actor.stack_decommit(false);
+			}
 			_actor._mainFunc(&_actor);
 			assert(_actor._inActor);
 			assert(_actor._childActorList.empty());
@@ -1204,40 +1208,30 @@ public:
 	}
 
 #ifdef WIN32
-	void guard_stack()
-	{
-		context_yield::coro_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
-		char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
-		char* const sm = (char*)info->stackTop - info->stackSize;
-		//分页加PAGE_GUARD标记
-		size_t l = PAGE_SIZE;
-		while (sp - l >= sm)
-		{
-			DWORD oldPro = 0;
-			BOOL ok = VirtualProtect(sp - l, PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
-			if (!ok || (PAGE_READWRITE | PAGE_GUARD) == oldPro)
-			{
-				break;
-			}
-			l += PAGE_SIZE;
-		}
-	}
-
 	static size_t clean_size(context_yield::coro_info* const info)
 	{
 		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
-		size_t cleanSize = 0;
-		while (sb + cleanSize < info->stackTop)
+		size_t rangeA = 0;
+		size_t rangeB = (info->stackSize + info->reserveSize) / PAGE_SIZE;
+		do
 		{
 			MEMORY_BASIC_INFORMATION mbi;
-			VirtualQuery(sb + cleanSize, &mbi, sizeof(mbi));
-			if (MEM_RESERVE != mbi.State && (PAGE_READWRITE | PAGE_GUARD) != mbi.Protect)
+			const size_t i = rangeA + (rangeB - rangeA) / 2;
+			VirtualQuery(sb + i * PAGE_SIZE, &mbi, sizeof(mbi));
+			if ((PAGE_READWRITE | PAGE_GUARD) == mbi.Protect)
 			{
-				break;
+				return i * PAGE_SIZE + PAGE_SIZE;
+			} 
+			else if (MEM_RESERVE == mbi.State)
+			{
+				rangeA = i + 1;
 			}
-			cleanSize += PAGE_SIZE;
-		}
-		return cleanSize;
+			else
+			{
+				rangeB = i;
+			}
+		} while (rangeA < rangeB);
+		return 0;
 	}
 
 	void check_stack()
@@ -1246,11 +1240,8 @@ public:
 		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 		const size_t cleanSize = clean_size(info);
 		_actor._usingStackSize = std::max(_actor._usingStackSize, info->stackSize + info->reserveSize - cleanSize);
-		if (_actor._autoStack)
-		{
-			//记录本次实际消耗的栈空间
-			s_autoActorStackMng.update_stack_size(_actor._actorKey, _actor._usingStackSize);
-		}
+		//记录本次实际消耗的栈空间
+		s_autoActorStackMng.update_stack_size(_actor._actorKey, _actor._usingStackSize);
 		if (cleanSize < info->reserveSize - PAGE_SIZE)
 		{
 			//预留内存页释放物理内存，保留地址空间
@@ -1263,9 +1254,8 @@ public:
 	void operator ()(actor_push_type& actorPush)
 	{
 		actor_handler(actorPush);
-		check_stack();
+		if (_actor._checkStack) check_stack();
 		exit_notify();
-		guard_stack();
 	}
 #else
 	void operator ()(actor_push_type& actorPush)
@@ -1274,10 +1264,8 @@ public:
 		{
 			actor_handler(actorPush);
 			//从实际栈底查看有多少个PAGE的PAGE_GUARD标记消失和用了多少栈预留空间
-			check_stack();
+			if (_actor._checkStack) check_stack();
 			exit_notify();
-			//分页加PAGE_GUARD标记
-			guard_stack();
 		}
 		__except (seh_exception_handler(GetExceptionCode(), GetExceptionInformation()))
 		{
@@ -1344,38 +1332,41 @@ public:
 	{
 		context_yield::coro_info* const info = ((actor_pull_type*)self->_actorPull)->_coroInfo;
 		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
-		size_t cleanSize = 0;
-		while (sb + cleanSize < info->stackTop)
+		size_t i = 0;
+		size_t rangeA = 0;
+		size_t rangeB = (info->stackSize + info->reserveSize) / PAGE_SIZE;
+		do
 		{
 			self->_sigsegvSign = true;
-			char t = *(sb + cleanSize);
+			i = rangeA + (rangeB - rangeA) / 2;
+			char* const pi = sb + i * PAGE_SIZE;
+			char t = *pi;
 			if (self->_sigsegvSign)
 			{
-				self->_sigsegvSign = false;
-				break;
+				rangeB = i;
 			}
-			mprotect(sb + cleanSize, PAGE_SIZE, PROT_NONE);
-			cleanSize += PAGE_SIZE;
-		}
-		return cleanSize;
+			else
+			{
+				mprotect(pi, PAGE_SIZE, PROT_NONE);
+				rangeA = i + 1;
+			}
+		} while (rangeA < rangeB);
+		const bool acc = self->_sigsegvSign;
+		self->_sigsegvSign = false;
+		return i * PAGE_SIZE + (acc ? 0 : PAGE_SIZE);
 	}
 #pragma GCC pop_options
 
 	void operator ()(actor_push_type& actorPush)
 	{
 		context_yield::coro_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
-		char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
 		_actor._usingStackSize = info->stackSize;
 		actor_handler(actorPush);
-		if (_actor._autoStack)
+		if (_actor._checkStack)
 		{
 			s_autoActorStackMng.update_stack_size(_actor._actorKey, _actor._usingStackSize);
 		}
 		exit_notify();
-		if (_actor._usingStackSize > info->stackSize)
-		{
-			mprotect((char*)info->stackTop - info->stackSize - info->reserveSize, info->reserveSize, PROT_NONE);
-		}
 	}
 
 	static int sigsegv_handler(void* fault_address, int serious)
@@ -1481,7 +1472,7 @@ _childActorList(_childActorListAll)
 #ifdef PRINT_ACTOR_STACK
 	_checkStackFree = false;
 #endif
-	_autoStack = false;
+	_checkStack = false;
 	_timerStateSuspend = false;
 	_timerStateCompleted = true;
 #ifdef __linux__
@@ -1533,7 +1524,7 @@ my_actor::~my_actor()
 #endif
 
 #ifdef PRINT_ACTOR_STACK
-	if (_checkStackFree || _autoStack || _usingStackSize > _stackSize)
+	if (_checkStackFree || _checkStack || _usingStackSize > _stackSize)
 	{
 		stack_overflow_format(_usingStackSize - _stackSize, _createStack);
 	}
@@ -1588,11 +1579,13 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 {
 	actor_pull_type* pull = NULL;
 	const size_t nsize = wrapActor.stack_size();
+	bool checkStack = false;
 	if (nsize)
 	{
 		if (IS_TRY_SIZE(nsize))
 		{
 			size_t lasts = s_autoActorStackMng.get_stack_size(wrapActor.key());
+			checkStack = !lasts;
 			pull = ContextPool_::getContext(lasts ? lasts : GET_TRY_SIZE(nsize));
 #ifdef __linux__
 #if (_DEBUG || DEBUG)
@@ -1608,11 +1601,13 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 		else
 		{
 			pull = ContextPool_::getContext(nsize);
+			checkStack = false;
 		}
 	}
 	else
 	{
 		size_t lasts = s_autoActorStackMng.get_stack_size(wrapActor.key());
+		checkStack = !lasts;
 #ifdef WIN32
 		pull = ContextPool_::getContext(lasts ? lasts : DEFAULT_STACKSIZE);
 #elif __linux__
@@ -1622,7 +1617,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 	actor_handle newActor(new(pull->_space)my_actor(), [](my_actor* p){p->~my_actor(); }, actor_ref_count_alloc<void>(pull));
 	newActor->_weakThis = newActor;
 	newActor->_strand = actorStrand;
-	newActor->_autoStack = true;
+	newActor->_checkStack = checkStack;
 	wrapActor.swap(newActor->_mainFunc);
 	newActor->_actorKey = wrapActor.key();
 	newActor->_timer = actorStrand->actor_timer();
@@ -2003,6 +1998,15 @@ size_t my_actor::stack_total_size()
 {
 	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	return info->stackSize + info->reserveSize;
+}
+
+void my_actor::enable_check_stack()
+{
+	if (!_checkStack)
+	{
+		_checkStack = true;
+		stack_decommit(false);
+	}
 }
 
 size_t my_actor::yield_count()

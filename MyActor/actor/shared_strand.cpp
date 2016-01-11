@@ -85,7 +85,7 @@ void boost_strand::create_multi(list<shared_strand>& res, size_t n, io_engine& i
 
 shared_strand boost_strand::clone()
 {
-	return create(*_ioEngine);
+	return create(*_ioEngine, !!_actorTimer);
 }
 
 bool boost_strand::in_this_ios()

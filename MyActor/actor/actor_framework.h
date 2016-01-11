@@ -3438,7 +3438,7 @@ public:
 	}
 
 	wrapped_sync_handler(const wrapped_sync_handler& s)
-		:_handler(s._handle), _result(s._result)
+		:_handler(s._handler), _result(s._result)
 	{
 		DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
 	}
@@ -7199,7 +7199,7 @@ public:
 	/*!
 	@brief 当前还未使用过的栈空间
 	*/
-	__yield_interrupt size_t clean_stack_size();
+	size_t clean_stack_size();
 
 	/*!
 	@brief 获取当前Actor剩余安全栈空间
@@ -7210,7 +7210,7 @@ public:
 	@brief 释放已经被使用过的栈空间
 	@param calcUsingStack 是否计算已经使用的空间大小
 	*/
-	__yield_interrupt void stack_decommit(bool calcUsingStack = true);
+	void stack_decommit(bool calcUsingStack = true);
 
 	/*!
 	@brief 获取当前Actor调度器
@@ -7261,6 +7261,11 @@ public:
 	@brief Actor栈总大小
 	*/
 	size_t stack_total_size();
+
+	/*!
+	@brief 开启栈检测
+	*/
+	void enable_check_stack();
 
 	/*!
 	@brief 获取Actor切换计数
@@ -7579,7 +7584,7 @@ private:
 	bool _hasNotify : 1;///<当前Actor挂起，有外部触发准备进入Actor标记
 	bool _isForce : 1;///<是否是强制退出的标记，成功调用了force_quit
 	bool _notifyQuited : 1;///<当前Actor被锁定后，收到退出消息
-	bool _autoStack : 1;///<是否自动调整栈空间
+	bool _checkStack : 1;///<是否检测栈空间
 #ifdef __linux__
 	bool _sigsegvSign : 1;///<sigsegv信号检测栈标记
 #endif
