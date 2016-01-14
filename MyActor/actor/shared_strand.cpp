@@ -4,7 +4,13 @@
 
 boost_strand::boost_strand()
 #ifdef ENABLE_NEXT_TICK
-:_pCheckDestroy(NULL), _beginNextRound(false), _thisRoundCount(64), _nextTickAlloc(8192), _nextTickQueue1(8192), _nextTickQueue2(8192), _frontTickQueue(&_nextTickQueue1), _backTickQueue(&_nextTickQueue2)
+:_pCheckDestroy(NULL),
+_beginNextRound(false),
+_thisRoundCount(64),
+_nextTickAlloc(NULL),
+_reuMemAlloc(NULL),
+_frontTickQueue(NULL),
+_backTickQueue(NULL)
 #endif //ENABLE_NEXT_TICK
 {
 	_ioEngine = NULL;
@@ -16,29 +22,42 @@ boost_strand::boost_strand()
 boost_strand::~boost_strand()
 {
 #ifdef ENABLE_NEXT_TICK
-	assert(_nextTickQueue1.empty());
-	assert(_nextTickQueue2.empty());
+	assert(_frontTickQueue->empty());
+	assert(_backTickQueue->empty());
+	delete _nextTickAlloc;
+	delete _reuMemAlloc;
+	delete _frontTickQueue;
+	delete _backTickQueue;
 	if (_pCheckDestroy)
 	{
 		*_pCheckDestroy = true;
 	}
 #endif //ENABLE_NEXT_TICK
-	delete _strand;
 	delete _actorTimer;
 	delete _timerBoost;
+	if (_strand)
+	{
+		_ioEngine->_strandPool->recycle(_strand);
+	}
 }
 
 shared_strand boost_strand::create(io_engine& ioEngine, bool makeTimer)
 {
 	shared_strand res(new boost_strand);
+	res->_weakThis = res;
 	res->_ioEngine = &ioEngine;
-	res->_strand = new strand_type(ioEngine);
+	res->_strand = ioEngine._strandPool->pick();
+#ifdef ENABLE_NEXT_TICK
+	res->_reuMemAlloc = new reusable_mem();
+	res->_nextTickAlloc = new mem_alloc2<wrap_next_tick_space>(8192);
+	res->_frontTickQueue = new msg_queue<wrap_next_tick_base*, mem_alloc2<>>(8192);
+	res->_backTickQueue = new msg_queue<wrap_next_tick_base*, mem_alloc2<>>(8192);
+#endif
 	if (makeTimer)
 	{
 		res->_actorTimer = new ActorTimer_(res);
 		res->_timerBoost = new TimerBoost_(res);
 	}
-	res->_weakThis = res;
 	assert(!res->running_in_this_thread());
 	return res;
 }
@@ -105,7 +124,7 @@ bool boost_strand::empty(bool checkTick)
 	assert(_strand);
 	assert(running_in_this_thread());
 #ifdef ENABLE_NEXT_TICK
-	return _strand->empty() && (checkTick ? _nextTickQueue1.empty() && _nextTickQueue2.empty() : true);
+	return _strand->empty() && (checkTick ? _frontTickQueue->empty() && _backTickQueue->empty() : true);
 #else
 	return _strand->empty();
 #endif
@@ -163,11 +182,11 @@ void boost_strand::run_tick_front()
 		auto res = tick->invoke();
 		if (-1 == res._size)
 		{
-			_nextTickAlloc.deallocate(res._ptr);
+			_nextTickAlloc->deallocate(res._ptr);
 		}
 		else
 		{
-			_reuMemAlloc.deallocate(res._ptr);
+			_reuMemAlloc->deallocate(res._ptr);
 		}
 	}
 }
@@ -186,11 +205,11 @@ void boost_strand::run_tick_back()
 			auto res = tick->invoke();
 			if (-1 == res._size)
 			{
-				_nextTickAlloc.deallocate(res._ptr);
+				_nextTickAlloc->deallocate(res._ptr);
 			}
 			else
 			{
-				_reuMemAlloc.deallocate(res._ptr);
+				_reuMemAlloc->deallocate(res._ptr);
 			}
 		} while (!_backTickQueue->empty() && ++tickCount <= _thisRoundCount);
 		std::swap(_frontTickQueue, _backTickQueue);

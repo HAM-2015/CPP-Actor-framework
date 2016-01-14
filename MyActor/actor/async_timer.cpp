@@ -20,7 +20,7 @@ typedef long long micseconds;
 
 TimerBoost_::TimerBoost_(const shared_strand& strand)
 :_ios(strand->get_io_engine()), _looping(false), _weakStrand(strand), _timerCount(0),
-_extMaxTick(0), _extFinishTime(-1), _timer(_ios.getTimer()), _handlerQueue(65536)
+_extMaxTick(0), _extFinishTime(-1), _timer(new timer_type(strand->get_io_engine())), _handlerQueue(65536)
 {
 
 }
@@ -29,7 +29,7 @@ TimerBoost_::~TimerBoost_()
 {
 	assert(_handlerQueue.empty());
 	assert(!_strand);
-	_ios.freeTimer(_timer);
+	delete (timer_type*)_timer;
 }
 
 TimerBoost_::timer_handle TimerBoost_::timeout(unsigned long long us, async_timer&& host)

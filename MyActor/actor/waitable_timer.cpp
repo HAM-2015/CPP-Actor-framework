@@ -120,11 +120,8 @@ void WaitableTimer_::timerThread()
 }
 //////////////////////////////////////////////////////////////////////////
 
-WaitableTimerEvent_::WaitableTimerEvent_(io_engine& ios, WaitableTimer_* timer)
-:_ios(ios), _timer(timer), _handler(NULL)
-{
-
-}
+WaitableTimerEvent_::WaitableTimerEvent_(io_engine& ios)
+:_ios(ios), _handler(NULL) {}
 
 WaitableTimerEvent_::~WaitableTimerEvent_()
 {
@@ -142,7 +139,7 @@ void WaitableTimerEvent_::eventHandler()
 void WaitableTimerEvent_::cancel(boost::system::error_code& ec)
 {
 	ec.clear();
-	_timer->removeEvent(_timerHandle);
+	_ios._waitableTimer->removeEvent(_timerHandle);
 	if (_handler)
 	{
 		wrap_base* cb = _handler;

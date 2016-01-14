@@ -84,12 +84,11 @@ class WaitableTimerEvent_
 		Handler _h;
 	};
 
-	friend io_engine;
 	friend ActorTimer_;
 	friend TimerBoost_;
 	friend WaitableTimer_;
 private:
-	WaitableTimerEvent_(io_engine& ios, WaitableTimer_* timer);
+	WaitableTimerEvent_(io_engine& ios);
 	~WaitableTimerEvent_();
 private:
 	void eventHandler();
@@ -101,13 +100,12 @@ private:
 		assert(!_handler);
 		typedef wrap_handler<RM_CREF(Handler)> wrap_type;
 		_handler = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(_ios, TRY_MOVE(handler));
-		_timer->appendEvent(us, this);
+		_ios._waitableTimer->appendEvent(us, this);
 	}
 private:
 	io_engine& _ios;
 	wrap_base* _handler;
 	reusable_mem _reuMem;
-	WaitableTimer_* _timer;
 	WaitableTimer_::timer_handle _timerHandle;
 };
 #elif __linux__

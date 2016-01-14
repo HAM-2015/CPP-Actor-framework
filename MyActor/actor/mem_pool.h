@@ -869,7 +869,7 @@ class obj_pool
 public:
 	virtual ~obj_pool(){};
 	virtual	T* pick() = 0;
-	virtual void recycle(void* p) = 0;
+	virtual void recycle(T* p) = 0;
 };
 
 template <typename T, typename CREATER, typename DESTORY>
@@ -973,7 +973,7 @@ public:
 		return (T*)newNode->_data;
 	}
 
-	void recycle(void* p)
+	void recycle(T* p)
 	{
 		{
 			std::lock_guard<MUTEX> lg(*this);
@@ -988,7 +988,7 @@ public:
 				return;
 			}
 		}
-		_destory((T*)((node*)p)->_data);
+		_destory(p);
 		free(p);
 	}
 private:

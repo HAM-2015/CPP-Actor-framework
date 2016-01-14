@@ -10,16 +10,21 @@
 #include <set>
 #include <vector>
 #include "scattered.h"
+#include "strand_ex.h"
+#include "mem_pool.h"
 
-class StrandEx_;
-class ActorTimer_;
-class TimerBoost_;
+class boost_strand;
+#ifdef DISABLE_BOOST_TIMER
+class WaitableTimer_;
+class WaitableTimerEvent_;
+#endif
 
 class io_engine
 {
-	friend StrandEx_;
-	friend ActorTimer_;
-	friend TimerBoost_;
+	friend boost_strand;
+#ifdef DISABLE_BOOST_TIMER
+	friend WaitableTimerEvent_;
+#endif
 public:
 #ifdef WIN32
 	enum priority
@@ -151,16 +156,11 @@ public:
 private:
 	void _run(size_t threadNum, sched policy);
 	void _stop();
-	void* getImpl();
-	void freeImpl(void* impl);
-	void* getTimer();
-	void freeTimer(void* timer);
 private:
 	bool _opend;
-	void* _implPool;
-	void* _timerPool;
+	obj_pool<StrandEx_>* _strandPool;
 #ifdef DISABLE_BOOST_TIMER
-	void* _waitableTimer;
+	WaitableTimer_* _waitableTimer;
 #endif
 	priority _priority;
 	std::mutex _runMutex;

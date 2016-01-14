@@ -3,7 +3,6 @@
 
 #ifdef ENABLE_QT_UI
 #ifdef ENABLE_QT_ACTOR
-#include <thread>
 #include "shared_strand.h"
 
 class bind_qt_run_base;

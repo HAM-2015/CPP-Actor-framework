@@ -4906,9 +4906,11 @@ public:
 				sign = true;
 				push_yield();
 			}
-			return;
 		}
-		h();
+		else
+		{
+			h();
+		}
 	}
 
 	template <typename R, typename H>
@@ -5031,9 +5033,38 @@ private:
 				sign = true;
 				push_yield_after_quited();
 			}
-			return;
 		}
-		h();
+		else
+		{
+			h();
+		}
+	}
+
+	template <typename H>
+	__yield_interrupt void async_send_after_quited(const shared_strand& exeStrand, H&& h)
+	{
+		bool sign = false;
+		exeStrand->asyncInvokeVoid(TRY_MOVE(h), std::bind([&sign](const actor_handle& self)
+		{
+			my_actor* this_ = self.get();
+			this_->_strand->try_tick(std::bind([&sign](const actor_handle& self)
+			{
+				assert(!self->_inActor);
+				if (sign)
+				{
+					self->pull_yield_after_quited();
+				}
+				else
+				{
+					sign = true;
+				}
+			}, std::move((actor_handle&)self)));
+		}, shared_from_this()));
+		if (!sign)
+		{
+			sign = true;
+			push_yield_after_quited();
+		}
 	}
 public:
 	/*!
@@ -7265,7 +7296,7 @@ public:
 	/*!
 	@brief 开启栈检测
 	*/
-	void enable_check_stack();
+	void enable_check_stack(bool decommit = false);
 
 	/*!
 	@brief 获取Actor切换计数

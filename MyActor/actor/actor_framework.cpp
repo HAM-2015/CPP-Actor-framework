@@ -1254,18 +1254,37 @@ public:
 	void operator ()(actor_push_type& actorPush)
 	{
 		actor_handler(actorPush);
-		if (_actor._checkStack) check_stack();
-		exit_notify();
+		if (_actor._checkStack)
+		{
+			_actor.async_send_after_quited(_actor.self_strand(), [this]
+			{
+				check_stack();
+				exit_notify();
+			});
+		}
+		else
+		{
+			exit_notify();
+		}
 	}
 #else
 	void operator ()(actor_push_type& actorPush)
 	{
 		__try
 		{
-			actor_handler(actorPush);
-			//从实际栈底查看有多少个PAGE的PAGE_GUARD标记消失和用了多少栈预留空间
-			if (_actor._checkStack) check_stack();
-			exit_notify();
+			actor_handler(actorPush);			
+			if (_actor._checkStack)
+			{//从实际栈底查看有多少个PAGE的PAGE_GUARD标记消失和用了多少栈预留空间
+				_actor.async_send_after_quited(_actor.self_strand(), [this]
+				{
+					check_stack();
+					exit_notify();
+				});
+			}
+			else
+			{
+				exit_notify();
+			}
 		}
 		__except (seh_exception_handler(GetExceptionCode(), GetExceptionInformation()))
 		{
@@ -2000,12 +2019,39 @@ size_t my_actor::stack_total_size()
 	return info->stackSize + info->reserveSize;
 }
 
-void my_actor::enable_check_stack()
+void my_actor::enable_check_stack(bool decommit)
 {
 	if (!_checkStack)
 	{
 		_checkStack = true;
+#ifdef WIN32
+		if (decommit)
+		{
+			stack_decommit(false);
+		}
+		else
+		{
+			char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
+			begin_RUN_IN_THREAD_STACK(this);
+			context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+			char* const sm = (char*)info->stackTop - info->stackSize;
+			//分页加PAGE_GUARD标记
+			size_t l = PAGE_SIZE;
+			while (sp - l >= sm)
+			{
+				DWORD oldPro = 0;
+				BOOL ok = VirtualProtect(sp - l, PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
+				if (!ok || (PAGE_READWRITE | PAGE_GUARD) == oldPro)
+				{
+					break;
+				}
+				l += PAGE_SIZE;
+			}
+			end_RUN_IN_THREAD_STACK();
+		}
+#elif __linux__
 		stack_decommit(false);
+#endif
 	}
 }
 

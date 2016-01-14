@@ -186,11 +186,11 @@ class boost_strand
 		}
 
 		template <typename Handler>
-		static inline wrap_next_tick_base* create(Handler&& handler, mem_alloc_base& alloc, reusable_mem& reuAlloc)
+		static inline wrap_next_tick_base* create(Handler&& handler, mem_alloc_base* alloc, reusable_mem* reuAlloc)
 		{
-			if (!alloc.overflow())
+			if (!alloc->overflow())
 			{
-				return new(alloc.allocate())wrap_next_tick_handler<RM_REF(Handler)>(TRY_MOVE(handler));
+				return new(alloc->allocate())wrap_next_tick_handler<RM_REF(Handler)>(TRY_MOVE(handler));
 			}
 			else
 			{
@@ -218,9 +218,9 @@ class boost_strand
 		}
 
 		template <typename Handler>
-		static inline wrap_next_tick_base* create(Handler&& handler, mem_alloc_base& alloc, reusable_mem& reuAlloc)
+		static inline wrap_next_tick_base* create(Handler&& handler, mem_alloc_base* alloc, reusable_mem* reuAlloc)
 		{
-			return new(reuAlloc.allocate(sizeof(wrap_next_tick_handler<RM_REF(Handler), false>)))wrap_next_tick_handler<RM_REF(Handler), false>(TRY_MOVE(handler));
+			return new(reuAlloc->allocate(sizeof(wrap_next_tick_handler<RM_REF(Handler), false>)))wrap_next_tick_handler<RM_REF(Handler), false>(TRY_MOVE(handler));
 		}
 
 		result invoke()
@@ -542,10 +542,8 @@ protected:
 	bool* _pCheckDestroy;
 	bool _beginNextRound;
 	size_t _thisRoundCount;
-	reusable_mem _reuMemAlloc;
-	mem_alloc2<wrap_next_tick_space> _nextTickAlloc;
-	msg_queue<wrap_next_tick_base*, mem_alloc2<>> _nextTickQueue1;
-	msg_queue<wrap_next_tick_base*, mem_alloc2<>> _nextTickQueue2;
+	reusable_mem* _reuMemAlloc;
+	mem_alloc2<wrap_next_tick_space>* _nextTickAlloc;
 	msg_queue<wrap_next_tick_base*, mem_alloc2<>>* _backTickQueue;
 	msg_queue<wrap_next_tick_base*, mem_alloc2<>>* _frontTickQueue;
 #endif //ENABLE_NEXT_TICK

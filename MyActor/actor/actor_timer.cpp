@@ -20,7 +20,7 @@ typedef long long micseconds;
 
 ActorTimer_::ActorTimer_(const shared_strand& strand)
 :_ios(strand->get_io_engine()), _looping(false), _weakStrand(strand), _timerCount(0),
-_extMaxTick(0), _extFinishTime(-1), _timer(_ios.getTimer()), _handlerQueue(65536)
+_extMaxTick(0), _extFinishTime(-1), _timer(new timer_type(strand->get_io_engine())), _handlerQueue(65536)
 {
 
 }
@@ -29,7 +29,7 @@ ActorTimer_::~ActorTimer_()
 {
 	assert(_handlerQueue.empty());
 	assert(!_strand);
-	_ios.freeTimer(_timer);
+	delete (timer_type*)_timer;
 }
 
 ActorTimer_::timer_handle ActorTimer_::timeout(unsigned long long us, actor_handle&& host)

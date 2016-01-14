@@ -4,21 +4,9 @@
 #include "actor_framework.h"
 #include <boost/asio/detail/strand_service.hpp>
 #include <memory>
-#ifndef DISABLE_BOOST_TIMER
-#ifdef DISABLE_HIGH_TIMER
-#include <boost/asio/deadline_timer.hpp>
-typedef boost::asio::deadline_timer timer_type;
-#else
-#include <boost/chrono/system_clocks.hpp>
-#include <boost/asio/high_resolution_timer.hpp>
-typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> timer_type;
-#endif
-#else
+#ifdef DISABLE_BOOST_TIMER
 #include "waitable_timer.h"
-typedef WaitableTimerEvent_ timer_type;
 #endif
-
-typedef boost::asio::detail::strand_service::strand_impl impl_type;
 
 tls_space io_engine::_tls;
 
@@ -34,35 +22,25 @@ io_engine::io_engine()
 #else
 #error "error"
 #endif
-	_implPool = create_pool<impl_type>(256, [](void* p)
+	_strandPool = create_pool<StrandEx_>(1024, [this](void* p)
 	{
-		new(p)impl_type();
+		new(p)StrandEx_(*this);
+	}, [](StrandEx_* p)
+	{
+		p->~StrandEx_();
 	});
 #ifdef DISABLE_BOOST_TIMER
-	_waitableTimer = new WaitableTimer_;
-	_timerPool = create_pool<timer_type>(1024, [this](void* p)
-	{
-		new(p)timer_type(*this, (WaitableTimer_*)_waitableTimer);
-	}, [](void* p)
-	{
-		((timer_type*)p)->~timer_type();
-	});
-#else
-	_timerPool = create_pool<timer_type>(1024, [this](void* p)
-	{
-		new(p)timer_type(_ios);
-	});
+	_waitableTimer = new WaitableTimer_();
 #endif
 }
 
 io_engine::~io_engine()
 {
 	assert(!_opend);
-	delete (obj_pool<impl_type>*)_implPool;
-	delete (obj_pool<timer_type>*)_timerPool;
 #ifdef DISABLE_BOOST_TIMER
-	delete (WaitableTimer_*)_waitableTimer;
+	delete _waitableTimer;
 #endif
+	delete _strandPool;
 }
 
 void io_engine::run(size_t threadNum, sched policy)
@@ -289,26 +267,6 @@ const std::set<boost::thread::id>& io_engine::threadsID()
 io_engine::operator boost::asio::io_service&() const
 {
 	return (boost::asio::io_service&)_ios;
-}
-
-void* io_engine::getImpl()
-{
-	return ((obj_pool<impl_type>*)_implPool)->pick();
-}
-
-void io_engine::freeImpl(void* impl)
-{
-	((obj_pool<impl_type>*)_implPool)->recycle(impl);
-}
-
-void* io_engine::getTimer()
-{
-	return ((obj_pool<timer_type>*)_timerPool)->pick();
-}
-
-void io_engine::freeTimer(void* timer)
-{
-	((obj_pool<timer_type>*)_timerPool)->recycle(timer);
 }
 
 void* io_engine::getTlsValue(int i)
