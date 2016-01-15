@@ -33,7 +33,7 @@ typedef unsigned long long dirty_data_type;
 #define DIRTY_DATA ((dirty_data_type)0xF7F6F5F4F3F2F1F0LL)
 
 std::atomic<my_actor::id> s_actorIDCount(0);//ID¼ÆÊý
-std::shared_ptr<shared_obj_pool<bool>> s_sharedBoolPool(create_shared_pool<bool>(100000, [](void*){}));
+std::shared_ptr<shared_obj_pool<bool>> s_sharedBoolPool(create_shared_pool_mt<bool, std::mutex>(100000));
 msg_list_shared_alloc<actor_handle>::shared_node_alloc my_actor::_childActorListAll(100000);
 msg_list_shared_alloc<std::function<void()> >::shared_node_alloc my_actor::_quitExitCallbackAll(100000);
 msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc my_actor::_suspendResumeQueueAll(100000);
@@ -1145,36 +1145,43 @@ public:
 		}
 		catch (my_actor::pump_disconnected_exception&)
 		{
+			trace_line("\nerror: ", "pump_disconnected_exception");
 			assert(false);
 			exit(11);
 		}
-		catch (std::shared_ptr<std::string> msg)
+		catch (std::shared_ptr<std::string>& msg)
 		{
+			trace_line("\nerror: ", *msg);
 			assert(false);
 			exit(12);
 		}
 		catch (async_buffer_close_exception&)
 		{
+			trace_line("\nerror: ", "async_buffer_close_exception");
 			assert(false);
 			exit(13);
 		}
 		catch (sync_csp_exception&)
 		{
+			trace_line("\nerror: ", "sync_csp_exception");
 			assert(false);
 			exit(14);
 		}
 		catch (ntf_lost_exception&)
 		{
+			trace_line("\nerror: ", "ntf_lost_exception");
 			assert(false);
 			exit(15);
 		}
 		catch (boost::exception&)
 		{
+			trace_line("\nerror: ", "boost::exception");
 			assert(false);
 			exit(16);
 		}
 		catch (std::exception&)
 		{
+			trace_line("\nerror: ", "std::exception");
 			assert(false);
 			exit(17);
 		}

@@ -308,16 +308,18 @@ class boost_strand
 	};
 
 	friend my_actor;
-	FRIEND_SHARED_PTR(boost_strand);
+	friend io_engine;
+	friend ActorTimer_;
+	friend TimerBoost_;
 protected:
 	boost_strand();
 	virtual ~boost_strand();
 public:
-	static shared_strand create(io_engine& ioEngine, bool makeTimer = true);
-	static vector<shared_strand> create_multi(size_t n, io_engine& ioEngine, bool makeTimer = true);
-	static void create_multi(shared_strand* res, size_t n, io_engine& ioEngine, bool makeTimer = true);
-	static void create_multi(vector<shared_strand>& res, size_t n, io_engine& ioEngine, bool makeTimer = true);
-	static void create_multi(list<shared_strand>& res, size_t n, io_engine& ioEngine, bool makeTimer = true);
+	static shared_strand create(io_engine& ioEngine);
+	static vector<shared_strand> create_multi(size_t n, io_engine& ioEngine);
+	static void create_multi(shared_strand* res, size_t n, io_engine& ioEngine);
+	static void create_multi(vector<shared_strand>& res, size_t n, io_engine& ioEngine);
+	static void create_multi(list<shared_strand>& res, size_t n, io_engine& ioEngine);
 public:
 	/*!
 	@brief 如果在本strand中调用则直接执行，否则添加到队列中等待执行
@@ -513,6 +515,11 @@ public:
 	@param checkTick 是否计算tick任务
 	*/
 	virtual bool empty(bool checkTick = true);
+
+	/*!
+	@brief 是否在运行
+	*/
+	virtual bool is_running();
 
 	/*!
 	@brief 获取当前调度器代理

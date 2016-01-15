@@ -158,7 +158,7 @@ private:
 	void _stop();
 private:
 	bool _opend;
-	obj_pool<StrandEx_>* _strandPool;
+	shared_obj_pool<boost_strand>* _strandPool;
 #ifdef DISABLE_BOOST_TIMER
 	WaitableTimer_* _waitableTimer;
 #endif

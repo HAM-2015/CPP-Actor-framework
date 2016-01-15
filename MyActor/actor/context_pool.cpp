@@ -101,7 +101,7 @@ ContextPool_::coro_pull_interface* ContextPool_::getContext(size_t size)
 		delete newFiber;
 		size += PAGE_SIZE;
 	} while (size <= 1024 * 1024);
-	throw std::shared_ptr<string>(new string("context ¿Õ¼ä²»×ã"));
+	throw std::shared_ptr<string>(new string("stack memory deficiency"));
 }
 
 void ContextPool_::recovery(coro_pull_interface* coro)

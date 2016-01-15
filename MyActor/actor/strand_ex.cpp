@@ -11,6 +11,11 @@ struct get_impl_waiting_empty_strand_ex
 	bool _empty;
 };
 
+struct get_impl_running_strand_ex
+{
+	bool _running;
+};
+
 namespace boost
 {
 	namespace asio
@@ -18,7 +23,7 @@ namespace boost
 		namespace detail
 		{
 			template <>
-			inline void boost::asio::detail::strand_service::post(boost::asio::detail::strand_service::implementation_type& impl, get_impl_ready_empty_strand_ex& fh)
+			void boost::asio::detail::strand_service::post(boost::asio::detail::strand_service::implementation_type& impl, get_impl_ready_empty_strand_ex& fh)
 			{
 				fh._empty = impl->ready_queue_.empty();
 			}
@@ -27,6 +32,12 @@ namespace boost
 			void boost::asio::detail::strand_service::post(boost::asio::detail::strand_service::implementation_type& impl, get_impl_waiting_empty_strand_ex& fh)
 			{
 				fh._empty = impl->waiting_queue_.empty();
+			}
+
+			template <>
+			void boost::asio::detail::strand_service::post(boost::asio::detail::strand_service::implementation_type& impl, get_impl_running_strand_ex& fh)
+			{
+				fh._running = impl->locked_;
 			}
 		}
 	}
@@ -67,4 +78,11 @@ bool StrandEx_::waiting_empty() const
 	get_impl_waiting_empty_strand_ex t;
 	_service.post((boost::asio::detail::strand_service::implementation_type&)_impl, t);
 	return t._empty;
+}
+
+bool StrandEx_::running() const
+{
+	get_impl_running_strand_ex t;
+	_service.post((boost::asio::detail::strand_service::implementation_type&)_impl, t);
+	return t._running;
 }

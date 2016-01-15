@@ -56,13 +56,12 @@ private:
 	*/
 	void timer_loop(unsigned long long us);
 private:
-	io_engine& _ios;
 	void* _timer;
-	shared_strand _strand;
+	std::weak_ptr<boost_strand>& _weakStrand;
+	shared_strand _lockStrand;
 	handler_queue _handlerQueue;
 	unsigned long long _extMaxTick;
 	unsigned long long _extFinishTime;
-	std::weak_ptr<boost_strand> _weakStrand;
 	int _timerCount;
 	bool _looping;
 };
@@ -124,7 +123,10 @@ public:
 	*/
 	void cancel();
 
-	shared_strand self_strand() const;
+	/*!
+	@brief 
+	*/
+	shared_strand self_strand();
 private:
 	void timeout_handler();
 private:

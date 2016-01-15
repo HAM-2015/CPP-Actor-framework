@@ -13,7 +13,6 @@ class boost_strand;
 */
 class StrandEx_
 {
-	friend io_engine;
 	friend boost_strand;
 private:
 	StrandEx_(io_engine& ios);
@@ -23,6 +22,7 @@ private:
 	bool empty() const;
 	bool ready_empty() const;
 	bool waiting_empty() const;
+	bool running() const;
 
 	template <typename Handler>
 	void post(Handler&& handler)

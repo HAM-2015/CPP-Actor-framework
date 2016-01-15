@@ -35,76 +35,72 @@ boost_strand::~boost_strand()
 #endif //ENABLE_NEXT_TICK
 	delete _actorTimer;
 	delete _timerBoost;
-	if (_strand)
-	{
-		_ioEngine->_strandPool->recycle(_strand);
-	}
+	delete _strand;
 }
 
-shared_strand boost_strand::create(io_engine& ioEngine, bool makeTimer)
+shared_strand boost_strand::create(io_engine& ioEngine)
 {
-	shared_strand res(new boost_strand);
+	shared_strand res = ioEngine._strandPool->pick();
 	res->_weakThis = res;
-	res->_ioEngine = &ioEngine;
-	res->_strand = ioEngine._strandPool->pick();
-#ifdef ENABLE_NEXT_TICK
-	res->_reuMemAlloc = new reusable_mem();
-	res->_nextTickAlloc = new mem_alloc2<wrap_next_tick_space>(8192);
-	res->_frontTickQueue = new msg_queue<wrap_next_tick_base*, mem_alloc2<>>(8192);
-	res->_backTickQueue = new msg_queue<wrap_next_tick_base*, mem_alloc2<>>(8192);
-#endif
-	if (makeTimer)
+	if (!res->_ioEngine)
 	{
+		res->_ioEngine = &ioEngine;
+		res->_strand = new strand_type(ioEngine);
+#ifdef ENABLE_NEXT_TICK
+		res->_reuMemAlloc = new reusable_mem();
+		res->_nextTickAlloc = new mem_alloc2<wrap_next_tick_space>(8192);
+		res->_frontTickQueue = new msg_queue<wrap_next_tick_base*, mem_alloc2<>>(8192);
+		res->_backTickQueue = new msg_queue<wrap_next_tick_base*, mem_alloc2<>>(8192);
+#endif
 		res->_actorTimer = new ActorTimer_(res);
 		res->_timerBoost = new TimerBoost_(res);
 	}
-	assert(!res->running_in_this_thread());
 	return res;
 }
 
-vector<shared_strand> boost_strand::create_multi(size_t n, io_engine& ioEngine, bool makeTimer)
+vector<shared_strand> boost_strand::create_multi(size_t n, io_engine& ioEngine)
 {
 	assert(0 != n);
 	vector<shared_strand> res(n);
 	for (size_t i = 0; i < n; i++)
 	{
-		res[i] = boost_strand::create(ioEngine, makeTimer);
+		res[i] = boost_strand::create(ioEngine);
 	}
 	return res;
 }
 
-void boost_strand::create_multi(shared_strand* res, size_t n, io_engine& ioEngine, bool makeTimer)
+void boost_strand::create_multi(shared_strand* res, size_t n, io_engine& ioEngine)
 {
 	assert(0 != n);
 	for (size_t i = 0; i < n; i++)
 	{
-		res[i] = boost_strand::create(ioEngine, makeTimer);
+		res[i] = boost_strand::create(ioEngine);
 	}
 }
 
-void boost_strand::create_multi(vector<shared_strand>& res, size_t n, io_engine& ioEngine, bool makeTimer)
+void boost_strand::create_multi(vector<shared_strand>& res, size_t n, io_engine& ioEngine)
 {
 	assert(0 != n);
 	res.resize(n);
 	for (size_t i = 0; i < n; i++)
 	{
-		res[i] = boost_strand::create(ioEngine, makeTimer);
+		res[i] = boost_strand::create(ioEngine);
 	}
 }
 
-void boost_strand::create_multi(list<shared_strand>& res, size_t n, io_engine& ioEngine, bool makeTimer)
+void boost_strand::create_multi(list<shared_strand>& res, size_t n, io_engine& ioEngine)
 {
 	assert(0 != n);
 	res.clear();
 	for (size_t i = 0; i < n; i++)
 	{
-		res.push_front(boost_strand::create(ioEngine, makeTimer));
+		res.push_front(boost_strand::create(ioEngine));
 	}
 }
 
 shared_strand boost_strand::clone()
 {
-	return create(*_ioEngine, !!_actorTimer);
+	return create(*_ioEngine);
 }
 
 bool boost_strand::in_this_ios()
@@ -128,6 +124,12 @@ bool boost_strand::empty(bool checkTick)
 #else
 	return _strand->empty();
 #endif
+}
+
+bool boost_strand::is_running()
+{
+	assert(_strand);
+	return _strand->running();
 }
 
 size_t boost_strand::ios_thread_number()
@@ -215,7 +217,7 @@ void boost_strand::run_tick_back()
 		std::swap(_frontTickQueue, _backTickQueue);
 		if (!_frontTickQueue->empty() && waiting_empty())
 		{
-			post([lockThis]{});
+			post(std::bind([](const shared_strand& st){}, std::move(lockThis)));
 		}
 	}
 }

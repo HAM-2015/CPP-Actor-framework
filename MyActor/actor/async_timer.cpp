@@ -19,7 +19,7 @@ typedef long long micseconds;
 #endif
 
 TimerBoost_::TimerBoost_(const shared_strand& strand)
-:_ios(strand->get_io_engine()), _looping(false), _weakStrand(strand), _timerCount(0),
+:_weakStrand(strand->_weakThis), _looping(false), _timerCount(0),
 _extMaxTick(0), _extFinishTime(-1), _timer(new timer_type(strand->get_io_engine())), _handlerQueue(65536)
 {
 
@@ -28,17 +28,16 @@ _extMaxTick(0), _extFinishTime(-1), _timer(new timer_type(strand->get_io_engine(
 TimerBoost_::~TimerBoost_()
 {
 	assert(_handlerQueue.empty());
-	assert(!_strand);
 	delete (timer_type*)_timer;
 }
 
 TimerBoost_::timer_handle TimerBoost_::timeout(unsigned long long us, async_timer&& host)
 {
-	if (!_strand)
+	if (!_lockStrand)
 	{
-		_strand = _weakStrand.lock();
+		_lockStrand = _weakStrand.lock();
 	}
-	assert(_strand->running_in_this_thread());
+	assert(_lockStrand->running_in_this_thread());
 	assert(us < 0x80000000LL * 1000);
 	unsigned long long et = (get_tick_us() + us) & -256;
 	timer_handle timerHandle;
@@ -75,7 +74,7 @@ void TimerBoost_::cancel(timer_handle& th)
 {
 	if (!th._null)
 	{//删除当前定时器节点
-		assert(_strand && _strand->running_in_this_thread());
+		assert(_lockStrand && _lockStrand->running_in_this_thread());
 		th._null = true;
 		auto itNode = th._queueNode;
 		if (_handlerQueue.size() == 1)
@@ -108,14 +107,14 @@ void TimerBoost_::timer_loop(unsigned long long us)
 {
 	int tc = ++_timerCount;
 #ifdef DISABLE_BOOST_TIMER
-	((timer_type*)_timer)->async_wait(micseconds(us), _strand->wrap_post([this, tc](const boost::system::error_code&)
+	((timer_type*)_timer)->async_wait(micseconds(us), _lockStrand->wrap_post([this, tc](const boost::system::error_code&)
 #else
 	boost::system::error_code ec;
 	((timer_type*)_timer)->expires_from_now(micseconds(us), ec);
-	((timer_type*)_timer)->async_wait(_strand->wrap_asio([this, tc](const boost::system::error_code&)
+	((timer_type*)_timer)->async_wait(_lockStrand->wrap_asio([this, tc](const boost::system::error_code&)
 #endif
 	{
-		assert(_strand->running_in_this_thread());
+		assert(_lockStrand->running_in_this_thread());
 		if (tc == _timerCount)
 		{
 			_extFinishTime = 0;
@@ -136,11 +135,11 @@ void TimerBoost_::timer_loop(unsigned long long us)
 				}
 			}
 			_looping = false;
-			_strand.reset();
+			_lockStrand.reset();
 		}
 		else if (tc == _timerCount - 1)
 		{
-			_strand.reset();
+			_lockStrand.reset();
 		}
 	}));
 }
@@ -164,7 +163,7 @@ void AsyncTimer_::cancel()
 	_timerBoost.cancel(_timerHandle);
 }
 
-shared_strand AsyncTimer_::self_strand() const
+shared_strand AsyncTimer_::self_strand()
 {
 	return _timerBoost._weakStrand.lock();
 }

@@ -22,12 +22,17 @@ io_engine::io_engine()
 #else
 #error "error"
 #endif
-	_strandPool = create_pool<StrandEx_>(1024, [this](void* p)
+	_strandPool = create_shared_pool_mt<boost_strand, std::mutex>(1024, [this](void* p)
 	{
-		new(p)StrandEx_(*this);
-	}, [](StrandEx_* p)
+		new(p)boost_strand();
+	}, [](boost_strand* p)->bool
 	{
-		p->~StrandEx_();
+		if (!p->is_running())
+		{
+			p->~boost_strand();
+			return true;
+		}
+		return false;
 	});
 #ifdef DISABLE_BOOST_TIMER
 	_waitableTimer = new WaitableTimer_();
@@ -119,14 +124,17 @@ void io_engine::_run(size_t threadNum, sched policy)
 				}
 				catch (boost::exception&)
 				{
+					trace_line("\nerror: ", "boost::exception");
 					exit(2);
 				}
 				catch (std::exception&)
 				{
+					trace_line("\nerror: ", "std::exception");
 					exit(3);
 				}
-				catch (std::shared_ptr<std::string> msg)
+				catch (std::shared_ptr<std::string>& msg)
 				{
+					trace_line("\nerror: ", *msg);
 					exit(4);
 				}
 				catch (...)
