@@ -4,8 +4,7 @@
 
 boost_strand::boost_strand()
 #ifdef ENABLE_NEXT_TICK
-:_pCheckDestroy(NULL),
-_beginNextRound(false),
+:_beginNextRound(false),
 _thisRoundCount(64),
 _nextTickAlloc(NULL),
 _reuMemAlloc(NULL),
@@ -28,10 +27,6 @@ boost_strand::~boost_strand()
 	delete _reuMemAlloc;
 	delete _frontTickQueue;
 	delete _backTickQueue;
-	if (_pCheckDestroy)
-	{
-		*_pCheckDestroy = true;
-	}
 #endif //ENABLE_NEXT_TICK
 	delete _actorTimer;
 	delete _timerBoost;

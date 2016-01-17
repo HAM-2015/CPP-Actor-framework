@@ -48,6 +48,12 @@ struct mem_alloc_mt<void, MUTEX>
 	{
 		typedef mem_alloc_mt<_Other, MUTEX> other;
 	};
+
+	template <typename _Other>
+	struct rebind_no_mt
+	{
+		typedef mem_alloc_mt<_Other, null_mutex> other;
+	};
 };
 
 template <typename DATA, typename MUTEX>
@@ -59,6 +65,12 @@ struct mem_alloc_mt : protected MUTEX, public mem_alloc_base
 	struct rebind 
 	{
 		typedef mem_alloc_mt<_Other, MUTEX> other;
+	};
+
+	template <typename _Other>
+	struct rebind_no_mt
+	{
+		typedef mem_alloc_mt<_Other, null_mutex> other;
 	};
 
 	union BUFFER
@@ -202,6 +214,12 @@ struct mem_alloc_mt2<void, MUTEX>
 	{
 		typedef mem_alloc_mt2<_Other, MUTEX> other;
 	};
+
+	template <typename _Other>
+	struct rebind_no_mt
+	{
+		typedef mem_alloc_mt2<_Other, null_mutex> other;
+	};
 };
 
 template <typename DATA, typename MUTEX>
@@ -213,6 +231,12 @@ struct mem_alloc_mt2 : protected MUTEX, public mem_alloc_base
 	struct rebind
 	{
 		typedef mem_alloc_mt2<_Other, MUTEX> other;
+	};
+
+	template <typename _Other>
+	struct rebind_no_mt
+	{
+		typedef mem_alloc_mt2<_Other, null_mutex> other;
 	};
 
 	mem_alloc_mt2(size_t poolSize)
@@ -621,13 +645,33 @@ private:
 class reusable_mem : public reusable_mem_mt<null_mutex> {};
 
 //////////////////////////////////////////////////////////////////////////
-template<typename _Ty, typename _Mtx = std::mutex>
+template <typename _Ty = void, typename _All = mem_alloc_mt<>>
+class pool_alloc_mt;
+
+template <typename _All>
+class pool_alloc_mt<void, _All>
+{
+public:
+	template <typename _Other>
+	struct rebind
+	{
+		typedef pool_alloc_mt<_Other, _All> other;
+	};
+
+	template <typename _Other>
+	struct try_rebind
+	{
+		typedef pool_alloc_mt<_Other, _All> other;
+	};
+};
+
+template <typename _Ty, typename _All>
 class pool_alloc_mt
 {
 public:
 	typedef _Ty node_type;
-	typedef mem_alloc<_Ty> mem_alloc_type;
-	typedef mem_alloc_mt<_Ty, _Mtx> mem_alloc_mt_type;
+	typedef typename _All::template rebind_no_mt<_Ty>::other mem_alloc_type;
+	typedef typename _All::template rebind<_Ty>::other mem_alloc_mt_type;
 	typedef typename std::allocator<_Ty>::pointer pointer;
 	typedef typename std::allocator<_Ty>::difference_type difference_type;
 	typedef typename std::allocator<_Ty>::reference reference;
@@ -636,10 +680,16 @@ public:
 	typedef typename std::allocator<_Ty>::size_type size_type;
 	typedef typename std::allocator<_Ty>::value_type value_type;
 
-	template<typename _Other>
+	template <typename _Other>
 	struct rebind
 	{
-		typedef pool_alloc_mt<_Other, _Mtx> other;
+		typedef pool_alloc_mt<_Other, _All> other;
+	};
+
+	template <typename _Other>
+	struct try_rebind
+	{
+		typedef pool_alloc_mt<_Ty, _All> other;
 	};
 
 	pool_alloc_mt(size_t poolSize, bool shared = true)
@@ -670,8 +720,8 @@ public:
 		}
 	}
 
-	template<typename _Other>
-	pool_alloc_mt(const pool_alloc_mt<_Other, _Mtx>& s)
+	template <typename _Other>
+	pool_alloc_mt(const pool_alloc_mt<_Other, _All>& s)
 	{
 		if (s.is_shared())
 		{
@@ -697,8 +747,8 @@ public:
 		return *this;
 	}
 
-	template<typename _Other>
-	pool_alloc_mt& operator=(const pool_alloc_mt<_Other, _Mtx>& s)
+	template <typename _Other>
+	pool_alloc_mt& operator=(const pool_alloc_mt<_Other, _All>& s)
 	{
 		assert(false);
 		return *this;
@@ -730,7 +780,7 @@ public:
 		new ((void *)_Ptr) _Ty(std::move(_Val));
 	}
 
-	template<class _Uty>
+	template <class _Uty>
 	void destroy(_Uty *_Ptr)
 	{
 		_Ptr->~_Uty();
@@ -758,12 +808,32 @@ public:
 };
 //////////////////////////////////////////////////////////////////////////
 
-template<typename _Ty>
+template <typename _Ty = void, typename _All = mem_alloc<>>
+class pool_alloc;
+
+template <typename _All>
+class pool_alloc<void, _All>
+{
+public:
+	template <typename _Other>
+	struct rebind
+	{
+		typedef pool_alloc<_Other, _All> other;
+	};
+
+	template <typename _Other>
+	struct try_rebind 
+	{
+		typedef pool_alloc<_Other, _All> other;
+	};
+};
+
+template <typename _Ty, typename _All>
 class pool_alloc
 {
 public:
 	typedef _Ty node_type;
-	typedef mem_alloc<_Ty> mem_alloc_type;
+	typedef typename _All::template rebind<_Ty>::other mem_alloc_type;
 	typedef typename std::allocator<_Ty>::pointer pointer;
 	typedef typename std::allocator<_Ty>::difference_type difference_type;
 	typedef typename std::allocator<_Ty>::reference reference;
@@ -772,10 +842,16 @@ public:
 	typedef typename std::allocator<_Ty>::size_type size_type;
 	typedef typename std::allocator<_Ty>::value_type value_type;
 
-	template<typename _Other>
+	template <typename _Other>
 	struct rebind
 	{
-		typedef pool_alloc<_Other> other;
+		typedef pool_alloc<_Other, _All> other;
+	};
+
+	template <typename _Other>
+	struct try_rebind
+	{
+		typedef pool_alloc<_Ty, _All> other;
 	};
 
 	pool_alloc(size_t poolSize)
@@ -792,7 +868,7 @@ public:
 	{
 	}
 
-	template<typename _Other>
+	template <typename _Other>
 	pool_alloc(const pool_alloc<_Other>& s)
 		: _memAlloc(s._memAlloc._poolMaxSize)
 	{
@@ -804,7 +880,7 @@ public:
 		return *this;
 	}
 
-	template<typename _Other>
+	template <typename _Other>
 	pool_alloc& operator=(const pool_alloc<_Other>& s)
 	{
 		assert(false);
@@ -837,7 +913,7 @@ public:
 		new ((void *)_Ptr) _Ty(std::move(_Val));
 	}
 
-	template<class _Uty>
+	template <class _Uty>
 	void destroy(_Uty *_Ptr)
 	{
 		_Ptr->~_Uty();
@@ -1093,10 +1169,10 @@ struct RefAlloc_
 	size_t _nodeCount;
 };
 
-template<typename _Tp, typename MUTEX>
+template <typename _Tp, typename MUTEX>
 class CreateRefAlloc_;
 
-template<typename MUTEX>
+template <typename MUTEX>
 class CreateRefAlloc_<void, MUTEX>
 {
 public:
@@ -1105,7 +1181,7 @@ public:
 	typedef const void* const_pointer;
 	typedef void        value_type;
 
-	template<typename _Tp1>
+	template <typename _Tp1>
 	struct rebind
 	{
 		typedef CreateRefAlloc_<_Tp1, MUTEX> other;
@@ -1117,7 +1193,7 @@ public:
 	RefAlloc_* _refAll;
 };
 
-template<typename _Tp, typename MUTEX>
+template <typename _Tp, typename MUTEX>
 class CreateRefAlloc_
 {
 public:
@@ -1128,7 +1204,7 @@ public:
 	typedef const _Tp& const_reference;
 	typedef _Tp        value_type;
 
-	template<typename _Tp1>
+	template <typename _Tp1>
 	struct rebind
 	{
 		typedef CreateRefAlloc_<_Tp1, MUTEX> other;
@@ -1140,7 +1216,7 @@ public:
 	CreateRefAlloc_(const CreateRefAlloc_& s)
 		:_refAll(s._refAll) {}
 
-	template<typename _Tp1>
+	template <typename _Tp1>
 	CreateRefAlloc_(const CreateRefAlloc_<_Tp1, MUTEX>& s)
 		: _refAll(s._refAll) {}
 
@@ -1179,10 +1255,10 @@ public:
 	RefAlloc_* _refAll;
 };
 
-template<typename _Tp>
+template <typename _Tp>
 class ref_count_alloc;
 
-template<>
+template <>
 class ref_count_alloc<void>
 {
 public:
@@ -1191,7 +1267,7 @@ public:
 	typedef const void* const_pointer;
 	typedef void        value_type;
 
-	template<typename _Tp1>
+	template <typename _Tp1>
 	struct rebind
 	{
 		typedef ref_count_alloc<_Tp1> other;
@@ -1206,7 +1282,7 @@ public:
 	mem_alloc_base* _refCountAlloc;
 };
 
-template<typename _Tp>
+template <typename _Tp>
 class ref_count_alloc
 {
 public:
@@ -1217,7 +1293,7 @@ public:
 	typedef const _Tp& const_reference;
 	typedef _Tp        value_type;
 
-	template<typename _Tp1>
+	template <typename _Tp1>
 	struct rebind
 	{
 		typedef ref_count_alloc<_Tp1> other;
@@ -1229,7 +1305,7 @@ public:
 	ref_count_alloc(const ref_count_alloc& s)
 		:_refCountAlloc(s._refCountAlloc) {}
 
-	template<typename _Tp1>
+	template <typename _Tp1>
 	ref_count_alloc(const ref_count_alloc<_Tp1>& s)
 		: _refCountAlloc(s._refCountAlloc)
 	{

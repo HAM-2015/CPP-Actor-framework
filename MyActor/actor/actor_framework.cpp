@@ -29,9 +29,6 @@ struct initStackLine
 
 #define ACTOR_TLS_INDEX 0
 
-typedef unsigned long long dirty_data_type;
-#define DIRTY_DATA ((dirty_data_type)0xF7F6F5F4F3F2F1F0LL)
-
 std::atomic<my_actor::id> s_actorIDCount(0);//ID¼ÆÊý
 std::shared_ptr<shared_obj_pool<bool>> s_sharedBoolPool(create_shared_pool_mt<bool, std::mutex>(100000));
 msg_list_shared_alloc<actor_handle>::shared_node_alloc my_actor::_childActorListAll(100000);

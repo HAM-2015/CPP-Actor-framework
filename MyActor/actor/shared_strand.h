@@ -91,26 +91,21 @@ class boost_strand
 		capture_base(boost_strand* strand)
 		:_strand(strand) {}
 
-		void begin_run(bool& checkDestroy)
+		void begin_run()
 		{
 			if (_strand->_beginNextRound)
 			{
 				_strand->run_tick_front();
 			}
-			_strand->_pCheckDestroy = &checkDestroy;
 		}
 
-		void end_run(bool& checkDestroy)
+		void end_run()
 		{
-			if (!checkDestroy)
+			_strand->_thisRoundCount++;
+			_strand->_beginNextRound = _strand->ready_empty();
+			if (_strand->_beginNextRound)
 			{
-				_strand->_pCheckDestroy = NULL;
-				_strand->_thisRoundCount++;
-				_strand->_beginNextRound = _strand->ready_empty();
-				if (_strand->_beginNextRound)
-				{
-					_strand->run_tick_back();
-				}
+				_strand->run_tick_back();
 			}
 		}
 
@@ -145,10 +140,9 @@ class boost_strand
 
 		void operator ()()
 		{
-			bool checkDestroy = false;
-			begin_run(checkDestroy);
+			begin_run();
 			_handler();
-			end_run(checkDestroy);
+			end_run();
 		}
 
 		mutable H _handler;
@@ -371,9 +365,7 @@ public:
 	void next_tick(Handler&& handler)
 	{
 		assert(running_in_this_thread());
-#ifdef ENABLE_NEXT_TICK
-		assert(_beginNextRound || _pCheckDestroy);//错误, strand还没开始第一个post就已经再投递next_tick
-#endif
+		assert(is_running());//错误, strand还没开始第一个post就已经再投递next_tick
 #ifdef ENABLE_QT_ACTOR
 		UI_NEXT_TICK();
 #else
@@ -546,7 +538,6 @@ protected:
 	bool waiting_empty();
 	void run_tick_front();
 	void run_tick_back();
-	bool* _pCheckDestroy;
 	bool _beginNextRound;
 	size_t _thisRoundCount;
 	reusable_mem* _reuMemAlloc;

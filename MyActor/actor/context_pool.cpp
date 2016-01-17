@@ -19,6 +19,9 @@ void ContextPool_::coro_pull_interface::operator()()
 }
 //////////////////////////////////////////////////////////////////////////
 
+ContextPool_::context_pool_pck::pool_queue::shared_node_alloc ContextPool_::context_pool_pck::_alloc(1000000);
+//////////////////////////////////////////////////////////////////////////
+
 ContextPool_ s_fiberPool;
 
 ContextPool_::ContextPool_()
