@@ -4327,7 +4327,7 @@ class my_actor
 	struct wrap_timer_handler_face
 	{
 		virtual void invoke(reusable_mem& reuMem) = 0;
-		virtual void destory(reusable_mem& reuMem) = 0;
+		virtual void destroy(reusable_mem& reuMem) = 0;
 	};
 
 	template <typename Handler>
@@ -4340,10 +4340,10 @@ class my_actor
 		void invoke(reusable_mem& reuMem)
 		{
 			_h();
-			destory(reuMem);
+			destroy(reuMem);
 		}
 
-		void destory(reusable_mem& reuMem)
+		void destroy(reusable_mem& reuMem)
 		{
 			this->~wrap_timer_handler();
 			reuMem.deallocate(this);
@@ -4509,6 +4509,9 @@ public:
 	/*!
 	@brief 开始运行一组子Actor，只能调用一次
 	*/
+	void child_actors_run(list<child_actor_handle::ptr>& actorHandles);
+	void child_actors_run(list<child_actor_handle>& actorHandles);
+
 	template <typename Alloc>
 	void child_actors_run(list<child_actor_handle::ptr, Alloc>& actorHandles)
 	{
@@ -4544,6 +4547,12 @@ public:
 			child_actor_force_quit(*phandles[i]);
 		}
 	}
+
+	/*!
+	@brief 强制终止一组Actor
+	*/
+	__yield_interrupt void child_actors_force_quit(list<child_actor_handle::ptr>& actorHandles);
+	__yield_interrupt void child_actors_force_quit(list<child_actor_handle>& actorHandles);
 
 	template <typename Alloc>
 	__yield_interrupt void child_actors_force_quit(list<child_actor_handle::ptr, Alloc>& actorHandles)
@@ -4630,6 +4639,9 @@ public:
 	@brief 等待一组子Actor完成后返回
 	@return 都正常退出的返回true，否则false
 	*/
+	__yield_interrupt void child_actors_wait_quit(list<child_actor_handle::ptr>& actorHandles);
+	__yield_interrupt void child_actors_wait_quit(list<child_actor_handle>& actorHandles);
+
 	template <typename Alloc>
 	__yield_interrupt void child_actors_wait_quit(list<child_actor_handle::ptr, Alloc>& actorHandles)
 	{
@@ -4671,6 +4683,9 @@ public:
 	/*!
 	@brief 挂起一组子Actor
 	*/
+	__yield_interrupt void child_actors_suspend(list<child_actor_handle::ptr>& actorHandles);
+	__yield_interrupt void child_actors_suspend(list<child_actor_handle>& actorHandles);
+
 	template <typename Alloc>
 	__yield_interrupt void child_actors_suspend(list<child_actor_handle::ptr, Alloc>& actorHandles)
 	{
@@ -4744,6 +4759,9 @@ public:
 	/*!
 	@brief 恢复一组子Actor
 	*/
+	__yield_interrupt void child_actors_resume(list<child_actor_handle::ptr>& actorHandles);
+	__yield_interrupt void child_actors_resume(list<child_actor_handle>& actorHandles);
+
 	template <typename Alloc>
 	__yield_interrupt void child_actors_resume(list<child_actor_handle::ptr, Alloc>& actorHandles)
 	{
@@ -7403,6 +7421,8 @@ public:
 	/*!
 	@brief 启动一堆Actor
 	*/
+	void actors_start_run(const list<actor_handle>& anotherActors);
+
 	template <typename Alloc>
 	void actors_start_run(const list<actor_handle, Alloc>& anotherActors)
 	{
@@ -7417,6 +7437,11 @@ public:
 	@brief 强制退出另一个Actor，并且等待完成
 	*/
 	__yield_interrupt void actor_force_quit(const actor_handle& anotherActor);
+
+	/*!
+	@brief 强制退出一堆Actor，并且等待完成
+	*/
+	__yield_interrupt void actors_force_quit(const list<actor_handle>& anotherActors);
 
 	template <typename Alloc>
 	__yield_interrupt void actors_force_quit(const list<actor_handle, Alloc>& anotherActors)
@@ -7440,6 +7465,11 @@ public:
 	*/
 	__yield_interrupt void actor_wait_quit(const actor_handle& anotherActor);
 
+	/*!
+	@brief 等待一堆Actor结束后返回
+	*/
+	__yield_interrupt void actors_wait_quit(const list<actor_handle>& anotherActors);
+
 	template <typename Alloc>
 	__yield_interrupt void actors_wait_quit(const list<actor_handle, Alloc>& anotherActors)
 	{
@@ -7456,6 +7486,11 @@ public:
 	@brief 挂起另一个Actor，等待其所有子Actor都调用后才返回
 	*/
 	__yield_interrupt void actor_suspend(const actor_handle& anotherActor);
+
+	/*!
+	@brief 挂起一堆Actor，等待其所有子Actor都调用后才返回
+	*/
+	__yield_interrupt void actors_suspend(const list<actor_handle>& anotherActors);
 
 	template <typename Alloc>
 	__yield_interrupt void actors_suspend(const list<actor_handle, Alloc>& anotherActors)
@@ -7479,6 +7514,11 @@ public:
 	*/
 	__yield_interrupt void actor_resume(const actor_handle& anotherActor);
 
+	/*!
+	@brief 恢复一堆Actor，等待其所有子Actor都调用后才返回
+	*/
+	__yield_interrupt void actors_resume(const list<actor_handle>& anotherActors);
+
 	template <typename Alloc>
 	__yield_interrupt void actors_resume(const list<actor_handle, Alloc>& anotherActors)
 	{
@@ -7501,6 +7541,12 @@ public:
 	@return 都已挂起返回true，否则false
 	*/
 	__yield_interrupt bool actor_switch(const actor_handle& anotherActor);
+
+	/*!
+	@brief 对一堆Actor进行挂起/恢复状态切换
+	@return 都已挂起返回true，否则false
+	*/
+	__yield_interrupt bool actors_switch(const list<actor_handle>& anotherActors);
 
 	template <typename Alloc>
 	__yield_interrupt bool actors_switch(const list<actor_handle, Alloc>& anotherActors)
@@ -7531,10 +7577,10 @@ private:
 		assert(_timerStateCompleted);
 		assert(!_timerStateCb);
 		typedef wrap_timer_handler<RM_CREF(Handler)> wrap_type;
-		_timerStateTime = (long long)ms * 1000;
-		_timerStateCb = new(_timerStateReuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
-		_timerStateStampBegin = get_tick_us();
 		_timerStateCompleted = false;
+		_timerStateTime = (long long)ms * 1000;
+		_timerStateStampBegin = get_tick_us();
+		_timerStateCb = new(_timerStateReuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
 		_timerStateHandle = _timer->timeout(_timerStateTime, shared_from_this());
 	}
 

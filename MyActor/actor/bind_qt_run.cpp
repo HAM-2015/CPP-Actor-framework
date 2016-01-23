@@ -1,6 +1,20 @@
 #include "bind_qt_run.h"
 
 #ifdef ENABLE_QT_UI
+
+mem_alloc_mt<bind_qt_run_base::task_event> bind_qt_run_base::task_event::_taskAlloc(256);
+
+void* bind_qt_run_base::task_event::operator new(size_t s)
+{
+	assert(sizeof(task_event) == s);
+	return _taskAlloc.allocate();
+}
+
+void bind_qt_run_base::task_event::operator delete(void* p)
+{
+	_taskAlloc.deallocate(p);
+}
+
 bind_qt_run_base::bind_qt_run_base()
 :_isClosed(false), _updated(false), _tasksQueue(16)
 {
@@ -20,39 +34,6 @@ boost::thread::id bind_qt_run_base::thread_id()
 	return _threadID;
 }
 
-void bind_qt_run_base::post(const std::function<void()>& h)
-{
-	{
-		boost::shared_lock<boost::shared_mutex> sl(_postMutex);
-		if (!_isClosed)
-		{
-			_mutex.lock();
-			_tasksQueue.push_back(h);
-			_mutex.unlock();
-			postTaskEvent();
-			return;
-		}
-	}
-	assert(false);
-}
-
-void bind_qt_run_base::post(std::function<void()>&& h)
-{
-	{
-		boost::shared_lock<boost::shared_mutex> sl(_postMutex);
-		if (!_isClosed)
-		{
-			_mutex.lock();
-			_tasksQueue.push_back(std::move(h));
-			_mutex.unlock();
-			sl.unlock();
-			postTaskEvent();
-			return;
-		}
-	}
-	assert(false);
-}
-
 void bind_qt_run_base::post_queue_size(size_t fixedSize)
 {
 	assert(boost::this_thread::get_id() == _threadID);
@@ -65,23 +46,22 @@ void bind_qt_run_base::runOneTask()
 {
 	_mutex.lock();
 	assert(!_tasksQueue.empty());
-	auto h = std::move(_tasksQueue.front());
+	wrap_handler_face* h = _tasksQueue.front();
 	_tasksQueue.pop_front();
 	_mutex.unlock();
-	assert(h);
-	h();
+	h->invoke(_reuMem);
 }
 
 void bind_qt_run_base::paintTask()
 {
 	while (!_paintTasks.empty())
 	{
-		_paintTasks.front()();
+		_paintTasks.front()->invoke(_reuMem);
 		_paintTasks.pop_front();
 	}
 }
 
-void bind_qt_run_base::notifyUiClosed()
+void bind_qt_run_base::qt_ui_closed()
 {
 	assert(boost::this_thread::get_id() == _threadID);
 	{

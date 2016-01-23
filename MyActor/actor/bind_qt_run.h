@@ -55,6 +55,44 @@ struct qt_ui_closed_exception {};
 
 class bind_qt_run_base
 {
+	struct wrap_handler_face
+	{
+		virtual void invoke(reusable_mem_mt<>& reuMem) = 0;
+	};
+
+	template <typename Handler>
+	struct wrap_handler : public wrap_handler_face
+	{
+		template <typename H>
+		wrap_handler(H&& h)
+			:_handler(TRY_MOVE(h)) {}
+
+		void invoke(reusable_mem_mt<>& reuMem)
+		{
+			_handler();
+			this->~wrap_handler();
+			reuMem.deallocate(this);
+		}
+
+		Handler _handler;
+	};
+
+	template <typename Handler>
+	wrap_handler_face* make_wrap_handler(reusable_mem_mt<>& reuMem, Handler&& handler)
+	{
+		typedef wrap_handler<RM_CREF(Handler)> handler_type;
+		return new(reuMem.allocate(sizeof(handler_type)))handler_type(TRY_MOVE(handler));
+	}
+protected:
+	struct task_event : public QEvent
+	{
+		template <typename... Args>
+		task_event(Args&&... args)
+			:QEvent(TRY_MOVE(args)...) {}
+		void* operator new(size_t s);
+		void operator delete(void* p);
+		static mem_alloc_mt<task_event> _taskAlloc;
+	};
 protected:
 	bind_qt_run_base();
 	virtual ~bind_qt_run_base();
@@ -72,28 +110,44 @@ public:
 	/*!
 	@brief 发送一个执行函数到UI消息队列中执行
 	*/
-	void post(const std::function<void()>& h);
-	void post(std::function<void()>&& h);
+	template <typename Handler>
+	void post(Handler&& handler)
+	{
+		{
+			boost::shared_lock<boost::shared_mutex> sl(_postMutex);
+			if (!_isClosed)
+			{
+				wrap_handler_face* ph = make_wrap_handler(_reuMem, TRY_MOVE(handler));
+				_mutex.lock();
+				_tasksQueue.push_back(ph);
+				_mutex.unlock();
+				postTaskEvent();
+				return;
+			}
+		}
+		assert(false);
+	}
 
 	/*!
 	@brief 发送一个执行函数到UI消息队列中执行，完成后返回
 	*/
 	template <typename Handler>
-	void send(my_actor* host, Handler&& h)
+	void send(my_actor* host, Handler&& handler)
 	{
 		host->lock_quit();
 		bool closed = false;
-		host->trig([&](const trig_once_notifer<>& cb)
+		host->trig([&](trig_once_notifer<>&& cb)
 		{
 			boost::shared_lock<boost::shared_mutex> sl(_postMutex);
 			if (!_isClosed)
 			{
-				_mutex.lock();
-				_tasksQueue.push_back([&h, cb]()
+				wrap_handler_face* ph = make_wrap_handler(_reuMem, std::bind([&handler](const trig_once_notifer<>& cb)
 				{
-					h();
+					handler();
 					cb();
-				});
+				}, std::move(cb)));
+				_mutex.lock();
+				_tasksQueue.push_back(ph);
 				_mutex.unlock();
 				sl.unlock();
 				postTaskEvent();
@@ -116,21 +170,22 @@ public:
 	@brief 启动一段代码绘制图形
 	*/
 	template <typename Handler>
-	void paint(my_actor* host, Handler&& h)
+	void paint(my_actor* host, Handler&& handler)
 	{
 		host->lock_quit();
 		bool closed = false;
-		host->trig([&](const trig_once_notifer<>& cb)
+		host->trig([&](trig_once_notifer<>&& cb)
 		{
 			boost::shared_lock<boost::shared_mutex> sl(_postMutex);
 			if (!_isClosed)
 			{
-				_mutex.lock();
-				_paintTasks.push_back([&h, cb]()
+				wrap_handler_face* ph = make_wrap_handler(_reuMem, std::bind([&handler](const trig_once_notifer<>& cb)
 				{
-					h();
+					handler();
 					cb();
-				});
+				}, std::move(cb)));
+				_mutex.lock();
+				_paintTasks.push_back(ph);
 				_mutex.unlock();
 				sl.unlock();
 				paintUpdate();
@@ -177,12 +232,13 @@ protected:
 	virtual void paintUpdate() = 0;
 	void runOneTask();
 	void paintTask();
-	void notifyUiClosed();
+	void qt_ui_closed();
 private:
-	msg_queue<std::function<void()> > _tasksQueue;
-	msg_queue<std::function<void()> > _paintTasks;
+	msg_queue<wrap_handler_face*> _tasksQueue;
+	msg_queue<wrap_handler_face*> _paintTasks;
 	boost::shared_mutex _postMutex;
 	boost::thread::id _threadID;
+	reusable_mem_mt<> _reuMem;
 	std::mutex _mutex;
 protected:
 	bool _isClosed;
@@ -192,12 +248,6 @@ protected:
 template <typename FRAME>
 class bind_qt_run : public FRAME, private bind_qt_run_base
 {
-	struct task_event : public QEvent
-	{
-		template <typename... Args>
-		task_event(Args&&... args)
-			:QEvent(TRY_MOVE(args)...) {}
-	};
 protected:
 	template <typename... Args>
 	bind_qt_run(Args&&... args)
@@ -220,26 +270,22 @@ public:
 		return bind_qt_run_base::post_queue_size(fixedSize);
 	}
 
-	void post(const std::function<void()>& h)
+	template <typename Handler>
+	void post(Handler&& handler)
 	{
-		bind_qt_run_base::post(h);
-	}
-
-	void post(std::function<void()>&& h)
-	{
-		bind_qt_run_base::post(TRY_MOVE(h));
+		bind_qt_run_base::post(TRY_MOVE(handler));
 	}
 
 	template <typename Handler>
-	void send(my_actor* host, Handler&& h)
+	void send(my_actor* host, Handler&& handler)
 	{
-		bind_qt_run_base::send(host, TRY_MOVE(h));
+		bind_qt_run_base::send(host, TRY_MOVE(handler));
 	}
 
 	template <typename Handler>
-	void paint(my_actor* host, Handler&& h)
+	void paint(my_actor* host, Handler&& handler)
 	{
-		bind_qt_run_base::paint(host, TRY_MOVE(h));
+		bind_qt_run_base::paint(host, TRY_MOVE(handler));
 	}
 
 	template <typename Handler>
@@ -319,9 +365,9 @@ protected:
 
 	}
 
-	void notifyUiClosed()
+	void qt_ui_closed()
 	{
-		bind_qt_run_base::notifyUiClosed();
+		bind_qt_run_base::qt_ui_closed();
 	}
 };
 #endif

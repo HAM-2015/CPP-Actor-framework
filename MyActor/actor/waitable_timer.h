@@ -52,7 +52,7 @@ class WaitableTimerEvent_
 	{
 		virtual void invoke(reusable_mem& reuMem) = 0;
 		virtual void invoke_err(reusable_mem& reuMem) = 0;
-		virtual void destory(reusable_mem& reuMem) = 0;
+		virtual void destroy(reusable_mem& reuMem) = 0;
 	};
 
 	template <typename Handler>
@@ -65,16 +65,16 @@ class WaitableTimerEvent_
 		void invoke(reusable_mem& reuMem)
 		{
 			_h(boost::system::error_code());
-			destory(reuMem);
+			destroy(reuMem);
 		}
 
 		void invoke_err(reusable_mem& reuMem)
 		{
 			_h(boost::system::error_code(1, boost::system::system_category()));
-			destory(reuMem);
+			destroy(reuMem);
 		}
 
-		void destory(reusable_mem& reuMem)
+		void destroy(reusable_mem& reuMem)
 		{
 			this->~wrap_handler();
 			reuMem.deallocate(this);

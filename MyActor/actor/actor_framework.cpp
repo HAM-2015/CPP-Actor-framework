@@ -1720,6 +1720,24 @@ void my_actor::child_actor_run(child_actor_handle& actorHandle)
 	actorHandle._actor->notify_run();
 }
 
+void my_actor::child_actors_run(list<child_actor_handle::ptr>& actorHandles)
+{
+	assert_enter();
+	for (auto& actorHandle : actorHandles)
+	{
+		child_actor_run(*actorHandle);
+	}
+}
+
+void my_actor::child_actors_run(list<child_actor_handle>& actorHandles)
+{
+	assert_enter();
+	for (auto& actorHandle : actorHandles)
+	{
+		child_actor_run(actorHandle);
+	}
+}
+
 void my_actor::child_actor_force_quit(child_actor_handle& actorHandle)
 {
 	assert_enter();
@@ -1742,6 +1760,66 @@ void my_actor::child_actor_force_quit(child_actor_handle& actorHandle)
 	}
 }
 
+void my_actor::child_actors_force_quit(list<child_actor_handle::ptr>& actorHandles)
+{
+	assert_enter();
+	for (auto& actorHandle : actorHandles)
+	{
+		if (!actorHandle->_quited)
+		{
+			assert(actorHandle->get_actor());
+			assert(actorHandle->get_actor()->parent_actor()->self_id() == self_id());
+			my_actor* actor = actorHandle->_actor.get();
+			if (actor->self_strand() == _strand)
+			{
+				actor->force_quit(std::function<void()>());
+			}
+			else
+			{
+				actor->notify_quit();
+			}
+		}
+	}
+	for (auto& actorHandle : actorHandles)
+	{
+		if (!actorHandle->_quited)
+		{
+			wait_trig(actorHandle->_quiteAth);
+			actorHandle->peel();
+		}
+	}
+}
+
+void my_actor::child_actors_force_quit(list<child_actor_handle>& actorHandles)
+{
+	assert_enter();
+	for (auto& actorHandle : actorHandles)
+	{
+		if (!actorHandle._quited)
+		{
+			assert(actorHandle.get_actor());
+			assert(actorHandle.get_actor()->parent_actor()->self_id() == self_id());
+			my_actor* actor = actorHandle._actor.get();
+			if (actor->self_strand() == _strand)
+			{
+				actor->force_quit(std::function<void()>());
+			}
+			else
+			{
+				actor->notify_quit();
+			}
+		}
+	}
+	for (auto& actorHandle : actorHandles)
+	{
+		if (!actorHandle._quited)
+		{
+			wait_trig(actorHandle._quiteAth);
+			actorHandle.peel();
+		}
+	}
+}
+
 void my_actor::child_actor_wait_quit(child_actor_handle& actorHandle)
 {
 	assert_enter();
@@ -1752,6 +1830,26 @@ void my_actor::child_actor_wait_quit(child_actor_handle& actorHandle)
 		assert(actorHandle._started);
 		wait_trig(actorHandle._quiteAth);
 		actorHandle.peel();
+	}
+}
+
+void my_actor::child_actors_wait_quit(list<child_actor_handle::ptr>& actorHandles)
+{
+	assert_enter();
+	for (auto& actorHandle : actorHandles)
+	{
+		assert(actorHandle->get_actor()->parent_actor()->self_id() == self_id());
+		child_actor_wait_quit(*actorHandle);
+	}
+}
+
+void my_actor::child_actors_wait_quit(list<child_actor_handle>& actorHandles)
+{
+	assert_enter();
+	for (auto& actorHandle : actorHandles)
+	{
+		assert(actorHandle.get_actor()->parent_actor()->self_id() == self_id());
+		child_actor_wait_quit(actorHandle);
 	}
 }
 
@@ -1779,12 +1877,64 @@ void my_actor::child_actor_suspend(child_actor_handle& actorHandle)
 	my_actor* actor = actorHandle.get_actor().get();
 	if (actorHandle.get_actor()->self_strand() == _strand)
 	{
-		trig([actor](const trig_once_notifer<>& h){actor->suspend(h); });
+		trig([actor](trig_once_notifer<>&& h){actor->suspend(std::move(h)); });
 	}
 	else
 	{
-		trig([actor](const trig_once_notifer<>& h){actor->notify_suspend(h); });
+		trig([actor](trig_once_notifer<>&& h){actor->notify_suspend(std::move(h)); });
 	}
+}
+
+void my_actor::child_actors_suspend(list<child_actor_handle::ptr>& actorHandles)
+{
+	assert_enter();
+	actor_msg_handle<> amh;
+	auto h = make_msg_notifer_to_self(amh);
+	for (auto& actorHandle : actorHandles)
+	{
+		assert(actorHandle->get_actor());
+		assert(actorHandle->get_actor()->parent_actor()->self_id() == self_id());
+		my_actor* actor = actorHandle->get_actor().get();
+		if (actor->self_strand() == _strand)
+		{
+			actor->suspend(h);
+		}
+		else
+		{
+			actor->notify_suspend(h);
+		}
+	}
+	for (size_t i = actorHandles.size(); i > 0; i--)
+	{
+		wait_msg(amh);
+	}
+	close_msg_notifer(amh);
+}
+
+void my_actor::child_actors_suspend(list<child_actor_handle>& actorHandles)
+{
+	assert_enter();
+	actor_msg_handle<> amh;
+	auto h = make_msg_notifer_to_self(amh);
+	for (auto& actorHandle : actorHandles)
+	{
+		assert(actorHandle.get_actor());
+		assert(actorHandle.get_actor()->parent_actor()->self_id() == self_id());
+		my_actor* actor = actorHandle.get_actor().get();
+		if (actor->self_strand() == _strand)
+		{
+			actor->suspend(h);
+		}
+		else
+		{
+			actor->notify_suspend(h);
+		}
+	}
+	for (size_t i = actorHandles.size(); i > 0; i--)
+	{
+		wait_msg(amh);
+	}
+	close_msg_notifer(amh);
 }
 
 void my_actor::child_actor_resume(child_actor_handle& actorHandle)
@@ -1795,12 +1945,64 @@ void my_actor::child_actor_resume(child_actor_handle& actorHandle)
 	my_actor* actor = actorHandle.get_actor().get();
 	if (actorHandle.get_actor()->self_strand() == _strand)
 	{
-		trig([actor](const trig_once_notifer<>& h){actor->resume(h); });
+		trig([actor](trig_once_notifer<>&& h){actor->resume(std::move(h)); });
 	}
 	else
 	{
-		trig([actor](const trig_once_notifer<>& h){actor->notify_resume(h); });
+		trig([actor](trig_once_notifer<>&& h){actor->notify_resume(std::move(h)); });
 	}
+}
+
+void my_actor::child_actors_resume(list<child_actor_handle::ptr>& actorHandles)
+{
+	assert_enter();
+	actor_msg_handle<> amh;
+	auto h = make_msg_notifer_to_self(amh);
+	for (auto& actorHandle : actorHandles)
+	{
+		assert(actorHandle->get_actor());
+		assert(actorHandle->get_actor()->parent_actor()->self_id() == self_id());
+		my_actor* actor = actorHandle->get_actor().get();
+		if (actor->self_strand() == _strand)
+		{
+			actor->resume(h);
+		}
+		else
+		{
+			actor->notify_resume(h);
+		}
+	}
+	for (size_t i = actorHandles.size(); i > 0; i--)
+	{
+		wait_msg(amh);
+	}
+	close_msg_notifer(amh);
+}
+
+void my_actor::child_actors_resume(list<child_actor_handle>& actorHandles)
+{
+	assert_enter();
+	actor_msg_handle<> amh;
+	auto h = make_msg_notifer_to_self(amh);
+	for (auto& actorHandle : actorHandles)
+	{
+		assert(actorHandle.get_actor());
+		assert(actorHandle.get_actor()->parent_actor()->self_id() == self_id());
+		my_actor* actor = actorHandle.get_actor().get();
+		if (actor->self_strand() == _strand)
+		{
+			actor->resume(h);
+		}
+		else
+		{
+			actor->notify_resume(h);
+		}
+	}
+	for (size_t i = actorHandles.size(); i > 0; i--)
+	{
+		wait_msg(amh);
+	}
+	close_msg_notifer(amh);
 }
 
 void my_actor::run_child_actor_complete(const shared_strand& actorStrand, const main_func& h, size_t stackSize)
@@ -2553,18 +2755,43 @@ void my_actor::append_quit_callback(std::function<void()>&& h)
 	}
 }
 
+void my_actor::actors_start_run(const list<actor_handle>& anotherActors)
+{
+	assert_enter();
+	for (auto& actorHandle : anotherActors)
+	{
+		actorHandle->notify_run();
+	}
+}
+
 void my_actor::actor_force_quit(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
-	trig([anotherActor](const trig_once_notifer<>& h){anotherActor->notify_quit(h); });
+	trig([anotherActor](trig_once_notifer<>&& h){anotherActor->notify_quit(std::move(h)); });
+}
+
+void my_actor::actors_force_quit(const list<actor_handle>& anotherActors)
+{
+	assert_enter();
+	actor_msg_handle<> amh;
+	auto h = make_msg_notifer_to_self(amh);
+	for (auto& actorHandle : anotherActors)
+	{
+		actorHandle->notify_quit(h);
+	}
+	for (size_t i = anotherActors.size(); i > 0; i--)
+	{
+		wait_msg(amh);
+	}
+	close_msg_notifer(amh);
 }
 
 void my_actor::actor_wait_quit(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
-	trig([anotherActor](const trig_once_notifer<>& h){anotherActor->append_quit_callback(h); });
+	trig([anotherActor](trig_once_notifer<>&& h){anotherActor->append_quit_callback(std::move(h)); });
 }
 
 bool my_actor::timed_actor_wait_quit(int tm, const actor_handle& anotherActor)
@@ -2576,25 +2803,84 @@ bool my_actor::timed_actor_wait_quit(int tm, const actor_handle& anotherActor)
 	return timed_wait_trig(tm, ath);
 }
 
+void my_actor::actors_wait_quit(const list<actor_handle>& anotherActors)
+{
+	assert_enter();
+	for (auto& actorHandle : anotherActors)
+	{
+		actor_wait_quit(actorHandle);
+	}
+}
+
 void my_actor::actor_suspend(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
-	trig([anotherActor](const trig_once_notifer<>& h){anotherActor->notify_suspend(h); });
+	trig([anotherActor](trig_once_notifer<>&& h){anotherActor->notify_suspend(std::move(h)); });
+}
+
+void my_actor::actors_suspend(const list<actor_handle>& anotherActors)
+{
+	assert_enter();
+	actor_msg_handle<> amh;
+	auto h = make_msg_notifer_to_self(amh);
+	for (auto& actorHandle : anotherActors)
+	{
+		actorHandle->notify_suspend(h);
+	}
+	for (size_t i = anotherActors.size(); i > 0; i--)
+	{
+		wait_msg(amh);
+	}
+	close_msg_notifer(amh);
 }
 
 void my_actor::actor_resume(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
-	trig([anotherActor](const trig_once_notifer<>& h){anotherActor->notify_resume(h); });
+	trig([anotherActor](trig_once_notifer<>&& h){anotherActor->notify_resume(std::move(h)); });
+}
+
+void my_actor::actors_resume(const list<actor_handle>& anotherActors)
+{
+	assert_enter();
+	actor_msg_handle<> amh;
+	auto h = make_msg_notifer_to_self(amh);
+	for (auto& actorHandle : anotherActors)
+	{
+		actorHandle->notify_resume(h);
+	}
+	for (size_t i = anotherActors.size(); i > 0; i--)
+	{
+		wait_msg(amh);
+	}
+	close_msg_notifer(amh);
 }
 
 bool my_actor::actor_switch(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
-	return trig<bool>([anotherActor](const trig_once_notifer<bool>& h){anotherActor->switch_pause_play(h); });
+	return trig<bool>([anotherActor](trig_once_notifer<bool>&& h){anotherActor->switch_pause_play(std::move(h)); });
+}
+
+bool my_actor::actors_switch(const list<actor_handle>& anotherActors)
+{
+	assert_enter();
+	bool isPause = true;
+	actor_msg_handle<bool> amh;
+	auto h = make_msg_notifer_to_self(amh);
+	for (auto& actorHandle : anotherActors)
+	{
+		actorHandle->switch_pause_play(h);
+	}
+	for (size_t i = anotherActors.size(); i > 0; i--)
+	{
+		isPause &= wait_msg(amh);
+	}
+	close_msg_notifer(amh);
+	return isPause;
 }
 
 void my_actor::run_one()
@@ -2775,7 +3061,7 @@ void my_actor::cancel_timer()
 		if (_timerStateTime)
 		{
 			_timer->cancel(_timerStateHandle);
-			_timerStateCb->destory(_timerStateReuMem);
+			_timerStateCb->destroy(_timerStateReuMem);
 			_timerStateCb = NULL;
 		}
 	}

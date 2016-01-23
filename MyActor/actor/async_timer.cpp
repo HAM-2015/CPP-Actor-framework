@@ -157,7 +157,7 @@ void AsyncTimer_::cancel()
 {
 	if (_handler)
 	{
-		_handler->destory(_reuMem);
+		_handler->destroy(_reuMem);
 		_handler = NULL;
 	}
 	_timerBoost.cancel(_timerHandle);

@@ -78,7 +78,7 @@ class AsyncTimer_
 	struct wrap_base
 	{
 		virtual void invoke(reusable_mem& reuMem) = 0;
-		virtual void destory(reusable_mem& reuMem) = 0;
+		virtual void destroy(reusable_mem& reuMem) = 0;
 	};
 
 	template <typename Handler>
@@ -91,10 +91,10 @@ class AsyncTimer_
 		void invoke(reusable_mem& reuMem)
 		{
 			_h();
-			destory(reuMem);
+			destroy(reuMem);
 		}
 
-		void destory(reusable_mem& reuMem)
+		void destroy(reusable_mem& reuMem)
 		{
 			this->~wrap_handler();
 			reuMem.deallocate(this);
