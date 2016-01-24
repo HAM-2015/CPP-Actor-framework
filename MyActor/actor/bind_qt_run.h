@@ -7,6 +7,7 @@
 #include <functional>
 #include <mutex>
 #include <QtGui/qevent.h>
+#include <QtCore/qeventloop.h>
 #include "wrapped_post_handler.h"
 #include "actor_framework.h"
 #include "qt_strand.h"
@@ -17,12 +18,20 @@
 //开始在Actor中，嵌入一段在qt-ui线程中执行的连续逻辑
 #define begin_RUN_IN_QT_UI_FOR(__qt__, __host__) (__qt__)->send(__host__, [&]() {
 #define begin_RUN_IN_QT_UI() begin_RUN_IN_QT_UI_FOR(this, self)
+//开始在Actor中，嵌入一段在qt-ui线程中执行的连续逻辑，并捕获关闭异常
+#define begin_CATCH_RUN_IN_QT_UI_FOR(__qt__, __host__) try {(__qt__)->send(__host__, [&]() {
+#define begin_CATCH_RUN_IN_QT_UI() begin_CATCH_RUN_IN_QT_UI_FOR(this, self)
 //结束在qt-ui线程中执行的一段连续逻辑，只有当这段逻辑执行完毕后才会执行END后续代码
 #define end_RUN_IN_QT_UI() })
+//结束在qt-ui线程中执行的一段连续逻辑，并捕获关闭异常，只有当这段逻辑执行完毕后才会执行END后续代码
+#define end_CATCH_RUN_IN_QT_UI(__catch_exp__) }); } catch (qt_ui_closed_exception&) { __catch_exp__; }
 //////////////////////////////////////////////////////////////////////////
 //在Actor中，嵌入一段在qt-ui线程中执行的语句
 #define RUN_IN_QT_UI_FOR(__qt__, __host__, __exp__) (__qt__)->send(__host__, [&]() {__exp__;})
 #define RUN_IN_QT_UI(__exp__) RUN_IN_QT_UI_FOR(this, self, __exp__)
+//在Actor中，嵌入一段在qt-ui线程中执行的语句，并捕获关闭异常
+#define CATCH_RUN_IN_QT_UI_FOR(__qt__, __host__, __exp__, __catch_exp__) try {(__qt__)->send(__host__, [&]() {__exp__;}); } catch (qt_ui_closed_exception&) { __catch_exp__; }
+#define CATCH_RUN_IN_QT_UI(__exp__, __catch_exp__) CATCH_RUN_IN_QT_UI_FOR(this, self, __exp__, __catch_exp__)
 //////////////////////////////////////////////////////////////////////////
 //在Actor中，嵌入一段在qt-ui线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用begin_RUN_IN_QT_UI_FOR）
 #define begin_ACTOR_RUN_IN_QT_UI_FOR(__qt__, __host__, __ios__) {\
@@ -39,17 +48,6 @@
 	___tactor->notify_run(); \
 	___host->actor_wait_quit(___tactor); \
 }
-//////////////////////////////////////////////////////////////////////////
-
-//在qt-ui中执行一段绘制代码
-#define begin_QT_UI_PAINT_FOR(__qt__, __host__) (__qt__)->paint(__host__, [&]() {
-#define begin_QT_UI_PAINT() begin_QT_UI_PAINT_FOR(this, self)
-//结束在qt-ui中执行一段绘制代码，只有当绘制代码执行完毕后才会执行END后续代码
-#define end_QT_PAINT() })
-//////////////////////////////////////////////////////////////////////////
-//在qt-ui中执行一段绘制语句
-#define QT_UI_PAINT_FOR(__qt__, __host__, __exp__) (__qt__)->paint(__host__, [&]() {__exp__;})
-#define QT_UI_PAINT(__exp__) QT_UI_PAINT_FOR(this, self, __exp__)
 
 struct qt_ui_closed_exception {};
 
@@ -69,7 +67,7 @@ class bind_qt_run_base
 
 		void invoke(reusable_mem_mt<>& reuMem)
 		{
-			_handler();
+			CHECK_EXCEPTION(_handler);
 			this->~wrap_handler();
 			reuMem.deallocate(this);
 		}
@@ -167,44 +165,6 @@ public:
 	}
 
 	/*!
-	@brief 启动一段代码绘制图形
-	*/
-	template <typename Handler>
-	void paint(my_actor* host, Handler&& handler)
-	{
-		host->lock_quit();
-		bool closed = false;
-		host->trig([&](trig_once_notifer<>&& cb)
-		{
-			boost::shared_lock<boost::shared_mutex> sl(_postMutex);
-			if (!_isClosed)
-			{
-				wrap_handler_face* ph = make_wrap_handler(_reuMem, std::bind([&handler](const trig_once_notifer<>& cb)
-				{
-					handler();
-					cb();
-				}, std::move(cb)));
-				_mutex.lock();
-				_paintTasks.push_back(ph);
-				_mutex.unlock();
-				sl.unlock();
-				paintUpdate();
-			}
-			else
-			{
-				sl.unlock();
-				closed = true;
-				cb();
-			}
-		});
-		host->unlock_quit();
-		if (closed)
-		{
-			throw qt_ui_closed_exception();
-		}
-	}
-
-	/*!
 	@brief 绑定一个函数到UI队列执行
 	*/
 	template <typename Handler>
@@ -213,6 +173,19 @@ public:
 		return wrapped_post_handler<bind_qt_run_base, RM_CREF(Handler)>(this, TRY_MOVE(handler));
 	}
 
+	template <typename Handler>
+	std::function<void()> wrap_check_close(Handler&& handler)
+	{
+		assert(boost::this_thread::get_id() == _threadID);
+		_waitCount++;
+		return wrap(std::bind([this](const Handler& handler)
+		{
+			handler();
+			check_close();
+		}, TRY_MOVE(handler)));
+	}
+
+	std::function<void()> wrap_check_close();
 #ifdef ENABLE_QT_ACTOR
 	/*!
 	@brief 
@@ -229,18 +202,22 @@ public:
 #endif
 protected:
 	virtual void postTaskEvent() = 0;
-	virtual void paintUpdate() = 0;
+	virtual void enter_loop() = 0;
+	virtual void close_now() = 0;
 	void runOneTask();
-	void paintTask();
-	void qt_ui_closed();
+	void ui_closed();
+	void check_close();
+	void enter_wait_close();
 private:
 	msg_queue<wrap_handler_face*> _tasksQueue;
-	msg_queue<wrap_handler_face*> _paintTasks;
 	boost::shared_mutex _postMutex;
 	boost::thread::id _threadID;
 	reusable_mem_mt<> _reuMem;
 	std::mutex _mutex;
 protected:
+	QEventLoop* _eventLoop;
+	int _waitCount;
+	bool _waitClose;
 	bool _isClosed;
 	bool _updated;
 };
@@ -283,15 +260,20 @@ public:
 	}
 
 	template <typename Handler>
-	void paint(my_actor* host, Handler&& handler)
-	{
-		bind_qt_run_base::paint(host, TRY_MOVE(handler));
-	}
-
-	template <typename Handler>
 	wrapped_post_handler<bind_qt_run_base, Handler> wrap(Handler&& handler)
 	{
 		return bind_qt_run_base::wrap(TRY_MOVE(handler));
+	}
+
+	template <typename Handler>
+	std::function<void()> wrap_check_close(Handler&& handler)
+	{
+		return bind_qt_run_base::wrap_check_close(TRY_MOVE(handler));
+	}
+
+	std::function<void()> wrap_check_close()
+	{
+		return bind_qt_run_base::wrap_check_close();
 	}
 #ifdef ENABLE_QT_ACTOR
 	shared_qt_strand make_qt_strand()
@@ -320,25 +302,6 @@ private:
 		QCoreApplication::postEvent(this, new task_event(QEvent::Type(QT_POST_TASK)));
 	}
 
-	void paintUpdate() override final
-	{
-		_updated = true;
-		FRAME::update();
-	}
-
-	void paintEvent(QPaintEvent* e) override final
-	{
-		if (_updated)
-		{
-			_updated = false;
-			bind_qt_run_base::paintTask();
-		} 
-		else
-		{
-			paintEvent_(e);
-		}
-	}
-
 	void customEvent(QEvent* e) override final
 	{
 		if (e->type() == QEvent::Type(QT_POST_TASK))
@@ -354,20 +317,52 @@ private:
 			customEvent_(e);
 		}
 	}
+
+	void enter_loop() override final
+	{
+		QEventLoop eventLoop(this);
+		_eventLoop = &eventLoop;
+		eventLoop.exec();
+		_eventLoop = NULL;
+	}
+
+	void close_now() override final
+	{
+		QCoreApplication::sendEvent(this, new QCloseEvent());
+		if (_eventLoop)
+		{
+			_eventLoop->exit();
+		}
+	}
 protected:
 	virtual void customEvent_(QEvent*)
 	{
 
 	}
 
-	virtual void paintEvent_(QPaintEvent*)
+	void ui_closed()
 	{
-
+		bind_qt_run_base::ui_closed();
 	}
 
-	void qt_ui_closed()
+	void enter_wait_close()
 	{
-		bind_qt_run_base::qt_ui_closed();
+		bind_qt_run_base::enter_wait_close();
+	}
+
+	bool is_closed()
+	{
+		return _isClosed;
+	}
+
+	bool is_wait_close()
+	{
+		return _waitClose;
+	}
+
+	bool wait_close_over()
+	{
+		return 0 == _waitCount;
 	}
 };
 #endif

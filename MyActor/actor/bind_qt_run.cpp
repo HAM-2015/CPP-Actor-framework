@@ -16,7 +16,7 @@ void bind_qt_run_base::task_event::operator delete(void* p)
 }
 
 bind_qt_run_base::bind_qt_run_base()
-:_isClosed(false), _updated(false), _tasksQueue(16)
+:_isClosed(false), _updated(false), _waitClose(false), _eventLoop(NULL), _waitCount(0), _tasksQueue(16)
 {
 	_threadID = boost::this_thread::get_id();
 }
@@ -25,6 +25,7 @@ bind_qt_run_base::~bind_qt_run_base()
 {
 	assert(boost::this_thread::get_id() == _threadID);
 	assert(_isClosed);
+	assert(0 == _waitCount);
 	assert(_tasksQueue.empty());
 }
 
@@ -42,6 +43,16 @@ void bind_qt_run_base::post_queue_size(size_t fixedSize)
 	_mutex.unlock();
 }
 
+std::function<void()> bind_qt_run_base::wrap_check_close()
+{
+	assert(boost::this_thread::get_id() == _threadID);
+	_waitCount++;
+	return wrap([this]
+	{
+		check_close();
+	});
+}
+
 void bind_qt_run_base::runOneTask()
 {
 	_mutex.lock();
@@ -52,16 +63,7 @@ void bind_qt_run_base::runOneTask()
 	h->invoke(_reuMem);
 }
 
-void bind_qt_run_base::paintTask()
-{
-	while (!_paintTasks.empty())
-	{
-		_paintTasks.front()->invoke(_reuMem);
-		_paintTasks.pop_front();
-	}
-}
-
-void bind_qt_run_base::qt_ui_closed()
+void bind_qt_run_base::ui_closed()
 {
 	assert(boost::this_thread::get_id() == _threadID);
 	{
@@ -72,7 +74,31 @@ void bind_qt_run_base::qt_ui_closed()
 	{
 		bind_qt_run_base::runOneTask();
 	}
-	bind_qt_run_base::paintTask();
+}
+
+void bind_qt_run_base::enter_wait_close()
+{
+	assert(boost::this_thread::get_id() == _threadID);
+	assert(!_waitClose);
+	_waitClose = true;
+	if (_waitCount)
+	{
+		enter_loop();
+	} 
+	else
+	{
+		close_now();
+	}
+}
+
+void bind_qt_run_base::check_close()
+{
+	assert(_waitCount > 0);
+	_waitCount--;
+	if (_waitClose && 0 == _waitCount)
+	{
+		close_now();
+	}
 }
 
 #ifdef ENABLE_QT_ACTOR

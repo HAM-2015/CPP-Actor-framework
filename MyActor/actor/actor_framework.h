@@ -2026,11 +2026,13 @@ class post_actor_msg
 public:
 	post_actor_msg(){}
 #ifdef ENABLE_CHECK_LOST
-	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool, const actor_handle& hostActor, const std::shared_ptr<CheckPumpLost_>& autoCheckLost)
-		:_msgPool(msgPool), _hostActor(hostActor), _autoCheckLost(autoCheckLost) {}
+	template <typename ActorHandle, typename CheckPumpLost>
+	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool, ActorHandle&& hostActor, CheckPumpLost&& autoCheckLost)
+		:_msgPool(msgPool), _hostActor(TRY_MOVE(hostActor)), _autoCheckLost(TRY_MOVE(autoCheckLost)) {}
 #else
-	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool, const actor_handle& hostActor)
-		:_msgPool(msgPool), _hostActor(hostActor) {}
+	template <typename ActorHandle>
+	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool, ActorHandle&& hostActor)
+		:_msgPool(msgPool), _hostActor(TRY_MOVE(hostActor)) {}
 #endif
 	post_actor_msg(const post_actor_msg<ARGS...>& s)
 		:_hostActor(s._hostActor), _msgPool(s._msgPool)
@@ -4335,11 +4337,11 @@ class my_actor
 	{
 		template <typename H>
 		wrap_timer_handler(H&& h)
-			:_h(TRY_MOVE(h)) {}
+			:_handler(TRY_MOVE(h)) {}
 
 		void invoke(reusable_mem& reuMem)
 		{
-			_h();
+			CHECK_EXCEPTION(_handler);
 			destroy(reuMem);
 		}
 
@@ -4349,7 +4351,7 @@ class my_actor
 			reuMem.deallocate(this);
 		}
 
-		Handler _h;
+		Handler _handler;
 	};
 
 	class actor_run;
@@ -6237,7 +6239,7 @@ public:
 			buddyPck->unlock(this);
 			msgPck->unlock(this);
 			qg.unlock();
-			return post_actor_msg<Args...>(buddyPool, buddyActor, autoCheckLost);
+			return post_actor_msg<Args...>(buddyPool, buddyActor, std::move(autoCheckLost));
 #else
 			buddyPck->unlock(this);
 			msgPck->unlock(this);
@@ -6345,7 +6347,21 @@ public:
 			{
 				auto msgPck = msg_pool_pck<Args...>(id, this);
 				msgPck->_msgPool = pool_type::make(strand, fixedSize);
-				return post_type(msgPck->_msgPool, shared_from_this(), chekcLost);
+#ifdef ENABLE_CHECK_LOST
+				std::shared_ptr<CheckPumpLost_> autoCheckLost;
+				if (chekcLost)
+				{
+					autoCheckLost = msgPck->_msgPool->_weakCheckLost.lock();
+					if (!autoCheckLost)
+					{
+						autoCheckLost = ActorFunc_::new_check_pump_lost(shared_from_this(), msgPck->_msgPool.get());
+						msgPck->_msgPool->_weakCheckLost = autoCheckLost;
+					}
+				}
+				return post_type(msgPck->_msgPool, shared_from_this(), std::move(autoCheckLost));
+#else
+				return post_type(msgPck->_msgPool, shared_from_this());
+#endif
 			}
 			assert(false);
 			return post_type();
