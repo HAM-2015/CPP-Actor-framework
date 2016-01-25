@@ -108,6 +108,9 @@ CheckLost_::~CheckLost_()
 CheckPumpLost_::CheckPumpLost_(const actor_handle& hostActor, MsgPoolBase_* pool)
 :_hostActor(hostActor), _pool(pool) {}
 
+CheckPumpLost_::CheckPumpLost_(actor_handle&& hostActor, MsgPoolBase_* pool)
+: _hostActor(std::move(hostActor)), _pool(pool) {}
+
 CheckPumpLost_::~CheckPumpLost_()
 {
 	_pool->lost_msg(std::move(_hostActor));
@@ -257,9 +260,9 @@ actor_msg_handle_base::actor_msg_handle_base()
 
 }
 
-void actor_msg_handle_base::set_actor(const actor_handle& hostActor)
+void actor_msg_handle_base::set_actor(my_actor* hostActor)
 {
-	_hostActor = hostActor.get();
+	_hostActor = hostActor;
 	DEBUG_OPERATION(_strand = hostActor->self_strand());
 }
 
@@ -625,7 +628,7 @@ void MsgPoolVoid_::pump_handler::operator=(pump_handler&& s)
 }
 //////////////////////////////////////////////////////////////////////////
 
-MsgPumpVoid_::MsgPumpVoid_(const actor_handle& hostActor, bool checkLost)
+MsgPumpVoid_::MsgPumpVoid_(my_actor* hostActor, bool checkLost)
 {
 #ifndef ENABLE_CHECK_LOST
 	assert(!checkLost);
@@ -638,7 +641,7 @@ MsgPumpVoid_::MsgPumpVoid_(const actor_handle& hostActor, bool checkLost)
 	_checkLost = checkLost;
 	_dstRec = NULL;
 	_pumpCount = 0;
-	_hostActor = hostActor.get();
+	_hostActor = hostActor;
 	_strand = hostActor->self_strand();
 }
 
@@ -3425,6 +3428,16 @@ std::shared_ptr<CheckPumpLost_> ActorFunc_::new_check_pump_lost(const actor_hand
 {
 	auto& s_checkPumpLostObjAlloc_ = s_checkPumpLostObjAlloc;
 	return std::shared_ptr<CheckPumpLost_>(new(s_checkPumpLostObjAlloc.allocate())CheckPumpLost_(hostActor, pool), [&s_checkPumpLostObjAlloc_](CheckPumpLost_* p)
+	{
+		p->~CheckPumpLost_();
+		s_checkPumpLostObjAlloc_.deallocate(p);
+	}, ref_count_alloc<void>(s_checkPumpLostRefCountAlloc));
+}
+
+std::shared_ptr<CheckPumpLost_> ActorFunc_::new_check_pump_lost(actor_handle&& hostActor, MsgPoolBase_* pool)
+{
+	auto& s_checkPumpLostObjAlloc_ = s_checkPumpLostObjAlloc;
+	return std::shared_ptr<CheckPumpLost_>(new(s_checkPumpLostObjAlloc.allocate())CheckPumpLost_(std::move(hostActor), pool), [&s_checkPumpLostObjAlloc_](CheckPumpLost_* p)
 	{
 		p->~CheckPumpLost_();
 		s_checkPumpLostObjAlloc_.deallocate(p);

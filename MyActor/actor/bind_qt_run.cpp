@@ -16,14 +16,14 @@ void bind_qt_run_base::task_event::operator delete(void* p)
 }
 
 bind_qt_run_base::bind_qt_run_base()
-:_isClosed(false), _updated(false), _waitClose(false), _eventLoop(NULL), _waitCount(0), _tasksQueue(16)
+:_isClosed(false), _waitClose(false), _eventLoop(NULL), _waitCount(0), _tasksQueue(16)
 {
 	_threadID = boost::this_thread::get_id();
 }
 
 bind_qt_run_base::~bind_qt_run_base()
 {
-	assert(boost::this_thread::get_id() == _threadID);
+	assert(run_in_ui_thread());
 	assert(_isClosed);
 	assert(0 == _waitCount);
 	assert(_tasksQueue.empty());
@@ -35,9 +35,14 @@ boost::thread::id bind_qt_run_base::thread_id()
 	return _threadID;
 }
 
+bool bind_qt_run_base::run_in_ui_thread()
+{
+	return boost::this_thread::get_id() == _threadID;
+}
+
 void bind_qt_run_base::post_queue_size(size_t fixedSize)
 {
-	assert(boost::this_thread::get_id() == _threadID);
+	assert(run_in_ui_thread());
 	_mutex.lock();
 	_tasksQueue.expand_fixed(fixedSize);
 	_mutex.unlock();
@@ -45,7 +50,7 @@ void bind_qt_run_base::post_queue_size(size_t fixedSize)
 
 std::function<void()> bind_qt_run_base::wrap_check_close()
 {
-	assert(boost::this_thread::get_id() == _threadID);
+	assert(run_in_ui_thread());
 	_waitCount++;
 	return wrap([this]
 	{
@@ -65,7 +70,7 @@ void bind_qt_run_base::runOneTask()
 
 void bind_qt_run_base::ui_closed()
 {
-	assert(boost::this_thread::get_id() == _threadID);
+	assert(run_in_ui_thread());
 	{
 		boost::unique_lock<boost::shared_mutex> sl(_postMutex);
 		_isClosed = true;
@@ -78,7 +83,7 @@ void bind_qt_run_base::ui_closed()
 
 void bind_qt_run_base::enter_wait_close()
 {
-	assert(boost::this_thread::get_id() == _threadID);
+	assert(run_in_ui_thread());
 	assert(!_waitClose);
 	_waitClose = true;
 	if (_waitCount)

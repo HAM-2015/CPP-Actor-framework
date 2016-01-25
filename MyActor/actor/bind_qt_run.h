@@ -16,31 +16,60 @@
 #define QT_POST_TASK	(QEvent::MaxUser-1)
 
 //开始在Actor中，嵌入一段在qt-ui线程中执行的连续逻辑
-#define begin_RUN_IN_QT_UI_FOR(__qt__, __host__) (__qt__)->send(__host__, [&]() {
-#define begin_RUN_IN_QT_UI() begin_RUN_IN_QT_UI_FOR(this, self)
+#define begin_RUN_IN_QT_UI_AT(__this_ui__, __host__) (__this_ui__)->send(__host__, [&]() {
+#define begin_RUN_IN_QT_UI() begin_RUN_IN_QT_UI_AT(this, self)
 //开始在Actor中，嵌入一段在qt-ui线程中执行的连续逻辑，并捕获关闭异常
-#define begin_CATCH_RUN_IN_QT_UI_FOR(__qt__, __host__) try {(__qt__)->send(__host__, [&]() {
-#define begin_CATCH_RUN_IN_QT_UI() begin_CATCH_RUN_IN_QT_UI_FOR(this, self)
+#define begin_CATCH_RUN_IN_QT_UI_AT(__this_ui__, __host__) try {(__this_ui__)->send(__host__, [&]() {
+#define begin_CATCH_RUN_IN_QT_UI() begin_CATCH_RUN_IN_QT_UI_AT(this, self)
 //结束在qt-ui线程中执行的一段连续逻辑，只有当这段逻辑执行完毕后才会执行END后续代码
 #define end_RUN_IN_QT_UI() })
 //结束在qt-ui线程中执行的一段连续逻辑，并捕获关闭异常，只有当这段逻辑执行完毕后才会执行END后续代码
 #define end_CATCH_RUN_IN_QT_UI(__catch_exp__) }); } catch (qt_ui_closed_exception&) { __catch_exp__; }
 //////////////////////////////////////////////////////////////////////////
 //在Actor中，嵌入一段在qt-ui线程中执行的语句
-#define RUN_IN_QT_UI_FOR(__qt__, __host__, __exp__) (__qt__)->send(__host__, [&]() {__exp__;})
-#define RUN_IN_QT_UI(__exp__) RUN_IN_QT_UI_FOR(this, self, __exp__)
+#define RUN_IN_QT_UI_AT(__this_ui__, __host__, __exp__) (__this_ui__)->send(__host__, [&]() {__exp__;})
+#define RUN_IN_QT_UI(__exp__) RUN_IN_QT_UI_AT(this, self, __exp__)
 //在Actor中，嵌入一段在qt-ui线程中执行的语句，并捕获关闭异常
-#define CATCH_RUN_IN_QT_UI_FOR(__qt__, __host__, __exp__, __catch_exp__) try {(__qt__)->send(__host__, [&]() {__exp__;}); } catch (qt_ui_closed_exception&) { __catch_exp__; }
-#define CATCH_RUN_IN_QT_UI(__exp__, __catch_exp__) CATCH_RUN_IN_QT_UI_FOR(this, self, __exp__, __catch_exp__)
+#define CATCH_RUN_IN_QT_UI_AT(__this_ui__, __host__, __exp__, __catch_exp__) try {(__this_ui__)->send(__host__, [&]() {__exp__;}); } catch (qt_ui_closed_exception&) { __catch_exp__; }
+#define CATCH_RUN_IN_QT_UI(__exp__, __catch_exp__) CATCH_RUN_IN_QT_UI_AT(this, self, __exp__, __catch_exp__)
 //////////////////////////////////////////////////////////////////////////
-//在Actor中，嵌入一段在qt-ui线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用begin_RUN_IN_QT_UI_FOR）
-#define begin_ACTOR_RUN_IN_QT_UI_FOR(__qt__, __host__, __ios__) {\
+#define __NO_DELETE_FRAME(__frame__)
+#define __DELETE_FRAME(__frame__) delete (__frame__)
+#define __DESTROY_FRAME(__frame__) (__frame__).destroy();
+#define __WAIT_QT_UI_CLOSED_AT(__this_ui__, __host__, __frame__, __delete__) {\
+	bool __inside_loop = true;\
+	do\
+	{\
+		begin_RUN_IN_QT_UI_AT(__this_ui__, __host__);\
+		if (!(__frame__)->is_wait_close() && !(__frame__)->is_closed())\
+		{\
+			(__frame__)->close();\
+			__inside_loop = false;\
+		}\
+		else\
+		{\
+			__inside_loop = (__frame__)->inside_wait_close_loop();\
+		}\
+		if (!__inside_loop) { __delete__(__frame__); }\
+		end_RUN_IN_QT_UI();\
+	} while (__inside_loop); \
+}
+//在Actor中，等待一个qt-ui完全结束
+#define WAIT_QT_UI_CLOSED_AT(__this_ui__, __host__, __frame__) __WAIT_QT_UI_CLOSED_AT(__this_ui__, __host__, __frame__, __NO_DELETE_FRAME)
+#define WAIT_QT_UI_CLOSED(__frame__) WAIT_QT_UI_CLOSED_AT(this, self, __frame__)
+#define WAIT_QT_UI_CLOSED_DELETE_AT(__this_ui__, __host__, __frame__) __WAIT_QT_UI_CLOSED_AT(__this_ui__, __host__, __frame__, __DELETE_FRAME)
+#define WAIT_QT_UI_CLOSED_DELETE(__frame__) WAIT_QT_UI_CLOSED_DELETE_AT(this, self, __frame__)
+#define WAIT_QT_UI_CLOSED_DESTROY_AT(__this_ui__, __host__, __frame__) __WAIT_QT_UI_CLOSED_AT(__this_ui__, __host__, __frame__, __DESTROY_FRAME)
+#define WAIT_QT_UI_CLOSED_DESTROY(__frame__) WAIT_QT_UI_CLOSED_DESTROY_AT(this, self, __frame__)
+//////////////////////////////////////////////////////////////////////////
+//在Actor中，嵌入一段在qt-ui线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用begin_RUN_IN_QT_UI_AT）
+#define begin_ACTOR_RUN_IN_QT_UI_AT(__this_ui__, __host__, __ios__) {\
 	auto ___host = __host__; \
 	my_actor::quit_guard ___qg(__host__); \
-	auto ___tactor = (__qt__)->create_qt_actor(__ios__, [&](my_actor* __host__) {
+	auto ___tactor = (__this_ui__)->create_qt_actor(__ios__, [&](my_actor* __host__) {
 
 //在Actor中，嵌入一段在qt-ui线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用begin_RUN_IN_QT_UI）
-#define begin_ACTOR_RUN_IN_QT_UI(__ios__) begin_ACTOR_RUN_IN_QT_UI_FOR(this, self, __ios__)
+#define begin_ACTOR_RUN_IN_QT_UI(__ios__) begin_ACTOR_RUN_IN_QT_UI_AT(this, self, __ios__)
 
 //结束在qt-ui线程中执行的Actor，只有当Actor内逻辑执行完毕后才会执行END后续代码
 #define end_ACTOR_RUN_IN_QT_UI()\
@@ -99,6 +128,11 @@ public:
 	@brief 获取主线程ID
 	*/
 	boost::thread::id thread_id();
+
+	/*!
+	@brief 是否在UI线程中执行
+	*/
+	bool run_in_ui_thread();
 
 	/*!
 	@brief 扩充队列池长度
@@ -219,7 +253,6 @@ protected:
 	int _waitCount;
 	bool _waitClose;
 	bool _isClosed;
-	bool _updated;
 };
 
 template <typename FRAME>
@@ -228,18 +261,16 @@ class bind_qt_run : public FRAME, private bind_qt_run_base
 protected:
 	template <typename... Args>
 	bind_qt_run(Args&&... args)
-		: FRAME(TRY_MOVE(args)...)
-	{
-	}
-
-	virtual ~bind_qt_run()
-	{
-
-	}
+		: FRAME(TRY_MOVE(args)...) {}
 public:
 	boost::thread::id thread_id()
 	{
 		return bind_qt_run_base::thread_id();
+	}
+
+	bool run_in_ui_thread()
+	{
+		return bind_qt_run_base::run_in_ui_thread();
 	}
 
 	void post_queue_size(size_t fixedSize)
@@ -274,6 +305,40 @@ public:
 	std::function<void()> wrap_check_close()
 	{
 		return bind_qt_run_base::wrap_check_close();
+	}
+public:
+	void ui_closed()
+	{
+		bind_qt_run_base::ui_closed();
+	}
+
+	void enter_wait_close()
+	{
+		bind_qt_run_base::enter_wait_close();
+	}
+
+	bool is_closed()
+	{
+		assert(run_in_ui_thread());
+		return _isClosed;
+	}
+
+	bool is_wait_close()
+	{
+		assert(run_in_ui_thread());
+		return _waitClose;
+	}
+
+	bool wait_close_reached()
+	{
+		assert(run_in_ui_thread());
+		return 0 == _waitCount;
+	}
+
+	bool inside_wait_close_loop()
+	{
+		assert(run_in_ui_thread());
+		return NULL != _eventLoop;
 	}
 #ifdef ENABLE_QT_ACTOR
 	shared_qt_strand make_qt_strand()
@@ -328,7 +393,8 @@ private:
 
 	void close_now() override final
 	{
-		QCoreApplication::sendEvent(this, new QCloseEvent());
+		QCloseEvent closeEvent;
+		QCoreApplication::sendEvent(this, &closeEvent);
 		if (_eventLoop)
 		{
 			_eventLoop->exit();
@@ -338,31 +404,6 @@ protected:
 	virtual void customEvent_(QEvent*)
 	{
 
-	}
-
-	void ui_closed()
-	{
-		bind_qt_run_base::ui_closed();
-	}
-
-	void enter_wait_close()
-	{
-		bind_qt_run_base::enter_wait_close();
-	}
-
-	bool is_closed()
-	{
-		return _isClosed;
-	}
-
-	bool is_wait_close()
-	{
-		return _waitClose;
-	}
-
-	bool wait_close_over()
-	{
-		return 0 == _waitCount;
 	}
 };
 #endif

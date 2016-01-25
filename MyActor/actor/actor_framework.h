@@ -99,6 +99,7 @@ struct ActorFunc_
 #ifdef ENABLE_CHECK_LOST
 	static std::shared_ptr<CheckLost_> new_check_lost(const shared_strand& strand, actor_msg_handle_base* msgHandle);
 	static std::shared_ptr<CheckPumpLost_> new_check_pump_lost(const actor_handle& hostActor, MsgPoolBase_* pool);
+	static std::shared_ptr<CheckPumpLost_> new_check_pump_lost(actor_handle&& hostActor, MsgPoolBase_* pool);
 #endif
 };
 //////////////////////////////////////////////////////////////////////////
@@ -125,6 +126,7 @@ class CheckPumpLost_
 	FRIEND_SHARED_PTR(CheckPumpLost_);
 private:
 	CheckPumpLost_(const actor_handle& hostActor, MsgPoolBase_* pool);
+	CheckPumpLost_(actor_handle&& hostActor, MsgPoolBase_* pool);
 	~CheckPumpLost_();
 private:
 	actor_handle _hostActor;
@@ -268,7 +270,7 @@ public:
 private:
 	virtual void lost_msg();
 protected:
-	void set_actor(const actor_handle& hostActor);
+	void set_actor(my_actor* hostActor);
 	virtual void stop_waiting() = 0;
 	virtual void throw_lost_exception() = 0;
 protected:
@@ -457,7 +459,7 @@ public:
 		return std::function<void(ARGS...)>(*this);
 	}
 
-	actor_handle host_actor() const
+	const actor_handle& dest_actor() const
 	{
 		return _hostActor;
 	}
@@ -602,7 +604,7 @@ public:
 		close();
 	}
 private:
-	msg_notifer make_notifer(const actor_handle& hostActor, bool checkLost)
+	msg_notifer make_notifer(my_actor* hostActor, bool checkLost)
 	{
 		close();
 		Parent::set_actor(hostActor);
@@ -699,7 +701,7 @@ public:
 		close();
 	}
 private:
-	msg_notifer make_notifer(const actor_handle& hostActor, bool checkLost)
+	msg_notifer make_notifer(my_actor* hostActor, bool checkLost)
 	{
 		close();
 		Parent::set_actor(hostActor);
@@ -817,7 +819,7 @@ public:
 		close();
 	}
 private:
-	msg_notifer make_notifer(const actor_handle& hostActor, bool checkLost)
+	msg_notifer make_notifer(my_actor* hostActor, bool checkLost)
 	{
 		close();
 		Parent::set_actor(hostActor);
@@ -929,7 +931,7 @@ public:
 		close();
 	}
 private:
-	msg_notifer make_notifer(const actor_handle& hostActor, bool checkLost)
+	msg_notifer make_notifer(my_actor* hostActor, bool checkLost)
 	{
 		close();
 		Parent::set_actor(hostActor);
@@ -1078,7 +1080,7 @@ private:
 		DEBUG_OPERATION(*_pClosed = true);
 	}
 private:
-	static std::shared_ptr<MsgPump_<ARGS...>> make(const actor_handle& hostActor, bool checkLost)
+	static std::shared_ptr<MsgPump_<ARGS...>> make(my_actor* hostActor, bool checkLost)
 	{
 #ifndef ENABLE_CHECK_LOST
 		assert(!checkLost);
@@ -1093,8 +1095,8 @@ private:
 		res->_checkLost = checkLost;
 		res->_pumpCount = 0;
 		res->_dstRec = NULL;
-		res->_hostActor = hostActor.get();
-		res->_strand = ActorFunc_::self_strand(hostActor.get());
+		res->_hostActor = hostActor;
+		res->_strand = ActorFunc_::self_strand(hostActor);
 		return res;
 	}
 
@@ -1848,7 +1850,7 @@ class MsgPumpVoid_ : public MsgPumpBase_
 	friend mutex_block_pump<>;
 	friend pump_handler;
 protected:
-	MsgPumpVoid_(const actor_handle& hostActor, bool checkLost);
+	MsgPumpVoid_(my_actor* hostActor, bool checkLost);
 	virtual ~MsgPumpVoid_();
 protected:
 	void receiver();
@@ -1915,7 +1917,7 @@ class MsgPump_<> : public MsgPumpVoid_
 public:
 	typedef MsgPump_* handle;
 private:
-	MsgPump_(const actor_handle& hostActor, bool checkLost)
+	MsgPump_(my_actor* hostActor, bool checkLost)
 		:MsgPumpVoid_(hostActor, checkLost)
 	{
 		DEBUG_OPERATION(_pClosed = ActorFunc_::new_bool());
@@ -1926,7 +1928,7 @@ private:
 		DEBUG_OPERATION(*_pClosed = true);
 	}
 
-	static std::shared_ptr<MsgPump_> make(const actor_handle& hostActor, bool checkLost)
+	static std::shared_ptr<MsgPump_> make(my_actor* hostActor, bool checkLost)
 	{
 		std::shared_ptr<MsgPump_> res(new MsgPump_(hostActor, checkLost));
 		res->_weakThis = res;
@@ -2103,6 +2105,11 @@ public:
 	operator bool() const
 	{
 		return !empty();
+	}
+
+	const actor_handle& dest_actor() const
+	{
+		return _hostActor;
 	}
 private:
 	actor_handle _hostActor;
@@ -2654,6 +2661,12 @@ private:
 		:_dstRec(dstRec), _sign(sign)
 	{
 		_hostActor = hostActor;
+	}
+
+	trig_once_notifer(actor_handle&& hostActor, dst_receiver* dstRec, bool* sign)
+		:_dstRec(dstRec), _sign(sign)
+	{
+		_hostActor = std::move(hostActor);
 	}
 public:
 	trig_once_notifer(trig_once_notifer&& s)
@@ -5307,7 +5320,7 @@ public:
 	template <typename... Args>
 	actor_msg_notifer<Args...> make_msg_notifer_to_self(actor_msg_handle<Args...>& amh, bool checkLost = false)
 	{
-		return amh.make_notifer(shared_from_this(), checkLost);
+		return amh.make_notifer(this, checkLost);
 	}
 
 	/*!
@@ -5317,19 +5330,21 @@ public:
 	actor_msg_notifer<Args...> make_msg_notifer_to(const actor_handle& buddyActor, actor_msg_handle<Args...>& amh, bool checkLost = false)
 	{
 		assert_enter();
-		return amh.make_notifer(buddyActor, checkLost);
+		return amh.make_notifer(buddyActor.get(), checkLost);
 	}
 
 	template <typename... Args>
 	actor_msg_notifer<Args...> make_msg_notifer_to(my_actor* buddyActor, actor_msg_handle<Args...>& amh, bool checkLost = false)
 	{
-		return make_msg_notifer_to<Args...>(buddyActor->shared_from_this(), amh, checkLost);
+		assert_enter();
+		return amh.make_notifer(buddyActor, checkLost);
 	}
 
 	template <typename... Args>
 	actor_msg_notifer<Args...> make_msg_notifer_to(child_actor_handle& childActor, actor_msg_handle<Args...>& amh, bool checkLost = false)
 	{
-		return make_msg_notifer_to<Args...>(childActor.get_actor(), amh, checkLost);
+		assert_enter();
+		return amh.make_notifer(childActor.get_actor().get(), checkLost);
 	}
 
 	/*!
@@ -5582,7 +5597,7 @@ public:
 	template <typename... Args>
 	actor_trig_notifer<Args...> make_trig_notifer_to_self(actor_trig_handle<Args...>& ath, bool checkLost = false)
 	{
-		return ath.make_notifer(shared_from_this(), checkLost);
+		return ath.make_notifer(this, checkLost);
 	}
 
 	/*!
@@ -5592,19 +5607,21 @@ public:
 	actor_trig_notifer<Args...> make_trig_notifer_to(const actor_handle& buddyActor, actor_trig_handle<Args...>& ath, bool checkLost = false)
 	{
 		assert_enter();
-		return ath.make_notifer(buddyActor, checkLost);
+		return ath.make_notifer(buddyActor.get(), checkLost);
 	}
 
 	template <typename... Args>
 	actor_trig_notifer<Args...> make_trig_notifer_to(my_actor* buddyActor, actor_trig_handle<Args...>& ath, bool checkLost = false)
 	{
-		return make_trig_notifer_to<Args...>(buddyActor->shared_from_this(), ath, checkLost);
+		assert_enter();
+		return ath.make_notifer(buddyActor, checkLost);
 	}
 
 	template <typename... Args>
 	actor_trig_notifer<Args...> make_trig_notifer_to(child_actor_handle& childActor, actor_trig_handle<Args...>& ath, bool checkLost = false)
 	{
-		return make_trig_notifer_to<Args...>(childActor.get_actor(), ath, checkLost);
+		assert_enter();
+		return ath.make_notifer(childActor.get_actor().get(), checkLost);
 	}
 
 	/*!
@@ -6425,7 +6442,7 @@ private:
 		auto& msgPool_ = msgPck->_msgPool;
 		if (!msgPump_)
 		{
-			msgPump_ = pump_type::make(host->shared_from_this(), checkLost);
+			msgPump_ = pump_type::make(host, checkLost);
 		}
 		else
 		{
