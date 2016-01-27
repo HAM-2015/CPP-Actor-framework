@@ -290,6 +290,11 @@ void actor_msg_handle_base::lost_msg()
 	}
 }
 
+const SharedBool_& actor_msg_handle_base::dead_sign()
+{
+	return _closed;
+}
+
 //////////////////////////////////////////////////////////////////////////
 long long MutexBlock_::actor_id(my_actor* host)
 {

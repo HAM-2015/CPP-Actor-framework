@@ -211,8 +211,7 @@ public:
 			{
 				auto& ntf_ = ref4.ntf;
 				ntf_ = ref4.ath.make_notifer();
-				wait_node wn = { ntf_, host_->self_id() };
-				ref4->_waitQueue.push_front(wn);
+				ref4->_waitQueue.push_front({ ntf_, host_->self_id() });
 				ref4.complete = false;
 			}
 		});
@@ -241,8 +240,7 @@ public:
 		{
 			mutex_trig_handle ath(host);
 			mutex_trig_notifer ntf = ath.make_notifer();
-			wait_node wn = { ntf, host->self_id() };
-			_waitQueue.push_back(wn);
+			_waitQueue.push_back({ ntf, host->self_id() });
 			ath.wait();
 		}
 	}
@@ -295,8 +293,7 @@ public:
 			{
 				auto& ntf_ = ref5.ntf;
 				ntf_ = ref5.ath.make_notifer();
-				wait_node wn = { ntf_, host_->self_id() };
-				ref5->_waitQueue.push_front(wn);
+				ref5->_waitQueue.push_front({ ntf_, host_->self_id() });
 				ref5.nit = ref5->_waitQueue.begin();
 				ref5.complete = false;
 			}
@@ -517,8 +514,7 @@ public:
 		host->send(_strand, [&ref2]
 		{
 			ref2.ntf = ref2.ath.make_notifer();
-			wait_node wn = { ref2.ntf };
-			ref2->_waitQueue.push_back(wn);
+			ref2->_waitQueue.push_back({ ref2.ntf });
 		});
 		mutex.unlock();
 		ath.wait();
@@ -539,8 +535,7 @@ public:
 		host->send(_strand, [&ref4]
 		{
 			ref4.ntf = ref4.ath.make_notifer();
-			wait_node wn = { ref4.ntf };
-			ref4->_waitQueue.push_front(wn);
+			ref4->_waitQueue.push_front({ ref4.ntf });
 			ref4.nit = ref4->_waitQueue.begin();
 		});
 		mutex.unlock();
@@ -711,8 +706,7 @@ public:
 				auto& ntf_ = ref4.ntf;
 				ref4.complete = false;
 				ntf_ = ref4.ath.make_notifer();
-				wait_node wn = { ntf_, ref4.host->self_id(), st_unique };
-				ref4->_waitQueue.push_front(wn);
+				ref4->_waitQueue.push_front({ ntf_, ref4.host->self_id(), st_unique });
 			}
 		});
 		if (!complete)
@@ -768,8 +762,7 @@ public:
 				auto& ntf_ = ref5.ntf;
 				auto& waitQueue_ = ref5->_waitQueue;
 				ntf_ = ref5.ath.make_notifer();
-				wait_node wn = { ntf_, ref5.host->self_id(), st_unique };
-				waitQueue_.push_front(wn);
+				waitQueue_.push_front({ ntf_, ref5.host->self_id(), st_unique });
 				ref5.nit = waitQueue_.begin();
 			}
 		});
@@ -821,8 +814,7 @@ public:
 			{
 				auto& ntf_ = ref4.ntf;
 				ntf_ = ref4.ath.make_notifer();
-				wait_node wn = { ntf_, ref4.host->self_id(), st_shared };
-				ref4->_waitQueue.push_front(wn);
+				ref4->_waitQueue.push_front({ ntf_, ref4.host->self_id(), st_shared });
 			}
 		});
 		if (!complete)
@@ -875,8 +867,7 @@ public:
 				auto& ntf_ = ref5.ntf;
 				auto& waitQueue_ = ref5->_waitQueue;
 				ntf_ = ref5.ath.make_notifer();
-				wait_node wn = { ntf_, ref5.host->self_id(), st_shared };
-				waitQueue_.push_front(wn);
+				waitQueue_.push_front({ ntf_, ref5.host->self_id(), st_shared });
 				ref5.nit = waitQueue_.begin();
 			}
 		});
@@ -934,8 +925,7 @@ public:
 				inSet_.erase(it);
 				auto& ntf_ = ref4.ntf;
 				ntf_ = ref4.ath.make_notifer();
-				wait_node wn = { ntf_, ref4.host->self_id(), st_upgrade };
-				ref4->_waitQueue.push_front(wn);
+				ref4->_waitQueue.push_front({ ntf_, ref4.host->self_id(), st_upgrade });
 			}
 		});
 		if (!complete)
@@ -997,8 +987,7 @@ public:
 				auto& waitQueue_ = ref5->_waitQueue;
 				auto& ntf_ = ref5.ntf;
 				ntf_ = ref5.ath.make_notifer();
-				wait_node wn = { ntf_, ref5.host->self_id(), st_upgrade };
-				waitQueue_.push_front(wn);
+				waitQueue_.push_front({ ntf_, ref5.host->self_id(), st_upgrade });
 				ref5.nit = waitQueue_.begin();
 			}
 		});

@@ -26,6 +26,8 @@ bind_qt_run_base::~bind_qt_run_base()
 	assert(run_in_ui_thread());
 	assert(_isClosed);
 	assert(0 == _waitCount);
+	assert(!_waitClose);
+	assert(!_eventLoop);
 	assert(_tasksQueue.empty());
 }
 
@@ -48,6 +50,11 @@ void bind_qt_run_base::post_queue_size(size_t fixedSize)
 	_mutex.unlock();
 }
 
+size_t bind_qt_run_base::task_number()
+{
+	return _tasksQueue.size();
+}
+
 std::function<void()> bind_qt_run_base::wrap_check_close()
 {
 	assert(run_in_ui_thread());
@@ -63,6 +70,7 @@ void bind_qt_run_base::runOneTask()
 	_mutex.lock();
 	assert(!_tasksQueue.empty());
 	wrap_handler_face* h = _tasksQueue.front();
+	h->running_now();
 	_tasksQueue.pop_front();
 	_mutex.unlock();
 	h->invoke(_reuMem);
@@ -94,6 +102,8 @@ void bind_qt_run_base::enter_wait_close()
 	{
 		close_now();
 	}
+	//assert(_isClosed);
+	_waitClose = false;
 }
 
 void bind_qt_run_base::check_close()

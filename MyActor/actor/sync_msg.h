@@ -116,8 +116,8 @@ class sync_msg
 		bool* can_move;
 		bool& notified;
 		unsigned char* dst;
-		actor_trig_notifer<bool> ntf;
 		actor_trig_notifer<bool>& takeOk;
+		actor_trig_notifer<bool> ntf;
 	};
 public:
 	struct close_exception : public sync_msg_close_exception {};
@@ -147,8 +147,8 @@ public:
 				auto& _takeWait = ref5->_takeWait;
 				if (_takeWait.empty())
 				{
-					send_wait pw = { try_move<TM&&>::can_move, ref5.notified, (ST&)ref5.msg, ref5.host->make_trig_notifer_to_self(ref5.ath) };
-					ref5->_sendWait.push_front(pw);
+					ref5->_sendWait.push_front({ try_move<TM&&>::can_move, ref5.notified, (ST&)ref5.msg });
+					ref5->_sendWait.front().ntf = ref5.host->make_trig_notifer_to_self(ref5.ath);
 				}
 				else
 				{
@@ -250,8 +250,8 @@ public:
 				auto& _takeWait = ref6->_takeWait;
 				if (_takeWait.empty())
 				{
-					send_wait pw = { try_move<TM&&>::can_move, ref6.notified, (T&)ref6.msg, ref6.host->make_trig_notifer_to_self(ref6.ath) };
-					ref6->_sendWait.push_front(pw);
+					ref6->_sendWait.push_front({ try_move<TM&&>::can_move, ref6.notified, (T&)ref6.msg });
+					ref6->_sendWait.front().ntf = ref6.host->make_trig_notifer_to_self(ref6.ath);
 					ref6.mit = ref6->_sendWait.begin();
 				}
 				else
@@ -320,15 +320,15 @@ public:
 				if (_sendWait.empty())
 				{
 					ref6.wait = true;
-					take_wait pw = { NULL, ref6.notified, ref6.msgBuf, ref6.host->make_trig_notifer_to_self(ref6.ath), ref6.ntf };
-					ref6->_takeWait.push_front(pw);
+					ref6->_takeWait.push_front({ NULL, ref6.notified, ref6.msgBuf, ref6.ntf });
+					ref6->_takeWait.front().ntf = ref6.host->make_trig_notifer_to_self(ref6.ath);
 				}
 				else
 				{
 					send_wait& wt = _sendWait.back();
 					new(ref6.msgBuf)RT(wt.can_move ? TakeMove_<T>::move(wt.src_msg) : wt.src_msg);
 					wt.notified = true;
-					ref6.ntf = wt.ntf;
+					ref6.ntf = std::move(wt.ntf);
 					_sendWait.pop_back();
 				}
 			}
@@ -494,8 +494,8 @@ private:
 				if (_sendWait.empty())
 				{
 					ref4.wait = true;
-					take_wait pw = { &ref4.can_move, ref4.notified, ref6.msgBuf, ref6.host->make_trig_notifer_to_self(ref6.ath), ref4.ntf };
-					ref6->_takeWait.push_front(pw);
+					ref6->_takeWait.push_front({ &ref4.can_move, ref4.notified, ref6.msgBuf, ref4.ntf });
+					ref6->_takeWait.front().ntf = ref6.host->make_trig_notifer_to_self(ref6.ath);
 					ref6.mit = ref6->_takeWait.begin();
 				}
 				else
@@ -570,8 +570,8 @@ class CspChannel_
 		bool& notified;
 		T*& srcMsg;
 		unsigned char*& res;
-		actor_trig_notifer<bool> ntf;
 		actor_trig_notifer<bool>& ntfSend;
+		actor_trig_notifer<bool> ntf;
 	};
 protected:
 	CspChannel_(const shared_strand& strand)
@@ -605,8 +605,8 @@ public:
 				auto& _takeWait = ref6->_takeWait;
 				if (_takeWait.empty())
 				{
-					send_wait pw = { ref6.notified, ref6.msg, ref6.resBuf, ref6.host->make_trig_notifer_to_self(ref6.ath) };
-					ref6->_sendWait.push_front(pw);
+					ref6->_sendWait.push_front({ ref6.notified, ref6.msg, ref6.resBuf });
+					ref6->_sendWait.front().ntf = ref6.host->make_trig_notifer_to_self(ref6.ath);
 				}
 				else
 				{
@@ -722,8 +722,8 @@ public:
 				auto& _takeWait = ref8->_takeWait;
 				if (_takeWait.empty())
 				{
-					send_wait pw = { ref8.notified, ref8.msg, ref8.resBuf, ref8.host->make_trig_notifer_to_self(ref8.ath) };
-					ref8->_sendWait.push_front(pw);
+					ref8->_sendWait.push_front({ ref8.notified, ref8.msg, ref8.resBuf });
+					ref8->_sendWait.front().ntf = ref8.host->make_trig_notifer_to_self(ref8.ath);
 					ref8.nit = ref8->_sendWait.begin();
 				}
 				else
@@ -809,15 +809,15 @@ public:
 				if (_sendWait.empty())
 				{
 					ref8.wait = true;
-					take_wait pw = { ref8.notified, ref8.srcMsg, ref8.res, ref8.host->make_trig_notifer_to_self(ref8.ath), ref8.ntfSend };
-					ref8->_takeWait.push_front(pw);
+					ref8->_takeWait.push_front({ ref8.notified, ref8.srcMsg, ref8.res, ref8.ntfSend });
+					ref8->_takeWait.front().ntf = ref8.host->make_trig_notifer_to_self(ref8.ath);
 				}
 				else
 				{
 					send_wait& wt = _sendWait.back();
 					ref8.srcMsg = &wt.srcMsg;
 					wt.notified = true;
-					ref8.ntfSend = wt.ntf;
+					ref8.ntfSend = std::move(wt.ntf);
 					ref8.res = wt.res;
 					_sendWait.pop_back();
 				}
@@ -881,7 +881,7 @@ public:
 					send_wait& wt = _sendWait.back();
 					ref5.srcMsg = &wt.srcMsg;
 					wt.notified = true;
-					ref5.ntfSend = wt.ntf;
+					ref5.ntfSend = std::move(wt.ntf);
 					ref5.res = wt.res;
 					_sendWait.pop_back();
 				}
@@ -943,8 +943,8 @@ public:
 				if (_sendWait.empty())
 				{
 					ref9.wait = true;
-					take_wait pw = { ref9.notified, ref9.srcMsg, ref9.res, ref9.host->make_trig_notifer_to_self(ref9.ath), ref9.ntfSend };
-					ref9->_takeWait.push_front(pw);
+					ref9->_takeWait.push_front({ ref9.notified, ref9.srcMsg, ref9.res, ref9.ntfSend });
+					ref9->_takeWait.front().ntf = ref9.host->make_trig_notifer_to_self(ref9.ath);
 					ref9.wit = ref9->_takeWait.begin();
 				}
 				else
@@ -952,7 +952,7 @@ public:
 					send_wait& wt = _sendWait.back();
 					ref9.srcMsg = &wt.srcMsg;
 					wt.notified = true;
-					ref9.ntfSend = wt.ntf;
+					ref9.ntfSend = std::move(wt.ntf);
 					ref9.res = wt.res;
 					_sendWait.pop_back();
 				}

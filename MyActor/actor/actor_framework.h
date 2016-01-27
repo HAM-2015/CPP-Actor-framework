@@ -257,6 +257,21 @@ class actor_trig_handle;
 template <typename... ARGS>
 class MsgNotiferBase_;
 
+struct run_mutex_block_force_quit {};
+
+#ifdef ENABLE_CHECK_LOST
+
+template <typename... ARGS>
+class mutex_block_msg_check_lost;
+
+template <typename... ARGS>
+class mutex_block_trig_check_lost;
+
+template <typename... ARGS>
+class mutex_block_pump_check_lost;
+
+#endif
+
 class actor_msg_handle_base
 {
 	friend CheckLost_;
@@ -267,6 +282,7 @@ public:
 	virtual void close() = 0;
 	virtual size_t size() = 0;
 	void check_lost(bool checkLost = true);
+	const SharedBool_& dead_sign();
 private:
 	virtual void lost_msg();
 protected:
@@ -483,6 +499,11 @@ public:
 	{
 		return !empty();
 	}
+
+	const SharedBool_& dead_sign() const
+	{
+		return _closed;
+	}
 protected:
 	MsgNotiferBase_(const MsgNotiferBase_<ARGS...>& s)
 		:_msgHandle(s._msgHandle), _hostActor(s._hostActor), _closed(s._closed)
@@ -592,6 +613,9 @@ class actor_msg_handle : public ActorMsgHandlePush_<ARGS...>
 	typedef actor_msg_notifer<ARGS...> msg_notifer;
 
 	friend mutex_block_msg<ARGS...>;
+#ifdef ENABLE_CHECK_LOST
+	friend mutex_block_msg_check_lost<ARGS...>;
+#endif
 	friend my_actor;
 public:
 	struct lost_exception : ntf_lost_exception {};
@@ -692,6 +716,9 @@ class actor_msg_handle<> : public ActorMsgHandlePush_<>
 	typedef actor_msg_notifer<> msg_notifer;
 
 	friend mutex_block_msg<>;
+#ifdef ENABLE_CHECK_LOST
+	friend mutex_block_msg_check_lost<>;
+#endif
 	friend my_actor;
 public:
 	struct lost_exception : ntf_lost_exception {};
@@ -807,6 +834,9 @@ class actor_trig_handle : public ActorMsgHandlePush_<ARGS...>
 	typedef actor_trig_notifer<ARGS...> msg_notifer;
 
 	friend mutex_block_trig<ARGS...>;
+#ifdef ENABLE_CHECK_LOST
+	friend mutex_block_trig_check_lost<ARGS...>;
+#endif
 	friend my_actor;
 public:
 	struct lost_exception : ntf_lost_exception {};
@@ -908,8 +938,8 @@ public:
 	}
 private:
 	dst_receiver* _dstRec;
-	bool _hasMsg;
 	unsigned char _msgBuff[sizeof(msg_type)];
+	bool _hasMsg;
 };
 
 template <>
@@ -919,6 +949,9 @@ class actor_trig_handle<> : public ActorMsgHandlePush_<>
 	typedef actor_trig_notifer<> msg_notifer;
 
 	friend mutex_block_trig<>;
+#ifdef ENABLE_CHECK_LOST
+	friend mutex_block_trig_check_lost<>;
+#endif
 	friend my_actor;
 public:
 	struct lost_exception : ntf_lost_exception {};
@@ -1067,6 +1100,9 @@ class MsgPump_ : public MsgPumpBase_
 	friend mutex_block_pump<ARGS...>;
 	friend pump_handler;
 	friend msg_pump_handle<ARGS...>;
+#ifdef ENABLE_CHECK_LOST
+	friend mutex_block_pump_check_lost<ARGS...>;
+#endif
 	FRIEND_SHARED_PTR(MsgPump_<ARGS...>);
 private:
 	MsgPump_()
@@ -1849,6 +1885,9 @@ class MsgPumpVoid_ : public MsgPumpBase_
 	friend MsgPoolVoid_;
 	friend mutex_block_pump<>;
 	friend pump_handler;
+#ifdef ENABLE_CHECK_LOST
+	friend mutex_block_pump_check_lost<>;
+#endif
 protected:
 	MsgPumpVoid_(my_actor* hostActor, bool checkLost);
 	virtual ~MsgPumpVoid_();
@@ -1913,6 +1952,9 @@ class MsgPump_<> : public MsgPumpVoid_
 	friend my_actor;
 	friend mutex_block_pump<>;
 	friend msg_pump_handle<>;
+#ifdef ENALBE_CHECK_LOST
+	friend mutex_block_pump_check_lost<>;
+#endif
 	FRIEND_SHARED_PTR(MsgPump_<>);
 public:
 	typedef MsgPump_* handle;
@@ -1943,6 +1985,9 @@ class msg_pump_handle
 {
 	friend my_actor;
 	friend mutex_block_pump<ARGS...>;
+#ifdef ENABLE_CHECK_LOST
+	friend mutex_block_pump_check_lost<ARGS...>;
+#endif
 
 	typedef MsgPump_<ARGS...> pump;
 public:
@@ -2176,12 +2221,9 @@ private:
 	{
 		if (_msgBuff.has())
 		{
-			BEGIN_CHECK_EXCEPTION;
 			isRun = true;
-			bool r = tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
-			_msgBuff.clear();
-			return r;
-			END_CHECK_EXCEPTION;
+			OUT_OF_SCOPE({ _msgBuff.clear(); });
+			return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 		}
 		isRun = false;
 		return false;
@@ -2244,13 +2286,10 @@ private:
 	{
 		if (_msgBuff.has())
 		{
-			BEGIN_CHECK_EXCEPTION;
 			isRun = true;
 			_triged = true;
-			bool r = tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
-			_msgBuff.clear();
-			return r;
-			END_CHECK_EXCEPTION;
+			OUT_OF_SCOPE({ _msgBuff.clear(); });
+			return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 		}
 		isRun = false;
 		return false;
@@ -2327,12 +2366,9 @@ private:
 		assert(!_msgHandle.check_closed());
 		if (_msgBuff.has())
 		{
-			BEGIN_CHECK_EXCEPTION;
 			isRun = true;
-			bool r = tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
-			_msgBuff.clear();
-			return r;
-			END_CHECK_EXCEPTION;
+			OUT_OF_SCOPE({ _msgBuff.clear(); });
+			return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 		}
 		isRun = false;
 		return false;
@@ -2388,11 +2424,9 @@ private:
 	{
 		if (_has)
 		{
-			BEGIN_CHECK_EXCEPTION;
 			isRun = true;
 			_has = false;
 			return _handler();
-			END_CHECK_EXCEPTION;
 		}
 		isRun = false;
 		return false;
@@ -2451,12 +2485,10 @@ private:
 	{
 		if (_has)
 		{
-			BEGIN_CHECK_EXCEPTION;
 			isRun = true;
 			_triged = true;
 			_has = false;
 			return _handler();
-			END_CHECK_EXCEPTION;
 		}
 		isRun = false;
 		return false;
@@ -2529,11 +2561,9 @@ private:
 		assert(!_msgHandle.check_closed());
 		if (_has)
 		{
-			BEGIN_CHECK_EXCEPTION;
 			isRun = true;
 			_has = false;
 			return _handler();
-			END_CHECK_EXCEPTION;
 		}
 		isRun = false;
 		return false;
@@ -2554,6 +2584,521 @@ private:
 	std::function<bool()> _handler;
 	bool _has;
 };
+//////////////////////////////////////////////////////////////////////////
+
+#ifdef ENABLE_CHECK_LOST
+
+/*!
+@brief actor_msg_handle消息互斥执行块，带通知句柄丢失处理
+*/
+template <typename... ARGS>
+class mutex_block_msg_check_lost : public MutexBlock_
+{
+	typedef actor_msg_handle<ARGS...> msg_handle;
+	typedef DstReceiverBuff_<ARGS...> dst_receiver;
+
+	friend my_actor;
+public:
+	template <typename Handler, typename LostHandler>
+	mutex_block_msg_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler))
+	{
+		_msgHandle.check_lost(true);
+	}
+private:
+	bool ready()
+	{
+		assert(!_msgBuff.has());
+		return _msgHandle.read_msg(_msgBuff) || is_losted();
+	}
+
+	void cancel()
+	{
+		_msgHandle.stop_waiting();
+	}
+
+	bool is_losted()
+	{
+		assert(_msgHandle._checkLost);
+		return _msgHandle._losted;
+	}
+
+	void check_lost()
+	{
+	}
+
+	bool go(bool& isRun)
+	{
+		if (_msgBuff.has())
+		{
+			isRun = true;
+			OUT_OF_SCOPE({ _msgBuff.clear(); });
+			return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
+		}
+		else if (is_losted())
+		{
+			isRun = true;
+			return _lostHandler();
+		}
+		isRun = false;
+		return false;
+	}
+
+	size_t snap_id()
+	{
+		return (size_t)&_msgHandle;
+	}
+
+	long long host_id()
+	{
+		return MutexBlock_::actor_id(_msgHandle._hostActor);
+	}
+private:
+	msg_handle& _msgHandle;
+	std::function<bool(ARGS...)> _handler;
+	std::function<bool()> _lostHandler;
+	dst_receiver _msgBuff;
+};
+
+/*!
+@brief actor_trig_handle消息互斥执行块，带通知句柄丢失处理
+*/
+template <typename... ARGS>
+class mutex_block_trig_check_lost : public MutexBlock_
+{
+	typedef actor_trig_handle<ARGS...> msg_handle;
+	typedef DstReceiverBuff_<ARGS...> dst_receiver;
+
+	friend my_actor;
+public:
+	template <typename Handler, typename LostHandler>
+	mutex_block_trig_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _triged(false)
+	{
+		_msgHandle.check_lost(true);
+	}
+private:
+	bool ready()
+	{
+		if (!_triged)
+		{
+			assert(!_msgBuff.has());
+			return _msgHandle.read_msg(_msgBuff) || is_losted();
+		}
+		return false;
+	}
+
+	void cancel()
+	{
+		_msgHandle.stop_waiting();
+	}
+
+	bool is_losted()
+	{
+		assert(_msgHandle._checkLost);
+		return _msgHandle._losted;
+	}
+
+	void check_lost()
+	{
+	}
+
+	bool go(bool& isRun)
+	{
+		if (_msgBuff.has())
+		{
+			isRun = true;
+			_triged = true;
+			OUT_OF_SCOPE({ _msgBuff.clear(); });
+			return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
+		}
+		else if (is_losted())
+		{
+			isRun = true;
+			_triged = true;
+			return _lostHandler();
+		}
+		isRun = false;
+		return false;
+	}
+
+	size_t snap_id()
+	{
+		return (size_t)&_msgHandle;
+	}
+
+	long long host_id()
+	{
+		return MutexBlock_::actor_id(_msgHandle._hostActor);
+	}
+private:
+	msg_handle& _msgHandle;
+	std::function<bool(ARGS...)> _handler;
+	std::function<bool()> _lostHandler;
+	dst_receiver _msgBuff;
+	bool _triged;
+};
+
+/*!
+@brief msg_pump消息互斥执行块，带通知句柄丢失处理
+*/
+template <typename... ARGS>
+class mutex_block_pump_check_lost : public MutexBlock_
+{
+	typedef msg_pump_handle<ARGS...> pump_handle;
+	typedef DstReceiverBuff_<ARGS...> dst_receiver;
+
+	friend my_actor;
+public:
+	template <typename Handler, typename LostHandler>
+	mutex_block_pump_check_lost(my_actor* host, Handler&& handler, LostHandler&& lostHandler)
+		:_handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler))
+	{
+		_msgHandle = ActorFunc_::connect_msg_pump<ARGS...>(0, host, true);
+	}
+
+	template <typename Handler, typename LostHandler>
+	mutex_block_pump_check_lost(const int id, my_actor* host, Handler&& handler, LostHandler&& lostHandler)
+		: _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler))
+	{
+		_msgHandle = ActorFunc_::connect_msg_pump<ARGS...>(id, host, true);
+	}
+
+	template <typename Handler, typename LostHandler>
+	mutex_block_pump_check_lost(const pump_handle& pump, Handler&& handler, LostHandler&& lostHandler)
+		: _msgHandle(pump), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler))
+	{
+		_msgHandle.check_lost(true);
+	}
+private:
+	bool ready()
+	{
+		assert(!_msgBuff.has());
+		assert(!_msgHandle.check_closed());
+		return _msgHandle._handle->read_msg(_msgBuff) || is_losted();
+	}
+
+	void cancel()
+	{
+		assert(!_msgHandle.check_closed());
+		_msgHandle._handle->stop_waiting();
+	}
+
+	bool is_losted()
+	{
+		assert(_msgHandle.get()->_checkLost);
+		return _msgHandle.get()->_losted;
+	}
+
+	void check_lost()
+	{
+	}
+
+	bool go(bool& isRun)
+	{
+		assert(!_msgHandle.check_closed());
+		if (_msgBuff.has())
+		{
+			isRun = true;
+			OUT_OF_SCOPE({ _msgBuff.clear(); });
+			return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
+		}
+		else if (is_losted())
+		{
+			isRun = true;
+			return _lostHandler();
+		}
+		isRun = false;
+		return false;
+	}
+
+	size_t snap_id()
+	{
+		assert(!_msgHandle.check_closed());
+		return (size_t)_msgHandle._handle;
+	}
+
+	long long host_id()
+	{
+		return MutexBlock_::actor_id(_msgHandle.get()->_hostActor);
+	}
+private:
+	pump_handle _msgHandle;
+	std::function<bool(ARGS...)> _handler;
+	std::function<bool()> _lostHandler;
+	dst_receiver _msgBuff;
+};
+
+template <>
+class mutex_block_msg_check_lost<> : public MutexBlock_
+{
+	typedef actor_msg_handle<> msg_handle;
+
+	friend my_actor;
+public:
+	template <typename Handler, typename LostHandler>
+	mutex_block_msg_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _has(false)
+	{
+		_msgHandle.check_lost(true);
+	}
+private:
+	bool ready()
+	{
+		assert(!_has);
+		return _msgHandle.read_msg(_has) || is_losted();
+	}
+
+	void cancel()
+	{
+		_msgHandle.stop_waiting();
+	}
+
+	bool is_losted()
+	{
+		assert(_msgHandle._checkLost);
+		return _msgHandle._losted;
+	}
+
+	void check_lost()
+	{
+	}
+
+	bool go(bool& isRun)
+	{
+		if (_has)
+		{
+			isRun = true;
+			_has = false;
+			return _handler();
+		}
+		else if (is_losted())
+		{
+			isRun = true;
+			return _lostHandler();
+		}
+		isRun = false;
+		return false;
+	}
+
+	size_t snap_id()
+	{
+		return (size_t)&_msgHandle;
+	}
+
+	long long host_id()
+	{
+		return MutexBlock_::actor_id(_msgHandle._hostActor);
+	}
+private:
+	msg_handle& _msgHandle;
+	std::function<bool()> _handler;
+	std::function<bool()> _lostHandler;
+	bool _has;
+};
+
+template <>
+class mutex_block_trig_check_lost<> : public MutexBlock_
+{
+	typedef actor_trig_handle<> msg_handle;
+
+	friend my_actor;
+public:
+	template <typename Handler, typename LostHandler>
+	mutex_block_trig_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _has(false), _triged(false)
+	{
+		_msgHandle.check_lost(true);
+	}
+private:
+	bool ready()
+	{
+		if (!_triged)
+		{
+			assert(!_has);
+			return _msgHandle.read_msg(_has) || is_losted();
+		}
+		return false;
+	}
+
+	void cancel()
+	{
+		_msgHandle.stop_waiting();
+	}
+
+	bool is_losted()
+	{
+		assert(_msgHandle._checkLost);
+		return _msgHandle._losted;
+	}
+
+	void check_lost()
+	{
+	}
+
+	bool go(bool& isRun)
+	{
+		if (_has)
+		{
+			isRun = true;
+			_triged = true;
+			_has = false;
+			return _handler();
+		}
+		else if (is_losted())
+		{
+			isRun = true;
+			_triged = true;
+			return _lostHandler();
+		}
+		isRun = false;
+		return false;
+	}
+
+	size_t snap_id()
+	{
+		return (size_t)&_msgHandle;
+	}
+
+	long long host_id()
+	{
+		return MutexBlock_::actor_id(_msgHandle._hostActor);
+	}
+private:
+	msg_handle& _msgHandle;
+	std::function<bool()> _handler;
+	std::function<bool()> _lostHandler;
+	bool _has;
+	bool _triged;
+};
+
+template <>
+class mutex_block_pump_check_lost<> : public MutexBlock_
+{
+	typedef msg_pump_handle<> pump_handle;
+
+	friend my_actor;
+public:
+	template <typename Handler, typename LostHandler>
+	mutex_block_pump_check_lost(my_actor* host, Handler&& handler, LostHandler&& lostHandler)
+		:_handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _has(false)
+	{
+		_msgHandle = ActorFunc_::connect_msg_pump(0, host, true);
+	}
+
+	template <typename Handler, typename LostHandler>
+	mutex_block_pump_check_lost(const int id, my_actor* host, Handler&& handler, LostHandler&& lostHandler)
+		: _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _has(false)
+	{
+		_msgHandle = ActorFunc_::connect_msg_pump(id, host, true);
+	}
+
+	template <typename Handler, typename LostHandler>
+	mutex_block_pump_check_lost(const pump_handle& pump, Handler&& handler, LostHandler&& lostHandler)
+		: _msgHandle(pump), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _has(false)
+	{
+		_msgHandle.check_lost(true);
+	}
+private:
+	bool ready()
+	{
+		assert(!_has);
+		assert(!_msgHandle.check_closed());
+		return _msgHandle._handle->read_msg(_has) || is_losted();
+	}
+
+	void cancel()
+	{
+		assert(!_msgHandle.check_closed());
+		_msgHandle._handle->stop_waiting();
+	}
+
+	bool is_losted()
+	{
+		assert(_msgHandle.get()->_checkLost);
+		return _msgHandle.get()->_losted;
+	}
+
+	void check_lost()
+	{
+	}
+
+	bool go(bool& isRun)
+	{
+		assert(!_msgHandle.check_closed());
+		if (_has)
+		{
+			isRun = true;
+			_has = false;
+			return _handler();
+		}
+		else if (is_losted())
+		{
+			isRun = true;
+			return _lostHandler();
+		}
+		isRun = false;
+		return false;
+	}
+
+	size_t snap_id()
+	{
+		assert(!_msgHandle.check_closed());
+		return (size_t)_msgHandle._handle;
+	}
+
+	long long host_id()
+	{
+		return MutexBlock_::actor_id(_msgHandle.get()->_hostActor);
+	}
+private:
+	pump_handle _msgHandle;
+	std::function<bool()> _handler;
+	std::function<bool()> _lostHandler;
+	bool _has;
+};
+#endif
+//////////////////////////////////////////////////////////////////////////
+
+template <typename Handler, typename... ARGS>
+mutex_block_msg<ARGS...> make_mutex_block_msg(actor_msg_handle<ARGS...>& msgHandle, Handler&& handler)
+{
+	return mutex_block_msg<ARGS...>(msgHandle, TRY_MOVE(handler));
+}
+
+template <typename Handler, typename... ARGS>
+mutex_block_trig<ARGS...> make_mutex_block_trig(actor_trig_handle<ARGS...>& msgHandle, Handler&& handler)
+{
+	return mutex_block_trig<ARGS...>(msgHandle, TRY_MOVE(handler));
+}
+
+template <typename Handler, typename... ARGS>
+mutex_block_pump<ARGS...> make_mutex_block_pump(const msg_pump_handle<ARGS...>& msgHandle, Handler&& handler)
+{
+	return mutex_block_pump<ARGS...>(msgHandle, TRY_MOVE(handler));
+}
+
+#ifdef ENABLE_CHECK_LOST
+
+template <typename Handler, typename LostHandler, typename... ARGS>
+mutex_block_msg_check_lost<ARGS...> make_mutex_block_msg_check_lost(actor_msg_handle<ARGS...>& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+{
+	return mutex_block_msg_check_lost<ARGS...>(msgHandle, TRY_MOVE(handler), TRY_MOVE(lostHandler));
+}
+
+template <typename Handler, typename LostHandler, typename... ARGS>
+mutex_block_trig_check_lost<ARGS...> make_mutex_block_trig_check_lost(actor_trig_handle<ARGS...>& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+{
+	return mutex_block_trig_check_lost<ARGS...>(msgHandle, TRY_MOVE(handler), TRY_MOVE(lostHandler));
+}
+
+template <typename Handler, typename LostHandler, typename... ARGS>
+mutex_block_pump_check_lost<ARGS...> make_mutex_block_pump_check_lost(const msg_pump_handle<ARGS...>& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+{
+	return mutex_block_pump_check_lost<ARGS...>(msgHandle, TRY_MOVE(handler), TRY_MOVE(lostHandler));
+}
+
+#endif
 //////////////////////////////////////////////////////////////////////////
 
 class TrigOnceBase_
@@ -6981,15 +7526,21 @@ private:
 
 	static bool _mutex_go(MutexBlock_** const mbs, const size_t N)
 	{
-		for (size_t i = 0; i < N; i++)
+		try
 		{
-			bool isRun = false;
-			if (mbs[i]->go(isRun))
+			bool isQuit = false;
+			for (size_t i = 0; i < N; i++)
 			{
-				return true;
+				bool isRun = false;
+				isQuit |= mbs[i]->go(isRun);
 			}
+			return isQuit;
 		}
-		return false;
+		catch (run_mutex_block_force_quit&)
+		{
+			return true;
+		}
+		DEBUG_OPERATION(catch (...) { assert(false); } return true;)
 	}
 
 	static void _mutex_check_lost(MutexBlock_** const mbs, const size_t N)
@@ -7004,21 +7555,26 @@ private:
 
 	static bool _mutex_go_count(size_t& runCount, MutexBlock_** const mbs, const size_t N)
 	{
-		for (size_t i = 0; i < N; i++)
+		try
 		{
-			bool isRun = false;
-			if (mbs[i]->go(isRun))
+			bool isQuit = false;
+			for (size_t i = 0; i < N; i++)
 			{
-				assert(isRun);
-				runCount++;
-				return true;
+				bool isRun = false;
+				isQuit |= mbs[i]->go(isRun);
+				if (isRun)
+				{
+					runCount++;
+				}
 			}
-			if (isRun)
-			{
-				runCount++;
-			}
+			return isQuit;
 		}
-		return false;
+		catch (run_mutex_block_force_quit&)
+		{
+			runCount++;
+			return true;
+		}
+		DEBUG_OPERATION(catch (...) { assert(false); } return true;)
 	}
 
 	static bool _cmp_snap_id(MutexBlock_** const mbs, const size_t N)
@@ -7124,10 +7680,10 @@ private:
 	}
 public:
 	/*!
-	@brief 运行互斥消息执行块（阻塞）
+	@brief 运行互斥消息执行块（阻塞），每次有几个取几个
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt void run_mutex_blocks(MutexBlocks&&... mbs)
+	__yield_interrupt void run_mutex_blocks_many(MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");
@@ -7142,7 +7698,7 @@ public:
 	@brief 运行互斥消息执行块（阻塞），每次从头开始优先只取一条消息
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt void run_mutex_blocks1(MutexBlocks&&... mbs)
+	__yield_interrupt void run_mutex_blocks_safe(MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");
@@ -7157,7 +7713,7 @@ public:
 	@brief 运行互斥消息执行块（阻塞），每次依次往后开始优先只取一条消息
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt void run_mutex_blocks2(MutexBlocks&&... mbs)
+	__yield_interrupt void run_mutex_blocks_rotation(MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");
@@ -7174,7 +7730,7 @@ public:
 	@brief 运行互斥消息执行块（阻塞，带优先级），每次只取一条消息
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt void run_mutex_blocks3(MutexBlocks&&... mbs)
+	__yield_interrupt void run_mutex_blocks_priority(MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");
@@ -7191,10 +7747,10 @@ public:
 	}
 
 	/*!
-	@brief 超时等待运行互斥消息执行块（阻塞）
+	@brief 超时等待运行互斥消息执行块（阻塞），每次有几个取几个
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt size_t timed_run_mutex_blocks(const int tm, MutexBlocks&&... mbs)
+	__yield_interrupt size_t timed_run_mutex_blocks_many(const int tm, MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");
@@ -7209,7 +7765,7 @@ public:
 	@brief 超时等待运行互斥消息执行块（阻塞），每次从头开始优先只取一条消息
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt size_t timed_run_mutex_blocks1(const int tm, MutexBlocks&&... mbs)
+	__yield_interrupt size_t timed_run_mutex_blocks_safe(const int tm, MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");
@@ -7224,7 +7780,7 @@ public:
 	@brief 超时等待运行互斥消息执行块（阻塞），每次依次往后开始优先只取一条消息
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt size_t timed_run_mutex_blocks2(const int tm, MutexBlocks&&... mbs)
+	__yield_interrupt size_t timed_run_mutex_blocks_rotation(const int tm, MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");
@@ -7241,7 +7797,7 @@ public:
 	@brief 超时等待运行互斥消息执行块（阻塞，带优先级），每次只取一条消息
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt size_t timed_run_mutex_blocks3(const int tm, MutexBlocks&&... mbs)
+	__yield_interrupt size_t timed_run_mutex_blocks_priority(const int tm, MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");

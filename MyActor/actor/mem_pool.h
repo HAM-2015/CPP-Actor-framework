@@ -43,6 +43,8 @@ struct mem_alloc_mt;
 template <typename MUTEX>
 struct mem_alloc_mt<void, MUTEX>
 {
+	typedef MUTEX mutex_type;
+
 	template <typename _Other>
 	struct rebind
 	{
@@ -60,6 +62,8 @@ template <typename DATA, typename MUTEX>
 struct mem_alloc_mt : protected MUTEX, public mem_alloc_base
 {
 	struct node_space;
+
+	typedef MUTEX mutex_type;
 
 	template <typename _Other>
 	struct rebind 
@@ -209,6 +213,8 @@ struct mem_alloc_mt2;
 template <typename MUTEX>
 struct mem_alloc_mt2<void, MUTEX>
 {
+	typedef MUTEX mutex_type;
+
 	template <typename _Other>
 	struct rebind
 	{
@@ -226,6 +232,7 @@ template <typename DATA, typename MUTEX>
 struct mem_alloc_mt2 : protected MUTEX, public mem_alloc_base
 {
 	typedef typename mem_alloc_mt<DATA>::node_space node_space;
+	typedef MUTEX mutex_type;
 
 	template <typename _Other>
 	struct rebind

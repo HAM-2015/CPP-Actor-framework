@@ -16,21 +16,21 @@
 #define QT_POST_TASK	(QEvent::MaxUser-1)
 
 //开始在Actor中，嵌入一段在qt-ui线程中执行的连续逻辑
-#define begin_RUN_IN_QT_UI_AT(__this_ui__, __host__) (__this_ui__)->send(__host__, [&]() {
+#define begin_RUN_IN_QT_UI_AT(__this_ui__, __host__) {(__this_ui__)->send(__host__, [&]() {
 #define begin_RUN_IN_QT_UI() begin_RUN_IN_QT_UI_AT(this, self)
 //开始在Actor中，嵌入一段在qt-ui线程中执行的连续逻辑，并捕获关闭异常
-#define begin_CATCH_RUN_IN_QT_UI_AT(__this_ui__, __host__) try {(__this_ui__)->send(__host__, [&]() {
+#define begin_CATCH_RUN_IN_QT_UI_AT(__this_ui__, __host__) {try {(__this_ui__)->send(__host__, [&]() {
 #define begin_CATCH_RUN_IN_QT_UI() begin_CATCH_RUN_IN_QT_UI_AT(this, self)
 //结束在qt-ui线程中执行的一段连续逻辑，只有当这段逻辑执行完毕后才会执行END后续代码
-#define end_RUN_IN_QT_UI() })
+#define end_RUN_IN_QT_UI() });}
 //结束在qt-ui线程中执行的一段连续逻辑，并捕获关闭异常，只有当这段逻辑执行完毕后才会执行END后续代码
-#define end_CATCH_RUN_IN_QT_UI(__catch_exp__) }); } catch (qt_ui_closed_exception&) { __catch_exp__; }
+#define end_CATCH_RUN_IN_QT_UI(__catch_exp__) }); } catch (qt_ui_closed_exception&) { __catch_exp__; }}
 //////////////////////////////////////////////////////////////////////////
 //在Actor中，嵌入一段在qt-ui线程中执行的语句
-#define RUN_IN_QT_UI_AT(__this_ui__, __host__, __exp__) (__this_ui__)->send(__host__, [&]() {__exp__;})
+#define RUN_IN_QT_UI_AT(__this_ui__, __host__, __exp__) {(__this_ui__)->send(__host__, [&]() {__exp__;});}
 #define RUN_IN_QT_UI(__exp__) RUN_IN_QT_UI_AT(this, self, __exp__)
 //在Actor中，嵌入一段在qt-ui线程中执行的语句，并捕获关闭异常
-#define CATCH_RUN_IN_QT_UI_AT(__this_ui__, __host__, __exp__, __catch_exp__) try {(__this_ui__)->send(__host__, [&]() {__exp__;}); } catch (qt_ui_closed_exception&) { __catch_exp__; }
+#define CATCH_RUN_IN_QT_UI_AT(__this_ui__, __host__, __exp__, __catch_exp__) {try {(__this_ui__)->send(__host__, [&]() {__exp__;}); } catch (qt_ui_closed_exception&) { __catch_exp__; }}
 #define CATCH_RUN_IN_QT_UI(__exp__, __catch_exp__) CATCH_RUN_IN_QT_UI_AT(this, self, __exp__, __catch_exp__)
 //////////////////////////////////////////////////////////////////////////
 #define __NO_DELETE_FRAME(__frame__)
@@ -85,6 +85,7 @@ class bind_qt_run_base
 	struct wrap_handler_face
 	{
 		virtual void invoke(reusable_mem_mt<>& reuMem) = 0;
+		virtual void running_now() = 0;
 	};
 
 	template <typename Handler>
@@ -101,6 +102,40 @@ class bind_qt_run_base
 			reuMem.deallocate(this);
 		}
 
+		void running_now()
+		{
+		}
+
+		Handler _handler;
+	};
+
+	template <typename Handler>
+	struct wrap_timed_handler : public wrap_handler_face
+	{
+		template <typename H>
+		wrap_timed_handler(const SharedBool_& deadSign, bool& running, H&& h)
+			:_deadSign(deadSign), _running(running), _handler(TRY_MOVE(h)) {}
+
+		void invoke(reusable_mem_mt<>& reuMem)
+		{
+			if (!*_deadSign)
+			{
+				CHECK_EXCEPTION(_handler);
+			}
+			this->~wrap_timed_handler();
+			reuMem.deallocate(this);
+		}
+
+		void running_now()
+		{
+			if (!*_deadSign)
+			{
+				_running = true;
+			}
+		}
+
+		SharedBool_ _deadSign;
+		bool& _running;
 		Handler _handler;
 	};
 
@@ -109,6 +144,13 @@ class bind_qt_run_base
 	{
 		typedef wrap_handler<RM_CREF(Handler)> handler_type;
 		return new(reuMem.allocate(sizeof(handler_type)))handler_type(TRY_MOVE(handler));
+	}
+
+	template <typename Handler>
+	wrap_handler_face* make_wrap_timed_handler(reusable_mem_mt<>& reuMem, const SharedBool_& deadSign, bool& running, Handler&& handler)
+	{
+		typedef wrap_timed_handler<RM_CREF(Handler)> handler_type;
+		return new(reuMem.allocate(sizeof(handler_type)))handler_type(deadSign, running, TRY_MOVE(handler));
 	}
 protected:
 	struct task_event : public QEvent
@@ -138,6 +180,11 @@ public:
 	@brief 扩充队列池长度
 	*/
 	void post_queue_size(size_t fixedSize);
+
+	/*!
+	@brief 任务队列长度
+	*/
+	size_t task_number();
 
 	/*!
 	@brief 发送一个执行函数到UI消息队列中执行
@@ -199,6 +246,52 @@ public:
 	}
 
 	/*!
+	@brief 发送一个超时执行函数到UI消息队列中执行，完成后返回
+	*/
+	template <typename Handler>
+	bool timed_send(int tm, my_actor* host, Handler&& handler)
+	{
+		{
+			boost::shared_lock<boost::shared_mutex> sl(_postMutex);
+			if (!_isClosed)
+			{
+				host->lock_quit();
+				bool running = false;
+				actor_trig_handle<> ath;
+				actor_trig_notifer<> ntf = host->make_trig_notifer_to_self(ath);
+				wrap_handler_face* ph = make_wrap_timed_handler(_reuMem, ath.dead_sign(), running, [&handler, &ntf]
+				{
+					handler();
+					ntf();
+				});
+				_mutex.lock();
+				_tasksQueue.push_back(ph);
+				_mutex.unlock();
+				postTaskEvent();
+				sl.unlock();
+
+				if (!host->timed_wait_trig(tm, ath))
+				{
+					_mutex.lock();
+					if (!running)
+					{
+						host->close_trig_notifer(ath);
+						_mutex.unlock();
+						host->unlock_quit();
+						return false;
+					}
+					_mutex.unlock();
+					host->wait_trig(ath);
+				}
+				host->unlock_quit();
+				return true;
+			}
+		}
+		throw qt_ui_closed_exception();
+		return false;
+	}
+
+	/*!
 	@brief 绑定一个函数到UI队列执行
 	*/
 	template <typename Handler>
@@ -210,7 +303,7 @@ public:
 	template <typename Handler>
 	std::function<void()> wrap_check_close(Handler&& handler)
 	{
-		assert(boost::this_thread::get_id() == _threadID);
+		assert(run_in_ui_thread());
 		_waitCount++;
 		return wrap(std::bind([this](const Handler& handler)
 		{
@@ -243,7 +336,7 @@ protected:
 	void check_close();
 	void enter_wait_close();
 private:
-	msg_queue<wrap_handler_face*> _tasksQueue;
+	msg_queue<wrap_handler_face*, mem_alloc2<> > _tasksQueue;
 	boost::shared_mutex _postMutex;
 	boost::thread::id _threadID;
 	reusable_mem_mt<> _reuMem;
@@ -278,6 +371,11 @@ public:
 		return bind_qt_run_base::post_queue_size(fixedSize);
 	}
 
+	size_t task_number()
+	{
+		return bind_qt_run_base::task_number();
+	}
+
 	template <typename Handler>
 	void post(Handler&& handler)
 	{
@@ -288,6 +386,12 @@ public:
 	void send(my_actor* host, Handler&& handler)
 	{
 		bind_qt_run_base::send(host, TRY_MOVE(handler));
+	}
+
+	template <typename Handler>
+	bool timed_send(int tm, my_actor* host, Handler&& handler)
+	{
+		return bind_qt_run_base::timed_send(tm, host, TRY_MOVE(handler));
 	}
 
 	template <typename Handler>

@@ -20,7 +20,7 @@ void wait_multi_msg()
 	{
 		actor_handle act1 = my_actor::create(self->self_strand(), [](my_actor* self)
 		{
-			self->run_mutex_blocks1(mutex_block_pump<int>(self, [&](int msg)
+			self->run_mutex_blocks_safe(mutex_block_pump<int>(self, [&](int msg)
 			{
 				trace_comma(self->self_id(), "begin msg int");
 				self->sleep(500);
