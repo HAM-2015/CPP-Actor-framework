@@ -1,6 +1,7 @@
 #ifndef __WRAPPED_POST_HANDLER_H
 #define __WRAPPED_POST_HANDLER_H
 
+#include <boost/asio/io_service.hpp>
 #include "wrapped_capture.h"
 
 template <typename Poster, typename Handler, bool = false>
@@ -82,6 +83,7 @@ public:
 	template <typename... Args>
 	void operator()(Args&&... args)
 	{
+		assert(!_checkOnce->exchange(true));
 		_poster->post(wrap_capture(FORCE_MOVE(_handler), FORCE_MOVE(args)...));
 	}
 
@@ -90,6 +92,51 @@ public:
 #if (_DEBUG || DEBUG)
 	std::shared_ptr<std::atomic<bool> > _checkOnce;
 #endif
+};
+//////////////////////////////////////////////////////////////////////////
+
+template <typename Poster, typename Handler>
+class wrapped_hold_work_post_handler
+{
+public:
+	template <typename H>
+	wrapped_hold_work_post_handler(boost::asio::io_service& ios, Poster* poster, H&& handler)
+		: _holdWork(ios), _poster(poster),
+		_handler(TRY_MOVE(handler))
+	{
+	}
+
+	template <typename P, typename H>
+	wrapped_hold_work_post_handler(wrapped_hold_work_post_handler<P, H>&& sp)
+		: _holdWork(sp._holdWork), _poster(sp._poster),
+		_handler(std::move(sp._handler))
+	{
+	}
+
+	template <typename P, typename H>
+	void operator=(wrapped_hold_work_post_handler<P, H>&& sp)
+	{
+		_holdWork = sp._holdWork;
+		_poster = sp._poster;
+		_handler = std::move(sp._handler);
+	}
+
+	template <typename... Args>
+	void operator()(Args&&... args)
+	{
+		_poster->post(wrap_capture(_handler, TRY_MOVE(args)...));
+	}
+
+	template <typename... Args>
+	void operator()(Args&&... args) const
+	{
+		_poster->post(wrap_capture(_handler, TRY_MOVE(args)...));
+	}
+
+private:
+	boost::asio::io_service::work _holdWork;
+	Poster* _poster;
+	Handler _handler;
 };
 
 #endif

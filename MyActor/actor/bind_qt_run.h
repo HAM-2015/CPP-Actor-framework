@@ -82,9 +82,27 @@ struct qt_ui_closed_exception {};
 
 class bind_qt_run_base
 {
+#ifdef ENABLE_QT_ACTOR
+	struct ui_tls
+	{
+		ui_tls();
+		~ui_tls();
+
+		static void push_stack(bind_qt_run_base*);
+		static bind_qt_run_base* pop_stack();
+		static bool running_in_this_thread(bind_qt_run_base*);
+		static void init();
+		static void reset();
+
+		msg_list<bind_qt_run_base*, pool_alloc<mem_alloc2<> > > _uiStack;
+		int _count;
+		static tls_space _tls;
+	};
+#endif
+
 	struct wrap_handler_face
 	{
-		virtual void invoke(reusable_mem_mt<>& reuMem) = 0;
+		virtual void invoke() = 0;
 		virtual void running_now() = 0;
 	};
 
@@ -95,11 +113,10 @@ class bind_qt_run_base
 		wrap_handler(H&& h)
 			:_handler(TRY_MOVE(h)) {}
 
-		void invoke(reusable_mem_mt<>& reuMem)
+		void invoke()
 		{
 			CHECK_EXCEPTION(_handler);
 			this->~wrap_handler();
-			reuMem.deallocate(this);
 		}
 
 		void running_now()
@@ -113,17 +130,16 @@ class bind_qt_run_base
 	struct wrap_timed_handler : public wrap_handler_face
 	{
 		template <typename H>
-		wrap_timed_handler(const SharedBool_& deadSign, bool& running, H&& h)
+		wrap_timed_handler(const shared_bool& deadSign, bool& running, H&& h)
 			:_deadSign(deadSign), _running(running), _handler(TRY_MOVE(h)) {}
 
-		void invoke(reusable_mem_mt<>& reuMem)
+		void invoke()
 		{
 			if (!*_deadSign)
 			{
 				CHECK_EXCEPTION(_handler);
 			}
 			this->~wrap_timed_handler();
-			reuMem.deallocate(this);
 		}
 
 		void running_now()
@@ -134,7 +150,7 @@ class bind_qt_run_base
 			}
 		}
 
-		SharedBool_ _deadSign;
+		shared_bool _deadSign;
 		bool& _running;
 		Handler _handler;
 	};
@@ -147,7 +163,7 @@ class bind_qt_run_base
 	}
 
 	template <typename Handler>
-	wrap_handler_face* make_wrap_timed_handler(reusable_mem_mt<>& reuMem, const SharedBool_& deadSign, bool& running, Handler&& handler)
+	wrap_handler_face* make_wrap_timed_handler(reusable_mem_mt<>& reuMem, const shared_bool& deadSign, bool& running, Handler&& handler)
 	{
 		typedef wrap_timed_handler<RM_CREF(Handler)> handler_type;
 		return new(reuMem.allocate(sizeof(handler_type)))handler_type(deadSign, running, TRY_MOVE(handler));
@@ -175,6 +191,11 @@ public:
 	@brief 是否在UI线程中执行
 	*/
 	bool run_in_ui_thread();
+
+	/*!
+	@brief 检测现在是否运行在本UI的post任务下
+	*/
+	bool running_in_this_thread();
 
 	/*!
 	@brief 扩充队列池长度
@@ -317,15 +338,14 @@ public:
 	/*!
 	@brief 
 	*/
-	shared_qt_strand make_qt_strand();
-	shared_qt_strand make_qt_strand(io_engine& ios);
+	void start_qt_strand(io_engine& ios);
 
 	/*!
 	@brief 在UI线程中创建一个Actor
 	@param ios Actor内部timer使用的调度器，没有就不能用timer
 	*/
-	actor_handle create_qt_actor(io_engine& ios, const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	actor_handle create_qt_actor(const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	actor_handle create_qt_actor(const my_actor::main_func& mainFunc, size_t stackSize = 128 kB - STACK_RESERVED_SPACE_SIZE);
+	actor_handle create_qt_actor(my_actor::main_func&& mainFunc, size_t stackSize = 128 kB - STACK_RESERVED_SPACE_SIZE);
 #endif
 protected:
 	virtual void postTaskEvent() = 0;
@@ -341,6 +361,9 @@ private:
 	boost::thread::id _threadID;
 	reusable_mem_mt<> _reuMem;
 	std::mutex _mutex;
+#ifdef ENABLE_QT_ACTOR
+	shared_qt_strand _qtStrand;
+#endif;
 protected:
 	QEventLoop* _eventLoop;
 	int _waitCount;
@@ -364,6 +387,11 @@ public:
 	bool run_in_ui_thread()
 	{
 		return bind_qt_run_base::run_in_ui_thread();
+	}
+
+	bool running_in_this_thread()
+	{
+		return bind_qt_run_base::running_in_this_thread();
 	}
 
 	void post_queue_size(size_t fixedSize)
@@ -445,24 +473,19 @@ public:
 		return NULL != _eventLoop;
 	}
 #ifdef ENABLE_QT_ACTOR
-	shared_qt_strand make_qt_strand()
+	void start_qt_strand(io_engine& ios)
 	{
-		return bind_qt_run_base::make_qt_strand();
+		bind_qt_run_base::start_qt_strand(ios);
 	}
 
-	shared_qt_strand make_qt_strand(io_engine& ios)
-	{
-		return bind_qt_run_base::make_qt_strand(ios);
-	}
-
-	actor_handle create_qt_actor(io_engine& ios, const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE)
-	{
-		return bind_qt_run_base::create_qt_actor(ios, mainFunc, stackSize);
-	}
-
-	actor_handle create_qt_actor(const my_actor::main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE)
+	actor_handle create_qt_actor(const my_actor::main_func& mainFunc, size_t stackSize = 128 kB - STACK_RESERVED_SPACE_SIZE)
 	{
 		return bind_qt_run_base::create_qt_actor(mainFunc, stackSize);
+	}
+
+	actor_handle create_qt_actor(my_actor::main_func&& mainFunc, size_t stackSize = 128 kB - STACK_RESERVED_SPACE_SIZE)
+	{
+		return bind_qt_run_base::create_qt_actor(std::move(mainFunc), stackSize);
 	}
 #endif
 private:
@@ -475,11 +498,9 @@ private:
 	{
 		if (e->type() == QEvent::Type(QT_POST_TASK))
 		{
-			if (!_isClosed)
-			{
-				assert(dynamic_cast<task_event*>(e));
-				bind_qt_run_base::runOneTask();
-			}
+			assert(!is_closed());
+			assert(dynamic_cast<task_event*>(e));
+			bind_qt_run_base::runOneTask();
 		}
 		else
 		{

@@ -62,7 +62,23 @@ class CheckLost_;
 class CheckPumpLost_;
 class actor_msg_handle_base;
 class MsgPoolBase_;
-typedef std::shared_ptr<bool> SharedBool_;
+
+struct shared_bool
+{
+	shared_bool();
+	explicit shared_bool(const std::shared_ptr<bool>& pb);
+	explicit shared_bool(std::shared_ptr<bool>&& pb);
+	void operator=(const shared_bool& s);
+	void operator=(shared_bool&& s);
+	bool& operator*() const;
+	void set(bool b);
+	bool get();
+	bool empty() const;
+	void reset();
+	static shared_bool new_(bool b = false);
+private:
+	std::shared_ptr<bool> _ptr;
+};
 
 struct ActorFunc_
 {
@@ -74,7 +90,6 @@ struct ActorFunc_
 	static void pull_yield(my_actor* host);
 	static void push_yield(my_actor* host);
 	static bool is_quited(my_actor* host);
-	static SharedBool_ new_bool(bool b = false);
 	template <typename R, typename H>
 	static R send(my_actor* host, const shared_strand& exeStrand, H&& h);
 	template <typename R, typename H>
@@ -116,7 +131,7 @@ private:
 	~CheckLost_();
 private:
 	shared_strand _strand;
-	SharedBool_ _closed;
+	shared_bool _closed;
 	actor_msg_handle_base* _handle;
 };
 
@@ -282,7 +297,7 @@ public:
 	virtual void close() = 0;
 	virtual size_t size() = 0;
 	void check_lost(bool checkLost = true);
-	const SharedBool_& dead_sign();
+	const shared_bool& dead_sign();
 private:
 	virtual void lost_msg();
 protected:
@@ -291,7 +306,7 @@ protected:
 	virtual void throw_lost_exception() = 0;
 protected:
 	my_actor* _hostActor;
-	SharedBool_ _closed;
+	shared_bool _closed;
 	DEBUG_OPERATION(shared_strand _strand);
 	bool _waiting : 1;
 	bool _losted : 1;
@@ -375,7 +390,7 @@ struct MsgNotiferBaseMsgCapture_
 
 	msg_handle* _msgHandle;
 	actor_handle _hostActor;
-	SharedBool_ _closed;
+	shared_bool _closed;
 	mutable std::tuple<TYPE_PIPE(ARGS)...> _args;
 };
 
@@ -422,7 +437,7 @@ struct MsgNotiferBaseMsgCapture_<>
 
 	msg_handle* _msgHandle;
 	actor_handle _hostActor;
-	SharedBool_ _closed;
+	shared_bool _closed;
 };
 
 template <typename... ARGS>
@@ -500,7 +515,7 @@ public:
 		return !empty();
 	}
 
-	const SharedBool_& dead_sign() const
+	const shared_bool& dead_sign() const
 	{
 		return _closed;
 	}
@@ -544,7 +559,7 @@ protected:
 private:
 	msg_handle* _msgHandle;
 	actor_handle _hostActor;
-	SharedBool_ _closed;
+	shared_bool _closed;
 #ifdef ENABLE_CHECK_LOST
 	std::shared_ptr<CheckLost_> _autoCheckLost;
 #endif
@@ -632,7 +647,7 @@ private:
 	{
 		close();
 		Parent::set_actor(hostActor);
-		Parent::_closed = ActorFunc_::new_bool();
+		Parent::_closed = shared_bool::new_();
 		return msg_notifer(this, checkLost);
 	}
 
@@ -659,7 +674,7 @@ private:
 	bool read_msg(dst_receiver& dst)
 	{
 		assert(Parent::_strand->running_in_this_thread());
-		assert(Parent::_closed);
+		assert(!Parent::_closed.empty());
 		assert(!*Parent::_closed);
 		if (!_msgBuff.empty())
 		{
@@ -685,7 +700,7 @@ private:
 
 	void close()
 	{
-		if (Parent::_closed)
+		if (!Parent::_closed.empty())
 		{
 			assert(Parent::_strand->running_in_this_thread());
 			*Parent::_closed = true;
@@ -732,7 +747,7 @@ private:
 	{
 		close();
 		Parent::set_actor(hostActor);
-		Parent::_closed = ActorFunc_::new_bool();
+		Parent::_closed = shared_bool::new_();
 		return msg_notifer(this, checkLost);
 	}
 
@@ -759,7 +774,7 @@ private:
 	bool read_msg()
 	{
 		assert(Parent::_strand->running_in_this_thread());
-		assert(Parent::_closed);
+		assert(!Parent::_closed.empty());
 		assert(!*Parent::_closed);
 		assert(!_dstRec);
 		if (_msgCount)
@@ -774,7 +789,7 @@ private:
 	bool read_msg(bool& dst)
 	{
 		assert(Parent::_strand->running_in_this_thread());
-		assert(Parent::_closed);
+		assert(!Parent::_closed.empty());
 		assert(!*Parent::_closed);
 		if (_msgCount)
 		{
@@ -800,7 +815,7 @@ private:
 
 	void close()
 	{
-		if (Parent::_closed)
+		if (!Parent::_closed.empty())
 		{
 			assert(Parent::_strand->running_in_this_thread());
 			*Parent::_closed = true;
@@ -853,7 +868,7 @@ private:
 	{
 		close();
 		Parent::set_actor(hostActor);
-		Parent::_closed = ActorFunc_::new_bool();
+		Parent::_closed = shared_bool::new_();
 		return msg_notifer(this, checkLost);
 	}
 
@@ -880,7 +895,7 @@ private:
 	bool read_msg(dst_receiver& dst)
 	{
 		assert(Parent::_strand->running_in_this_thread());
-		assert(Parent::_closed);
+		assert(!Parent::_closed.empty());
 		if (_hasMsg)
 		{
 			_hasMsg = false;
@@ -907,7 +922,7 @@ private:
 
 	void close()
 	{
-		if (Parent::_closed)
+		if (!Parent::_closed.empty())
 		{
 			assert(Parent::_strand->running_in_this_thread());
 			*Parent::_closed = true;
@@ -968,7 +983,7 @@ private:
 	{
 		close();
 		Parent::set_actor(hostActor);
-		Parent::_closed = ActorFunc_::new_bool();
+		Parent::_closed = shared_bool::new_();
 		return msg_notifer(this, checkLost);
 	}
 
@@ -996,7 +1011,7 @@ private:
 	bool read_msg()
 	{
 		assert(Parent::_strand->running_in_this_thread());
-		assert(Parent::_closed);
+		assert(!Parent::_closed.empty());
 		assert(!_dstRec);
 		if (_hasMsg)
 		{
@@ -1011,7 +1026,7 @@ private:
 	bool read_msg(bool& dst)
 	{
 		assert(Parent::_strand->running_in_this_thread());
-		assert(Parent::_closed);
+		assert(!Parent::_closed.empty());
 		if (_hasMsg)
 		{
 			_hasMsg = false;
@@ -1037,7 +1052,7 @@ private:
 
 	void close()
 	{
-		if (Parent::_closed)
+		if (!Parent::_closed.empty())
 		{
 			assert(Parent::_strand->running_in_this_thread());
 			*Parent::_closed = true;
@@ -1107,7 +1122,7 @@ class MsgPump_ : public MsgPumpBase_
 private:
 	MsgPump_()
 	{
-		DEBUG_OPERATION(_pClosed = ActorFunc_::new_bool());
+		DEBUG_OPERATION(_pClosed = shared_bool::new_());
 	}
 
 	~MsgPump_()
@@ -1394,7 +1409,7 @@ private:
 	pump_handler _pumpHandler;
 	shared_strand _strand;
 	dst_receiver* _dstRec;
-	DEBUG_OPERATION(SharedBool_ _pClosed);
+	DEBUG_OPERATION(shared_bool _pClosed);
 	unsigned char _pumpCount;
 	bool _hasMsg : 1;
 	bool _waiting : 1;
@@ -1962,7 +1977,7 @@ private:
 	MsgPump_(my_actor* hostActor, bool checkLost)
 		:MsgPumpVoid_(hostActor, checkLost)
 	{
-		DEBUG_OPERATION(_pClosed = ActorFunc_::new_bool());
+		DEBUG_OPERATION(_pClosed = shared_bool::new_());
 	}
 
 	~MsgPump_()
@@ -1977,7 +1992,7 @@ private:
 		return res;
 	}
 
-	DEBUG_OPERATION(SharedBool_ _pClosed);
+	DEBUG_OPERATION(shared_bool _pClosed);
 };
 
 template <typename... ARGS>
@@ -2057,11 +2072,11 @@ private:
 #if (_DEBUG || DEBUG)
 	bool check_closed() const
 	{
-		return !_pClosed || *_pClosed;
+		return _pClosed.empty() || *_pClosed;
 	}
 #endif
 
-	DEBUG_OPERATION(SharedBool_ _pClosed);
+	DEBUG_OPERATION(shared_bool _pClosed);
 	pump* _handle;
 	int _id;
 };
@@ -3177,11 +3192,11 @@ protected:
 	}
 
 	void tick_handler(bool* sign) const;
-	void tick_handler(const SharedBool_& closed, bool* sign) const;
-	void tick_handler(SharedBool_&& closed, bool* sign) const;
+	void tick_handler(const shared_bool& closed, bool* sign) const;
+	void tick_handler(shared_bool&& closed, bool* sign) const;
 	void dispatch_handler(bool* sign) const;
-	void dispatch_handler(const SharedBool_& closed, bool* sign) const;
-	void dispatch_handler(SharedBool_&& closed, bool* sign) const;
+	void dispatch_handler(const shared_bool& closed, bool* sign) const;
+	void dispatch_handler(shared_bool&& closed, bool* sign) const;
 	virtual void reset() const = 0;
 protected:
 	void copy(const TrigOnceBase_& s);
@@ -3399,7 +3414,7 @@ class tm_callback__handler<types_pck<ARGS...>, types_pck<OUTS...>> : public Trig
 public:
 	template <typename... Outs>
 	tm_callback__handler(my_actor* host, int tm, bool& timed, Outs&... outs)
-		:_closed(ActorFunc_::new_bool(false)), _selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
+		:_closed(shared_bool::new_(false)), _selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
 		ActorFunc_::delay_trig(host, tm, [this, &timed]
@@ -3487,7 +3502,7 @@ private:
 		assert(false);
 	}
 private:
-	SharedBool_ _closed;
+	shared_bool _closed;
 	my_actor* const _selfEarly;
 	dst_receiver _dstRef;
 	bool* _sign;
@@ -3602,7 +3617,7 @@ class asio_tm_cb_handler<types_pck<ARGS...>, types_pck<OUTS...>> : public TrigOn
 public:
 	template <typename... Outs>
 	asio_tm_cb_handler(my_actor* host, int tm, bool& timed, Outs&... outs)
-		:_closed(ActorFunc_::new_bool(false)), _selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
+		:_closed(shared_bool::new_(false)), _selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
 		ActorFunc_::delay_trig(host, tm, [this, &timed]
@@ -3691,7 +3706,7 @@ private:
 		assert(false);
 	}
 private:
-	mutable SharedBool_ _closed;
+	mutable shared_bool _closed;
 	my_actor* const _selfEarly;
 	dst_receiver _dstRef;
 	bool* _sign;
@@ -4784,7 +4799,7 @@ class my_actor
 		bool* _sign;
 		std::tuple<ARGS...> _args;
 		actor_handle _sharedThis;
-		SharedBool_ _closed;
+		shared_bool _closed;
 	};
 
 	template <typename Handler>
@@ -4879,7 +4894,7 @@ class my_actor
 			s._sign = NULL;
 		}
 
-		SharedBool_ _closed;
+		shared_bool _closed;
 		actor_handle _lockSelf;
 		bool* _sign;
 	};
@@ -5684,14 +5699,14 @@ public:
 	}
 private:
 	void dispatch_handler(bool* sign);
-	void dispatch_handler(const SharedBool_& closed, bool* sign);
-	void dispatch_handler(SharedBool_&& closed, bool* sign);
+	void dispatch_handler(const shared_bool& closed, bool* sign);
+	void dispatch_handler(shared_bool&& closed, bool* sign);
 	void tick_handler(bool* sign);
-	void tick_handler(const SharedBool_& closed, bool* sign);
-	void tick_handler(SharedBool_&& closed, bool* sign);
+	void tick_handler(const shared_bool& closed, bool* sign);
+	void tick_handler(shared_bool&& closed, bool* sign);
 	void next_tick_handler(bool* sign);
-	void next_tick_handler(const SharedBool_& closed, bool* sign);
-	void next_tick_handler(SharedBool_&& closed, bool* sign);
+	void next_tick_handler(const shared_bool& closed, bool* sign);
+	void next_tick_handler(shared_bool&& closed, bool* sign);
 
 	template <typename DST, typename... ARGS>
 	void _trig_handler(bool* sign, DST& dstRec, ARGS&&... args)
@@ -6946,6 +6961,43 @@ public:
 	post_actor_msg<Args...> connect_msg_notifer(bool chekcLost = false, size_t fixedSize = 16)
 	{
 		return connect_msg_notifer<Args...>(self_strand(), 0, chekcLost, fixedSize);
+	}
+
+	template <typename... Args>
+	post_actor_msg<Args...> connect_msg_notifer_unsafe(const int id, bool chekcLost = false, size_t fixedSize = 16)
+	{
+		typedef post_actor_msg<Args...> post_type;
+		typedef MsgPool_<Args...> pool_type;
+		assert(self_strand()->in_this_ios());
+		assert(self_strand()->sync_safe());
+		if (!_parentActor && !_started && !_quited)
+		{
+			auto msgPck = msg_pool_pck<Args...>(id, this);
+			msgPck->_msgPool = pool_type::make(self_strand(), fixedSize);
+#ifdef ENABLE_CHECK_LOST
+			std::shared_ptr<CheckPumpLost_> autoCheckLost;
+			if (chekcLost)
+			{
+				autoCheckLost = msgPck->_msgPool->_weakCheckLost.lock();
+				if (!autoCheckLost)
+				{
+					autoCheckLost = ActorFunc_::new_check_pump_lost(shared_from_this(), msgPck->_msgPool.get());
+					msgPck->_msgPool->_weakCheckLost = autoCheckLost;
+				}
+			}
+			return post_type(msgPck->_msgPool, shared_from_this(), std::move(autoCheckLost));
+#else
+			return post_type(msgPck->_msgPool, shared_from_this());
+#endif
+		}
+		assert(false);
+		return post_type();
+	}
+
+	template <typename... Args>
+	post_actor_msg<Args...> connect_msg_notifer_unsafe(bool chekcLost = false, size_t fixedSize = 16)
+	{
+		return connect_msg_notifer_unsafe<Args...>(0, chekcLost, fixedSize);
 	}
 	//////////////////////////////////////////////////////////////////////////
 

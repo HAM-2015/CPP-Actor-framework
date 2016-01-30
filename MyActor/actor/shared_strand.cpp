@@ -21,8 +21,8 @@ _backTickQueue(NULL)
 boost_strand::~boost_strand()
 {
 #ifdef ENABLE_NEXT_TICK
-	assert(_frontTickQueue->empty());
-	assert(_backTickQueue->empty());
+	assert(!_frontTickQueue || _frontTickQueue->empty());
+	assert(!_backTickQueue || _backTickQueue->empty());
 	delete _nextTickAlloc;
 	delete _reuMemAlloc;
 	delete _frontTickQueue;
@@ -102,6 +102,12 @@ bool boost_strand::in_this_ios()
 {
 	assert(_ioEngine);
 	return _ioEngine->runningInThisIos();
+}
+
+bool boost_strand::sync_safe()
+{
+	assert(_ioEngine);
+	return 1 == _ioEngine->threadNumber();
 }
 
 bool boost_strand::running_in_this_thread()

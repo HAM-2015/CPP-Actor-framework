@@ -59,6 +59,65 @@ struct makeLostRefCountAlloc
 	}
 } s_makeLostRefCountAlloc;
 #endif
+//////////////////////////////////////////////////////////////////////////
+
+void shared_bool::reset()
+{
+	_ptr.reset();
+}
+
+bool shared_bool::empty() const
+{
+	return !_ptr;
+}
+
+bool shared_bool::get()
+{
+	assert(!empty());
+	return *_ptr;
+}
+
+void shared_bool::set(bool b)
+{
+	assert(!empty());
+	*_ptr = b;
+}
+
+bool& shared_bool::operator*() const
+{
+	assert(!empty());
+	return *_ptr;
+}
+
+void shared_bool::operator=(shared_bool&& s)
+{
+	_ptr = std::move(s._ptr);
+}
+
+void shared_bool::operator=(const shared_bool& s)
+{
+	_ptr = s._ptr;
+}
+
+shared_bool::shared_bool(std::shared_ptr<bool>&& pb)
+:_ptr(std::move(pb)) {}
+
+shared_bool::shared_bool(const std::shared_ptr<bool>& pb)
+: _ptr(pb) {}
+
+shared_bool::shared_bool()
+{
+}
+
+shared_bool shared_bool::new_(bool b)
+{
+	assert(s_sharedBoolPool);
+	shared_bool r(s_sharedBoolPool->pick());
+	*r = b;
+	return r;
+}
+
+//////////////////////////////////////////////////////////////////////////
 
 struct autoActorStackMng
 {
@@ -290,7 +349,7 @@ void actor_msg_handle_base::lost_msg()
 	}
 }
 
-const SharedBool_& actor_msg_handle_base::dead_sign()
+const shared_bool& actor_msg_handle_base::dead_sign()
 {
 	return _closed;
 }
@@ -962,7 +1021,7 @@ void TrigOnceBase_::tick_handler(bool* sign) const
 	reset();
 }
 
-void TrigOnceBase_::tick_handler(const SharedBool_& closed, bool* sign) const
+void TrigOnceBase_::tick_handler(const shared_bool& closed, bool* sign) const
 {
 	assert(!_pIsTrig->exchange(true));
 	assert(_hostActor);
@@ -970,7 +1029,7 @@ void TrigOnceBase_::tick_handler(const SharedBool_& closed, bool* sign) const
 	reset();
 }
 
-void TrigOnceBase_::tick_handler(SharedBool_&& closed, bool* sign) const
+void TrigOnceBase_::tick_handler(shared_bool&& closed, bool* sign) const
 {
 	assert(!_pIsTrig->exchange(true));
 	assert(_hostActor);
@@ -986,7 +1045,7 @@ void TrigOnceBase_::dispatch_handler(bool* sign) const
 	reset();
 }
 
-void TrigOnceBase_::dispatch_handler(const SharedBool_& closed, bool* sign) const
+void TrigOnceBase_::dispatch_handler(const shared_bool& closed, bool* sign) const
 {
 	assert(!_pIsTrig->exchange(true));
 	assert(_hostActor);
@@ -994,7 +1053,7 @@ void TrigOnceBase_::dispatch_handler(const SharedBool_& closed, bool* sign) cons
 	reset();
 }
 
-void TrigOnceBase_::dispatch_handler(SharedBool_&& closed, bool* sign) const
+void TrigOnceBase_::dispatch_handler(shared_bool&& closed, bool* sign) const
 {
 	assert(!_pIsTrig->exchange(true));
 	assert(_hostActor);
@@ -2139,12 +2198,12 @@ void my_actor::dispatch_handler(bool* sign)
 	_strand->dispatch(wrap_trig_run_one(shared_from_this(), sign));
 }
 
-void my_actor::dispatch_handler(const SharedBool_& closed, bool* sign)
+void my_actor::dispatch_handler(const shared_bool& closed, bool* sign)
 {
 	_strand->dispatch(wrap_check_trig_run_one(closed, shared_from_this(), sign));
 }
 
-void my_actor::dispatch_handler(SharedBool_&& closed, bool* sign)
+void my_actor::dispatch_handler(shared_bool&& closed, bool* sign)
 {
 	_strand->dispatch(wrap_check_trig_run_one(std::move(closed), shared_from_this(), sign));
 }
@@ -2154,12 +2213,12 @@ void my_actor::tick_handler(bool* sign)
 	_strand->try_tick(wrap_trig_run_one(shared_from_this(), sign));
 }
 
-void my_actor::tick_handler(const SharedBool_& closed, bool* sign)
+void my_actor::tick_handler(const shared_bool& closed, bool* sign)
 {
 	_strand->try_tick(wrap_check_trig_run_one(closed, shared_from_this(), sign));
 }
 
-void my_actor::tick_handler(SharedBool_&& closed, bool* sign)
+void my_actor::tick_handler(shared_bool&& closed, bool* sign)
 {
 	_strand->try_tick(wrap_check_trig_run_one(TRY_MOVE(closed), shared_from_this(), sign));
 }
@@ -2169,12 +2228,12 @@ void my_actor::next_tick_handler(bool* sign)
 	_strand->next_tick(wrap_trig_run_one(shared_from_this(), sign));
 }
 
-void my_actor::next_tick_handler(const SharedBool_& closed, bool* sign)
+void my_actor::next_tick_handler(const shared_bool& closed, bool* sign)
 {
 	_strand->next_tick(wrap_check_trig_run_one(closed, shared_from_this(), sign));
 }
 
-void my_actor::next_tick_handler(SharedBool_&& closed, bool* sign)
+void my_actor::next_tick_handler(shared_bool&& closed, bool* sign)
 {
 	_strand->next_tick(wrap_check_trig_run_one(std::move(closed), shared_from_this(), sign));
 }
@@ -3402,14 +3461,6 @@ bool ActorFunc_::is_quited(my_actor* host)
 {
 	assert(host);
 	return host->is_quited();
-}
-
-SharedBool_ ActorFunc_::new_bool(bool b)
-{
-	assert(s_sharedBoolPool);
-	SharedBool_ r = s_sharedBoolPool->pick();
-	*r = b;
-	return r;
 }
 
 void ActorFunc_::cancel_timer(my_actor* host)

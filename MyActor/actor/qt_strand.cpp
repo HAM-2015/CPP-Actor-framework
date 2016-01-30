@@ -18,21 +18,11 @@ qt_strand::~qt_strand()
 
 shared_qt_strand qt_strand::create(io_engine& ioEngine, bind_qt_run_base* qt)
 {
-	shared_qt_strand res(new qt_strand, [](qt_strand* p){delete p; });
+	shared_qt_strand res(new qt_strand);
 	res->_ioEngine = &ioEngine;
 	res->_qt = qt;
-	res->_qtThreadID = qt->thread_id();
 	res->_actorTimer = new ActorTimer_(res);
 	res->_timerBoost = new TimerBoost_(res);
-	res->_weakThis = res;
-	return res;
-}
-
-shared_qt_strand qt_strand::create(bind_qt_run_base* qt)
-{
-	shared_qt_strand res(new qt_strand, [](qt_strand* p){delete p; });
-	res->_qt = qt;
-	res->_qtThreadID = qt->thread_id();
 	res->_weakThis = res;
 	return res;
 }
@@ -44,13 +34,23 @@ shared_strand qt_strand::clone()
 
 bool qt_strand::in_this_ios()
 {
-	return running_in_this_thread();
+	return _qt->run_in_ui_thread();
 }
 
 bool qt_strand::running_in_this_thread()
 {
-	assert(boost::thread::id() != _qtThreadID);
-	return boost::this_thread::get_id() == _qtThreadID;
+	return _qt->running_in_this_thread();
+}
+
+bool qt_strand::empty(bool)
+{
+	assert(running_in_this_thread());
+	return 0 == _qt->task_number();
+}
+
+bool qt_strand::sync_safe()
+{
+	return true;
 }
 
 void qt_strand::_post(const std::function<void()>& h)

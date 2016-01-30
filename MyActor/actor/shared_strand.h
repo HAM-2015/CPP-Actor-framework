@@ -80,6 +80,37 @@ else\
 	_post(TRY_MOVE(handler)); \
 }
 
+template <typename Handler>
+struct once_handler
+{
+	template <typename H>
+	once_handler(bool pl, H&& h)
+		:_handler(TRY_MOVE(h)) {}
+
+	once_handler(const once_handler<Handler>& s)
+		:_handler(std::move(s._handler)) {}
+
+	template <typename... Args>
+	void operator()(Args&&... args)
+	{
+		_handler(TRY_MOVE(args)...);
+	}
+
+	template <typename... Args>
+	void operator()(Args&&... args) const
+	{
+		_handler(TRY_MOVE(args)...);
+	}
+
+	mutable Handler _handler;
+};
+
+template <typename Handler>
+once_handler<RM_CREF(Handler)> wrap_once_handler(Handler&& handler)
+{
+	return once_handler<RM_CREF(Handler)>(true, TRY_MOVE(handler));
+}
+
 class boost_strand
 {
 	typedef StrandEx_ strand_type;
@@ -437,6 +468,15 @@ public:
 	}
 
 	/*!
+	@brief 把被调用函数包装到post中，并且锁定ios，直到释放通知函数包
+	*/
+	template <typename Handler>
+	wrapped_hold_work_post_handler<boost_strand, RM_CREF(Handler)> wrap_hold_post(Handler&& handler)
+	{
+		return wrapped_hold_work_post_handler<boost_strand, RM_CREF(Handler)>(get_io_service(), this, TRY_MOVE(handler));
+	}
+
+	/*!
 	@brief 把被调用函数包装到post中，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
@@ -491,6 +531,11 @@ public:
 	@return true 在, false 不在
 	*/
 	virtual bool in_this_ios();
+
+	/*!
+	@brief 检测当前依赖的ios是否是单线程
+	*/
+	virtual bool sync_safe();
 
 	/*!
 	@brief 依赖的ios调度器运行线程数

@@ -545,10 +545,10 @@ private:
 	sync_msg(const sync_msg&){};
 	void operator=(const sync_msg&){};
 private:
-	bool _closed;
 	shared_strand _strand;
 	msg_list<take_wait> _takeWait;
 	msg_list<send_wait> _sendWait;
+	bool _closed;
 };
 
 /*!
@@ -1054,10 +1054,10 @@ private:
 	virtual void throw_try_take_exception() = 0;
 	virtual void throw_timed_take_exception() = 0;
 private:
-	bool _closed;
 	shared_strand _strand;
 	msg_list<take_wait> _takeWait;
 	msg_list<send_wait> _sendWait;
+	bool _closed;
 protected:
 	DEBUG_OPERATION(bool _thrownCloseExp);
 };

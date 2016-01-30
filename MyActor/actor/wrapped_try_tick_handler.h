@@ -82,6 +82,7 @@ public:
 	template <typename... Args>
 	void operator()(Args&&... args)
 	{
+		assert(!_checkOnce->exchange(true));
 		_poster->try_tick(wrap_capture(FORCE_MOVE(_handler), FORCE_MOVE(args)...));
 	}
 
