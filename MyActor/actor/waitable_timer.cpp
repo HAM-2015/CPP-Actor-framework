@@ -5,22 +5,15 @@
 #include <Windows.h>
 
 WaitableTimer_::WaitableTimer_()
-:_eventsQueue(1024)
-{
-	_exit = false;
-	_extMaxTick = 0;
-	_extFinishTime = -1;
-	_timerHandle = CreateWaitableTimer(NULL, FALSE, NULL);
-	boost::thread th(&WaitableTimer_::timerThread, this);
-	_timerThread.swap(th);
-}
+:_eventsQueue(1024), _exited(false), _extMaxTick(0), _extFinishTime(-1),
+_timerHandle(CreateWaitableTimer(NULL, FALSE, NULL)), _timerThread(&WaitableTimer_::timerThread, this) {}
 
 WaitableTimer_::~WaitableTimer_()
 {
 	{
 		std::lock_guard<std::mutex> lg(_ctrlMutex);
 		assert(_eventsQueue.empty());
-		_exit = true;
+		_exited = true;
 		LARGE_INTEGER sleepTime;
 		sleepTime.QuadPart = 0;
 		SetWaitableTimer(_timerHandle, &sleepTime, 0, NULL, NULL, FALSE);
@@ -88,7 +81,7 @@ void WaitableTimer_::timerThread()
 {
 	while (true)
 	{
-		if (WAIT_OBJECT_0 == WaitForSingleObject(_timerHandle, INFINITE) && !_exit)
+		if (WAIT_OBJECT_0 == WaitForSingleObject(_timerHandle, INFINITE) && !_exited)
 		{
 			unsigned long long nt = get_tick_us();
 			std::lock_guard<std::mutex> lg(_ctrlMutex);

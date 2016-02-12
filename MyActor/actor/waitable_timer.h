@@ -37,7 +37,7 @@ private:
 	void removeEvent(timer_handle& th);
 	void timerThread();
 private:
-	bool _exit;
+	bool _exited;
 	void* _timerHandle;
 	unsigned long long _extMaxTick;
 	unsigned long long _extFinishTime;

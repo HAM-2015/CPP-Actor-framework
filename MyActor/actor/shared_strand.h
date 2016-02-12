@@ -42,7 +42,7 @@ if (_strand)\
 }\
 else\
 {\
-	_post(TRY_MOVE(handler)); \
+	post_ui(TRY_MOVE(handler)); \
 };
 
 #define UI_DISPATCH()\
@@ -52,7 +52,7 @@ if (_strand)\
 }\
 else\
 {\
-	_post(TRY_MOVE(handler)); \
+	post_ui(TRY_MOVE(handler)); \
 };
 
 
@@ -77,7 +77,7 @@ if (_strand)\
 }\
 else\
 {\
-	_post(TRY_MOVE(handler)); \
+	post_ui(TRY_MOVE(handler)); \
 }
 
 template <typename Handler>
@@ -108,7 +108,35 @@ struct once_handler
 template <typename Handler>
 once_handler<RM_CREF(Handler)> wrap_once_handler(Handler&& handler)
 {
-	return once_handler<RM_CREF(Handler)>(true, TRY_MOVE(handler));
+	return once_handler<RM_CREF(Handler)>(bool(), TRY_MOVE(handler));
+}
+
+template <typename Handler>
+struct ref_handler 
+{
+	ref_handler(bool bl, Handler& h)
+		:_handler(h) {}
+
+	template <typename... Args>
+	void operator()(Args&&... args)
+	{
+		_handler(TRY_MOVE(args)...);
+	}
+
+	template <typename... Args>
+	void operator()(Args&&... args) const
+	{
+		_handler(TRY_MOVE(args)...);
+	}
+
+	Handler& _handler;
+};
+
+template <typename Handler>
+ref_handler<Handler> wrap_ref_handler(Handler& handler)
+{
+	static_assert(!std::is_rvalue_reference<Handler&>::value, "");
+	return ref_handler<Handler>(bool(), handler);
 }
 
 class boost_strand
@@ -524,7 +552,7 @@ public:
 	/*!
 	@brief 复制一个依赖同一个ios的strand
 	*/
-	virtual shared_strand clone();
+	shared_strand clone();
 
 	/*!
 	@brief 检查是否在所依赖ios线程中执行
@@ -551,7 +579,7 @@ public:
 	@brief 当前任务队列是否为空(不算当前)
 	@param checkTick 是否计算tick任务
 	*/
-	virtual bool empty(bool checkTick = true);
+	bool empty(bool checkTick = true);
 
 	/*!
 	@brief 是否在运行
@@ -577,6 +605,10 @@ private:
 	@brief 获取Actor定时器
 	*/
 	ActorTimer_* actor_timer();
+#ifdef ENABLE_QT_ACTOR
+	template <typename Handler>
+	void post_ui(Handler&& handler);
+#endif
 protected:
 #ifdef ENABLE_NEXT_TICK
 	bool ready_empty();
@@ -591,10 +623,6 @@ protected:
 	msg_queue<wrap_next_tick_base*, mem_alloc2<>>* _frontTickQueue;
 #endif //ENABLE_NEXT_TICK
 protected:
-#ifdef ENABLE_QT_ACTOR
-	virtual void _post(const std::function<void()>& h);
-	virtual void _post(std::function<void()>&& h);
-#endif
 	ActorTimer_* _actorTimer;
 	TimerBoost_* _timerBoost;
 	io_engine* _ioEngine;

@@ -95,6 +95,7 @@ void boost_strand::create_multi(list<shared_strand>& res, size_t n, io_engine& i
 
 shared_strand boost_strand::clone()
 {
+	assert(_ioEngine);
 	return create(*_ioEngine);
 }
 
@@ -223,15 +224,3 @@ void boost_strand::run_tick_back()
 	}
 }
 #endif //ENABLE_NEXT_TICK
-
-#ifdef ENABLE_QT_ACTOR
-void boost_strand::_post(const std::function<void()>& h)
-{
-	assert(false);
-}
-
-void boost_strand::_post(std::function<void()>&& h)
-{
-	assert(false);
-}
-#endif

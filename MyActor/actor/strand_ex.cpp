@@ -45,10 +45,8 @@ namespace boost
 //////////////////////////////////////////////////////////////////////////
 
 StrandEx_::StrandEx_(io_engine& ios)
-: _service(boost::asio::use_service<boost::asio::detail::strand_service>(ios))
-{
-	_impl = new boost::asio::detail::strand_service::strand_impl();
-}
+: _service(boost::asio::use_service<boost::asio::detail::strand_service>(ios)),
+_impl(new boost::asio::detail::strand_service::strand_impl()) {}
 
 StrandEx_::~StrandEx_()
 {

@@ -109,6 +109,12 @@ shared_bool::shared_bool()
 {
 }
 
+shared_bool::shared_bool(const shared_bool& s)
+:_ptr(s._ptr) {}
+
+shared_bool::shared_bool(shared_bool&& s)
+: _ptr(std::move(s._ptr)) {}
+
 shared_bool shared_bool::new_(bool b)
 {
 	assert(s_sharedBoolPool);
@@ -1168,6 +1174,82 @@ struct actor_ref_count_alloc
 };
 //////////////////////////////////////////////////////////////////////////
 
+void my_actor::quit_guard::operator=(const quit_guard&) {}
+
+my_actor::quit_guard::quit_guard(const quit_guard&) {}
+
+my_actor::quit_guard::quit_guard(my_actor* self) :_self(self)
+{
+	_locked = true;
+	_self->lock_quit();
+}
+
+my_actor::quit_guard::~quit_guard()
+{
+	if (_locked)
+	{
+#ifdef _MSC_VER
+		//可能在此析构函数内抛出 force_quit_exception 异常，但在 unlock_quit 已经切换出堆栈，在切换回来后会安全的释放资源
+		_self->unlock_quit();
+#elif __GNUG__
+		try
+		{
+			_self->unlock_quit();
+		}
+		catch (my_actor::force_quit_exception&) {}
+		DEBUG_OPERATION(catch (...) { assert(false); })
+#endif
+	}
+}
+
+void my_actor::quit_guard::lock()
+{
+	assert(!_locked);
+	_locked = true;
+	_self->lock_quit();
+}
+
+void my_actor::quit_guard::unlock()
+{
+	assert(_locked);
+	_locked = false;
+	_self->unlock_quit();
+}
+//////////////////////////////////////////////////////////////////////////
+
+void my_actor::suspend_guard::operator=(const suspend_guard&) {}
+
+my_actor::suspend_guard::suspend_guard(const suspend_guard&) {}
+
+my_actor::suspend_guard::suspend_guard(my_actor* self) :_self(self)
+{
+	_locked = true;
+	_self->lock_suspend();
+}
+
+my_actor::suspend_guard::~suspend_guard()
+{
+	if (_locked)
+	{
+		_self->unlock_suspend();
+	}
+}
+
+void my_actor::suspend_guard::lock()
+{
+	assert(!_locked);
+	_locked = true;
+	_self->lock_suspend();
+}
+
+void my_actor::suspend_guard::unlock()
+{
+	assert(_locked);
+	_locked = false;
+	_self->unlock_suspend();
+}
+//////////////////////////////////////////////////////////////////////////
+
 class my_actor::actor_run
 {
 public:
@@ -1198,9 +1280,10 @@ public:
 			}
 			_actor._mainFunc(&_actor);
 			assert(_actor._inActor);
+			assert(!_actor._lockQuit);
+			assert(!_actor._lockSuspend);
 			assert(_actor._childActorList.empty());
 			assert(_actor._quitHandlerList.empty());
-			assert(_actor._suspendResumeQueue.empty());
 		}
 		catch (my_actor::force_quit_exception&)
 		{//捕获Actor被强制退出异常
@@ -1269,6 +1352,19 @@ public:
 	void exit_notify()
 	{
 		DEBUG_OPERATION(size_t yc = _actor.yield_count());
+		_actor._lockSuspend = 0;
+		if (_actor._holdedSuspendSign)
+		{
+			_actor._holdedSuspendSign = false;
+			while (!_actor._suspendResumeQueue.empty())
+			{
+				if (_actor._suspendResumeQueue.front()._h)
+				{
+					CHECK_EXCEPTION(_actor._suspendResumeQueue.front()._h);
+				}
+				_actor._suspendResumeQueue.pop_front();
+			}
+		}
 		while (!_actor._exitCallback.empty())
 		{
 			assert(_actor._exitCallback.front());
@@ -1565,12 +1661,14 @@ _childActorList(_childActorListAll)
 	_checkStack = false;
 	_timerStateSuspend = false;
 	_timerStateCompleted = true;
+	_holdedSuspendSign = false;
 #ifdef __linux__
 	_sigsegvSign = false;
 #endif
 	_selfID = ++s_actorIDCount;
 	_actorKey = -1;
 	_lockQuit = 0;
+	_lockSuspend = 0;
 	_yieldCount = 0;
 	_lastYield = -1;
 	_childOverCount = 0;
@@ -1596,10 +1694,10 @@ my_actor::~my_actor()
 	assert(!_mainFunc);
 	assert(!_childOverCount);
 	assert(!_lockQuit);
+	assert(!_lockSuspend);
 	assert(!_childSuspendResumeCount);
 	assert(_suspendResumeQueue.empty());
 	assert(_quitHandlerList.empty());
-	assert(_suspendResumeQueue.empty());
 	assert(_exitCallback.empty());
 	assert(_childActorList.empty());
 #ifdef WIN32
@@ -2263,6 +2361,11 @@ size_t my_actor::self_key()
 	return _actorKey;
 }
 
+reusable_mem& my_actor::self_reusable()
+{
+	return _reuMem;
+}
+
 void my_actor::return_code(size_t cd)
 {
 	_returnCode = cd;
@@ -2343,8 +2446,7 @@ void my_actor::reset_yield()
 
 void my_actor::notify_run()
 {
-	actor_handle shared_this = shared_from_this();
-	_strand->try_tick([shared_this]
+	_strand->try_tick(std::bind([](const actor_handle& shared_this)
 	{
 		my_actor* self = shared_this.get();
 		if (!self->_quited && !self->_started)
@@ -2352,25 +2454,29 @@ void my_actor::notify_run()
 			self->_started = true;
 			self->pull_yield();
 		}
-	});
+	}, shared_from_this()));
 }
 
 void my_actor::assert_enter()
 {
+#if (_DEBUG || DEBUG)
 	assert(_strand->running_in_this_thread());
 	assert(!_quited);
 	assert(_inActor);
 	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	assert((size_t)get_sp() >= (size_t)info->stackTop - info->stackSize - info->reserveSize + 1024);
 	check_self();
+#endif
 }
 
 void my_actor::notify_quit()
 {
 	if (!_quited)
 	{
-		actor_handle shared_this = shared_from_this();
-		_strand->try_tick([shared_this]{shared_this->force_quit(std::function<void()>()); });
+		_strand->try_tick(std::bind([](const actor_handle& shared_this)
+		{
+			shared_this->force_quit(std::function<void()>());
+		}, shared_from_this()));
 	}
 }
 
@@ -2424,14 +2530,19 @@ void my_actor::force_quit(std::function<void()>&& h)
 				{
 					auto cc = _childActorList.front();
 					_childActorList.pop_front();
-					actor_handle shared_this = shared_from_this();
 					if (cc->_strand == _strand)
 					{
-						cc->force_quit([shared_this]{shared_this->force_quit_cb_handler(); });
+						cc->force_quit(std::bind([](const actor_handle& shared_this)
+						{
+							shared_this->force_quit_cb_handler();
+						}, shared_from_this()));
 					}
 					else
 					{
-						cc->notify_quit(_strand->wrap_post([shared_this]{shared_this->force_quit_cb_handler(); }));
+						cc->notify_quit(_strand->wrap_post(std::bind([](const actor_handle& shared_this)
+						{
+							shared_this->force_quit_cb_handler();
+						}, shared_from_this())));
 					}
 				}
 			}
@@ -2509,6 +2620,38 @@ void my_actor::unlock_quit()
 	}
 }
 
+void my_actor::lock_suspend()
+{
+	assert_enter();
+	_lockSuspend++;
+}
+
+void my_actor::unlock_suspend()
+{
+	assert_enter();
+	assert(_lockSuspend);
+	if (0 == --_lockSuspend && _holdedSuspendSign)
+	{
+		_holdedSuspendSign = false;
+		assert(!_suspendResumeQueue.empty());
+		if (_suspendResumeQueue.front()._isSuspend)
+		{
+			_strand->next_tick(std::bind([](const actor_handle& shared_this)
+			{
+				shared_this->suspend();
+			}, shared_from_this()));
+		} 
+		else
+		{
+			_strand->next_tick(std::bind([](const actor_handle& shared_this)
+			{
+				shared_this->resume();
+			}, shared_from_this()));
+		}
+		yield_guard();
+	}
+}
+
 bool my_actor::is_locked_quit()
 {
 	assert_enter();
@@ -2572,7 +2715,7 @@ void my_actor::suspend(std::function<void()>&& h)
 	suspend_resume_option& tmp = _suspendResumeQueue.back();
 	tmp._isSuspend = true;
 	tmp._h = std::move(h);
-	if (_suspendResumeQueue.size() == 1)
+	if (1 == _suspendResumeQueue.size())
 	{
 		suspend();
 	}
@@ -2582,8 +2725,13 @@ void my_actor::suspend()
 {
 	assert(_strand->running_in_this_thread());
 	assert(!_inActor);
-
 	assert(!_childSuspendResumeCount);
+	assert(!_holdedSuspendSign);
+	if (_lockSuspend)
+	{
+		_holdedSuspendSign = true;
+		return;
+	}
 	if (!_quited)
 	{
 		if (!_suspended)
@@ -2598,14 +2746,19 @@ void my_actor::suspend()
 				_childSuspendResumeCount = _childActorList.size();
 				for (auto& childActor : _childActorList)
 				{
-					actor_handle shared_this = shared_from_this();
 					if (childActor->_strand == _strand)
 					{
-						childActor->suspend([shared_this]{shared_this->child_suspend_cb_handler(); });
+						childActor->suspend(std::bind([](const actor_handle& shared_this)
+						{
+							shared_this->child_suspend_cb_handler();
+						}, shared_from_this()));
 					}
 					else
 					{
-						childActor->notify_suspend(_strand->wrap_post([shared_this]{shared_this->child_suspend_cb_handler(); }));
+						childActor->notify_suspend(_strand->wrap_post(std::bind([](const actor_handle& shared_this)
+						{
+							shared_this->child_suspend_cb_handler();
+						}, shared_from_this())));
 					}
 				}
 				return;
@@ -2661,7 +2814,7 @@ void my_actor::resume(std::function<void()>&& h)
 	suspend_resume_option& tmp = _suspendResumeQueue.back();
 	tmp._isSuspend = false;
 	tmp._h = std::move(h);
-	if (_suspendResumeQueue.size() == 1)
+	if (1 == _suspendResumeQueue.size())
 	{
 		resume();
 	}
@@ -2671,8 +2824,13 @@ void my_actor::resume()
 {
 	assert(_strand->running_in_this_thread());
 	assert(!_inActor);
-
 	assert(!_childSuspendResumeCount);
+	assert(!_holdedSuspendSign);
+	if (_lockSuspend)
+	{
+		_holdedSuspendSign = true;
+		return;
+	}
 	if (!_quited)
 	{
 		if (_suspended)
@@ -2687,14 +2845,19 @@ void my_actor::resume()
 				_childSuspendResumeCount = _childActorList.size();
 				for (auto& childActor : _childActorList)
 				{
-					actor_handle shared_this = shared_from_this();
 					if (childActor->_strand == _strand)
 					{
-						childActor->resume(_strand->wrap_post([shared_this]{shared_this->child_resume_cb_handler(); }));
+						childActor->resume(_strand->wrap_post(std::bind([](const actor_handle& shared_this)
+						{
+							shared_this->child_resume_cb_handler();
+						}, shared_from_this())));
 					}
 					else
 					{
-						childActor->notify_resume(_strand->wrap_post([shared_this]{shared_this->child_resume_cb_handler(); }));
+						childActor->notify_resume(_strand->wrap_post(std::bind([](const actor_handle& shared_this)
+						{
+							shared_this->child_resume_cb_handler();
+						}, shared_from_this())));
 					}
 				}
 				return;
@@ -2712,8 +2875,7 @@ void my_actor::switch_pause_play()
 
 void my_actor::switch_pause_play(const std::function<void(bool)>& h)
 {
-	actor_handle shared_this = shared_from_this();
-	_strand->try_tick([shared_this, h]
+	_strand->try_tick(std::bind([](const actor_handle& shared_this, const std::function<void(bool)>& h)
 	{
 		assert(shared_this->_strand->running_in_this_thread());
 		if (!shared_this->_quited)
@@ -2749,7 +2911,7 @@ void my_actor::switch_pause_play(const std::function<void(bool)>& h)
 			CHECK_EXCEPTION1(h, true);
 			assert(shared_this->yield_count() == yc);
 		}
-	});
+	}, shared_from_this(), h));
 }
 
 void my_actor::outside_wait_quit()
@@ -3051,8 +3213,10 @@ void my_actor::child_suspend_cb_handler()
 			}
 			else
 			{
-				actor_handle shared_this = shared_from_this();
-				_strand->next_tick([shared_this]{shared_this->resume(); });
+				_strand->next_tick(std::bind([](const actor_handle& shared_this)
+				{
+					shared_this->resume();
+				}, shared_from_this()));
 				return;
 			}
 		}
@@ -3081,8 +3245,10 @@ void my_actor::child_resume_cb_handler()
 			}
 			else
 			{
-				actor_handle shared_this = shared_from_this();
-				_strand->next_tick([shared_this]{shared_this->suspend(); });
+				_strand->next_tick(std::bind([](const actor_handle& shared_this)
+				{
+					shared_this->suspend();
+				}, shared_from_this()));
 				return;
 			}
 		}
@@ -3115,7 +3281,8 @@ void my_actor::timeout_handler()
 	_timerStateHandle.reset();
 	wrap_timer_handler_face* h = _timerStateCb;
 	_timerStateCb = NULL;
-	h->invoke(_timerStateReuMem);
+	h->invoke();
+	_reuMem.deallocate(h);
 }
 
 void my_actor::cancel_timer()
@@ -3128,7 +3295,8 @@ void my_actor::cancel_timer()
 		if (_timerStateTime)
 		{
 			_timer->cancel(_timerStateHandle);
-			_timerStateCb->destroy(_timerStateReuMem);
+			_timerStateCb->destroy();
+			_reuMem.deallocate(_timerStateCb);
 			_timerStateCb = NULL;
 		}
 	}
@@ -3461,6 +3629,11 @@ bool ActorFunc_::is_quited(my_actor* host)
 {
 	assert(host);
 	return host->is_quited();
+}
+
+reusable_mem& ActorFunc_::reu_mem(my_actor* host)
+{
+	return host->self_reusable();
 }
 
 void ActorFunc_::cancel_timer(my_actor* host)

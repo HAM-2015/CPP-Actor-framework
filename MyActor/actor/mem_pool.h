@@ -652,6 +652,66 @@ private:
 class reusable_mem : public reusable_mem_mt<null_mutex> {};
 
 //////////////////////////////////////////////////////////////////////////
+
+template <typename _Ty = void, typename _Reusalble = reusable_mem>
+struct reusable_alloc;
+
+template <typename _Reusalble>
+struct reusable_alloc<void, _Reusalble>
+{
+	template <typename _Other>
+	struct rebind
+	{
+		typedef reusable_alloc<_Other, _Reusalble> other;
+	};
+
+	reusable_alloc(_Reusalble& reu)
+		:_reuMem(&reu) {}
+
+	_Reusalble* _reuMem;
+};
+
+template <typename _Ty, typename _Reusalble>
+struct reusable_alloc
+{
+	template <typename _Other>
+	struct rebind
+	{
+		typedef reusable_alloc<_Other, _Reusalble> other;
+	};
+public:
+	reusable_alloc()
+		:_reuMem(NULL) {}
+
+	reusable_alloc(_Reusalble& reu)
+		:_reuMem(&reu) {}
+
+	template <typename _Other>
+	reusable_alloc(reusable_alloc<_Other, _Reusalble>& reu)
+		:_reuMem(reu._reuMem) {}
+
+	void* allocate(size_t n)
+	{
+		assert(_reuMem);
+		assert(1 == n);
+		return _reuMem->allocate(sizeof(_Ty));
+	}
+
+	void deallocate(void* p, size_t n)
+	{
+		assert(_reuMem);
+		assert(1 == n);
+		_reuMem->deallocate(p);
+	}
+
+	void destroy(_Ty* p)
+	{
+		p->~_Ty();
+	}
+
+	_Reusalble* _reuMem;
+};
+//////////////////////////////////////////////////////////////////////////
 template <typename _Ty = void, typename _All = mem_alloc_mt<>>
 class pool_alloc_mt;
 

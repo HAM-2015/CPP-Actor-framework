@@ -89,8 +89,9 @@ void bind_qt_run_base::task_event::operator delete(void* p)
 //////////////////////////////////////////////////////////////////////////
 
 bind_qt_run_base::bind_qt_run_base()
-:_isClosed(false), _waitClose(false), _eventLoop(NULL), _waitCount(0), _tasksQueue(16)
+:_waitClose(false), _eventLoop(NULL), _waitCount(0), _inCloseScope(false)
 {
+	DEBUG_OPERATION(_taskCount = 0);
 	_threadID = boost::this_thread::get_id();
 #ifdef ENABLE_QT_ACTOR
 	ui_tls::init();
@@ -100,11 +101,10 @@ bind_qt_run_base::bind_qt_run_base()
 bind_qt_run_base::~bind_qt_run_base()
 {
 	assert(run_in_ui_thread());
-	assert(_isClosed);
 	assert(0 == _waitCount);
+	assert(0 == _taskCount);
 	assert(!_waitClose);
 	assert(!_eventLoop);
-	assert(_tasksQueue.empty());
 #ifdef ENABLE_QT_ACTOR
 	_qtStrand.reset();
 	ui_tls::reset();
@@ -131,38 +131,50 @@ bool bind_qt_run_base::running_in_this_thread()
 #endif
 }
 
-void bind_qt_run_base::post_queue_size(size_t fixedSize)
+bool bind_qt_run_base::is_wait_close()
 {
 	assert(run_in_ui_thread());
-	_mutex.lock();
-	_tasksQueue.expand_fixed(fixedSize);
-	_mutex.unlock();
+	return _waitClose;
 }
 
-size_t bind_qt_run_base::task_number()
+bool bind_qt_run_base::wait_close_reached()
 {
-	return _tasksQueue.size();
+	assert(run_in_ui_thread());
+	return 0 == _waitCount;
+}
+
+bool bind_qt_run_base::inside_wait_close_loop()
+{
+	assert(run_in_ui_thread());
+	return NULL != _eventLoop;
+}
+
+bool bind_qt_run_base::in_close_scope()
+{
+	return _inCloseScope;
+}
+
+void bind_qt_run_base::set_in_close_scope_sign(bool b)
+{
+	_inCloseScope = b;
 }
 
 std::function<void()> bind_qt_run_base::wrap_check_close()
 {
 	assert(run_in_ui_thread());
 	_waitCount++;
-	return wrap([this]
+	return std::function<void()>(wrap([this]
 	{
 		check_close();
-	});
+#ifdef _MSC_VER
+	}), reusable_alloc<void, reusable_mem_mt<>>(_reuMem));
+#elif __GNUG__
+	}));
+#endif
 }
 
-void bind_qt_run_base::runOneTask()
+void bind_qt_run_base::run_one_task(wrap_handler_face* h)
 {
-	_mutex.lock();
-	assert(!_tasksQueue.empty());
-	wrap_handler_face* h = _tasksQueue.front();
-	h->running_now();
-	_tasksQueue.pop_front();
-	_mutex.unlock();
-
 #ifdef ENABLE_QT_ACTOR
 	ui_tls::push_stack(this);
 #endif
@@ -174,34 +186,16 @@ void bind_qt_run_base::runOneTask()
 #endif
 }
 
-void bind_qt_run_base::ui_closed()
-{
-	assert(run_in_ui_thread());
-	{
-		boost::unique_lock<boost::shared_mutex> sl(_postMutex);
-		_isClosed = true;
-	}
-	while (!_tasksQueue.empty())
-	{
-		bind_qt_run_base::runOneTask();
-	}
-}
-
 void bind_qt_run_base::enter_wait_close()
 {
 	assert(run_in_ui_thread());
 	assert(!_waitClose);
-	_waitClose = true;
 	if (_waitCount)
 	{
+		_waitClose = true;
 		enter_loop();
-	} 
-	else
-	{
-		close_now();
+		_waitClose = false;
 	}
-	//assert(_isClosed);
-	_waitClose = false;
 }
 
 void bind_qt_run_base::check_close()
@@ -215,18 +209,28 @@ void bind_qt_run_base::check_close()
 }
 
 #ifdef ENABLE_QT_ACTOR
-actor_handle bind_qt_run_base::create_qt_actor(const my_actor::main_func& mainFunc, size_t stackSize /*= DEFAULT_STACKSIZE*/)
+actor_handle bind_qt_run_base::create_qt_actor(const my_actor::main_func& mainFunc, size_t stackSize /*= QT_UI_ACTOR_STACK_SIZE*/)
 {
-	assert(!_isClosed);
 	assert(!!_qtStrand);
 	return my_actor::create(_qtStrand, mainFunc, stackSize);
 }
 
-actor_handle bind_qt_run_base::create_qt_actor(my_actor::main_func&& mainFunc, size_t stackSize /*= DEFAULT_STACKSIZE*/)
+actor_handle bind_qt_run_base::create_qt_actor(my_actor::main_func&& mainFunc, size_t stackSize /*= QT_UI_ACTOR_STACK_SIZE*/)
 {
-	assert(!_isClosed);
 	assert(!!_qtStrand);
 	return my_actor::create(_qtStrand, std::move(mainFunc), stackSize);
+}
+
+child_actor_handle bind_qt_run_base::create_qt_child_actor(my_actor* host, const my_actor::main_func& mainFunc, size_t stackSize /*= QT_UI_ACTOR_STACK_SIZE*/)
+{
+	assert(!!_qtStrand);
+	return host->create_child_actor(_qtStrand, mainFunc, stackSize);
+}
+
+child_actor_handle bind_qt_run_base::create_qt_child_actor(my_actor* host, my_actor::main_func&& mainFunc, size_t stackSize /*= QT_UI_ACTOR_STACK_SIZE*/)
+{
+	assert(!!_qtStrand);
+	return host->create_child_actor(_qtStrand, std::move(mainFunc), stackSize);
 }
 
 void bind_qt_run_base::start_qt_strand(io_engine& ios)
@@ -234,5 +238,12 @@ void bind_qt_run_base::start_qt_strand(io_engine& ios)
 	assert(run_in_ui_thread());
 	_qtStrand = qt_strand::create(ios, this);
 }
+
+const shared_qt_strand& bind_qt_run_base::ui_strand()
+{
+	assert(!!_qtStrand);
+	return _qtStrand;
+}
+
 #endif
 #endif

@@ -66,6 +66,8 @@ class MsgPoolBase_;
 struct shared_bool
 {
 	shared_bool();
+	shared_bool(const shared_bool& s);
+	shared_bool(shared_bool&& s);
 	explicit shared_bool(const std::shared_ptr<bool>& pb);
 	explicit shared_bool(std::shared_ptr<bool>&& pb);
 	void operator=(const shared_bool& s);
@@ -90,6 +92,7 @@ struct ActorFunc_
 	static void pull_yield(my_actor* host);
 	static void push_yield(my_actor* host);
 	static bool is_quited(my_actor* host);
+	static reusable_mem& reu_mem(my_actor* host);
 	template <typename R, typename H>
 	static R send(my_actor* host, const shared_strand& exeStrand, H&& h);
 	template <typename R, typename H>
@@ -697,7 +700,7 @@ private:
 	{
 		throw lost_exception();
 	}
-
+public:
 	void close()
 	{
 		if (!Parent::_closed.empty())
@@ -812,7 +815,7 @@ private:
 	{
 		throw lost_exception();
 	}
-
+public:
 	void close()
 	{
 		if (!Parent::_closed.empty())
@@ -919,7 +922,7 @@ private:
 	{
 		throw lost_exception();
 	}
-
+public:
 	void close()
 	{
 		if (!Parent::_closed.empty())
@@ -939,7 +942,7 @@ private:
 		Parent::_checkLost = false;
 		Parent::_hostActor = NULL;
 	}
-public:
+
 	bool has()
 	{
 		assert(Parent::_strand->running_in_this_thread());
@@ -1049,7 +1052,7 @@ private:
 	{
 		throw lost_exception();
 	}
-
+public:
 	void close()
 	{
 		if (!Parent::_closed.empty())
@@ -1065,7 +1068,7 @@ private:
 		Parent::_checkLost = false;
 		Parent::_hostActor = NULL;
 	}
-public:
+
 	bool has()
 	{
 		assert(Parent::_strand->running_in_this_thread());
@@ -2211,7 +2214,11 @@ class mutex_block_msg : public MutexBlock_
 public:
 	template <typename Handler>
 	mutex_block_msg(msg_handle& msgHandle, Handler&& handler)
+#ifdef _MSC_VER
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))) {}
+#elif __GNUG__
 		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)) {}
+#endif
 private:
 	bool ready()
 	{
@@ -2272,7 +2279,11 @@ class mutex_block_trig : public MutexBlock_
 public:
 	template <typename Handler>
 	mutex_block_trig(msg_handle& msgHandle, Handler&& handler)
+#ifdef _MSC_VER
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))), _triged(false) {}
+#elif __GNUG__
 		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _triged(false) {}
+#endif
 private:
 	bool ready()
 	{
@@ -2339,21 +2350,26 @@ class mutex_block_pump : public MutexBlock_
 public:
 	template <typename Handler>
 	mutex_block_pump(my_actor* host, Handler&& handler, bool checkLost = false)
-		:_handler(TRY_MOVE(handler))
-	{
-		_msgHandle = ActorFunc_::connect_msg_pump<ARGS...>(0, host, checkLost);
-	}
+		:mutex_block_pump(0, host, TRY_MOVE(handler), checkLost) {}
 
 	template <typename Handler>
 	mutex_block_pump(const int id, my_actor* host, Handler&& handler, bool checkLost = false)
-		: _handler(TRY_MOVE(handler))
+#ifdef _MSC_VER
+		:_handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(host)))
+#elif __GNUG__
+		:_handler(TRY_MOVE(handler))
+#endif
 	{
 		_msgHandle = ActorFunc_::connect_msg_pump<ARGS...>(id, host, checkLost);
 	}
 
 	template <typename Handler>
 	mutex_block_pump(const pump_handle& pump, Handler&& handler)
+#ifdef _MSC_VER
+		: _msgHandle(pump), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))) {}
+#elif __GNUG__
 		: _msgHandle(pump), _handler(TRY_MOVE(handler)) {}
+#endif
 private:
 	bool ready()
 	{
@@ -2370,7 +2386,8 @@ private:
 
 	void check_lost()
 	{
-		if (_msgHandle.get()->_checkLost && _msgHandle.get()->_losted)
+		auto* t = _msgHandle.get();
+		if (t->_checkLost && t->_losted)
 		{
 			throw typename msg_pump_handle<ARGS...>::lost_exception(_msgHandle.get_id());
 		}
@@ -2414,7 +2431,11 @@ class mutex_block_msg<> : public MutexBlock_
 public:
 	template <typename Handler>
 	mutex_block_msg(msg_handle& msgHandle, Handler&& handler)
+#ifdef _MSC_VER
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))), _has(false) {}
+#elif __GNUG__
 		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _has(false) {}
+#endif
 private:
 	bool ready()
 	{
@@ -2471,7 +2492,11 @@ class mutex_block_trig<> : public MutexBlock_
 public:
 	template <typename Handler>
 	mutex_block_trig(msg_handle& msgHandle, Handler&& handler)
+#ifdef _MSC_VER
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))), _has(false), _triged(false) {}
+#elif __GNUG__
 		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _has(false), _triged(false) {}
+#endif
 private:
 	bool ready()
 	{
@@ -2534,21 +2559,26 @@ class mutex_block_pump<> : public MutexBlock_
 public:
 	template <typename Handler>
 	mutex_block_pump(my_actor* host, Handler&& handler, bool checkLost = false)
-		:_handler(TRY_MOVE(handler)), _has(false)
-	{
-		_msgHandle = ActorFunc_::connect_msg_pump(0, host, checkLost);
-	}
+		:mutex_block_pump(0, host, TRY_MOVE(handler), checkLost) {}
 
 	template <typename Handler>
 	mutex_block_pump(const int id, my_actor* host, Handler&& handler, bool checkLost = false)
-		: _handler(TRY_MOVE(handler)), _has(false)
+#ifdef _MSC_VER
+		:_handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(host))), _has(false)
+#elif __GNUG__
+		:_handler(TRY_MOVE(handler)), _has(false)
+#endif
 	{
 		_msgHandle = ActorFunc_::connect_msg_pump(id, host, checkLost);
 	}
 
 	template <typename Handler>
 	mutex_block_pump(const pump_handle& pump, Handler&& handler)
+#ifdef _MSC_VER
+		: _msgHandle(pump), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))), _has(false) {}
+#elif __GNUG__
 		: _msgHandle(pump), _handler(TRY_MOVE(handler)), _has(false) {}
+#endif
 private:
 	bool ready()
 	{
@@ -2565,7 +2595,8 @@ private:
 
 	void check_lost()
 	{
-		if (_msgHandle.get()->_checkLost && _msgHandle.get()->_losted)
+		auto* t = _msgHandle.get();
+		if (t->_checkLost && t->_losted)
 		{
 			throw msg_pump_handle<>::lost_exception(_msgHandle.get_id());
 		}
@@ -2616,7 +2647,12 @@ class mutex_block_msg_check_lost : public MutexBlock_
 public:
 	template <typename Handler, typename LostHandler>
 	mutex_block_msg_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler))
+#ifdef _MSC_VER
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
+		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))), _lostNtfed(false)
+#elif __GNUG__
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _lostNtfed(false)
+#endif
 	{
 		_msgHandle.check_lost(true);
 	}
@@ -2635,7 +2671,7 @@ private:
 	bool is_losted()
 	{
 		assert(_msgHandle._checkLost);
-		return _msgHandle._losted;
+		return _msgHandle._losted && !_lostNtfed;
 	}
 
 	void check_lost()
@@ -2653,6 +2689,7 @@ private:
 		else if (is_losted())
 		{
 			isRun = true;
+			_lostNtfed = true;
 			return _lostHandler();
 		}
 		isRun = false;
@@ -2673,6 +2710,7 @@ private:
 	std::function<bool(ARGS...)> _handler;
 	std::function<bool()> _lostHandler;
 	dst_receiver _msgBuff;
+	bool _lostNtfed;
 };
 
 /*!
@@ -2688,7 +2726,12 @@ class mutex_block_trig_check_lost : public MutexBlock_
 public:
 	template <typename Handler, typename LostHandler>
 	mutex_block_trig_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _triged(false)
+#ifdef _MSC_VER
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
+		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))), _triged(false), _lostNtfed(false)
+#elif __GNUG__
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _triged(false), _lostNtfed(false)
+#endif
 	{
 		_msgHandle.check_lost(true);
 	}
@@ -2711,7 +2754,7 @@ private:
 	bool is_losted()
 	{
 		assert(_msgHandle._checkLost);
-		return _msgHandle._losted;
+		return _msgHandle._losted && !_lostNtfed;
 	}
 
 	void check_lost()
@@ -2731,6 +2774,7 @@ private:
 		{
 			isRun = true;
 			_triged = true;
+			_lostNtfed = true;
 			return _lostHandler();
 		}
 		isRun = false;
@@ -2752,6 +2796,7 @@ private:
 	std::function<bool()> _lostHandler;
 	dst_receiver _msgBuff;
 	bool _triged;
+	bool _lostNtfed;
 };
 
 /*!
@@ -2767,21 +2812,28 @@ class mutex_block_pump_check_lost : public MutexBlock_
 public:
 	template <typename Handler, typename LostHandler>
 	mutex_block_pump_check_lost(my_actor* host, Handler&& handler, LostHandler&& lostHandler)
-		:_handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler))
-	{
-		_msgHandle = ActorFunc_::connect_msg_pump<ARGS...>(0, host, true);
-	}
+		:mutex_block_pump_check_lost(0, host, TRY_MOVE(handler), TRY_MOVE(lostHandler)) {}
 
 	template <typename Handler, typename LostHandler>
 	mutex_block_pump_check_lost(const int id, my_actor* host, Handler&& handler, LostHandler&& lostHandler)
-		: _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler))
+#ifdef _MSC_VER
+		:_handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(host))),
+		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(host))), _lostNtfed(false)
+#elif __GNUG__
+		:_handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _lostNtfed(false)
+#endif
 	{
 		_msgHandle = ActorFunc_::connect_msg_pump<ARGS...>(id, host, true);
 	}
 
 	template <typename Handler, typename LostHandler>
 	mutex_block_pump_check_lost(const pump_handle& pump, Handler&& handler, LostHandler&& lostHandler)
-		: _msgHandle(pump), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler))
+#ifdef _MSC_VER
+		: _msgHandle(pump), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))),
+		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))), _lostNtfed(false)
+#elif __GNUG__
+		: _msgHandle(pump), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _lostNtfed(false)
+#endif
 	{
 		_msgHandle.check_lost(true);
 	}
@@ -2802,7 +2854,7 @@ private:
 	bool is_losted()
 	{
 		assert(_msgHandle.get()->_checkLost);
-		return _msgHandle.get()->_losted;
+		return _msgHandle.get()->_losted && !_lostNtfed;
 	}
 
 	void check_lost()
@@ -2815,12 +2867,14 @@ private:
 		if (_msgBuff.has())
 		{
 			isRun = true;
+			_lostNtfed = false;
 			OUT_OF_SCOPE({ _msgBuff.clear(); });
 			return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 		}
 		else if (is_losted())
 		{
 			isRun = true;
+			_lostNtfed = true;
 			return _lostHandler();
 		}
 		isRun = false;
@@ -2842,6 +2896,7 @@ private:
 	std::function<bool(ARGS...)> _handler;
 	std::function<bool()> _lostHandler;
 	dst_receiver _msgBuff;
+	bool _lostNtfed;
 };
 
 template <>
@@ -2853,7 +2908,12 @@ class mutex_block_msg_check_lost<> : public MutexBlock_
 public:
 	template <typename Handler, typename LostHandler>
 	mutex_block_msg_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _has(false)
+#ifdef _MSC_VER
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
+		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))), _has(false), _lostNtfed(false)
+#elif __GNUG__
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _has(false), _lostNtfed(false)
+#endif
 	{
 		_msgHandle.check_lost(true);
 	}
@@ -2872,7 +2932,7 @@ private:
 	bool is_losted()
 	{
 		assert(_msgHandle._checkLost);
-		return _msgHandle._losted;
+		return _msgHandle._losted && !_lostNtfed;
 	}
 
 	void check_lost()
@@ -2890,6 +2950,7 @@ private:
 		else if (is_losted())
 		{
 			isRun = true;
+			_lostNtfed = true;
 			return _lostHandler();
 		}
 		isRun = false;
@@ -2910,6 +2971,7 @@ private:
 	std::function<bool()> _handler;
 	std::function<bool()> _lostHandler;
 	bool _has;
+	bool _lostNtfed;
 };
 
 template <>
@@ -2921,7 +2983,12 @@ class mutex_block_trig_check_lost<> : public MutexBlock_
 public:
 	template <typename Handler, typename LostHandler>
 	mutex_block_trig_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _has(false), _triged(false)
+#ifdef _MSC_VER
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
+		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))), _has(false), _triged(false), _lostNtfed(false)
+#elif __GNUG__
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _has(false), _triged(false), _lostNtfed(false)
+#endif
 	{
 		_msgHandle.check_lost(true);
 	}
@@ -2944,7 +3011,7 @@ private:
 	bool is_losted()
 	{
 		assert(_msgHandle._checkLost);
-		return _msgHandle._losted;
+		return _msgHandle._losted && !_lostNtfed;
 	}
 
 	void check_lost()
@@ -2964,6 +3031,7 @@ private:
 		{
 			isRun = true;
 			_triged = true;
+			_lostNtfed = true;
 			return _lostHandler();
 		}
 		isRun = false;
@@ -2985,6 +3053,7 @@ private:
 	std::function<bool()> _lostHandler;
 	bool _has;
 	bool _triged;
+	bool _lostNtfed;
 };
 
 template <>
@@ -2996,21 +3065,28 @@ class mutex_block_pump_check_lost<> : public MutexBlock_
 public:
 	template <typename Handler, typename LostHandler>
 	mutex_block_pump_check_lost(my_actor* host, Handler&& handler, LostHandler&& lostHandler)
-		:_handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _has(false)
-	{
-		_msgHandle = ActorFunc_::connect_msg_pump(0, host, true);
-	}
+		:mutex_block_pump_check_lost(0, host, TRY_MOVE(handler), TRY_MOVE(lostHandler)) {}
 
 	template <typename Handler, typename LostHandler>
 	mutex_block_pump_check_lost(const int id, my_actor* host, Handler&& handler, LostHandler&& lostHandler)
-		: _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _has(false)
+#ifdef _MSC_VER
+		: _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(host))),
+		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(host))), _has(false), _lostNtfed(false)
+#elif __GNUG__
+		: _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _has(false), _lostNtfed(false)
+#endif
 	{
 		_msgHandle = ActorFunc_::connect_msg_pump(id, host, true);
 	}
 
 	template <typename Handler, typename LostHandler>
 	mutex_block_pump_check_lost(const pump_handle& pump, Handler&& handler, LostHandler&& lostHandler)
-		: _msgHandle(pump), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _has(false)
+#ifdef _MSC_VER
+		: _msgHandle(pump), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))),
+		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))), _has(false), _lostNtfed(false)
+#elif __GNUG__
+		: _msgHandle(pump), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _has(false), _lostNtfed(false)
+#endif
 	{
 		_msgHandle.check_lost(true);
 	}
@@ -3031,7 +3107,7 @@ private:
 	bool is_losted()
 	{
 		assert(_msgHandle.get()->_checkLost);
-		return _msgHandle.get()->_losted;
+		return _msgHandle.get()->_losted && !_lostNtfed;
 	}
 
 	void check_lost()
@@ -3045,11 +3121,13 @@ private:
 		{
 			isRun = true;
 			_has = false;
+			_lostNtfed = false;
 			return _handler();
 		}
 		else if (is_losted())
 		{
 			isRun = true;
+			_lostNtfed = true;
 			return _lostHandler();
 		}
 		isRun = false;
@@ -3071,6 +3149,7 @@ private:
 	std::function<bool()> _handler;
 	std::function<bool()> _lostHandler;
 	bool _has;
+	bool _lostNtfed;
 };
 #endif
 //////////////////////////////////////////////////////////////////////////
@@ -3464,7 +3543,7 @@ public:
 	void operator()(Args&&... args) const
 	{
 		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
-		assert(_closed);
+		assert(!_closed.empty());
 		if (_selfEarly)
 		{
 			Parent::_trig_handler3(_closed, _sign, _dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
@@ -3478,7 +3557,7 @@ public:
 	void operator()() const
 	{
 		static_assert(sizeof...(ARGS) == 0, "");
-		assert(_closed);
+		assert(!_closed.empty());
 		if (_selfEarly)
 		{
 			Parent::tick_handler(_closed, _sign);
@@ -3668,7 +3747,7 @@ public:
 	void operator()(Args&&... args) const
 	{
 		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
-		assert(_closed);
+		assert(!_closed.empty());
 		if (_selfEarly)
 		{
 			Parent::_dispatch_handler3(_closed, _sign, _dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
@@ -3682,7 +3761,7 @@ public:
 	void operator()() const
 	{
 		static_assert(sizeof...(ARGS) == 0, "");
-		assert(_closed);
+		assert(!_closed.empty());
 		if (_selfEarly)
 		{
 			Parent::dispatch_handler(_closed, _sign);
@@ -4901,8 +4980,8 @@ class my_actor
 
 	struct wrap_timer_handler_face
 	{
-		virtual void invoke(reusable_mem& reuMem) = 0;
-		virtual void destroy(reusable_mem& reuMem) = 0;
+		virtual void invoke() = 0;
+		virtual void destroy() = 0;
 	};
 
 	template <typename Handler>
@@ -4912,19 +4991,25 @@ class my_actor
 		wrap_timer_handler(H&& h)
 			:_handler(TRY_MOVE(h)) {}
 
-		void invoke(reusable_mem& reuMem)
+		void invoke()
 		{
 			CHECK_EXCEPTION(_handler);
-			destroy(reuMem);
+			destroy();
 		}
 
-		void destroy(reusable_mem& reuMem)
+		void destroy()
 		{
 			this->~wrap_timer_handler();
-			reuMem.deallocate(this);
 		}
 
 		Handler _handler;
+	};
+
+	template <typename T>
+	struct ignore_msg
+	{
+		template <typename Arg>
+		void operator=(Arg&&) {}
 	};
 
 	class actor_run;
@@ -4947,47 +5032,30 @@ public:
 	class quit_guard
 	{
 	public:
-		quit_guard(my_actor* self)
-			:_self(self)
-		{
-			_locked = true;
-			_self->lock_quit();
-		}
-
-		~quit_guard()
-		{
-			if (_locked)
-			{
-#ifdef _MSC_VER
-				//可能在此析构函数内抛出 force_quit_exception 异常，但在 unlock_quit 已经切换出堆栈，在切换回来后会安全的释放资源
-				_self->unlock_quit();
-#elif __GNUG__
-				try
-				{
-					_self->unlock_quit();
-				}
-				catch (my_actor::force_quit_exception&) {}
-				DEBUG_OPERATION(catch (...) { assert(false); })
-#endif
-			}
-		}
-
-		void lock()
-		{
-			assert(!_locked);
-			_locked = true;
-			_self->lock_quit();
-		}
-
-		void unlock()
-		{
-			assert(_locked);
-			_locked = false;
-			_self->unlock_quit();
-		}
+		quit_guard(my_actor* self);
+		~quit_guard();
+		void lock();
+		void unlock();
 	private:
-		quit_guard(const quit_guard&) {}
-		void operator=(const quit_guard&) {}
+		quit_guard(const quit_guard&);
+		void operator=(const quit_guard&);
+		my_actor* _self;
+		bool _locked;
+	};
+
+	/*!
+	@brief 在{}一定范围内锁定当前Actor不被挂起
+	*/
+	class suspend_guard
+	{
+	public:
+		suspend_guard(my_actor* self);
+		~suspend_guard();
+		void lock();
+		void unlock();
+	private:
+		suspend_guard(const suspend_guard&);
+		void operator=(const suspend_guard&);
 		my_actor* _self;
 		bool _locked;
 	};
@@ -6050,6 +6118,40 @@ public:
 	{
 		timed_wait_msg<Args...>(-1, amh, h);
 	}
+
+	/*!
+	@brief 等待并忽略掉一个消息
+	*/
+	template <typename... Args>
+	void wait_ignore_msg(actor_msg_handle<Args...>& amh)
+	{
+		timed_wait_ignore_msg(-1, amh);
+	}
+
+	/*!
+	@brief 尝试弹出并忽略掉一个消息
+	*/
+	template <typename... Args>
+	bool try_wait_ignore_msg(actor_msg_handle<Args...>& amh)
+	{
+		return timed_wait_ignore_msg(0, amh);
+	}
+
+	/*!
+	@brief 在一定时间内尝试弹出并忽略掉一个消息
+	*/
+	template <typename... Args>
+	bool timed_wait_ignore_msg(int tm, actor_msg_handle<Args...>& amh)
+	{
+		std::tuple<ignore_msg<Args>...> ignoreMsg;
+		return tuple_invoke<bool>(&my_actor::_timed_wait_ignore_msg<Args...>, std::tuple<my_actor*, int&, actor_msg_handle<Args...>&>(this, tm, amh), ignoreMsg);
+	}
+private:
+	template <typename... Args>
+	static bool _timed_wait_ignore_msg(my_actor* const host, int tm, actor_msg_handle<Args...>& amh, ignore_msg<Args>&... outs)
+	{
+		return host->timed_wait_msg(tm, amh, outs...);
+	}
 public:
 	/*!
 	@brief 创建上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_context_as_type(...))
@@ -6328,6 +6430,40 @@ public:
 	{
 		timed_wait_trig<Args...>(-1, ath, h);
 	}
+
+	/*!
+	@brief 等待并忽略掉一个消息
+	*/
+	template <typename... Args>
+	void wait_ignore_trig(actor_trig_handle<Args...>& ath)
+	{
+		timed_wait_ignore_trig(-1, ath);
+	}
+
+	/*!
+	@brief 尝试弹出并忽略掉一个消息
+	*/
+	template <typename... Args>
+	bool try_wait_ignore_trig(actor_trig_handle<Args...>& ath)
+	{
+		return timed_wait_ignore_trig(0, ath);
+	}
+
+	/*!
+	@brief 在一定时间内尝试弹出并忽略掉一个消息
+	*/
+	template <typename... Args>
+	bool timed_wait_ignore_trig(int tm, actor_trig_handle<Args...>& ath)
+	{
+		std::tuple<ignore_msg<Args>...> ignoreMsg;
+		return tuple_invoke<bool>(&my_actor::_timed_wait_ignore_trig<Args...>, std::tuple<my_actor*, int&, actor_trig_handle<Args...>&>(this, tm, ath), ignoreMsg);
+	}
+private:
+	template <typename... Args>
+	static bool _timed_wait_ignore_trig(my_actor* const host, int tm, actor_trig_handle<Args...>& ath, ignore_msg<Args>&... outs)
+	{
+		return host->timed_wait_trig(tm, ath, outs...);
+	}
 private:
 	/*!
 	@brief 寻找出与模板参数类型匹配的消息池
@@ -6493,6 +6629,7 @@ private:
 				return false;
 			}
 		}
+		suspend_guard sg(this);
 		quit_guard qg(this);
 		pck_type msgPck = msg_pool_pck<Args...>(id, this);
 		msgPck->lock(this);
@@ -6511,6 +6648,7 @@ private:
 			{
 				msgPck->unlock(this);
 				qg.unlock();
+				sg.unlock();
 				return false;
 			}
 			childPck->lock(this);
@@ -6544,6 +6682,7 @@ private:
 		childPck->unlock(this);
 		msgPck->unlock(this);
 		qg.unlock();
+		sg.unlock();
 		return true;
 	}
 public:
@@ -6644,6 +6783,7 @@ public:
 		auto msgPck = msg_pool_pck<Args...>(id, this, false);
 		if (msgPck)
 		{
+			suspend_guard sg(this);
 			quit_guard qg(this);
 			auto& next_ = msgPck->_next;
 			msgPck->lock(this);
@@ -6658,6 +6798,7 @@ public:
 			}
 			msgPck->unlock(this);
 			qg.unlock();
+			sg.unlock();
 		}
 	}
 
@@ -6673,6 +6814,7 @@ public:
 		auto it = _msgPoolStatus._msgTypeMap.find(typeID);
 		if (_msgPoolStatus._msgTypeMap.end() != it)
 		{
+			suspend_guard sg(this);
 			quit_guard qg(this);
 			assert(std::dynamic_pointer_cast<pck_type>(it->second));
 			std::shared_ptr<pck_type> msgPck = std::static_pointer_cast<pck_type>(it->second);
@@ -6684,6 +6826,7 @@ public:
 			_msgPoolStatus._msgTypeMap.erase(it);
 			msgPck->unlock(this);
 			qg.unlock();
+			sg.unlock();
 			return true;
 		}
 		return false;
@@ -6720,6 +6863,7 @@ public:
 			}
 		}
 #endif
+		suspend_guard sg(this);
 		quit_guard qg(this);
 		pck_type msgPck = msg_pool_pck<Args...>(id, this);
 		msgPck->lock(this);
@@ -6738,6 +6882,7 @@ public:
 			{
 				msgPck->unlock(this);
 				qg.unlock();
+				sg.unlock();
 				return post_actor_msg<Args...>();
 			}
 			buddyPck->lock(this);
@@ -6787,10 +6932,12 @@ public:
 			}
 			msgPck->unlock(this);
 			qg.unlock();
+			sg.unlock();
 			return post_actor_msg<Args...>(newPool, buddyActor, autoCheckLost);
 #else
 			msgPck->unlock(this);
 			qg.unlock();
+			sg.unlock();
 			return post_actor_msg<Args...>(newPool, buddyActor);
 #endif
 		}
@@ -6816,17 +6963,20 @@ public:
 			buddyPck->unlock(this);
 			msgPck->unlock(this);
 			qg.unlock();
+			sg.unlock();
 			return post_actor_msg<Args...>(buddyPool, buddyActor, std::move(autoCheckLost));
 #else
 			buddyPck->unlock(this);
 			msgPck->unlock(this);
 			qg.unlock();
+			sg.unlock();
 			return post_actor_msg<Args...>(buddyPool, buddyActor);
 #endif
 		}
 		buddyPck->unlock(this);
 		msgPck->unlock(this);
 		qg.unlock();
+		sg.unlock();
 		return post_actor_msg<Args...>();
 	}
 
@@ -7025,6 +7175,7 @@ private:
 		typedef typename pool_type::pump_handler pump_handler;
 
 		host->assert_enter();
+		suspend_guard sg(host);
 		quit_guard qg(host);
 		auto msgPck = msg_pool_pck<Args...>(id, host);
 		msgPck->lock(host);
@@ -7063,6 +7214,7 @@ private:
 		mh._id = id;
 		DEBUG_OPERATION(mh._pClosed = msgPump_->_pClosed);
 		qg.unlock();
+		sg.unlock();
 		return mh;
 	}
 private:
@@ -7465,6 +7617,65 @@ public:
 	{
 		_timed_wait_connect(pump, -1);
 	}
+
+	/*!
+	@brief 在一定时间内尝试弹出并忽略掉一个消息
+	*/
+	template <typename... Args>
+	__yield_interrupt bool timed_pump_ignore_msg(int tm, bool checkDis, const msg_pump_handle<Args...>& pump)
+	{
+		std::tuple<ignore_msg<Args>...> ignoreMsg;
+		return tuple_invoke<bool>(&my_actor::_timed_pump_ignore_msg<Args...>, std::tuple<my_actor*, int&, bool&, const msg_pump_handle<Args...>&>(this, tm, checkDis, pump), ignoreMsg);
+	}
+
+	template <typename... Args>
+	__yield_interrupt bool timed_pump_ignore_msg(int tm, const msg_pump_handle<Args...>& pump)
+	{
+		return timed_pump_ignore_msg(tm, false, pump);
+	}
+
+	/*!
+	@brief 尝试弹出并忽略掉一个消息
+	*/
+	template <typename... Args>
+	__yield_interrupt bool try_pump_ignore_msg(bool checkDis, const msg_pump_handle<Args...>& pump)
+	{
+		std::tuple<ignore_msg<Args>...> ignoreMsg;
+		return tuple_invoke<bool>(&my_actor::_try_pump_ignore_msg<Args...>, std::tuple<my_actor*, bool&, const msg_pump_handle<Args...>&>(this, checkDis, pump), ignoreMsg);
+	}
+
+	template <typename... Args>
+	__yield_interrupt bool try_pump_ignore_msg(const msg_pump_handle<Args...>& pump)
+	{
+		return try_pump_ignore_msg(false, pump);
+	}
+
+	/*!
+	@brief 等待并忽略掉一个消息
+	*/
+	template <typename... Args>
+	__yield_interrupt void pump_ignore_msg(bool checkDis, const msg_pump_handle<Args...>& pump)
+	{
+		timed_pump_ignore_msg(-1, checkDis, pump);
+	}
+
+	template <typename... Args>
+	__yield_interrupt void pump_ignore_msg(const msg_pump_handle<Args...>& pump)
+	{
+		pump_ignore_msg(false, pump);
+	}
+private:
+	template <typename... Args>
+	__yield_interrupt static bool _timed_pump_ignore_msg(my_actor* const host, int tm, bool checkDis, const msg_pump_handle<Args...>& pump, ignore_msg<Args>&... res)
+	{
+		return host->timed_pump_msg(tm, checkDis, pump, res...);
+	}
+
+	template <typename... Args>
+	__yield_interrupt static bool _try_pump_ignore_msg(my_actor* const host, bool checkDis, const msg_pump_handle<Args...>& pump, ignore_msg<Args>&... res)
+	{
+		return host->try_pump_msg(checkDis, pump, res...);
+	}
 public:
 	/*!
 	@brief 查询当前消息由谁代理
@@ -7474,6 +7685,7 @@ public:
 	{
 		typedef std::shared_ptr<msg_pool_status::pck<Args...>> pck_type;
 
+		suspend_guard sg(this);
 		quit_guard qg(this);
 		auto msgPck = send<pck_type>(buddyActor->self_strand(), [id, &buddyActor]()->pck_type
 		{
@@ -7511,11 +7723,13 @@ public:
 					}
 					msgPck->unlock(this);
 					qg.unlock();
+					sg.unlock();
 					return r;
 				}
 			}
 		}
 		qg.unlock();
+		sg.unlock();
 		return actor_handle();
 	}
 
@@ -7656,6 +7870,7 @@ private:
 	template <typename Ready>
 	__yield_interrupt void _run_mutex_blocks(Ready&& mutexReady, MutexBlock_** const mbList, const size_t N)
 	{
+		suspend_guard sg(this);
 		quit_guard qg(this);
 		DEBUG_OPERATION(_check_host_id(this, mbList, N));//判断句柄是不是都是自己的
 		assert(_cmp_snap_id(mbList, N));//判断有没有重复参数
@@ -7928,6 +8143,11 @@ public:
 	size_t self_key();
 
 	/*!
+	@brief 当前Actor使用的reusable_mem
+	*/
+	reusable_mem& self_reusable();
+
+	/*!
 	@brief 设置退出码
 	*/
 	void return_code(size_t cd);
@@ -8017,6 +8237,16 @@ public:
 	@brief 解除退出锁定
 	*/
 	void unlock_quit();
+
+	/*!
+	@brief 锁定当前Actor，暂时不让挂起
+	*/
+	void lock_suspend();
+
+	/*!
+	@brief 解除挂起锁定
+	*/
+	void unlock_suspend();
 
 	/*!
 	@brief 是否锁定了退出
@@ -8221,7 +8451,7 @@ private:
 		_timerStateCompleted = false;
 		_timerStateTime = (long long)ms * 1000;
 		_timerStateStampBegin = get_tick_us();
-		_timerStateCb = new(_timerStateReuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
+		_timerStateCb = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
 		_timerStateHandle = _timer->timeout(_timerStateTime, shared_from_this());
 	}
 
@@ -8264,6 +8494,7 @@ private:
 	wrap_timer_handler_face* _timerStateCb = NULL;///<定时器触发回调
 	size_t _actorKey;///<该Actor处理模块的全局唯一key
 	size_t _lockQuit;///<锁定当前Actor，如果当前接收到退出消息，暂时不退，等到解锁后退出
+	size_t _lockSuspend;///锁定当前Actor的挂起操作，如果当前接收到挂起消息，暂时不挂起，等到解锁后挂起
 	size_t _yieldCount;///<yield计数
 	size_t _lastYield;///<记录上次try_yield的计数
 	size_t _childOverCount;///<子Actor退出时计数
@@ -8276,7 +8507,7 @@ private:
 	msg_pool_status _msgPoolStatus;///<消息池列表
 	actor_handle _parentActor;///<父Actor，子Actor都析构后，父Actor才能析构
 	ActorTimer_::timer_handle _timerStateHandle;///<定时器句柄
-	reusable_mem _timerStateReuMem;///<定时器内存管理
+	reusable_mem _reuMem;///<定时器内存管理
 	ActorTimer_* _timer;///<定时器
 	main_func _mainFunc;///<Actor入口
 	msg_list_shared_alloc<suspend_resume_option> _suspendResumeQueue;///<挂起/恢复操作队列
@@ -8303,6 +8534,7 @@ private:
 	bool _isForce : 1;///<是否是强制退出的标记，成功调用了force_quit
 	bool _notifyQuited : 1;///<当前Actor被锁定后，收到退出消息
 	bool _checkStack : 1;///<是否检测栈空间
+	bool _holdedSuspendSign : 1;///<挂起恢复操作没挂起标记
 #ifdef __linux__
 	bool _sigsegvSign : 1;///<sigsegv信号检测栈标记
 #endif
