@@ -552,7 +552,7 @@ protected:
 
 struct ui_sync_closed_exception {};
 
-struct ui_sync_lost_exeption{};
+struct ui_sync_lost_exception{};
 
 /*!
 @brief ui非阻塞同步消息返回值
@@ -915,7 +915,7 @@ struct qt_ui_sync_check_lost_notifer<R(ARGS...)>
 		if (-1 == rcd)
 		{
 			assert(!res.has());
-			throw ui_sync_lost_exeption();
+			throw ui_sync_lost_exception();
 		}
 		if (!res.has())
 		{
@@ -984,7 +984,7 @@ struct qt_ui_sync_check_lost_notifer<void(ARGS...)>
 		if (-1 == rcd)
 		{
 			assert(!res.has());
-			throw ui_sync_lost_exeption();
+			throw ui_sync_lost_exception();
 		}
 		if (!res.has())
 		{
