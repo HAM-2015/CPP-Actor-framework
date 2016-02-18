@@ -5731,26 +5731,13 @@ public:
 	/*!
 	@brief 调用一个异步函数，异步回调完成后返回
 	*/
-	template <typename H>
-	__yield_interrupt void trig(const H& h)
+	template <typename H, typename... Outs>
+	__yield_interrupt void trig(const H& h, Outs&... dargs)
 	{
 		assert_enter();
 		bool sign = false;
-		h(trig_once_notifer<>(shared_from_this(), NULL, &sign));
-		if (!sign)
-		{
-			sign = true;
-			push_yield();
-		}
-	}
-
-	template <typename... DArgs, typename H>
-	__yield_interrupt void trig(DArgs&... dargs, const H& h)
-	{
-		assert_enter();
-		bool sign = false;
-		std::tuple<DArgs&...> res(dargs...);
-		h(trig_once_notifer<DArgs...>(shared_from_this(), &res, &sign));
+		std::tuple<Outs&...> res(dargs...);
+		h(trig_once_notifer<Outs...>(shared_from_this(), &res, &sign));
 		if (!sign)
 		{
 			sign = true;
@@ -5762,7 +5749,37 @@ public:
 	__yield_interrupt R trig(const H& h)
 	{
 		R res;
-		trig<R>(res, h);
+		trig(h, res);
+		return res;
+	}
+
+	/*!
+	@brief 调用一个异步函数，异步回调完成后返回，之间锁定强制退出
+	*/
+	template <typename H, typename... Outs>
+	__yield_interrupt void trig_guard(const H& h, Outs&... dargs)
+	{
+		assert_enter();
+		lock_quit();
+		bool sign = false;
+		std::tuple<Outs&...> res(dargs...);
+		_strand->next_tick([&]
+		{
+			h(trig_once_notifer<Outs...>(shared_from_this(), &res, &sign));
+		});
+		if (!sign)
+		{
+			sign = true;
+			push_yield();
+		}
+		unlock_quit();
+	}
+
+	template <typename R, typename H>
+	__yield_interrupt R trig_guard(const H& h)
+	{
+		R res;
+		trig_guard(h, res);
 		return res;
 	}
 private:

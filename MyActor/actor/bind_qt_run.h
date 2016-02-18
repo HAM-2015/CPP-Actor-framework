@@ -273,8 +273,7 @@ public:
 	template <typename Handler>
 	void send(my_actor* host, Handler&& handler)
 	{
-		host->lock_quit();
-		host->trig([&](trig_once_notifer<>&& cb)
+		host->trig_guard([&](trig_once_notifer<>&& cb)
 		{
 			post_task_event(make_wrap_handler(_reuMem, std::bind([&handler](const trig_once_notifer<>& cb)
 			{
@@ -282,7 +281,6 @@ public:
 				cb();
 			}, std::move(cb))));
 		});
-		host->unlock_quit();
 	}
 
 	/*!
