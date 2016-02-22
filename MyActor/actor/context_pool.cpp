@@ -1,7 +1,7 @@
 #include "context_pool.h"
 #include "scattered.h"
 #include "actor_framework.h"
-#ifdef FIBER_CORO
+#ifdef WIN32
 #include <Windows.h>
 #endif
 
@@ -67,18 +67,18 @@ ContextPool_::coro_pull_interface* ContextPool_::getContext(size_t size)
 {
 	assert(size && size % 4096 == 0 && size <= 1024 * 1024);
 	size = std::max(size, (size_t)CORO_CONTEXT_STATE_SPACE);
-	do
-	{
-#ifdef FIBER_CORO
+#ifdef WIN32
 #if _WIN32_WINNT >= 0x0600
 		if (!IsThreadAFiber())
 		{
 			ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH);
 		}
-#else//#elif _MSC_VER >= 0x0501
+#else//#elif _WIN32_WINNT >= 0x0501
 		ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH);
 #endif
 #endif
+	do
+	{
 		{
 			context_pool_pck& pool = s_fiberPool._contextPool[size / 4096 - 1];
 			pool._mutex.lock();

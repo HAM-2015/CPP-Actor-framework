@@ -170,7 +170,7 @@ protected:
 		{
 			bool run = false;
 			_mutex.lock();
-			if (!*_deadSign)
+			if (!_deadSign)
 			{
 				_running = true;
 				run = true;
@@ -317,6 +317,11 @@ public:
 	}
 
 	/*!
+	@brief 发送到UI，执行一次yield操作
+	*/
+	void ui_yield(my_actor* host);
+
+	/*!
 	@brief 绑定一个函数到UI队列执行
 	*/
 	template <typename Handler>
@@ -445,7 +450,7 @@ public:
 	{
 		return bind_qt_run_base::wrap_check_close();
 	}
-public:
+
 	void enter_wait_close()
 	{
 		bind_qt_run_base::enter_wait_close();
@@ -474,6 +479,11 @@ public:
 	void set_in_close_scope_sign(bool b)
 	{
 		bind_qt_run_base::set_in_close_scope_sign(b);
+	}
+
+	void ui_yield(my_actor* host)
+	{
+		bind_qt_run_base::ui_yield(host);
 	}
 #ifdef ENABLE_QT_ACTOR
 	void start_qt_strand(io_engine& ios)
@@ -835,7 +845,7 @@ struct check_lost_qt_ui_sync_result
 		if (_res)
 		{
 			std::lock_guard<std::mutex> lg(*_mutex);
-			if (!*_lostSign)
+			if (!_lostSign)
 			{
 				assert(!_res->has());
 				if (_res->_runBase->running_in_this_thread())
@@ -848,7 +858,7 @@ struct check_lost_qt_ui_sync_result
 						const shared_bool& lostSign, const std::shared_ptr<std::mutex>& mutex)
 					{
 						std::lock_guard<std::mutex> lg(*mutex);
-						if (!*lostSign)
+						if (!lostSign)
 						{
 							res->_eventLoop.exit(-1);
 						}
@@ -907,7 +917,7 @@ struct qt_ui_sync_check_lost_notifer<R(ARGS...)>
 		_handler(check_lost_qt_ui_sync_result<R>(&res, sign, _mutex), TRY_MOVE(args)...);
 		int rcd = eventLoop.exec();
 		_mutex->lock();
-		*sign = true;
+		sign = true;
 		_mutex->unlock();
 		DEBUG_OPERATION(_notifyCount--);
 		if (-1 == rcd)
@@ -976,7 +986,7 @@ struct qt_ui_sync_check_lost_notifer<void(ARGS...)>
 		_handler(check_lost_qt_ui_sync_result<void>(&res, sign, _mutex), TRY_MOVE(args)...);
 		int rcd = eventLoop.exec();
 		_mutex->lock();
-		*sign = true;
+		sign = true;
 		_mutex->unlock();
 		DEBUG_OPERATION(_notifyCount--);
 		if (-1 == rcd)

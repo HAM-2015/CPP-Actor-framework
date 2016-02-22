@@ -71,19 +71,13 @@ bool shared_bool::empty() const
 	return !_ptr;
 }
 
-bool shared_bool::get()
-{
-	assert(!empty());
-	return *_ptr;
-}
-
-void shared_bool::set(bool b)
+void shared_bool::operator=(bool b)
 {
 	assert(!empty());
 	*_ptr = b;
 }
 
-bool& shared_bool::operator*() const
+shared_bool::operator bool() const
 {
 	assert(!empty());
 	return *_ptr;
@@ -119,7 +113,7 @@ shared_bool shared_bool::new_(bool b)
 {
 	assert(s_sharedBoolPool);
 	shared_bool r(s_sharedBoolPool->pick());
-	*r = b;
+	r = b;
 	return r;
 }
 
@@ -155,17 +149,16 @@ CheckLost_::CheckLost_(const shared_strand& strand, actor_msg_handle_base* msgHa
 
 CheckLost_::~CheckLost_()
 {
-	if (!(*_closed))
+	if (!_closed)
 	{
-		auto& closed_ = _closed;
 		auto& handle_ = _handle;
-		_strand->try_tick([closed_, handle_]()
+		_strand->try_tick(std::bind([handle_](const shared_bool& closed)
 		{
-			if (!(*closed_))
+			if (!closed)
 			{
 				handle_->lost_msg();
 			}
-		});
+		}, std::move(_closed)));
 	}
 }
 
@@ -201,8 +194,8 @@ child_actor_handle::child_actor_handle(const actor_handle& actor)
 	my_actor* parent = _actor->_parentActor.get();
 	parent->_childActorList.push_front(_actor);
 	_actorIt = parent->_childActorList.begin();
-	_actor->_exitCallback.push_front(parent->make_trig_notifer_to_self(_quiteAth));
-	_athIt = _actor->_exitCallback.begin();
+	_actor->_quitCallback.push_front(parent->make_trig_notifer_to_self(_quiteAth));
+	_athIt = _actor->_quitCallback.begin();
 }
 
 child_actor_handle::child_actor_handle()
@@ -233,10 +226,10 @@ void child_actor_handle::operator =(child_actor_handle&& s)
 		s._quited = true;
 		_started = false;
 		_quited = false;
-		_actor->_exitCallback.erase(s._athIt);
+		_actor->_quitCallback.erase(s._athIt);
 		parent->close_trig_notifer(s._quiteAth);
-		_actor->_exitCallback.push_front(parent->make_trig_notifer_to_self(_quiteAth));
-		_athIt = _actor->_exitCallback.begin();
+		_actor->_quitCallback.push_front(parent->make_trig_notifer_to_self(_quiteAth));
+		_athIt = _actor->_quitCallback.begin();
 	}
 }
 
@@ -1283,7 +1276,7 @@ public:
 			assert(!_actor._lockQuit);
 			assert(!_actor._lockSuspend);
 			assert(_actor._childActorList.empty());
-			assert(_actor._quitHandlerList.empty());
+			assert(_actor._atBeginQuitRegistExecutor.empty());
 		}
 		catch (my_actor::force_quit_exception&)
 		{//捕获Actor被强制退出异常
@@ -1346,12 +1339,12 @@ public:
 		_actor._notifyQuited = true;
 		_actor._msgPoolStatus.clear(&_actor);//yield now
 		_actor._inActor = false;
-		_actor._exited = true;
 	}
 
 	void exit_notify()
 	{
 		DEBUG_OPERATION(size_t yc = _actor.yield_count());
+		_actor._exited = true;
 		_actor._lockSuspend = 0;
 		if (_actor._holdedSuspendSign)
 		{
@@ -1365,11 +1358,11 @@ public:
 				_actor._suspendResumeQueue.pop_front();
 			}
 		}
-		while (!_actor._exitCallback.empty())
+		while (!_actor._quitCallback.empty())
 		{
-			assert(_actor._exitCallback.front());
-			CHECK_EXCEPTION(_actor._exitCallback.front());
-			_actor._exitCallback.pop_front();
+			assert(_actor._quitCallback.front());
+			CHECK_EXCEPTION(_actor._quitCallback.front());
+			_actor._quitCallback.pop_front();
 		}
 		assert(_actor.yield_count() == yc);
 	}
@@ -1640,8 +1633,8 @@ void my_actor::deinstall_sigsegv()
 
 my_actor::my_actor()
 :_suspendResumeQueue(_suspendResumeQueueAll),
-_exitCallback(_quitExitCallbackAll),
-_quitHandlerList(_quitExitCallbackAll),
+_quitCallback(_quitExitCallbackAll),
+_atBeginQuitRegistExecutor(_quitExitCallbackAll),
 _childActorList(_childActorListAll)
 {
 	_actorPull = NULL;
@@ -1697,8 +1690,8 @@ my_actor::~my_actor()
 	assert(!_lockSuspend);
 	assert(!_childSuspendResumeCount);
 	assert(_suspendResumeQueue.empty());
-	assert(_quitHandlerList.empty());
-	assert(_exitCallback.empty());
+	assert(_atBeginQuitRegistExecutor.empty());
+	assert(_quitCallback.empty());
 	assert(_childActorList.empty());
 #ifdef WIN32
 #ifdef CHECK_SELF
@@ -2195,9 +2188,9 @@ void my_actor::sleep(int ms)
 	{
 		if (0 == ms)
 		{
-			_strand->post(std::bind([](const actor_handle& self)
+			_strand->post(std::bind([](const actor_handle& shared_this)
 			{
-				self->run_one();
+				shared_this->run_one();
 			}, shared_from_this()));
 		}
 		else
@@ -2220,9 +2213,9 @@ void my_actor::sleep_guard(int ms)
 void my_actor::yield()
 {
 	assert_enter();
-	_strand->post(std::bind([](const actor_handle& self)
+	_strand->post(std::bind([](const actor_handle& shared_this)
 	{
-		self->run_one();
+		shared_this->run_one();
 	}, shared_from_this()));
 	push_yield();
 }
@@ -2240,9 +2233,9 @@ void my_actor::yield_guard()
 {
 	assert_enter();
 	lock_quit();
-	_strand->next_tick(std::bind([](const actor_handle& self)
+	_strand->next_tick(std::bind([](const actor_handle& shared_this)
 	{
-		self->run_one();
+		shared_this->run_one();
 	}, shared_from_this()));
 	push_yield();
 	unlock_quit();
@@ -2267,22 +2260,22 @@ const msg_list_shared_alloc<actor_handle>& my_actor::child_actors()
 	return _childActorList;
 }
 
-my_actor::quit_iterator my_actor::regist_quit_handler(const std::function<void()>& quitHandler)
+my_actor::quit_iterator my_actor::regist_quit_executor(const std::function<void()>& quitHandler)
 {
-	return regist_quit_handler(std::function<void()>(quitHandler));
+	return regist_quit_executor(std::function<void()>(quitHandler));
 }
 
-my_actor::quit_iterator my_actor::regist_quit_handler(std::function<void()>&& quitHandler)
+my_actor::quit_iterator my_actor::regist_quit_executor(std::function<void()>&& quitHandler)
 {
 	assert_enter();
-	_quitHandlerList.push_front(std::move(quitHandler));//后注册的先执行
-	return _quitHandlerList.begin();
+	_atBeginQuitRegistExecutor.push_front(std::move(quitHandler));//后注册的先执行
+	return _atBeginQuitRegistExecutor.begin();
 }
 
-void my_actor::cancel_quit_handler(const quit_iterator& qh)
+void my_actor::cancel_quit_executor(const quit_iterator& qh)
 {
 	assert_enter();
-	_quitHandlerList.erase(qh);
+	_atBeginQuitRegistExecutor.erase(qh);
 }
 
 void my_actor::cancel_delay_trig()
@@ -2487,23 +2480,10 @@ void my_actor::notify_quit(const std::function<void()>& h)
 
 void my_actor::notify_quit(std::function<void()>&& h)
 {
-	struct wrap_quit
+	_strand->try_tick(std::bind([](const actor_handle& shared_this, std::function<void()>& h)
 	{
-		wrap_quit(const actor_handle& host, std::function<void()>&& h)
-		:_sharedThis(host), _h(std::move(h)) {}
-
-		wrap_quit(wrap_quit&& s)
-			:_sharedThis(s._sharedThis), _h(std::move(s._h)) {}
-
-		void operator()()
-		{
-			_sharedThis->force_quit(std::move(_h));
-		}
-
-		actor_handle _sharedThis;
-		std::function<void()> _h;
-	};
-	_strand->try_tick(wrap_quit(shared_from_this(), std::move(h)));
+		shared_this->force_quit(std::move(h));
+	}, shared_from_this(), std::move(h)));
 }
 
 void my_actor::force_quit(const std::function<void()>& h)
@@ -2522,7 +2502,7 @@ void my_actor::force_quit(std::function<void()>&& h)
 		{
 			_isForce = true;
 			_quited = true;
-			if (h) _exitCallback.push_back(std::move(h));
+			if (h) _quitCallback.push_back(std::move(h));
 			if (!_childActorList.empty())
 			{
 				_childOverCount = _childActorList.size();
@@ -2548,13 +2528,13 @@ void my_actor::force_quit(std::function<void()>&& h)
 			}
 			else
 			{
-				exit_callback();
+				at_begin_quit_execute();
 			}
 			return;
 		}
 		else if (h)
 		{
-			_exitCallback.push_back(std::move(h));
+			_quitCallback.push_back(std::move(h));
 		}
 	}
 	else if (h)
@@ -2567,7 +2547,7 @@ void my_actor::force_quit(std::function<void()>&& h)
 		}
 		else
 		{
-			_exitCallback.push_back(std::move(h));
+			_quitCallback.push_back(std::move(h));
 		}
 	}
 }
@@ -2682,23 +2662,10 @@ void my_actor::notify_suspend(const std::function<void()>& h)
 
 void my_actor::notify_suspend(std::function<void()>&& h)
 {
-	struct wrap_suspend
+	_strand->try_tick(std::bind([](const actor_handle& shared_this, std::function<void()>& h)
 	{
-		wrap_suspend(const actor_handle& host, std::function<void()>&& h)
-		:_sharedThis(host), _h(std::move(h)) {}
-
-		wrap_suspend(wrap_suspend&& s)
-			:_sharedThis(s._sharedThis), _h(std::move(s._h)) {}
-
-		void operator()()
-		{
-			_sharedThis->suspend(std::move(_h));
-		}
-
-		actor_handle _sharedThis;
-		std::function<void()> _h;
-	};
-	_strand->try_tick(wrap_suspend(shared_from_this(), std::move(h)));
+		shared_this->suspend(std::move(h));
+	}, shared_from_this(), std::move(h)));
 }
 
 void my_actor::suspend(const std::function<void()>& h)
@@ -2781,23 +2748,10 @@ void my_actor::notify_resume(const std::function<void()>& h)
 
 void my_actor::notify_resume(std::function<void()>&& h)
 {
-	struct wrap_resume
+	_strand->try_tick(std::bind([](const actor_handle& shared_this, std::function<void()>& h)
 	{
-		wrap_resume(const actor_handle& host, std::function<void()>&& h)
-		:_sharedThis(host), _h(std::move(h)) {}
-
-		wrap_resume(wrap_resume&& s)
-			:_sharedThis(s._sharedThis), _h(std::move(s._h)) {}
-
-		void operator()()
-		{
-			_sharedThis->resume(std::move(_h));
-		}
-
-		actor_handle _sharedThis;
-		std::function<void()> _h;
-	};
-	_strand->try_tick(wrap_resume(shared_from_this(), std::move(h)));
+		shared_this->resume(std::move(h));
+	}, shared_from_this(), std::move(h)));
 }
 
 void my_actor::resume(const std::function<void()>& h)
@@ -2932,7 +2886,7 @@ void my_actor::outside_wait_quit()
 		else
 		{
 			auto& ref2_ = ref2;
-			ref2->_exitCallback.push_back([&ref2_]()
+			ref2->_quitCallback.push_back([&ref2_]()
 			{
 				std::lock_guard<std::mutex> lg(ref2_.mutex);
 				ref2_.conVar.notify_one();
@@ -2942,12 +2896,12 @@ void my_actor::outside_wait_quit()
 	conVar.wait(ul);
 }
 
-void my_actor::append_quit_callback(const std::function<void()>& h)
+void my_actor::append_quit_notify(const std::function<void()>& h)
 {
-	append_quit_callback(std::function<void()>(h));
+	append_quit_notify(std::function<void()>(h));
 }
 
-void my_actor::append_quit_callback(std::function<void()>&& h)
+void my_actor::append_quit_notify(std::function<void()>&& h)
 {
 	if (_strand->running_in_this_thread())
 	{
@@ -2959,28 +2913,44 @@ void my_actor::append_quit_callback(std::function<void()>&& h)
 		}
 		else
 		{
-			_exitCallback.push_back(std::move(h));
+			_quitCallback.push_back(std::move(h));
 		}
 	}
 	else
 	{
-		struct wrap_append 
+		_strand->post(std::bind([](const actor_handle& shared_this, std::function<void()>& h)
 		{
-			wrap_append(const actor_handle& host, std::function<void()>&& h)
-			:_sharedThis(host), _h(std::move(h)) {}
+			shared_this->append_quit_notify(std::move(h));
+		}, shared_from_this(), std::move(h)));
+	}
+}
 
-			wrap_append(wrap_append&& s)
-				:_sharedThis(s._sharedThis), _h(std::move(s._h)) {}
+void my_actor::append_quit_executor(const std::function<void()>& h)
+{
+	append_quit_executor(std::function<void()>(h));
+}
 
-			void operator()()
-			{
-				_sharedThis->append_quit_callback(std::move(_h));
-			}
-
-			actor_handle _sharedThis;
-			std::function<void()> _h;
-		};
-		_strand->post(wrap_append(shared_from_this(), std::move(h)));
+void my_actor::append_quit_executor(std::function<void()>&& h)
+{
+	if (_strand->running_in_this_thread())
+	{
+		if (_exited)
+		{
+			DEBUG_OPERATION(size_t yc = yield_count());
+			CHECK_EXCEPTION(h);
+			assert(yield_count() == yc);
+		}
+		else
+		{
+			_quitCallback.push_front(std::move(h));
+		}
+	}
+	else
+	{
+		_strand->post(std::bind([](const actor_handle& shared_this, std::function<void()>& h)
+		{
+			shared_this->append_quit_executor(std::move(h));
+		}, shared_from_this(), std::move(h)));
 	}
 }
 
@@ -3020,7 +2990,7 @@ void my_actor::actor_wait_quit(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
-	trig([anotherActor](trig_once_notifer<>&& h){anotherActor->append_quit_callback(std::move(h)); });
+	trig([anotherActor](trig_once_notifer<>&& h){anotherActor->append_quit_notify(std::move(h)); });
 }
 
 bool my_actor::timed_actor_wait_quit(int tm, const actor_handle& anotherActor)
@@ -3028,7 +2998,7 @@ bool my_actor::timed_actor_wait_quit(int tm, const actor_handle& anotherActor)
 	assert_enter();
 	assert(anotherActor);
 	actor_trig_handle<> ath;
-	anotherActor->append_quit_callback(make_trig_notifer_to_self(ath));
+	anotherActor->append_quit_notify(make_trig_notifer_to_self(ath));
 	return timed_wait_trig(tm, ath);
 }
 
@@ -3187,7 +3157,7 @@ void my_actor::force_quit_cb_handler()
 	assert((int)_childOverCount > 0);
 	if (0 == --_childOverCount)
 	{
-		exit_callback();
+		at_begin_quit_execute();
 	}
 }
 
@@ -3260,15 +3230,15 @@ void my_actor::child_resume_cb_handler()
 	}
 }
 
-void my_actor::exit_callback()
+void my_actor::at_begin_quit_execute()
 {
 	assert(_notifyQuited);
 	assert(!_childOverCount);
 	DEBUG_OPERATION(size_t yc = yield_count());
-	while (!_quitHandlerList.empty())
+	while (!_atBeginQuitRegistExecutor.empty())
 	{
-		CHECK_EXCEPTION(_quitHandlerList.front());
-		_quitHandlerList.pop_front();
+		CHECK_EXCEPTION(_atBeginQuitRegistExecutor.front());
+		_atBeginQuitRegistExecutor.pop_front();
 	}
 	assert(yield_count() == yc);
 	pull_yield_tls();

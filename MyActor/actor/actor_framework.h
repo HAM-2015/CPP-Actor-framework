@@ -18,8 +18,8 @@
 class my_actor;
 typedef std::shared_ptr<my_actor> actor_handle;//Actor句柄
 
-class mutex_trig_notifer;
-class mutex_trig_handle;
+class MutexTrigNotifer_;
+class MutexTrigHandle_;
 class ActorMutex_;
 
 using namespace std;
@@ -52,7 +52,8 @@ using namespace std;
 
 //检测 pump_msg 是否有 pump_disconnected_exception 异常抛出，因为在 catch 内部不能安全的进行coro切换
 #define CATCH_PUMP_DISCONNECTED CATCH_FOR(my_actor::pump_disconnected_exception)
-
+//包装actor_msg_handle, actor_trig_handle关闭事件
+#define wrap_close_msg_handle(__handle__) [&__handle__]{__handle__.close(); }
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -72,9 +73,8 @@ struct shared_bool
 	explicit shared_bool(std::shared_ptr<bool>&& pb);
 	void operator=(const shared_bool& s);
 	void operator=(shared_bool&& s);
-	bool& operator*() const;
-	void set(bool b);
-	bool get();
+	void operator=(bool b);
+	operator bool() const;
 	bool empty() const;
 	void reset();
 	static shared_bool new_(bool b = false);
@@ -385,7 +385,7 @@ struct MsgNotiferBaseMsgCapture_
 
 	void operator ()()
 	{
-		if (!(*_closed))
+		if (!_closed)
 		{
 			_msgHandle->push_msg(_args);
 		}
@@ -432,7 +432,7 @@ struct MsgNotiferBaseMsgCapture_<>
 
 	void operator ()()
 	{
-		if (!(*_closed))
+		if (!_closed)
 		{
 			_msgHandle->push_msg();
 		}
@@ -472,7 +472,7 @@ public:
 	{
 		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
 		assert(!empty());
-		if (!(*_closed))
+		if (!_closed)
 		{
 			ActorFunc_::self_strand(_hostActor.get())->try_tick(MsgNotiferBaseMsgCapture_<ARGS...>(_msgHandle, _hostActor, _closed, TRY_MOVE(args)...));
 		}
@@ -482,7 +482,7 @@ public:
 	{
 		static_assert(sizeof...(ARGS) == 0, "");
 		assert(!empty());
-		if (!(*_closed))
+		if (!_closed)
 		{
 			ActorFunc_::self_strand(_hostActor.get())->try_tick(MsgNotiferBaseMsgCapture_<>(_msgHandle, _hostActor, _closed));
 		}
@@ -678,7 +678,7 @@ private:
 	{
 		assert(Parent::_strand->running_in_this_thread());
 		assert(!Parent::_closed.empty());
-		assert(!*Parent::_closed);
+		assert(!Parent::_closed);
 		if (!_msgBuff.empty())
 		{
 			dst.move_from(_msgBuff.front());
@@ -706,7 +706,7 @@ public:
 		if (!Parent::_closed.empty())
 		{
 			assert(Parent::_strand->running_in_this_thread());
-			*Parent::_closed = true;
+			Parent::_closed = true;
 			Parent::_closed.reset();
 		}
 		_dstRec = NULL;
@@ -778,7 +778,7 @@ private:
 	{
 		assert(Parent::_strand->running_in_this_thread());
 		assert(!Parent::_closed.empty());
-		assert(!*Parent::_closed);
+		assert(!Parent::_closed);
 		assert(!_dstRec);
 		if (_msgCount)
 		{
@@ -793,7 +793,7 @@ private:
 	{
 		assert(Parent::_strand->running_in_this_thread());
 		assert(!Parent::_closed.empty());
-		assert(!*Parent::_closed);
+		assert(!Parent::_closed);
 		if (_msgCount)
 		{
 			_msgCount--;
@@ -821,7 +821,7 @@ public:
 		if (!Parent::_closed.empty())
 		{
 			assert(Parent::_strand->running_in_this_thread());
-			*Parent::_closed = true;
+			Parent::_closed = true;
 			Parent::_closed.reset();
 		}
 		_dstRec = NULL;
@@ -878,7 +878,7 @@ private:
 	void push_msg(msg_type& msg)
 	{
 		assert(Parent::_strand->running_in_this_thread());
-		*Parent::_closed = true;
+		Parent::_closed = true;
 		if (!ActorFunc_::is_quited(Parent::_hostActor))
 		{
 			if (Parent::_waiting)
@@ -906,7 +906,7 @@ private:
 			((msg_type*)_msgBuff)->~msg_type();
 			return true;
 		}
-		assert(!*Parent::_closed);
+		assert(!Parent::_closed);
 		_dstRec = &dst;
 		Parent::_waiting = true;
 		return false;
@@ -928,7 +928,7 @@ public:
 		if (!Parent::_closed.empty())
 		{
 			assert(Parent::_strand->running_in_this_thread());
-			*Parent::_closed = true;
+			Parent::_closed = true;
 			Parent::_closed.reset();
 		}
 		if (_hasMsg)
@@ -993,7 +993,7 @@ private:
 	void push_msg()
 	{
 		assert(Parent::_strand->running_in_this_thread());
-		*Parent::_closed = true;
+		Parent::_closed = true;
 		if (!ActorFunc_::is_quited(Parent::_hostActor))
 		{
 			if (Parent::_waiting)
@@ -1021,7 +1021,7 @@ private:
 			_hasMsg = false;
 			return true;
 		}
-		assert(!*Parent::_closed);
+		assert(!Parent::_closed);
 		Parent::_waiting = true;
 		return false;
 	}
@@ -1036,7 +1036,7 @@ private:
 			dst = true;
 			return true;
 		}
-		assert(!*Parent::_closed);
+		assert(!Parent::_closed);
 		_dstRec = &dst;
 		Parent::_waiting = true;
 		return false;
@@ -1058,7 +1058,7 @@ public:
 		if (!Parent::_closed.empty())
 		{
 			assert(Parent::_strand->running_in_this_thread());
-			*Parent::_closed = true;
+			Parent::_closed = true;
 			Parent::_closed.reset();
 		}
 		_dstRec = NULL;
@@ -1125,13 +1125,13 @@ class MsgPump_ : public MsgPumpBase_
 private:
 	MsgPump_()
 	{
-		DEBUG_OPERATION(_pClosed = shared_bool::new_());
+		DEBUG_OPERATION(_closed = shared_bool::new_());
 	}
 
 	~MsgPump_()
 	{
 		assert(!_hasMsg);
-		DEBUG_OPERATION(*_pClosed = true);
+		DEBUG_OPERATION(_closed = true);
 	}
 private:
 	static std::shared_ptr<MsgPump_<ARGS...>> make(my_actor* hostActor, bool checkLost)
@@ -1412,7 +1412,7 @@ private:
 	pump_handler _pumpHandler;
 	shared_strand _strand;
 	dst_receiver* _dstRec;
-	DEBUG_OPERATION(shared_bool _pClosed);
+	DEBUG_OPERATION(shared_bool _closed);
 	unsigned char _pumpCount;
 	bool _hasMsg : 1;
 	bool _waiting : 1;
@@ -1980,12 +1980,12 @@ private:
 	MsgPump_(my_actor* hostActor, bool checkLost)
 		:MsgPumpVoid_(hostActor, checkLost)
 	{
-		DEBUG_OPERATION(_pClosed = shared_bool::new_());
+		DEBUG_OPERATION(_closed = shared_bool::new_());
 	}
 
 	~MsgPump_()
 	{
-		DEBUG_OPERATION(*_pClosed = true);
+		DEBUG_OPERATION(_closed = true);
 	}
 
 	static std::shared_ptr<MsgPump_> make(my_actor* hostActor, bool checkLost)
@@ -1995,7 +1995,7 @@ private:
 		return res;
 	}
 
-	DEBUG_OPERATION(shared_bool _pClosed);
+	DEBUG_OPERATION(shared_bool _closed);
 };
 
 template <typename... ARGS>
@@ -2068,18 +2068,18 @@ public:
 private:
 	pump* get() const
 	{
-		assert(!*_pClosed);
+		assert(!_closed);
 		return _handle;
 	}
 
 #if (_DEBUG || DEBUG)
 	bool check_closed() const
 	{
-		return _pClosed.empty() || *_pClosed;
+		return _closed.empty() || _closed;
 	}
 #endif
 
-	DEBUG_OPERATION(shared_bool _pClosed);
+	DEBUG_OPERATION(shared_bool _closed);
 	pump* _handle;
 	int _id;
 };
@@ -3522,7 +3522,7 @@ public:
 					catch (...) {}
 #endif
 				}
-				*_closed = true;
+				_closed = true;
 				ActorFunc_::cancel_timer(_selfEarly);
 			}
 			Parent::_hostActor.reset();
@@ -3725,7 +3725,7 @@ public:
 					catch (...) {}
 #endif
 				}
-				*_closed = true;
+				_closed = true;
 				ActorFunc_::cancel_timer(_selfEarly);
 			}
 			Parent::_hostActor.reset();
@@ -4859,9 +4859,9 @@ class my_actor
 
 		void operator ()()
 		{
-			if (!_sharedThis->_quited && !*_closed)
+			if (!_sharedThis->_quited && !_closed)
 			{
-				*_closed = true;
+				_closed = true;
 				TupleReceiverRef_(_dst, std::move(_args));
 				if (*_sign)
 				{
@@ -4950,9 +4950,9 @@ class my_actor
 
 		void operator()()
 		{
-			if (!_lockSelf->_quited && !*_closed)
+			if (!_lockSelf->_quited && !_closed)
 			{
-				*_closed = true;
+				_closed = true;
 				if (*_sign)
 				{
 					_lockSelf->pull_yield();
@@ -5018,8 +5018,8 @@ class my_actor
 	friend MsgPumpBase_;
 	friend actor_msg_handle_base;
 	friend TrigOnceBase_;
-	friend mutex_trig_notifer;
-	friend mutex_trig_handle;
+	friend MutexTrigNotifer_;
+	friend MutexTrigHandle_;
 	friend io_engine;
 	friend ActorTimer_;
 	friend ActorMutex_;
@@ -5505,15 +5505,15 @@ public:
 	typedef msg_list_shared_alloc<std::function<void()> >::iterator quit_iterator;
 
 	/*!
-	@brief 注册一个资源释放函数，在强制退出Actor时调用
+	@brief 注册一个资源释放函数，在强制准备退出Actor时执行
 	*/
-	quit_iterator regist_quit_handler(const std::function<void()>& quitHandler);
-	quit_iterator regist_quit_handler(std::function<void()>&& quitHandler);
+	quit_iterator regist_quit_executor(const std::function<void()>& quitHandler);
+	quit_iterator regist_quit_executor(std::function<void()>&& quitHandler);
 
 	/*!
 	@brief 注销资源释放函数
 	*/
-	void cancel_quit_handler(const quit_iterator& qh);
+	void cancel_quit_executor(const quit_iterator& qh);
 public:
 	/*!
 	@brief 使用内部定时器延时触发某个函数，在触发完成之前不能多次调用
@@ -5731,8 +5731,8 @@ public:
 	/*!
 	@brief 调用一个异步函数，异步回调完成后返回
 	*/
-	template <typename H, typename... Outs>
-	__yield_interrupt void trig(const H& h, Outs&... dargs)
+	template <typename... Outs, typename H>
+	__yield_interrupt void trig(Outs&... dargs, const H& h)
 	{
 		assert_enter();
 		bool sign = false;
@@ -5745,19 +5745,32 @@ public:
 		}
 	}
 
+	template <typename H>
+	__yield_interrupt void trig(const H& h)
+	{
+		assert_enter();
+		bool sign = false;
+		h(trig_once_notifer<>(shared_from_this(), NULL, &sign));
+		if (!sign)
+		{
+			sign = true;
+			push_yield();
+		}
+	}
+
 	template <typename R, typename H>
 	__yield_interrupt R trig(const H& h)
 	{
 		R res;
-		trig(h, res);
+		trig<R>(res, h);
 		return res;
 	}
 
 	/*!
 	@brief 调用一个异步函数，异步回调完成后返回，之间锁定强制退出
 	*/
-	template <typename H, typename... Outs>
-	__yield_interrupt void trig_guard(const H& h, Outs&... dargs)
+	template <typename... Outs, typename H>
+	__yield_interrupt void trig_guard(Outs&... dargs, const H& h)
 	{
 		assert_enter();
 		lock_quit();
@@ -5775,11 +5788,29 @@ public:
 		unlock_quit();
 	}
 
+	template <typename H>
+	__yield_interrupt void trig_guard(const H& h)
+	{
+		assert_enter();
+		lock_quit();
+		bool sign = false;
+		_strand->next_tick([&]
+		{
+			h(trig_once_notifer<>(shared_from_this(), NULL, &sign));
+		});
+		if (!sign)
+		{
+			sign = true;
+			push_yield();
+		}
+		unlock_quit();
+	}
+
 	template <typename R, typename H>
 	__yield_interrupt R trig_guard(const H& h)
 	{
 		R res;
-		trig_guard(h, res);
+		trig_guard<R>(res, h);
 		return res;
 	}
 private:
@@ -5832,7 +5863,7 @@ private:
 	{
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !*closed)
+			if (!_quited && !closed)
 			{
 				TupleReceiver_(dstRec, TRY_MOVE(args)...);
 				next_tick_handler(TRY_MOVE(closed), sign);
@@ -5883,7 +5914,7 @@ private:
 	{
 		if (_strand->running_in_this_thread())
 		{
-			if (!_quited && !*closed)
+			if (!_quited && !closed)
 			{
 				TupleReceiver_(dstRec, TRY_MOVE(args)...);
 				next_tick_handler(TRY_MOVE(closed), sign);
@@ -7229,7 +7260,7 @@ private:
 		msg_pump_handle<Args...> mh;
 		mh._handle = msgPump_.get();
 		mh._id = id;
-		DEBUG_OPERATION(mh._pClosed = msgPump_->_pClosed);
+		DEBUG_OPERATION(mh._closed = msgPump_->_closed);
 		qg.unlock();
 		sg.unlock();
 		return mh;
@@ -8301,10 +8332,16 @@ public:
 	void outside_wait_quit();
 
 	/*!
-	@brief 添加一个Actor结束回调
+	@brief 添加一个Actor结束通知
 	*/
-	void append_quit_callback(const std::function<void()>& h);
-	void append_quit_callback(std::function<void()>&& h);
+	void append_quit_notify(const std::function<void()>& h);
+	void append_quit_notify(std::function<void()>&& h);
+
+	/*!
+	@brief 添加一个Actor结束时在strand中执行的函数，后添加的先执行
+	*/
+	void append_quit_executor(const std::function<void()>& h);
+	void append_quit_executor(std::function<void()>&& h);
 
 	/*!
 	@brief 启动一堆Actor
@@ -8491,7 +8528,7 @@ private:
 	void push_yield();
 	void push_yield_after_quited();
 	void force_quit_cb_handler();
-	void exit_callback();
+	void at_begin_quit_execute();
 	void child_suspend_cb_handler();
 	void child_resume_cb_handler();
 #ifdef __linux__
@@ -8528,8 +8565,8 @@ private:
 	ActorTimer_* _timer;///<定时器
 	main_func _mainFunc;///<Actor入口
 	msg_list_shared_alloc<suspend_resume_option> _suspendResumeQueue;///<挂起/恢复操作队列
-	msg_list_shared_alloc<std::function<void()> > _exitCallback;///<Actor结束后的回调函数，强制退出返回false，正常退出返回true
-	msg_list_shared_alloc<std::function<void()> > _quitHandlerList;///<Actor退出时强制调用的函数，后注册的先执行
+	msg_list_shared_alloc<std::function<void()> > _quitCallback;///<Actor结束后的回调函数
+	msg_list_shared_alloc<std::function<void()> > _atBeginQuitRegistExecutor;///<Actor准备退出时调用的函数，后注册的先执行
 	msg_list_shared_alloc<actor_handle> _childActorList;///<子Actor集合，子Actor都退出后，父Actor才能退出
 #ifdef WIN32
 #ifdef CHECK_SELF

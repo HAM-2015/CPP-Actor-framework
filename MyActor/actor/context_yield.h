@@ -1,6 +1,5 @@
 #ifndef __CONTEXT_YIELD_H
 #define __CONTEXT_YIELD_H
-#include "coro_choice.h"
 #include <stddef.h>
 
 namespace context_yield

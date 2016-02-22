@@ -1,6 +1,5 @@
 #include "io_engine.h"
 #include "mem_pool.h"
-#include "coro_choice.h"
 #include "actor_framework.h"
 #include <boost/asio/detail/strand_service.hpp>
 #include <memory>
@@ -108,14 +107,14 @@ void io_engine::_run(size_t threadNum, sched policy)
 					char actorExtraStack[16 kB];
 					my_actor::install_sigsegv(actorExtraStack, sizeof(actorExtraStack));
 #endif
-#ifdef FIBER_CORO
+#ifdef WIN32
 					ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH);
 #endif
 					void* tlsBuff[64] = { 0 };
 					_tls.set_space(tlsBuff);
 					_runCount += _ios.run();
 					_tls.set_space(NULL);
-#ifdef FIBER_CORO
+#ifdef WIN32
 					ConvertFiberToThread();
 #endif
 #ifdef __linux__

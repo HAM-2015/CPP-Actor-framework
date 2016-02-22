@@ -208,6 +208,17 @@ void bind_qt_run_base::check_close()
 	}
 }
 
+void bind_qt_run_base::ui_yield(my_actor* host)
+{
+	host->trig_guard([this](trig_once_notifer<>&& cb)
+	{
+		post_task_event(make_wrap_handler(_reuMem, std::bind([](const trig_once_notifer<>& cb)
+		{
+			cb();
+		}, std::move(cb))));
+	});
+}
+
 #ifdef ENABLE_QT_ACTOR
 actor_handle bind_qt_run_base::create_qt_actor(const my_actor::main_func& mainFunc, size_t stackSize /*= QT_UI_ACTOR_STACK_SIZE*/)
 {
