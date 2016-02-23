@@ -131,7 +131,7 @@ public:
 	template <typename TM>
 	void send(my_actor* host, TM&& msg)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		actor_trig_handle<bool> ath;
 		bool closed = false;
 		bool notified = false;
@@ -171,10 +171,10 @@ public:
 		}
 		if (closed)
 		{
-			qg.unlock();
+			host->unlock_quit();
 			throw close_exception();
 		}
-		qg.unlock();
+		host->unlock_quit();
 	}
 
 	/*!
@@ -184,7 +184,7 @@ public:
 	template <typename TM>
 	bool try_send(my_actor* host, TM&& msg)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		actor_trig_handle<bool> ath;
 		bool ok = false;
 		bool closed = false;
@@ -219,10 +219,10 @@ public:
 		}
 		if (closed)
 		{
-			qg.unlock();
+			host->unlock_quit();
 			throw close_exception();
 		}
-		qg.unlock();
+		host->unlock_quit();
 		return ok;
 	}
 
@@ -233,7 +233,7 @@ public:
 	template <typename TM>
 	bool timed_send(int tm, my_actor* host, TM&& msg)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		actor_trig_handle<bool> ath;
 		typename msg_list<send_wait>::iterator mit;
 		bool closed = false;
@@ -288,10 +288,10 @@ public:
 		}
 		if (closed)
 		{
-			qg.unlock();
+			host->unlock_quit();
 			throw close_exception();
 		}
-		qg.unlock();
+		host->unlock_quit();
 		return notified;
 	}
 
@@ -300,7 +300,7 @@ public:
 	*/
 	RT take(my_actor* host)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		actor_trig_handle<bool> ath;
 		actor_trig_notifer<bool> ntf;
 		unsigned char msgBuf[sizeof(RT)];
@@ -345,10 +345,10 @@ public:
 				((TP_*)msgBuf)->~TP_();
 				ntf(false);
 			});
-			qg.unlock();
+			host->unlock_quit();
 			return std::move((RT&)*(RT*)msgBuf);
 		}
-		qg.unlock();
+		host->unlock_quit();
 		throw close_exception();
 	}
 
@@ -399,7 +399,7 @@ public:
 	*/
 	void close(my_actor* host)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		host->send(_strand, [this]
 		{
 			_closed = true;
@@ -418,7 +418,7 @@ public:
 				_sendWait.pop_front();
 			}
 		});
-		qg.unlock();
+		host->unlock_quit();
 	}
 
 	/*!
@@ -433,7 +433,7 @@ private:
 	template <typename CT>
 	bool try_take_ct(my_actor* host, const CT& ct)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		actor_trig_handle<bool> ath;
 		bool ok = false;
 		bool closed = false;
@@ -460,17 +460,17 @@ private:
 		});
 		if (closed)
 		{
-			qg.unlock();
+			host->unlock_quit();
 			throw close_exception();
 		}
-		qg.unlock();
+		host->unlock_quit();
 		return ok;
 	}
 
 	template <typename CT>
 	bool timed_take_ct(int tm, my_actor* host, const CT& ct)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		actor_trig_handle<bool> ath;
 		actor_trig_notifer<bool> ntf;
 		typename msg_list<take_wait>::iterator mit;
@@ -535,10 +535,10 @@ private:
 		}
 		if (closed)
 		{
-			qg.unlock();
+			host->unlock_quit();
 			throw close_exception();
 		}
-		qg.unlock();
+		host->unlock_quit();
 		return ok;
 	}
 
@@ -588,7 +588,7 @@ public:
 	template <typename TM>
 	R send(my_actor* host, TM&& msg)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		actor_trig_handle<bool> ath;
 		unsigned char resBuf[sizeof(R)];
 		bool closed = false;
@@ -626,7 +626,7 @@ public:
 		}
 		if (closed)
 		{
-			qg.unlock();
+			host->unlock_quit();
 			throw_close_exception();
 		}
 		OUT_OF_SCOPE(
@@ -634,7 +634,7 @@ public:
 			typedef R TP_;
 			((TP_*)resBuf)->~TP_();
 		});
-		qg.unlock();
+		host->unlock_quit();
 		return std::move(*(R*)resBuf);
 	}
 
@@ -645,7 +645,7 @@ public:
 	template <typename TM>
 	R try_send(my_actor* host, TM&& msg)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		actor_trig_handle<bool> ath;
 		unsigned char resBuf[sizeof(R)];
 		bool closed = false;
@@ -677,14 +677,14 @@ public:
 		{
 			if (!has)
 			{
-				qg.unlock();
+				host->unlock_quit();
 				throw_try_send_exception();
 			}
 			closed = host->wait_trig(ath);
 		}
 		if (closed)
 		{
-			qg.unlock();
+			host->unlock_quit();
 			throw_close_exception();
 		}
 		OUT_OF_SCOPE(
@@ -692,7 +692,7 @@ public:
 			typedef R TP_;
 			((TP_*)resBuf)->~TP_();
 		});
-		qg.unlock();
+		host->unlock_quit();
 		return std::move(*(R*)resBuf);
 	}
 
@@ -703,7 +703,7 @@ public:
 	template <typename TM>
 	R timed_send(int tm, my_actor* host, TM&& msg)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		actor_trig_handle<bool> ath;
 		unsigned char resBuf[sizeof(R)];
 		typename msg_list<send_wait>::iterator nit;
@@ -758,7 +758,7 @@ public:
 					});
 					if (!has)
 					{
-						qg.unlock();
+						host->unlock_quit();
 						throw_timed_send_exception();
 					}
 				}
@@ -770,7 +770,7 @@ public:
 		}
 		if (closed)
 		{
-			qg.unlock();
+			host->unlock_quit();
 			throw_close_exception();
 		}
 		OUT_OF_SCOPE(
@@ -778,7 +778,7 @@ public:
 			typedef R TP_;
 			((TP_*)resBuf)->~TP_();
 		});
-		qg.unlock();
+		host->unlock_quit();
 		return std::move(*(R*)resBuf);
 	}
 
@@ -788,7 +788,7 @@ public:
 	template <typename H>
 	void take(my_actor* host, const H& h)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		actor_trig_handle<bool> ath;
 		actor_trig_notifer<bool> ntfSend;
 		T* srcMsg = NULL;
@@ -839,15 +839,15 @@ public:
 			{
 				assert(_thrownCloseExp);
 				DEBUG_OPERATION(_thrownCloseExp = false);
-				qg.unlock();
+				host->unlock_quit();
 				throw_close_exception();
 			}
 			END_TRY_;
 			ok = true;
-			qg.unlock();
+			host->unlock_quit();
 			return;
 		}
-		qg.unlock();
+		host->unlock_quit();
 		throw_close_exception();
 	}
 
@@ -857,7 +857,7 @@ public:
 	template <typename H>
 	void try_take(my_actor* host, const H& h)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		actor_trig_notifer<bool> ntfSend;
 		T* srcMsg = NULL;
 		unsigned char* res = NULL;
@@ -889,12 +889,12 @@ public:
 		});
 		if (closed)
 		{
-			qg.unlock();
+			host->unlock_quit();
 			throw_close_exception();
 		}
 		if (!has)
 		{
-			qg.unlock();
+			host->unlock_quit();
 			throw_try_take_exception();
 		}
 		bool ok = false;
@@ -907,12 +907,12 @@ public:
 		{
 			assert(_thrownCloseExp);
 			DEBUG_OPERATION(_thrownCloseExp = false);
-			qg.unlock();
+			host->unlock_quit();
 			throw_close_exception();
 		}
 		END_TRY_;
 		ok = true;
-		qg.unlock();
+		host->unlock_quit();
 	}
 
 	/*!
@@ -921,7 +921,7 @@ public:
 	template <typename H>
 	void timed_take(int tm, my_actor* host, const H& h)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		actor_trig_handle<bool> ath;
 		actor_trig_notifer<bool> ntfSend;
 		typename msg_list<take_wait>::iterator wit;
@@ -978,7 +978,7 @@ public:
 					}
 					if (!wait && !closed)
 					{
-						qg.unlock();
+						host->unlock_quit();
 						throw_timed_take_exception();
 					}
 				}
@@ -986,7 +986,7 @@ public:
 		}
 		if (closed)
 		{
-			qg.unlock();
+			host->unlock_quit();
 			throw_close_exception();
 		}
 		bool ok = false;
@@ -999,12 +999,12 @@ public:
 		{
 			assert(_thrownCloseExp);
 			DEBUG_OPERATION(_thrownCloseExp = false);
-			qg.unlock();
+			host->unlock_quit();
 			throw_close_exception();
 		}
 		END_TRY_;
 		ok = true;
-		qg.unlock();
+		host->unlock_quit();
 	}
 
 	/*!
@@ -1012,7 +1012,7 @@ public:
 	*/
 	void close(my_actor* host)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		host->send(_strand, [this]
 		{
 			_closed = true;
@@ -1032,7 +1032,7 @@ public:
 				_sendWait.pop_front();
 			}
 		});
-		qg.unlock();
+		host->unlock_quit();
 	}
 
 	/*!

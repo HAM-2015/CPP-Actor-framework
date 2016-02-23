@@ -126,8 +126,9 @@ protected:
 		ui_tls();
 		~ui_tls();
 
-		static void push_stack(bind_qt_run_base*);
+		static ui_tls* push_stack(bind_qt_run_base*);
 		static bind_qt_run_base* pop_stack();
+		static bind_qt_run_base* pop_stack(ui_tls*);
 		static bool running_in_this_thread(bind_qt_run_base*);
 		static void init();
 		static void reset();

@@ -297,7 +297,7 @@ public:
 
 	void close(my_actor* host, bool clearBuff = true)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		host->send(_strand, [&]
 		{
 			_closed = true;
@@ -316,18 +316,18 @@ public:
 				_popWait.pop_front();
 			}
 		});
-		qg.unlock();
+		host->unlock_quit();
 	}
 
 	size_t length(my_actor* host)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		size_t l = 0;
 		host->send(_strand, [&]
 		{
 			l = _buffer.size();
 		});
-		qg.unlock();
+		host->unlock_quit();
 		return l;
 	}
 
@@ -348,7 +348,7 @@ private:
 	template <typename H>
 	void _push(my_actor* host, const H& h)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		while (true)
 		{
 			actor_trig_handle<bool> ath;
@@ -389,27 +389,27 @@ private:
 			});
 			if (closed)
 			{
-				qg.unlock();
+				host->unlock_quit();
 				throw close_exception();
 			}
 			if (!isFull)
 			{
-				qg.unlock();
+				host->unlock_quit();
 				return;
 			}
 			if (host->wait_trig(ath))
 			{
-				qg.unlock();
+				host->unlock_quit();
 				throw close_exception();
 			}
 		}
-		qg.unlock();
+		host->unlock_quit();
 	}
 
 	template <typename H>
 	size_t _try_push(my_actor* host, const H& h)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		bool closed = false;
 		size_t pushCount = 0;
 		LAMBDA_THIS_REF4(ref4, host, h, closed, pushCount);
@@ -441,17 +441,17 @@ private:
 		});
 		if (closed)
 		{
-			qg.unlock();
+			host->unlock_quit();
 			throw close_exception();
 		}
-		qg.unlock();
+		host->unlock_quit();
 		return pushCount;
 	}
 
 	template <typename H>
 	size_t _timed_push(int tm, my_actor* host, const H& h)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		long long utm = (long long)tm * 1000;
 		size_t pushCount = 0;
 		while (true)
@@ -499,7 +499,7 @@ private:
 			{
 				if (!isFull)
 				{
-					qg.unlock();
+					host->unlock_quit();
 					return pushCount;
 				}
 				long long bt = get_tick_us();
@@ -520,24 +520,24 @@ private:
 				utm -= get_tick_us() - bt;
 				if (utm < 1000)
 				{
-					qg.unlock();
+					host->unlock_quit();
 					return pushCount;
 				}
 			}
 			if (closed)
 			{
-				qg.unlock();
+				host->unlock_quit();
 				throw close_exception();
 			}
 		}
-		qg.unlock();
+		host->unlock_quit();
 		return pushCount;
 	}
 
 	template <typename H>
 	size_t _force_push(my_actor* host, const H& h)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		bool closed = false;
 		size_t lostCount = 0;
 		LAMBDA_THIS_REF4(ref4, host, h, closed, lostCount);
@@ -569,17 +569,17 @@ private:
 		});
 		if (closed)
 		{
-			qg.unlock();
+			host->unlock_quit();
 			throw close_exception();
 		}
-		qg.unlock();
+		host->unlock_quit();
 		return lostCount;
 	}
 
 	template <typename H>
 	void _pop(my_actor* host, const H& out)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		while (true)
 		{
 			actor_trig_handle<bool> ath;
@@ -621,27 +621,27 @@ private:
 			});
 			if (closed)
 			{
-				qg.unlock();
+				host->unlock_quit();
 				throw close_exception();
 			}
 			if (!isEmpty)
 			{
-				qg.unlock();
+				host->unlock_quit();
 				return;
 			}
 			if (host->wait_trig(ath))
 			{
-				qg.unlock();
+				host->unlock_quit();
 				throw close_exception();
 			}
 		}
-		qg.unlock();
+		host->unlock_quit();
 	}
 
 	template <typename H>
 	size_t _try_pop(my_actor* host, const H& out)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		bool closed = false;
 		bool popCount = 0;
 		LAMBDA_THIS_REF4(ref4, host, out, closed, popCount);
@@ -674,17 +674,17 @@ private:
 		});
 		if (closed)
 		{
-			qg.unlock();
+			host->unlock_quit();
 			throw close_exception();
 		}
-		qg.unlock();
+		host->unlock_quit();
 		return popCount;
 	}
 
 	template <typename H>
 	size_t _timed_pop(int tm, my_actor* host, const H& out)
 	{
-		my_actor::quit_guard qg(host);
+		host->lock_quit();
 		long long utm = (long long)tm * 1000;
 		size_t popCount = 0;
 		while (true)
@@ -733,7 +733,7 @@ private:
 			{
 				if (!isEmpty)
 				{
-					qg.unlock();
+					host->unlock_quit();
 					return popCount;
 				}
 				long long bt = get_tick_us();
@@ -754,17 +754,17 @@ private:
 				utm -= get_tick_us() - bt;
 				if (utm < 1000)
 				{
-					qg.unlock();
+					host->unlock_quit();
 					return popCount;
 				}
 			}
 			if (closed)
 			{
-				qg.unlock();
+				host->unlock_quit();
 				throw close_exception();
 			}
 		}
-		qg.unlock();
+		host->unlock_quit();
 		return popCount;
 	}
 private:

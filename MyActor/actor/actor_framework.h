@@ -3213,8 +3213,6 @@ protected:
 	{
 		DEBUG_OPERATION(_pIsTrig = std::move(s._pIsTrig));
 	}
-
-	virtual ~TrigOnceBase_() {}
 protected:
 	template <typename DST, typename... Args>
 	void _trig_handler(bool* sign, DST& dstRec, Args&&... args) const
@@ -3414,7 +3412,7 @@ public:
 		ActorFunc_::delay_trig(host, tm, th);
 	}
 
-	~callback_handler()
+	~callback_handler() __disable_noexcept
 	{
 		if (_selfEarly)
 		{
@@ -3423,15 +3421,7 @@ public:
 				if (!_bsign)
 				{
 					_bsign = true;
-#ifdef _MSC_VER
 					ActorFunc_::push_yield(_selfEarly);
-#elif __GNUG__
-					try
-					{
-						ActorFunc_::push_yield(_selfEarly);
-					}
-					catch (...) {}
-#endif
 				}
 				ActorFunc_::cancel_timer(_selfEarly);
 			}
@@ -3503,7 +3493,7 @@ public:
 		});
 	}
 
-	~tm_callback__handler()
+	~tm_callback__handler() __disable_noexcept
 	{
 		if (_selfEarly)
 		{
@@ -3512,15 +3502,7 @@ public:
 				if (!_bsign)
 				{
 					_bsign = true;
-#ifdef _MSC_VER
 					ActorFunc_::push_yield(_selfEarly);
-#elif __GNUG__
-					try
-					{
-						ActorFunc_::push_yield(_selfEarly);
-					}
-					catch (...) {}
-#endif
 				}
 				_closed = true;
 				ActorFunc_::cancel_timer(_selfEarly);
@@ -3617,7 +3599,7 @@ public:
 		});
 	}
 
-	~asio_cb_handler()
+	~asio_cb_handler() __disable_noexcept
 	{
 		if (_selfEarly)
 		{
@@ -3626,15 +3608,7 @@ public:
 				if (!_bsign)
 				{
 					_bsign = true;
-#ifdef _MSC_VER
 					ActorFunc_::push_yield(_selfEarly);
-#elif __GNUG__
-					try
-					{
-						ActorFunc_::push_yield(_selfEarly);
-					}
-					catch (...) {}
-#endif
 				}
 				ActorFunc_::cancel_timer(_selfEarly);
 			}
@@ -3706,7 +3680,7 @@ public:
 		});
 	}
 
-	~asio_tm_cb_handler()
+	~asio_tm_cb_handler() __disable_noexcept
 	{
 		if (_selfEarly)
 		{
@@ -3715,15 +3689,7 @@ public:
 				if (!_bsign)
 				{
 					_bsign = true;
-#ifdef _MSC_VER
 					ActorFunc_::push_yield(_selfEarly);
-#elif __GNUG__
-					try
-					{
-						ActorFunc_::push_yield(_selfEarly);
-					}
-					catch (...) {}
-#endif
 				}
 				_closed = true;
 				ActorFunc_::cancel_timer(_selfEarly);
@@ -5033,7 +4999,7 @@ public:
 	{
 	public:
 		quit_guard(my_actor* self);
-		~quit_guard();
+		~quit_guard() __disable_noexcept;
 		void lock();
 		void unlock();
 	private:
@@ -5050,7 +5016,7 @@ public:
 	{
 	public:
 		suspend_guard(my_actor* self);
-		~suspend_guard();
+		~suspend_guard() __disable_noexcept;
 		void lock();
 		void unlock();
 	private:
@@ -6677,8 +6643,8 @@ private:
 				return false;
 			}
 		}
-		suspend_guard sg(this);
-		quit_guard qg(this);
+		lock_suspend();
+		lock_quit();
 		pck_type msgPck = msg_pool_pck<Args...>(id, this);
 		msgPck->lock(this);
 		pck_type childPck;
@@ -6695,8 +6661,8 @@ private:
 			if (!childPck || msgPck->_next == childPck)
 			{
 				msgPck->unlock(this);
-				qg.unlock();
-				sg.unlock();
+				unlock_quit();
+				unlock_suspend();
 				return false;
 			}
 			childPck->lock(this);
@@ -6729,8 +6695,8 @@ private:
 		childPck->_isHead = false;
 		childPck->unlock(this);
 		msgPck->unlock(this);
-		qg.unlock();
-		sg.unlock();
+		unlock_quit();
+		unlock_suspend();
 		return true;
 	}
 public:
@@ -6831,8 +6797,8 @@ public:
 		auto msgPck = msg_pool_pck<Args...>(id, this, false);
 		if (msgPck)
 		{
-			suspend_guard sg(this);
-			quit_guard qg(this);
+			lock_suspend();
+			lock_quit();
 			auto& next_ = msgPck->_next;
 			msgPck->lock(this);
 			if (next_)
@@ -6845,8 +6811,8 @@ public:
 				next_.reset();
 			}
 			msgPck->unlock(this);
-			qg.unlock();
-			sg.unlock();
+			unlock_quit();
+			unlock_suspend();
 		}
 	}
 
@@ -6862,8 +6828,8 @@ public:
 		auto it = _msgPoolStatus._msgTypeMap.find(typeID);
 		if (_msgPoolStatus._msgTypeMap.end() != it)
 		{
-			suspend_guard sg(this);
-			quit_guard qg(this);
+			lock_suspend();
+			lock_quit();
 			assert(std::dynamic_pointer_cast<pck_type>(it->second));
 			std::shared_ptr<pck_type> msgPck = std::static_pointer_cast<pck_type>(it->second);
 			msgPck->lock(this);
@@ -6873,8 +6839,8 @@ public:
 			msgPck->clear();
 			_msgPoolStatus._msgTypeMap.erase(it);
 			msgPck->unlock(this);
-			qg.unlock();
-			sg.unlock();
+			unlock_quit();
+			unlock_suspend();
 			return true;
 		}
 		return false;
@@ -6911,8 +6877,8 @@ public:
 			}
 		}
 #endif
-		suspend_guard sg(this);
-		quit_guard qg(this);
+		lock_suspend();
+		lock_quit();
 		pck_type msgPck = msg_pool_pck<Args...>(id, this);
 		msgPck->lock(this);
 		pck_type buddyPck;
@@ -6929,8 +6895,8 @@ public:
 			if (!buddyPck)
 			{
 				msgPck->unlock(this);
-				qg.unlock();
-				sg.unlock();
+				unlock_quit();
+				unlock_suspend();
 				return post_actor_msg<Args...>();
 			}
 			buddyPck->lock(this);
@@ -6979,13 +6945,13 @@ public:
 				newPool->_weakCheckLost = autoCheckLost;
 			}
 			msgPck->unlock(this);
-			qg.unlock();
-			sg.unlock();
+			unlock_quit();
+			unlock_suspend();
 			return post_actor_msg<Args...>(newPool, buddyActor, autoCheckLost);
 #else
 			msgPck->unlock(this);
-			qg.unlock();
-			sg.unlock();
+			unlock_quit();
+			unlock_suspend();
 			return post_actor_msg<Args...>(newPool, buddyActor);
 #endif
 		}
@@ -7010,21 +6976,21 @@ public:
 			}
 			buddyPck->unlock(this);
 			msgPck->unlock(this);
-			qg.unlock();
-			sg.unlock();
+			unlock_quit();
+			unlock_suspend();
 			return post_actor_msg<Args...>(buddyPool, buddyActor, std::move(autoCheckLost));
 #else
 			buddyPck->unlock(this);
 			msgPck->unlock(this);
-			qg.unlock();
-			sg.unlock();
+			unlock_quit();
+			unlock_suspend();
 			return post_actor_msg<Args...>(buddyPool, buddyActor);
 #endif
 		}
 		buddyPck->unlock(this);
 		msgPck->unlock(this);
-		qg.unlock();
-		sg.unlock();
+		unlock_quit();
+		unlock_suspend();
 		return post_actor_msg<Args...>();
 	}
 
@@ -7223,8 +7189,8 @@ private:
 		typedef typename pool_type::pump_handler pump_handler;
 
 		host->assert_enter();
-		suspend_guard sg(host);
-		quit_guard qg(host);
+		host->lock_suspend();
+		host->lock_quit();
 		auto msgPck = msg_pool_pck<Args...>(id, host);
 		msgPck->lock(host);
 		if (msgPck->_next)
@@ -7261,8 +7227,8 @@ private:
 		mh._handle = msgPump_.get();
 		mh._id = id;
 		DEBUG_OPERATION(mh._closed = msgPump_->_closed);
-		qg.unlock();
-		sg.unlock();
+		host->unlock_quit();
+		host->unlock_suspend();
 		return mh;
 	}
 private:
@@ -7733,8 +7699,8 @@ public:
 	{
 		typedef std::shared_ptr<msg_pool_status::pck<Args...>> pck_type;
 
-		suspend_guard sg(this);
-		quit_guard qg(this);
+		lock_suspend();
+		lock_quit();
 		auto msgPck = send<pck_type>(buddyActor->self_strand(), [id, &buddyActor]()->pck_type
 		{
 			if (!buddyActor->is_quited())
@@ -7770,14 +7736,14 @@ public:
 						uStack[--stackl]->unlock(this);
 					}
 					msgPck->unlock(this);
-					qg.unlock();
-					sg.unlock();
+					unlock_quit();
+					unlock_suspend();
 					return r;
 				}
 			}
 		}
-		qg.unlock();
-		sg.unlock();
+		unlock_quit();
+		unlock_suspend();
 		return actor_handle();
 	}
 
@@ -7918,8 +7884,7 @@ private:
 	template <typename Ready>
 	__yield_interrupt void _run_mutex_blocks(Ready&& mutexReady, MutexBlock_** const mbList, const size_t N)
 	{
-		suspend_guard sg(this);
-		quit_guard qg(this);
+		lock_quit();
 		DEBUG_OPERATION(_check_host_id(this, mbList, N));//判断句柄是不是都是自己的
 		assert(_cmp_snap_id(mbList, N));//判断有没有重复参数
 		OUT_OF_SCOPE(
@@ -7932,23 +7897,23 @@ private:
 			if (!mutexReady())
 			{
 				assert(yield_count() == nt);
-				qg.unlock();
+				unlock_quit();
 				_mutex_check_lost(mbList, N);
 				push_yield();
 				_mutex_check_lost(mbList, N);
-				qg.lock();
+				lock_quit();
 				DEBUG_OPERATION(nt = yield_count());
 			}
 			_mutex_cancel(mbList, N);
 			assert(yield_count() == nt);
 		} while (!_mutex_go(mbList, N));
-		qg.unlock();
+		unlock_quit();
 	}
 
 	template <typename Ready>
 	__yield_interrupt size_t _timed_run_mutex_blocks(const int tm, Ready&& mutexReady, MutexBlock_** const mbList, const size_t N)
 	{
-		quit_guard qg(this);
+		lock_quit();
 		size_t runCount = 0;
 		DEBUG_OPERATION(_check_host_id(this, mbList, N));//判断句柄是不是都是自己的
 		assert(_cmp_snap_id(mbList, N));//判断有没有重复参数
@@ -7962,7 +7927,7 @@ private:
 			if (!mutexReady())
 			{
 				assert(yield_count() == nt);
-				qg.unlock();
+				unlock_quit();
 				_mutex_check_lost(mbList, N);
 				if (tm >= 0)
 				{
@@ -7975,6 +7940,7 @@ private:
 					push_yield();
 					if (timed)
 					{
+						lock_quit();
 						break;
 					}
 					cancel_delay_trig();
@@ -7984,13 +7950,13 @@ private:
 					push_yield();
 				}
 				_mutex_check_lost(mbList, N);
-				qg.lock();
+				lock_quit();
 				DEBUG_OPERATION(nt = yield_count());
 			}
 			_mutex_cancel(mbList, N);
 			assert(yield_count() == nt);
 		} while (!_mutex_go_count(runCount, mbList, N));
-		qg.unlock();
+		unlock_quit();
 		return runCount;
 	}
 public:
@@ -8300,11 +8266,6 @@ public:
 	@brief 是否锁定了退出
 	*/
 	bool is_locked_quit();
-
-	/*!
-	@brief 检测退出消息，尝试退出
-	*/
-	void try_quit();
 
 	/*!
 	@brief 暂停Actor

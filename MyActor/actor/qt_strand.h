@@ -26,6 +26,12 @@ private:
 	bool is_running();
 
 	template <typename Handler>
+	void dispatch_ui(Handler&& handler)
+	{
+		_ui->post(TRY_MOVE(handler));
+	}
+
+	template <typename Handler>
 	void post_ui(Handler&& handler)
 	{
 		_ui->post(TRY_MOVE(handler));
@@ -38,6 +44,12 @@ template <typename Handler>
 void boost_strand::post_ui(Handler&& handler)
 {
 	static_cast<qt_strand*>(this)->post_ui(TRY_MOVE(handler));
+}
+
+template <typename Handler>
+void boost_strand::dispatch_ui(Handler&& handler)
+{
+	static_cast<qt_strand*>(this)->dispatch_ui(TRY_MOVE(handler));
 }
 
 #endif

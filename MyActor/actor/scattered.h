@@ -127,6 +127,11 @@ if (__catched) {
 #define end_RUN_IN_THREAD_STACK() });\
 	___host->unlock_quit(); }
 
+#ifdef _MSC_VER
+#define __disable_noexcept
+#elif __GNUG__
+#define __disable_noexcept noexcept(false)
+#endif
 
 /*!
 @brief 这个类在测试消息传递时使用

@@ -524,18 +524,27 @@ void socket_test()
 	{
 		child_actor_handle srv = self->create_child_actor([&](my_actor* self)
 		{
+			stack_obj<boost::asio::ip::tcp::acceptor> acc;
+			try
+			{
+				acc.create(self->self_io_service(), boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), 1234), false);
+			}
+			catch (...)
+			{
+				trace_line("server port conflict");
+				return;
+			}
 			boost::asio::ip::tcp::socket sck(self->self_io_service());
-			boost::asio::ip::tcp::acceptor acc(self->self_io_service(), boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 1234));
 			boost::system::error_code ec;
 			bool timed = false;
-			acc.async_accept(sck, self->make_asio_timed_context(1500, [&]
+			acc->async_accept(sck, self->make_asio_timed_context(1500, [&]
 			{
 				timed = true;
-				acc.close(ec);
+				acc->close(ec);
 			}, ec));
 			if (!timed && !ec)
 			{
-				acc.close(ec);
+				acc->close(ec);
 				char buf[128];
 				size_t s = 0;
 				while (true)
@@ -636,7 +645,7 @@ void perfor_test()
 				ct += count[i];
 			}
 			double f = (double)ct * 1000000 / (get_tick_us() - tk);
-			trace_line("ActorÊý=", num, ", ", "ÇÐ»»ÆµÂÊ=", (int)f);
+			trace_line("Actor number=", num, ", ", "switching frequency=", (int)f);
 		}
 	});
 	ah->notify_run();

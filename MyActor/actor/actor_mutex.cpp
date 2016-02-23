@@ -181,7 +181,7 @@ actor_mutex::~actor_mutex()
 void actor_mutex::lock(my_actor* host)
 {
 	host->assert_enter();
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	bool complete = false;
 	MutexTrigHandle_ ath(host);
 	MutexTrigNotifer_ ntf;
@@ -209,7 +209,7 @@ void actor_mutex::lock(my_actor* host)
 	{
 		ath.wait();
 	}
-	qg.unlock();
+	host->unlock_quit();
 }
 
 void actor_mutex::quited_lock(my_actor* host)
@@ -237,7 +237,7 @@ void actor_mutex::quited_lock(my_actor* host)
 bool actor_mutex::try_lock(my_actor* host)
 {
 	host->assert_enter();
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	bool complete = false;
 	LAMBDA_THIS_REF2(ref2, host, complete);
 	host->send(_strand, [&ref2]
@@ -255,14 +255,14 @@ bool actor_mutex::try_lock(my_actor* host)
 			ref2.complete = false;
 		}
 	});
-	qg.unlock();
+	host->unlock_quit();
 	return complete;
 }
 
 bool actor_mutex::timed_lock(int tm, my_actor* host)
 {
 	host->assert_enter();
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	msg_list<wait_node>::iterator nit;
 	bool complete = false;
 	MutexTrigHandle_ ath(host);
@@ -305,20 +305,20 @@ bool actor_mutex::timed_lock(int tm, my_actor* host)
 			});
 			if (!complete)
 			{
-				qg.unlock();
+				host->unlock_quit();
 				return false;
 			}
 			ath.wait();
 		}
 	}
-	qg.unlock();
+	host->unlock_quit();
 	return true;
 }
 
 void actor_mutex::unlock(my_actor* host)
 {
 	host->assert_enter();
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	host->send(_strand, [&]
 	{
 		assert(host->self_id() == _lockActorID);
@@ -337,7 +337,7 @@ void actor_mutex::unlock(my_actor* host)
 			}
 		}
 	});
-	qg.unlock();
+	host->unlock_quit();
 }
 
 void actor_mutex::quited_unlock(my_actor* host)
@@ -422,7 +422,7 @@ void actor_condition_variable::wait(my_actor* host, actor_lock_guard& mutex)
 {
 	host->assert_enter();
 	assert(mutex._host == host);
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	MutexTrigHandle_ ath(host);
 	MutexTrigNotifer_ ntf;
 	LAMBDA_THIS_REF2(ref2, ath, ntf);
@@ -434,14 +434,14 @@ void actor_condition_variable::wait(my_actor* host, actor_lock_guard& mutex)
 	mutex.unlock();
 	ath.wait();
 	mutex.lock();
-	qg.unlock();
+	host->unlock_quit();
 }
 
 bool actor_condition_variable::timed_wait(int tm, my_actor* host, actor_lock_guard& mutex)
 {
 	host->assert_enter();
 	assert(mutex._host == host);
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	MutexTrigHandle_ ath(host);
 	MutexTrigNotifer_ ntf;
 	msg_list<wait_node>::iterator nit;
@@ -470,14 +470,14 @@ bool actor_condition_variable::timed_wait(int tm, my_actor* host, actor_lock_gua
 		}
 	}
 	mutex.lock();
-	qg.unlock();
+	host->unlock_quit();
 	return !timed;
 }
 
 bool actor_condition_variable::notify_one(my_actor* host)
 {
 	host->assert_enter();
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	bool complete = false;
 	LAMBDA_THIS_REF1(ref1, complete);
 	host->send(_strand, [&ref1]
@@ -491,14 +491,14 @@ bool actor_condition_variable::notify_one(my_actor* host)
 			waitQueue_.pop_back();
 		}
 	});
-	qg.unlock();
+	host->unlock_quit();
 	return complete;
 }
 
 size_t actor_condition_variable::notify_all(my_actor* host)
 {
 	host->assert_enter();
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	size_t count = 0;
 	LAMBDA_THIS_REF1(ref1, count);
 	host->send(_strand, [&ref1]
@@ -511,7 +511,7 @@ size_t actor_condition_variable::notify_all(my_actor* host)
 			waitQueue_.pop_back();
 		}
 	});
-	qg.unlock();
+	host->unlock_quit();
 	return count;
 }
 //////////////////////////////////////////////////////////////////////////
@@ -530,7 +530,7 @@ actor_shared_mutex::~actor_shared_mutex()
 void actor_shared_mutex::lock(my_actor* host)
 {
 	host->assert_enter();
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	bool complete = false;
 	MutexTrigHandle_ ath(host);
 	MutexTrigNotifer_ ntf;
@@ -558,13 +558,13 @@ void actor_shared_mutex::lock(my_actor* host)
 		ath.wait();
 	}
 	assert(st_unique == _status);
-	qg.unlock();
+	host->unlock_quit();
 }
 
 bool actor_shared_mutex::try_lock(my_actor* host)
 {
 	host->assert_enter();
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	bool complete = false;
 	LAMBDA_THIS_REF2(ref2, host, complete);
 	host->send(_strand, [&ref2]
@@ -578,14 +578,14 @@ bool actor_shared_mutex::try_lock(my_actor* host)
 		}
 	});
 	assert(!complete || st_unique == _status);
-	qg.unlock();
+	host->unlock_quit();
 	return complete;
 }
 
 bool actor_shared_mutex::timed_lock(int tm, my_actor* host)
 {
 	host->assert_enter();
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	bool complete = false;
 	MutexTrigHandle_ ath(host);
 	MutexTrigNotifer_ ntf;
@@ -627,21 +627,21 @@ bool actor_shared_mutex::timed_lock(int tm, my_actor* host)
 			});
 			if (!complete)
 			{
-				qg.unlock();
+				host->unlock_quit();
 				return false;
 			}
 			ath.wait();
 		}
 	}
 	assert(complete && st_unique == _status);
-	qg.unlock();
+	host->unlock_quit();
 	return true;
 }
 
 void actor_shared_mutex::lock_shared(my_actor* host)
 {
 	host->assert_enter();
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	bool complete = false;
 	MutexTrigHandle_ ath(host);
 	MutexTrigNotifer_ ntf;
@@ -666,13 +666,13 @@ void actor_shared_mutex::lock_shared(my_actor* host)
 		ath.wait();
 	}
 	assert(st_shared == _status);
-	qg.unlock();
+	host->unlock_quit();
 }
 
 bool actor_shared_mutex::try_lock_shared(my_actor* host)
 {
 	host->assert_enter();
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	bool complete = false;
 	LAMBDA_THIS_REF2(ref2, host, complete);
 	host->send(_strand, [&ref2]
@@ -685,14 +685,14 @@ bool actor_shared_mutex::try_lock_shared(my_actor* host)
 		}
 	});
 	assert(!complete || st_shared == _status);
-	qg.unlock();
+	host->unlock_quit();
 	return complete;
 }
 
 bool actor_shared_mutex::timed_lock_shared(int tm, my_actor* host)
 {
 	host->assert_enter();
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	bool complete = false;
 	MutexTrigHandle_ ath(host);
 	MutexTrigNotifer_ ntf;
@@ -732,21 +732,21 @@ bool actor_shared_mutex::timed_lock_shared(int tm, my_actor* host)
 			});
 			if (!complete)
 			{
-				qg.unlock();
+				host->unlock_quit();
 				return false;
 			}
 			ath.wait();
 		}
 	}
 	assert(complete && st_shared == _status);
-	qg.unlock();
+	host->unlock_quit();
 	return true;
 }
 
 void actor_shared_mutex::lock_upgrade(my_actor* host)
 {
 	host->assert_enter();
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	bool complete = false;
 	MutexTrigHandle_ ath(host);
 	MutexTrigNotifer_ ntf;
@@ -777,13 +777,13 @@ void actor_shared_mutex::lock_upgrade(my_actor* host)
 		ath.wait();
 	}
 	assert(st_upgrade == _status);
-	qg.unlock();
+	host->unlock_quit();
 }
 
 bool actor_shared_mutex::try_lock_upgrade(my_actor* host)
 {
 	host->assert_enter();
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	bool complete = false;
 	LAMBDA_THIS_REF2(ref2, host, complete);
 	host->send(_strand, [&ref2]
@@ -799,14 +799,14 @@ bool actor_shared_mutex::try_lock_upgrade(my_actor* host)
 		}
 	});
 	assert(!complete || st_upgrade == _status);
-	qg.unlock();
+	host->unlock_quit();
 	return complete;
 }
 
 bool actor_shared_mutex::timed_lock_upgrade(int tm, my_actor* host)
 {
 	host->assert_enter();
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	bool complete = false;
 	MutexTrigHandle_ ath(host);
 	MutexTrigNotifer_ ntf;
@@ -852,21 +852,21 @@ bool actor_shared_mutex::timed_lock_upgrade(int tm, my_actor* host)
 			});
 			if (!complete)
 			{
-				qg.unlock();
+				host->unlock_quit();
 				return false;
 			}
 			ath.wait();
 		}
 	}
 	assert(complete && st_upgrade == _status);
-	qg.unlock();
+	host->unlock_quit();
 	return true;
 }
 
 void actor_shared_mutex::unlock(my_actor* host)
 {
 	host->assert_enter();
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	host->send(_strand, [&]
 	{
 		assert(st_unique == _status);
@@ -900,13 +900,13 @@ void actor_shared_mutex::unlock(my_actor* host)
 			}
 		}
 	});
-	qg.unlock();
+	host->unlock_quit();
 }
 
 void actor_shared_mutex::unlock_shared(my_actor* host)
 {
 	host->assert_enter();
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	host->send(_strand, [&]
 	{
 		assert(st_shared == _status);
@@ -927,13 +927,13 @@ void actor_shared_mutex::unlock_shared(my_actor* host)
 			}
 		}
 	});
-	qg.unlock();
+	host->unlock_quit();
 }
 
 void actor_shared_mutex::unlock_upgrade(my_actor* host)
 {
 	host->assert_enter();
-	my_actor::quit_guard qg(host);
+	host->lock_quit();
 	host->send(_strand, [&]
 	{
 		assert(_inSet.size() == 1);
@@ -956,7 +956,7 @@ void actor_shared_mutex::unlock_upgrade(my_actor* host)
 			}
 		}
 	});
-	qg.unlock();
+	host->unlock_quit();
 	assert(st_shared == _status);
 }
 //////////////////////////////////////////////////////////////////////////

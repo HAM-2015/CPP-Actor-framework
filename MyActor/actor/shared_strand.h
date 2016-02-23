@@ -52,7 +52,7 @@ if (_strand)\
 }\
 else\
 {\
-	post_ui(TRY_MOVE(handler)); \
+	dispatch_ui(TRY_MOVE(handler)); \
 };
 
 
@@ -608,6 +608,9 @@ private:
 #ifdef ENABLE_QT_ACTOR
 	template <typename Handler>
 	void post_ui(Handler&& handler);
+
+	template <typename Handler>
+	void dispatch_ui(Handler&& handler);
 #endif
 protected:
 #ifdef ENABLE_NEXT_TICK

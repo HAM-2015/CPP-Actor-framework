@@ -6,7 +6,7 @@
 /*!
 @brief 在栈上分配一段临时空间用于构造临时对象
 */
-template <typename Type = void, bool AUTO = true>
+template <typename Type = void, bool AutoDestroy = true>
 class stack_obj
 {
 	typedef TYPE_PIPE(Type) type;
@@ -36,29 +36,14 @@ public:
 		{
 			free();
 		}
+		new(_space)type(TRY_MOVE(args)...);
 		_null = false;
-		new(_buff)type(TRY_MOVE(args)...);
 	}
 
-	void create()
+	template <typename Arg>
+	void operator =(Arg&& arg)
 	{
-		if (!_null)
-		{
-			free();
-		}
-		_null = false;
-		new(_buff)type();
-	}
-
-	template <typename PT0>
-	void operator =(PT0&& p0)
-	{
-		if (!_null)
-		{
-			free();
-		}
-		_null = false;
-		new(_buff)type(TRY_MOVE(p0));
+		create(TRY_MOVE(arg));
 	}
 
 	bool has() const
@@ -81,13 +66,13 @@ public:
 	Type& get()
 	{
 		assert(!_null);
-		return *(type*)_buff;
+		return *(type*)_space;
 	}
 
 	Type& operator *()
 	{
 		assert(!_null);
-		return *(type*)_buff;
+		return *(type*)_space;
 	}
 
 	/*!
@@ -102,13 +87,13 @@ private:
 	void free()
 	{
 		assert(!_null);
-		((type*)_buff)->~type();
+		((type*)_space)->~type();
 #if (_DEBUG || DEBUG)
-		memset(_buff, 0xcf, sizeof(_buff));
+		memset(_space, 0xcf, sizeof(_space));
 #endif
 	}
 private:
-	unsigned char _buff[sizeof(type)];
+	char _space[sizeof(type)];
 	bool _null;
 };
 
@@ -139,23 +124,14 @@ public:
 	void create(Args&&... args)
 	{
 		assert(_null);
+		new(_space)type(TRY_MOVE(args)...);
 		DEBUG_OPERATION(_null = false);
-		new(_buff)type(TRY_MOVE(args)...);
 	}
 
-	void create()
+	template <typename Arg>
+	void operator =(Arg&& arg)
 	{
-		assert(_null);
-		DEBUG_OPERATION(_null = false);
-		new(_buff)type();
-	}
-
-	template <typename PT0>
-	void operator =(PT0&& p0)
-	{
-		assert(_null);
-		DEBUG_OPERATION(_null = false);
-		new(_buff)type(TRY_MOVE(p0));
+		create(TRY_MOVE(arg));
 	}
 
 	/*!
@@ -165,22 +141,22 @@ public:
 	{
 		assert(!_null);
 		DEBUG_OPERATION(_null = true);
-		((type*)_buff)->~type();
+		((type*)_space)->~type();
 #if (_DEBUG || DEBUG)
-		memset(_buff, 0xcf, sizeof(_buff));
+		memset(_space, 0xcf, sizeof(_space));
 #endif
 	}
 
 	Type& get()
 	{
 		assert(!_null);
-		return *(type*)_buff;
+		return *(type*)_space;
 	}
 
 	Type& operator *()
 	{
 		assert(!_null);
-		return *(type*)_buff;
+		return *(type*)_space;
 	}
 
 	/*!
@@ -192,12 +168,12 @@ public:
 		return &get();
 	}
 private:
-	unsigned char _buff[sizeof(type)];
+	char _space[sizeof(type)];
 	DEBUG_OPERATION(bool _null);
 };
 
-template <bool AUTO>
-class stack_obj<void, AUTO>
+template <bool AutoDestroy>
+class stack_obj<void, AutoDestroy>
 {
 public:
 	stack_obj()
@@ -237,8 +213,8 @@ struct check_stack_obj_type
 	typedef Type type;
 };
 
-template <typename Type, bool AUTO>
-struct check_stack_obj_type<stack_obj<Type, AUTO>>
+template <typename Type, bool AutoDestroy>
+struct check_stack_obj_type<stack_obj<Type, AutoDestroy>>
 {
 	typedef Type type;
 };

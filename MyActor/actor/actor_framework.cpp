@@ -1177,21 +1177,12 @@ my_actor::quit_guard::quit_guard(my_actor* self) :_self(self)
 	_self->lock_quit();
 }
 
-my_actor::quit_guard::~quit_guard()
+my_actor::quit_guard::~quit_guard() __disable_noexcept
 {
 	if (_locked)
 	{
-#ifdef _MSC_VER
-		//可能在此析构函数内抛出 force_quit_exception 异常，但在 unlock_quit 已经切换出堆栈，在切换回来后会安全的释放资源
+		//可能在此析构函数内抛出 force_quit_exception 异常
 		_self->unlock_quit();
-#elif __GNUG__
-		try
-		{
-			_self->unlock_quit();
-		}
-		catch (my_actor::force_quit_exception&) {}
-		DEBUG_OPERATION(catch (...) { assert(false); })
-#endif
 	}
 }
 
@@ -1220,9 +1211,9 @@ my_actor::suspend_guard::suspend_guard(my_actor* self) :_self(self)
 	_self->lock_suspend();
 }
 
-my_actor::suspend_guard::~suspend_guard()
+my_actor::suspend_guard::~suspend_guard() __disable_noexcept
 {
-	if (_locked)
+	if (_locked && !_self->is_quited())
 	{
 		_self->unlock_suspend();
 	}
@@ -2636,18 +2627,6 @@ bool my_actor::is_locked_quit()
 {
 	assert_enter();
 	return 0 != _lockQuit;
-}
-
-void my_actor::try_quit()
-{
-#ifdef __GNUG__
-	if (_notifyQuited && 0 == _lockQuit)
-	{
-		throw force_quit_exception();
-	}
-#elif _MSC_VER
-	assert(!(_notifyQuited && 0 == _lockQuit));
-#endif
 }
 
 void my_actor::notify_suspend()

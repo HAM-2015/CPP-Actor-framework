@@ -35,18 +35,23 @@ void bind_qt_run_base::ui_tls::reset()
 	}
 }
 
-void bind_qt_run_base::ui_tls::push_stack(bind_qt_run_base* s)
+bind_qt_run_base::ui_tls* bind_qt_run_base::ui_tls::push_stack(bind_qt_run_base* s)
 {
 	assert(s);
 	ui_tls* uiTls = (ui_tls*)_tls.get_space();
 	assert(uiTls);
 	uiTls->_uiStack.push_front(s);
+	return uiTls;
 }
 
 bind_qt_run_base* bind_qt_run_base::ui_tls::pop_stack()
 {
-	ui_tls* uiTls = (ui_tls*)_tls.get_space();
-	assert(uiTls);
+	return pop_stack((ui_tls*)_tls.get_space());
+}
+
+bind_qt_run_base* bind_qt_run_base::ui_tls::pop_stack(ui_tls* uiTls)
+{
+	assert(uiTls && uiTls == (ui_tls*)_tls.get_space());
 	assert(!uiTls->_uiStack.empty());
 	bind_qt_run_base* r = uiTls->_uiStack.front();
 	uiTls->_uiStack.pop_front();
@@ -176,12 +181,12 @@ std::function<void()> bind_qt_run_base::wrap_check_close()
 void bind_qt_run_base::run_one_task(wrap_handler_face* h)
 {
 #ifdef ENABLE_QT_ACTOR
-	ui_tls::push_stack(this);
+	ui_tls* uiTls = ui_tls::push_stack(this);
 #endif
 	h->invoke();
 	_reuMem.deallocate(h);
 #ifdef ENABLE_QT_ACTOR
-	bind_qt_run_base* r = ui_tls::pop_stack();
+	bind_qt_run_base* r = ui_tls::pop_stack(uiTls);
 	assert(this == r);
 #endif
 }
