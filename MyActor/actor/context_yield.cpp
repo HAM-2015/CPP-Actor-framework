@@ -86,21 +86,17 @@ namespace context_yield
 	context_yield::coro_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
 	{
 		size_t allocSize = MEM_ALIGN(stackSize + STACK_RESERVED_SPACE_SIZE, STACK_BLOCK_SIZE);
-		void* stack = mmap(0, allocSize, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+		void* stack = mmap(0, allocSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);//内存足够下可能失败，调整 /proc/sys/vm/max_map_count
 		if (!stack)
 		{
 			throw size_t(allocSize);
 		}
 		context_yield::coro_info* info = new context_yield::coro_info;
 		info->stackTop = (char*)stack + allocSize;
-#if (_DEBUG || DEBUG)
-		info->stackSize = allocSize - PAGE_SIZE;
-		info->reserveSize = PAGE_SIZE;
-#else
 		info->stackSize = stackSize;
 		info->reserveSize = allocSize - info->stackSize;
-#endif
-		mprotect((char*)stack + info->reserveSize, info->stackSize, PROT_READ | PROT_WRITE);
+		bool ok = 0 == mprotect(stack, PAGE_SIZE, PROT_NONE);//设置哨兵，可能失败，调整 /proc/sys/vm/max_map_count
+		assert(ok);
 		struct local_ref
 		{
 			context_yield::context_handler handler;

@@ -8118,7 +8118,12 @@ public:
 	/*!
 	@brief 当前还未使用过的栈空间
 	*/
-	size_t clean_stack_size();
+	__yield_interrupt size_t clean_stack_size();
+
+	/*!
+	@brief 当前还未使用过的栈空间(linux下使用,win下等效clean_stack_size)
+	*/
+	__yield_interrupt size_t none_stack_size();
 
 	/*!
 	@brief 获取当前Actor剩余安全栈空间
@@ -8129,7 +8134,13 @@ public:
 	@brief 释放已经被使用过的栈空间
 	@param calcUsingStack 是否计算已经使用的空间大小
 	*/
-	void stack_decommit(bool calcUsingStack = true);
+	__yield_interrupt void stack_decommit(bool calcUsingStack = true);
+
+	/*!
+	@brief 释放已经被使用过的栈空间
+	@param calcUsingStack 是否计算已经使用的空间大小(计算PROT_NONE，linux下使用,win下等效stack_decommit)
+	*/
+	__yield_interrupt void none_stack_decommit(bool calcUsingStack = true);
 
 	/*!
 	@brief 获取当前Actor调度器
@@ -8189,7 +8200,7 @@ public:
 	/*!
 	@brief 开启栈检测
 	*/
-	void enable_check_stack(bool decommit = false);
+	__yield_interrupt void enable_check_stack(bool decommit = true);
 
 	/*!
 	@brief 获取Actor切换计数

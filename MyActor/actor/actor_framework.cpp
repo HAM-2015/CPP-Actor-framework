@@ -1388,14 +1388,14 @@ public:
 	void check_stack()
 	{
 		context_yield::coro_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
-		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 		const size_t cleanSize = clean_size(info);
 		_actor._usingStackSize = std::max(_actor._usingStackSize, info->stackSize + info->reserveSize - cleanSize);
 		//记录本次实际消耗的栈空间
 		s_autoActorStackMng.update_stack_size(_actor._actorKey, _actor._usingStackSize);
 		if (cleanSize < info->reserveSize - PAGE_SIZE)
 		{
-			//预留内存页释放物理内存，保留地址空间
+			//释放物理内存，保留地址空间
+			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 			VirtualFree(sb + cleanSize - PAGE_SIZE, info->reserveSize - cleanSize, MEM_DECOMMIT);
 			DWORD oldPro = 0;
 			VirtualProtect(sb + info->reserveSize - PAGE_SIZE, PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
@@ -1498,10 +1498,14 @@ public:
 #elif __linux__
 #pragma GCC push_options
 #pragma GCC optimize("O0")
-	static size_t clean_size(my_actor* self)
+	static size_t none_size(my_actor* self)
 	{
+		unsigned char mvec[256];
 		context_yield::coro_info* const info = ((actor_pull_type*)self->_actorPull)->_coroInfo;
-		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
+		const size_t totalStackSize = info->stackSize + info->reserveSize;
+		char* const sb = (char*)info->stackTop - totalStackSize;
+		bool ok = 0 == mincore(sb, totalStackSize, mvec);
+		assert(ok);
 		size_t i = 0;
 		size_t rangeA = 0;
 		size_t rangeB = (info->stackSize + info->reserveSize) / PAGE_SIZE;
@@ -1520,6 +1524,10 @@ public:
 				mprotect(pi, PAGE_SIZE, PROT_NONE);
 				rangeA = i + 1;
 			}
+			if (0 == mvec[i])
+			{
+				madvise(pi, PAGE_SIZE, MADV_DONTNEED);
+			}
 		} while (rangeA < rangeB);
 		const bool acc = self->_sigsegvSign;
 		self->_sigsegvSign = false;
@@ -1527,16 +1535,53 @@ public:
 	}
 #pragma GCC pop_options
 
-	void operator ()(actor_push_type& actorPush)
+	static size_t clean_size(context_yield::coro_info* const info)
+	{
+		unsigned char mvec[256];
+		const size_t totalStackSize = info->stackSize + info->reserveSize;
+		char* const sb = (char*)info->stackTop - totalStackSize;
+		bool ok = 0 == mincore(sb, totalStackSize, mvec);
+		assert(ok);
+		for (size_t i = 0; i < totalStackSize; i += PAGE_SIZE)
+		{
+			if (0 != mvec[i / PAGE_SIZE])
+			{
+				return i;
+			}
+		}
+		return totalStackSize;
+	}
+
+	void check_stack()
 	{
 		context_yield::coro_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
-		_actor._usingStackSize = info->stackSize;
+		const size_t cleanSize = clean_size(info);
+		_actor._usingStackSize = std::max(_actor._usingStackSize, info->stackSize + info->reserveSize - cleanSize);
+		//记录本次实际消耗的栈空间
+		s_autoActorStackMng.update_stack_size(_actor._actorKey, _actor._usingStackSize);
+		if (cleanSize < info->reserveSize)
+		{
+			//释放物理内存，保留地址空间
+			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
+			madvise(sb + cleanSize, info->reserveSize - cleanSize, MADV_DONTNEED);
+		}
+	}
+
+	void operator ()(actor_push_type& actorPush)
+	{
 		actor_handler(actorPush);
 		if (_actor._checkStack)
 		{
-			s_autoActorStackMng.update_stack_size(_actor._actorKey, _actor._usingStackSize);
+			_actor.async_send_after_quited(_actor.self_strand(), [this]
+			{
+				check_stack();
+				exit_notify();
+			});
 		}
-		exit_notify();
+		else
+		{
+			exit_notify();
+		}
 	}
 
 	static int sigsegv_handler(void* fault_address, int serious)
@@ -1551,18 +1596,27 @@ public:
 			{
 				if (!self->_sigsegvSign)
 				{
-					size_t l = 0;
-					char* const st = (char*)info->stackTop - self->_usingStackSize;
-					while (violationAddr + l < st)
+					if (violationAddr > sb)
 					{
-						mprotect(violationAddr + l, PAGE_SIZE, PROT_READ | PROT_WRITE);
-						l += PAGE_SIZE;
+						size_t l = 0;
+						char* const st = (char*)info->stackTop - self->_usingStackSize;
+						while (violationAddr + l < st)
+						{
+							mprotect(violationAddr + l, PAGE_SIZE, PROT_READ | PROT_WRITE);
+							l += PAGE_SIZE;
+						}
+						if (violationAddr < (char*)info->stackTop - self->_usingStackSize)
+						{
+							self->_usingStackSize = (char*)info->stackTop - violationAddr;
+						}
+						return -1;
 					}
-					if (violationAddr < (char*)info->stackTop - self->_usingStackSize)
+					else
 					{
-						self->_usingStackSize = (char*)info->stackTop - violationAddr;
+						//触碰栈哨兵
+						exit(101);
+						return 0;
 					}
-					return -1;
 				} 
 				else
 				{
@@ -1759,16 +1813,6 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 			size_t lasts = s_autoActorStackMng.get_stack_size(wrapActor.key());
 			checkStack = !lasts;
 			pull = ContextPool_::getContext(lasts ? lasts : GET_TRY_SIZE(nsize));
-#ifdef __linux__
-#if (_DEBUG || DEBUG)
-#else
-			if (!lasts && GET_TRY_SIZE(nsize) > CORO_CONTEXT_STATE_SPACE)
-			{
-				context_yield::coro_info* const info = pull->_coroInfo;
-				mprotect((char*)info->stackTop - info->stackSize, GET_TRY_SIZE(nsize) - CORO_CONTEXT_STATE_SPACE, PROT_NONE);
-			}
-#endif
-#endif
 		}
 		else
 		{
@@ -1780,11 +1824,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 	{
 		size_t lasts = s_autoActorStackMng.get_stack_size(wrapActor.key());
 		checkStack = !lasts;
-#ifdef WIN32
 		pull = ContextPool_::getContext(lasts ? lasts : DEFAULT_STACKSIZE);
-#elif __linux__
-		pull = ContextPool_::getContext(lasts ? lasts : CORO_CONTEXT_STATE_SPACE);
-#endif
 	}
 	actor_handle newActor(new(pull->_space)my_actor(), [](my_actor* p){p->~my_actor(); }, actor_ref_count_alloc<void>(pull));
 	newActor->_weakThis = newActor;
@@ -2410,7 +2450,20 @@ void my_actor::enable_check_stack(bool decommit)
 			end_RUN_IN_THREAD_STACK();
 		}
 #elif __linux__
-		stack_decommit(false);
+		if (decommit)
+		{
+			stack_decommit(false);
+		}
+		else
+		{
+			char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
+			begin_RUN_IN_THREAD_STACK(this);
+			context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
+			bool ok = 0 == mprotect(sb, sp - sb, PROT_NONE);
+			assert(ok);
+			end_RUN_IN_THREAD_STACK();
+		}
 #endif
 	}
 }
@@ -3359,20 +3412,25 @@ size_t my_actor::stack_idle_space()
 
 size_t my_actor::clean_stack_size()
 {
-#ifdef WIN32
 	size_t s = 0;
 	begin_RUN_IN_THREAD_STACK(this);
 	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	s = actor_run::clean_size(info);
 	end_RUN_IN_THREAD_STACK();
 	return s;
+}
+
+size_t my_actor::none_stack_size()
+{
+#ifdef WIN32
+	return clean_stack_size();
 #elif __linux__
 	size_t s = 0;
 	begin_RUN_IN_THREAD_STACK(this);
 	void** tlsBuff = io_engine::getTlsValueBuff();
 	void* old = tlsBuff[ACTOR_TLS_INDEX];
 	tlsBuff[ACTOR_TLS_INDEX] = this;
-	s = actor_run::clean_size(this);
+	s = actor_run::none_size(this);
 	tlsBuff[ACTOR_TLS_INDEX] = old;
 	end_RUN_IN_THREAD_STACK();
 	return s;
@@ -3411,22 +3469,41 @@ void my_actor::stack_decommit(bool calcUsingStack)
 		}
 	}
 #elif __linux__
-#if !(_DEBUG || DEBUG)
 	if (sp > sb)
 	{
 		if (calcUsingStack)
 		{
-			_usingStackSize = std::max(_usingStackSize, (size_t)info->stackTop - (size_t)sp);
+			_usingStackSize = std::max(_usingStackSize, info->stackSize + info->reserveSize - actor_run::clean_size(info));
 		}
-		else
-		{
-			_usingStackSize = (size_t)info->stackTop - (size_t)sp;
-		}
-		mprotect(sb, sp - sb, PROT_NONE);
+		madvise(sb, sp - sb, MADV_DONTNEED);
 	}
 #endif
-#endif
 	end_RUN_IN_THREAD_STACK();
+}
+
+void my_actor::none_stack_decommit(bool calcUsingStack)
+{
+#ifdef WIN32
+	stack_decommit(calcUsingStack);
+#elif __linux__
+	char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
+	begin_RUN_IN_THREAD_STACK(this);
+	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
+	if (sp > sb)
+	{
+		if (calcUsingStack)
+		{
+			void** tlsBuff = io_engine::getTlsValueBuff();
+			void* old = tlsBuff[ACTOR_TLS_INDEX];
+			tlsBuff[ACTOR_TLS_INDEX] = this;
+			_usingStackSize = std::max(_usingStackSize, info->stackSize + info->reserveSize - actor_run::none_size(this));
+			tlsBuff[ACTOR_TLS_INDEX] = old;
+		}
+		madvise(sb, sp - sb, MADV_DONTNEED);
+	}
+	end_RUN_IN_THREAD_STACK();
+#endif
 }
 
 void my_actor::close_msg_notifer(actor_msg_handle_base& amh)
