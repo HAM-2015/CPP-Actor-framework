@@ -17,17 +17,9 @@ namespace context_yield
 	void adjust_stack(context_yield::coro_info* info)
 	{
 		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
-		char* sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE)) - 2 * PAGE_SIZE;
-		while (sp >= sb)
-		{
-			MEMORY_BASIC_INFORMATION mbi;
-			if (sizeof(mbi) != VirtualQuery(sp, &mbi, sizeof(mbi)) || MEM_RESERVE == mbi.State)
-			{
-				break;
-			}
-			VirtualFree(sp, PAGE_SIZE, MEM_DECOMMIT);
-			sp -= PAGE_SIZE;
-		}
+		char* const sp = (char*)info->stackTop - 2 * PAGE_SIZE;
+		VirtualAlloc(sp, PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD);
+		VirtualFree(sb, (size_t)sp - (size_t)sb, MEM_DECOMMIT);
 	}
 
 	context_yield::coro_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
@@ -45,6 +37,7 @@ namespace context_yield
 		info->obj = CreateFiberEx(0, allocSize, FIBER_FLAG_FLOAT_SWITCH, [](void* param)
 		{
 			local_ref* ref = (local_ref*)param;
+			assert((size_t)get_sp() > (size_t)ref->info->stackTop - PAGE_SIZE + 256);
 			adjust_stack(ref->info);
 			ref->handler(ref->info, ref->p);
 		}, &ref);
@@ -73,6 +66,11 @@ namespace context_yield
 	{
 		DeleteFiber(info->obj);
 		delete info;
+	}
+
+	void decommit_context(context_yield::coro_info* info)
+	{
+		adjust_stack(info);
 	}
 
 #elif __linux__
@@ -126,6 +124,11 @@ namespace context_yield
 	{
 		munmap((char*)info->stackTop - info->stackSize - info->reserveSize, info->stackSize + info->reserveSize);
 		delete info;
+	}
+
+	void decommit_context(context_yield::coro_info* info)
+	{
+		madvise((char*)info->stackTop - info->stackSize - info->reserveSize, info->stackSize + info->reserveSize, MADV_DONTNEED);
 	}
 #endif
 }

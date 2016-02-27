@@ -7,14 +7,14 @@
       <PathStyle>RemoteUnix</PathStyle>
     </CustomSourceDirectories>
     <BuildHost>
-      <HostName>192.168.1.66</HostName>
+      <HostName>127.0.0.1</HostName>
       <Transport>SSH</Transport>
       <UserName>ham</UserName>
     </BuildHost>
     <MainSourceTransferCommand>
       <SkipWhenRunningCommandList>false</SkipWhenRunningCommandList>
       <RemoteHost>
-        <HostName>192.168.1.66</HostName>
+        <HostName>127.0.0.1</HostName>
         <Transport>SSH</Transport>
         <UserName>ham</UserName>
       </RemoteHost>
@@ -44,7 +44,7 @@
     <MakeConfigurationName>Debug</MakeConfigurationName>
     <AdditionalMakeArguments />
     <Toolchain>
-      <Name>Default GCC toolchain on 192.168.1.66</Name>
+      <Name>Default GCC toolchain on 127.0.0.1</Name>
       <UnixSystem>true</UnixSystem>
       <GCC>gcc</GCC>
       <GXX>g++</GXX>
@@ -76,7 +76,7 @@
     <MakeCommandTemplate>
       <SkipWhenRunningCommandList>false</SkipWhenRunningCommandList>
       <RemoteHost>
-        <HostName>192.168.1.66</HostName>
+        <HostName>127.0.0.1</HostName>
         <Transport>SSH</Transport>
         <UserName>ham</UserName>
       </RemoteHost>

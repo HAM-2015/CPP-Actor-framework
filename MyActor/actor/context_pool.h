@@ -43,12 +43,13 @@ public:
 private:
 	struct context_pool_pck
 	{
-		typedef msg_list_shared_alloc<coro_pull_interface*, pool_alloc_mt<void, mem_alloc_mt2<> > > pool_queue;
+		typedef msg_list_shared_alloc<coro_pull_interface*, pool_alloc_mt<void, mem_alloc_mt2<void, null_mutex> > > pool_queue;
 
 		context_pool_pck()
-		:_pool(_alloc){}
-		std::mutex _mutex;
+		:_pool(_alloc), _decommitPool(_alloc){}
 		pool_queue _pool;
+		pool_queue _decommitPool;
+		static std::mutex _mutex;
 		static pool_queue::shared_node_alloc _alloc;
 	};
 public:

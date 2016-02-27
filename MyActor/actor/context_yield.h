@@ -18,6 +18,7 @@ namespace context_yield
 	void push_yield(coro_info* info);
 	void pull_yield(coro_info* info);
 	void delete_context(coro_info* info);
+	void decommit_context(coro_info* info);
 }
 
 #endif

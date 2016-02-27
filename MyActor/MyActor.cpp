@@ -20,6 +20,7 @@ void wait_multi_msg()
 	{
 		actor_handle act1 = my_actor::create(self->self_strand(), [](my_actor* self)
 		{
+			my_actor::quit_guard qg(self);
 			self->run_mutex_blocks_safe(mutex_block_pump<int>(self, [&](int msg)
 			{
 				trace_comma(self->self_id(), "begin msg int");
@@ -36,7 +37,7 @@ void wait_multi_msg()
 				self->sleep(500);
 				trace_comma(self->self_id(), "end msg int");
 				return false;
-			}), mutex_block_pump<>(self, [&]()
+			}), mutex_block_quit(self, [&]()
 			{
 				trace_comma(self->self_id(), "begin end");
 				self->sleep(1000);
@@ -71,7 +72,7 @@ void wait_multi_msg()
 		act1->notify_run();
 		self->child_actor_run(ch2, ch3);
 		self->child_actor_wait_quit(ch2, ch3);
-		self->connect_msg_notifer_to(act1)();
+		act1->notify_quit();
 		self->actor_wait_quit(act1);
 	});
 	ah->notify_run();

@@ -7,6 +7,7 @@
 
 //清理最小周期(秒)
 #define CONTEXT_MIN_CLEAR_CYCLE		30
+#define CONTEXT_MIN_DELETE_CYCLE		300
 
 void ContextPool_::coro_push_interface::operator()()
 {
@@ -19,6 +20,7 @@ void ContextPool_::coro_pull_interface::operator()()
 }
 //////////////////////////////////////////////////////////////////////////
 
+std::mutex ContextPool_::context_pool_pck::_mutex;
 ContextPool_::context_pool_pck::pool_queue::shared_node_alloc ContextPool_::context_pool_pck::_alloc(1000000);
 //////////////////////////////////////////////////////////////////////////
 
@@ -58,6 +60,16 @@ ContextPool_::~ContextPool_()
 			context_yield::delete_context(info);
 			delete pull;
 		}
+		while (!_contextPool[i]._decommitPool.empty())
+		{
+			coro_pull_interface* const pull = _contextPool[i]._decommitPool.back();
+			_contextPool[i]._decommitPool.pop_back();
+			context_yield::coro_info* const info = pull->_coroInfo;
+			_stackCount--;
+			_stackTotalSize -= info->stackSize + info->reserveSize;
+			context_yield::delete_context(info);
+			delete pull;
+		}
 	}
 	assert(0 == _stackCount);
 	assert(0 == _stackTotalSize);
@@ -86,6 +98,14 @@ ContextPool_::coro_pull_interface* ContextPool_::getContext(size_t size)
 			{
 				coro_pull_interface* oldFiber = pool._pool.back();
 				pool._pool.pop_back();
+				pool._mutex.unlock();
+				oldFiber->_tick = 0;
+				return oldFiber;
+			}
+			if (!pool._decommitPool.empty())
+			{
+				coro_pull_interface* oldFiber = pool._decommitPool.back();
+				pool._decommitPool.pop_back();
 				pool._mutex.unlock();
 				oldFiber->_tick = 0;
 				return oldFiber;
@@ -135,6 +155,7 @@ void ContextPool_::contextHandler(context_yield::coro_info* info, void* param)
 #if (_DEBUG || DEBUG)
 	pull->_spaceSize = sizeof(space);
 #endif
+	assert((size_t)get_sp() > (size_t)info->stackTop - PAGE_SIZE + 256);
 	context_yield::push_yield(info);
 	while (true)
 	{
@@ -174,7 +195,7 @@ void ContextPool_::clearThread()
 					break;
 				}
 				_clearWait = true;
-				if (std::cv_status::no_timeout == _clearVar.wait_for(ul, std::chrono::milliseconds(10)))
+				if (std::cv_status::no_timeout == _clearVar.wait_for(ul, std::chrono::milliseconds(1)))
 				{
 					break;
 				}
@@ -185,12 +206,23 @@ void ContextPool_::clearThread()
 			int extTick = get_tick_s();
 			for (int i = 255; i >= 0; i--)
 			{
-				_contextPool[i]._mutex.lock();
-				if (!_contextPool[i]._pool.empty() && extTick - _contextPool[i]._pool.front()->_tick >= CONTEXT_MIN_CLEAR_CYCLE)
+				context_pool_pck& contextPool = _contextPool[i];
+				contextPool._mutex.lock();
+				if (!contextPool._pool.empty() && extTick - contextPool._pool.front()->_tick >= CONTEXT_MIN_CLEAR_CYCLE)
 				{
-					coro_pull_interface* const pull = _contextPool[i]._pool.front();
-					_contextPool[i]._pool.pop_front();
-					_contextPool[i]._mutex.unlock();
+					coro_pull_interface* const pull = contextPool._pool.front();
+					contextPool._pool.pop_front();
+					contextPool._mutex.unlock();
+					context_yield::decommit_context(pull->_coroInfo);
+					contextPool._mutex.lock();
+					contextPool._decommitPool.push_front(pull);
+					contextPool._mutex.unlock();
+				}
+				else if (!contextPool._decommitPool.empty() && extTick - contextPool._decommitPool.front()->_tick >= CONTEXT_MIN_DELETE_CYCLE)
+				{
+					coro_pull_interface* const pull = contextPool._decommitPool.front();
+					contextPool._decommitPool.pop_front();
+					contextPool._mutex.unlock();
 					context_yield::coro_info* const info = pull->_coroInfo;
 					freeCount++;
 					_stackCount--;
@@ -200,7 +232,7 @@ void ContextPool_::clearThread()
 				}
 				else
 				{
-					_contextPool[i]._mutex.unlock();
+					contextPool._mutex.unlock();
 				}
 			}
 		} while (freeCount);

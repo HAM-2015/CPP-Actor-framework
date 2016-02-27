@@ -1072,6 +1072,88 @@ void TrigOnceBase_::move(TrigOnceBase_&& s)
 	DEBUG_OPERATION(_pIsTrig = std::move(s._pIsTrig));
 }
 //////////////////////////////////////////////////////////////////////////
+
+bool mutex_block_quit::ready()
+{
+	_host->_waitingQuit = true;
+	return !_quitNtfed && _host->quit_msg();
+}
+
+void mutex_block_quit::cancel()
+{
+	_host->_waitingQuit = false;
+}
+
+void mutex_block_quit::check_lost()
+{
+}
+
+bool mutex_block_quit::go(bool& isRun)
+{
+	if (!_quitNtfed && _host->quit_msg())
+	{
+		_quitNtfed = true;
+		isRun = true;
+		return _quitHandler();
+	}
+	isRun = false;
+	return false;
+}
+
+size_t mutex_block_quit::snap_id()
+{
+	return -1;
+}
+
+long long mutex_block_quit::host_id()
+{
+	return _host->self_id();
+}
+
+void mutex_block_quit::check_lock_quit()
+{
+	assert(_host->_lockQuit > 0);
+}
+//////////////////////////////////////////////////////////////////////////
+
+bool mutex_block_sign::ready()
+{
+	_host->_waitingTrigMask |= _mask;
+	return !_signNtfed && (_host->_trigSignMask & _mask);
+}
+
+void mutex_block_sign::cancel()
+{
+	_host->_waitingTrigMask &= (-1 ^ _mask);
+}
+
+void mutex_block_sign::check_lost()
+{
+}
+
+bool mutex_block_sign::go(bool& isRun)
+{
+	if (!_signNtfed && (_host->_trigSignMask & _mask))
+	{
+		_signNtfed = true;
+		isRun = true;
+		return _signHandler();
+	}
+	isRun = false;
+	return false;
+}
+
+size_t mutex_block_sign::snap_id()
+{
+	return (-1 ^ ((size_t)-1 >> 1)) | _mask;
+}
+
+long long mutex_block_sign::host_id()
+{
+	return _host->self_id();
+}
+//////////////////////////////////////////////////////////////////////////
+
 template <typename _Ty>
 struct actor_ref_count_alloc;
 
@@ -1700,6 +1782,7 @@ _childActorList(_childActorListAll)
 	_timerStateSuspend = false;
 	_timerStateCompleted = true;
 	_holdedSuspendSign = false;
+	_waitingQuit = false;
 #ifdef __linux__
 	_sigsegvSign = false;
 #endif
@@ -1713,6 +1796,8 @@ _childActorList(_childActorListAll)
 	_childSuspendResumeCount = 0;
 	_returnCode = 0;
 	_usingStackSize = 0;
+	_trigSignMask = 0;
+	_waitingTrigMask = 0;
 	_timerStateCount = 0;
 	_timerStateTime = 0;
 	_timerStateStampBegin = 0;
@@ -2580,6 +2665,11 @@ void my_actor::force_quit(std::function<void()>&& h)
 		{
 			_quitCallback.push_back(std::move(h));
 		}
+		if (_waitingQuit)
+		{
+			_waitingQuit = false;
+			pull_yield();
+		}
 	}
 	else if (h)
 	{
@@ -2898,6 +2988,33 @@ void my_actor::switch_pause_play(const std::function<void(bool)>& h)
 			assert(shared_this->yield_count() == yc);
 		}
 	}, shared_from_this(), h));
+}
+
+void my_actor::notify_trig_sign(int id)
+{
+	assert(id >= 0 && id < 8 * sizeof(void*));
+	_strand->try_tick(std::bind([id](const actor_handle& shared_this)
+	{
+		my_actor* self = shared_this.get();
+		if (!self->_quited)
+		{
+			const size_t mask = (size_t)1 << id;
+			self->_trigSignMask |= mask;
+			if (mask & self->_waitingTrigMask)
+			{
+				self->_waitingTrigMask ^= mask;
+				self->pull_yield();
+			}
+		}
+	}, shared_from_this()));
+}
+
+void my_actor::reset_trig_sign(int id)
+{
+	assert_enter();
+	assert(id >= 0 && id < 8 * sizeof(void*));
+	const size_t mask = (size_t)1 << id;
+	_trigSignMask &= (-1 ^ mask);
 }
 
 void my_actor::outside_wait_quit()
@@ -3606,6 +3723,27 @@ void my_actor::pump_msg(bool checkDis, const msg_pump_handle<>& pump)
 void my_actor::pump_msg(const msg_pump_handle<>& pump)
 {
 	return pump_msg(false, pump);
+}
+
+bool my_actor::timed_wait_trig_sign(int tm, int id)
+{
+	return timed_wait_trig_sign(tm, id, [this]
+	{
+		pull_yield();
+	});
+}
+
+bool my_actor::try_wait_trig_sign(int id)
+{
+	assert_enter();
+	assert(id >= 0 && id < 8 * sizeof(void*));
+	const size_t mask = (size_t)1 << id;
+	return 0 != (mask & _trigSignMask);
+}
+
+void my_actor::wait_trig_sign(int id)
+{
+	timed_wait_trig_sign(-1, id);
 }
 //////////////////////////////////////////////////////////////////////////
 

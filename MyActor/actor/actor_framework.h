@@ -2460,8 +2460,8 @@ private:
 	{
 		if (_has)
 		{
-			isRun = true;
 			_has = false;
+			isRun = true;
 			return _handler();
 		}
 		isRun = false;
@@ -2525,9 +2525,9 @@ private:
 	{
 		if (_has)
 		{
-			isRun = true;
-			_triged = true;
 			_has = false;
+			_triged = true;
+			isRun = true;
 			return _handler();
 		}
 		isRun = false;
@@ -2607,8 +2607,8 @@ private:
 		assert(!_msgHandle.check_closed());
 		if (_has)
 		{
-			isRun = true;
 			_has = false;
+			isRun = true;
 			return _handler();
 		}
 		isRun = false;
@@ -2629,6 +2629,54 @@ private:
 	pump_handle _msgHandle;
 	std::function<bool()> _handler;
 	bool _has;
+};
+
+class mutex_block_quit : public MutexBlock_
+{
+	friend my_actor;
+public:
+	template <typename Handler>
+	mutex_block_quit(my_actor* host, Handler&& handler)
+		:_host(host), _quitHandler(TRY_MOVE(handler)), _quitNtfed(false)
+	{
+		check_lock_quit();
+	}
+private:
+	bool ready();
+	void cancel();
+	void check_lost();
+	bool go(bool& isRun);
+	size_t snap_id();
+	long long host_id();
+	void check_lock_quit();
+private:
+	my_actor* _host;
+	std::function<bool()> _quitHandler;
+	bool _quitNtfed;
+};
+
+class mutex_block_sign : public MutexBlock_
+{
+	friend my_actor;
+public:
+	template <typename Handler>
+	mutex_block_sign(my_actor* host, int id, Handler&& handler)
+		:_host(host), _signHandler(TRY_MOVE(handler)), _mask((size_t)1 << id), _signNtfed(false)
+	{
+		assert(id >= 0 && id < 8 * sizeof(void*));
+	}
+private:
+	bool ready();
+	void cancel();
+	void check_lost();
+	bool go(bool& isRun);
+	size_t snap_id();
+	long long host_id();
+private:
+	my_actor* _host;
+	std::function<bool()> _signHandler;
+	size_t _mask;
+	bool _signNtfed;
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -2682,6 +2730,7 @@ private:
 	{
 		if (_msgBuff.has())
 		{
+			assert(!_lostNtfed);
 			isRun = true;
 			OUT_OF_SCOPE({ _msgBuff.clear(); });
 			return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
@@ -2765,6 +2814,7 @@ private:
 	{
 		if (_msgBuff.has())
 		{
+			assert(!_lostNtfed);
 			isRun = true;
 			_triged = true;
 			OUT_OF_SCOPE({ _msgBuff.clear(); });
@@ -2943,8 +2993,9 @@ private:
 	{
 		if (_has)
 		{
-			isRun = true;
+			assert(!_lostNtfed);
 			_has = false;
+			isRun = true;
 			return _handler();
 		}
 		else if (is_losted())
@@ -3022,9 +3073,10 @@ private:
 	{
 		if (_has)
 		{
-			isRun = true;
-			_triged = true;
+			assert(!_lostNtfed);
 			_has = false;
+			_triged = true;
+			isRun = true;
 			return _handler();
 		}
 		else if (is_losted())
@@ -3119,9 +3171,9 @@ private:
 		assert(!_msgHandle.check_closed());
 		if (_has)
 		{
-			isRun = true;
 			_has = false;
 			_lostNtfed = false;
+			isRun = true;
 			return _handler();
 		}
 		else if (is_losted())
@@ -3398,18 +3450,10 @@ class callback_handler<types_pck<ARGS...>, types_pck<OUTS...>>: public TrigOnceB
 	friend my_actor;
 public:
 	template <typename... Outs>
-	callback_handler(my_actor* host, Outs&... outs)
-		:_selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
+	callback_handler(my_actor* host, bool hasTm, Outs&... outs)
+		:_selfEarly(host), _bsign(false), _hasTm(hasTm), _sign(&_bsign), _dstRef(outs...)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
-	}
-
-	template <typename TimedHandler, typename... Outs>
-	callback_handler(my_actor* host, int tm, const TimedHandler& th, Outs&... outs)
-		: _selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
-	{
-		Parent::_hostActor = ActorFunc_::shared_from_this(host);
-		ActorFunc_::delay_trig(host, tm, th);
 	}
 
 	~callback_handler() __disable_noexcept
@@ -3423,17 +3467,20 @@ public:
 					_bsign = true;
 					ActorFunc_::push_yield(_selfEarly);
 				}
-				ActorFunc_::cancel_timer(_selfEarly);
+				if (_hasTm)
+				{
+					ActorFunc_::cancel_timer(_selfEarly);
+				}
 			}
 			Parent::_hostActor.reset();
 		}
 	}
 
 	callback_handler(const callback_handler& s)
-		:TrigOnceBase_(s), _selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef) {}
+		:TrigOnceBase_(s), _selfEarly(NULL), _bsign(false), _hasTm(false), _sign(s._sign), _dstRef(s._dstRef) {}
 
 	callback_handler(callback_handler&& s)
-		:TrigOnceBase_(std::move(s)), _selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef)
+		:TrigOnceBase_(std::move(s)), _selfEarly(NULL), _bsign(false), _hasTm(false), _sign(s._sign), _dstRef(s._dstRef)
 	{
 		s._sign = NULL;
 	}
@@ -3468,6 +3515,7 @@ private:
 	bool* _sign;
 	my_actor* const _selfEarly;
 	bool _bsign;
+	bool _hasTm;
 };
 
 /*!
@@ -3582,21 +3630,10 @@ class asio_cb_handler<types_pck<ARGS...>, types_pck<OUTS...>> : public TrigOnceB
 	friend my_actor;
 public:
 	template <typename... Outs>
-	asio_cb_handler(my_actor* host, Outs&... outs)
-		:_selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
+	asio_cb_handler(my_actor* host, bool hasTm, Outs&... outs)
+		:_selfEarly(host), _bsign(false), _hasTm(hasTm), _sign(&_bsign), _dstRef(outs...)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
-	}
-
-	template <typename TimedHandler, typename... Outs>
-	asio_cb_handler(my_actor* host, int tm, const TimedHandler& th, Outs&... outs)
-		: _selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
-	{
-		Parent::_hostActor = ActorFunc_::shared_from_this(host);
-		ActorFunc_::delay_trig(host, tm, [&th]
-		{
-			th();
-		});
 	}
 
 	~asio_cb_handler() __disable_noexcept
@@ -3610,17 +3647,20 @@ public:
 					_bsign = true;
 					ActorFunc_::push_yield(_selfEarly);
 				}
-				ActorFunc_::cancel_timer(_selfEarly);
+				if (_hasTm)
+				{
+					ActorFunc_::cancel_timer(_selfEarly);
+				}
 			}
 			Parent::_hostActor.reset();
 		}
 	}
 
 	asio_cb_handler(const asio_cb_handler& s)
-		:TrigOnceBase_(std::move((asio_cb_handler&)s)), _selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef) {}
+		:TrigOnceBase_(std::move((asio_cb_handler&)s)), _selfEarly(NULL), _bsign(false), _hasTm(false), _sign(s._sign), _dstRef(s._dstRef) {}
 
 	asio_cb_handler(asio_cb_handler&& s)
-		:TrigOnceBase_(std::move(s)), _selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef)
+		:TrigOnceBase_(std::move(s)), _selfEarly(NULL), _bsign(false), _hasTm(false), _sign(s._sign), _dstRef(s._dstRef)
 	{
 		s._sign = NULL;
 	}
@@ -3655,6 +3695,7 @@ private:
 	bool* _sign;
 	my_actor* const _selfEarly;
 	bool _bsign;
+	bool _hasTm;
 };
 
 /*!
@@ -4981,6 +5022,8 @@ class my_actor
 	class actor_run;
 	friend actor_run;
 	friend child_actor_handle;
+	friend mutex_block_quit;
+	friend mutex_block_sign;
 	friend MsgPumpBase_;
 	friend actor_msg_handle_base;
 	friend TrigOnceBase_;
@@ -5911,7 +5954,7 @@ private:
 			if (tm > 0)
 			{
 				bool timed = false;
-				delay_trig(tm, [this, &timed, &th]
+				delay_trig(tm, [&timed, &th]
 				{
 					timed = true;
 					th();
@@ -6037,7 +6080,7 @@ public:
 			if (tm > 0)
 			{
 				bool timed = false;
-				delay_trig(tm, [this, &timed, &th]
+				delay_trig(tm, [&timed, &th]
 				{
 					timed = true;
 					th();
@@ -6137,7 +6180,7 @@ public:
 	@brief 等待并忽略掉一个消息
 	*/
 	template <typename... Args>
-	void wait_ignore_msg(actor_msg_handle<Args...>& amh)
+	__yield_interrupt void wait_ignore_msg(actor_msg_handle<Args...>& amh)
 	{
 		timed_wait_ignore_msg(-1, amh);
 	}
@@ -6146,7 +6189,7 @@ public:
 	@brief 尝试弹出并忽略掉一个消息
 	*/
 	template <typename... Args>
-	bool try_wait_ignore_msg(actor_msg_handle<Args...>& amh)
+	__yield_interrupt bool try_wait_ignore_msg(actor_msg_handle<Args...>& amh)
 	{
 		return timed_wait_ignore_msg(0, amh);
 	}
@@ -6155,14 +6198,14 @@ public:
 	@brief 在一定时间内尝试弹出并忽略掉一个消息
 	*/
 	template <typename... Args>
-	bool timed_wait_ignore_msg(int tm, actor_msg_handle<Args...>& amh)
+	__yield_interrupt bool timed_wait_ignore_msg(int tm, actor_msg_handle<Args...>& amh)
 	{
 		std::tuple<ignore_msg<Args>...> ignoreMsg;
 		return tuple_invoke<bool>(&my_actor::_timed_wait_ignore_msg<Args...>, std::tuple<my_actor*, int&, actor_msg_handle<Args...>&>(this, tm, amh), ignoreMsg);
 	}
 private:
 	template <typename... Args>
-	static bool _timed_wait_ignore_msg(my_actor* const host, int tm, actor_msg_handle<Args...>& amh, ignore_msg<Args>&... outs)
+	__yield_interrupt static bool _timed_wait_ignore_msg(my_actor* const host, int tm, actor_msg_handle<Args...>& amh, ignore_msg<Args>&... outs)
 	{
 		return host->timed_wait_msg(tm, amh, outs...);
 	}
@@ -6175,7 +6218,7 @@ public:
 	{
 		static_assert(sizeof...(Args) == sizeof...(Outs), "");
 		assert_enter();
-		return callback_handler<types_pck<Args...>, types_pck<Outs...>>(this, outs...);
+		return callback_handler<types_pck<Args...>, types_pck<Outs...>>(this, false, outs...);
 	}
 
 	/*!
@@ -6185,7 +6228,7 @@ public:
 	callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_context(Outs&... outs)
 	{
 		assert_enter();
-		return callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, outs...);
+		return callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, false, outs...);
 	}
 
 	/*!
@@ -6202,10 +6245,11 @@ public:
 	@brief 创建带超时的上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_timed_context(...))
 	*/
 	template <typename TimedHandler, typename... Outs>
-	callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_context(int tm, const TimedHandler& th, Outs&... outs)
+	callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_context(int tm, TimedHandler&& th, Outs&... outs)
 	{
 		assert_enter();
-		return callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, tm, th, outs...);
+		delay_trig(tm, TRY_MOVE(th));
+		return callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, true, outs...);
 	}
 
 	/*!
@@ -6216,7 +6260,7 @@ public:
 	{
 		static_assert(sizeof...(Args) == sizeof...(Outs), "");
 		assert_enter();
-		return asio_cb_handler<types_pck<Args...>, types_pck<Outs...>>(this, outs...);
+		return asio_cb_handler<types_pck<Args...>, types_pck<Outs...>>(this, false, outs...);
 	}
 
 	/*!
@@ -6226,7 +6270,7 @@ public:
 	asio_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_asio_context(Outs&... outs)
 	{
 		assert_enter();
-		return asio_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, outs...);
+		return asio_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, false, outs...);
 	}
 
 	/*!
@@ -6243,10 +6287,11 @@ public:
 	@brief 创建带超时的ASIO库上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_asio_timed_context(...))
 	*/
 	template <typename TimedHandler, typename... Outs>
-	asio_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_asio_timed_context(int tm, const TimedHandler& th, Outs&... outs)
+	asio_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_asio_timed_context(int tm, TimedHandler&& th, Outs&... outs)
 	{
 		assert_enter();
-		return asio_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, tm, th, outs...);
+		delay_trig(tm, TRY_MOVE(th));
+		return asio_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, true, outs...);
 	}
 
 	/*!
@@ -6349,7 +6394,7 @@ public:
 			if (tm > 0)
 			{
 				bool timed = false;
-				delay_trig(tm, [this, &timed, &th]
+				delay_trig(tm, [&timed, &th]
 				{
 					timed = true;
 					th();
@@ -6449,7 +6494,7 @@ public:
 	@brief 等待并忽略掉一个消息
 	*/
 	template <typename... Args>
-	void wait_ignore_trig(actor_trig_handle<Args...>& ath)
+	__yield_interrupt void wait_ignore_trig(actor_trig_handle<Args...>& ath)
 	{
 		timed_wait_ignore_trig(-1, ath);
 	}
@@ -6458,7 +6503,7 @@ public:
 	@brief 尝试弹出并忽略掉一个消息
 	*/
 	template <typename... Args>
-	bool try_wait_ignore_trig(actor_trig_handle<Args...>& ath)
+	__yield_interrupt bool try_wait_ignore_trig(actor_trig_handle<Args...>& ath)
 	{
 		return timed_wait_ignore_trig(0, ath);
 	}
@@ -6467,14 +6512,69 @@ public:
 	@brief 在一定时间内尝试弹出并忽略掉一个消息
 	*/
 	template <typename... Args>
-	bool timed_wait_ignore_trig(int tm, actor_trig_handle<Args...>& ath)
+	__yield_interrupt bool timed_wait_ignore_trig(int tm, actor_trig_handle<Args...>& ath)
 	{
 		std::tuple<ignore_msg<Args>...> ignoreMsg;
 		return tuple_invoke<bool>(&my_actor::_timed_wait_ignore_trig<Args...>, std::tuple<my_actor*, int&, actor_trig_handle<Args...>&>(this, tm, ath), ignoreMsg);
 	}
+
+	/*!
+	@brief 等待触发消息
+	*/
+	__yield_interrupt void wait_trig_sign(int id);
+
+	/*!
+	@brief 超时等待触发消息
+	*/
+	__yield_interrupt bool timed_wait_trig_sign(int tm, int id);
+
+	template <typename TimedHandler>
+	__yield_interrupt bool timed_wait_trig_sign(int tm, int id, const TimedHandler& th)
+	{
+		assert_enter();
+		assert(id >= 0 && id < 8 * sizeof(void*));
+		const size_t mask = (size_t)1 << id;
+		if (!(mask & _trigSignMask))
+		{
+			OUT_OF_SCOPE(
+			{
+				_waitingTrigMask &= (-1 ^ mask);
+			});
+			_waitingTrigMask |= mask;
+			if (tm > 0)
+			{
+				bool timed = false;
+				delay_trig(tm, [&timed, &th]
+				{
+					timed = true;
+					th();
+				});
+				push_yield();
+				if (timed)
+				{
+					return false;
+				}
+				cancel_delay_trig();
+			}
+			else if (tm < 0)
+			{
+				push_yield();
+			}
+			else
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/*!
+	@brief 尝试等待触发消息
+	*/
+	bool try_wait_trig_sign(int id);
 private:
 	template <typename... Args>
-	static bool _timed_wait_ignore_trig(my_actor* const host, int tm, actor_trig_handle<Args...>& ath, ignore_msg<Args>&... outs)
+	__yield_interrupt static bool _timed_wait_ignore_trig(my_actor* const host, int tm, actor_trig_handle<Args...>& ath, ignore_msg<Args>&... outs)
 	{
 		return host->timed_wait_trig(tm, ath, outs...);
 	}
@@ -7257,7 +7357,7 @@ private:
 			if (tm >= 0)
 			{
 				bool timed = false;
-				delay_trig(tm, [this, &timed, &th]
+				delay_trig(tm, [&timed, &th]
 				{
 					timed = true;
 					th();
@@ -7431,7 +7531,7 @@ public:
 			if (tm >= 0)
 			{
 				bool timed = false;
-				delay_trig(tm, [this, &timed, &th]
+				delay_trig(tm, [&timed, &th]
 				{
 					timed = true;
 					th();
@@ -8293,6 +8393,16 @@ public:
 	void notify_resume(std::function<void()>&& h);
 
 	/*!
+	@brief 触发通知，0 <= id < 32,64
+	*/
+	void notify_trig_sign(int id);
+
+	/*!
+	@brief 重置触发标记
+	*/
+	void reset_trig_sign(int id);
+
+	/*!
 	@brief 切换挂起/非挂起状态
 	*/
 	void switch_pause_play();
@@ -8527,6 +8637,8 @@ private:
 	size_t _childSuspendResumeCount;///<子Actor挂起/恢复计数
 	size_t _returnCode;///<退出码
 	size_t _usingStackSize;///<栈消耗
+	size_t _trigSignMask;///<触发消息标记
+	size_t _waitingTrigMask;///<等待触发消息标记
 	long long _timerStateTime;///<当前定时时间
 	long long _timerStateStampBegin;///<定时起始时间
 	long long _timerStateStampEnd;///<定时结束时间
@@ -8561,6 +8673,7 @@ private:
 	bool _notifyQuited : 1;///<当前Actor被锁定后，收到退出消息
 	bool _checkStack : 1;///<是否检测栈空间
 	bool _holdedSuspendSign : 1;///<挂起恢复操作没挂起标记
+	bool _waitingQuit : 1;///<等待退出标记
 #ifdef __linux__
 	bool _sigsegvSign : 1;///<sigsegv信号检测栈标记
 #endif
