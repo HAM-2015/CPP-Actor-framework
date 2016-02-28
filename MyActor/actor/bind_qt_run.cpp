@@ -3,10 +3,14 @@
 #ifdef ENABLE_QT_UI
 
 #ifdef ENABLE_QT_ACTOR
+
+#define QT_UI_TLS_INDEX 1
+
 bind_qt_run_base::ui_tls::ui_tls()
 :_uiStack(64)
 {
 	_count = 0;
+	memset(_tlsBuff, 0, sizeof(_tlsBuff));
 }
 
 bind_qt_run_base::ui_tls::~ui_tls()
@@ -16,21 +20,40 @@ bind_qt_run_base::ui_tls::~ui_tls()
 
 void bind_qt_run_base::ui_tls::init()
 {
-	ui_tls* uiTls = (ui_tls*)_tls.get_space();
-	if (!uiTls)
+	void** const tlsBuff = io_engine::getTlsValueBuff();
+	if (tlsBuff)
 	{
-		uiTls = new ui_tls();
-		_tls.set_space((void**)uiTls);
+		ui_tls* uiTls = (ui_tls*)tlsBuff[QT_UI_TLS_INDEX];
+		if (!uiTls)
+		{//ios线程中创建的UI
+			uiTls = new ui_tls();
+		}
+		uiTls->_count++;
 	}
-	uiTls->_count++;
+	else
+	{
+		ui_tls* uiTls = new ui_tls();
+		uiTls->_count++;
+		uiTls->_tlsBuff[QT_UI_TLS_INDEX] = uiTls;
+		io_engine::setTlsBuff(uiTls->_tlsBuff);
+	}
 }
 
 void bind_qt_run_base::ui_tls::reset()
 {
-	ui_tls* uiTls = (ui_tls*)_tls.get_space();
-	if (uiTls && 0 == --uiTls->_count)
+	void** const tlsBuff = io_engine::getTlsValueBuff();
+	assert(tlsBuff);
+	ui_tls* uiTls = (ui_tls*)tlsBuff[QT_UI_TLS_INDEX];
+	if (0 == --uiTls->_count)
 	{
-		_tls.set_space(NULL);
+		if (tlsBuff == uiTls->_tlsBuff)
+		{
+			io_engine::setTlsBuff(NULL);
+		}
+		else
+		{//ios线程中创建的UI
+			tlsBuff[QT_UI_TLS_INDEX] = NULL;
+		}
 		delete uiTls;
 	}
 }
@@ -38,7 +61,7 @@ void bind_qt_run_base::ui_tls::reset()
 bind_qt_run_base::ui_tls* bind_qt_run_base::ui_tls::push_stack(bind_qt_run_base* s)
 {
 	assert(s);
-	ui_tls* uiTls = (ui_tls*)_tls.get_space();
+	ui_tls* uiTls = (ui_tls*)io_engine::getTlsValue(QT_UI_TLS_INDEX);
 	assert(uiTls);
 	uiTls->_uiStack.push_front(s);
 	return uiTls;
@@ -46,12 +69,12 @@ bind_qt_run_base::ui_tls* bind_qt_run_base::ui_tls::push_stack(bind_qt_run_base*
 
 bind_qt_run_base* bind_qt_run_base::ui_tls::pop_stack()
 {
-	return pop_stack((ui_tls*)_tls.get_space());
+	return pop_stack((ui_tls*)io_engine::getTlsValue(QT_UI_TLS_INDEX));
 }
 
 bind_qt_run_base* bind_qt_run_base::ui_tls::pop_stack(ui_tls* uiTls)
 {
-	assert(uiTls && uiTls == (ui_tls*)_tls.get_space());
+	assert(uiTls && uiTls == (ui_tls*)io_engine::getTlsValue(QT_UI_TLS_INDEX));
 	assert(!uiTls->_uiStack.empty());
 	bind_qt_run_base* r = uiTls->_uiStack.front();
 	uiTls->_uiStack.pop_front();
@@ -60,7 +83,7 @@ bind_qt_run_base* bind_qt_run_base::ui_tls::pop_stack(ui_tls* uiTls)
 
 bool bind_qt_run_base::ui_tls::running_in_this_thread(bind_qt_run_base* s)
 {
-	ui_tls* uiTls = (ui_tls*)_tls.get_space();
+	ui_tls* uiTls = (ui_tls*)io_engine::getTlsValue(QT_UI_TLS_INDEX);
 	if (uiTls)
 	{
 		for (bind_qt_run_base* const ele : uiTls->_uiStack)
@@ -74,7 +97,6 @@ bool bind_qt_run_base::ui_tls::running_in_this_thread(bind_qt_run_base* s)
 	return false;
 }
 
-tls_space bind_qt_run_base::ui_tls::_tls;
 #endif
 
 //////////////////////////////////////////////////////////////////////////

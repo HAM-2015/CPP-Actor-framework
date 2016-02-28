@@ -107,16 +107,12 @@ void io_engine::_run(size_t threadNum, sched policy)
 					char actorExtraStack[16 kB];
 					my_actor::install_sigsegv(actorExtraStack, sizeof(actorExtraStack));
 #endif
-#ifdef WIN32
-					ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH);
-#endif
+					context_yield::convert_thread_to_fiber();
 					void* tlsBuff[64] = { 0 };
 					_tls.set_space(tlsBuff);
 					_runCount += _ios.run();
 					_tls.set_space(NULL);
-#ifdef WIN32
-					ConvertFiberToThread();
-#endif
+					context_yield::convert_fiber_to_thread();
 #ifdef __linux__
 					my_actor::deinstall_sigsegv();
 #endif
@@ -274,6 +270,11 @@ const std::set<boost::thread::id>& io_engine::threadsID()
 io_engine::operator boost::asio::io_service&() const
 {
 	return (boost::asio::io_service&)_ios;
+}
+
+void io_engine::setTlsBuff(void** buf)
+{
+	_tls.set_space(buf);
 }
 
 void* io_engine::getTlsValue(int i)

@@ -14,7 +14,49 @@ namespace context_yield
 		void* _stackBottom;
 	};
 
-	void adjust_stack(context_yield::coro_info* info)
+	struct init_main_fiber 
+	{
+		init_main_fiber()
+		{
+			convert_thread_to_fiber();
+		}
+
+		~init_main_fiber()
+		{
+			convert_fiber_to_thread();
+		}
+	} s_initMainFiber;
+
+	bool is_thread_a_fiber()
+	{
+#if _WIN32_WINNT >= 0x0600
+		return TRUE == IsThreadAFiber();
+#else//#elif _WIN32_WINNT == 0x0501
+		return 0x1E00 != (size_t)GetCurrentFiber();
+#endif
+	}
+
+	void convert_thread_to_fiber()
+	{
+		if (!is_thread_a_fiber())
+		{
+#if _WIN32_WINNT >= 0x0502
+			ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH);
+#else//#elif _WIN32_WINNT == 0x0501
+			ConvertThreadToFiber(NULL);
+#endif
+		}
+	}
+
+	void convert_fiber_to_thread()
+	{
+		if (is_thread_a_fiber())
+		{
+			ConvertFiberToThread();
+		}
+	}
+
+	void adjust_stack(context_yield::context_info* info)
 	{
 		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 		char* const sp = (char*)info->stackTop - 2 * PAGE_SIZE;
@@ -22,19 +64,23 @@ namespace context_yield
 		VirtualFree(sb, (size_t)sp - (size_t)sb, MEM_DECOMMIT);
 	}
 
-	context_yield::coro_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
+	context_yield::context_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
 	{
 		size_t allocSize = MEM_ALIGN(stackSize + STACK_RESERVED_SPACE_SIZE, STACK_BLOCK_SIZE);
-		context_yield::coro_info* info = new context_yield::coro_info;
+		context_yield::context_info* info = new context_yield::context_info;
 		info->stackSize = stackSize;
 		info->reserveSize = allocSize - info->stackSize;
 		struct local_ref
 		{
 			context_yield::context_handler handler;
-			context_yield::coro_info* info;
+			context_yield::context_info* info;
 			void* p;
 		} ref = { handler, info, p };
+#if _WIN32_WINNT >= 0x0502
 		info->obj = CreateFiberEx(0, allocSize, FIBER_FLAG_FLOAT_SWITCH, [](void* param)
+#else//#elif _WIN32_WINNT == 0x0501
+		info->obj = CreateFiber(allocSize, [](void* param)
+#endif
 		{
 			local_ref* ref = (local_ref*)param;
 			assert((size_t)get_sp() > (size_t)ref->info->stackTop - PAGE_SIZE + 256);
@@ -51,24 +97,24 @@ namespace context_yield
 		return info;
 	}
 
-	void push_yield(context_yield::coro_info* info)
+	void push_yield(context_yield::context_info* info)
 	{
 		SwitchToFiber(info->nc);
 	}
 
-	void pull_yield(context_yield::coro_info* info)
+	void pull_yield(context_yield::context_info* info)
 	{
 		info->nc = GetCurrentFiber();
 		SwitchToFiber(info->obj);
 	}
 
-	void delete_context(context_yield::coro_info* info)
+	void delete_context(context_yield::context_info* info)
 	{
 		DeleteFiber(info->obj);
 		delete info;
 	}
 
-	void decommit_context(context_yield::coro_info* info)
+	void decommit_context(context_yield::context_info* info)
 	{
 		adjust_stack(info);
 	}
@@ -81,7 +127,11 @@ namespace context_yield
 		void* jumpfcontext(void** ofc, void* nfc, void* vp, bool preserve_fpu);
 	}
 
-	context_yield::coro_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
+	bool is_thread_a_fiber() {return true; }
+	void convert_thread_to_fiber(){}
+	void convert_fiber_to_thread(){}
+
+	context_yield::context_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
 	{
 		size_t allocSize = MEM_ALIGN(stackSize + STACK_RESERVED_SPACE_SIZE, STACK_BLOCK_SIZE);
 		void* stack = mmap(0, allocSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);//内存足够下可能失败，调整 /proc/sys/vm/max_map_count
@@ -89,7 +139,7 @@ namespace context_yield
 		{
 			throw size_t(allocSize);
 		}
-		context_yield::coro_info* info = new context_yield::coro_info;
+		context_yield::context_info* info = new context_yield::context_info;
 		info->stackTop = (char*)stack + allocSize;
 		info->stackSize = stackSize;
 		info->reserveSize = allocSize - info->stackSize;
@@ -98,7 +148,7 @@ namespace context_yield
 		struct local_ref
 		{
 			context_yield::context_handler handler;
-			context_yield::coro_info* info;
+			context_yield::context_info* info;
 			void* p;
 		} ref = { handler, info, p };
 		info->obj = makefcontext(info->stackTop, stackSize, [](void* param)
@@ -110,23 +160,23 @@ namespace context_yield
 		return info;
 	}
 
-	void push_yield(context_yield::coro_info* info)
+	void push_yield(context_yield::context_info* info)
 	{
 		jumpfcontext(&info->obj, info->nc, NULL, true);
 	}
 
-	void pull_yield(context_yield::coro_info* info)
+	void pull_yield(context_yield::context_info* info)
 	{
 		jumpfcontext(&info->nc, info->obj, NULL, true);
 	}
 
-	void delete_context(context_yield::coro_info* info)
+	void delete_context(context_yield::context_info* info)
 	{
 		munmap((char*)info->stackTop - info->stackSize - info->reserveSize, info->stackSize + info->reserveSize);
 		delete info;
 	}
 
-	void decommit_context(context_yield::coro_info* info)
+	void decommit_context(context_yield::context_info* info)
 	{
 		madvise((char*)info->stackTop - info->stackSize - info->reserveSize, info->stackSize + info->reserveSize, MADV_DONTNEED);
 	}

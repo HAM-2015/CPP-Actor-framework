@@ -24,14 +24,14 @@ public:
 	{
 		void operator()();
 
-		context_yield::coro_info* _coroInfo;
+		context_yield::context_info* _coroInfo;
 	};
 
 	struct coro_pull_interface
 	{
 		void operator()();
 
-		context_yield::coro_info* _coroInfo;
+		context_yield::context_info* _coroInfo;
 		coro_handler _currentHandler;
 		void* _param;
 		void* _space;
@@ -59,7 +59,7 @@ public:
 	static coro_pull_interface* getContext(size_t size);
 	static void recovery(coro_pull_interface* coro);
 private:
-	static void contextHandler(context_yield::coro_info* info, void* param);
+	static void contextHandler(context_yield::context_info* info, void* param);
 	void clearThread();
 private:
 	bool _exitSign;

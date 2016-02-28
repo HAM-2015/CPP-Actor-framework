@@ -10,24 +10,23 @@
 typedef ContextPool_::coro_push_interface actor_push_type;
 typedef ContextPool_::coro_pull_interface actor_pull_type;
 
-#ifdef WIN32
-#ifdef CHECK_SELF
-#ifndef ENABLE_TLS_CHECK_SELF
-msg_map<void*, my_actor*> s_stackLine(100000);
-std::mutex s_stackLineMutex;
-struct initStackLine
-{
-	initStackLine()
-	{
-		s_stackLine.insert(make_pair((void*)NULL, (my_actor*)NULL));
-		s_stackLine.insert(make_pair((void*)-1, (my_actor*)NULL));
-	}
-} s_initStackLine;
-#endif
-#endif
-#endif
-
 #define ACTOR_TLS_INDEX 0
+#if (WIN32 && (defined CHECK_SELF) && (_WIN32_WINNT >= 0x0502))
+struct initActorFlsIndex
+{
+	initActorFlsIndex()
+	{
+		_actorFlsIndex = FlsAlloc(NULL);
+	}
+
+	~initActorFlsIndex()
+	{
+		FlsFree(_actorFlsIndex);
+	}
+
+	DWORD _actorFlsIndex;
+} s_actorFlsIndex;
+#endif
 
 std::atomic<my_actor::id> s_actorIDCount(0);//ID计数
 std::shared_ptr<shared_obj_pool<bool>> s_sharedBoolPool(create_shared_pool_mt<bool, std::mutex>(100000));
@@ -1441,7 +1440,7 @@ public:
 	}
 
 #ifdef WIN32
-	static size_t clean_size(context_yield::coro_info* const info)
+	static size_t clean_size(context_yield::context_info* const info)
 	{
 		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 		size_t rangeA = 0;
@@ -1469,7 +1468,7 @@ public:
 
 	void check_stack()
 	{
-		context_yield::coro_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
+		context_yield::context_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
 		const size_t cleanSize = clean_size(info);
 		_actor._usingStackSize = std::max(_actor._usingStackSize, info->stackSize + info->reserveSize - cleanSize);
 		//记录本次实际消耗的栈空间
@@ -1486,6 +1485,9 @@ public:
 #ifndef _MSC_VER
 	void operator ()(actor_push_type& actorPush)
 	{
+#if ((defined CHECK_SELF) && (_WIN32_WINNT >= 0x0502))
+		FlsSetValue(s_actorFlsIndex._actorFlsIndex, &_actor);
+#endif
 		actor_handler(actorPush);
 		if (_actor._checkStack)
 		{
@@ -1499,10 +1501,16 @@ public:
 		{
 			exit_notify();
 		}
+#if ((defined CHECK_SELF) && (_WIN32_WINNT >= 0x0502))
+		FlsSetValue(s_actorFlsIndex._actorFlsIndex, NULL);
+#endif
 	}
 #else
 	void operator ()(actor_push_type& actorPush)
 	{
+#if ((defined CHECK_SELF) && (_WIN32_WINNT >= 0x0502))
+		FlsSetValue(s_actorFlsIndex._actorFlsIndex, &_actor);
+#endif
 		__try
 		{
 			actor_handler(actorPush);			
@@ -1523,11 +1531,14 @@ public:
 		{
 			exit(100);
 		}
+#if ((defined CHECK_SELF) && (_WIN32_WINNT >= 0x0502))
+		FlsSetValue(s_actorFlsIndex._actorFlsIndex, NULL);
+#endif
 	}
 
 	DWORD seh_exception_handler(DWORD ecd, _EXCEPTION_POINTERS* eInfo)
 	{
-		context_yield::coro_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
+		context_yield::context_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
 		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 #ifdef _WIN64
 		char* const sp = (char*)((size_t)eInfo->ContextRecord->Rsp & (0 - PAGE_SIZE));
@@ -1583,7 +1594,7 @@ public:
 	static size_t none_size(my_actor* self)
 	{
 		unsigned char mvec[256];
-		context_yield::coro_info* const info = ((actor_pull_type*)self->_actorPull)->_coroInfo;
+		context_yield::context_info* const info = ((actor_pull_type*)self->_actorPull)->_coroInfo;
 		const size_t totalStackSize = info->stackSize + info->reserveSize;
 		char* const sb = (char*)info->stackTop - totalStackSize;
 		bool ok = 0 == mincore(sb, totalStackSize, mvec);
@@ -1617,7 +1628,7 @@ public:
 	}
 #pragma GCC pop_options
 
-	static size_t clean_size(context_yield::coro_info* const info)
+	static size_t clean_size(context_yield::context_info* const info)
 	{
 		unsigned char mvec[256];
 		const size_t totalStackSize = info->stackSize + info->reserveSize;
@@ -1636,7 +1647,7 @@ public:
 
 	void check_stack()
 	{
-		context_yield::coro_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
+		context_yield::context_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
 		const size_t cleanSize = clean_size(info);
 		_actor._usingStackSize = std::max(_actor._usingStackSize, info->stackSize + info->reserveSize - cleanSize);
 		//记录本次实际消耗的栈空间
@@ -1671,7 +1682,7 @@ public:
 		my_actor* self = my_actor::self_actor();
 		if (self)
 		{
-			context_yield::coro_info* const info = ((actor_pull_type*)self->_actorPull)->_coroInfo;
+			context_yield::context_info* const info = ((actor_pull_type*)self->_actorPull)->_coroInfo;
 			char* const violationAddr = (char*)((size_t)fault_address & (0 - PAGE_SIZE));
 			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 			if (violationAddr >= sb && violationAddr < info->stackTop)
@@ -1823,16 +1834,6 @@ my_actor::~my_actor()
 	assert(_atBeginQuitRegistExecutor.empty());
 	assert(_quitCallback.empty());
 	assert(_childActorList.empty());
-#ifdef WIN32
-#ifdef CHECK_SELF
-#ifndef ENABLE_TLS_CHECK_SELF
-	s_stackLineMutex.lock();
-	s_stackLine.erase(_btIt);
-	s_stackLine.erase(_topIt);
-	s_stackLineMutex.unlock();
-#endif
-#endif
-#endif
 
 #ifdef PRINT_ACTOR_STACK
 	if (_checkStackFree || _checkStack || _usingStackSize > _stackSize)
@@ -1865,17 +1866,6 @@ actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& main
 	newActor->_createStack = std::shared_ptr<list<stack_line_info>>(new list<stack_line_info>(get_stack_list(8, 1)));
 #endif
 
-#ifdef WIN32
-#ifdef CHECK_SELF
-#ifndef ENABLE_TLS_CHECK_SELF
-	context_yield::coro_info* const info = pull->_coroInfo;
-	s_stackLineMutex.lock();
-	newActor->_topIt = s_stackLine.insert(make_pair((char*)info->stackTop-1, (my_actor*)NULL)).first;
-	newActor->_btIt = s_stackLine.insert(newActor->_topIt, make_pair((char*)info->stackTop - info->stackSize - info->reserveSize, newActor.get()));
-	s_stackLineMutex.unlock();
-#endif
-#endif
-#endif
 	pull->_param = newActor.get();
 	pull->_currentHandler = [](actor_push_type& push, void* p)
 	{
@@ -1923,17 +1913,6 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 	newActor->_createStack = std::shared_ptr<list<stack_line_info>>(new list<stack_line_info>(get_stack_list(8, 1)));
 #endif
 
-#ifdef WIN32
-#ifdef CHECK_SELF
-#ifndef ENABLE_TLS_CHECK_SELF
-	context_yield::coro_info* const info = pull->_coroInfo;
-	s_stackLineMutex.lock();
-	newActor->_topIt = s_stackLine.insert(make_pair((char*)info->stackTop-1, (my_actor*)NULL)).first;
-	newActor->_btIt = s_stackLine.insert(newActor->_topIt, make_pair((char*)info->stackTop - info->stackSize - info->reserveSize, newActor.get()));
-	s_stackLineMutex.unlock();
-#endif
-#endif
-#endif
 	pull->_param = newActor.get();
 	pull->_currentHandler = [](actor_push_type& push, void* p)
 	{
@@ -2494,13 +2473,13 @@ size_t my_actor::using_stack_size()
 
 size_t my_actor::stack_size()
 {
-	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	return info->stackSize;
 }
 
 size_t my_actor::stack_total_size()
 {
-	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	return info->stackSize + info->reserveSize;
 }
 
@@ -2518,7 +2497,7 @@ void my_actor::enable_check_stack(bool decommit)
 		{
 			char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
 			begin_RUN_IN_THREAD_STACK(this);
-			context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+			context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 			char* const sm = (char*)info->stackTop - info->stackSize;
 			//分页加PAGE_GUARD标记
 			size_t l = PAGE_SIZE;
@@ -2543,7 +2522,7 @@ void my_actor::enable_check_stack(bool decommit)
 		{
 			char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
 			begin_RUN_IN_THREAD_STACK(this);
-			context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+			context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 			bool ok = 0 == mprotect(sb, sp - sb, PROT_NONE);
 			assert(ok);
@@ -2585,7 +2564,7 @@ void my_actor::assert_enter()
 	assert(_strand->running_in_this_thread());
 	assert(!_quited);
 	assert(_inActor);
-	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	assert((size_t)get_sp() >= (size_t)info->stackTop - info->stackSize - info->reserveSize + 1024);
 	check_self();
 #endif
@@ -3243,14 +3222,14 @@ void my_actor::run_one()
 
 void my_actor::pull_yield_tls()
 {
-#if ((defined CHECK_SELF) && (defined ENABLE_TLS_CHECK_SELF)) || __linux__
+#if (WIN32 && ((_WIN32_WINNT >= 0x0502) || !(defined CHECK_SELF)))
+	(*(actor_pull_type*)_actorPull)();
+#else//if (__linux__ || (WIN32 && (_WIN32_WINNT < 0x0502) && (defined CHECK_SELF)))
 	void** tlsBuff = io_engine::getTlsValueBuff();
 	void* old = tlsBuff[ACTOR_TLS_INDEX];
 	tlsBuff[ACTOR_TLS_INDEX] = this;
 	(*(actor_pull_type*)_actorPull)();
 	tlsBuff[ACTOR_TLS_INDEX] = old;
-#else
-	(*(actor_pull_type*)_actorPull)();
 #endif
 }
 
@@ -3467,35 +3446,16 @@ void my_actor::check_stack()
 
 my_actor* my_actor::self_actor()
 {
-#ifdef WIN32
-#ifdef CHECK_SELF
-#ifdef ENABLE_TLS_CHECK_SELF
+#if (WIN32 && (defined CHECK_SELF) && (_WIN32_WINNT >= 0x0502))
+	return (my_actor*)FlsGetValue(s_actorFlsIndex._actorFlsIndex);
+#elif (__linux__ || (WIN32 && (defined CHECK_SELF)))
 	void** buff = io_engine::getTlsValueBuff();
 	if (buff)
 	{
 		return (my_actor*)buff[ACTOR_TLS_INDEX];
 	}
-	return NULL;
-#else
-	std::lock_guard<std::mutex> lg(s_stackLineMutex);
-	auto eit = s_stackLine.insert(make_pair(get_sp(), (my_actor*)NULL));
-	if (eit.second)
-	{
-		s_stackLine.erase(eit.first--);
-		assert(eit.first != s_stackLine.end());
-		return eit.first->second;
-	}
-#endif
 #endif
 	return NULL;
-#elif __linux__
-	void** buff = io_engine::getTlsValueBuff();
-	if (buff)
-	{
-		return (my_actor*)buff[ACTOR_TLS_INDEX];
-	}
-	return NULL;
-#endif
 }
 
 void my_actor::check_self()
@@ -3511,7 +3471,7 @@ my_actor::stack_info my_actor::self_stack()
 {
 	assert_enter();
 	void* const sp = get_sp();
-	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	return { info->stackTop,
 		sp, info->stackSize,
 		(size_t)info->stackTop - (size_t)sp,
@@ -3523,7 +3483,7 @@ my_actor::stack_info my_actor::self_stack()
 size_t my_actor::stack_idle_space()
 {
 	assert_enter();
-	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	return info->stackSize + info->reserveSize - ((size_t)info->stackTop - (size_t)get_sp());
 }
 
@@ -3531,7 +3491,7 @@ size_t my_actor::clean_stack_size()
 {
 	size_t s = 0;
 	begin_RUN_IN_THREAD_STACK(this);
-	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	s = actor_run::clean_size(info);
 	end_RUN_IN_THREAD_STACK();
 	return s;
@@ -3558,7 +3518,7 @@ void my_actor::stack_decommit(bool calcUsingStack)
 {
 	char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
 	begin_RUN_IN_THREAD_STACK(this);
-	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 #ifdef WIN32
 	if (sp > sb)
@@ -3605,7 +3565,7 @@ void my_actor::none_stack_decommit(bool calcUsingStack)
 #elif __linux__
 	char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
 	begin_RUN_IN_THREAD_STACK(this);
-	context_yield::coro_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 	if (sp > sb)
 	{

@@ -132,6 +132,11 @@ public:
 	operator boost::asio::io_service& () const;
 
 	/*!
+	@brief 在非ios线程中初始化一个tls空间
+	*/
+	static void setTlsBuff(void** buf);
+
+	/*!
 	@brief 获取tls值
 	@param 0 <= i < 64
 	*/

@@ -8196,7 +8196,6 @@ public:
 public:
 	/*!
 	@brief 获取当前代码运行在哪个Actor下
-	@return 不运行在Actor下或没启动 CHECK_SELF 返回NULL
 	*/
 	static my_actor* self_actor();
 
@@ -8652,14 +8651,6 @@ private:
 	msg_list_shared_alloc<std::function<void()> > _quitCallback;///<Actor结束后的回调函数
 	msg_list_shared_alloc<std::function<void()> > _atBeginQuitRegistExecutor;///<Actor准备退出时调用的函数，后注册的先执行
 	msg_list_shared_alloc<actor_handle> _childActorList;///<子Actor集合，子Actor都退出后，父Actor才能退出
-#ifdef WIN32
-#ifdef CHECK_SELF
-#ifndef ENABLE_TLS_CHECK_SELF
-	msg_map<void*, my_actor*>::iterator _btIt;
-	msg_map<void*, my_actor*>::iterator _topIt;
-#endif
-#endif
-#endif
 	int _timerStateCount;///<定时器计数
 	bool _timerStateSuspend : 1;///<定时器是否挂起
 	bool _timerStateCompleted : 1;///<定时器是否完成

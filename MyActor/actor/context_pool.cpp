@@ -1,9 +1,6 @@
 #include "context_pool.h"
 #include "scattered.h"
 #include "actor_framework.h"
-#ifdef WIN32
-#include <Windows.h>
-#endif
 
 //清理最小周期(秒)
 #define CONTEXT_MIN_CLEAR_CYCLE		30
@@ -54,7 +51,7 @@ ContextPool_::~ContextPool_()
 		{
 			coro_pull_interface* const pull = _contextPool[i]._pool.back();
 			_contextPool[i]._pool.pop_back();
-			context_yield::coro_info* const info = pull->_coroInfo;
+			context_yield::context_info* const info = pull->_coroInfo;
 			_stackCount--;
 			_stackTotalSize -= info->stackSize + info->reserveSize;
 			context_yield::delete_context(info);
@@ -64,7 +61,7 @@ ContextPool_::~ContextPool_()
 		{
 			coro_pull_interface* const pull = _contextPool[i]._decommitPool.back();
 			_contextPool[i]._decommitPool.pop_back();
-			context_yield::coro_info* const info = pull->_coroInfo;
+			context_yield::context_info* const info = pull->_coroInfo;
 			_stackCount--;
 			_stackTotalSize -= info->stackSize + info->reserveSize;
 			context_yield::delete_context(info);
@@ -78,17 +75,8 @@ ContextPool_::~ContextPool_()
 ContextPool_::coro_pull_interface* ContextPool_::getContext(size_t size)
 {
 	assert(size && size % 4096 == 0 && size <= 1024 * 1024);
+	assert(context_yield::is_thread_a_fiber());
 	size = std::max(size, (size_t)CORO_CONTEXT_STATE_SPACE);
-#ifdef WIN32
-#if _WIN32_WINNT >= 0x0600
-		if (!IsThreadAFiber())
-		{
-			ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH);
-		}
-#else//#elif _WIN32_WINNT >= 0x0501
-		ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH);
-#endif
-#endif
 	do
 	{
 		{
@@ -135,7 +123,7 @@ void ContextPool_::recovery(coro_pull_interface* coro)
 	pool._pool.push_back(coro);
 }
 
-void ContextPool_::contextHandler(context_yield::coro_info* info, void* param)
+void ContextPool_::contextHandler(context_yield::context_info* info, void* param)
 {
 	coro_pull_interface* pull = (coro_pull_interface*)param;
 #ifdef _MSC_VER
@@ -223,7 +211,7 @@ void ContextPool_::clearThread()
 					coro_pull_interface* const pull = contextPool._decommitPool.front();
 					contextPool._decommitPool.pop_front();
 					contextPool._mutex.unlock();
-					context_yield::coro_info* const info = pull->_coroInfo;
+					context_yield::context_info* const info = pull->_coroInfo;
 					freeCount++;
 					_stackCount--;
 					_stackTotalSize -= info->stackSize + info->reserveSize;

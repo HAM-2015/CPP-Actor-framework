@@ -134,8 +134,8 @@ protected:
 		static void reset();
 
 		msg_list<bind_qt_run_base*, pool_alloc<mem_alloc2<> > > _uiStack;
+		void* _tlsBuff[64];
 		int _count;
-		static tls_space _tls;
 	};
 #endif
 

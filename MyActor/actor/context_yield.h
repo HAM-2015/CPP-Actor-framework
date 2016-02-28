@@ -4,7 +4,7 @@
 
 namespace context_yield
 {
-	struct coro_info
+	struct context_info
 	{
 		void* obj = 0;
 		void* stackTop = 0;
@@ -13,12 +13,15 @@ namespace context_yield
 		size_t reserveSize = 0;
 	};
 
-	typedef void(*context_handler)(coro_info* info, void* p);
-	coro_info* make_context(size_t stackSize, context_handler handler, void* p);
-	void push_yield(coro_info* info);
-	void pull_yield(coro_info* info);
-	void delete_context(coro_info* info);
-	void decommit_context(coro_info* info);
+	bool is_thread_a_fiber();
+	void convert_thread_to_fiber();
+	void convert_fiber_to_thread();
+	typedef void(*context_handler)(context_info* info, void* p);
+	context_info* make_context(size_t stackSize, context_handler handler, void* p);
+	void push_yield(context_info* info);
+	void pull_yield(context_info* info);
+	void delete_context(context_info* info);
+	void decommit_context(context_info* info);
 }
 
 #endif
