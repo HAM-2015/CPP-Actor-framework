@@ -627,7 +627,23 @@ struct init_mod
 
 	boost::thread* _thread;
 	boost::asio::io_service::work* _stackLogWork;
-} _init_ms;
+};
+init_mod* _init_ms = NULL;
+
+void install_check_stack()
+{
+	if (!_init_ms)
+	{
+		_init_ms = new init_mod();
+	}
+}
+
+void uninstall_check_stack()
+{
+	delete _init_ms;
+	_init_ms = NULL;
+}
+
 #elif __linux__
 
 list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool module, bool symbolName)
@@ -661,7 +677,26 @@ struct init_mod
 
 	boost:thread* _thread;
 	boost::asio::io_service::work* _stackLogWork;
-} _init_gcc;
+};
+
+init_mod* _init_gcc = NULL;
+
+void install_check_stack()
+{
+	if (!_init_gcc)
+	{
+		_init_gcc = new init_mod();
+	}
+}
+
+void uninstall_check_stack()
+{
+	delete _init_gcc;
+	_init_gcc = NULL;
+}
 
 #endif
+#else
+void install_check_stack(){}
+void uninstall_check_stack(){}
 #endif

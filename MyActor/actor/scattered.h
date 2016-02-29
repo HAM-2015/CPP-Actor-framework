@@ -229,11 +229,17 @@ list<stack_line_info> get_stack_list(size_t maxDepth = 32, size_t offset = 0, bo
 */
 void stack_overflow_format(int size, std::shared_ptr<list<stack_line_info>> createStack);
 
+void install_check_stack();
+void uninstall_check_stack();
+
 #else
 
 //记录当前Actor入口信息
 #define ACTOR_POSITION(__host__)
 #define SELF_POSITION
+
+void install_check_stack();
+void uninstall_check_stack();
 
 #endif
 

@@ -39,6 +39,9 @@ public:
 #if (_DEBUG || DEBUG)
 		size_t _spaceSize;
 #endif
+#if (WIN32 && (defined CHECK_SELF) && (_WIN32_WINNT >= 0x0502))
+		static DWORD _actorFlsIndex;
+#endif
 	};
 private:
 	struct context_pool_pck
@@ -46,11 +49,11 @@ private:
 		typedef msg_list_shared_alloc<coro_pull_interface*, pool_alloc_mt<void, mem_alloc_mt2<void, null_mutex> > > pool_queue;
 
 		context_pool_pck()
-		:_pool(_alloc), _decommitPool(_alloc){}
+		:_pool(*_alloc), _decommitPool(*_alloc){}
 		pool_queue _pool;
 		pool_queue _decommitPool;
-		static std::mutex _mutex;
-		static pool_queue::shared_node_alloc _alloc;
+		static std::mutex* _mutex;
+		static pool_queue::shared_node_alloc* _alloc;
 	};
 public:
 	ContextPool_();
@@ -58,6 +61,8 @@ public:
 public:
 	static coro_pull_interface* getContext(size_t size);
 	static void recovery(coro_pull_interface* coro);
+	static void install();
+	static void uninstall();
 private:
 	static void contextHandler(context_yield::context_info* info, void* param);
 	void clearThread();
@@ -70,6 +75,7 @@ private:
 	std::atomic<int> _stackCount;
 	std::condition_variable _clearVar;
 	std::atomic<size_t> _stackTotalSize;
+	static ContextPool_* _fiberPool;
 };
 
 #endif

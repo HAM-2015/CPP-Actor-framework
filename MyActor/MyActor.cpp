@@ -676,6 +676,7 @@ void auto_stack_test()
 
 int main(int argc, char *argv[])
 {
+	init_my_actor();
 	auto_stack_test();
 	trace("\n");
 	trig_test();

@@ -2,6 +2,9 @@
 #include "async_buffer.h"
 #include "sync_msg.h"
 #include "context_pool.h"
+#if (defined WIN32 && defined __GNUG__)
+#include <fibersapi.h>
+#endif
 #ifdef __linux__
 #include "sigsegv.h"
 #include <sys/mman.h>
@@ -10,54 +13,123 @@
 typedef ContextPool_::coro_push_interface actor_push_type;
 typedef ContextPool_::coro_pull_interface actor_pull_type;
 
-#define ACTOR_TLS_INDEX 0
-#if (WIN32 && (defined CHECK_SELF) && (_WIN32_WINNT >= 0x0502))
-struct initActorFlsIndex
-{
-	initActorFlsIndex()
-	{
-		_actorFlsIndex = FlsAlloc(NULL);
-	}
-
-	~initActorFlsIndex()
-	{
-		FlsFree(_actorFlsIndex);
-	}
-
-	DWORD _actorFlsIndex;
-} s_actorFlsIndex;
+DEBUG_OPERATION(static boost::thread::id s_installID);
+static bool s_inited = false;
+static bool s_isSelfInitFiber = false;
+#ifdef __linux__
+static std::mutex* s_sigsegvMutex = NULL;
+#endif
+#ifdef ENABLE_CHECK_LOST
+static mem_alloc_mt<CheckLost_>* s_checkLostObjAlloc = NULL;
+static mem_alloc_mt<CheckPumpLost_>* s_checkPumpLostObjAlloc = NULL;
+static mem_alloc_base* s_checkLostRefCountAlloc = NULL;
+static mem_alloc_base* s_checkPumpLostRefCountAlloc = NULL;
 #endif
 
-std::atomic<my_actor::id> s_actorIDCount(0);//ID计数
-std::shared_ptr<shared_obj_pool<bool>> s_sharedBoolPool(create_shared_pool_mt<bool, std::mutex>(100000));
-msg_list_shared_alloc<actor_handle>::shared_node_alloc my_actor::_childActorListAll(100000);
-msg_list_shared_alloc<std::function<void()> >::shared_node_alloc my_actor::_quitExitCallbackAll(100000);
-msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc my_actor::_suspendResumeQueueAll(100000);
-msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc my_actor::msg_pool_status::_msgTypeMapAll(100000);
-
-#ifdef ENABLE_CHECK_LOST
-mem_alloc_mt<CheckLost_> s_checkLostObjAlloc(100000);
-mem_alloc_mt<CheckPumpLost_> s_checkPumpLostObjAlloc(100000);
-mem_alloc_base* s_checkLostRefCountAlloc = NULL;
-mem_alloc_base* s_checkPumpLostRefCountAlloc = NULL;
-
-struct makeLostRefCountAlloc
+struct autoActorStackMng
 {
-	makeLostRefCountAlloc()
+	size_t get_stack_size(size_t key)
 	{
+		boost::shared_lock<boost::shared_mutex> sl(_mutex);
+		auto it = _table.find(key);
+		if (_table.end() != it)
+		{
+			return it->second;
+		}
+		return 0;
+	}
+
+	void update_stack_size(size_t key, size_t ns)
+	{
+		boost::unique_lock<boost::shared_mutex> ul(_mutex);
+		_table[key] = ns;
+	}
+
+	map<size_t, size_t> _table;
+	boost::shared_mutex _mutex;
+};
+static autoActorStackMng* s_autoActorStackMng = NULL;
+shared_obj_pool<bool>* shared_bool::_sharedBoolPool = NULL;
+std::atomic<my_actor::id>* my_actor::_actorIDCount = NULL;
+msg_list_shared_alloc<actor_handle>::shared_node_alloc* my_actor::_childActorListAll = NULL;
+msg_list_shared_alloc<std::function<void()> >::shared_node_alloc* my_actor::_quitExitCallbackAll = NULL;
+msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc* my_actor::_suspendResumeQueueAll = NULL;
+msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc* my_actor::msg_pool_status::_msgTypeMapAll = NULL;
+
+void my_actor::install()
+{
+	if (!s_inited)
+	{
+		s_inited = true;
+		DEBUG_OPERATION(s_installID = boost::this_thread::get_id());
+		io_engine::install();
+		install_check_stack();
+		s_isSelfInitFiber = context_yield::convert_thread_to_fiber();
+		ContextPool_::install();
+#ifdef ENABLE_CHECK_LOST
 		auto& s_checkLostObjAlloc_ = s_checkLostObjAlloc;
 		auto& s_checkPumpLostObjAlloc_ = s_checkPumpLostObjAlloc;
-		s_checkLostRefCountAlloc = make_ref_count_alloc<CheckLost_, std::mutex>(100000, [&s_checkLostObjAlloc_](CheckLost_*){});
-		s_checkPumpLostRefCountAlloc = make_ref_count_alloc<CheckPumpLost_, std::mutex>(100000, [&s_checkPumpLostObjAlloc_](CheckPumpLost_*){});
-	}
-
-	~makeLostRefCountAlloc()
-	{
-		delete s_checkLostRefCountAlloc;
-		delete s_checkPumpLostRefCountAlloc;
-	}
-} s_makeLostRefCountAlloc;
+		s_checkLostObjAlloc_ = new mem_alloc_mt<CheckLost_>(100000);
+		s_checkPumpLostObjAlloc_ = new mem_alloc_mt<CheckPumpLost_>(100000);
+		s_checkLostRefCountAlloc = make_ref_count_alloc<CheckLost_, std::mutex>(100000, [s_checkLostObjAlloc_](CheckLost_*){});
+		s_checkPumpLostRefCountAlloc = make_ref_count_alloc<CheckPumpLost_, std::mutex>(100000, [s_checkPumpLostObjAlloc_](CheckPumpLost_*){});
 #endif
+		s_autoActorStackMng = new autoActorStackMng;
+#ifdef __linux__
+		s_sigsegvMutex = new std::mutex;
+#endif
+		shared_bool::_sharedBoolPool = create_shared_pool_mt<bool, std::mutex>(100000);
+		my_actor::_actorIDCount = new std::atomic<my_actor::id>(cpu_tick());
+		my_actor::_childActorListAll = new msg_list_shared_alloc<actor_handle>::shared_node_alloc(100000);
+		my_actor::_quitExitCallbackAll = new msg_list_shared_alloc<std::function<void()> >::shared_node_alloc(100000);
+		my_actor::_suspendResumeQueueAll = new msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc(100000);
+		my_actor::msg_pool_status::_msgTypeMapAll = new msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc(100000);
+	}
+}
+
+void my_actor::uninstall()
+{
+	if (s_inited)
+	{
+		s_inited = false;
+		assert(boost::this_thread::get_id() == s_installID);
+		delete shared_bool::_sharedBoolPool;
+		shared_bool::_sharedBoolPool = NULL;
+		delete my_actor::_actorIDCount;
+		my_actor::_actorIDCount = NULL;
+		delete my_actor::_childActorListAll;
+		my_actor::_childActorListAll = NULL;
+		delete my_actor::_quitExitCallbackAll;
+		my_actor::_quitExitCallbackAll = NULL;
+		delete my_actor::_suspendResumeQueueAll;
+		my_actor::_suspendResumeQueueAll = NULL;
+		delete my_actor::msg_pool_status::_msgTypeMapAll;
+		my_actor::msg_pool_status::_msgTypeMapAll = NULL;
+		delete s_autoActorStackMng;
+		s_autoActorStackMng = NULL;
+#ifdef __linux__
+		delete s_sigsegvMutex;
+		s_sigsegvMutex = NULL;
+#endif
+#ifdef ENABLE_CHECK_LOST
+		delete s_checkLostRefCountAlloc;
+		s_checkLostRefCountAlloc = NULL;
+		delete s_checkPumpLostRefCountAlloc;
+		s_checkPumpLostRefCountAlloc = NULL;
+		delete s_checkLostObjAlloc;
+		s_checkLostObjAlloc = NULL;
+		delete s_checkPumpLostObjAlloc;
+		s_checkPumpLostObjAlloc = NULL;
+#endif
+		ContextPool_::uninstall();
+		if (s_isSelfInitFiber)
+			context_yield::convert_fiber_to_thread();
+		uninstall_check_stack();
+		io_engine::uninstall();
+	}
+}
+
+#define ACTOR_TLS_INDEX 0
 //////////////////////////////////////////////////////////////////////////
 
 void shared_bool::reset()
@@ -110,36 +182,11 @@ shared_bool::shared_bool(shared_bool&& s)
 
 shared_bool shared_bool::new_(bool b)
 {
-	assert(s_sharedBoolPool);
-	shared_bool r(s_sharedBoolPool->pick());
+	assert(_sharedBoolPool);
+	shared_bool r(_sharedBoolPool->pick());
 	r = b;
 	return r;
 }
-
-//////////////////////////////////////////////////////////////////////////
-
-struct autoActorStackMng
-{
-	size_t get_stack_size(size_t key)
-	{
-		boost::shared_lock<boost::shared_mutex> sl(_mutex);
-		auto it = _table.find(key);
-		if (_table.end() != it)
-		{
-			return it->second;
-		}
-		return 0;
-	}
-
-	void update_stack_size(size_t key, size_t ns)
-	{
-		boost::unique_lock<boost::shared_mutex> ul(_mutex);
-		_table[key] = ns;
-	}
-
-	map<size_t, size_t> _table;
-	boost::shared_mutex _mutex;
-} s_autoActorStackMng;
 
 //////////////////////////////////////////////////////////////////////////
 #ifdef ENABLE_CHECK_LOST
@@ -1472,7 +1519,7 @@ public:
 		const size_t cleanSize = clean_size(info);
 		_actor._usingStackSize = std::max(_actor._usingStackSize, info->stackSize + info->reserveSize - cleanSize);
 		//记录本次实际消耗的栈空间
-		s_autoActorStackMng.update_stack_size(_actor._actorKey, _actor._usingStackSize);
+		s_autoActorStackMng->update_stack_size(_actor._actorKey, _actor._usingStackSize);
 		if (cleanSize < info->reserveSize - PAGE_SIZE)
 		{
 			//释放物理内存，保留地址空间
@@ -1485,9 +1532,6 @@ public:
 #ifndef _MSC_VER
 	void operator ()(actor_push_type& actorPush)
 	{
-#if ((defined CHECK_SELF) && (_WIN32_WINNT >= 0x0502))
-		FlsSetValue(s_actorFlsIndex._actorFlsIndex, &_actor);
-#endif
 		actor_handler(actorPush);
 		if (_actor._checkStack)
 		{
@@ -1501,16 +1545,10 @@ public:
 		{
 			exit_notify();
 		}
-#if ((defined CHECK_SELF) && (_WIN32_WINNT >= 0x0502))
-		FlsSetValue(s_actorFlsIndex._actorFlsIndex, NULL);
-#endif
 	}
 #else
 	void operator ()(actor_push_type& actorPush)
 	{
-#if ((defined CHECK_SELF) && (_WIN32_WINNT >= 0x0502))
-		FlsSetValue(s_actorFlsIndex._actorFlsIndex, &_actor);
-#endif
 		__try
 		{
 			actor_handler(actorPush);			
@@ -1531,9 +1569,6 @@ public:
 		{
 			exit(100);
 		}
-#if ((defined CHECK_SELF) && (_WIN32_WINNT >= 0x0502))
-		FlsSetValue(s_actorFlsIndex._actorFlsIndex, NULL);
-#endif
 	}
 
 	DWORD seh_exception_handler(DWORD ecd, _EXCEPTION_POINTERS* eInfo)
@@ -1651,7 +1686,7 @@ public:
 		const size_t cleanSize = clean_size(info);
 		_actor._usingStackSize = std::max(_actor._usingStackSize, info->stackSize + info->reserveSize - cleanSize);
 		//记录本次实际消耗的栈空间
-		s_autoActorStackMng.update_stack_size(_actor._actorKey, _actor._usingStackSize);
+		s_autoActorStackMng->update_stack_size(_actor._actorKey, _actor._usingStackSize);
 		if (cleanSize < info->reserveSize)
 		{
 			//释放物理内存，保留地址空间
@@ -1730,32 +1765,26 @@ public:
 
 	static void install_sigsegv(void* actorExtraStack, size_t size)
 	{
-		_mutex.lock();
+		s_sigsegvMutex->lock();
 		stackoverflow_install_handler(stackoverflow_handler, actorExtraStack, size);
 		sigsegv_install_handler(sigsegv_handler);
-		_mutex.unlock();
+		s_sigsegvMutex->unlock();
 	}
 
 	static void deinstall_sigsegv()
 	{
-		_mutex.lock();
+		s_sigsegvMutex->lock();
 		sigsegv_deinstall_handler();
 		stackoverflow_deinstall_handler();
-		_mutex.unlock();
+		s_sigsegvMutex->unlock();
 	}
 #endif
 
 private:
 	my_actor& _actor;
-#ifdef __linux__
-	static std::mutex _mutex;
-#endif
 };
 
 #ifdef __linux__
-
-std::mutex my_actor::actor_run::_mutex;
-
 void my_actor::install_sigsegv(void* actorExtraStack, size_t size)
 {
 	actor_run::install_sigsegv(actorExtraStack, size);
@@ -1770,10 +1799,10 @@ void my_actor::deinstall_sigsegv()
 //////////////////////////////////////////////////////////////////////////
 
 my_actor::my_actor()
-:_suspendResumeQueue(_suspendResumeQueueAll),
-_quitCallback(_quitExitCallbackAll),
-_atBeginQuitRegistExecutor(_quitExitCallbackAll),
-_childActorList(_childActorListAll)
+:_suspendResumeQueue(*_suspendResumeQueueAll),
+_quitCallback(*_quitExitCallbackAll),
+_atBeginQuitRegistExecutor(*_quitExitCallbackAll),
+_childActorList(*_childActorListAll)
 {
 	_actorPull = NULL;
 	_actorPush = NULL;
@@ -1797,7 +1826,7 @@ _childActorList(_childActorListAll)
 #ifdef __linux__
 	_sigsegvSign = false;
 #endif
-	_selfID = ++s_actorIDCount;
+	_selfID = ++(*_actorIDCount);
 	_actorKey = -1;
 	_lockQuit = 0;
 	_lockSuspend = 0;
@@ -1836,9 +1865,10 @@ my_actor::~my_actor()
 	assert(_childActorList.empty());
 
 #ifdef PRINT_ACTOR_STACK
-	if (_checkStackFree || _checkStack || _usingStackSize > _stackSize)
+	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	if (_checkStackFree || _checkStack || _usingStackSize > info->stackSize)
 	{
-		stack_overflow_format(_usingStackSize - _stackSize, _createStack);
+		stack_overflow_format(_usingStackSize - info->stackSize, _createStack);
 	}
 #endif
 }
@@ -1885,7 +1915,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 	{
 		if (IS_TRY_SIZE(nsize))
 		{
-			size_t lasts = s_autoActorStackMng.get_stack_size(wrapActor.key());
+			size_t lasts = s_autoActorStackMng->get_stack_size(wrapActor.key());
 			checkStack = !lasts;
 			pull = ContextPool_::getContext(lasts ? lasts : GET_TRY_SIZE(nsize));
 		}
@@ -1897,7 +1927,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 	}
 	else
 	{
-		size_t lasts = s_autoActorStackMng.get_stack_size(wrapActor.key());
+		size_t lasts = s_autoActorStackMng->get_stack_size(wrapActor.key());
 		checkStack = !lasts;
 		pull = ContextPool_::getContext(lasts ? lasts : DEFAULT_STACKSIZE);
 	}
@@ -3436,9 +3466,10 @@ void my_actor::resume_timer()
 void my_actor::check_stack()
 {
 #ifdef PRINT_ACTOR_STACK
-	if ((size_t)get_sp() < (size_t)_stackTop - _stackSize)
+	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	if ((size_t)get_sp() < (size_t)info->stackTop - info->stackSize)
 	{
-		stack_overflow_format((int)((size_t)get_sp() - (size_t)_stackTop - _stackSize), _createStack);
+		stack_overflow_format((int)((size_t)get_sp() - (size_t)info->stackTop - info->stackSize), _createStack);
 	}
 #endif
 	check_self();
@@ -3447,7 +3478,7 @@ void my_actor::check_stack()
 my_actor* my_actor::self_actor()
 {
 #if (WIN32 && (defined CHECK_SELF) && (_WIN32_WINNT >= 0x0502))
-	return (my_actor*)FlsGetValue(s_actorFlsIndex._actorFlsIndex);
+	return (my_actor*)FlsGetValue(ContextPool_::coro_pull_interface::_actorFlsIndex);
 #elif (__linux__ || (WIN32 && (defined CHECK_SELF)))
 	void** buff = io_engine::getTlsValueBuff();
 	if (buff)
@@ -3770,30 +3801,30 @@ void ActorFunc_::cancel_timer(my_actor* host)
 std::shared_ptr<CheckLost_> ActorFunc_::new_check_lost(const shared_strand& strand, actor_msg_handle_base* msgHandle)
 {
 	auto& s_checkLostObjAlloc_ = s_checkLostObjAlloc;
-	return std::shared_ptr<CheckLost_>(new(s_checkLostObjAlloc.allocate())CheckLost_(strand, msgHandle), [&s_checkLostObjAlloc_](CheckLost_* p)
+	return std::shared_ptr<CheckLost_>(new(s_checkLostObjAlloc->allocate())CheckLost_(strand, msgHandle), [s_checkLostObjAlloc_](CheckLost_* p)
 	{
 		p->~CheckLost_();
-		s_checkLostObjAlloc_.deallocate(p);
+		s_checkLostObjAlloc_->deallocate(p);
 	}, ref_count_alloc<void>(s_checkLostRefCountAlloc));
 }
 
 std::shared_ptr<CheckPumpLost_> ActorFunc_::new_check_pump_lost(const actor_handle& hostActor, MsgPoolBase_* pool)
 {
 	auto& s_checkPumpLostObjAlloc_ = s_checkPumpLostObjAlloc;
-	return std::shared_ptr<CheckPumpLost_>(new(s_checkPumpLostObjAlloc.allocate())CheckPumpLost_(hostActor, pool), [&s_checkPumpLostObjAlloc_](CheckPumpLost_* p)
+	return std::shared_ptr<CheckPumpLost_>(new(s_checkPumpLostObjAlloc->allocate())CheckPumpLost_(hostActor, pool), [s_checkPumpLostObjAlloc_](CheckPumpLost_* p)
 	{
 		p->~CheckPumpLost_();
-		s_checkPumpLostObjAlloc_.deallocate(p);
+		s_checkPumpLostObjAlloc_->deallocate(p);
 	}, ref_count_alloc<void>(s_checkPumpLostRefCountAlloc));
 }
 
 std::shared_ptr<CheckPumpLost_> ActorFunc_::new_check_pump_lost(actor_handle&& hostActor, MsgPoolBase_* pool)
 {
 	auto& s_checkPumpLostObjAlloc_ = s_checkPumpLostObjAlloc;
-	return std::shared_ptr<CheckPumpLost_>(new(s_checkPumpLostObjAlloc.allocate())CheckPumpLost_(std::move(hostActor), pool), [&s_checkPumpLostObjAlloc_](CheckPumpLost_* p)
+	return std::shared_ptr<CheckPumpLost_>(new(s_checkPumpLostObjAlloc->allocate())CheckPumpLost_(std::move(hostActor), pool), [s_checkPumpLostObjAlloc_](CheckPumpLost_* p)
 	{
 		p->~CheckPumpLost_();
-		s_checkPumpLostObjAlloc_.deallocate(p);
+		s_checkPumpLostObjAlloc_->deallocate(p);
 	}, ref_count_alloc<void>(s_checkPumpLostRefCountAlloc));
 }
 #endif

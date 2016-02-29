@@ -158,6 +158,16 @@ public:
 	@brief 获取tls变量空间
 	*/
 	static void** getTlsValueBuff();
+
+	/*!
+	@brief 初始化
+	*/
+	static void install();
+
+	/*!
+	@brief 释放
+	*/
+	static void uninstall();
 private:
 	void _run(size_t threadNum, sched policy);
 	void _stop();
@@ -181,7 +191,7 @@ private:
 	sched _policy;
 	std::vector<pthread_attr_t> _handleList;
 #endif
-	static tls_space _tls;
+	static tls_space* _tls;
 };
 
 #endif

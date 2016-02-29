@@ -29,14 +29,14 @@ using namespace std;
 
 #if (_DEBUG || DEBUG)
 /*!
-@brief 用于检测在Actor内调用的函数是否触发了强制退出
-*/
+	@brief 用于检测在Actor内调用的函数是否触发了强制退出
+	*/
 #define BEGIN_CHECK_FORCE_QUIT try {
 #define END_CHECK_FORCE_QUIT } catch (my_actor::force_quit_exception&) {assert(false);}
 
 /*!
-@brief 用于锁定actor不强制退出
-*/
+	@brief 用于锁定actor不强制退出
+	*/
 #define LOCK_QUIT(__self__) __self__->lock_quit(); try {
 #define UNLOCK_QUIT(__self__) } catch (...) { assert (false); } __self__->unlock_quit();
 
@@ -55,6 +55,11 @@ using namespace std;
 //包装actor_msg_handle, actor_trig_handle关闭事件
 #define wrap_close_msg_handle(__handle__) [&__handle__]{__handle__.close(); }
 
+//初始化my_actor框架
+#define init_my_actor()\
+	my_actor::install(); \
+	OUT_OF_SCOPE({ my_actor::uninstall(); });
+
 //////////////////////////////////////////////////////////////////////////
 
 template <typename... ARGS>
@@ -66,6 +71,7 @@ class MsgPoolBase_;
 
 struct shared_bool
 {
+	friend my_actor;
 	shared_bool();
 	shared_bool(const shared_bool& s);
 	shared_bool(shared_bool&& s);
@@ -80,6 +86,7 @@ struct shared_bool
 	static shared_bool new_(bool b = false);
 private:
 	std::shared_ptr<bool> _ptr;
+	static shared_obj_pool<bool>* _sharedBoolPool;
 };
 
 struct ActorFunc_
@@ -4599,7 +4606,7 @@ class my_actor
 		};
 
 		msg_pool_status()
-			:_msgTypeMap(_msgTypeMapAll) {}
+			:_msgTypeMap(*_msgTypeMapAll) {}
 
 		~msg_pool_status() {}
 
@@ -4716,7 +4723,7 @@ class my_actor
 		}
 
 		msg_map_shared_alloc<id_key, std::shared_ptr<pck_base> > _msgTypeMap;
-		static msg_map_shared_alloc<id_key, std::shared_ptr<pck_base> >::shared_node_alloc _msgTypeMapAll;
+		static msg_map_shared_alloc<id_key, std::shared_ptr<pck_base> >::shared_node_alloc* _msgTypeMapAll;
 	};
 
 	template <typename DST, typename ARG>
@@ -8574,6 +8581,16 @@ public:
 	}
 
 	void assert_enter();
+
+	/*!
+	@brief 安装my_actor框架
+	*/
+	static void install();
+
+	/*!
+	@brief 卸载my_actor框架
+	*/
+	static void uninstall();
 private:
 	template <typename Handler>
 	void timeout(int ms, Handler&& handler)
@@ -8673,9 +8690,10 @@ public:
 	bool _checkStackFree : 1;///<是否检测堆栈过多
 private:
 #endif
-	static msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc _suspendResumeQueueAll;
-	static msg_list_shared_alloc<std::function<void()> >::shared_node_alloc _quitExitCallbackAll;
-	static msg_list_shared_alloc<actor_handle>::shared_node_alloc _childActorListAll;
+	static std::atomic<my_actor::id>* _actorIDCount;///<ID计数
+	static msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc* _suspendResumeQueueAll;
+	static msg_list_shared_alloc<std::function<void()> >::shared_node_alloc* _quitExitCallbackAll;
+	static msg_list_shared_alloc<actor_handle>::shared_node_alloc* _childActorListAll;
 };
 
 template <typename R, typename H>

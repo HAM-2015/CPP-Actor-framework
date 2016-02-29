@@ -7,7 +7,21 @@
 #include "waitable_timer.h"
 #endif
 
-tls_space io_engine::_tls;
+tls_space* io_engine::_tls = NULL;
+
+void io_engine::install()
+{
+	if (!_tls)
+	{
+		_tls = new tls_space;
+	}
+}
+
+void io_engine::uninstall()
+{
+	delete _tls;
+	_tls = NULL;
+}
 
 io_engine::io_engine()
 {
@@ -109,9 +123,9 @@ void io_engine::_run(size_t threadNum, sched policy)
 #endif
 					context_yield::convert_thread_to_fiber();
 					void* tlsBuff[64] = { 0 };
-					_tls.set_space(tlsBuff);
+					_tls->set_space(tlsBuff);
 					_runCount += _ios.run();
-					_tls.set_space(NULL);
+					_tls->set_space(NULL);
 					context_yield::convert_fiber_to_thread();
 #ifdef __linux__
 					my_actor::deinstall_sigsegv();
@@ -274,25 +288,25 @@ io_engine::operator boost::asio::io_service&() const
 
 void io_engine::setTlsBuff(void** buf)
 {
-	_tls.set_space(buf);
+	_tls->set_space(buf);
 }
 
 void* io_engine::getTlsValue(int i)
 {
 	assert(i >= 0 && i < 64);
-	return _tls.get_space()[i];
+	return _tls->get_space()[i];
 }
 
 void io_engine::setTlsValue(int i, void* val)
 {
 	assert(i >= 0 && i < 64);
-	_tls.get_space()[i] = val;
+	_tls->get_space()[i] = val;
 }
 
 void* io_engine::swapTlsValue(int i, void* val)
 {
 	assert(i >= 0 && i < 64);
-	void** sp = _tls.get_space();
+	void** sp = _tls->get_space();
 	void* old = sp[i];
 	sp[i] = val;
 	return old;
@@ -300,5 +314,5 @@ void* io_engine::swapTlsValue(int i, void* val)
 
 void** io_engine::getTlsValueBuff()
 {
-	return _tls.get_space();
+	return _tls->get_space();
 }

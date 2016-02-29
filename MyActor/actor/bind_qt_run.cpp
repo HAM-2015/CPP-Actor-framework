@@ -23,7 +23,7 @@ void bind_qt_run_base::ui_tls::init()
 	void** const tlsBuff = io_engine::getTlsValueBuff();
 	if (tlsBuff)
 	{
-		ui_tls* uiTls = (ui_tls*)tlsBuff[QT_UI_TLS_INDEX];
+		ui_tls*& uiTls = (ui_tls*&)tlsBuff[QT_UI_TLS_INDEX];
 		if (!uiTls)
 		{//ios线程中创建的UI
 			uiTls = new ui_tls();
