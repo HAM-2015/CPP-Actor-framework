@@ -1,7 +1,7 @@
 #include "context_pool.h"
 #include "scattered.h"
 #include "actor_framework.h"
-#if (defined WIN32 && defined __GNUG__)
+#if (WIN32 && __GNUG__)
 #include <fibersapi.h>
 #endif
 
@@ -64,7 +64,7 @@ void ContextPool_::uninstall()
 ContextPool_::ContextPool_()
 :_exitSign(false), _clearWait(false), _stackCount(0), _stackTotalSize(0)
 {
-	boost::thread th(&ContextPool_::clearThread, this);
+	std::thread th(&ContextPool_::clearThread, this);
 	_clearThread.swap(th);
 }
 
@@ -150,7 +150,7 @@ ContextPool_::coro_pull_interface* ContextPool_::getContext(size_t size)
 		delete newFiber;
 		size += PAGE_SIZE;
 	} while (size <= 1024 * 1024);
-	throw std::shared_ptr<string>(new string("stack memory deficiency"));
+	throw std::shared_ptr<std::string>(new std::string("stack memory deficiency"));
 }
 
 void ContextPool_::recovery(coro_pull_interface* coro)

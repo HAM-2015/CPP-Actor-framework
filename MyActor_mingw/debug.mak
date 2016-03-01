@@ -12,7 +12,7 @@ AR := C:/mingw64/x86_64-4.9.3-release-posix-seh-rt_v4-rev1/mingw64/bin/ar.exe
 OBJCOPY := 
 
 #Additional flags
-PREPROCESSOR_MACROS := DEBUG _DEBUG WIN32 _WIN64 ENABLE_NEXT_TICK ENABLE_CHECK_LOST DISABLE_BOOST_TIMER
+PREPROCESSOR_MACROS := DEBUG _DEBUG WIN32 _WIN64 _WIN32_WINNT=0x0600 ENABLE_NEXT_TICK ENABLE_CHECK_LOST DISABLE_BOOST_TIMER
 INCLUDE_DIRS := E:\cpplib\boost\mingw64
 LIBRARY_DIRS := E:\cpplib\boost\mingw64\lib_posix_seh_x64
 LIBRARY_NAMES := Mswsock Winmm ws2_32 boost_thread-mgw49-mt-sd-1_59 boost_system-mgw49-mt-sd-1_59 boost_chrono-mgw49-mt-sd-1_59

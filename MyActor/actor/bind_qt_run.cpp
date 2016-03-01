@@ -101,25 +101,39 @@ bool bind_qt_run_base::ui_tls::running_in_this_thread(bind_qt_run_base* s)
 
 //////////////////////////////////////////////////////////////////////////
 
-mem_alloc_mt<bind_qt_run_base::task_event> bind_qt_run_base::task_event::_taskAlloc(256);
+mem_alloc_mt2<bind_qt_run_base::task_event>* bind_qt_run_base::task_event::_taskAlloc = NULL;
 
 void* bind_qt_run_base::task_event::operator new(size_t s)
 {
 	assert(sizeof(task_event) == s);
-	return _taskAlloc.allocate();
+	return _taskAlloc->allocate();
 }
 
 void bind_qt_run_base::task_event::operator delete(void* p)
 {
-	_taskAlloc.deallocate(p);
+	_taskAlloc->deallocate(p);
 }
 //////////////////////////////////////////////////////////////////////////
+
+void bind_qt_run_base::install()
+{
+	if (!task_event::_taskAlloc)
+	{
+		task_event::_taskAlloc = new mem_alloc_mt2<bind_qt_run_base::task_event>(256);
+	}
+}
+
+void bind_qt_run_base::uninstall()
+{
+	delete task_event::_taskAlloc;
+	task_event::_taskAlloc = NULL;
+}
 
 bind_qt_run_base::bind_qt_run_base()
 :_waitClose(false), _eventLoop(NULL), _waitCount(0), _inCloseScope(false)
 {
 	DEBUG_OPERATION(_taskCount = 0);
-	_threadID = boost::this_thread::get_id();
+	_threadID = std::this_thread::get_id();
 #ifdef ENABLE_QT_ACTOR
 	ui_tls::init();
 #endif
@@ -138,15 +152,15 @@ bind_qt_run_base::~bind_qt_run_base()
 #endif
 }
 
-boost::thread::id bind_qt_run_base::thread_id()
+std::thread::id bind_qt_run_base::thread_id()
 {
-	assert(boost::thread::id() != _threadID);
+	assert(std::thread::id() != _threadID);
 	return _threadID;
 }
 
 bool bind_qt_run_base::run_in_ui_thread()
 {
-	return boost::this_thread::get_id() == _threadID;
+	return std::this_thread::get_id() == _threadID;
 }
 
 bool bind_qt_run_base::running_in_this_thread()

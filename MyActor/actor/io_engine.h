@@ -3,16 +3,17 @@
 
 #include <algorithm>
 #include <boost/asio/io_service.hpp>
-#include <boost/thread/thread.hpp>
 #include <condition_variable>
 #include <atomic>
 #include <mutex>
+#include <thread>
 #include <set>
 #include <vector>
 #include "scattered.h"
 #include "strand_ex.h"
 #include "mem_pool.h"
 
+class my_actor;
 class boost_strand;
 #ifdef DISABLE_BOOST_TIMER
 class WaitableTimer_;
@@ -124,7 +125,7 @@ public:
 	/*!
 	@brief 运行线程ID
 	*/
-	const std::set<boost::thread::id>& threadsID();
+	const std::set<std::thread::id>& threadsID();
 
 	/*!
 	@brief 调度器对象引用
@@ -158,15 +159,9 @@ public:
 	@brief 获取tls变量空间
 	*/
 	static void** getTlsValueBuff();
-
-	/*!
-	@brief 初始化
-	*/
+private:
+	friend my_actor;
 	static void install();
-
-	/*!
-	@brief 释放
-	*/
 	static void uninstall();
 private:
 	void _run(size_t threadNum, sched policy);
@@ -181,8 +176,8 @@ private:
 	std::mutex _runMutex;
 	std::mutex _ctrlMutex;
 	std::atomic<long long> _runCount;
-	std::set<boost::thread::id> _threadsID;
-	boost::thread_group _runThreads;
+	std::set<std::thread::id> _threadsID;
+	std::list<std::thread*> _runThreads;
 	boost::asio::io_service _ios;
 	boost::asio::io_service::work* _runLock;
 #ifdef WIN32

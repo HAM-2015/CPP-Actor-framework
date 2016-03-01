@@ -369,10 +369,10 @@ protected:
 	virtual ~boost_strand();
 public:
 	static shared_strand create(io_engine& ioEngine);
-	static vector<shared_strand> create_multi(size_t n, io_engine& ioEngine);
+	static std::vector<shared_strand> create_multi(size_t n, io_engine& ioEngine);
 	static void create_multi(shared_strand* res, size_t n, io_engine& ioEngine);
-	static void create_multi(vector<shared_strand>& res, size_t n, io_engine& ioEngine);
-	static void create_multi(list<shared_strand>& res, size_t n, io_engine& ioEngine);
+	static void create_multi(std::vector<shared_strand>& res, size_t n, io_engine& ioEngine);
+	static void create_multi(std::list<shared_strand>& res, size_t n, io_engine& ioEngine);
 public:
 	/*!
 	@brief 如果在本strand中调用则直接执行，否则添加到队列中等待执行

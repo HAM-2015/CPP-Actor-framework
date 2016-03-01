@@ -7,8 +7,6 @@
 #include <list>
 #include "try_move.h"
 
-using namespace std;
-
 #define NAME_BOND(__NAMEL__, __NAMER__) __NAMEL__ ## __NAMER__
 
 #ifdef _MSC_VER
@@ -85,6 +83,12 @@ private:
 
 //内存边界对齐
 #define MEM_ALIGN(__o, __a) (((__o) + ((__a)-1)) & (0-__a))
+
+//禁用对象拷贝
+#define NONE_COPY(__T__) \
+	private:\
+	__T__(const __T__&); \
+	void operator =(const __T__&);
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -222,12 +226,12 @@ struct stack_line_info
 @brief 获取当前调用堆栈信息
 @param maxDepth 获取当前堆栈向下最高层次，最大32层
 */
-list<stack_line_info> get_stack_list(size_t maxDepth = 32, size_t offset = 0, bool module = false, bool symbolName = false);
+std::list<stack_line_info> get_stack_list(size_t maxDepth = 32, size_t offset = 0, bool module = false, bool symbolName = false);
 
 /*!
 @brief 堆栈溢出弹出消息
 */
-void stack_overflow_format(int size, std::shared_ptr<list<stack_line_info>> createStack);
+void stack_overflow_format(int size, std::shared_ptr<std::list<stack_line_info>> createStack);
 
 void install_check_stack();
 void uninstall_check_stack();

@@ -53,10 +53,10 @@ shared_strand boost_strand::create(io_engine& ioEngine)
 	return res;
 }
 
-vector<shared_strand> boost_strand::create_multi(size_t n, io_engine& ioEngine)
+std::vector<shared_strand> boost_strand::create_multi(size_t n, io_engine& ioEngine)
 {
 	assert(0 != n);
-	vector<shared_strand> res(n);
+	std::vector<shared_strand> res(n);
 	for (size_t i = 0; i < n; i++)
 	{
 		res[i] = boost_strand::create(ioEngine);
@@ -73,7 +73,7 @@ void boost_strand::create_multi(shared_strand* res, size_t n, io_engine& ioEngin
 	}
 }
 
-void boost_strand::create_multi(vector<shared_strand>& res, size_t n, io_engine& ioEngine)
+void boost_strand::create_multi(std::vector<shared_strand>& res, size_t n, io_engine& ioEngine)
 {
 	assert(0 != n);
 	res.resize(n);
@@ -83,7 +83,7 @@ void boost_strand::create_multi(vector<shared_strand>& res, size_t n, io_engine&
 	}
 }
 
-void boost_strand::create_multi(list<shared_strand>& res, size_t n, io_engine& ioEngine)
+void boost_strand::create_multi(std::list<shared_strand>& res, size_t n, io_engine& ioEngine)
 {
 	assert(0 != n);
 	res.clear();

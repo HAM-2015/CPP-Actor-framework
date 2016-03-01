@@ -42,6 +42,7 @@
   <Build xsi:type="com.visualgdb.build.make">
     <MakeFilePathRelativeToSourceDir>Makefile</MakeFilePathRelativeToSourceDir>
     <MakeConfigurationName>Release</MakeConfigurationName>
+    <AdditionalMakeArguments>-j2</AdditionalMakeArguments>
     <Toolchain>
       <Name>Default GCC toolchain on 127.0.0.1</Name>
       <UnixSystem>true</UnixSystem>

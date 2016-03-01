@@ -1,14 +1,14 @@
 #include "context_yield.h"
 #include "check_actor_stack.h"
 #include "scattered.h"
-#if (defined WIN32 && defined __GNUG__)
-#include <fibersapi.h>
-#endif
 
 namespace context_yield
 {
 #ifdef WIN32
 #include <Windows.h>
+#if (WIN32 && __GNUG__)
+#include <fibersapi.h>
+#endif
 	struct fiber_struct
 	{
 		void* _param;

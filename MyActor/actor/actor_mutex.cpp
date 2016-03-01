@@ -364,6 +364,11 @@ void actor_mutex::quited_unlock(my_actor* host)
 		}
 	}
 }
+
+const shared_strand& actor_mutex::self_strand()
+{
+	return _strand;
+}
 //////////////////////////////////////////////////////////////////////////
 
 actor_lock_guard::actor_lock_guard(actor_mutex& amutex, my_actor* host)
@@ -371,12 +376,6 @@ actor_lock_guard::actor_lock_guard(actor_mutex& amutex, my_actor* host)
 {
 	_amutex.lock(_host);
 	_host->lock_quit();
-}
-
-actor_lock_guard::actor_lock_guard(const actor_lock_guard&)
-: _amutex(_amutex), _host(0)
-{
-
 }
 
 actor_lock_guard::~actor_lock_guard()
@@ -387,11 +386,6 @@ actor_lock_guard::~actor_lock_guard()
 		_amutex.unlock(_host);
 	}
 	_host->unlock_quit();
-}
-
-void actor_lock_guard::operator=(const actor_lock_guard&)
-{
-
 }
 
 void actor_lock_guard::unlock()
@@ -513,6 +507,11 @@ size_t actor_condition_variable::notify_all(my_actor* host)
 	});
 	host->unlock_quit();
 	return count;
+}
+
+const shared_strand& actor_condition_variable::self_strand()
+{
+	return _strand;
 }
 //////////////////////////////////////////////////////////////////////////
 
@@ -959,6 +958,11 @@ void actor_shared_mutex::unlock_upgrade(my_actor* host)
 	host->unlock_quit();
 	assert(st_shared == _status);
 }
+
+const shared_strand& actor_shared_mutex::self_strand()
+{
+	return _strand;
+}
 //////////////////////////////////////////////////////////////////////////
 
 actor_unique_lock::actor_unique_lock(actor_shared_mutex& amutex, my_actor* host)
@@ -966,12 +970,6 @@ actor_unique_lock::actor_unique_lock(actor_shared_mutex& amutex, my_actor* host)
 {
 	_amutex.lock(_host);
 	_host->lock_quit();
-}
-
-actor_unique_lock::actor_unique_lock(const actor_unique_lock&)
-: _amutex(_amutex), _host(0)
-{
-
 }
 
 actor_unique_lock::~actor_unique_lock()
@@ -982,11 +980,6 @@ actor_unique_lock::~actor_unique_lock()
 		_amutex.unlock(_host);
 	}
 	_host->unlock_quit();
-}
-
-void actor_unique_lock::operator=(const actor_unique_lock&)
-{
-
 }
 
 void actor_unique_lock::unlock()
@@ -1009,12 +1002,6 @@ actor_shared_lock::actor_shared_lock(actor_shared_mutex& amutex, my_actor* host)
 	_host->lock_quit();
 }
 
-actor_shared_lock::actor_shared_lock(const actor_shared_lock&)
-: _amutex(_amutex), _host(0)
-{
-
-}
-
 actor_shared_lock::~actor_shared_lock()
 {
 	assert(!_host->is_quited());
@@ -1023,11 +1010,6 @@ actor_shared_lock::~actor_shared_lock()
 		_amutex.unlock_shared(_host);
 	}
 	_host->unlock_quit();
-}
-
-void actor_shared_lock::operator=(const actor_shared_lock&)
-{
-
 }
 
 void actor_shared_lock::unlock_shared()

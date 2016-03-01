@@ -3,6 +3,7 @@
 
 #include "tuple_option.h"
 #include <atomic>
+#include <memory>
 
 template <typename H, typename... ARGS>
 struct wrapped_capture 

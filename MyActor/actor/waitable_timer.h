@@ -6,7 +6,6 @@
 #include "msg_queue.h"
 #include "mem_pool.h"
 #include "io_engine.h"
-#include <boost/thread/thread.hpp>
 
 class ActorTimer_;
 class TimerBoost_;
@@ -43,7 +42,7 @@ private:
 	unsigned long long _extFinishTime;
 	handler_queue _eventsQueue;
 	std::mutex _ctrlMutex;
-	boost::thread _timerThread;
+	std::thread _timerThread;
 };
 
 class WaitableTimerEvent_

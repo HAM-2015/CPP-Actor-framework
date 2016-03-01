@@ -249,6 +249,33 @@ void trace_comma(First&& fst, Args&&... args)
 	trace_comma(TRY_MOVE(args)...);
 }
 
+#if (_DEBUG || DEBUG)
+#define debug_trace(...) trace(get_time_string_ms(), " DEBUG:   "); trace(__VA_ARGS__)
+#define debug_trace_line(...) trace(get_time_string_ms(), " DEBUG:   "); trace_line(__VA_ARGS__)
+#define debug_trace_space(...) trace(get_time_string_ms(), " DEBUG:   "); trace_space(__VA_ARGS__)
+#define debug_trace_comma(...) trace(get_time_string_ms(), " DEBUG:   "); trace_comma(__VA_ARGS__)
+#else
+#define debug_trace(...)
+#define debug_trace_line(...)
+#define debug_trace_space(...)
+#define debug_trace_comma(...)
+#endif
+
+#define info_trace(...) trace(get_time_string_ms(), " INFO:    "); trace(__VA_ARGS__)
+#define info_trace_line(...) trace(get_time_string_ms(), " INFO:    "); trace_line(__VA_ARGS__)
+#define info_trace_space(...) trace(get_time_string_ms(), " INFO:    "); trace_space(__VA_ARGS__)
+#define info_trace_comma(...) trace(get_time_string_ms(), " INFO:    "); trace_comma(__VA_ARGS__)
+
+#define error_trace(...) trace(get_time_string_ms(), " ERROR:   "); trace(__VA_ARGS__)
+#define error_trace_line(...) trace(get_time_string_ms(), " ERROR:   "); trace_line(__VA_ARGS__)
+#define error_trace_space(...) trace(get_time_string_ms(), " ERROR:   "); trace_space(__VA_ARGS__)
+#define error_trace_comma(...) trace(get_time_string_ms(), " ERROR:   "); trace_comma(__VA_ARGS__)
+
+#define warning_trace(...) trace(get_time_string_ms(), " WARNING: "); trace(__VA_ARGS__)
+#define warning_trace_line(...) trace(get_time_string_ms(), " WARNING: "); trace_line(__VA_ARGS__)
+#define warning_trace_space(...) trace(get_time_string_ms(), " WARNING: "); trace_space(__VA_ARGS__)
+#define warning_trace_comma(...) trace(get_time_string_ms(), " WARNING: "); trace_comma(__VA_ARGS__)
+
 struct trace_result
 {
 	template <typename... Args>

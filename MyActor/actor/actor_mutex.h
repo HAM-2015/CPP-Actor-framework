@@ -47,16 +47,20 @@ public:
 	@brief 解除当前Actor对其持有，递归 lock 几次，就需要 unlock 几次
 	*/
 	void unlock(my_actor* host);
+
+	/*!
+	@brief 当前依赖的strand
+	*/
+	const shared_strand& self_strand();
 private:
 	void quited_lock(my_actor* host);
 	void quited_unlock(my_actor* host);
-	actor_mutex(const actor_mutex& s);
-	void operator=(const actor_mutex& s);
 private:
 	shared_strand _strand;
 	msg_list<wait_node> _waitQueue;
 	long long _lockActorID;
 	size_t _recCount;
+	NONE_COPY(actor_mutex)
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -69,9 +73,6 @@ class actor_lock_guard
 public:
 	actor_lock_guard(actor_mutex& amutex, my_actor* host);
 	~actor_lock_guard();
-private:
-	actor_lock_guard(const actor_lock_guard&);
-	void operator=(const actor_lock_guard&);
 public:
 	void unlock();
 	void lock();
@@ -79,6 +80,7 @@ private:
 	actor_mutex& _amutex;
 	my_actor* _host;
 	bool _isUnlock;
+	NONE_COPY(actor_lock_guard)
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -114,12 +116,15 @@ public:
 	@brief 通知所有等待
 	*/
 	size_t notify_all(my_actor* host);
-private:
-	actor_condition_variable(const actor_condition_variable& s);
-	void operator=(const actor_condition_variable& s);
+
+	/*!
+	@brief 当前依赖的strand
+	*/
+	const shared_strand& self_strand();
 private:
 	shared_strand _strand;
 	msg_list<wait_node> _waitQueue;
+	NONE_COPY(actor_condition_variable)
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -180,14 +185,17 @@ public:
 	@brief 解除独占锁定，恢复为共享锁定
 	*/
 	void unlock_upgrade(my_actor* host);
-private:
-	actor_shared_mutex(const actor_shared_mutex& s);
-	void operator=(const actor_shared_mutex& s);
+
+	/*!
+	@brief 当前依赖的strand
+	*/
+	const shared_strand& self_strand();
 private:
 	lock_status _status;
 	shared_strand _strand;
 	msg_list<wait_node> _waitQueue;
 	msg_map<long long, lock_status> _inSet;
+	NONE_COPY(actor_shared_mutex)
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -200,9 +208,6 @@ class actor_unique_lock
 public:
 	actor_unique_lock(actor_shared_mutex& amutex, my_actor* host);
 	~actor_unique_lock();
-private:
-	actor_unique_lock(const actor_unique_lock&);
-	void operator=(const actor_unique_lock&);
 public:
 	void unlock();
 	void lock();
@@ -210,6 +215,7 @@ private:
 	actor_shared_mutex& _amutex;
 	my_actor* _host;
 	bool _isUnlock;
+	NONE_COPY(actor_unique_lock)
 };
 
 /*!
@@ -221,9 +227,6 @@ class actor_shared_lock
 public:
 	actor_shared_lock(actor_shared_mutex& amutex, my_actor* host);
 	~actor_shared_lock();
-private:
-	actor_shared_lock(const actor_shared_lock&);
-	void operator=(const actor_shared_lock&);
 public:
 	void unlock_shared();
 	void lock_shared();
@@ -231,5 +234,6 @@ private:
 	actor_shared_mutex& _amutex;
 	my_actor* _host;
 	bool _isUnlock;
+	NONE_COPY(actor_shared_lock)
 };
 #endif

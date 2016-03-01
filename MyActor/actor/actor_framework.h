@@ -22,8 +22,6 @@ class MutexTrigNotifer_;
 class MutexTrigHandle_;
 class ActorMutex_;
 
-using namespace std;
-
 //此函数会上下文切换
 #define __yield_interrupt
 
@@ -55,11 +53,16 @@ using namespace std;
 //包装actor_msg_handle, actor_trig_handle关闭事件
 #define wrap_close_msg_handle(__handle__) [&__handle__]{__handle__.close(); }
 
-//初始化my_actor框架
-#define init_my_actor()\
+#define _init_my_actor1()\
 	my_actor::install(); \
-	OUT_OF_SCOPE({ my_actor::uninstall(); });
+	OUT_OF_SCOPE({ my_actor::uninstall(); })
 
+#define _init_my_actor2(__aid__)\
+	my_actor::install(__aid__); \
+	OUT_OF_SCOPE({ my_actor::uninstall(); })
+
+//初始化my_actor框架
+#define init_my_actor(...) _BOND_LR__(_init_my_actor, _PP_NARG(__pl__, __VA_ARGS__))(__VA_ARGS__);
 //////////////////////////////////////////////////////////////////////////
 
 template <typename... ARGS>
@@ -1209,7 +1212,7 @@ private:
 		}
 		else
 		{
-			_strand->post(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPump_> sharedThis)
+			_strand->post(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPump_> sharedThis)
 			{
 				sharedThis->_lost_msg();
 			}, TRY_MOVE(hostActor), _weakThis.lock()));
@@ -1219,7 +1222,7 @@ private:
 	template <typename ActorHandle>
 	void receive_msg_tick(msg_type&& msg, ActorHandle&& hostActor)
 	{
-		_strand->try_tick(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPump_> sharedThis, const msg_type& msg)
+		_strand->try_tick(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPump_> sharedThis, const msg_type& msg)
 		{
 			sharedThis->receiver(std::move((msg_type&)msg));
 		}, TRY_MOVE(hostActor), _weakThis.lock(), std::move(msg)));
@@ -1234,7 +1237,7 @@ private:
 		}
 		else
 		{
-			_strand->post(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPump_> sharedThis, const msg_type& msg)
+			_strand->post(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPump_> sharedThis, const msg_type& msg)
 			{
 				sharedThis->receiver(std::move((msg_type&)msg));
 			}, TRY_MOVE(hostActor), _weakThis.lock(), std::move(msg)));
@@ -1757,7 +1760,7 @@ private:
 		}
 		else
 		{
-			_strand->post(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPool_>& sharedThis, const msg_type& msg)
+			_strand->post(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPool_>& sharedThis, const msg_type& msg)
 			{
 				sharedThis->send_msg(std::move((msg_type&)msg), std::move((actor_handle&)hostActor));
 			}, hostActor, _weakThis.lock(), std::move(mt)));
@@ -1780,7 +1783,7 @@ private:
 	{
 		if (!_closed)
 		{
-			_strand->try_tick(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPool_>& sharedThis)
+			_strand->try_tick(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPool_>& sharedThis)
 			{
 				sharedThis->_lost_msg(hostActor);
 			}, hostActor, _weakThis.lock()));
@@ -1791,7 +1794,7 @@ private:
 	{
 		if (!_closed)
 		{
-			_strand->try_tick(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPool_>& sharedThis)
+			_strand->try_tick(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPool_>& sharedThis)
 			{
 				sharedThis->_lost_msg(hostActor);
 			}, std::move(hostActor), _weakThis.lock()));
@@ -4612,10 +4615,8 @@ class my_actor
 
 		struct pck_base
 		{
-			pck_base() :_amutex(_strand) { assert(false); }
-
 			pck_base(my_actor* hostActor)
-				:_strand(hostActor->_strand), _amutex(_strand), _isHead(true), _hostActor(hostActor){}
+				:_amutex(hostActor->_strand), _isHead(true), _hostActor(hostActor){}
 
 			virtual ~pck_base() {}
 
@@ -4637,10 +4638,11 @@ class my_actor
 				_amutex.unlock(self);
 			}
 
-			shared_strand _strand;
 			actor_mutex _amutex;
-			bool _isHead;
 			my_actor* _hostActor;
+			bool _isHead;
+		private:
+			pck_base();
 		};
 
 		template <typename... ARGS>
@@ -4712,6 +4714,7 @@ class my_actor
 			std::shared_ptr<pool_type> _msgPool;
 			std::shared_ptr<pump_type> _msgPump;
 			std::shared_ptr<pck> _next;
+			NONE_COPY(pck)
 		};
 
 		void clear(my_actor* self)
@@ -4917,8 +4920,8 @@ class my_actor
 			}
 		}
 
-		const int _count;
 		actor_handle _lockSelf;
+		const int _count;
 		Handler _h;
 	};
 
@@ -5053,10 +5056,9 @@ public:
 		void lock();
 		void unlock();
 	private:
-		quit_guard(const quit_guard&);
-		void operator=(const quit_guard&);
 		my_actor* _self;
 		bool _locked;
+		NONE_COPY(quit_guard)
 	};
 
 	/*!
@@ -5070,10 +5072,9 @@ public:
 		void lock();
 		void unlock();
 	private:
-		suspend_guard(const suspend_guard&);
-		void operator=(const suspend_guard&);
 		my_actor* _self;
 		bool _locked;
+		NONE_COPY(suspend_guard)
 	};
 
 	/*!
@@ -5155,24 +5156,21 @@ public:
 	void child_actor_run(child_actor_handle& actorHandle);
 
 	template <typename... Handles>
-	void child_actor_run(Handles&... handles)
+	void child_actor_run(child_actor_handle& actorHandle, Handles&... handles)
 	{
-		static_assert(sizeof...(Handles) > 1, "");
-		child_actor_handle* phandles[sizeof...(Handles)] = { &handles... };
-		for (int i = 0; i < sizeof...(Handles); i++)
-		{
-			child_actor_run(*phandles[i]);
-		}
+		static_assert(sizeof...(Handles) >= 1, "");
+		child_actor_run(actorHandle);
+		child_actor_run(handles...);
 	}
 
 	/*!
 	@brief 开始运行一组子Actor，只能调用一次
 	*/
-	void child_actors_run(list<child_actor_handle::ptr>& actorHandles);
-	void child_actors_run(list<child_actor_handle>& actorHandles);
+	void child_actors_run(std::list<child_actor_handle::ptr>& actorHandles);
+	void child_actors_run(std::list<child_actor_handle>& actorHandles);
 
 	template <typename Alloc>
-	void child_actors_run(list<child_actor_handle::ptr, Alloc>& actorHandles)
+	void child_actors_run(std::list<child_actor_handle::ptr, Alloc>& actorHandles)
 	{
 		assert_enter();
 		for (auto& actorHandle : actorHandles)
@@ -5182,7 +5180,7 @@ public:
 	}
 
 	template <typename Alloc>
-	void child_actors_run(list<child_actor_handle, Alloc>& actorHandles)
+	void child_actors_run(std::list<child_actor_handle, Alloc>& actorHandles)
 	{
 		assert_enter();
 		for (auto& actorHandle : actorHandles)
@@ -5197,24 +5195,21 @@ public:
 	__yield_interrupt void child_actor_force_quit(child_actor_handle& actorHandle);
 
 	template <typename... Handles>
-	__yield_interrupt void child_actor_force_quit(Handles&... handles)
+	__yield_interrupt void child_actor_force_quit(child_actor_handle& actorHandle, Handles&... handles)
 	{
-		static_assert(sizeof...(Handles) > 1, "");
-		child_actor_handle* phandles[sizeof...(Handles)] = { &handles... };
-		for (int i = 0; i < sizeof...(Handles); i++)
-		{
-			child_actor_force_quit(*phandles[i]);
-		}
+		static_assert(sizeof...(Handles) >= 1, "");
+		child_actor_force_quit(actorHandle);
+		child_actor_force_quit(handles...);
 	}
 
 	/*!
 	@brief 强制终止一组Actor
 	*/
-	__yield_interrupt void child_actors_force_quit(list<child_actor_handle::ptr>& actorHandles);
-	__yield_interrupt void child_actors_force_quit(list<child_actor_handle>& actorHandles);
+	__yield_interrupt void child_actors_force_quit(std::list<child_actor_handle::ptr>& actorHandles);
+	__yield_interrupt void child_actors_force_quit(std::list<child_actor_handle>& actorHandles);
 
 	template <typename Alloc>
-	__yield_interrupt void child_actors_force_quit(list<child_actor_handle::ptr, Alloc>& actorHandles)
+	__yield_interrupt void child_actors_force_quit(std::list<child_actor_handle::ptr, Alloc>& actorHandles)
 	{
 		assert_enter();
 		for (auto& actorHandle : actorHandles)
@@ -5245,7 +5240,7 @@ public:
 	}
 
 	template <typename Alloc>
-	__yield_interrupt void child_actors_force_quit(list<child_actor_handle, Alloc>& actorHandles)
+	__yield_interrupt void child_actors_force_quit(std::list<child_actor_handle, Alloc>& actorHandles)
 	{
 		assert_enter();
 		for (auto& actorHandle : actorHandles)
@@ -5282,14 +5277,11 @@ public:
 	__yield_interrupt void child_actor_wait_quit(child_actor_handle& actorHandle);
 
 	template <typename... Handles>
-	__yield_interrupt void child_actor_wait_quit(Handles&... handles)
+	__yield_interrupt void child_actor_wait_quit(child_actor_handle& actorHandle, Handles&... handles)
 	{
-		static_assert(sizeof...(Handles) > 1, "");
-		child_actor_handle* phandles[sizeof...(Handles)] = { &handles... };
-		for (int i = 0; i < sizeof...(Handles); i++)
-		{
-			child_actor_wait_quit(*phandles[i]);
-		}
+		static_assert(sizeof...(Handles) >= 1, "");
+		child_actor_wait_quit(actorHandle);
+		child_actor_wait_quit(handles...);
 	}
 
 	__yield_interrupt bool timed_child_actor_wait_quit(int tm, child_actor_handle& actorHandle);
@@ -5298,11 +5290,11 @@ public:
 	@brief 等待一组子Actor完成后返回
 	@return 都正常退出的返回true，否则false
 	*/
-	__yield_interrupt void child_actors_wait_quit(list<child_actor_handle::ptr>& actorHandles);
-	__yield_interrupt void child_actors_wait_quit(list<child_actor_handle>& actorHandles);
+	__yield_interrupt void child_actors_wait_quit(std::list<child_actor_handle::ptr>& actorHandles);
+	__yield_interrupt void child_actors_wait_quit(std::list<child_actor_handle>& actorHandles);
 
 	template <typename Alloc>
-	__yield_interrupt void child_actors_wait_quit(list<child_actor_handle::ptr, Alloc>& actorHandles)
+	__yield_interrupt void child_actors_wait_quit(std::list<child_actor_handle::ptr, Alloc>& actorHandles)
 	{
 		assert_enter();
 		for (auto& actorHandle : actorHandles)
@@ -5313,7 +5305,7 @@ public:
 	}
 
 	template <typename Alloc>
-	__yield_interrupt void child_actors_wait_quit(list<child_actor_handle, Alloc>& actorHandles)
+	__yield_interrupt void child_actors_wait_quit(std::list<child_actor_handle, Alloc>& actorHandles)
 	{
 		assert_enter();
 		for (auto& actorHandle : actorHandles)
@@ -5329,24 +5321,21 @@ public:
 	__yield_interrupt void child_actor_suspend(child_actor_handle& actorHandle);
 
 	template <typename... Handles>
-	__yield_interrupt void child_actor_suspend(Handles&... handles)
+	__yield_interrupt void child_actor_suspend(child_actor_handle& actorHandle, Handles&... handles)
 	{
-		static_assert(sizeof...(Handles) > 1, "");
-		child_actor_handle* phandles[sizeof...(Handles)] = { &handles... };
-		for (int i = 0; i < sizeof...(Handles); i++)
-		{
-			child_actor_suspend(*phandles[i]);
-		}
+		static_assert(sizeof...(Handles) >= 1, "");
+		child_actor_suspend(actorHandle);
+		child_actor_suspend(handles...);
 	}
 
 	/*!
 	@brief 挂起一组子Actor
 	*/
-	__yield_interrupt void child_actors_suspend(list<child_actor_handle::ptr>& actorHandles);
-	__yield_interrupt void child_actors_suspend(list<child_actor_handle>& actorHandles);
+	__yield_interrupt void child_actors_suspend(std::list<child_actor_handle::ptr>& actorHandles);
+	__yield_interrupt void child_actors_suspend(std::list<child_actor_handle>& actorHandles);
 
 	template <typename Alloc>
-	__yield_interrupt void child_actors_suspend(list<child_actor_handle::ptr, Alloc>& actorHandles)
+	__yield_interrupt void child_actors_suspend(std::list<child_actor_handle::ptr, Alloc>& actorHandles)
 	{
 		assert_enter();
 		actor_msg_handle<> amh;
@@ -5373,7 +5362,7 @@ public:
 	}
 
 	template <typename Alloc>
-	__yield_interrupt void child_actors_suspend(list<child_actor_handle, Alloc>& actorHandles)
+	__yield_interrupt void child_actors_suspend(std::list<child_actor_handle, Alloc>& actorHandles)
 	{
 		assert_enter();
 		actor_msg_handle<> amh;
@@ -5405,24 +5394,21 @@ public:
 	__yield_interrupt void child_actor_resume(child_actor_handle& actorHandle);
 
 	template <typename... Handles>
-	__yield_interrupt void child_actor_resume(Handles&... handles)
+	__yield_interrupt void child_actor_resume(child_actor_handle& actorHandle, Handles&... handles)
 	{
-		static_assert(sizeof...(Handles) > 1, "");
-		child_actor_handle* phandles[sizeof...(Handles)] = { &handles... };
-		for (int i = 0; i < sizeof...(Handles); i++)
-		{
-			child_actor_resume(*phandles[i]);
-		}
+		static_assert(sizeof...(Handles) >= 1, "");
+		child_actor_resume(actorHandle);
+		child_actor_resume(handles...);
 	}
 
 	/*!
 	@brief 恢复一组子Actor
 	*/
-	__yield_interrupt void child_actors_resume(list<child_actor_handle::ptr>& actorHandles);
-	__yield_interrupt void child_actors_resume(list<child_actor_handle>& actorHandles);
+	__yield_interrupt void child_actors_resume(std::list<child_actor_handle::ptr>& actorHandles);
+	__yield_interrupt void child_actors_resume(std::list<child_actor_handle>& actorHandles);
 
 	template <typename Alloc>
-	__yield_interrupt void child_actors_resume(list<child_actor_handle::ptr, Alloc>& actorHandles)
+	__yield_interrupt void child_actors_resume(std::list<child_actor_handle::ptr, Alloc>& actorHandles)
 	{
 		assert_enter();
 		actor_msg_handle<> amh;
@@ -5449,7 +5435,7 @@ public:
 	}
 
 	template <typename Alloc>
-	__yield_interrupt void child_actors_resume(list<child_actor_handle, Alloc>& actorHandles)
+	__yield_interrupt void child_actors_resume(std::list<child_actor_handle, Alloc>& actorHandles)
 	{
 		assert_enter();
 		actor_msg_handle<> amh;
@@ -5792,10 +5778,10 @@ public:
 		lock_quit();
 		bool sign = false;
 		std::tuple<Outs&...> res(dargs...);
-		_strand->next_tick([&]
+		_strand->next_tick(std::bind([&h, &res, &sign](const actor_handle& self)
 		{
-			h(trig_once_notifer<Outs...>(shared_from_this(), &res, &sign));
-		});
+			h(trig_once_notifer<Outs...>(std::move((actor_handle&)self), &res, &sign));
+		}, shared_from_this()));
 		if (!sign)
 		{
 			sign = true;
@@ -5810,10 +5796,10 @@ public:
 		assert_enter();
 		lock_quit();
 		bool sign = false;
-		_strand->next_tick([&]
+		_strand->next_tick(std::bind([&h, &sign](const actor_handle& self)
 		{
-			h(trig_once_notifer<>(shared_from_this(), NULL, &sign));
-		});
+			h(trig_once_notifer<>(std::move((actor_handle&)self), NULL, &sign));
+		}, shared_from_this()));
 		if (!sign)
 		{
 			sign = true;
@@ -8434,10 +8420,10 @@ public:
 	/*!
 	@brief 启动一堆Actor
 	*/
-	void actors_start_run(const list<actor_handle>& anotherActors);
+	void actors_start_run(const std::list<actor_handle>& anotherActors);
 
 	template <typename Alloc>
-	void actors_start_run(const list<actor_handle, Alloc>& anotherActors)
+	void actors_start_run(const std::list<actor_handle, Alloc>& anotherActors)
 	{
 		assert_enter();
 		for (auto& actorHandle : anotherActors)
@@ -8454,10 +8440,10 @@ public:
 	/*!
 	@brief 强制退出一堆Actor，并且等待完成
 	*/
-	__yield_interrupt void actors_force_quit(const list<actor_handle>& anotherActors);
+	__yield_interrupt void actors_force_quit(const std::list<actor_handle>& anotherActors);
 
 	template <typename Alloc>
-	__yield_interrupt void actors_force_quit(const list<actor_handle, Alloc>& anotherActors)
+	__yield_interrupt void actors_force_quit(const std::list<actor_handle, Alloc>& anotherActors)
 	{
 		assert_enter();
 		actor_msg_handle<> amh;
@@ -8481,10 +8467,10 @@ public:
 	/*!
 	@brief 等待一堆Actor结束后返回
 	*/
-	__yield_interrupt void actors_wait_quit(const list<actor_handle>& anotherActors);
+	__yield_interrupt void actors_wait_quit(const std::list<actor_handle>& anotherActors);
 
 	template <typename Alloc>
-	__yield_interrupt void actors_wait_quit(const list<actor_handle, Alloc>& anotherActors)
+	__yield_interrupt void actors_wait_quit(const std::list<actor_handle, Alloc>& anotherActors)
 	{
 		assert_enter();
 		for (auto& actorHandle : anotherActors)
@@ -8503,10 +8489,10 @@ public:
 	/*!
 	@brief 挂起一堆Actor，等待其所有子Actor都调用后才返回
 	*/
-	__yield_interrupt void actors_suspend(const list<actor_handle>& anotherActors);
+	__yield_interrupt void actors_suspend(const std::list<actor_handle>& anotherActors);
 
 	template <typename Alloc>
-	__yield_interrupt void actors_suspend(const list<actor_handle, Alloc>& anotherActors)
+	__yield_interrupt void actors_suspend(const std::list<actor_handle, Alloc>& anotherActors)
 	{
 		assert_enter();
 		actor_msg_handle<> amh;
@@ -8530,10 +8516,10 @@ public:
 	/*!
 	@brief 恢复一堆Actor，等待其所有子Actor都调用后才返回
 	*/
-	__yield_interrupt void actors_resume(const list<actor_handle>& anotherActors);
+	__yield_interrupt void actors_resume(const std::list<actor_handle>& anotherActors);
 
 	template <typename Alloc>
-	__yield_interrupt void actors_resume(const list<actor_handle, Alloc>& anotherActors)
+	__yield_interrupt void actors_resume(const std::list<actor_handle, Alloc>& anotherActors)
 	{
 		assert_enter();
 		actor_msg_handle<> amh;
@@ -8559,10 +8545,10 @@ public:
 	@brief 对一堆Actor进行挂起/恢复状态切换
 	@return 都已挂起返回true，否则false
 	*/
-	__yield_interrupt bool actors_switch(const list<actor_handle>& anotherActors);
+	__yield_interrupt bool actors_switch(const std::list<actor_handle>& anotherActors);
 
 	template <typename Alloc>
-	__yield_interrupt bool actors_switch(const list<actor_handle, Alloc>& anotherActors)
+	__yield_interrupt bool actors_switch(const std::list<actor_handle, Alloc>& anotherActors)
 	{
 		assert_enter();
 		bool isPause = true;
@@ -8586,6 +8572,7 @@ public:
 	@brief 安装my_actor框架
 	*/
 	static void install();
+	static void install(id aid);
 
 	/*!
 	@brief 卸载my_actor框架
@@ -8635,7 +8622,7 @@ private:
 #endif
 public:
 #ifdef PRINT_ACTOR_STACK
-	std::shared_ptr<list<stack_line_info>> _createStack;///<当前Actor创建时的调用堆栈
+	std::shared_ptr<std::list<stack_line_info>> _createStack;///<当前Actor创建时的调用堆栈
 #endif
 private:
 	std::weak_ptr<my_actor> _weakThis;

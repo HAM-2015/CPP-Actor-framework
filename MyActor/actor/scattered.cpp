@@ -1,11 +1,11 @@
 #include "scattered.h"
 #include <assert.h>
+#include <thread>
 #ifdef WIN32
 #include <winsock2.h>
 #include <Windows.h>
 #include <MMSystem.h>
 #endif
-#include <boost/thread.hpp>
 #include <boost/asio/io_service.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #ifdef PRINT_ACTOR_STACK
@@ -343,7 +343,7 @@ void** tls_space::get_space()
 boost::asio::io_service* _stackLogIos;
 std::ofstream _stackLogFile;
 
-void stack_overflow_format(int size, std::shared_ptr<list<stack_line_info>> createStack)
+void stack_overflow_format(int size, std::shared_ptr<std::list<stack_line_info>> createStack)
 {
 	if (_stackLogIos)
 	{
@@ -502,7 +502,7 @@ size_t check_file_name(char* name)
 	return length;
 }
 
-list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool module, bool symbolName)
+std::list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool module, bool symbolName)
 {
 	assert(maxDepth <= 32);
 
@@ -518,7 +518,7 @@ list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool module
 #endif
 	size_t depths = _stackwalk(trace, maxDepth + 1, &context);
 
-	list<stack_line_info> imageList;
+	std::list<stack_line_info> imageList;
 	HANDLE hProcess = ::GetCurrentProcess();
 	for (size_t i = 1 + offset; i < depths; i++)
 	{
@@ -599,7 +599,7 @@ struct init_mod
 		{
 			_stackLogIos = new boost::asio::io_service;
 			_stackLogWork = new boost::asio::io_service::work(*_stackLogIos);
-			_thread = new boost::thread([&]
+			_thread = new std::thread([&]
 			{
 				boost::system::error_code ec;
 				_stackLogIos->run(ec);
@@ -625,7 +625,7 @@ struct init_mod
 		}
 	}
 
-	boost::thread* _thread;
+	std::thread* _thread;
 	boost::asio::io_service::work* _stackLogWork;
 };
 init_mod* _init_ms = NULL;
@@ -646,13 +646,13 @@ void uninstall_check_stack()
 
 #elif __linux__
 
-list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool module, bool symbolName)
+std::list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool module, bool symbolName)
 {
 	assert(maxDepth <= 32);
 	int nptrs;
 	void *buffer[33];
 	char **strings;
-	list<stack_line_info> imageList;
+	std::list<stack_line_info> imageList;
 
 	nptrs = backtrace(buffer, 1+maxDepth);
 	strings = backtrace_symbols(buffer, nptrs);

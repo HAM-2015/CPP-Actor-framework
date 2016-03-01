@@ -16,7 +16,7 @@
   <Build xsi:type="com.visualgdb.build.make">
     <MakeFilePathRelativeToSourceDir>Makefile</MakeFilePathRelativeToSourceDir>
     <MakeConfigurationName>Release</MakeConfigurationName>
-    <AdditionalMakeArguments />
+    <AdditionalMakeArguments>-j2</AdditionalMakeArguments>
     <Toolchain>
       <Name>MinGW</Name>
       <Location>C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64</Location>

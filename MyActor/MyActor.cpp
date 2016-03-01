@@ -7,9 +7,6 @@
 #include "./actor/msg_queue.h"
 #include "./actor/sync_msg.h"
 #include "./actor/trace.h"
-#include "./actor/async_timer.h"
-
-using namespace std;
 
 void wait_multi_msg()
 {
@@ -618,12 +615,12 @@ void perfor_test()
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [&](my_actor* self)
 	{
 		self->check_stack();
-		vector<shared_strand> strands = boost_strand::create_multi(ios.threadNumber(), ios);
+		std::vector<shared_strand> strands = boost_strand::create_multi(ios.threadNumber(), ios);
 		for (int n = 1; n < 200; n++)
 		{
 			int num = n*n;
-			list<child_actor_handle> childList;
-			vector<int> count(num);
+			std::list<child_actor_handle> childList;
+			std::vector<int> count(num);
 			for (int i = 0; i < num; i++)
 			{
 				count[i] = 0;
@@ -676,7 +673,7 @@ void auto_stack_test()
 
 int main(int argc, char *argv[])
 {
-	init_my_actor();
+	init_my_actor(0);
 	auto_stack_test();
 	trace("\n");
 	trig_test();

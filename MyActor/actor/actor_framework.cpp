@@ -2,7 +2,10 @@
 #include "async_buffer.h"
 #include "sync_msg.h"
 #include "context_pool.h"
-#if (defined WIN32 && defined __GNUG__)
+#include "bind_qt_run.h"
+#include <boost/thread/shared_mutex.hpp>
+#include <boost/thread/locks.hpp>
+#if (WIN32 && __GNUG__)
 #include <fibersapi.h>
 #endif
 #ifdef __linux__
@@ -13,7 +16,7 @@
 typedef ContextPool_::coro_push_interface actor_push_type;
 typedef ContextPool_::coro_pull_interface actor_pull_type;
 
-DEBUG_OPERATION(static boost::thread::id s_installID);
+DEBUG_OPERATION(static std::thread::id s_installID);
 static bool s_inited = false;
 static bool s_isSelfInitFiber = false;
 #ifdef __linux__
@@ -45,7 +48,7 @@ struct autoActorStackMng
 		_table[key] = ns;
 	}
 
-	map<size_t, size_t> _table;
+	std::map<size_t, size_t> _table;
 	boost::shared_mutex _mutex;
 };
 static autoActorStackMng* s_autoActorStackMng = NULL;
@@ -58,14 +61,22 @@ msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor
 
 void my_actor::install()
 {
+	install(cpu_tick());
+}
+
+void my_actor::install(id aid)
+{
 	if (!s_inited)
 	{
 		s_inited = true;
-		DEBUG_OPERATION(s_installID = boost::this_thread::get_id());
+		DEBUG_OPERATION(s_installID = std::this_thread::get_id());
 		io_engine::install();
 		install_check_stack();
 		s_isSelfInitFiber = context_yield::convert_thread_to_fiber();
 		ContextPool_::install();
+#ifdef ENABLE_QT_UI
+		bind_qt_run_base::install();
+#endif
 #ifdef ENABLE_CHECK_LOST
 		auto& s_checkLostObjAlloc_ = s_checkLostObjAlloc;
 		auto& s_checkPumpLostObjAlloc_ = s_checkPumpLostObjAlloc;
@@ -79,7 +90,7 @@ void my_actor::install()
 		s_sigsegvMutex = new std::mutex;
 #endif
 		shared_bool::_sharedBoolPool = create_shared_pool_mt<bool, std::mutex>(100000);
-		my_actor::_actorIDCount = new std::atomic<my_actor::id>(cpu_tick());
+		my_actor::_actorIDCount = new std::atomic<my_actor::id>(aid);
 		my_actor::_childActorListAll = new msg_list_shared_alloc<actor_handle>::shared_node_alloc(100000);
 		my_actor::_quitExitCallbackAll = new msg_list_shared_alloc<std::function<void()> >::shared_node_alloc(100000);
 		my_actor::_suspendResumeQueueAll = new msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc(100000);
@@ -92,7 +103,7 @@ void my_actor::uninstall()
 	if (s_inited)
 	{
 		s_inited = false;
-		assert(boost::this_thread::get_id() == s_installID);
+		assert(std::this_thread::get_id() == s_installID);
 		delete shared_bool::_sharedBoolPool;
 		shared_bool::_sharedBoolPool = NULL;
 		delete my_actor::_actorIDCount;
@@ -120,6 +131,9 @@ void my_actor::uninstall()
 		s_checkLostObjAlloc = NULL;
 		delete s_checkPumpLostObjAlloc;
 		s_checkPumpLostObjAlloc = NULL;
+#endif
+#ifdef ENABLE_QT_UI
+		bind_qt_run_base::uninstall();
 #endif
 		ContextPool_::uninstall();
 		if (s_isSelfInitFiber)
@@ -447,7 +461,7 @@ void MsgPoolVoid_::push_msg(const actor_handle& hostActor)
 	}
 	else
 	{
-		_strand->post(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPoolVoid_>& sharedThis)
+		_strand->post(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPoolVoid_>& sharedThis)
 		{
 			sharedThis->send_msg(std::move((actor_handle&)hostActor));
 		}, hostActor, _weakThis.lock()));
@@ -470,7 +484,7 @@ void MsgPoolVoid_::lost_msg(const actor_handle& hostActor)
 {
 	if (!_closed)
 	{
-		_strand->try_tick(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPoolVoid_>& sharedThis)
+		_strand->try_tick(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPoolVoid_>& sharedThis)
 		{
 			sharedThis->_lost_msg(hostActor);
 		}, hostActor, _weakThis.lock()));
@@ -481,7 +495,7 @@ void MsgPoolVoid_::lost_msg(actor_handle&& hostActor)
 {
 	if (!_closed)
 	{
-		_strand->try_tick(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPoolVoid_>& sharedThis)
+		_strand->try_tick(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPoolVoid_>& sharedThis)
 		{
 			sharedThis->_lost_msg(hostActor);
 		}, std::move(hostActor), _weakThis.lock()));
@@ -868,7 +882,7 @@ void MsgPumpVoid_::lost_msg(const actor_handle& hostActor)
 	}
 	else
 	{
-		_strand->post(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPumpVoid_>& sharedThis)
+		_strand->post(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPumpVoid_>& sharedThis)
 		{
 			sharedThis->_lost_msg();
 		}, hostActor, _weakThis.lock()));
@@ -883,7 +897,7 @@ void MsgPumpVoid_::lost_msg(actor_handle&& hostActor)
 	}
 	else
 	{
-		_strand->post(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPumpVoid_>& sharedThis)
+		_strand->post(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPumpVoid_>& sharedThis)
 		{
 			sharedThis->_lost_msg();
 		}, std::move(hostActor), _weakThis.lock()));
@@ -1014,7 +1028,7 @@ void MsgPumpVoid_::receive_msg(const actor_handle& hostActor)
 	}
 	else
 	{
-		_strand->post(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPumpVoid_>& sharedThis)
+		_strand->post(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPumpVoid_>& sharedThis)
 		{
 			sharedThis->receiver();
 		}, hostActor, _weakThis.lock()));
@@ -1029,7 +1043,7 @@ void MsgPumpVoid_::receive_msg(actor_handle&& hostActor)
 	}
 	else
 	{
-		_strand->post(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPumpVoid_>& sharedThis)
+		_strand->post(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPumpVoid_>& sharedThis)
 		{
 			sharedThis->receiver();
 		}, std::move(hostActor), _weakThis.lock()));
@@ -1038,7 +1052,7 @@ void MsgPumpVoid_::receive_msg(actor_handle&& hostActor)
 
 void MsgPumpVoid_::receive_msg_tick(const actor_handle& hostActor)
 {
-	_strand->try_tick(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPumpVoid_>& sharedThis)
+	_strand->try_tick(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPumpVoid_>& sharedThis)
 	{
 		sharedThis->receiver();
 	}, hostActor, _weakThis.lock()));
@@ -1046,7 +1060,7 @@ void MsgPumpVoid_::receive_msg_tick(const actor_handle& hostActor)
 
 void MsgPumpVoid_::receive_msg_tick(actor_handle&& hostActor)
 {
-	_strand->try_tick(std::bind([](const actor_handle& hostActor, const shared_ptr<MsgPumpVoid_>& sharedThis)
+	_strand->try_tick(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPumpVoid_>& sharedThis)
 	{
 		sharedThis->receiver();
 	}, std::move(hostActor), _weakThis.lock()));
@@ -1295,10 +1309,6 @@ struct actor_ref_count_alloc
 };
 //////////////////////////////////////////////////////////////////////////
 
-void my_actor::quit_guard::operator=(const quit_guard&) {}
-
-my_actor::quit_guard::quit_guard(const quit_guard&) {}
-
 my_actor::quit_guard::quit_guard(my_actor* self) :_self(self)
 {
 	_locked = true;
@@ -1328,10 +1338,6 @@ void my_actor::quit_guard::unlock()
 	_self->unlock_quit();
 }
 //////////////////////////////////////////////////////////////////////////
-
-void my_actor::suspend_guard::operator=(const suspend_guard&) {}
-
-my_actor::suspend_guard::suspend_guard(const suspend_guard&) {}
 
 my_actor::suspend_guard::suspend_guard(my_actor* self) :_self(self)
 {
@@ -1893,7 +1899,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& main
 	newActor->_timer = actorStrand->actor_timer();
 	newActor->_actorPull = pull;
 #ifdef PRINT_ACTOR_STACK
-	newActor->_createStack = std::shared_ptr<list<stack_line_info>>(new list<stack_line_info>(get_stack_list(8, 1)));
+	newActor->_createStack = std::shared_ptr<std::list<stack_line_info>>(new std::list<stack_line_info>(get_stack_list(8, 1)));
 #endif
 
 	pull->_param = newActor.get();
@@ -1940,7 +1946,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 	newActor->_timer = actorStrand->actor_timer();
 	newActor->_actorPull = pull;
 #ifdef PRINT_ACTOR_STACK
-	newActor->_createStack = std::shared_ptr<list<stack_line_info>>(new list<stack_line_info>(get_stack_list(8, 1)));
+	newActor->_createStack = std::shared_ptr<std::list<stack_line_info>>(new std::list<stack_line_info>(get_stack_list(8, 1)));
 #endif
 
 	pull->_param = newActor.get();
@@ -2003,7 +2009,7 @@ void my_actor::child_actor_run(child_actor_handle& actorHandle)
 	actorHandle._actor->notify_run();
 }
 
-void my_actor::child_actors_run(list<child_actor_handle::ptr>& actorHandles)
+void my_actor::child_actors_run(std::list<child_actor_handle::ptr>& actorHandles)
 {
 	assert_enter();
 	for (auto& actorHandle : actorHandles)
@@ -2012,7 +2018,7 @@ void my_actor::child_actors_run(list<child_actor_handle::ptr>& actorHandles)
 	}
 }
 
-void my_actor::child_actors_run(list<child_actor_handle>& actorHandles)
+void my_actor::child_actors_run(std::list<child_actor_handle>& actorHandles)
 {
 	assert_enter();
 	for (auto& actorHandle : actorHandles)
@@ -2043,7 +2049,7 @@ void my_actor::child_actor_force_quit(child_actor_handle& actorHandle)
 	}
 }
 
-void my_actor::child_actors_force_quit(list<child_actor_handle::ptr>& actorHandles)
+void my_actor::child_actors_force_quit(std::list<child_actor_handle::ptr>& actorHandles)
 {
 	assert_enter();
 	for (auto& actorHandle : actorHandles)
@@ -2073,7 +2079,7 @@ void my_actor::child_actors_force_quit(list<child_actor_handle::ptr>& actorHandl
 	}
 }
 
-void my_actor::child_actors_force_quit(list<child_actor_handle>& actorHandles)
+void my_actor::child_actors_force_quit(std::list<child_actor_handle>& actorHandles)
 {
 	assert_enter();
 	for (auto& actorHandle : actorHandles)
@@ -2116,7 +2122,7 @@ void my_actor::child_actor_wait_quit(child_actor_handle& actorHandle)
 	}
 }
 
-void my_actor::child_actors_wait_quit(list<child_actor_handle::ptr>& actorHandles)
+void my_actor::child_actors_wait_quit(std::list<child_actor_handle::ptr>& actorHandles)
 {
 	assert_enter();
 	for (auto& actorHandle : actorHandles)
@@ -2126,7 +2132,7 @@ void my_actor::child_actors_wait_quit(list<child_actor_handle::ptr>& actorHandle
 	}
 }
 
-void my_actor::child_actors_wait_quit(list<child_actor_handle>& actorHandles)
+void my_actor::child_actors_wait_quit(std::list<child_actor_handle>& actorHandles)
 {
 	assert_enter();
 	for (auto& actorHandle : actorHandles)
@@ -2168,7 +2174,7 @@ void my_actor::child_actor_suspend(child_actor_handle& actorHandle)
 	}
 }
 
-void my_actor::child_actors_suspend(list<child_actor_handle::ptr>& actorHandles)
+void my_actor::child_actors_suspend(std::list<child_actor_handle::ptr>& actorHandles)
 {
 	assert_enter();
 	actor_msg_handle<> amh;
@@ -2194,7 +2200,7 @@ void my_actor::child_actors_suspend(list<child_actor_handle::ptr>& actorHandles)
 	close_msg_notifer(amh);
 }
 
-void my_actor::child_actors_suspend(list<child_actor_handle>& actorHandles)
+void my_actor::child_actors_suspend(std::list<child_actor_handle>& actorHandles)
 {
 	assert_enter();
 	actor_msg_handle<> amh;
@@ -2236,7 +2242,7 @@ void my_actor::child_actor_resume(child_actor_handle& actorHandle)
 	}
 }
 
-void my_actor::child_actors_resume(list<child_actor_handle::ptr>& actorHandles)
+void my_actor::child_actors_resume(std::list<child_actor_handle::ptr>& actorHandles)
 {
 	assert_enter();
 	actor_msg_handle<> amh;
@@ -2262,7 +2268,7 @@ void my_actor::child_actors_resume(list<child_actor_handle::ptr>& actorHandles)
 	close_msg_notifer(amh);
 }
 
-void my_actor::child_actors_resume(list<child_actor_handle>& actorHandles)
+void my_actor::child_actors_resume(std::list<child_actor_handle>& actorHandles)
 {
 	assert_enter();
 	actor_msg_handle<> amh;
@@ -3112,7 +3118,7 @@ void my_actor::append_quit_executor(std::function<void()>&& h)
 	}
 }
 
-void my_actor::actors_start_run(const list<actor_handle>& anotherActors)
+void my_actor::actors_start_run(const std::list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	for (auto& actorHandle : anotherActors)
@@ -3128,7 +3134,7 @@ void my_actor::actor_force_quit(const actor_handle& anotherActor)
 	trig([anotherActor](trig_once_notifer<>&& h){anotherActor->notify_quit(std::move(h)); });
 }
 
-void my_actor::actors_force_quit(const list<actor_handle>& anotherActors)
+void my_actor::actors_force_quit(const std::list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	actor_msg_handle<> amh;
@@ -3160,7 +3166,7 @@ bool my_actor::timed_actor_wait_quit(int tm, const actor_handle& anotherActor)
 	return timed_wait_trig(tm, ath);
 }
 
-void my_actor::actors_wait_quit(const list<actor_handle>& anotherActors)
+void my_actor::actors_wait_quit(const std::list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	for (auto& actorHandle : anotherActors)
@@ -3176,7 +3182,7 @@ void my_actor::actor_suspend(const actor_handle& anotherActor)
 	trig([anotherActor](trig_once_notifer<>&& h){anotherActor->notify_suspend(std::move(h)); });
 }
 
-void my_actor::actors_suspend(const list<actor_handle>& anotherActors)
+void my_actor::actors_suspend(const std::list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	actor_msg_handle<> amh;
@@ -3199,7 +3205,7 @@ void my_actor::actor_resume(const actor_handle& anotherActor)
 	trig([anotherActor](trig_once_notifer<>&& h){anotherActor->notify_resume(std::move(h)); });
 }
 
-void my_actor::actors_resume(const list<actor_handle>& anotherActors)
+void my_actor::actors_resume(const std::list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	actor_msg_handle<> amh;
@@ -3222,7 +3228,7 @@ bool my_actor::actor_switch(const actor_handle& anotherActor)
 	return trig<bool>([anotherActor](trig_once_notifer<bool>&& h){anotherActor->switch_pause_play(std::move(h)); });
 }
 
-bool my_actor::actors_switch(const list<actor_handle>& anotherActors)
+bool my_actor::actors_switch(const std::list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	bool isPause = true;

@@ -2,9 +2,8 @@
 #define __BIND_QT_RUN_H
 
 #ifdef ENABLE_QT_UI
-#include <boost/thread/shared_mutex.hpp>
-#include <boost/thread/locks.hpp>
 #include <functional>
+#include <thread>
 #include <mutex>
 #include <QtGui/qevent.h>
 #include <QtCore/qeventloop.h>
@@ -213,8 +212,12 @@ protected:
 		void* operator new(size_t s);
 		void operator delete(void* p);
 		wrap_handler_face* _handler;
-		static mem_alloc_mt<task_event> _taskAlloc;
+		static mem_alloc_mt2<task_event>* _taskAlloc;
 	};
+private:
+	friend my_actor;
+	static void install();
+	static void uninstall();
 protected:
 	bind_qt_run_base();
 	virtual ~bind_qt_run_base();
@@ -222,7 +225,7 @@ public:
 	/*!
 	@brief 获取主线程ID
 	*/
-	boost::thread::id thread_id();
+	std::thread::id thread_id();
 
 	/*!
 	@brief 是否在UI线程中执行
@@ -379,7 +382,7 @@ protected:
 	void check_close();
 	void enter_wait_close();
 private:
-	boost::thread::id _threadID;
+	std::thread::id _threadID;
 	reusable_mem_mt<> _reuMem;
 	std::mutex _mutex;
 #ifdef ENABLE_QT_ACTOR
@@ -402,7 +405,7 @@ protected:
 	bind_qt_run(Args&&... args)
 		: FRAME(TRY_MOVE(args)...) {}
 public:
-	boost::thread::id thread_id()
+	std::thread::id thread_id()
 	{
 		return bind_qt_run_base::thread_id();
 	}
