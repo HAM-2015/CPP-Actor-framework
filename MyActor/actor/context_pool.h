@@ -20,14 +20,14 @@ public:
 public:
 	struct coro_push_interface
 	{
-		void operator()();
+		void yield();
 
 		context_yield::context_info* _coroInfo;
 	};
 
 	struct coro_pull_interface
 	{
-		void operator()();
+		void yield();
 
 		context_yield::context_info* _coroInfo;
 		coro_handler _currentHandler;
@@ -65,8 +65,8 @@ private:
 	static void contextHandler(context_yield::context_info* info, void* param);
 	void clearThread();
 private:
-	bool _exitSign;
-	bool _clearWait;
+	volatile bool _exitSign;
+	volatile bool _clearWait;
 	context_pool_pck _contextPool[256];
 	std::mutex _clearMutex;
 	std::thread _clearThread;

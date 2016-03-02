@@ -2,7 +2,6 @@
 #define __WAITABLE_TIMER_H
 
 #ifdef DISABLE_BOOST_TIMER
-#ifdef WIN32
 #include "msg_queue.h"
 #include "mem_pool.h"
 #include "io_engine.h"
@@ -36,8 +35,12 @@ private:
 	void removeEvent(timer_handle& th);
 	void timerThread();
 private:
-	bool _exited;
+	volatile bool _exited;
+#ifdef WIN32
 	void* _timerHandle;
+#elif __linux__
+	int _timerFd;
+#endif
 	unsigned long long _extMaxTick;
 	unsigned long long _extFinishTime;
 	handler_queue _eventsQueue;
@@ -107,9 +110,6 @@ private:
 	reusable_mem _reuMem;
 	WaitableTimer_::timer_handle _timerHandle;
 };
-#elif __linux__
-#error "do not define DISABLE_BOOST_TIMER"
-#endif
 #endif
 
 #endif

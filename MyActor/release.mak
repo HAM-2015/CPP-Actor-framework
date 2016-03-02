@@ -12,7 +12,7 @@ AR := ar
 OBJCOPY := objcopy
 
 #Additional flags
-PREPROCESSOR_MACROS := NDEBUG RELEASE ENABLE_NEXT_TICK ENABLE_CHECK_LOST
+PREPROCESSOR_MACROS := NDEBUG RELEASE ENABLE_NEXT_TICK ENABLE_CHECK_LOST DISABLE_BOOST_TIMER
 INCLUDE_DIRS := 
 LIBRARY_DIRS := /usr/local/lib/boost ./actor
 LIBRARY_NAMES := pthread sigsegv_x64 fcontext_x64 boost_thread-gcc49-mt-s-1_59 boost_system-gcc49-mt-s-1_59 boost_chrono-gcc49-mt-s-1_59
@@ -20,8 +20,8 @@ ADDITIONAL_LINKER_INPUTS :=
 MACOS_FRAMEWORKS := 
 LINUX_PACKAGES := 
 
-CFLAGS := -ggdb -ffunction-sections -O3
-CXXFLAGS := -ggdb -ffunction-sections -O3 -std=c++11
+CFLAGS := -ffunction-sections -O3
+CXXFLAGS := -ffunction-sections -O3 -std=c++11
 ASFLAGS := 
 LDFLAGS := -Wl,-gc-sections
 COMMONFLAGS := 

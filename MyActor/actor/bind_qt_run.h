@@ -339,7 +339,7 @@ public:
 	{
 		assert(run_in_ui_thread());
 		_waitCount++;
-		return std::function<void()>(wrap(std::bind([this](const Handler& handler)
+		return std::function<void()>(wrap(std::bind([this](Handler& handler)
 		{
 			handler();
 			check_close();

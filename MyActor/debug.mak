@@ -12,7 +12,7 @@ AR := ar
 OBJCOPY := objcopy
 
 #Additional flags
-PREPROCESSOR_MACROS := DEBUG _DEBUG ENABLE_NEXT_TICK ENABLE_CHECK_LOST
+PREPROCESSOR_MACROS := DEBUG _DEBUG ENABLE_NEXT_TICK ENABLE_CHECK_LOST DISABLE_BOOST_TIMER
 INCLUDE_DIRS := 
 LIBRARY_DIRS := /usr/local/lib/boost ./actor
 LIBRARY_NAMES := pthread sigsegv_x64 fcontext_x64 boost_thread-gcc49-mt-sd-1_59 boost_system-gcc49-mt-sd-1_59 boost_chrono-gcc49-mt-sd-1_59

@@ -785,8 +785,8 @@ public:
 	/*!
 	@brief 等待对方执行一个函数体，函数体内返回对方需要的执行结果
 	*/
-	template <typename H>
-	void take(my_actor* host, const H& h)
+	template <typename Func>
+	void take(my_actor* host, Func&& h)
 	{
 		host->lock_quit();
 		actor_trig_handle<bool> ath;
@@ -854,8 +854,8 @@ public:
 	/*!
 	@brief 尝试执行一个函数体，如果对方在准备执行则成功，否则抛出 try_wait_exception 异常
 	*/
-	template <typename H>
-	void try_take(my_actor* host, const H& h)
+	template <typename Func>
+	void try_take(my_actor* host, Func&& h)
 	{
 		host->lock_quit();
 		actor_trig_notifer<bool> ntfSend;
@@ -918,8 +918,8 @@ public:
 	/*!
 	@brief 尝试执行一个函数体，如果对方在一定时间内执行则成功，否则抛出 timed_wait_exception 异常
 	*/
-	template <typename H>
-	void timed_take(int tm, my_actor* host, const H& h)
+	template <typename Func>
+	void timed_take(int tm, my_actor* host, Func&& h)
 	{
 		host->lock_quit();
 		actor_trig_handle<bool> ath;
@@ -1087,9 +1087,9 @@ struct CspInvokeBaseFunc_
 	typedef R&& result_type;
 
 	template <typename H, typename TUPLE>
-	static inline R invoke(H&& h, TUPLE&& t)
+	static inline R invoke(H& h, TUPLE&& t)
 	{
-		return tuple_invoke<R>(TRY_MOVE(h), TRY_MOVE(t));
+		return tuple_invoke<R>(h, TRY_MOVE(t));
 	}
 };
 
@@ -1099,9 +1099,9 @@ struct CspInvokeBaseFunc_<void>
 	typedef void result_type;
 
 	template <typename H, typename TUPLE>
-	static inline VoidReturn_ invoke(H&& h, TUPLE&& t)
+	static inline VoidReturn_ invoke(H& h, TUPLE&& t)
 	{
-		tuple_invoke(TRY_MOVE(h), TRY_MOVE(t));
+		tuple_invoke(h, TRY_MOVE(t));
 		return VoidReturn_();
 	}
 };
@@ -1118,8 +1118,8 @@ protected:
 		:base_csp_channel(strand) {}
 	~CspInvokeBase_() {}
 public:
-	template <typename H>
-	void wait_invoke(my_actor* host, const H& h)
+	template <typename Func>
+	void wait_invoke(my_actor* host, Func&& h)
 	{
 		base_csp_channel::take(host, [&](msg_type& msg)->return_type
 		{
@@ -1127,8 +1127,8 @@ public:
 		});
 	}
 
-	template <typename H>
-	void try_wait_invoke(my_actor* host, const H& h)
+	template <typename Func>
+	void try_wait_invoke(my_actor* host, Func&& h)
 	{
 		base_csp_channel::try_take(host, [&](msg_type& msg)->return_type
 		{
@@ -1136,8 +1136,8 @@ public:
 		});
 	}
 
-	template <typename H>
-	void timed_wait_invoke(int tm, my_actor* host, const H& h)
+	template <typename Func>
+	void timed_wait_invoke(int tm, my_actor* host, Func&& h)
 	{
 		base_csp_channel::timed_take(tm, host, [&](msg_type& msg)->return_type
 		{

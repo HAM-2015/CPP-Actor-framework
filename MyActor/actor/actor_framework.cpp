@@ -248,8 +248,8 @@ child_actor_handle::child_actor_handle(child_actor_handle&& s)
 	*this = std::move(s);
 }
 
-child_actor_handle::child_actor_handle(const actor_handle& actor)
-:_actor(actor), _started(false), _quited(false)
+child_actor_handle::child_actor_handle(actor_handle&& actor)
+:_actor(std::move(actor)), _started(false), _quited(false)
 {
 	my_actor* parent = _actor->_parentActor.get();
 	parent->_childActorList.push_front(_actor);
@@ -1384,7 +1384,7 @@ public:
 			{
 				_actor._yieldCount++;
 				_actor._inActor = false;
-				(*(actor_push_type*)_actor._actorPush)();
+				((actor_push_type*)_actor._actorPush)->yield();
 				if (_actor._notifyQuited)
 				{
 					throw force_quit_exception();
@@ -1903,12 +1903,8 @@ actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& main
 #endif
 
 	pull->_param = newActor.get();
-	pull->_currentHandler = [](actor_push_type& push, void* p)
-	{
-		actor_run entrance(*(my_actor*)p);
-		entrance(push);
-	};
-	(*pull)();
+	pull->_currentHandler = [](actor_push_type& push, void* p) {actor_run(*(my_actor*)p)(push); };
+	pull->yield();
 	return newActor;
 }
 
@@ -1950,12 +1946,8 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 #endif
 
 	pull->_param = newActor.get();
-	pull->_currentHandler = [](actor_push_type& push, void* p)
-	{
-		actor_run entrance(*(my_actor*)p);
-		entrance(push);
-	};
-	(*pull)();
+	pull->_currentHandler = [](actor_push_type& push, void* p) {actor_run(*(my_actor*)p)(push); };
+	pull->yield();
 	return newActor;
 }
 
@@ -1964,7 +1956,7 @@ child_actor_handle my_actor::create_child_actor(const shared_strand& actorStrand
 	assert_enter();
 	actor_handle childActor = my_actor::create(actorStrand, mainFunc, stackSize);
 	childActor->_parentActor = shared_from_this();
-	return child_actor_handle(childActor);
+	return child_actor_handle(std::move(childActor));
 }
 
 child_actor_handle my_actor::create_child_actor(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize)
@@ -1972,7 +1964,7 @@ child_actor_handle my_actor::create_child_actor(const shared_strand& actorStrand
 	assert_enter();
 	actor_handle childActor = my_actor::create(actorStrand, std::move(mainFunc), stackSize);
 	childActor->_parentActor = shared_from_this();
-	return child_actor_handle(childActor);
+	return child_actor_handle(std::move(childActor));
 }
 
 child_actor_handle my_actor::create_child_actor(const main_func& mainFunc, size_t stackSize)
@@ -1990,7 +1982,7 @@ child_actor_handle my_actor::create_child_actor(const shared_strand& actorStrand
 	assert_enter();
 	actor_handle childActor = my_actor::create(actorStrand, std::move(wrapActor));
 	childActor->_parentActor = shared_from_this();
-	return child_actor_handle(childActor);
+	return child_actor_handle(std::move(childActor));
 }
 
 child_actor_handle my_actor::create_child_actor(AutoStackActorFace_&& wrapActor)
@@ -3259,12 +3251,12 @@ void my_actor::run_one()
 void my_actor::pull_yield_tls()
 {
 #if (WIN32 && ((_WIN32_WINNT >= 0x0502) || !(defined CHECK_SELF)))
-	(*(actor_pull_type*)_actorPull)();
+	((actor_pull_type*)_actorPull)->yield();
 #else//if (__linux__ || (WIN32 && (_WIN32_WINNT < 0x0502) && (defined CHECK_SELF)))
 	void** tlsBuff = io_engine::getTlsValueBuff();
 	void* old = tlsBuff[ACTOR_TLS_INDEX];
 	tlsBuff[ACTOR_TLS_INDEX] = this;
-	(*(actor_pull_type*)_actorPull)();
+	((actor_pull_type*)_actorPull)->yield();
 	tlsBuff[ACTOR_TLS_INDEX] = old;
 #endif
 }
@@ -3296,7 +3288,7 @@ void my_actor::push_yield()
 	check_stack();
 	_yieldCount++;
 	_inActor = false;
-	(*(actor_push_type*)_actorPush)();
+	((actor_push_type*)_actorPush)->yield();
 	if (!_notifyQuited || _lockQuit)
 	{
 		_inActor = true;
@@ -3309,7 +3301,7 @@ void my_actor::push_yield_after_quited()
 {
 	check_stack();
 	_inActor = false;
-	(*(actor_push_type*)_actorPush)();
+	((actor_push_type*)_actorPush)->yield();
 	_inActor = true;
 }
 

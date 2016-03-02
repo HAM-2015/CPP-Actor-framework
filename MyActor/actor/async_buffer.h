@@ -345,8 +345,8 @@ private:
 	async_buffer(const async_buffer&){};
 	void operator=(const async_buffer&){};
 
-	template <typename H>
-	void _push(my_actor* host, const H& h)
+	template <typename Func>
+	void _push(my_actor* host, Func&& h)
 	{
 		host->lock_quit();
 		while (true)
@@ -406,8 +406,8 @@ private:
 		host->unlock_quit();
 	}
 
-	template <typename H>
-	size_t _try_push(my_actor* host, const H& h)
+	template <typename Func>
+	size_t _try_push(my_actor* host, Func&& h)
 	{
 		host->lock_quit();
 		bool closed = false;
@@ -448,8 +448,8 @@ private:
 		return pushCount;
 	}
 
-	template <typename H>
-	size_t _timed_push(int tm, my_actor* host, const H& h)
+	template <typename Func>
+	size_t _timed_push(int tm, my_actor* host, Func&& h)
 	{
 		host->lock_quit();
 		long long utm = (long long)tm * 1000;
@@ -534,8 +534,8 @@ private:
 		return pushCount;
 	}
 
-	template <typename H>
-	size_t _force_push(my_actor* host, const H& h)
+	template <typename Func>
+	size_t _force_push(my_actor* host, Func&& h)
 	{
 		host->lock_quit();
 		bool closed = false;
@@ -576,8 +576,8 @@ private:
 		return lostCount;
 	}
 
-	template <typename H>
-	void _pop(my_actor* host, const H& out)
+	template <typename Func>
+	void _pop(my_actor* host, Func&& out)
 	{
 		host->lock_quit();
 		while (true)
@@ -638,8 +638,8 @@ private:
 		host->unlock_quit();
 	}
 
-	template <typename H>
-	size_t _try_pop(my_actor* host, const H& out)
+	template <typename Func>
+	size_t _try_pop(my_actor* host, Func&& out)
 	{
 		host->lock_quit();
 		bool closed = false;
@@ -681,8 +681,8 @@ private:
 		return popCount;
 	}
 
-	template <typename H>
-	size_t _timed_pop(int tm, my_actor* host, const H& out)
+	template <typename Func>
+	size_t _timed_pop(int tm, my_actor* host, Func&& out)
 	{
 		host->lock_quit();
 		long long utm = (long long)tm * 1000;

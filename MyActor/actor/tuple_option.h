@@ -124,9 +124,9 @@ template <typename R, size_t N>
 struct ApplyArg_
 {
 	template <typename Handler, typename Tuple, typename... Args>
-	static inline R append(Handler&& h, Tuple&& tup, Args&&... args)
+	static inline R append(Handler& h, Tuple&& tup, Args&&... args)
 	{
-		return ApplyArg_<R, N - 1>::append(TRY_MOVE(h), TRY_MOVE(tup), tuple_move<N - 1, Tuple&&>::get(TRY_MOVE(tup)), TRY_MOVE(args)...);
+		return ApplyArg_<R, N - 1>::append(h, TRY_MOVE(tup), tuple_move<N - 1, Tuple&&>::get(TRY_MOVE(tup)), TRY_MOVE(args)...);
 	}
 
 	template <typename Tuple, typename First, typename... Args>
@@ -148,7 +148,7 @@ template <typename R>
 struct ApplyArg_<R, 0>
 {
 	template <typename Handler, typename Tuple, typename... Args>
-	static inline R append(Handler&& h, Tuple&&, Args&&... args)
+	static inline R append(Handler& h, Tuple&&, Args&&... args)
 	{
 		return h(TRY_MOVE(args)...);
 	}
@@ -173,7 +173,7 @@ template <typename R, typename Handler, typename... TYPES>
 struct TupleInvokeWrap_<R, Handler, std::tuple<TYPES...>&&>
 {
 	template <typename... Args>
-	inline R operator ()(Args&&... args)
+	inline R operator ()(Args&&... args) const
 	{
 		return ApplyArg_<R, sizeof...(TYPES)>::append(_h, std::move(_tuple), TRY_MOVE(args)...);
 	}
@@ -186,7 +186,7 @@ template <typename R, typename Handler, typename... TYPES>
 struct TupleInvokeWrap_<R, Handler, std::tuple<TYPES...>&>
 {
 	template <typename... Args>
-	inline R operator ()(Args&&... args)
+	inline R operator ()(Args&&... args) const
 	{
 		return ApplyArg_<R, sizeof...(TYPES)>::append(_h, _tuple, TRY_MOVE(args)...);
 	}
@@ -199,7 +199,7 @@ template <typename R, typename Handler, typename... TYPES>
 struct TupleInvokeWrap_<R, Handler, const std::tuple<TYPES...>&>
 {
 	template <typename... Args>
-	inline R operator ()(Args&&... args)
+	inline R operator ()(Args&&... args) const
 	{
 		return ApplyArg_<R, sizeof...(TYPES)>::append(_h, _tuple, TRY_MOVE(args)...);
 	}
@@ -212,7 +212,7 @@ template <typename R, typename Handler, typename... TYPES>
 struct TupleInvokeWrap_<R, Handler, const std::tuple<TYPES...>&&>
 {
 	template <typename... Args>
-	inline R operator ()(Args&&... args)
+	inline R operator ()(Args&&... args) const
 	{
 		return ApplyArg_<R, sizeof...(TYPES)>::append(_h, _tuple, TRY_MOVE(args)...);
 	}
@@ -225,7 +225,7 @@ template <typename R, typename Handler, typename TYPE>
 struct TupleInvokeWrap_<R, Handler, TYPE>
 {
 	template <typename... Args>
-	inline R operator ()(Args&&... args)
+	inline R operator ()(Args&&... args) const
 	{
 		return _h((TYPE)_type, TRY_MOVE(args)...);
 	}
@@ -238,7 +238,7 @@ template <typename R, typename F, typename C>
 struct InvokeWrapObj_
 {
 	template <typename... Args>
-	inline R operator ()(Args&&... args)
+	inline R operator ()(Args&&... args) const
 	{
 		return (obj->*pf)(TRY_MOVE(args)...);
 	}
@@ -251,13 +251,13 @@ template <typename R, bool>
 struct TupleInvoke_ 
 {
 	template <typename Handler>
-	static inline R tuple_invoke(Handler&& h)
+	static inline R tuple_invoke(Handler& h)
 	{
 		return h();
 	}
 
 	template <typename Handler, typename First, typename... Tuple>
-	static inline R tuple_invoke(Handler&& h, First&& fst, Tuple&&... tups)
+	static inline R tuple_invoke(Handler& h, First&& fst, Tuple&&... tups)
 	{
 		TupleInvokeWrap_<R, Handler, First&&> wrap = { h, fst };
 		return tuple_invoke(wrap, TRY_MOVE(tups)...);
@@ -299,13 +299,13 @@ struct CheckClassFunc_<R(C::*)(Types...) const>
 template <typename R = void, typename Handler, typename Unknown, typename... Tuple>
 inline R tuple_invoke(Handler&& h, Unknown&& unkown, Tuple&&... tups)
 {
-	return TupleInvoke_<R, CheckClassFunc_<Handler>::value>::tuple_invoke(TRY_MOVE(h), TRY_MOVE(unkown), TRY_MOVE(tups)...);
+	return TupleInvoke_<R, CheckClassFunc_<RM_CREF(Handler)>::value>::tuple_invoke(h, TRY_MOVE(unkown), TRY_MOVE(tups)...);
 }
 
 template <typename R = void, typename Handler>
 inline R tuple_invoke(Handler&& h)
 {
-	static_assert(!CheckClassFunc_<Handler>::value, "");
+	static_assert(!CheckClassFunc_<RM_CREF(Handler)>::value, "");
 	return h();
 }
 
@@ -327,7 +327,7 @@ struct ApplyRval_
 	};
 
 	template <typename Handler, typename First, typename... Args>
-	static inline R append(Handler&& h, First&& fst, Args&&... args)
+	static inline R append(Handler& h, First&& fst, Args&&... args)
 	{
 		wrap_handler<Handler, First&&> wrap = { h, fst };
 		return ApplyRval_<R, N - 1>::append(wrap, TRY_MOVE(args)...);
@@ -338,7 +338,7 @@ template <typename R>
 struct ApplyRval_<R, 0>
 {
 	template <typename Handler>
-	static inline R append(Handler&& h)
+	static inline R append(Handler& h)
 	{
 		return h();
 	}
@@ -348,9 +348,9 @@ template <typename R, bool>
 struct RvalInvoke_
 {
 	template <typename Handler, typename... Args>
-	static inline R invoke(Handler&& h, Args&&... args)
+	static inline R invoke(Handler& h, Args&&... args)
 	{
-		return ApplyRval_<R, sizeof...(Args)>::append(TRY_MOVE(h), TRY_MOVE(args)...);
+		return ApplyRval_<R, sizeof...(Args)>::append(h, TRY_MOVE(args)...);
 	}
 };
 
@@ -371,13 +371,13 @@ struct RvalInvoke_<R, true>
 template <typename R = void, typename Handler, typename Unknown, typename... Args>
 inline R try_rval_invoke(Handler&& h, Unknown&& unkown, Args&&... args)
 {
-	return RvalInvoke_<R, CheckClassFunc_<Handler>::value>::invoke(TRY_MOVE(h), TRY_MOVE(unkown), TRY_MOVE(args)...);
+	return RvalInvoke_<R, CheckClassFunc_<RM_CREF(Handler)>::value>::invoke(h, TRY_MOVE(unkown), TRY_MOVE(args)...);
 }
 
 template <typename R = void, typename Handler>
 inline R try_rval_invoke(Handler&& h)
 {
-	static_assert(!CheckClassFunc_<Handler>::value, "");
+	static_assert(!CheckClassFunc_<RM_CREF(Handler)>::value, "");
 	return h();
 }
 

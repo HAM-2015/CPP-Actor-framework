@@ -284,14 +284,14 @@ private:
 };
 #endif
 
-static decltype(std::placeholders::_1) ph1;
-static decltype(std::placeholders::_2) ph2;
-static decltype(std::placeholders::_3) ph3;
-static decltype(std::placeholders::_4) ph4;
-static decltype(std::placeholders::_5) ph5;
-static decltype(std::placeholders::_6) ph6;
-static decltype(std::placeholders::_7) ph7;
-static decltype(std::placeholders::_8) ph8;
-static decltype(std::placeholders::_9) ph9;
+static decltype(std::placeholders::_1) __1;
+static decltype(std::placeholders::_2) __2;
+static decltype(std::placeholders::_3) __3;
+static decltype(std::placeholders::_4) __4;
+static decltype(std::placeholders::_5) __5;
+static decltype(std::placeholders::_6) __6;
+static decltype(std::placeholders::_7) __7;
+static decltype(std::placeholders::_8) __8;
+static decltype(std::placeholders::_9) __9;
 
 #endif

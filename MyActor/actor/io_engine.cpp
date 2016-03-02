@@ -1,8 +1,7 @@
 #include "io_engine.h"
 #include "mem_pool.h"
 #include "actor_framework.h"
-#include <boost/asio/detail/strand_service.hpp>
-#include <memory>
+#include "context_yield.h"
 #ifdef DISABLE_BOOST_TIMER
 #include "waitable_timer.h"
 #endif

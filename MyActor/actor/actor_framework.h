@@ -4451,7 +4451,6 @@ public:
 	typedef std::shared_ptr<child_actor_handle> ptr;
 public:
 	child_actor_handle();
-	child_actor_handle(const actor_handle& actor);
 	child_actor_handle(child_actor_handle&& s);
 	~child_actor_handle();
 	void operator =(child_actor_handle&& s);
@@ -4461,6 +4460,7 @@ public:
 	static ptr make_ptr();
 private:
 	void peel();
+	child_actor_handle(actor_handle&& actor);
 	child_actor_handle(const child_actor_handle&);
 	void operator =(const child_actor_handle&);
 private:
@@ -5733,8 +5733,8 @@ public:
 	/*!
 	@brief 调用一个异步函数，异步回调完成后返回
 	*/
-	template <typename... Outs, typename H>
-	__yield_interrupt void trig(Outs&... dargs, const H& h)
+	template <typename... Outs, typename Func>
+	__yield_interrupt void trig(Outs&... dargs, Func&& h)
 	{
 		assert_enter();
 		bool sign = false;
@@ -5747,8 +5747,8 @@ public:
 		}
 	}
 
-	template <typename H>
-	__yield_interrupt void trig(const H& h)
+	template <typename Func>
+	__yield_interrupt void trig(Func&& h)
 	{
 		assert_enter();
 		bool sign = false;
@@ -5760,8 +5760,8 @@ public:
 		}
 	}
 
-	template <typename R, typename H>
-	__yield_interrupt R trig(const H& h)
+	template <typename R, typename Func>
+	__yield_interrupt R trig(Func&& h)
 	{
 		R res;
 		trig<R>(res, h);
@@ -5771,8 +5771,8 @@ public:
 	/*!
 	@brief 调用一个异步函数，异步回调完成后返回，之间锁定强制退出
 	*/
-	template <typename... Outs, typename H>
-	__yield_interrupt void trig_guard(Outs&... dargs, const H& h)
+	template <typename... Outs, typename Func>
+	__yield_interrupt void trig_guard(Outs&... dargs, Func&& h)
 	{
 		assert_enter();
 		lock_quit();
@@ -5790,8 +5790,8 @@ public:
 		unlock_quit();
 	}
 
-	template <typename H>
-	__yield_interrupt void trig_guard(const H& h)
+	template <typename Func>
+	__yield_interrupt void trig_guard(Func&& h)
 	{
 		assert_enter();
 		lock_quit();
@@ -5808,8 +5808,8 @@ public:
 		unlock_quit();
 	}
 
-	template <typename R, typename H>
-	__yield_interrupt R trig_guard(const H& h)
+	template <typename R, typename Func>
+	__yield_interrupt R trig_guard(Func&& h)
 	{
 		R res;
 		trig_guard<R>(res, h);
@@ -5929,7 +5929,7 @@ private:
 	}
 private:
 	template <typename TimedHandler, typename DST, typename... Args>
-	bool _timed_wait_msg(ActorMsgHandlePush_<Args...>& amh, const TimedHandler& th, DST& dstRec, const int tm)
+	bool _timed_wait_msg(ActorMsgHandlePush_<Args...>& amh, TimedHandler&& th, DST& dstRec, const int tm)
 	{
 		assert(amh._hostActor && amh._hostActor->self_id() == self_id());
 		if (!amh.read_msg(dstRec))
@@ -6044,7 +6044,7 @@ public:
 	}
 
 	template <typename TimedHandler, typename... Args, typename... Outs>
-	__yield_interrupt bool timed_wait_msg(int tm, const TimedHandler& th, actor_msg_handle<Args...>& amh, Outs&... res)
+	__yield_interrupt bool timed_wait_msg(int tm, TimedHandler&& th, actor_msg_handle<Args...>& amh, Outs&... res)
 	{
 		assert_enter();
 		DstReceiverRef_<types_pck<Args...>, types_pck<Outs...>> dstRec(res...);
@@ -6054,7 +6054,7 @@ public:
 	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<>& amh);
 
 	template <typename TimedHandler>
-	__yield_interrupt bool timed_wait_msg(int tm, const TimedHandler& th, actor_msg_handle<>& amh)
+	__yield_interrupt bool timed_wait_msg(int tm, TimedHandler&& th, actor_msg_handle<>& amh)
 	{
 		assert_enter();
 		assert(amh._hostActor && amh._hostActor->self_id() == self_id());
@@ -6104,7 +6104,7 @@ public:
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<Args...>& amh, const Handler& h)
+	__yield_interrupt bool timed_wait_msg_invoke(int tm, actor_msg_handle<Args...>& amh, Handler&& h)
 	{
 		assert_enter();
 		DstReceiverBuff_<Args...> dstRec;
@@ -6117,7 +6117,7 @@ public:
 	}
 
 	template <typename... Args, typename TimedHandler, typename Handler>
-	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<Args...>& amh, const TimedHandler& th, const Handler& h)
+	__yield_interrupt bool timed_wait_msg_invoke(int tm, actor_msg_handle<Args...>& amh, TimedHandler&& th, Handler&& h)
 	{
 		assert_enter();
 		DstReceiverBuff_<Args...> dstRec;
@@ -6138,9 +6138,9 @@ public:
 	__yield_interrupt bool try_wait_msg(actor_msg_handle<>& amh);
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt bool try_wait_msg(actor_msg_handle<Args...>& amh, const Handler& h)
+	__yield_interrupt bool try_wait_msg_invoke(actor_msg_handle<Args...>& amh, Handler&& h)
 	{
-		return timed_wait_msg(0, amh, h);
+		return timed_wait_msg_invoke(0, amh, h);
 	}
 
 	/*!
@@ -6164,9 +6164,9 @@ public:
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt void wait_msg(actor_msg_handle<Args...>& amh, const Handler& h)
+	__yield_interrupt void wait_msg_invoke(actor_msg_handle<Args...>& amh, Handler&& h)
 	{
-		timed_wait_msg<Args...>(-1, amh, h);
+		timed_wait_msg_invoke<Args...>(-1, amh, h);
 	}
 
 	/*!
@@ -6357,7 +6357,7 @@ public:
 	}
 
 	template <typename TimedHandler, typename... Args, typename... Outs>
-	__yield_interrupt bool timed_wait_trig(int tm, const TimedHandler& th, actor_trig_handle<Args...>& ath, Outs&... res)
+	__yield_interrupt bool timed_wait_trig(int tm, TimedHandler&& th, actor_trig_handle<Args...>& ath, Outs&... res)
 	{
 		assert_enter();
 		DstReceiverRef_<types_pck<Args...>, types_pck<Outs...>> dstRec(res...);
@@ -6368,7 +6368,7 @@ public:
 
 
 	template <typename TimedHandler>
-	__yield_interrupt bool timed_wait_trig(int tm, const TimedHandler& th, actor_trig_handle<>& ath)
+	__yield_interrupt bool timed_wait_trig(int tm, TimedHandler&& th, actor_trig_handle<>& ath)
 	{
 		assert_enter();
 		assert(ath._hostActor && ath._hostActor->self_id() == self_id());
@@ -6418,7 +6418,7 @@ public:
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<Args...>& ath, const Handler& h)
+	__yield_interrupt bool timed_wait_trig_invoke(int tm, actor_trig_handle<Args...>& ath, Handler&& h)
 	{
 		assert_enter();
 		DstReceiverBuff_<Args...> dstRec;
@@ -6431,7 +6431,7 @@ public:
 	}
 
 	template <typename... Args, typename TimedHandler, typename Handler>
-	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<Args...>& ath, const TimedHandler& th, const Handler& h)
+	__yield_interrupt bool timed_wait_trig_invoke(int tm, actor_trig_handle<Args...>& ath, TimedHandler&& th, Handler&& h)
 	{
 		assert_enter();
 		DstReceiverBuff_<Args...> dstRec;
@@ -6452,9 +6452,9 @@ public:
 	__yield_interrupt bool try_wait_trig(actor_trig_handle<>& ath);
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt bool try_wait_trig(actor_trig_handle<Args...>& ath, const Handler& h)
+	__yield_interrupt bool try_wait_trig_invoke(actor_trig_handle<Args...>& ath, Handler&& h)
 	{
-		return timed_wait_trig(0, ath, h);
+		return timed_wait_trig_invoke(0, ath, h);
 	}
 
 	/*!
@@ -6478,9 +6478,9 @@ public:
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt void wait_trig(actor_trig_handle<Args...>& ath, const Handler& h)
+	__yield_interrupt void wait_trig_invoke(actor_trig_handle<Args...>& ath, Handler&& h)
 	{
-		timed_wait_trig<Args...>(-1, ath, h);
+		timed_wait_trig_invoke<Args...>(-1, ath, h);
 	}
 
 	/*!
@@ -6522,7 +6522,7 @@ public:
 	__yield_interrupt bool timed_wait_trig_sign(int tm, int id);
 
 	template <typename TimedHandler>
-	__yield_interrupt bool timed_wait_trig_sign(int tm, int id, const TimedHandler& th)
+	__yield_interrupt bool timed_wait_trig_sign(int tm, int id, TimedHandler&& th)
 	{
 		assert_enter();
 		assert(id >= 0 && id < 8 * sizeof(void*));
@@ -6812,36 +6812,36 @@ public:
 	template <typename... Args, typename Handler>
 	__yield_interrupt child_actor_handle msg_agent_to_actor(const int id, const shared_strand& strand, bool autoRun, Handler&& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
-		actor_handle childActor = my_actor::create(strand, [id, agentActor](my_actor* self)
+		actor_handle childActor = my_actor::create(strand, std::bind([id](Handler& agentActor, my_actor* self)
 		{
 			msg_pump_handle<Args...> pump = my_actor::_connect_msg_pump<Args...>(id, self, false);
 			agentActor(self, pump);
-		}, stackSize);
+		}, TRY_MOVE(agentActor), __1), stackSize);
 		childActor->_parentActor = shared_from_this();
 		msg_agent_to<Args...>(id, childActor);
 		if (autoRun)
 		{
 			childActor->notify_run();
 		}
-		return child_actor_handle(childActor);
+		return child_actor_handle(std::move(childActor));
 	}
 
 	template <typename... Args, typename Handler>
 	__yield_interrupt child_actor_handle msg_agent_to_actor(const int id, const shared_strand& strand, bool autoRun, AutoStackMsgAgentActor_<Handler>&& wrapActor)
 	{
-		RM_CREF(Handler) agentActor = (Handler)wrapActor._h;
-		actor_handle childActor = my_actor::create(strand, __auto_stack_actor([id, agentActor](my_actor* self)
+		static_assert(std::is_reference<Handler>::value, "");
+		actor_handle childActor = my_actor::create(strand, __auto_stack_actor(std::bind([id](Handler& agentActor, my_actor* self)
 		{
 			msg_pump_handle<Args...> pump = my_actor::_connect_msg_pump<Args...>(id, self, false);
 			agentActor(self, pump);
-		}, wrapActor._stackSize, wrapActor._key));
+		}, (Handler)wrapActor._h, __1), wrapActor._stackSize, wrapActor._key));
 		childActor->_parentActor = shared_from_this();
 		msg_agent_to<Args...>(id, childActor);
 		if (autoRun)
 		{
 			childActor->notify_run();
 		}
-		return child_actor_handle(childActor);
+		return child_actor_handle(std::move(childActor));
 	}
 
 	template <typename... Args, typename Handler>
@@ -7326,7 +7326,7 @@ private:
 	}
 private:
 	template <typename TimedHandler, typename DST, typename... Args>
-	bool _timed_pump_msg(const msg_pump_handle<Args...>& pump, const TimedHandler& th, DST& dstRec, int tm, bool checkDis)
+	bool _timed_pump_msg(const msg_pump_handle<Args...>& pump, TimedHandler&& th, DST& dstRec, int tm, bool checkDis)
 	{
 		assert(!pump.check_closed());
 		assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
@@ -7477,7 +7477,7 @@ public:
 	}
 
 	template <typename TimedHandler, typename... Args, typename... Outs>
-	__yield_interrupt bool timed_pump_msg(int tm, const TimedHandler& th, bool checkDis, const msg_pump_handle<Args...>& pump, Outs&... res)
+	__yield_interrupt bool timed_pump_msg(int tm, TimedHandler&& th, bool checkDis, const msg_pump_handle<Args...>& pump, Outs&... res)
 	{
 		assert_enter();
 		DstReceiverRef_<types_pck<Args...>, types_pck<Outs...>> dstRec(res...);
@@ -7491,7 +7491,7 @@ public:
 	}
 
 	template <typename TimedHandler, typename... Args, typename... Outs>
-	__yield_interrupt bool timed_pump_msg(int tm, const TimedHandler& th, const msg_pump_handle<Args...>& pump, Outs&... res)
+	__yield_interrupt bool timed_pump_msg(int tm, TimedHandler&& th, const msg_pump_handle<Args...>& pump, Outs&... res)
 	{
 		return timed_pump_msg(tm, th, false, pump, res...);
 	}
@@ -7499,7 +7499,7 @@ public:
 	__yield_interrupt bool timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<>& pump);
 
 	template <typename TimedHandler>
-	__yield_interrupt bool timed_pump_msg(int tm, const TimedHandler& th, bool checkDis, const msg_pump_handle<>& pump)
+	__yield_interrupt bool timed_pump_msg(int tm, TimedHandler&& th, bool checkDis, const msg_pump_handle<>& pump)
 	{
 		assert_enter();
 		assert(!pump.check_closed());
@@ -7558,13 +7558,13 @@ public:
 	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<>& pump);
 
 	template <typename TimedHandler>
-	__yield_interrupt bool timed_pump_msg(int tm, const TimedHandler& th, const msg_pump_handle<>& pump)
+	__yield_interrupt bool timed_pump_msg(int tm, TimedHandler&& th, const msg_pump_handle<>& pump)
 	{
 		return timed_pump_msg(tm, th, false, pump);
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt bool timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<Args...>& pump, const Handler& h)
+	__yield_interrupt bool timed_pump_msg_invoke(int tm, bool checkDis, const msg_pump_handle<Args...>& pump, Handler&& h)
 	{
 		assert_enter();
 		DstReceiverBuff_<Args...> dstRec;
@@ -7577,7 +7577,7 @@ public:
 	}
 
 	template <typename... Args, typename TimedHandler, typename Handler>
-	__yield_interrupt bool timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<Args...>& pump, const TimedHandler& th, const Handler& h)
+	__yield_interrupt bool timed_pump_msg_invoke(int tm, bool checkDis, const msg_pump_handle<Args...>& pump, TimedHandler&& th, Handler&& h)
 	{
 		assert_enter();
 		DstReceiverBuff_<Args...> dstRec;
@@ -7590,15 +7590,15 @@ public:
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<Args...>& pump, const Handler& h)
+	__yield_interrupt bool timed_pump_msg_invoke(int tm, const msg_pump_handle<Args...>& pump, Handler&& h)
 	{
-		return timed_pump_msg(tm, false, pump, h);
+		return timed_pump_msg_invoke(tm, false, pump, h);
 	}
 
 	template <typename... Args, typename TimedHandler, typename Handler>
-	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<Args...>& pump, const TimedHandler& th, const Handler& h)
+	__yield_interrupt bool timed_pump_msg_invoke(int tm, const msg_pump_handle<Args...>& pump, TimedHandler&& th, Handler&& h)
 	{
-		return timed_pump_msg(tm, false, pump, th, h);
+		return timed_pump_msg_invoke(tm, false, pump, th, h);
 	}
 
 	/*!
@@ -7623,7 +7623,7 @@ public:
 	__yield_interrupt bool try_pump_msg(const msg_pump_handle<>& pump);
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt bool try_pump_msg(bool checkDis, const msg_pump_handle<Args...>& pump, const Handler& h)
+	__yield_interrupt bool try_pump_msg_invoke(bool checkDis, const msg_pump_handle<Args...>& pump, Handler&& h)
 	{
 		assert_enter();
 		DstReceiverBuff_<Args...> dstRec;
@@ -7636,9 +7636,9 @@ public:
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt bool try_pump_msg(const msg_pump_handle<Args...>& pump, const Handler& h)
+	__yield_interrupt bool try_pump_msg_invoke(const msg_pump_handle<Args...>& pump, Handler&& h)
 	{
-		return try_pump_msg(false, pump, h);
+		return try_pump_msg_invoke(false, pump, h);
 	}
 
 	/*!
@@ -7676,15 +7676,15 @@ public:
 	__yield_interrupt void pump_msg(const msg_pump_handle<>& pump);
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt void pump_msg(bool checkDis, const msg_pump_handle<Args...>& pump, const Handler& h)
+	__yield_interrupt void pump_msg_invoke(bool checkDis, const msg_pump_handle<Args...>& pump, Handler&& h)
 	{
-		timed_pump_msg<Args...>(-1, checkDis, pump, h);
+		timed_pump_msg_invoke<Args...>(-1, checkDis, pump, h);
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt void pump_msg(const msg_pump_handle<Args...>& pump, const Handler& h)
+	__yield_interrupt void pump_msg_invoke(const msg_pump_handle<Args...>& pump, Handler&& h)
 	{
-		pump_msg(false, pump, h);
+		pump_msg_invoke(false, pump, h);
 	}
 
 	/*!

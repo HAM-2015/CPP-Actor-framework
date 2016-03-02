@@ -140,7 +140,7 @@ namespace context_yield
 		void* stack = mmap(0, allocSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);//内存足够下可能失败，调整 /proc/sys/vm/max_map_count
 		if (!stack)
 		{
-			throw size_t(allocSize);
+			return NULL;
 		}
 		context_yield::context_info* info = new context_yield::context_info;
 		info->stackTop = (char*)stack + allocSize;
@@ -154,9 +154,10 @@ namespace context_yield
 			context_yield::context_info* info;
 			void* p;
 		} ref = { handler, info, p };
-		info->obj = makefcontext(info->stackTop, stackSize, [](void* param)
+		info->obj = makefcontext(info->stackTop, allocSize, [](void* param)
 		{
 			local_ref* ref = (local_ref*)param;
+			assert((size_t)get_sp() > (size_t)ref->info->stackTop - PAGE_SIZE + 256);
 			ref->handler(ref->info, ref->p);
 		});
 		jumpfcontext(&info->nc, info->obj, &ref, true);

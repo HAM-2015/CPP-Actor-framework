@@ -9,12 +9,12 @@
 #define CONTEXT_MIN_CLEAR_CYCLE		30
 #define CONTEXT_MIN_DELETE_CYCLE		300
 
-void ContextPool_::coro_push_interface::operator()()
+void ContextPool_::coro_push_interface::yield()
 {
 	context_yield::push_yield(_coroInfo);
 }
 
-void ContextPool_::coro_pull_interface::operator()()
+void ContextPool_::coro_pull_interface::yield()
 {
 	context_yield::pull_yield(_coroInfo);
 }

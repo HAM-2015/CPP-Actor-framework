@@ -1,7 +1,7 @@
 #ifdef DISABLE_BOOST_TIMER
-#ifdef WIN32
 #include "waitable_timer.h"
 #include "scattered.h"
+#ifdef WIN32
 #include <Windows.h>
 
 WaitableTimer_::WaitableTimer_()
@@ -48,35 +48,6 @@ void WaitableTimer_::appendEvent(long long us, WaitableTimerEvent_* h)
 	}
 }
 
-void WaitableTimer_::removeEvent(timer_handle& th)
-{
-	std::lock_guard<std::mutex> lg(_ctrlMutex);
-	if (!th._null)
-	{
-		th._null = true;
-		auto itNode = th._queueNode;
-		if (_eventsQueue.size() == 1)
-		{
-			_extMaxTick = 0;
-			_extFinishTime = -1;
-			_eventsQueue.erase(itNode);
-		}
-		else if (itNode->first == _extMaxTick)
-		{
-			_eventsQueue.erase(itNode++);
-			if (_eventsQueue.end() == itNode)
-			{
-				itNode--;
-			}
-			_extMaxTick = itNode->first;
-		}
-		else
-		{
-			_eventsQueue.erase(itNode);
-		}
-	}
-}
-
 void WaitableTimer_::timerThread()
 {
 	while (true)
@@ -111,6 +82,119 @@ void WaitableTimer_::timerThread()
 		}
 	}
 }
+#elif __linux__
+#include <sys/timerfd.h>
+
+WaitableTimer_::WaitableTimer_()
+:_eventsQueue(1024), _exited(false), _extMaxTick(0), _extFinishTime(-1),
+_timerFd(timerfd_create(CLOCK_MONOTONIC, 0)), _timerThread(&WaitableTimer_::timerThread, this) {}
+
+WaitableTimer_::~WaitableTimer_()
+{
+	{
+		std::lock_guard<std::mutex> lg(_ctrlMutex);
+		assert(_eventsQueue.empty());
+		_exited = true;
+		struct itimerspec newValue = { { 0, 0 }, { 0, 1 } };
+		timerfd_settime(_timerFd, TFD_TIMER_ABSTIME, &newValue, NULL);
+	}
+	_timerThread.join();
+	close(_timerFd);
+}
+
+void WaitableTimer_::appendEvent(long long us, WaitableTimerEvent_* h)
+{
+	assert(us > 0);
+	assert(h->_timerHandle._null);
+	h->_timerHandle._null = false;
+	unsigned long long et = us + get_tick_us();
+	std::lock_guard<std::mutex> lg(_ctrlMutex);
+	if (et >= _extMaxTick)
+	{
+		_extMaxTick = et;
+		h->_timerHandle._queueNode = _eventsQueue.insert(_eventsQueue.end(), std::make_pair(et, h));
+	}
+	else
+	{
+		h->_timerHandle._queueNode = _eventsQueue.insert(std::make_pair(et, h));
+	}
+	if (et < _extFinishTime)
+	{
+		_extFinishTime = et;
+		struct itimerspec newValue;
+		newValue.it_interval = { 0, 0 };
+		newValue.it_value.tv_nsec = _extFinishTime % 1000 * 1000;
+		newValue.it_value.tv_sec = _extFinishTime / 1000000;
+		timerfd_settime(_timerFd, TFD_TIMER_ABSTIME, &newValue, NULL);
+	}
+}
+
+void WaitableTimer_::timerThread()
+{
+	unsigned long long exp = 0;
+	while (true)
+	{
+		if (sizeof(exp) == read(_timerFd, &exp, sizeof(exp)) && !_exited)
+		{
+			unsigned long long nt = get_tick_us();
+			std::lock_guard<std::mutex> lg(_ctrlMutex);
+			_extFinishTime = -1;
+			while (!_eventsQueue.empty())
+			{
+				auto iter = _eventsQueue.begin();
+				if (iter->first > nt)
+				{
+					_extFinishTime = iter->first;
+					struct itimerspec newValue;
+					newValue.it_interval = { 0, 0 };
+					newValue.it_value.tv_nsec = _extFinishTime % 1000 * 1000;
+					newValue.it_value.tv_sec = _extFinishTime / 1000000;
+					timerfd_settime(_timerFd, TFD_TIMER_ABSTIME, &newValue, NULL);
+					break;
+				}
+				else
+				{
+					iter->second->eventHandler();
+					_eventsQueue.erase(iter);
+				}
+			}
+		}
+		else
+		{
+			break;
+		}
+	}
+}
+#endif
+
+void WaitableTimer_::removeEvent(timer_handle& th)
+{
+	std::lock_guard<std::mutex> lg(_ctrlMutex);
+	if (!th._null)
+	{
+		th._null = true;
+		auto itNode = th._queueNode;
+		if (_eventsQueue.size() == 1)
+		{
+			_extMaxTick = 0;
+			_extFinishTime = -1;
+			_eventsQueue.erase(itNode);
+		}
+		else if (itNode->first == _extMaxTick)
+		{
+			_eventsQueue.erase(itNode++);
+			if (_eventsQueue.end() == itNode)
+			{
+				itNode--;
+			}
+			_extMaxTick = itNode->first;
+		}
+		else
+		{
+			_eventsQueue.erase(itNode);
+		}
+	}
+}
 //////////////////////////////////////////////////////////////////////////
 
 WaitableTimerEvent_::WaitableTimerEvent_(io_engine& ios)
@@ -140,7 +224,4 @@ void WaitableTimerEvent_::cancel(boost::system::error_code& ec)
 		cb->invoke_err(_reuMem);
 	}
 }
-#elif __linux__
-#error "do not define DISABLE_BOOST_TIMER"
-#endif
 #endif
