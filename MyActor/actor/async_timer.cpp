@@ -20,9 +20,13 @@ typedef long long micseconds;
 
 TimerBoost_::TimerBoost_(const shared_strand& strand)
 :_weakStrand(strand->_weakThis), _looping(false), _timerCount(0),
-_extMaxTick(0), _extFinishTime(-1), _timer(new timer_type(strand->get_io_engine())), _handlerQueue(65536)
+_extMaxTick(0), _extFinishTime(-1), _handlerQueue(65536)
 {
-
+#ifdef DISABLE_BOOST_TIMER
+	_timer = new timer_type(strand->get_io_engine(), this);
+#else
+	_timer = new timer_type(strand->get_io_engine());
+#endif
 }
 
 TimerBoost_::~TimerBoost_()
@@ -107,41 +111,59 @@ void TimerBoost_::timer_loop(unsigned long long us)
 {
 	int tc = ++_timerCount;
 #ifdef DISABLE_BOOST_TIMER
-	((timer_type*)_timer)->async_wait(micseconds(us), _lockStrand->wrap_post([this, tc](const boost::system::error_code&)
+	_lockIos.create(_lockStrand->get_io_service());
+	((timer_type*)_timer)->async_wait(micseconds(us), tc);
 #else
 	boost::system::error_code ec;
 	((timer_type*)_timer)->expires_from_now(micseconds(us), ec);
 	((timer_type*)_timer)->async_wait(_lockStrand->wrap_asio([this, tc](const boost::system::error_code&)
-#endif
 	{
-		assert(_lockStrand->running_in_this_thread());
-		if (tc == _timerCount)
-		{
-			_extFinishTime = 0;
-			unsigned long long nt = get_tick_us();
-			while (!_handlerQueue.empty())
-			{
-				auto iter = _handlerQueue.begin();
-				if (iter->first > nt + 500)
-				{
-					_extFinishTime = iter->first;
-					timer_loop(iter->first - nt);
-					return;
-				}
-				else
-				{
-					iter->second->timeout_handler();
-					_handlerQueue.erase(iter);
-				}
-			}
-			_looping = false;
-			_lockStrand.reset();
-		}
-		else if (tc == _timerCount - 1)
-		{
-			_lockStrand.reset();
-		}
+		event_handler(tc);
 	}));
+#endif
+}
+
+#ifdef DISABLE_BOOST_TIMER
+void TimerBoost_::post_event(int tc)
+{
+	assert(_lockStrand);
+	_lockStrand->post([this, tc]
+	{
+		_lockIos.destroy();
+		event_handler(tc);
+	});
+}
+#endif
+
+void TimerBoost_::event_handler(int tc)
+{
+	assert(_lockStrand->running_in_this_thread());
+	if (tc == _timerCount)
+	{
+		_extFinishTime = 0;
+		unsigned long long nt = get_tick_us();
+		while (!_handlerQueue.empty())
+		{
+			auto iter = _handlerQueue.begin();
+			if (iter->first > nt + 500)
+			{
+				_extFinishTime = iter->first;
+				timer_loop(iter->first - nt);
+				return;
+			}
+			else
+			{
+				iter->second->timeout_handler();
+				_handlerQueue.erase(iter);
+			}
+		}
+		_looping = false;
+		_lockStrand.reset();
+	}
+	else if (tc == _timerCount - 1)
+	{
+		_lockStrand.reset();
+	}
 }
 //////////////////////////////////////////////////////////////////////////
 

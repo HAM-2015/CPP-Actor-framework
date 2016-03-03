@@ -139,6 +139,13 @@ ref_handler<Handler> wrap_ref_handler(Handler& handler)
 	return ref_handler<Handler>(bool(), handler);
 }
 
+#ifdef DISABLE_BOOST_TIMER
+struct TimerBoostCompletedEventFace_
+{
+	virtual void post_event(int tc) = 0;
+};
+#endif
+
 class boost_strand
 {
 	typedef StrandEx_ strand_type;

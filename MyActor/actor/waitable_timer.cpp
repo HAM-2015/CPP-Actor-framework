@@ -6,7 +6,11 @@
 
 WaitableTimer_::WaitableTimer_()
 :_eventsQueue(1024), _exited(false), _extMaxTick(0), _extFinishTime(-1),
-_timerHandle(CreateWaitableTimer(NULL, FALSE, NULL)), _timerThread(&WaitableTimer_::timerThread, this) {}
+_timerHandle(CreateWaitableTimer(NULL, FALSE, NULL))
+{
+	std::thread th(&WaitableTimer_::timerThread, this);
+	_timerThread.swap(th);
+}
 
 WaitableTimer_::~WaitableTimer_()
 {
@@ -87,7 +91,11 @@ void WaitableTimer_::timerThread()
 
 WaitableTimer_::WaitableTimer_()
 :_eventsQueue(1024), _exited(false), _extMaxTick(0), _extFinishTime(-1),
-_timerFd(timerfd_create(CLOCK_MONOTONIC, 0)), _timerThread(&WaitableTimer_::timerThread, this) {}
+_timerFd(timerfd_create(CLOCK_MONOTONIC, 0))
+{
+	std::thread th(&WaitableTimer_::timerThread, this);
+	_timerThread.swap(th);
+}
 
 WaitableTimer_::~WaitableTimer_()
 {
@@ -197,31 +205,38 @@ void WaitableTimer_::removeEvent(timer_handle& th)
 }
 //////////////////////////////////////////////////////////////////////////
 
-WaitableTimerEvent_::WaitableTimerEvent_(io_engine& ios)
-:_ios(ios), _handler(NULL) {}
+WaitableTimerEvent_::WaitableTimerEvent_(io_engine& ios, TimerBoostCompletedEventFace_* timerBoost)
+:_ios(ios), _timerBoost(timerBoost), _tcId(-1), _triged(true) {}
 
 WaitableTimerEvent_::~WaitableTimerEvent_()
 {
-	assert(!_handler);
+	assert(_triged);
 }
 
 void WaitableTimerEvent_::eventHandler()
 {
 	_timerHandle.reset();
-	wrap_base* cb = _handler;
-	_handler = NULL;
-	cb->invoke(_reuMem);
+	_triged = true;
+	_timerBoost->post_event(_tcId);
 }
 
 void WaitableTimerEvent_::cancel(boost::system::error_code& ec)
 {
 	ec.clear();
 	_ios._waitableTimer->removeEvent(_timerHandle);
-	if (_handler)
+	if (!_triged)
 	{
-		wrap_base* cb = _handler;
-		_handler = NULL;
-		cb->invoke_err(_reuMem);
+		_triged = true;
+		_timerBoost->post_event(_tcId);
 	}
 }
+
+void WaitableTimerEvent_::async_wait(long long us, int tc)
+{
+	assert(_triged);
+	_triged = false;
+	_tcId = tc;
+	_ios._waitableTimer->appendEvent(us, this);
+}
+
 #endif
