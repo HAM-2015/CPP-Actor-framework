@@ -4,6 +4,7 @@
 #include <boost/asio/buffered_write_stream.hpp>
 #include "./actor/actor_framework.h"
 #include "./actor/async_buffer.h"
+#include "./actor/async_timer.h"
 #include "./actor/msg_queue.h"
 #include "./actor/sync_msg.h"
 #include "./actor/trace.h"
@@ -652,6 +653,60 @@ void perfor_test()
 	trace_line("end perfor_test");
 }
 
+void async_timer_test()
+{
+	trace_line("begin async_timer_test");
+	io_engine ios;
+	ios.run();
+	shared_strand strand = boost_strand::create(ios);
+	{
+		async_timer timer1 = strand->make_timer();
+		async_timer timer2 = strand->make_timer();
+		async_timer timer3 = strand->make_timer();
+		strand->post([=]
+		{
+			timer1->timeout(500, [timer1]
+			{
+				info_trace_line("timer1 ", 1);
+				timer1->timeout(1000, [timer1]
+				{
+					info_trace_line("timer1 ", 2);
+					timer1->timeout(1000, []
+					{
+						info_trace_line("timer1 ", 3);
+					});
+				});
+			});
+			timer2->timeout(1000, [timer2]
+			{
+				info_trace_line("timer2 ", 1);
+				timer2->timeout(1000, [timer2]
+				{
+					info_trace_line("timer2 ", 2);
+					timer2->timeout(1000, []
+					{
+						info_trace_line("timer2 ", 3);
+					});
+				});
+			});
+			timer3->timeout(1500, [timer3]
+			{
+				info_trace_line("timer3 ", 1);
+				timer3->timeout(1000, [timer3]
+				{
+					info_trace_line("timer3 ", 2);
+					timer3->timeout(1000, []
+					{
+						info_trace_line("timer3 ", 3);
+					});
+				});
+			});
+		});
+	}
+	ios.stop();
+	trace_line("end async_timer_test");
+}
+
 void auto_stack_test()
 {
 	trace_line("begin auto_stack_test");
@@ -675,6 +730,8 @@ int main(int argc, char *argv[])
 {
 	init_my_actor(0);
 	auto_stack_test();
+	trace("\n");
+	async_timer_test();
 	trace("\n");
 	trig_test();
 	trace("\n");

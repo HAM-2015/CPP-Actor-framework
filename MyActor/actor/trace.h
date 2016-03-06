@@ -250,10 +250,10 @@ void trace_comma(First&& fst, Args&&... args)
 }
 
 #if (_DEBUG || DEBUG)
-#define debug_trace(...) trace(get_time_string_ms(), " DEBUG:   "); trace(__VA_ARGS__)
-#define debug_trace_line(...) trace(get_time_string_ms(), " DEBUG:   "); trace_line(__VA_ARGS__)
-#define debug_trace_space(...) trace(get_time_string_ms(), " DEBUG:   "); trace_space(__VA_ARGS__)
-#define debug_trace_comma(...) trace(get_time_string_ms(), " DEBUG:   "); trace_comma(__VA_ARGS__)
+#define debug_trace(...) trace(" DEBUG:   "); trace(__VA_ARGS__)
+#define debug_trace_line(...) trace(" DEBUG:   "); trace_line(__VA_ARGS__)
+#define debug_trace_space(...) trace(" DEBUG:   "); trace_space(__VA_ARGS__)
+#define debug_trace_comma(...) trace(" DEBUG:   "); trace_comma(__VA_ARGS__)
 #else
 #define debug_trace(...)
 #define debug_trace_line(...)
@@ -261,20 +261,20 @@ void trace_comma(First&& fst, Args&&... args)
 #define debug_trace_comma(...)
 #endif
 
-#define info_trace(...) trace(get_time_string_ms(), " INFO:    "); trace(__VA_ARGS__)
-#define info_trace_line(...) trace(get_time_string_ms(), " INFO:    "); trace_line(__VA_ARGS__)
-#define info_trace_space(...) trace(get_time_string_ms(), " INFO:    "); trace_space(__VA_ARGS__)
-#define info_trace_comma(...) trace(get_time_string_ms(), " INFO:    "); trace_comma(__VA_ARGS__)
+#define info_trace(...) print_time_ms(); trace(" INFO:    "); trace(__VA_ARGS__)
+#define info_trace_line(...) print_time_ms(); trace(" INFO:    "); trace_line(__VA_ARGS__)
+#define info_trace_space(...) print_time_ms(); trace(" INFO:    "); trace_space(__VA_ARGS__)
+#define info_trace_comma(...) print_time_ms(); trace(" INFO:    "); trace_comma(__VA_ARGS__)
 
-#define error_trace(...) trace(get_time_string_ms(), " ERROR:   "); trace(__VA_ARGS__)
-#define error_trace_line(...) trace(get_time_string_ms(), " ERROR:   "); trace_line(__VA_ARGS__)
-#define error_trace_space(...) trace(get_time_string_ms(), " ERROR:   "); trace_space(__VA_ARGS__)
-#define error_trace_comma(...) trace(get_time_string_ms(), " ERROR:   "); trace_comma(__VA_ARGS__)
+#define error_trace(...) print_time_ms(); trace(" ERROR:   "); trace(__VA_ARGS__)
+#define error_trace_line(...) print_time_ms(); trace(" ERROR:   "); trace_line(__VA_ARGS__)
+#define error_trace_space(...) print_time_ms(); trace(" ERROR:   "); trace_space(__VA_ARGS__)
+#define error_trace_comma(...) print_time_ms(); trace(" ERROR:   "); trace_comma(__VA_ARGS__)
 
-#define warning_trace(...) trace(get_time_string_ms(), " WARNING: "); trace(__VA_ARGS__)
-#define warning_trace_line(...) trace(get_time_string_ms(), " WARNING: "); trace_line(__VA_ARGS__)
-#define warning_trace_space(...) trace(get_time_string_ms(), " WARNING: "); trace_space(__VA_ARGS__)
-#define warning_trace_comma(...) trace(get_time_string_ms(), " WARNING: "); trace_comma(__VA_ARGS__)
+#define warning_trace(...) print_time_ms(); trace(" WARNING: "); trace(__VA_ARGS__)
+#define warning_trace_line(...) print_time_ms(); trace(" WARNING: "); trace_line(__VA_ARGS__)
+#define warning_trace_space(...) print_time_ms(); trace(" WARNING: "); trace_space(__VA_ARGS__)
+#define warning_trace_comma(...) print_time_ms(); trace(" WARNING: "); trace_comma(__VA_ARGS__)
 
 struct trace_result
 {

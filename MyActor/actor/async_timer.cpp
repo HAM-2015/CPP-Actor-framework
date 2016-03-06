@@ -40,6 +40,9 @@ TimerBoost_::timer_handle TimerBoost_::timeout(unsigned long long us, async_time
 	if (!_lockStrand)
 	{
 		_lockStrand = _weakStrand.lock();
+#ifdef DISABLE_BOOST_TIMER
+		_lockIos.create(_lockStrand->get_io_service());
+#endif
 	}
 	assert(_lockStrand->running_in_this_thread());
 	assert(us < 0x80000000LL * 1000);
@@ -111,7 +114,6 @@ void TimerBoost_::timer_loop(unsigned long long us)
 {
 	int tc = ++_timerCount;
 #ifdef DISABLE_BOOST_TIMER
-	_lockIos.create(_lockStrand->get_io_service());
 	((timer_type*)_timer)->async_wait(micseconds(us), tc);
 #else
 	boost::system::error_code ec;
@@ -129,8 +131,11 @@ void TimerBoost_::post_event(int tc)
 	assert(_lockStrand);
 	_lockStrand->post([this, tc]
 	{
-		_lockIos.destroy();
 		event_handler(tc);
+		if (!_lockStrand)
+		{
+			_lockIos.destroy();
+		}
 	});
 }
 #endif
@@ -179,10 +184,11 @@ void AsyncTimer_::cancel()
 {
 	if (_handler)
 	{
-		_handler->destroy(_reuMem);
+		_handler->destroy();
+		_reuMem.deallocate(_handler);
 		_handler = NULL;
+		_timerBoost.cancel(_timerHandle);
 	}
-	_timerBoost.cancel(_timerHandle);
 }
 
 shared_strand AsyncTimer_::self_strand()
@@ -195,5 +201,6 @@ void AsyncTimer_::timeout_handler()
 	_timerHandle.reset();
 	wrap_base* cb = _handler;
 	_handler = NULL;
-	cb->invoke(_reuMem);
+	cb->invoke();
+	_reuMem.deallocate(cb);
 }

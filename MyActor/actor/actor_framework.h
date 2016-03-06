@@ -4754,6 +4754,8 @@ class my_actor
 		actor_handle _sharedThis;
 		DST& _dstRec;
 		bool* _sign;
+	private:
+		void operator =(const async_invoke_handler&);
 	};
 
 	template <typename DST, typename ARG>
@@ -4780,6 +4782,8 @@ class my_actor
 		actor_handle _sharedThis;
 		DST& _dstRec;
 		bool* _sign;
+	private:
+		void operator =(const async_invoke_handler&);
 	};
 
 	template <typename DST, typename... ARGS>
@@ -4818,6 +4822,8 @@ class my_actor
 		bool* _sign;
 		std::tuple<ARGS...> _args;
 		actor_handle _sharedThis;
+	private:
+		void operator =(const trig_cb_handler&);
 	};
 
 	template <typename DstRef, typename... ARGS>
@@ -4896,6 +4902,8 @@ class my_actor
 		std::tuple<ARGS...> _args;
 		actor_handle _sharedThis;
 		shared_bool _closed;
+	private:
+		void operator =(const trig_cb_handler3&);
 	};
 
 	template <typename Handler>
@@ -4923,6 +4931,8 @@ class my_actor
 		actor_handle _lockSelf;
 		const int _count;
 		Handler _h;
+	private:
+		void operator =(const wrap_delay_trig&);
 	};
 
 	struct wrap_trig_run_one
@@ -4957,6 +4967,8 @@ class my_actor
 
 		actor_handle _lockSelf;
 		bool* _sign;
+	private:
+		void operator =(const wrap_trig_run_one&);
 	};
 
 	struct wrap_check_trig_run_one
@@ -4993,6 +5005,8 @@ class my_actor
 		shared_bool _closed;
 		actor_handle _lockSelf;
 		bool* _sign;
+	private:
+		void operator =(const wrap_check_trig_run_one&);
 	};
 
 	struct wrap_timer_handler_face
@@ -5020,6 +5034,7 @@ class my_actor
 		}
 
 		Handler _handler;
+		NONE_COPY(wrap_timer_handler);
 	};
 
 	template <typename T>

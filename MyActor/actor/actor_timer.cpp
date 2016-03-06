@@ -40,6 +40,9 @@ ActorTimer_::timer_handle ActorTimer_::timeout(unsigned long long us, actor_hand
 	if (!_lockStrand)
 	{
 		_lockStrand = _weakStrand.lock();
+#ifdef DISABLE_BOOST_TIMER
+		_lockIos.create(_lockStrand->get_io_service());
+#endif
 	}
 	assert(_lockStrand->running_in_this_thread());
 	assert(us < 0x80000000LL * 1000);
@@ -111,7 +114,6 @@ void ActorTimer_::timer_loop(unsigned long long us)
 {
 	int tc = ++_timerCount;
 #ifdef DISABLE_BOOST_TIMER
-	_lockIos.create(_lockStrand->get_io_service());
 	((timer_type*)_timer)->async_wait(micseconds(us), tc);
 #else
 	boost::system::error_code ec;
@@ -129,8 +131,11 @@ void ActorTimer_::post_event(int tc)
 	assert(_lockStrand);
 	_lockStrand->post([this, tc]
 	{
-		_lockIos.destroy();
 		event_handler(tc);
+		if (!_lockStrand)
+		{
+			_lockIos.destroy();
+		}
 	});
 }
 #endif

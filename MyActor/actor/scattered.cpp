@@ -179,15 +179,31 @@ std::string get_time_string_s()
 	return buff;
 }
 
-std::string get_time_string_s_file()
+void print_time_us()
 {
 	auto tm = boost::posix_time::microsec_clock::local_time();
 	auto date = tm.date();
 	auto time = tm.time_of_day();
-	char buff[32];
-	snPrintf(buff, sizeof(buff), "%u-%02u-%02u %02u.%02u.%02u", (int)date.year(), (int)date.month(), (int)date.day(), \
+	printf("%u-%02u-%02u %02u:%02u:%02u.%06u", (int)date.year(), (int)date.month(), (int)date.day(), \
+		(int)time.hours(), (int)time.minutes(), (int)time.seconds(), (int)time.fractional_seconds());
+}
+
+void print_time_ms()
+{
+	auto tm = boost::posix_time::microsec_clock::local_time();
+	auto date = tm.date();
+	auto time = tm.time_of_day();
+	printf("%u-%02u-%02u %02u:%02u:%02u.%03u", (int)date.year(), (int)date.month(), (int)date.day(), \
+		(int)time.hours(), (int)time.minutes(), (int)time.seconds(), (int)time.fractional_seconds() / 1000);
+}
+
+void print_time_s()
+{
+	auto tm = boost::posix_time::microsec_clock::local_time();
+	auto date = tm.date();
+	auto time = tm.time_of_day();
+	printf("%u-%02u-%02u %02u:%02u:%02u", (int)date.year(), (int)date.month(), (int)date.day(), \
 		(int)time.hours(), (int)time.minutes(), (int)time.seconds());
-	return buff;
 }
 
 #ifdef WIN32

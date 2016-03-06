@@ -92,8 +92,8 @@ class AsyncTimer_
 
 	struct wrap_base
 	{
-		virtual void invoke(reusable_mem& reuMem) = 0;
-		virtual void destroy(reusable_mem& reuMem) = 0;
+		virtual void invoke() = 0;
+		virtual void destroy() = 0;
 	};
 
 	template <typename Handler>
@@ -103,16 +103,15 @@ class AsyncTimer_
 		wrap_handler(H&& h)
 			:_h(TRY_MOVE(h)) {}
 
-		void invoke(reusable_mem& reuMem)
+		void invoke()
 		{
 			_h();
-			destroy(reuMem);
+			destroy();
 		}
 
-		void destroy(reusable_mem& reuMem)
+		void destroy()
 		{
 			this->~wrap_handler();
-			reuMem.deallocate(this);
 		}
 
 		Handler _h;
@@ -127,6 +126,7 @@ public:
 	template <typename Handler>
 	void timeout(int tm, Handler&& handler)
 	{
+		assert(self_strand()->running_in_this_thread());
 		assert(!_handler);
 		typedef wrap_handler<RM_CREF(Handler)> wrap_type;
 		_handler = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));

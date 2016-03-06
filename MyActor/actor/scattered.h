@@ -171,7 +171,9 @@ void enable_high_resolution();
 std::string get_time_string_us();
 std::string get_time_string_ms();
 std::string get_time_string_s();
-std::string get_time_string_s_file();
+void print_time_us();
+void print_time_ms();
+void print_time_s();
 
 long long get_tick_us();
 long long get_tick_ms();
@@ -250,10 +252,10 @@ void uninstall_check_stack();
 /*!
 @brief Çå¿Õstd::function
 */
-template <typename F>
-inline void clear_function(F& f)
+template <typename R, typename... Args>
+inline void clear_function(std::function<R(Args...)>& f)
 {
-	f = F();
+	f = std::function<R(Args...)>();
 }
 
 #ifdef _MSC_VER

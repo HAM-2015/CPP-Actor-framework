@@ -191,19 +191,6 @@ class boost_strand
 		handler_capture(handler_capture&& s)
 			:capture_base(s._strand), _handler(std::move(s._handler)) {}
 
-		void operator =(const handler_capture& s)
-		{
-			//static_assert(false, "no copy");//FIXME
-			_handler = std::move(s._handler);
-			_strand = s._strand;
-		}
-
-		void operator =(handler_capture&& s)
-		{
-			_handler = std::move(s._handler);
-			_strand = s._strand;
-		}
-
 		void operator ()()
 		{
 			begin_run();
@@ -212,6 +199,8 @@ class boost_strand
 		}
 
 		mutable H _handler;
+	private:
+		void operator =(const handler_capture&);
 	};
 
 	struct wrap_next_tick_base
@@ -264,6 +253,7 @@ class boost_strand
 			this->~wrap_next_tick_handler();
 			return { this, -1 };
 		}
+		NONE_COPY(wrap_next_tick_handler);
 	};
 
 	template <typename H>
@@ -291,6 +281,7 @@ class boost_strand
 		}
 
 		H _h;
+		NONE_COPY(wrap_next_tick_handler);
 	};
 #endif //ENABLE_NEXT_TICK
 
@@ -305,19 +296,7 @@ class boost_strand
 			:_h(std::move(s._h)), _cb(std::move(s._cb)) {}
 
 		wrap_async_invoke(const wrap_async_invoke& s)
-			:_h(s._h), _cb(s._cb) {}
-
-		void operator=(wrap_async_invoke&& s)
-		{
-			_h = std::move(s._h);
-			_cb = std::move(s._cb);
-		}
-
-		void operator=(const wrap_async_invoke& s)
-		{
-			_h = std::move(s._h);
-			_cb = std::move(s._cb);
-		}
+			:_h(std::move(s._h)), _cb(std::move(s._cb)) {}
 
 		void operator()()
 		{
@@ -328,6 +307,8 @@ class boost_strand
 
 		mutable H _h;
 		mutable CB _cb;
+	private:
+		void operator=(const wrap_async_invoke&);
 	};
 
 	template <typename H, typename CB>
@@ -341,19 +322,7 @@ class boost_strand
 			:_h(std::move(s._h)), _cb(std::move(s._cb)) {}
 
 		wrap_async_invoke_void(const wrap_async_invoke_void& s)
-			:_h(s._h), _cb(s._cb) {}
-
-		void operator=(wrap_async_invoke_void&& s)
-		{
-			_h = std::move(s._h);
-			_cb = std::move(s._cb);
-		}
-
-		void operator=(const wrap_async_invoke_void& s)
-		{
-			_h = std::move(s._h);
-			_cb = std::move(s._cb);
-		}
+			:_h(std::move(s._h)), _cb(std::move(s._cb)) {}
 
 		void operator()()
 		{
@@ -365,6 +334,8 @@ class boost_strand
 
 		mutable H _h;
 		mutable CB _cb;
+	private:
+		void operator=(const wrap_async_invoke_void&);
 	};
 
 	friend my_actor;
