@@ -62,7 +62,6 @@ else\
 	static_assert(sizeof(wrap_next_tick_space) == sizeof(wrap_next_tick_handler<RM_REF(Handler)>), "next tick wrap error"); \
 	typedef wrap_next_tick_handler<RM_REF(Handler), sizeof(RM_REF(Handler)) <= SPACE_SIZE> wrap_tick_type; \
 	_backTickQueue->push_back(wrap_tick_type::create(TRY_MOVE(handler), _nextTickAlloc, _reuMemAlloc));
-
 #else //ENABLE_NEXT_TICK
 
 #define APPEND_TICK()	post(TRY_MOVE(handler));
@@ -70,7 +69,7 @@ else\
 #endif //ENABLE_NEXT_TICK
 
 
-#define UI_NEXT_TICK()\
+#define UI_TICK()\
 if (_strand)\
 {\
 	APPEND_TICK(); \
@@ -395,23 +394,68 @@ public:
 #endif
 	}
 
+#ifdef ENABLE_POST_FRONT
 	/*!
-	@brief 添加一个任务到 next_tick 队列
+	@brief 如果在本strand中调用则直接执行，否则添加到队列头部等待执行
+	@param handler 被调用函数
+	*/
+	template <typename Handler>
+	void distribute_front(Handler&& handler)
+	{
+		if (running_in_this_thread())
+		{
+			handler();
+		}
+		else
+		{
+			post_front(TRY_MOVE(handler));
+		}
+	}
+
+	/*!
+	@brief 如果当前strand没任务就直接执行，否则添加到队列头部等待执行
+	*/
+	template <typename Handler>
+	void dispatch_front(Handler&&  handler)
+	{
+#ifdef ENABLE_QT_ACTOR
+		UI_DISPATCH();
+#else
+		_strand->dispatch_front(RUN_HANDLER);
+#endif
+	}
+
+	/*!
+	@brief 添加一个任务到 strand 等待队列头部
+	*/
+	template <typename Handler>
+	void post_front(Handler&& handler)
+	{
+#ifdef ENABLE_QT_ACTOR
+		UI_POST();
+#else
+		_strand->post_front(RUN_HANDLER);
+#endif
+	}
+#endif //ENABLE_POST_FRONT
+
+	/*!
+	@brief 添加一个任务到 tick 队列
 	*/
 	template <typename Handler>
 	void next_tick(Handler&& handler)
 	{
 		assert(running_in_this_thread());
-		assert(is_running());//错误, strand还没开始第一个post就已经再投递next_tick
+		assert(is_running());//错误, strand还没开始第一个post就已经再投递tick
 #ifdef ENABLE_QT_ACTOR
-		UI_NEXT_TICK();
+		UI_TICK();
 #else
 		APPEND_TICK();
 #endif
 	}
 
 	/*!
-	@brief 尝试添加一个任务到 next_tick 队列
+	@brief 尝试添加一个任务到 boost_tick 队列
 	*/
 	template <typename Handler>
 	void try_tick(Handler&& handler)
@@ -491,8 +535,73 @@ public:
 		return wrapped_post_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
 	}
 
+#ifdef ENABLE_POST_FRONT
 	/*!
-	@brief 把被调用函数包装到next_tick中
+	@brief 把被调用函数包装到dispatch_front中，用于不同strand间消息传递
+	*/
+	template <typename Handler>
+	wrapped_dispatch_front_handler<boost_strand, RM_CREF(Handler)> wrap_asio_front(Handler&& handler)
+	{
+		return wrapped_dispatch_front_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+	}
+
+	/*!
+	@brief 把被调用函数包装到dispatch_front中，用于不同strand间消息传递，调用后参数将强制被右值引用，且只能调用一次
+	*/
+	template <typename Handler>
+	wrapped_dispatch_front_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_asio_front(Handler&& handler)
+	{
+		return wrapped_dispatch_front_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+	}
+
+	/*!
+	@brief 把被调用函数包装到distribute_front中，用于不同strand间消息传递
+	*/
+	template <typename Handler>
+	wrapped_distribute_front_handler<boost_strand, RM_CREF(Handler)> wrap_front(Handler&& handler)
+	{
+		return wrapped_distribute_front_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+	}
+
+	/*!
+	@brief 把被调用函数包装到distribute_front中，用于不同strand间消息传递，调用后参数将强制被右值引用，且只能调用一次
+	*/
+	template <typename Handler>
+	wrapped_distribute_front_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_front(Handler&& handler)
+	{
+		return wrapped_distribute_front_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+	}
+
+	/*!
+	@brief 把被调用函数包装到post_front中
+	*/
+	template <typename Handler>
+	wrapped_post_front_handler<boost_strand, RM_CREF(Handler)> wrap_post_front(Handler&& handler)
+	{
+		return wrapped_post_front_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+	}
+
+	/*!
+	@brief 把被调用函数包装到post_front中，并且锁定ios，直到释放通知函数包
+	*/
+	template <typename Handler>
+	wrapped_hold_work_post_front_handler<boost_strand, RM_CREF(Handler)> wrap_hold_post_front(Handler&& handler)
+	{
+		return wrapped_hold_work_post_front_handler<boost_strand, RM_CREF(Handler)>(get_io_service(), this, TRY_MOVE(handler));
+	}
+
+	/*!
+	@brief 把被调用函数包装到post_front中，调用后参数将强制被右值引用，且只能调用一次
+	*/
+	template <typename Handler>
+	wrapped_post_front_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_post_front(Handler&& handler)
+	{
+		return wrapped_post_front_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+	}
+#endif //ENABLE_POST_FRONT
+
+	/*!
+	@brief 把被调用函数包装到tick中
 	*/
 	template <typename Handler>
 	wrapped_next_tick_handler<boost_strand, RM_CREF(Handler)> wrap_next_tick(Handler&& handler)
@@ -501,7 +610,7 @@ public:
 	}
 
 	/*!
-	@brief 把被调用函数包装到next_tick中，调用后参数将强制被右值引用，且只能调用一次
+	@brief 把被调用函数包装到tick中，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
 	wrapped_next_tick_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_next_tick(Handler&& handler)

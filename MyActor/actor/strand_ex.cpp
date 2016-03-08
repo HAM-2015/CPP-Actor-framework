@@ -31,7 +31,11 @@ namespace boost
 			template <>
 			void boost::asio::detail::strand_service::post(boost::asio::detail::strand_service::implementation_type& impl, get_impl_waiting_empty_strand_ex& fh)
 			{
+#ifdef ENABLE_POST_FRONT
+				fh._empty = impl->waiting_queue_.empty() && impl->front_queue_.empty();
+#else
 				fh._empty = impl->waiting_queue_.empty();
+#endif
 			}
 
 			template <>

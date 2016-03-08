@@ -1933,6 +1933,12 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 		checkStack = !lasts;
 		pull = ContextPool_::getContext(lasts ? lasts : DEFAULT_STACKSIZE);
 	}
+	if (!pull)
+	{
+		error_trace_line("stack memory deficiented");
+		exit(-2);
+		return actor_handle();
+	}
 	actor_handle newActor(new(pull->_space)my_actor(), [](my_actor* p){p->~my_actor(); }, actor_ref_count_alloc<void>(pull));
 	newActor->_weakThis = newActor;
 	newActor->_strand = actorStrand;

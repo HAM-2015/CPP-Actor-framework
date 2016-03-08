@@ -2,9 +2,7 @@
 #include "mem_pool.h"
 #include "actor_framework.h"
 #include "context_yield.h"
-#ifdef DISABLE_BOOST_TIMER
 #include "waitable_timer.h"
-#endif
 
 tls_space* io_engine::_tls = NULL;
 
@@ -31,10 +29,8 @@ io_engine::io_engine()
 #elif __linux__
 	_priority = idle;
 	_policy = sched_other;
-#else
-#error "error"
 #endif
-	_strandPool = create_shared_pool_mt<boost_strand, std::mutex>(1024, [this](void* p)
+	_strandPool = create_shared_pool_mt<boost_strand, std::mutex>(1024, [](void* p)
 	{
 		new(p)boost_strand();
 	}, [](boost_strand* p)->bool
@@ -101,8 +97,6 @@ void io_engine::_run(size_t threadNum, sched policy)
 							int rs = pthread_attr_getschedparam(&_handleList[i], &pm);
 							_priority = (priority)pm.__sched_priority;
 						}
-#else
-#error "error"
 #endif
 						auto lockMutex = blockMutex;
 						auto lockConVar = blockConVar;
@@ -186,8 +180,6 @@ void io_engine::_stop()
 			CloseHandle(ele);
 #elif __linux__
 			pthread_attr_destroy(&ele);
-#else
-#error "error"
 #endif
 		}
 		_handleList.clear();
@@ -208,8 +200,6 @@ void io_engine::changeThreadNumber(size_t threadNum)
 		auto policy = _policy;
 		_stop();
 		_run(threadNum, policy);
-#else
-#error "error"
 #endif
 	}
 }
@@ -265,8 +255,6 @@ void io_engine::runPriority(priority pri)
 			pthread_attr_setschedparam(&ele, &pm);
 		}
 	}
-#else
-#error "error"
 #endif
 }
 

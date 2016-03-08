@@ -37,6 +37,21 @@ private:
 		//_service.dispatch(_impl, TRY_MOVE(handler));
 		_service.dispatch(_impl, handler);
 	}
+#ifdef ENABLE_POST_FRONT
+	template <typename Handler>
+	void post_front(Handler&& handler)
+	{
+		//_service.post_front(_impl, TRY_MOVE(handler));
+		_service.post_front(_impl, handler);
+	}
+
+	template <typename Handler>
+	void dispatch_front(Handler&& handler)
+	{
+		//_service.dispatch_front(_impl, TRY_MOVE(handler));
+		_service.dispatch_front(_impl, handler);
+	}
+#endif
 private:
 	boost::asio::detail::strand_service& _service;
 	boost::asio::detail::strand_service::implementation_type _impl;
