@@ -393,4 +393,140 @@ struct\
 //用户内嵌lambda的外部变量引用捕获（外带当前this捕获，通过->访问），可以减小直接"&捕获"sizeof(lambda)的大小，提高调度效率
 #define LAMBDA_THIS_REF(__NAME__, ...) _BOND_LR__(LAMBDA_THIS_REF, _PP_NARG(__VA_ARGS__))(__NAME__, __VA_ARGS__)
 
+//////////////////////////////////////////////////////////////////////////
+
+template <typename... _Types>
+struct LocalRecursive_;
+template <typename... _Types>
+struct LocalRecursiveFace_;
+template <typename Handler, typename _Rt, typename... _Types>
+struct LocalRecursiveInvoker_;
+template <typename Handler, typename... _Types>
+struct InvokerType_;
+
+template <typename _Rt, typename... _Types>
+struct LocalRecursiveFace_<_Rt(_Types...)>
+{
+	virtual _Rt invoke(_Types...) = 0;
+	virtual _Rt invoke(_Types...) const = 0;
+	virtual void destroy() = 0;
+};
+
+template <typename Handler, typename _Rt, typename... _Types>
+struct LocalRecursiveInvoker_<Handler, _Rt(_Types...)> : public LocalRecursiveFace_<_Rt(_Types...)>
+{
+	template <typename H>
+	LocalRecursiveInvoker_(H&& h)
+		:_handler(std::forward<H>(h)) {}
+
+	_Rt invoke(_Types... args)
+	{
+		return _handler(std::forward<_Types>(args)...);
+	}
+
+	_Rt invoke(_Types... args) const
+	{
+		return _handler(std::forward<_Types>(args)...);
+	}
+
+	void destroy()
+	{
+		this->~LocalRecursiveInvoker_();
+		DEBUG_OPERATION(memset(this, 0xcf, sizeof(*this)));
+	}
+
+	Handler _handler;
+};
+
+template <typename _Rt, typename... _Types>
+struct LocalRecursive_<_Rt(_Types...)>
+{
+	typedef LocalRecursiveFace_<_Rt(_Types...)> func_type;
+	LocalRecursive_() {}
+	~LocalRecursive_() { assert(!_depth && !_func); }
+
+	template <typename... Args>
+	_Rt operator()(Args&&... args)
+	{
+		assert(_func);
+		DEBUG_OPERATION(_depth++);
+		DEBUG_OPERATION(OUT_OF_SCOPE({ _depth--; }));
+		return _func->invoke(std::forward<Args>(args)...);
+	}
+
+	template <typename Handler>
+	void set_handler(void* p, Handler&& h)
+	{
+		destroy();
+		_func = new(p)LocalRecursiveInvoker_<RM_REF(Handler), _Rt(_Types...)>(std::forward<Handler>(h));
+	}
+
+	void destroy()
+	{
+		assert(0 == _depth);
+		if (_func)
+		{
+			_func->destroy();
+			_func = NULL;
+		}
+	}
+
+	DEBUG_OPERATION(size_t _depth = 0);
+	func_type* _func = NULL;
+	NONE_COPY(LocalRecursive_);
+};
+
+template <typename Handler, typename C, typename _Rt, typename... _Types>
+struct InvokerType_<Handler, _Rt(C::*)(_Types...)>
+{
+	typedef LocalRecursiveInvoker_<Handler, _Rt(_Types...)> type;
+};
+
+template <typename Handler, typename C, typename _Rt, typename... _Types>
+struct InvokerType_<Handler, _Rt(C::*)(_Types...) const>
+{
+	typedef LocalRecursiveInvoker_<Handler, _Rt(_Types...)> type;
+};
+
+#define DEFINE_LOCAL_RECURSIVE(__name__, __type__)\
+	LocalRecursive_<__type__> __name__; \
+
+#define SET_RECURSIVE_FUNC(__name__, __h__)\
+	const auto& NAME_BOND(__temp, __name__) = __h__; \
+	typedef std::remove_const<std::remove_reference<decltype(NAME_BOND(__temp, __name__))>::type>::type NAME_BOND(func_type, __name__); \
+	typedef InvokerType_<NAME_BOND(func_type, __name__), decltype(&NAME_BOND(func_type, __name__)::operator())>::type NAME_BOND(invoker_type, __name__); \
+	char NAME_BOND(__space, __name__)[sizeof(NAME_BOND(invoker_type, __name__))]; \
+	__name__.set_handler(NAME_BOND(__space, __name__), __h__); \
+	OUT_OF_SCOPE({ __name__.destroy(); }); \
+
+#define _SET_RECURSIVE_FUNC(__name__, __type__, __h__)\
+	const auto& NAME_BOND(__temp, __name__) = __h__; \
+	char NAME_BOND(__space, __name__)[sizeof(LocalRecursiveInvoker_<RM_REF(decltype(NAME_BOND(__temp, __name__))), __type__>)]; \
+	__name__.set_handler(NAME_BOND(__space, __name__), __h__); \
+
+#define LOCAL_RECURSIVE1(__name__, __type__, __h__)\
+	DEFINE_LOCAL_RECURSIVE(__name__, __type__); \
+	_SET_RECURSIVE_FUNC(__name__, __type__, __h__)\
+	OUT_OF_SCOPE({ __name__.destroy(); }); \
+
+#define LOCAL_RECURSIVE2(__name1__, __name2__, __type1__, __type2__, __h1__, __h2__)\
+	DEFINE_LOCAL_RECURSIVE(__name1__, __type1__); \
+	DEFINE_LOCAL_RECURSIVE(__name2__, __type2__); \
+	_SET_RECURSIVE_FUNC(__name1__, __type1__, __h1__)\
+	_SET_RECURSIVE_FUNC(__name2__, __type2__, __h2__)\
+	OUT_OF_SCOPE({ __name1__.destroy(); __name2__.destroy(); }); \
+
+#define LOCAL_RECURSIVE3(__name1__, __name2__, __name3__, __type1__, __type2__, __type3__, __h1__, __h2__, __h3__)\
+	DEFINE_LOCAL_RECURSIVE(__name1__, __type1__); \
+	DEFINE_LOCAL_RECURSIVE(__name2__, __type2__); \
+	DEFINE_LOCAL_RECURSIVE(__name3__, __type3__); \
+	_SET_RECURSIVE_FUNC(__name1__, __type1__, __h1__)\
+	_SET_RECURSIVE_FUNC(__name2__, __type2__, __h2__)\
+	_SET_RECURSIVE_FUNC(__name3__, __type3__, __h3__)\
+	OUT_OF_SCOPE({ __name1__.destroy(); __name2__.destroy(); __name3__.destroy(); }); \
+
+#define WRAP_LAMBDA_REF(__name__, __lambda__)\
+	auto NAME_BOND(__lambda, __name__) = __lambda__; \
+	auto __name__ = wrap_ref_handler(NAME_BOND(__lambda, __name__));
+
 #endif

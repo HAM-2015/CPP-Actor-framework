@@ -55,6 +55,27 @@ else\
 	dispatch_ui(TRY_MOVE(handler)); \
 };
 
+#ifdef ENABLE_POST_FRONT
+#define UI_POST_FRONT()\
+if (_strand)\
+{\
+	_strand->post_front(RUN_HANDLER); \
+}\
+else\
+{\
+	post_ui(TRY_MOVE(handler)); \
+};
+
+#define UI_DISPATCH_FRONT()\
+if (_strand)\
+{\
+	_strand->dispatch_front(RUN_HANDLER); \
+}\
+else\
+{\
+	dispatch_ui(TRY_MOVE(handler)); \
+};
+#endif //ENABLE_POST_FRONT
 
 #ifdef ENABLE_NEXT_TICK
 
@@ -419,7 +440,7 @@ public:
 	void dispatch_front(Handler&&  handler)
 	{
 #ifdef ENABLE_QT_ACTOR
-		UI_DISPATCH();
+		UI_DISPATCH_FRONT();
 #else
 		_strand->dispatch_front(RUN_HANDLER);
 #endif
@@ -432,7 +453,7 @@ public:
 	void post_front(Handler&& handler)
 	{
 #ifdef ENABLE_QT_ACTOR
-		UI_POST();
+		UI_POST_FRONT();
 #else
 		_strand->post_front(RUN_HANDLER);
 #endif

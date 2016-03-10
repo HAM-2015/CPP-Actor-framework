@@ -6,275 +6,253 @@
 #include <list>
 #include <map>
 #include <set>
-#include <iostream>
+#include <sstream>
+#include <iostream> 
 #include "try_move.h"
 
 template <typename T>
-struct trace_match 
+struct TraceMatch_ 
 {
 	template <typename TP>
-	static void trace(TP&& s)
+	static void trace(std::wostream& out, TP&& s)
 	{
-		std::cout << s;
+		out << s;
 	}
 };
 
 template <>
-struct trace_match<bool> 
+struct TraceMatch_<bool> 
 {
-	static void trace(bool b)
+	static void trace(std::wostream& out, bool b)
 	{
-		std::cout << (b ? "true" : "false");
-	}
-};
-
-template <>
-struct trace_match<wchar_t>
-{
-	static void trace(wchar_t wc)
-	{
-		std::wcout << wc;
+		out << (b ? "true" : "false");
 	}
 };
 
 template <size_t N, typename T>
-struct trace_match<T[N]>
+struct TraceMatch_<T[N]>
 {
-	static void trace(const T (&s)[N])
+	static void trace(std::wostream& out, const T(&s)[N])
 	{
-		std::cout << "[";
+		out << "[";
 		for (int i = 0; i < (int)N - 1; i++)
 		{
-			trace_match<T>::trace(s[i]);
-			std::cout << ", ";
+			TraceMatch_<T>::trace(out, s[i]);
+			out << ", ";
 		}
 		if (N)
 		{
-			trace_match<T>::trace(s[N - 1]);
+			TraceMatch_<T>::trace(out, s[N - 1]);
 		}
-		std::cout << "]";
+		out << "]";
 	}
 };
 
 template <size_t N>
-struct trace_match<char[N]>
+struct TraceMatch_<char[N]>
 {
-	static void trace(const char (&s)[N])
+	static void trace(std::wostream& out, const char(&s)[N])
 	{
-		std::cout << s;
-	}
-};
-
-template <size_t N>
-struct trace_match<wchar_t[N]>
-{
-	static void trace(const wchar_t(&s)[N])
-	{
-		std::wcout << s;
+		out << s;
 	}
 };
 
 template <>
-struct trace_match<std::wstring>
+struct TraceMatch_<std::string>
 {
-	static void trace(const std::wstring& s)
+	static void trace(std::wostream& out, const std::string& s)
 	{
-		std::wcout << s;
+		out << s.c_str();
 	}
 };
 
 template <>
-struct trace_match<char*>
+struct TraceMatch_<char*>
 {
-	static void trace(const char* s)
+	static void trace(std::wostream& out, const char* s)
 	{
-		std::cout << s;
-	}
-};
-
-template <>
-struct trace_match<wchar_t*>
-{
-	static void trace(const wchar_t* s)
-	{
-		std::wcout << s;
+		out << s;
 	}
 };
 
 template <typename T>
-struct trace_match<std::vector<T>>
+struct TraceMatch_<std::vector<T>>
 {
-	static void trace(const std::vector<T>& s)
+	static void trace(std::wostream& out, const std::vector<T>& s)
 	{
-		std::cout << "[";
+		out << "[";
 		for (int i = 0; i < (int)s.size() - 1; i++)
 		{
-			trace_match<RM_CREF(T)>::trace(s[i]);
-			std::cout << ", ";
+			TraceMatch_<RM_CREF(T)>::trace(out, s[i]);
+			out << ", ";
 		}
 		if (!s.empty())
 		{
-			trace_match<RM_CREF(T)>::trace(s.back());
+			TraceMatch_<RM_CREF(T)>::trace(out, s.back());
 		}
-		std::cout << "]";
+		out << "]";
 	}
 };
 
 template <typename T>
-struct trace_match<std::list<T>>
+struct TraceMatch_<std::list<T>>
 {
-	static void trace(const std::list<T>& s)
+	static void trace(std::wostream& out, const std::list<T>& s)
 	{
-		std::cout << "{";
+		out << "{";
 		int l = (int)s.size();
 		auto it = s.begin();
 		for (int i = 0; i < l - 1; i++, it++)
 		{
-			trace_match<RM_CREF(T)>::trace(*it);
-			std::cout << "->";
+			TraceMatch_<RM_CREF(T)>::trace(out, *it);
+			out << "->";
 		}
 		if (l)
 		{
-			trace_match<RM_CREF(T)>::trace(*it);
+			TraceMatch_<RM_CREF(T)>::trace(out, *it);
 		}
-		std::cout << "}";
+		out << "}";
 	}
 };
 
 template <typename K, typename V>
-struct trace_match<std::map<K, V>>
+struct TraceMatch_<std::map<K, V>>
 {
-	static void trace(const std::map<K, V>& s)
+	static void trace(std::wostream& out, const std::map<K, V>& s)
 	{
-		std::cout << "{";
+		out << "{";
 		int l = (int)s.size();
 		auto it = s.begin();
 		for (int i = 0; i < l - 1; i++, it++)
 		{
-			trace_match<RM_CREF(K)>::trace(it->first);
-			std::cout << ": ";
-			trace_match<RM_CREF(V)>::trace(it->second);
-			std::cout << ", ";
+			TraceMatch_<RM_CREF(K)>::trace(out, it->first);
+			out << ": ";
+			TraceMatch_<RM_CREF(V)>::trace(out, it->second);
+			out << ", ";
 		}
 		if (l)
 		{
-			trace_match<RM_CREF(K)>::trace(it->first);
-			std::cout << ": ";
-			trace_match<RM_CREF(V)>::trace(it->second);
+			TraceMatch_<RM_CREF(K)>::trace(out, it->first);
+			out << ": ";
+			TraceMatch_<RM_CREF(V)>::trace(out, it->second);
 		}
-		std::cout << "}";
+		out << "}";
 	}
 };
 
 template <typename T>
-struct trace_match<std::set<T>>
+struct TraceMatch_<std::set<T>>
 {
-	static void trace(const std::set<T>& s)
+	static void trace(std::wostream& out, const std::set<T>& s)
 	{
-		std::cout << "{";
+		out << "{";
 		int l = (int)s.size();
 		auto it = s.begin();
 		for (int i = 0; i < l - 1; i++, it++)
 		{
-			trace_match<RM_CREF(T)>::trace(*it);
-			std::cout << ", ";
+			TraceMatch_<RM_CREF(T)>::trace(out, *it);
+			out << ", ";
 		}
 		if (l)
 		{
-			trace_match<RM_CREF(T)>::trace(*it);
+			TraceMatch_<RM_CREF(T)>::trace(out, *it);
 		}
-		std::cout << "}";
+		out << "}";
 	}
 };
 
 template <typename First>
-void trace(First&& fst)
+void _trace(std::wostream& out, First&& fst)
 {
-	trace_match<RM_CREF(First)>::trace(fst);
-	std::cout << std::flush;
+	TraceMatch_<RM_CREF(First)>::trace(out, fst);
 }
 
 template <typename First>
-void trace_line(First&& fst)
+void _trace_space(std::wostream& out, First&& fst)
 {
-	trace_match<RM_CREF(First)>::trace(fst);
-	std::cout << std::endl;
+	TraceMatch_<RM_CREF(First)>::trace(out, fst);
 }
 
 template <typename First>
-void trace_space(First&& fst)
+void _trace_comma(std::wostream& out, First&& fst)
 {
-	trace_match<RM_CREF(First)>::trace(fst);
-	std::cout << std::endl;
-}
-
-template <typename First>
-void trace_comma(First&& fst)
-{
-	trace_match<RM_CREF(First)>::trace(fst);
-	std::cout << std::endl;
+	TraceMatch_<RM_CREF(First)>::trace(out, fst);
 }
 
 template <typename First, typename... Args>
-void trace(First&& fst, Args&&... args)
+void _trace(std::wostream& out, First&& fst, Args&&... args)
 {
 	static_assert(sizeof...(Args) > 0, "");
-	trace_match<RM_CREF(First)>::trace(fst);
-	trace(TRY_MOVE(args)...);
+	TraceMatch_<RM_CREF(First)>::trace(out, fst);
+	_trace(out, TRY_MOVE(args)...);
 }
 
 template <typename First, typename... Args>
-void trace_line(First&& fst, Args&&... args)
+void _trace_space(std::wostream& out, First&& fst, Args&&... args)
 {
 	static_assert(sizeof...(Args) > 0, "");
-	trace_match<RM_CREF(First)>::trace(fst);
-	trace_line(TRY_MOVE(args)...);
+	TraceMatch_<RM_CREF(First)>::trace(out, fst);
+	out << " ";
+	_trace_space(out, TRY_MOVE(args)...);
 }
 
 template <typename First, typename... Args>
-void trace_space(First&& fst, Args&&... args)
+void _trace_comma(std::wostream& out, First&& fst, Args&&... args)
 {
 	static_assert(sizeof...(Args) > 0, "");
-	trace_match<RM_CREF(First)>::trace(fst);
-	std::cout << " ";
-	trace_space(TRY_MOVE(args)...);
+	TraceMatch_<RM_CREF(First)>::trace(out, fst);
+	out << ", ";
+	_trace_comma(out, TRY_MOVE(args)...);
 }
 
-template <typename First, typename... Args>
-void trace_comma(First&& fst, Args&&... args)
+struct TraceMutex_
 {
-	static_assert(sizeof...(Args) > 0, "");
-	trace_match<RM_CREF(First)>::trace(fst);
-	std::cout << ", ";
-	trace_comma(TRY_MOVE(args)...);
-}
+	TraceMutex_()
+	{
+		_mutex->lock();
+	}
+
+	~TraceMutex_()
+	{
+		_mutex->unlock();
+	}
+
+	static std::mutex* _mutex;
+};
+
+typedef std::wostringstream _Tracestream;
+
+template <typename... Args> void trace(Args&&... args) { _Tracestream oss; _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::flush; } }
+template <typename... Args> void trace_line(Args&&... args) { _Tracestream oss; _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
+template <typename... Args> void trace_space(Args&&... args) { _Tracestream oss; _trace_space(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
+template <typename... Args> void trace_comma(Args&&... args) { _Tracestream oss; _trace_comma(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
 
 #if (_DEBUG || DEBUG)
-#define debug_trace(...) trace(" DEBUG:   "); trace(__VA_ARGS__)
-#define debug_trace_line(...) trace(" DEBUG:   "); trace_line(__VA_ARGS__)
-#define debug_trace_space(...) trace(" DEBUG:   "); trace_space(__VA_ARGS__)
-#define debug_trace_comma(...) trace(" DEBUG:   "); trace_comma(__VA_ARGS__)
+template <typename... Args> void debug_trace(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " DEBUG:   "); _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::flush; } }
+template <typename... Args> void debug_trace_line(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " DEBUG:   "); _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
+template <typename... Args> void debug_trace_space(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " DEBUG:   "); _trace_space(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
+template <typename... Args> void debug_trace_comma(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " DEBUG:   "); _trace_comma(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
 #else
-#define debug_trace(...)
-#define debug_trace_line(...)
-#define debug_trace_space(...)
-#define debug_trace_comma(...)
+template <typename... Args> void debug_trace(Args&&... args) {}
+template <typename... Args> void debug_trace_line(Args&&... args) {}
+template <typename... Args> void debug_trace_space(Args&&... args) {}
+template <typename... Args> void debug_trace_comma(Args&&... args) {}
 #endif
 
-#define info_trace(...) print_time_ms(); trace(" INFO:    "); trace(__VA_ARGS__)
-#define info_trace_line(...) print_time_ms(); trace(" INFO:    "); trace_line(__VA_ARGS__)
-#define info_trace_space(...) print_time_ms(); trace(" INFO:    "); trace_space(__VA_ARGS__)
-#define info_trace_comma(...) print_time_ms(); trace(" INFO:    "); trace_comma(__VA_ARGS__)
+template <typename... Args> void info_trace(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " INFO:    "); _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::flush; } }
+template <typename... Args> void info_trace_line(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " INFO:    "); _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
+template <typename... Args> void info_trace_space(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " INFO:    "); _trace_space(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
+template <typename... Args> void info_trace_comma(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " INFO:    "); _trace_comma(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
 
-#define error_trace(...) print_time_ms(); trace(" ERROR:   "); trace(__VA_ARGS__)
-#define error_trace_line(...) print_time_ms(); trace(" ERROR:   "); trace_line(__VA_ARGS__)
-#define error_trace_space(...) print_time_ms(); trace(" ERROR:   "); trace_space(__VA_ARGS__)
-#define error_trace_comma(...) print_time_ms(); trace(" ERROR:   "); trace_comma(__VA_ARGS__)
+template <typename... Args> void error_trace(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " ERROR:   "); _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::flush; } }
+template <typename... Args> void error_trace_line(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " ERROR:   "); _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
+template <typename... Args> void error_trace_space(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " ERROR:   "); _trace_space(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
+template <typename... Args> void error_trace_comma(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " ERROR:   "); _trace_comma(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
 
-#define warning_trace(...) print_time_ms(); trace(" WARNING: "); trace(__VA_ARGS__)
-#define warning_trace_line(...) print_time_ms(); trace(" WARNING: "); trace_line(__VA_ARGS__)
-#define warning_trace_space(...) print_time_ms(); trace(" WARNING: "); trace_space(__VA_ARGS__)
-#define warning_trace_comma(...) print_time_ms(); trace(" WARNING: "); trace_comma(__VA_ARGS__)
+template <typename... Args> void warning_trace(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " WARNING: "); _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::flush; } }
+template <typename... Args> void warning_trace_line(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " WARNING: "); _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
+template <typename... Args> void warning_trace_space(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " WARNING: "); _trace_space(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
+template <typename... Args> void warning_trace_comma(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " WARNING: "); _trace_comma(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
 
 struct trace_result
 {

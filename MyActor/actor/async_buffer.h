@@ -104,10 +104,17 @@ public:
 	{
 		static_assert(sizeof...(TMS) > 0, "");
 		size_t pushCount = 0;
+#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+		std::tuple<TMS&&...> msgsTup(TRY_MOVE(msgs)...);
+#endif
 		_push(host, [&]()->bool
 		{
 			buff_push bp = { this, pushCount };
+#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+			tuple_invoke(bp, msgsTup);
+#else
 			bp((TMS&&)(msgs)...);
+#endif
 			return sizeof...(TMS) == ++pushCount;
 		});
 	}
@@ -135,10 +142,17 @@ public:
 	{
 		static_assert(sizeof...(TMS) > 1, "");
 		size_t pushCount = 0;
+#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+		std::tuple<TMS&&...> msgsTup(TRY_MOVE(msgs)...);
+#endif
 		return _try_push(host, [&]()->bool
 		{
 			buff_push bp = { this, pushCount };
+#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+			tuple_invoke(bp, msgsTup);
+#else
 			bp((TMS&&)(msgs)...);
+#endif
 			return sizeof...(TMS) == ++pushCount;
 		});
 	}
@@ -166,10 +180,17 @@ public:
 	{
 		static_assert(sizeof...(TMS) > 1, "");
 		size_t pushCount = 0;
+#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+		std::tuple<TMS&&...> msgsTup(TRY_MOVE(msgs)...);
+#endif
 		return _timed_push(tm, host, [&]()->bool
 		{
 			buff_push bp = { this, pushCount };
+#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+			tuple_invoke(bp, msgsTup);
+#else
 			bp((TMS&&)(msgs)...);
+#endif
 			return sizeof...(TMS) == ++pushCount;
 		});
 	}
@@ -183,10 +204,17 @@ public:
 	{
 		static_assert(sizeof...(TMS) > 0, "");
 		size_t pushCount = 0;
+#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+		std::tuple<TMS&&...> msgsTup(TRY_MOVE(msgs)...);
+#endif
 		return _force_push(host, [&]()->bool
 		{
 			buff_push bp = { this, pushCount };
+#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+			tuple_invoke(bp, msgsTup);
+#else
 			bp((TMS&&)(msgs)...);
+#endif
 			return sizeof...(TMS) == ++pushCount;
 		});
 	}
@@ -219,10 +247,17 @@ public:
 	{
 		static_assert(sizeof...(OTMS) > 0, "");
 		size_t popCount = 0;
+#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+		std::tuple<OTMS&...> outsTup(TRY_MOVE(outs)...);
+#endif
 		_pop(host, [&]()->bool
 		{
 			buff_pop bp = { this, popCount };
+#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+			tuple_invoke(bp, outsTup);
+#else
 			bp(outs...);
+#endif
 			_buffer.pop_front();
 			return sizeof...(OTMS) == ++popCount;
 		});
@@ -253,10 +288,17 @@ public:
 	{
 		static_assert(sizeof...(OTMS) > 1, "");
 		size_t popCount = 0;
+#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+		std::tuple<OTMS&...> outsTup(TRY_MOVE(outs)...);
+#endif
 		return _try_pop(host, [&]()->bool
 		{
 			buff_pop bp = { this, popCount };
+#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+			tuple_invoke(bp, outsTup);
+#else
 			bp(outs...);
+#endif
 			_buffer.pop_front();
 			return sizeof...(OTMS) == ++popCount;
 		});
@@ -286,10 +328,17 @@ public:
 	{
 		static_assert(sizeof...(OTMS) > 1, "");
 		size_t popCount = 0;
+#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+		std::tuple<OTMS&...> outsTup(TRY_MOVE(outs)...);
+#endif
 		return _timed_pop(tm, host, [&]()->bool
 		{
 			buff_pop bp = { this, popCount };
+#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+			tuple_invoke(bp, outsTup);
+#else
 			bp(outs...);
+#endif
 			_buffer.pop_front();
 			return sizeof...(OTMS) == ++popCount;
 		});

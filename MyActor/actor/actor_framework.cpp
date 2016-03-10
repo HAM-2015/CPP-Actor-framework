@@ -53,6 +53,7 @@ struct autoActorStackMng
 };
 static autoActorStackMng* s_autoActorStackMng = NULL;
 shared_obj_pool<bool>* shared_bool::_sharedBoolPool = NULL;
+std::mutex* TraceMutex_::_mutex = NULL;
 std::atomic<my_actor::id>* my_actor::_actorIDCount = NULL;
 msg_list_shared_alloc<actor_handle>::shared_node_alloc* my_actor::_childActorListAll = NULL;
 msg_list_shared_alloc<std::function<void()> >::shared_node_alloc* my_actor::_quitExitCallbackAll = NULL;
@@ -69,6 +70,7 @@ void my_actor::install(id aid)
 	if (!s_inited)
 	{
 		s_inited = true;
+		TraceMutex_::_mutex = new std::mutex;
 		DEBUG_OPERATION(s_installID = std::this_thread::get_id());
 		io_engine::install();
 		install_check_stack();
@@ -140,6 +142,8 @@ void my_actor::uninstall()
 			context_yield::convert_fiber_to_thread();
 		uninstall_check_stack();
 		io_engine::uninstall();
+		delete TraceMutex_::_mutex;
+		TraceMutex_::_mutex = NULL;
 	}
 }
 

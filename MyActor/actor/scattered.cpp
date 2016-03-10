@@ -105,6 +105,19 @@ std::ostream& operator <<(std::ostream& out, const move_test& s)
 	return out;
 }
 
+std::wostream& operator <<(std::wostream& out, const move_test& s)
+{
+	if (s._count)
+	{
+		out << L"(id:" << s._count->_id << L", generation:" << s._generation << L", move:" << s._count->_moveCount << L", copy:" << s._count->_copyCount << L")";
+	}
+	else
+	{
+		out << L"(id:null, generation:null, move:null, copy:null)";
+	}
+	return out;
+}
+
 move_test::move_test(move_test&& s)
 {
 	*this = std::move(s);
@@ -204,6 +217,72 @@ void print_time_s()
 	auto time = tm.time_of_day();
 	printf("%u-%02u-%02u %02u:%02u:%02u", (int)date.year(), (int)date.month(), (int)date.day(), \
 		(int)time.hours(), (int)time.minutes(), (int)time.seconds());
+}
+
+void print_time_us(std::ostream& out)
+{
+	auto tm = boost::posix_time::microsec_clock::local_time();
+	auto date = tm.date();
+	auto time = tm.time_of_day();
+	char buff[32];
+	snPrintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u.%06u", (int)date.year(), (int)date.month(), (int)date.day(), \
+		(int)time.hours(), (int)time.minutes(), (int)time.seconds(), (int)time.fractional_seconds());
+	out << buff;
+}
+
+void print_time_ms(std::ostream& out)
+{
+	auto tm = boost::posix_time::microsec_clock::local_time();
+	auto date = tm.date();
+	auto time = tm.time_of_day();
+	char buff[32];
+	snPrintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u.%03u", (int)date.year(), (int)date.month(), (int)date.day(), \
+		(int)time.hours(), (int)time.minutes(), (int)time.seconds(), (int)time.fractional_seconds() / 1000);
+	out << buff;
+}
+
+void print_time_s(std::ostream& out)
+{
+	auto tm = boost::posix_time::microsec_clock::local_time();
+	auto date = tm.date();
+	auto time = tm.time_of_day();
+	char buff[32];
+	snPrintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u", (int)date.year(), (int)date.month(), (int)date.day(), \
+		(int)time.hours(), (int)time.minutes(), (int)time.seconds());
+	out << buff;
+}
+
+void print_time_us(std::wostream& out)
+{
+	auto tm = boost::posix_time::microsec_clock::local_time();
+	auto date = tm.date();
+	auto time = tm.time_of_day();
+	char buff[32];
+	snPrintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u.%06u", (int)date.year(), (int)date.month(), (int)date.day(), \
+		(int)time.hours(), (int)time.minutes(), (int)time.seconds(), (int)time.fractional_seconds());
+	out << buff;
+}
+
+void print_time_ms(std::wostream& out)
+{
+	auto tm = boost::posix_time::microsec_clock::local_time();
+	auto date = tm.date();
+	auto time = tm.time_of_day();
+	char buff[32];
+	snPrintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u.%03u", (int)date.year(), (int)date.month(), (int)date.day(), \
+		(int)time.hours(), (int)time.minutes(), (int)time.seconds(), (int)time.fractional_seconds() / 1000);
+	out << buff;
+}
+
+void print_time_s(std::wostream& out)
+{
+	auto tm = boost::posix_time::microsec_clock::local_time();
+	auto date = tm.date();
+	auto time = tm.time_of_day();
+	char buff[32];
+	snPrintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u", (int)date.year(), (int)date.month(), (int)date.day(), \
+		(int)time.hours(), (int)time.minutes(), (int)time.seconds());
+	out << buff;
 }
 
 #ifdef WIN32

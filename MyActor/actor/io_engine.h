@@ -65,7 +65,7 @@ public:
 	};
 #endif
 public:
-	io_engine();
+	io_engine(bool enableTimer = true);
 	~io_engine();
 public:
 	/*!

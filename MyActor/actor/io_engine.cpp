@@ -20,7 +20,7 @@ void io_engine::uninstall()
 	_tls = NULL;
 }
 
-io_engine::io_engine()
+io_engine::io_engine(bool enableTimer)
 {
 	_opend = false;
 	_runLock = NULL;
@@ -43,7 +43,7 @@ io_engine::io_engine()
 		return false;
 	});
 #ifdef DISABLE_BOOST_TIMER
-	_waitableTimer = new WaitableTimer_();
+	_waitableTimer = enableTimer ? new WaitableTimer_() : NULL;
 #endif
 }
 

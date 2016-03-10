@@ -54,6 +54,7 @@ void WaitableTimer_::appendEvent(long long us, WaitableTimerEvent_* h)
 
 void WaitableTimer_::timerThread()
 {
+	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 	while (true)
 	{
 		if (WAIT_OBJECT_0 == WaitForSingleObject(_timerHandle, INFINITE) && !_exited)
@@ -88,6 +89,7 @@ void WaitableTimer_::timerThread()
 }
 #elif __linux__
 #include <sys/timerfd.h>
+#include <pthread.h>
 
 WaitableTimer_::WaitableTimer_()
 :_eventsQueue(1024), _exited(false), _extMaxTick(0), _extFinishTime(-1),
@@ -139,6 +141,11 @@ void WaitableTimer_::appendEvent(long long us, WaitableTimerEvent_* h)
 
 void WaitableTimer_::timerThread()
 {
+	pthread_attr_t threadAttr;
+	struct sched_param pm = { 83 };
+	pthread_attr_init(&threadAttr);
+	pthread_attr_setschedpolicy(&threadAttr, SCHED_FIFO);
+	pthread_attr_setschedparam(&threadAttr, &pm);
 	unsigned long long exp = 0;
 	while (true)
 	{
@@ -172,6 +179,7 @@ void WaitableTimer_::timerThread()
 			break;
 		}
 	}
+	pthread_attr_destroy(&threadAttr);
 }
 #endif
 

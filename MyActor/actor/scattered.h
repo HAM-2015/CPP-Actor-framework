@@ -53,6 +53,10 @@ private:
 	auto BOND_LINE(__t, __LINE__) = [&]__CL__; \
 	out_of_scope<decltype(BOND_LINE(__t, __LINE__))> BOND_LINE(__cl, __LINE__)(BOND_LINE(__t, __LINE__))
 
+#define OUT_OF_SCOPE_NAME(__NAME__, __CL__) \
+	auto NAME_BOND(__t, __NAME__) = [&]__CL__; \
+	out_of_scope<decltype(NAME_BOND(__t, __NAME__))> NAME_BOND(__cl, __NAME__)(NAME_BOND(__t, __NAME__))
+
 #if (_DEBUG || DEBUG)
 #define DEBUG_OPERATION(__exp__)	__exp__
 #else
@@ -159,6 +163,7 @@ struct move_test
 	void operator=(const move_test& s);
 	void operator=(move_test&& s);
 	friend std::ostream& operator <<(std::ostream& out, const move_test& s);
+	friend std::wostream& operator <<(std::wostream& out, const move_test& s);
 	std::shared_ptr<count> _count;
 	size_t _generation;
 };
@@ -174,6 +179,12 @@ std::string get_time_string_s();
 void print_time_us();
 void print_time_ms();
 void print_time_s();
+void print_time_us(std::ostream&);
+void print_time_ms(std::ostream&);
+void print_time_s(std::ostream&);
+void print_time_us(std::wostream&);
+void print_time_ms(std::wostream&);
+void print_time_s(std::wostream&);
 
 long long get_tick_us();
 long long get_tick_ms();

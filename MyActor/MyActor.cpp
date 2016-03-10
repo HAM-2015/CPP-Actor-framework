@@ -707,6 +707,36 @@ void async_timer_test()
 	trace_line("end async_timer_test");
 }
 
+void create_child_test()
+{
+	trace_line("begin create_child_test");
+	io_engine ios;
+	ios.run();
+	int count = 0;
+	LOCAL_RECURSIVE1(createActor, void(my_actor*), [&](my_actor* self)
+	{
+		if (++count < 100)
+		{
+			info_trace_line("create_child_actor ", count);
+			child_actor_handle child1 = self->create_child_actor([&](my_actor* self)
+			{
+				self->sleep(1000);
+				createActor(self);
+			});
+			child_actor_handle child2 = self->create_child_actor([&](my_actor* self)
+			{
+				self->sleep(1000);
+				createActor(self);
+			});
+			self->child_actor_run(child1, child2);
+			self->child_actor_wait_quit(child1, child2);
+		}
+	});
+	my_actor::create(boost_strand::create(ios), wrap_ref_handler(createActor))->notify_run();
+	ios.stop();
+	trace_line("end create_child_test");
+}
+
 void auto_stack_test()
 {
 	trace_line("begin auto_stack_test");
@@ -730,6 +760,8 @@ int main(int argc, char *argv[])
 {
 	init_my_actor(0);
 	auto_stack_test();
+	trace("\n");
+	create_child_test();
 	trace("\n");
 	async_timer_test();
 	trace("\n");
