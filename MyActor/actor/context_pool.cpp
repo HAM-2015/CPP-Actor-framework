@@ -64,7 +64,7 @@ void ContextPool_::uninstall()
 ContextPool_::ContextPool_()
 :_exitSign(false), _clearWait(false), _stackCount(0), _stackTotalSize(0)
 {
-	std::thread th(&ContextPool_::clearThread, this);
+	run_thread th([this] { clearThread(); });
 	_clearThread.swap(th);
 }
 
@@ -164,19 +164,7 @@ void ContextPool_::recovery(coro_pull_interface* coro)
 void ContextPool_::contextHandler(context_yield::context_info* info, void* param)
 {
 	coro_pull_interface* pull = (coro_pull_interface*)param;
-#ifdef _MSC_VER
-#ifdef _WIN64
-	char space[sizeof(my_actor)+40];
-#else
-	char space[sizeof(my_actor)+24];
-#endif
-#elif __GNUG__
-#ifdef __x86_64__
-	char space[sizeof(my_actor)+32];
-#elif __i386__
-	char space[sizeof(my_actor)+20];
-#endif
-#endif
+	char space[sizeof(my_actor)+64];
 	pull->_space = space;
 #if (_DEBUG || DEBUG)
 	pull->_spaceSize = sizeof(space);

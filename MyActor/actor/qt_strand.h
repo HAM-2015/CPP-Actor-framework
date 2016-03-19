@@ -24,18 +24,10 @@ private:
 	bool running_in_this_thread();
 	bool sync_safe();
 	bool is_running();
-
 	template <typename Handler>
-	void dispatch_ui(Handler&& handler)
-	{
-		_ui->post(TRY_MOVE(handler));
-	}
-
+	void dispatch_ui(Handler&& handler);
 	template <typename Handler>
-	void post_ui(Handler&& handler)
-	{
-		_ui->post(TRY_MOVE(handler));
-	}
+	void post_ui(Handler&& handler);
 private:
 	bind_qt_run_base* _ui;
 };

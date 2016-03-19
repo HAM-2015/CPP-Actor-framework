@@ -5,6 +5,7 @@
 #include "msg_queue.h"
 #include "mem_pool.h"
 #include "shared_strand.h"
+#include "run_thread.h"
 
 class ActorTimer_;
 class TimerBoost_;
@@ -39,7 +40,7 @@ private:
 	unsigned long long _extFinishTime;
 	handler_queue _eventsQueue;
 	std::mutex _ctrlMutex;
-	std::thread _timerThread;
+	run_thread _timerThread;
 #ifdef WIN32
 	void* _timerHandle;
 #elif __linux__

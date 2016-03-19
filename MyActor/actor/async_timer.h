@@ -128,7 +128,7 @@ public:
 	{
 		assert(self_strand()->running_in_this_thread());
 		assert(!_handler);
-		typedef wrap_handler<RM_CREF(Handler)> wrap_type;
+		typedef wrap_handler<RM_REF(Handler)> wrap_type;
 		_handler = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
 		_timerHandle = _timerBoost.timeout(tm * 1000, _weakThis.lock());
 	}

@@ -57,6 +57,19 @@ private:
 	auto NAME_BOND(__t, __NAME__) = [&]__CL__; \
 	out_of_scope<decltype(NAME_BOND(__t, __NAME__))> NAME_BOND(__cl, __NAME__)(NAME_BOND(__t, __NAME__))
 
+#define _OUT_OF_SCOPE_EXEC1(__opt1__) OUT_OF_SCOPE({ __opt1__; });
+#define _OUT_OF_SCOPE_EXEC2(__opt1__, __opt2__) OUT_OF_SCOPE({ __opt1__; __opt2__; });
+#define _OUT_OF_SCOPE_EXEC3(__opt1__, __opt2__, __opt3__) OUT_OF_SCOPE({ __opt1__; __opt2__; __opt3__; });
+#define _OUT_OF_SCOPE_EXEC4(__opt1__, __opt2__, __opt3__, __opt4__) OUT_OF_SCOPE({ __opt1__; __opt2__; __opt3__; __opt4__; });
+#define _OUT_OF_SCOPE_EXEC5(__opt1__, __opt2__, __opt3__, __opt4__, __opt5__) OUT_OF_SCOPE({ __opt1__; __opt2__; __opt3__; __opt4__; __opt5__; });
+#define _OUT_OF_SCOPE_EXEC6(__opt1__, __opt2__, __opt3__, __opt4__, __opt5__, __opt6__) OUT_OF_SCOPE({ __opt1__; __opt2__; __opt3__; __opt4__; __opt5__; __opt6__; });
+#ifdef _MSC_VER
+#define _OUT_OF_SCOPE_EXEC(__pl__, ...) _BOND_LR__(_OUT_OF_SCOPE_EXEC, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
+#define OUT_OF_SCOPE_EXEC(...) _OUT_OF_SCOPE_EXEC(__pl__, __VA_ARGS__)
+#elif __GNUG__
+#define OUT_OF_SCOPE_EXEC(...) _BOND_LR__(_OUT_OF_SCOPE_EXEC, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
+#endif
+
 #if (_DEBUG || DEBUG)
 #define DEBUG_OPERATION(__exp__)	__exp__
 #else

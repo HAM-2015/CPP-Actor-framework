@@ -4,10 +4,10 @@
 #include <mutex>
 #include <atomic>
 #include <string>
-#include <thread>
 #include <condition_variable>
 #include "msg_queue.h"
 #include "context_yield.h"
+#include "run_thread.h"
 
 /*!
 @brief context³Ø
@@ -69,7 +69,7 @@ private:
 	volatile bool _clearWait;
 	context_pool_pck _contextPool[256];
 	std::mutex _clearMutex;
-	std::thread _clearThread;
+	run_thread _clearThread;
 	std::atomic<int> _stackCount;
 	std::condition_variable _clearVar;
 	std::atomic<size_t> _stackTotalSize;

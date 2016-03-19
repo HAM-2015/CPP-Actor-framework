@@ -132,14 +132,14 @@ struct ApplyArg_
 	template <typename Tuple, typename First, typename... Args>
 	static inline void to_args(Tuple&& tup, First& fst, Args&... dsts)
 	{
-		fst = tuple_move<std::tuple_size<RM_CREF(Tuple)>::value - N, Tuple&&>::get(TRY_MOVE(tup));
+		fst = tuple_move<std::tuple_size<RM_REF(Tuple)>::value - N, Tuple&&>::get(TRY_MOVE(tup));
 		ApplyArg_<R, N - 1>::to_args(TRY_MOVE(tup), dsts...);
 	}
 
 	template <typename Tuple, typename First, typename... Args>
 	static inline void to_tuple(Tuple&& dst, First&& fst, Args&&... args)
 	{
-		std::get<std::tuple_size<RM_CREF(Tuple)>::value - N>(dst) = TRY_MOVE(fst);
+		std::get<std::tuple_size<RM_REF(Tuple)>::value - N>(dst) = TRY_MOVE(fst);
 		ApplyArg_<R, N - 1>::to_tuple(TRY_MOVE(dst), TRY_MOVE(args)...);
 	}
 };
@@ -299,13 +299,13 @@ struct CheckClassFunc_<R(C::*)(Types...) const>
 template <typename R = void, typename Handler, typename Unknown, typename... Tuple>
 inline R tuple_invoke(Handler&& h, Unknown&& unkown, Tuple&&... tups)
 {
-	return TupleInvoke_<R, CheckClassFunc_<RM_CREF(Handler)>::value>::tuple_invoke(h, TRY_MOVE(unkown), TRY_MOVE(tups)...);
+	return TupleInvoke_<R, CheckClassFunc_<RM_REF(Handler)>::value>::tuple_invoke(h, TRY_MOVE(unkown), TRY_MOVE(tups)...);
 }
 
 template <typename R = void, typename Handler>
 inline R tuple_invoke(Handler&& h)
 {
-	static_assert(!CheckClassFunc_<RM_CREF(Handler)>::value, "");
+	static_assert(!CheckClassFunc_<RM_REF(Handler)>::value, "");
 	return h();
 }
 
@@ -371,13 +371,13 @@ struct RvalInvoke_<R, true>
 template <typename R = void, typename Handler, typename Unknown, typename... Args>
 inline R try_rval_invoke(Handler&& h, Unknown&& unkown, Args&&... args)
 {
-	return RvalInvoke_<R, CheckClassFunc_<RM_CREF(Handler)>::value>::invoke(h, TRY_MOVE(unkown), TRY_MOVE(args)...);
+	return RvalInvoke_<R, CheckClassFunc_<RM_REF(Handler)>::value>::invoke(h, TRY_MOVE(unkown), TRY_MOVE(args)...);
 }
 
 template <typename R = void, typename Handler>
 inline R try_rval_invoke(Handler&& h)
 {
-	static_assert(!CheckClassFunc_<RM_CREF(Handler)>::value, "");
+	static_assert(!CheckClassFunc_<RM_REF(Handler)>::value, "");
 	return h();
 }
 

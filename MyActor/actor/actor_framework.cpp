@@ -16,7 +16,7 @@
 typedef ContextPool_::coro_push_interface actor_push_type;
 typedef ContextPool_::coro_pull_interface actor_pull_type;
 
-DEBUG_OPERATION(static std::thread::id s_installID);
+DEBUG_OPERATION(static run_thread::thread_id s_installID);
 static bool s_inited = false;
 static bool s_isSelfInitFiber = false;
 #ifdef __linux__
@@ -51,6 +51,14 @@ struct autoActorStackMng
 	std::map<size_t, size_t> _table;
 	boost::shared_mutex _mutex;
 };
+
+struct shared_initer 
+{
+	std::mutex* _traceMutex = NULL;
+	std::atomic<my_actor::id>* _actorIDCount = NULL;
+};
+static shared_initer s_shared_initer;
+static bool s_isSharedIniter = false;
 static autoActorStackMng* s_autoActorStackMng = NULL;
 shared_obj_pool<bool>* shared_bool::_sharedBoolPool = NULL;
 std::mutex* TraceMutex_::_mutex = NULL;
@@ -62,16 +70,13 @@ msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor
 
 void my_actor::install()
 {
-	install(cpu_tick());
-}
-
-void my_actor::install(id aid)
-{
 	if (!s_inited)
 	{
 		s_inited = true;
+		s_isSharedIniter = false;
 		TraceMutex_::_mutex = new std::mutex;
-		DEBUG_OPERATION(s_installID = std::this_thread::get_id());
+		s_shared_initer._traceMutex = TraceMutex_::_mutex;
+		DEBUG_OPERATION(s_installID = run_thread::this_thread_id());
 		io_engine::install();
 		install_check_stack();
 		s_isSelfInitFiber = context_yield::convert_thread_to_fiber();
@@ -92,7 +97,46 @@ void my_actor::install(id aid)
 		s_sigsegvMutex = new std::mutex;
 #endif
 		shared_bool::_sharedBoolPool = create_shared_pool_mt<bool, std::mutex>(100000);
-		my_actor::_actorIDCount = new std::atomic<my_actor::id>(aid);
+		my_actor::_actorIDCount = new std::atomic<my_actor::id>(0);
+		s_shared_initer._actorIDCount = my_actor::_actorIDCount;
+		my_actor::_childActorListAll = new msg_list_shared_alloc<actor_handle>::shared_node_alloc(100000);
+		my_actor::_quitExitCallbackAll = new msg_list_shared_alloc<std::function<void()> >::shared_node_alloc(100000);
+		my_actor::_suspendResumeQueueAll = new msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc(100000);
+		my_actor::msg_pool_status::_msgTypeMapAll = new msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc(100000);
+	}
+}
+
+void my_actor::install(const shared_initer* initer)
+{
+	if (!s_inited)
+	{
+		s_inited = true;
+		s_isSharedIniter = true;
+		TraceMutex_::_mutex = initer->_traceMutex;
+		s_shared_initer._traceMutex = initer->_traceMutex;
+		DEBUG_OPERATION(s_installID = run_thread::this_thread_id());
+		io_engine::install();
+		install_check_stack();
+		s_isSelfInitFiber = context_yield::convert_thread_to_fiber();
+		ContextPool_::install();
+#ifdef ENABLE_QT_UI
+		bind_qt_run_base::install();
+#endif
+#ifdef ENABLE_CHECK_LOST
+		auto& s_checkLostObjAlloc_ = s_checkLostObjAlloc;
+		auto& s_checkPumpLostObjAlloc_ = s_checkPumpLostObjAlloc;
+		s_checkLostObjAlloc_ = new mem_alloc_mt<CheckLost_>(100000);
+		s_checkPumpLostObjAlloc_ = new mem_alloc_mt<CheckPumpLost_>(100000);
+		s_checkLostRefCountAlloc = make_ref_count_alloc<CheckLost_, std::mutex>(100000, [s_checkLostObjAlloc_](CheckLost_*){});
+		s_checkPumpLostRefCountAlloc = make_ref_count_alloc<CheckPumpLost_, std::mutex>(100000, [s_checkPumpLostObjAlloc_](CheckPumpLost_*){});
+#endif
+		s_autoActorStackMng = new autoActorStackMng;
+#ifdef __linux__
+		s_sigsegvMutex = new std::mutex;
+#endif
+		shared_bool::_sharedBoolPool = create_shared_pool_mt<bool, std::mutex>(100000);
+		my_actor::_actorIDCount = initer->_actorIDCount;
+		s_shared_initer._actorIDCount = initer->_actorIDCount;
 		my_actor::_childActorListAll = new msg_list_shared_alloc<actor_handle>::shared_node_alloc(100000);
 		my_actor::_quitExitCallbackAll = new msg_list_shared_alloc<std::function<void()> >::shared_node_alloc(100000);
 		my_actor::_suspendResumeQueueAll = new msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc(100000);
@@ -105,10 +149,12 @@ void my_actor::uninstall()
 	if (s_inited)
 	{
 		s_inited = false;
-		assert(std::this_thread::get_id() == s_installID);
+		assert(run_thread::this_thread_id() == s_installID);
 		delete shared_bool::_sharedBoolPool;
 		shared_bool::_sharedBoolPool = NULL;
-		delete my_actor::_actorIDCount;
+		if (!s_isSharedIniter)
+			delete my_actor::_actorIDCount;
+		s_shared_initer._actorIDCount = NULL;
 		my_actor::_actorIDCount = NULL;
 		delete my_actor::_childActorListAll;
 		my_actor::_childActorListAll = NULL;
@@ -142,9 +188,16 @@ void my_actor::uninstall()
 			context_yield::convert_fiber_to_thread();
 		uninstall_check_stack();
 		io_engine::uninstall();
-		delete TraceMutex_::_mutex;
+		if (!s_isSharedIniter)
+			delete TraceMutex_::_mutex;
+		s_shared_initer._traceMutex = NULL;
 		TraceMutex_::_mutex = NULL;
 	}
+}
+
+const shared_initer* my_actor::get_initer()
+{
+	return &s_shared_initer;
 }
 
 #define ACTOR_TLS_INDEX 0
@@ -1284,8 +1337,8 @@ struct actor_ref_count_alloc
 	pointer allocate(size_type _Count)
 	{
 		assert(1 == _Count);
-		assert(sizeof(my_actor)+sizeof(_Ty) <= _pull->_spaceSize);
-		return (pointer)((char*)_pull->_space + sizeof(my_actor));
+		assert(MEM_ALIGN(sizeof(my_actor), sizeof(void*))+sizeof(_Ty) <= _pull->_spaceSize);
+		return (pointer)((char*)_pull->_space + MEM_ALIGN(sizeof(my_actor), sizeof(void*)));
 	}
 
 	void construct(_Ty *_Ptr, const _Ty& _Val)
@@ -2475,6 +2528,11 @@ boost::asio::io_service& my_actor::self_io_service()
 actor_handle my_actor::shared_from_this()
 {
 	return _weakThis.lock();
+}
+
+async_timer my_actor::make_timer()
+{
+	return _strand->make_timer();
 }
 
 my_actor::id my_actor::self_id()

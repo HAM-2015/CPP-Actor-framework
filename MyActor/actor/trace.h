@@ -57,6 +57,15 @@ struct TraceMatch_<char[N]>
 	}
 };
 
+template <size_t N>
+struct TraceMatch_<wchar_t[N]>
+{
+	static void trace(std::wostream& out, const wchar_t(&s)[N])
+	{
+		out << s;
+	}
+};
+
 template <>
 struct TraceMatch_<std::string>
 {
@@ -70,6 +79,15 @@ template <>
 struct TraceMatch_<char*>
 {
 	static void trace(std::wostream& out, const char* s)
+	{
+		out << s;
+	}
+};
+
+template <>
+struct TraceMatch_<wchar_t*>
+{
+	static void trace(std::wostream& out, const wchar_t* s)
 	{
 		out << s;
 	}

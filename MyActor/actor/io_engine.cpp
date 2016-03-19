@@ -5,12 +5,18 @@
 #include "waitable_timer.h"
 
 tls_space* io_engine::_tls = NULL;
+#if (defined DISABLE_BOOST_TIMER) && (defined ENABLE_GLOBAL_TIMER)
+WaitableTimer_* io_engine::_waitableTimer = NULL;
+#endif
 
 void io_engine::install()
 {
 	if (!_tls)
 	{
 		_tls = new tls_space;
+#if (defined DISABLE_BOOST_TIMER) && (defined ENABLE_GLOBAL_TIMER)
+		_waitableTimer = new WaitableTimer_();
+#endif
 	}
 }
 
@@ -18,6 +24,10 @@ void io_engine::uninstall()
 {
 	delete _tls;
 	_tls = NULL;
+#if (defined DISABLE_BOOST_TIMER) && (defined ENABLE_GLOBAL_TIMER)
+	delete _waitableTimer;
+	_waitableTimer = NULL;
+#endif
 }
 
 io_engine::io_engine(bool enableTimer)
@@ -43,7 +53,9 @@ io_engine::io_engine(bool enableTimer)
 		return false;
 	});
 #ifdef DISABLE_BOOST_TIMER
+#ifndef ENABLE_GLOBAL_TIMER
 	_waitableTimer = enableTimer ? new WaitableTimer_() : NULL;
+#endif
 #endif
 }
 
@@ -51,7 +63,9 @@ io_engine::~io_engine()
 {
 	assert(!_opend);
 #ifdef DISABLE_BOOST_TIMER
+#ifndef ENABLE_GLOBAL_TIMER
 	delete _waitableTimer;
+#endif
 #endif
 	delete _strandPool;
 }
@@ -80,7 +94,7 @@ void io_engine::_run(size_t threadNum, sched policy)
 		std::unique_lock<std::mutex> ul(*blockMutex);
 		for (size_t i = 0; i < threadNum; i++)
 		{
-			std::thread* newThread = new std::thread([&, i]
+			run_thread* newThread = new run_thread([&, i]
 			{
 				try
 				{
@@ -207,7 +221,7 @@ void io_engine::changeThreadNumber(size_t threadNum)
 bool io_engine::runningInThisIos()
 {
 	assert(_opend);
-	return _threadsID.find(std::this_thread::get_id()) != _threadsID.end();
+	return _threadsID.find(run_thread::this_thread_id()) != _threadsID.end();
 }
 
 size_t io_engine::threadNumber()
@@ -268,7 +282,7 @@ long long io_engine::getRunCount()
 	return _runCount;
 }
 
-const std::set<std::thread::id>& io_engine::threadsID()
+const std::set<run_thread::thread_id>& io_engine::threadsID()
 {
 	return _threadsID;
 }

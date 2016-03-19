@@ -6,12 +6,12 @@
 #include <condition_variable>
 #include <atomic>
 #include <mutex>
-#include <thread>
 #include <set>
 #include <vector>
 #include "scattered.h"
 #include "strand_ex.h"
 #include "mem_pool.h"
+#include "run_thread.h"
 
 class my_actor;
 class boost_strand;
@@ -125,7 +125,7 @@ public:
 	/*!
 	@brief 运行线程ID
 	*/
-	const std::set<std::thread::id>& threadsID();
+	const std::set<run_thread::thread_id>& threadsID();
 
 	/*!
 	@brief 调度器对象引用
@@ -170,14 +170,18 @@ private:
 	bool _opend;
 	shared_obj_pool<boost_strand>* _strandPool;
 #ifdef DISABLE_BOOST_TIMER
+#ifdef ENABLE_GLOBAL_TIMER
+	static WaitableTimer_* _waitableTimer;
+#else
 	WaitableTimer_* _waitableTimer;
+#endif
 #endif
 	priority _priority;
 	std::mutex _runMutex;
 	std::mutex _ctrlMutex;
 	std::atomic<long long> _runCount;
-	std::set<std::thread::id> _threadsID;
-	std::list<std::thread*> _runThreads;
+	std::set<run_thread::thread_id> _threadsID;
+	std::list<run_thread*> _runThreads;
 	boost::asio::io_service _ios;
 	boost::asio::io_service::work* _runLock;
 #ifdef WIN32

@@ -126,9 +126,9 @@ struct once_handler
 };
 
 template <typename Handler>
-once_handler<RM_CREF(Handler)> wrap_once_handler(Handler&& handler)
+once_handler<RM_REF(Handler)> wrap_once_handler(Handler&& handler)
 {
-	return once_handler<RM_CREF(Handler)>(bool(), TRY_MOVE(handler));
+	return once_handler<RM_REF(Handler)>(bool(), TRY_MOVE(handler));
 }
 
 template <typename Handler>
@@ -497,63 +497,63 @@ public:
 	@brief 把被调用函数包装到dispatch中，用于不同strand间消息传递
 	*/
 	template <typename Handler>
-	wrapped_dispatch_handler<boost_strand, RM_CREF(Handler)> wrap_asio(Handler&& handler)
+	wrapped_dispatch_handler<boost_strand, RM_REF(Handler)> wrap_asio(Handler&& handler)
 	{
-		return wrapped_dispatch_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_dispatch_handler<boost_strand, RM_REF(Handler)>(this, TRY_MOVE(handler));
 	}
 
 	/*!
 	@brief 把被调用函数包装到dispatch中，用于不同strand间消息传递，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_dispatch_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_asio(Handler&& handler)
+	wrapped_dispatch_handler<boost_strand, RM_REF(Handler), true> suck_wrap_asio(Handler&& handler)
 	{
-		return wrapped_dispatch_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+		return wrapped_dispatch_handler<boost_strand, RM_REF(Handler), true>(this, TRY_MOVE(handler));
 	}
 
 	/*!
 	@brief 把被调用函数包装到distribute中，用于不同strand间消息传递
 	*/
 	template <typename Handler>
-	wrapped_distribute_handler<boost_strand, RM_CREF(Handler)> wrap(Handler&& handler)
+	wrapped_distribute_handler<boost_strand, RM_REF(Handler)> wrap(Handler&& handler)
 	{
-		return wrapped_distribute_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_distribute_handler<boost_strand, RM_REF(Handler)>(this, TRY_MOVE(handler));
 	}
 
 	/*!
 	@brief 把被调用函数包装到distribute中，用于不同strand间消息传递，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_distribute_handler<boost_strand, RM_CREF(Handler), true> suck_wrap(Handler&& handler)
+	wrapped_distribute_handler<boost_strand, RM_REF(Handler), true> suck_wrap(Handler&& handler)
 	{
-		return wrapped_distribute_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+		return wrapped_distribute_handler<boost_strand, RM_REF(Handler), true>(this, TRY_MOVE(handler));
 	}
 
 	/*!
 	@brief 把被调用函数包装到post中
 	*/
 	template <typename Handler>
-	wrapped_post_handler<boost_strand, RM_CREF(Handler)> wrap_post(Handler&& handler)
+	wrapped_post_handler<boost_strand, RM_REF(Handler)> wrap_post(Handler&& handler)
 	{
-		return wrapped_post_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_post_handler<boost_strand, RM_REF(Handler)>(this, TRY_MOVE(handler));
 	}
 
 	/*!
 	@brief 把被调用函数包装到post中，并且锁定ios，直到释放通知函数包
 	*/
 	template <typename Handler>
-	wrapped_hold_work_post_handler<boost_strand, RM_CREF(Handler)> wrap_hold_post(Handler&& handler)
+	wrapped_hold_work_post_handler<boost_strand, RM_REF(Handler)> wrap_hold_post(Handler&& handler)
 	{
-		return wrapped_hold_work_post_handler<boost_strand, RM_CREF(Handler)>(get_io_service(), this, TRY_MOVE(handler));
+		return wrapped_hold_work_post_handler<boost_strand, RM_REF(Handler)>(get_io_service(), this, TRY_MOVE(handler));
 	}
 
 	/*!
 	@brief 把被调用函数包装到post中，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_post_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_post(Handler&& handler)
+	wrapped_post_handler<boost_strand, RM_REF(Handler), true> suck_wrap_post(Handler&& handler)
 	{
-		return wrapped_post_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+		return wrapped_post_handler<boost_strand, RM_REF(Handler), true>(this, TRY_MOVE(handler));
 	}
 
 #ifdef ENABLE_POST_FRONT
@@ -561,63 +561,63 @@ public:
 	@brief 把被调用函数包装到dispatch_front中，用于不同strand间消息传递
 	*/
 	template <typename Handler>
-	wrapped_dispatch_front_handler<boost_strand, RM_CREF(Handler)> wrap_asio_front(Handler&& handler)
+	wrapped_dispatch_front_handler<boost_strand, RM_REF(Handler)> wrap_asio_front(Handler&& handler)
 	{
-		return wrapped_dispatch_front_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_dispatch_front_handler<boost_strand, RM_REF(Handler)>(this, TRY_MOVE(handler));
 	}
 
 	/*!
 	@brief 把被调用函数包装到dispatch_front中，用于不同strand间消息传递，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_dispatch_front_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_asio_front(Handler&& handler)
+	wrapped_dispatch_front_handler<boost_strand, RM_REF(Handler), true> suck_wrap_asio_front(Handler&& handler)
 	{
-		return wrapped_dispatch_front_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+		return wrapped_dispatch_front_handler<boost_strand, RM_REF(Handler), true>(this, TRY_MOVE(handler));
 	}
 
 	/*!
 	@brief 把被调用函数包装到distribute_front中，用于不同strand间消息传递
 	*/
 	template <typename Handler>
-	wrapped_distribute_front_handler<boost_strand, RM_CREF(Handler)> wrap_front(Handler&& handler)
+	wrapped_distribute_front_handler<boost_strand, RM_REF(Handler)> wrap_front(Handler&& handler)
 	{
-		return wrapped_distribute_front_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_distribute_front_handler<boost_strand, RM_REF(Handler)>(this, TRY_MOVE(handler));
 	}
 
 	/*!
 	@brief 把被调用函数包装到distribute_front中，用于不同strand间消息传递，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_distribute_front_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_front(Handler&& handler)
+	wrapped_distribute_front_handler<boost_strand, RM_REF(Handler), true> suck_wrap_front(Handler&& handler)
 	{
-		return wrapped_distribute_front_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+		return wrapped_distribute_front_handler<boost_strand, RM_REF(Handler), true>(this, TRY_MOVE(handler));
 	}
 
 	/*!
 	@brief 把被调用函数包装到post_front中
 	*/
 	template <typename Handler>
-	wrapped_post_front_handler<boost_strand, RM_CREF(Handler)> wrap_post_front(Handler&& handler)
+	wrapped_post_front_handler<boost_strand, RM_REF(Handler)> wrap_post_front(Handler&& handler)
 	{
-		return wrapped_post_front_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_post_front_handler<boost_strand, RM_REF(Handler)>(this, TRY_MOVE(handler));
 	}
 
 	/*!
 	@brief 把被调用函数包装到post_front中，并且锁定ios，直到释放通知函数包
 	*/
 	template <typename Handler>
-	wrapped_hold_work_post_front_handler<boost_strand, RM_CREF(Handler)> wrap_hold_post_front(Handler&& handler)
+	wrapped_hold_work_post_front_handler<boost_strand, RM_REF(Handler)> wrap_hold_post_front(Handler&& handler)
 	{
-		return wrapped_hold_work_post_front_handler<boost_strand, RM_CREF(Handler)>(get_io_service(), this, TRY_MOVE(handler));
+		return wrapped_hold_work_post_front_handler<boost_strand, RM_REF(Handler)>(get_io_service(), this, TRY_MOVE(handler));
 	}
 
 	/*!
 	@brief 把被调用函数包装到post_front中，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_post_front_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_post_front(Handler&& handler)
+	wrapped_post_front_handler<boost_strand, RM_REF(Handler), true> suck_wrap_post_front(Handler&& handler)
 	{
-		return wrapped_post_front_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+		return wrapped_post_front_handler<boost_strand, RM_REF(Handler), true>(this, TRY_MOVE(handler));
 	}
 #endif //ENABLE_POST_FRONT
 
@@ -625,36 +625,36 @@ public:
 	@brief 把被调用函数包装到tick中
 	*/
 	template <typename Handler>
-	wrapped_next_tick_handler<boost_strand, RM_CREF(Handler)> wrap_next_tick(Handler&& handler)
+	wrapped_next_tick_handler<boost_strand, RM_REF(Handler)> wrap_next_tick(Handler&& handler)
 	{
-		return wrapped_next_tick_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_next_tick_handler<boost_strand, RM_REF(Handler)>(this, TRY_MOVE(handler));
 	}
 
 	/*!
 	@brief 把被调用函数包装到tick中，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_next_tick_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_next_tick(Handler&& handler)
+	wrapped_next_tick_handler<boost_strand, RM_REF(Handler), true> suck_wrap_next_tick(Handler&& handler)
 	{
-		return wrapped_next_tick_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+		return wrapped_next_tick_handler<boost_strand, RM_REF(Handler), true>(this, TRY_MOVE(handler));
 	}
 
 	/*!
 	@brief 把被调用函数包装到tick中
 	*/
 	template <typename Handler>
-	wrapped_try_tick_handler<boost_strand, RM_CREF(Handler)> wrap_try_tick(Handler&& handler)
+	wrapped_try_tick_handler<boost_strand, RM_REF(Handler)> wrap_try_tick(Handler&& handler)
 	{
-		return wrapped_try_tick_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_try_tick_handler<boost_strand, RM_REF(Handler)>(this, TRY_MOVE(handler));
 	}
 
 	/*!
 	@brief 把被调用函数包装到tick中，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_try_tick_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_try_tick(Handler&& handler)
+	wrapped_try_tick_handler<boost_strand, RM_REF(Handler), true> suck_wrap_try_tick(Handler&& handler)
 	{
-		return wrapped_try_tick_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+		return wrapped_try_tick_handler<boost_strand, RM_REF(Handler), true>(this, TRY_MOVE(handler));
 	}
 
 	/*!
@@ -799,13 +799,13 @@ public:
 	template <typename H, typename CB>
 	void asyncInvoke(H&& h, CB&& cb)
 	{
-		try_tick(wrap_async_invoke<RM_CREF(H), RM_CREF(CB)>(TRY_MOVE(h), TRY_MOVE(cb)));
+		try_tick(wrap_async_invoke<RM_REF(H), RM_REF(CB)>(TRY_MOVE(h), TRY_MOVE(cb)));
 	}
 
 	template <typename H, typename CB>
 	void asyncInvokeVoid(H&& h, CB&& cb)
 	{
-		try_tick(wrap_async_invoke_void<RM_CREF(H), RM_CREF(CB)>(TRY_MOVE(h), TRY_MOVE(cb)));
+		try_tick(wrap_async_invoke_void<RM_REF(H), RM_REF(CB)>(TRY_MOVE(h), TRY_MOVE(cb)));
 	}
 };
 

@@ -1,6 +1,6 @@
 #include "scattered.h"
+#include "run_thread.h"
 #include <assert.h>
-#include <thread>
 #ifdef WIN32
 #include <winsock2.h>
 #include <Windows.h>
@@ -378,15 +378,23 @@ void* get_sp()
 	__asm__("movq %%rsp, %0": "=r"(result));
 #elif __i386__
 	__asm__("movl %%esp, %0": "=r"(result));
+#elif __arm__
+	__asm__("mov %0, %%sp": "=r"(result));
 #endif
 	return result;
 }
 
 unsigned long long cpu_tick()
 {
+#if (defined __x86_64__) || (defined __i386__)
 	unsigned int __a, __d;
 	__asm__("rdtsc" : "=a" (__a), "=d" (__d));
 	return ((unsigned long long)__a) | (((unsigned long long)__d) << 32);
+#elif __arm__
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (unsigned long long)ts.tv_sec * 1000000000 + ts.tv_nsec;
+#endif
 }
 #endif
 //////////////////////////////////////////////////////////////////////////
@@ -694,7 +702,7 @@ struct init_mod
 		{
 			_stackLogIos = new boost::asio::io_service;
 			_stackLogWork = new boost::asio::io_service::work(*_stackLogIos);
-			_thread = new std::thread([&]
+			_thread = new run_thread([&]
 			{
 				boost::system::error_code ec;
 				_stackLogIos->run(ec);
@@ -720,7 +728,7 @@ struct init_mod
 		}
 	}
 
-	std::thread* _thread;
+	run_thread* _thread;
 	boost::asio::io_service::work* _stackLogWork;
 };
 init_mod* _init_ms = NULL;
@@ -770,7 +778,7 @@ struct init_mod
 	{
 	}
 
-	boost:thread* _thread;
+	run_thread* _thread;
 	boost::asio::io_service::work* _stackLogWork;
 };
 

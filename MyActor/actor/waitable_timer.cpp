@@ -8,7 +8,7 @@ WaitableTimer_::WaitableTimer_()
 :_eventsQueue(1024), _exited(false), _extMaxTick(0), _extFinishTime(-1),
 _timerHandle(CreateWaitableTimer(NULL, FALSE, NULL))
 {
-	std::thread th(&WaitableTimer_::timerThread, this);
+	run_thread th([this] { timerThread(); });
 	_timerThread.swap(th);
 }
 
@@ -95,7 +95,7 @@ WaitableTimer_::WaitableTimer_()
 :_eventsQueue(1024), _exited(false), _extMaxTick(0), _extFinishTime(-1),
 _timerFd(timerfd_create(CLOCK_MONOTONIC, 0))
 {
-	std::thread th(&WaitableTimer_::timerThread, this);
+	run_thread th([this] { timerThread(); });
 	_timerThread.swap(th);
 }
 

@@ -1,12 +1,114 @@
 #ifndef __ASYNC_BUFFER_H
 #define __ASYNC_BUFFER_H
 
-#include <boost/circular_buffer.hpp>
-#include <functional>
 #include <memory>
 #include "actor_framework.h"
 
 struct async_buffer_close_exception {};
+
+template <typename T>
+class fixed_buffer
+{
+	struct node
+	{
+		void destroy()
+		{
+			((T*)space)->~T();
+#if (_DEBUG || DEBUG)
+			memset(space, 0xcf, sizeof(space));
+#endif
+		}
+
+		template <typename Arg>
+		void set(Arg&& arg)
+		{
+			new(space)T(TRY_MOVE(arg));
+		}
+
+		T& get()
+		{
+			return *(T*)space;
+		}
+
+		char space[sizeof(T)];
+	};
+public:
+	fixed_buffer(size_t maxSize)
+	{
+		assert(0 != maxSize);
+		_size = 0;
+		_index = 0;
+		_maxSize = maxSize;
+		_buffer = (node*)malloc(sizeof(node)*maxSize);
+	}
+
+	~fixed_buffer()
+	{
+		clear();
+		free(_buffer);
+	}
+public:
+	size_t size() const
+	{
+		return _size;
+	}
+
+	size_t max_size() const
+	{
+		return _maxSize;
+	}
+
+	bool empty() const
+	{
+		return 0 == _size;
+	}
+
+	bool full() const
+	{
+		return _maxSize == _size;
+	}
+
+	void clear()
+	{
+		for (size_t i = 0; i < _size; i++)
+		{
+			const size_t t = _index + i;
+			_buffer[(t < _maxSize) ? t : (t - _maxSize)].destroy();
+		}
+		_index = 0;
+		_size = 0;
+	}
+
+	T& front()
+	{
+		assert(!empty());
+		const size_t i = _index + _size - 1;
+		return _buffer[(i < _maxSize) ? i : (i - _maxSize)].get();
+	}
+
+	void pop_front()
+	{
+		assert(!empty());
+		_size--;
+		const size_t i = _index + _size;
+		_buffer[(i < _maxSize) ? i : (i - _maxSize)].destroy();
+	}
+
+	template <typename Arg>
+	void push_back(Arg&& arg)
+	{
+		assert(!full());
+		const size_t i = (0 != _index) ? (_index - 1) : (_maxSize - 1);
+		_buffer[i].set(TRY_MOVE(arg));
+		_index = i;
+		_size++;
+	}
+private:
+	size_t _maxSize;
+	size_t _size;
+	size_t _index;
+	node* _buffer;
+};
 
 /*!
 @brief 异步缓冲队列，多写/多读，角色可转换
@@ -104,13 +206,13 @@ public:
 	{
 		static_assert(sizeof...(TMS) > 0, "");
 		size_t pushCount = 0;
-#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+#if ((__GNUG__ == 4) && (__GNUC_MINOR__ <= 8))
 		std::tuple<TMS&&...> msgsTup(TRY_MOVE(msgs)...);
 #endif
 		_push(host, [&]()->bool
 		{
 			buff_push bp = { this, pushCount };
-#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+#if ((__GNUG__ == 4) && (__GNUC_MINOR__ <= 8))
 			tuple_invoke(bp, msgsTup);
 #else
 			bp((TMS&&)(msgs)...);
@@ -142,13 +244,13 @@ public:
 	{
 		static_assert(sizeof...(TMS) > 1, "");
 		size_t pushCount = 0;
-#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+#if ((__GNUG__ == 4) && (__GNUC_MINOR__ <= 8))
 		std::tuple<TMS&&...> msgsTup(TRY_MOVE(msgs)...);
 #endif
 		return _try_push(host, [&]()->bool
 		{
 			buff_push bp = { this, pushCount };
-#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+#if ((__GNUG__ == 4) && (__GNUC_MINOR__ <= 8))
 			tuple_invoke(bp, msgsTup);
 #else
 			bp((TMS&&)(msgs)...);
@@ -180,13 +282,13 @@ public:
 	{
 		static_assert(sizeof...(TMS) > 1, "");
 		size_t pushCount = 0;
-#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+#if ((__GNUG__ == 4) && (__GNUC_MINOR__ <= 8))
 		std::tuple<TMS&&...> msgsTup(TRY_MOVE(msgs)...);
 #endif
 		return _timed_push(tm, host, [&]()->bool
 		{
 			buff_push bp = { this, pushCount };
-#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+#if ((__GNUG__ == 4) && (__GNUC_MINOR__ <= 8))
 			tuple_invoke(bp, msgsTup);
 #else
 			bp((TMS&&)(msgs)...);
@@ -204,13 +306,13 @@ public:
 	{
 		static_assert(sizeof...(TMS) > 0, "");
 		size_t pushCount = 0;
-#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+#if ((__GNUG__ == 4) && (__GNUC_MINOR__ <= 8))
 		std::tuple<TMS&&...> msgsTup(TRY_MOVE(msgs)...);
 #endif
 		return _force_push(host, [&]()->bool
 		{
 			buff_push bp = { this, pushCount };
-#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+#if ((__GNUG__ == 4) && (__GNUC_MINOR__ <= 8))
 			tuple_invoke(bp, msgsTup);
 #else
 			bp((TMS&&)(msgs)...);
@@ -247,13 +349,13 @@ public:
 	{
 		static_assert(sizeof...(OTMS) > 0, "");
 		size_t popCount = 0;
-#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+#if ((__GNUG__ == 4) && (__GNUC_MINOR__ <= 8))
 		std::tuple<OTMS&...> outsTup(TRY_MOVE(outs)...);
 #endif
 		_pop(host, [&]()->bool
 		{
 			buff_pop bp = { this, popCount };
-#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+#if ((__GNUG__ == 4) && (__GNUC_MINOR__ <= 8))
 			tuple_invoke(bp, outsTup);
 #else
 			bp(outs...);
@@ -288,13 +390,13 @@ public:
 	{
 		static_assert(sizeof...(OTMS) > 1, "");
 		size_t popCount = 0;
-#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+#if ((__GNUG__ == 4) && (__GNUC_MINOR__ <= 8))
 		std::tuple<OTMS&...> outsTup(TRY_MOVE(outs)...);
 #endif
 		return _try_pop(host, [&]()->bool
 		{
 			buff_pop bp = { this, popCount };
-#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+#if ((__GNUG__ == 4) && (__GNUC_MINOR__ <= 8))
 			tuple_invoke(bp, outsTup);
 #else
 			bp(outs...);
@@ -328,13 +430,13 @@ public:
 	{
 		static_assert(sizeof...(OTMS) > 1, "");
 		size_t popCount = 0;
-#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+#if ((__GNUG__ == 4) && (__GNUC_MINOR__ <= 8))
 		std::tuple<OTMS&...> outsTup(TRY_MOVE(outs)...);
 #endif
 		return _timed_pop(tm, host, [&]()->bool
 		{
 			buff_pop bp = { this, popCount };
-#if ((defined __GNUG__) && (__GNUG__ <= 4 && __GNUC_MINOR__ <= 8))
+#if ((__GNUG__ == 4) && (__GNUC_MINOR__ <= 8))
 			tuple_invoke(bp, outsTup);
 #else
 			bp(outs...);
@@ -818,7 +920,7 @@ private:
 	}
 private:
 	shared_strand _strand;
-	boost::circular_buffer<T> _buffer;
+	fixed_buffer<T> _buffer;
 	msg_list<push_pck> _pushWait;
 	msg_list<pop_pck> _popWait;
 	size_t _halfLength;

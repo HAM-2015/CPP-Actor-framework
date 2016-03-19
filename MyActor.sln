@@ -9,6 +9,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MyActor_win", "MyActor\MyAc
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MyActor_mingw", "MyActor_mingw\MyActor_mingw.vcxproj", "{27FDE187-1B88-4A88-BED2-5B8FFCD4C0D0}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MyActor_arm_linux", "MyActor_arm_linux\MyActor_arm_linux.vcxproj", "{5B0AE8CB-4AAA-435D-9CAC-C20F1CCCFC6A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -39,6 +41,12 @@ Global
 		{27FDE187-1B88-4A88-BED2-5B8FFCD4C0D0}.Release|Win32.ActiveCfg = Release|Win32
 		{27FDE187-1B88-4A88-BED2-5B8FFCD4C0D0}.Release|Win32.Build.0 = Release|Win32
 		{27FDE187-1B88-4A88-BED2-5B8FFCD4C0D0}.Release|x64.ActiveCfg = Release|Win32
+		{5B0AE8CB-4AAA-435D-9CAC-C20F1CCCFC6A}.Debug|Win32.ActiveCfg = Debug|Win32
+		{5B0AE8CB-4AAA-435D-9CAC-C20F1CCCFC6A}.Debug|Win32.Build.0 = Debug|Win32
+		{5B0AE8CB-4AAA-435D-9CAC-C20F1CCCFC6A}.Debug|x64.ActiveCfg = Debug|Win32
+		{5B0AE8CB-4AAA-435D-9CAC-C20F1CCCFC6A}.Release|Win32.ActiveCfg = Release|Win32
+		{5B0AE8CB-4AAA-435D-9CAC-C20F1CCCFC6A}.Release|Win32.Build.0 = Release|Win32
+		{5B0AE8CB-4AAA-435D-9CAC-C20F1CCCFC6A}.Release|x64.ActiveCfg = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

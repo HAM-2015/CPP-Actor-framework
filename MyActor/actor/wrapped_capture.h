@@ -40,9 +40,9 @@ struct wrapped_capture
 };
 
 template <typename Handler, typename... Args>
-wrapped_capture<RM_REF(Handler), RM_CREF(Args)...> wrap_capture(Handler&& h, Args&&... args)
+wrapped_capture<RM_REF(Handler), RM_REF(Args)...> wrap_capture(Handler&& h, Args&&... args)
 {
-	return wrapped_capture<RM_REF(Handler), RM_CREF(Args)...>(bool(), TRY_MOVE(h), TRY_MOVE(args)...);
+	return wrapped_capture<RM_REF(Handler), RM_REF(Args)...>(bool(), TRY_MOVE(h), TRY_MOVE(args)...);
 }
 
 #endif

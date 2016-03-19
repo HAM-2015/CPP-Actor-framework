@@ -3,14 +3,15 @@
 
 #ifdef ENABLE_QT_UI
 #include <functional>
-#include <thread>
 #include <mutex>
 #include <QtGui/qevent.h>
 #include <QtCore/qeventloop.h>
+#include <QtCore/qcoreapplication.h>
 #include "wrapped_post_handler.h"
 #include "actor_framework.h"
 #include "qt_strand.h"
 #include "msg_queue.h"
+#include "run_thread.h"
 
 #define QT_POST_TASK	(QEvent::MaxUser-1)
 #define	QT_UI_ACTOR_STACK_SIZE	(128 kB - STACK_RESERVED_SPACE_SIZE)
@@ -193,14 +194,14 @@ protected:
 	template <typename Handler>
 	wrap_handler_face* make_wrap_handler(reusable_mem_mt<>& reuMem, Handler&& handler)
 	{
-		typedef wrap_handler<RM_CREF(Handler)> handler_type;
+		typedef wrap_handler<RM_REF(Handler)> handler_type;
 		return new(reuMem.allocate(sizeof(handler_type)))handler_type(TRY_MOVE(handler));
 	}
 
 	template <typename Handler>
 	wrap_handler_face* make_wrap_timed_handler(reusable_mem_mt<>& reuMem, std::mutex& mutex, const shared_bool& deadSign, bool& running, Handler&& handler)
 	{
-		typedef wrap_timed_handler<RM_CREF(Handler)> handler_type;
+		typedef wrap_timed_handler<RM_REF(Handler)> handler_type;
 		return new(reuMem.allocate(sizeof(handler_type)))handler_type(mutex, deadSign, running, TRY_MOVE(handler));
 	}
 
@@ -225,7 +226,7 @@ public:
 	/*!
 	@brief 获取主线程ID
 	*/
-	std::thread::id thread_id();
+	run_thread::thread_id thread_id();
 
 	/*!
 	@brief 是否在UI线程中执行
@@ -331,7 +332,7 @@ public:
 	template <typename Handler>
 	wrapped_post_handler<bind_qt_run_base, Handler> wrap(Handler&& handler)
 	{
-		return wrapped_post_handler<bind_qt_run_base, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_post_handler<bind_qt_run_base, RM_REF(Handler)>(this, TRY_MOVE(handler));
 	}
 
 	template <typename Handler>
@@ -382,7 +383,7 @@ protected:
 	void check_close();
 	void enter_wait_close();
 private:
-	std::thread::id _threadID;
+	run_thread::thread_id _threadID;
 	reusable_mem_mt<> _reuMem;
 	std::mutex _mutex;
 #ifdef ENABLE_QT_ACTOR
@@ -397,6 +398,20 @@ private:
 	bool _inCloseScope;
 };
 
+#ifdef ENABLE_QT_ACTOR
+template <typename Handler>
+void qt_strand::dispatch_ui(Handler&& handler)
+{
+	_ui->post(TRY_MOVE(handler));
+}
+
+template <typename Handler>
+void qt_strand::post_ui(Handler&& handler)
+{
+	_ui->post(TRY_MOVE(handler));
+}
+#endif
+
 template <typename FRAME>
 class bind_qt_run : public FRAME, private bind_qt_run_base
 {
@@ -405,7 +420,7 @@ protected:
 	bind_qt_run(Args&&... args)
 		: FRAME(TRY_MOVE(args)...) {}
 public:
-	std::thread::id thread_id()
+	run_thread::thread_id thread_id()
 	{
 		return bind_qt_run_base::thread_id();
 	}

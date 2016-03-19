@@ -11,6 +11,7 @@
 #include "stack_object.h"
 #include "check_actor_stack.h"
 #include "actor_timer.h"
+#include "async_timer.h"
 #include "tuple_option.h"
 #include "trace.h"
 #include "lambda_ref.h"
@@ -63,6 +64,8 @@ class ActorMutex_;
 
 //初始化my_actor框架
 #define init_my_actor(...) _BOND_LR__(_init_my_actor, _PP_NARG(__pl__, __VA_ARGS__))(__VA_ARGS__);
+
+struct shared_initer;
 //////////////////////////////////////////////////////////////////////////
 
 template <typename... ARGS>
@@ -169,7 +172,7 @@ struct TupleTec_
 	template <typename DTuple, typename SRC, typename... Args>
 	static inline void receive(DTuple&& dst, SRC&& src, Args&&... args)
 	{
-		std::get<std::tuple_size<RM_CREF(DTuple)>::value - N>(dst) = TRY_MOVE(src);
+		std::get<std::tuple_size<RM_REF(DTuple)>::value - N>(dst) = TRY_MOVE(src);
 		TupleTec_<N - 1>::receive(TRY_MOVE(dst), TRY_MOVE(args)...);
 	}
 
@@ -194,15 +197,15 @@ struct TupleTec_<0>
 template <typename DTuple, typename... Args>
 void TupleReceiver_(DTuple&& dst, Args&&... args)
 {
-	static_assert(std::tuple_size<RM_CREF(DTuple)>::value == sizeof...(Args), "");
+	static_assert(std::tuple_size<RM_REF(DTuple)>::value == sizeof...(Args), "");
 	TupleTec_<sizeof...(Args)>::receive(TRY_MOVE(dst), TRY_MOVE(args)...);
 }
 
 template <typename DTuple, typename STuple>
 void TupleReceiverRef_(DTuple&& dst, STuple&& src)
 {
-	static_assert(std::tuple_size<RM_CREF(DTuple)>::value == std::tuple_size<RM_CREF(STuple)>::value, "");
-	TupleTec_<std::tuple_size<RM_CREF(DTuple)>::value>::receive_ref(TRY_MOVE(dst), TRY_MOVE(src));
+	static_assert(std::tuple_size<RM_REF(DTuple)>::value == std::tuple_size<RM_REF(STuple)>::value, "");
+	TupleTec_<std::tuple_size<RM_REF(DTuple)>::value>::receive_ref(TRY_MOVE(dst), TRY_MOVE(src));
 }
 //////////////////////////////////////////////////////////////////////////
 
@@ -4429,15 +4432,15 @@ private:
 @brief 包装一个handler到与当前ios无关的线程中同步调用
 */
 template <typename R = void, typename Handler>
-wrapped_sync_handler<R, RM_CREF(Handler)> wrap_sync(sync_result<R>& res, Handler&& h)
+wrapped_sync_handler<R, RM_REF(Handler)> wrap_sync(sync_result<R>& res, Handler&& h)
 {
-	return wrapped_sync_handler<R, RM_CREF(Handler)>(TRY_MOVE(h), res);
+	return wrapped_sync_handler<R, RM_REF(Handler)>(TRY_MOVE(h), res);
 }
 
 template <typename R = void, typename Handler>
-wrapped_sync_handler2<R, RM_CREF(Handler)> wrap_sync2(sync_result<R>& res, Handler&& h)
+wrapped_sync_handler2<R, RM_REF(Handler)> wrap_sync2(sync_result<R>& res, Handler&& h)
 {
-	return wrapped_sync_handler2<R, RM_CREF(Handler)>(TRY_MOVE(h), res);
+	return wrapped_sync_handler2<R, RM_REF(Handler)>(TRY_MOVE(h), res);
 }
 //////////////////////////////////////////////////////////////////////////
 
@@ -5551,7 +5554,7 @@ public:
 			assert(_timerStateCompleted);
 			_timerStateTime = 0;
 			_timerStateCompleted = false;
-			_strand->post(wrap_delay_trig<RM_CREF(Handler)>(shared_from_this(), TRY_MOVE(handler)));
+			_strand->post(wrap_delay_trig<RM_REF(Handler)>(shared_from_this(), TRY_MOVE(handler)));
 		}
 		else
 		{
@@ -5854,7 +5857,7 @@ private:
 		}
 		else
 		{
-			_strand->post(trig_cb_handler<DST, RM_CREF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
+			_strand->post(trig_cb_handler<DST, RM_REF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
 		}
 	}
 
@@ -5871,7 +5874,7 @@ private:
 		}
 		else
 		{
-			_strand->post(trig_cb_handler2<DST, RM_CREF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
+			_strand->post(trig_cb_handler2<DST, RM_REF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
 		}
 	}
 
@@ -5888,7 +5891,7 @@ private:
 		}
 		else
 		{
-			_strand->post(trig_cb_handler3<DST, RM_CREF(ARGS)...>(TRY_MOVE(closed), shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
+			_strand->post(trig_cb_handler3<DST, RM_REF(ARGS)...>(TRY_MOVE(closed), shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
 		}
 	}
 
@@ -5905,7 +5908,7 @@ private:
 		}
 		else
 		{
-			_strand->dispatch(trig_cb_handler<DST, RM_CREF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
+			_strand->dispatch(trig_cb_handler<DST, RM_REF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
 		}
 	}
 
@@ -5922,7 +5925,7 @@ private:
 		}
 		else
 		{
-			_strand->dispatch(trig_cb_handler2<DST, RM_CREF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
+			_strand->dispatch(trig_cb_handler2<DST, RM_REF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
 		}
 	}
 
@@ -5939,7 +5942,7 @@ private:
 		}
 		else
 		{
-			_strand->dispatch(trig_cb_handler3<DST, RM_CREF(ARGS)...>(TRY_MOVE(closed), shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
+			_strand->dispatch(trig_cb_handler3<DST, RM_REF(ARGS)...>(TRY_MOVE(closed), shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
 		}
 	}
 private:
@@ -8265,6 +8268,11 @@ public:
 	actor_handle shared_from_this();
 
 	/*!
+	@brief 创建一个异步定时器
+	*/
+	async_timer make_timer();
+
+	/*!
 	@brief 获取当前ActorID号
 	*/
 	id self_id();
@@ -8587,7 +8595,8 @@ public:
 	@brief 安装my_actor框架
 	*/
 	static void install();
-	static void install(id aid);
+	static void install(const shared_initer*);
+	static const shared_initer* get_initer();
 
 	/*!
 	@brief 卸载my_actor框架
@@ -8601,7 +8610,7 @@ private:
 		assert(ms > 0);
 		assert(_timerStateCompleted);
 		assert(!_timerStateCb);
-		typedef wrap_timer_handler<RM_CREF(Handler)> wrap_type;
+		typedef wrap_timer_handler<RM_REF(Handler)> wrap_type;
 		_timerStateCompleted = false;
 		_timerStateTime = (long long)ms * 1000;
 		_timerStateStampBegin = get_tick_us();

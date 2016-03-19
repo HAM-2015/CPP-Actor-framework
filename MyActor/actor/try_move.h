@@ -62,17 +62,23 @@ struct try_move<T&&>
 
 //移除引用属性
 #define RM_REF(__T__) typename std::remove_reference<__T__>::type
+#define RM_REF_(__T__) std::remove_reference<__T__>::type
 //移除类型本身的 const 属性
 #define RM_CONST(__T__) typename std::remove_const<__T__>::type
+#define RM_CONST_(__T__) std::remove_const<__T__>::type
 //移除类型本身的引用属性，然后移除 const
 #define RM_CREF(__T__) RM_CONST(RM_REF(__T__))
+#define RM_CREF_(__T__) RM_CONST_(RM_REF_(__T__))
 
 //移除指针
 #define RM_PTR(__T__) typename std::remove_pointer<__T__>::type
+#define RM_PTR_(__T__) std::remove_pointer<__T__>::type
 //移除类型本身的指针，然后移除 const
 #define RM_CPTR(__T__) RM_CONST(RM_PTR(__T__))
+#define RM_CPTR_(__T__) RM_CONST_(RM_PTR_(__T__))
 //移除类型本身的引用属性，再移除指针，然后移除 const
 #define RM_CPTR_REF(__T__) RM_CONST(RM_PTR(RM_REF(__T__)))
+#define RM_CPTR_REF_(__T__) RM_CONST_(RM_PTR_(RM_REF_(__T__)))
 
 
 //检测一个参数是否是右值传递，是就继续进行右值传递

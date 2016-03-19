@@ -133,7 +133,7 @@ bind_qt_run_base::bind_qt_run_base()
 :_waitClose(false), _eventLoop(NULL), _waitCount(0), _inCloseScope(false)
 {
 	DEBUG_OPERATION(_taskCount = 0);
-	_threadID = std::this_thread::get_id();
+	_threadID = run_thread::this_thread_id();
 #ifdef ENABLE_QT_ACTOR
 	ui_tls::init();
 #endif
@@ -152,15 +152,15 @@ bind_qt_run_base::~bind_qt_run_base()
 #endif
 }
 
-std::thread::id bind_qt_run_base::thread_id()
+run_thread::thread_id bind_qt_run_base::thread_id()
 {
-	assert(std::thread::id() != _threadID);
+	assert(run_thread::this_thread_id() != _threadID);
 	return _threadID;
 }
 
 bool bind_qt_run_base::run_in_ui_thread()
 {
-	return std::this_thread::get_id() == _threadID;
+	return run_thread::this_thread_id() == _threadID;
 }
 
 bool bind_qt_run_base::running_in_this_thread()
