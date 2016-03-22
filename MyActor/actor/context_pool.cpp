@@ -36,7 +36,7 @@ void ContextPool_::install()
 	if (!_fiberPool)
 	{
 #if (WIN32 && (defined CHECK_SELF) && (_WIN32_WINNT >= 0x0502))
-		ContextPool_::coro_pull_interface::_actorFlsIndex = FlsAlloc(NULL);
+		ContextPool_::coro_pull_interface::_actorFlsIndex = ::FlsAlloc(NULL);
 #endif
 		ContextPool_::context_pool_pck::_mutex = new std::mutex;
 		ContextPool_::context_pool_pck::_alloc = new context_pool_pck::pool_queue::shared_node_alloc(1000000);
@@ -54,7 +54,7 @@ void ContextPool_::uninstall()
 		delete ContextPool_::context_pool_pck::_alloc;
 		ContextPool_::context_pool_pck::_alloc = NULL;
 #if (WIN32 && (defined CHECK_SELF) && (_WIN32_WINNT >= 0x0502))
-		FlsFree(ContextPool_::coro_pull_interface::_actorFlsIndex);
+		::FlsFree(ContextPool_::coro_pull_interface::_actorFlsIndex);
 		ContextPool_::coro_pull_interface::_actorFlsIndex = -1;
 #endif
 		_fiberPool = NULL;
@@ -171,7 +171,7 @@ void ContextPool_::contextHandler(context_yield::context_info* info, void* param
 #endif
 	assert((size_t)get_sp() > (size_t)info->stackTop - PAGE_SIZE + 256);
 #if (WIN32 && (defined CHECK_SELF) && (_WIN32_WINNT >= 0x0502))
-	FlsSetValue(coro_pull_interface::_actorFlsIndex, (my_actor*)space);
+	::FlsSetValue(coro_pull_interface::_actorFlsIndex, (my_actor*)space);
 #endif
 	context_yield::push_yield(info);
 	while (true)

@@ -1,5 +1,5 @@
 并发逻辑控制框架(Actor Model)，适用于复杂业务逻辑，有问题或BUG反馈至591170887@qq.com;
-依赖于boost 1.5x;
+依赖于boost 1.59;
 暂无开发文档，等作者认为可以定型后开放文档;
 目前仅在 VS2013,MINGW49_x64,GCC4.9-linux_x86_x64_arm32 编译器中测试;
 可以用来构建服务端/客户端，也可以用在与网络无关的程序中;
@@ -12,8 +12,8 @@ oschina url:
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
-2016-03-19
-添加对arm-linux平台的支持.
+2016-03-15
+移植到arm-linux平台.
 
 2015-12-28
 添加linux平台下的自动栈空间伸缩管理;

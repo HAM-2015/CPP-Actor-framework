@@ -20,7 +20,7 @@ namespace context_yield
 	bool is_thread_a_fiber()
 	{
 #if _WIN32_WINNT >= 0x0600
-		return FALSE != IsThreadAFiber();
+		return FALSE != ::IsThreadAFiber();
 #else//#elif _WIN32_WINNT >= 0x0501
 		return 0x1E00 < (size_t)GetCurrentFiber();
 // #ifdef _WIN64
@@ -36,9 +36,9 @@ namespace context_yield
 		if (!is_thread_a_fiber())
 		{
 #if _WIN32_WINNT >= 0x0502
-			ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH);
+			::ConvertThreadToFiberEx(NULL, FIBER_FLAG_FLOAT_SWITCH);
 #else//#elif _WIN32_WINNT == 0x0501
-			ConvertThreadToFiber(NULL);
+			::ConvertThreadToFiber(NULL);
 #endif
 			return true;
 		}
@@ -49,7 +49,7 @@ namespace context_yield
 	{
 		if (is_thread_a_fiber())
 		{
-			ConvertFiberToThread();
+			::ConvertFiberToThread();
 			return true;
 		}
 		return false;
@@ -63,8 +63,8 @@ namespace context_yield
 		char* const sb = (char*)info->stackTop - 1024 kB;
 #endif
 		char* const sp = (char*)info->stackTop - 2 * PAGE_SIZE;
-		VirtualAlloc(sp, PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD);
-		VirtualFree(sb, (size_t)sp - (size_t)sb, MEM_DECOMMIT);
+		::VirtualAlloc(sp, PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD);
+		::VirtualFree(sb, (size_t)sp - (size_t)sb, MEM_DECOMMIT);
 	}
 
 	context_yield::context_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
@@ -80,9 +80,9 @@ namespace context_yield
 			void* p;
 		} ref = { handler, info, p };
 #if _WIN32_WINNT >= 0x0502
-		info->obj = CreateFiberEx(0, allocSize, FIBER_FLAG_FLOAT_SWITCH, [](void* param)
+		info->obj = ::CreateFiberEx(0, allocSize, FIBER_FLAG_FLOAT_SWITCH, [](void* param)
 #else//#elif _WIN32_WINNT == 0x0501
-		info->obj = CreateFiber(allocSize, [](void* param)
+		info->obj = ::CreateFiber(allocSize, [](void* param)
 #endif
 		{
 			local_ref* ref = (local_ref*)param;
@@ -102,18 +102,18 @@ namespace context_yield
 
 	void push_yield(context_yield::context_info* info)
 	{
-		SwitchToFiber(info->nc);
+		::SwitchToFiber(info->nc);
 	}
 
 	void pull_yield(context_yield::context_info* info)
 	{
 		info->nc = GetCurrentFiber();
-		SwitchToFiber(info->obj);
+		::SwitchToFiber(info->obj);
 	}
 
 	void delete_context(context_yield::context_info* info)
 	{
-		DeleteFiber(info->obj);
+		::DeleteFiber(info->obj);
 		delete info;
 	}
 
@@ -137,7 +137,7 @@ namespace context_yield
 	context_yield::context_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
 	{
 		size_t allocSize = MEM_ALIGN(stackSize + STACK_RESERVED_SPACE_SIZE, STACK_BLOCK_SIZE);
-		void* stack = mmap(0, allocSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);//内存足够下可能失败，调整 /proc/sys/vm/max_map_count
+		void* stack = ::mmap(0, allocSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);//内存足够下可能失败，调整 /proc/sys/vm/max_map_count
 		if (!stack)
 		{
 			return NULL;
@@ -146,7 +146,7 @@ namespace context_yield
 		info->stackTop = (char*)stack + allocSize;
 		info->stackSize = stackSize;
 		info->reserveSize = allocSize - info->stackSize;
-		bool ok = 0 == mprotect(stack, PAGE_SIZE, PROT_NONE);//设置哨兵，可能失败，调整 /proc/sys/vm/max_map_count
+		bool ok = 0 == ::mprotect(stack, PAGE_SIZE, PROT_NONE);//设置哨兵，可能失败，调整 /proc/sys/vm/max_map_count
 		assert(ok);
 		struct local_ref
 		{
@@ -176,13 +176,13 @@ namespace context_yield
 
 	void delete_context(context_yield::context_info* info)
 	{
-		munmap((char*)info->stackTop - info->stackSize - info->reserveSize, info->stackSize + info->reserveSize);
+		::munmap((char*)info->stackTop - info->stackSize - info->reserveSize, info->stackSize + info->reserveSize);
 		delete info;
 	}
 
 	void decommit_context(context_yield::context_info* info)
 	{
-		madvise((char*)info->stackTop - info->stackSize - info->reserveSize, info->stackSize + info->reserveSize, MADV_DONTNEED);
+		::madvise((char*)info->stackTop - info->stackSize - info->reserveSize, info->stackSize + info->reserveSize, MADV_DONTNEED);
 	}
 #endif
 }

@@ -78,6 +78,8 @@ public:
 	thread_id get_id();
 	void swap(run_thread& s);
 	static thread_id this_thread_id();
+	static size_t cpu_core_number();
+	static size_t cpu_thread_number();
 private:
 #ifdef _WIN32
 	HANDLE _handle;

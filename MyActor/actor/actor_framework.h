@@ -1172,7 +1172,6 @@ private:
 		if (Parent::_hostActor)
 		{
 			assert(!_hasMsg);
-			_losted = false;
 			_pumpCount++;
 			if (_dstRec)
 			{
@@ -1189,6 +1188,7 @@ private:
 			else
 			{//pump_msg超时结束后才接受到消息
 				assert(!_waiting);
+				_losted = false;
 				_hasMsg = true;
 				new (_msgSpace)msg_type(std::move(msg));
 			}
@@ -1198,10 +1198,12 @@ private:
 	void _lost_msg()
 	{
 		_losted = true;
+		_pumpCount++;
 		if (_waiting && _checkLost)
 		{
 			_waiting = false;
 			_checkDis = false;
+			_dstRec = NULL;
 			ActorFunc_::pull_yield(_hostActor);
 		}
 	}
@@ -1290,28 +1292,41 @@ private:
 #endif
 		{
 			bool wait = false;
-			if (_pumpHandler.try_pump(_hostActor, dst, _pumpCount, wait))
+			bool losted = false;
+			if (_pumpHandler.try_pump(_hostActor, dst, _pumpCount, wait, losted))
 			{
+#ifdef ENABLE_CHECK_LOST
 				if (wait)
 				{
-					if (!_hasMsg)
+					_dstRec = &dst;
+					_waiting = true;
+					ActorFunc_::push_yield(_hostActor);
+					assert(!_dstRec);
+					assert(!_waiting);
+					if (!_losted)
 					{
-						_dstRec = &dst;
-						_waiting = true;
-						ActorFunc_::push_yield(_hostActor);
-						assert(_hasMsg);
-						assert(!_dstRec);
-						assert(!_waiting);
+						return true;
 					}
-					_hasMsg = false;
-					dst.move_from(*(msg_type*)_msgSpace);
-					((msg_type*)_msgSpace)->~msg_type();
+					return false;
+				}
+				else if (!losted)
+				{
+					assert(!_dstRec);
+					return true;
+				}
+				_losted = true;
+#else
+				if (wait)
+				{
+					_dstRec = &dst;
+					_waiting = true;
+					ActorFunc_::push_yield(_hostActor);
+					assert(!_dstRec);
+					assert(!_waiting);
 				}
 				return true;
-			}
-#ifdef ENABLE_CHECK_LOST
-			_losted = wait;
 #endif
+			}
 		}
 		return false;
 	}
@@ -1344,26 +1359,16 @@ private:
 		_dstRec = NULL;
 	}
 
-	void connect(const pump_handler& pumpHandler, const bool& losted)
+	template <typename PumpHandler>
+	void connect(PumpHandler&& pumpHandler)
 	{
 		assert(_strand->running_in_this_thread());
 		assert(_hostActor);
-		_pumpHandler = pumpHandler;
+		_pumpHandler = TRY_MOVE(pumpHandler);
 		_pumpCount = 0;
-		_losted = losted;
 		if (_waiting)
 		{
-#ifdef ENABLE_CHECK_LOST
-			if (_losted && _checkLost)
-			{
-				_waiting = false;
-				ActorFunc_::pull_yield(_hostActor);
-			} 
-			else
-#endif
-			{
-				_pumpHandler.start_pump(_pumpCount);
-			}
+			_pumpHandler.start_pump(_pumpCount);
 		}
 		else if (_waitConnect)
 		{
@@ -1386,7 +1391,7 @@ private:
 		}
 	}
 
-	void backflow(stack_obj<msg_type>& suck)
+	void backflow(stack_obj<msg_type>& suck, bool& losted)
 	{
 		if (_hasMsg)
 		{
@@ -1394,6 +1399,8 @@ private:
 			suck.create(std::move(*(msg_type*)_msgSpace));
 			((msg_type*)_msgSpace)->~msg_type();
 		}
+		losted = _losted;
+		_losted = false;
 	}
 
 	void close()
@@ -1456,6 +1463,70 @@ class MsgPool_ : public MsgPoolBase_
 	typedef MsgPump_<ARGS...> msg_pump_type;
 	typedef post_actor_msg<ARGS...> post_type;
 
+	struct msg_pck 
+	{
+		msg_pck()
+		: _isMsg(false) {}
+
+		msg_pck(const msg_type& msg)
+		{
+			new(_msg)msg_type(msg);
+			_isMsg = true;
+		}
+
+		msg_pck(msg_type&& msg)
+		{
+			new(_msg)msg_type(std::move(msg));
+			_isMsg = true;
+		}
+
+		msg_pck(const msg_pck& s)
+		{
+			if (s._isMsg)
+			{
+				new(_msg)msg_type(s.get());
+				_isMsg = true;
+			}
+			else
+			{
+				_isMsg = false;
+			}
+		}
+
+		msg_pck(msg_pck&& s)
+		{
+			if (s._isMsg)
+			{
+				new(_msg)msg_type(std::move(s.get()));
+				_isMsg = true;
+			}
+			else
+			{
+				_isMsg = false;
+			}
+		}
+
+		~msg_pck()
+		{
+			if (_isMsg)
+			{
+				((msg_type*)_msg)->~msg_type();
+				_isMsg = false;
+			}
+		}
+
+		msg_type& get()
+		{
+			assert(_isMsg);
+			return *(msg_type*)_msg;
+		}
+
+		char _msg[sizeof(msg_type)];
+		bool _isMsg;
+	private:
+		void operator=(const msg_pck&) {}
+	};
+
 	struct pump_handler
 	{
 		pump_handler()
@@ -1489,17 +1560,20 @@ class MsgPool_ : public MsgPoolBase_
 				{
 					if (!msgBuff.empty())
 					{
-						msg_type mt_ = std::move(msgBuff.front());
+						msg_pck mt_ = std::move(msgBuff.front());
 						msgBuff.pop_front();
 						_thisPool->_sendCount++;
-						_msgPump->receive_msg(std::move(mt_), std::move(hostActor));
-					}
 #ifdef ENABLE_CHECK_LOST
-					else if (_thisPool->_losted)
-					{
-						_msgPump->lost_msg(std::move(hostActor));
-					}
+						if (!mt_._isMsg)
+						{
+							_msgPump->lost_msg(std::move(hostActor));
+						}
+						else
 #endif
+						{
+							_msgPump->receive_msg(std::move(mt_.get()), std::move(hostActor));
+						}
+					}
 					else
 					{
 						_thisPool->_waiting = true;
@@ -1534,10 +1608,10 @@ class MsgPool_ : public MsgPoolBase_
 			}
 		}
 
-		bool try_pump(my_actor* host, dst_receiver& dst, unsigned char pumpID, bool& wait)
+		bool try_pump(my_actor* host, dst_receiver& dst, unsigned char pumpID, bool& wait, bool& losted)
 		{
 			assert(_thisPool);
-			auto h = [&dst, &wait, pumpID](pump_handler& pump)->bool
+			auto h = [&dst, &wait, &losted, pumpID](pump_handler& pump)->bool
 			{
 				bool ok = false;
 				auto& thisPool_ = pump._thisPool;
@@ -1548,16 +1622,21 @@ class MsgPool_ : public MsgPoolBase_
 					{
 						if (!msgBuff.empty())
 						{
-							dst.move_from(msgBuff.front());
-							msgBuff.pop_front();
-							ok = true;
-						}
 #ifdef ENABLE_CHECK_LOST
-						else// if (thisPool_->_losted)
-						{
-							wait = thisPool_->_losted;
-						}
+							if (!msgBuff.front()._isMsg)
+							{
+								msgBuff.pop_front();
+								losted = true;
+								ok = true;
+							} 
+							else
 #endif
+							{
+								dst.move_from(msgBuff.front().get());
+								msgBuff.pop_front();
+								ok = true;
+							}
+						}
 					}
 					else
 					{//上次消息没取到，重新取，但实际中间已经post出去了
@@ -1569,18 +1648,7 @@ class MsgPool_ : public MsgPoolBase_
 				}
 				return ok;
 			};
-			bool r = false;
-			if (ActorFunc_::self_strand(host) == _thisPool->_strand)
-			{
-				r = h(*this);
-			} 
-			else
-			{
-				ActorFunc_::lock_quit(host);
-				r = ActorFunc_::async_send<bool>(host, _thisPool->_strand, std::bind(h, *this));
-				ActorFunc_::unlock_quit(host);
-			}
-			return r;
+			return ActorFunc_::send<bool>(host, _thisPool->_strand, std::bind(h, *this));
 		}
 
 		size_t size(my_actor* host, unsigned char pumpID)
@@ -1603,18 +1671,7 @@ class MsgPool_ : public MsgPoolBase_
 				}
 				return 0;
 			};
-			size_t r = 0;
-			if (ActorFunc_::self_strand(host) == _thisPool->_strand)
-			{
-				r = h(*this);
-			}
-			else
-			{
-				ActorFunc_::lock_quit(host);
-				r = ActorFunc_::async_send<size_t>(host, _thisPool->_strand, std::bind(h, *this));
-				ActorFunc_::unlock_quit(host);
-			}
-			return r;
+			return ActorFunc_::send<size_t>(host, _thisPool->_strand, std::bind(h, *this));
 		}
 
 		size_t snap_size(unsigned char pumpID)
@@ -1689,16 +1746,14 @@ private:
 		res->_strand = strand;
 		res->_waiting = false;
 		res->_closed = false;
-		res->_losted = false;
 		res->_sendCount = 0;
 		return res;
 	}
 
-	void send_msg(msg_type&& mt, actor_handle&& hostActor)
+	void send_msg(msg_type& mt, actor_handle& hostActor)
 	{
 		if (_closed) return;
 
-		_losted = false;
 		if (_waiting)
 		{
 			_waiting = false;
@@ -1706,17 +1761,6 @@ private:
 			assert(_msgBuff.empty());
 			_sendCount++;
 			_msgPump->receive_msg(std::move(mt), std::move(hostActor));
-// 			if (_msgBuff.empty())
-// 			{
-// 				_msgPump->receive_msg(std::move(mt), hostActor);
-// 			}
-// 			else
-// 			{
-// 				msg_type mt_ = std::move(_msgBuff.front());
-// 				_msgBuff.pop_front();
-// 				_msgBuff.push_back(std::move(mt));
-// 				_msgPump->receive_msg(std::move(mt_), hostActor);
-// 			}
 		}
 		else
 		{
@@ -1727,7 +1771,6 @@ private:
 
 	void post_msg(msg_type&& mt, const actor_handle& hostActor)
 	{
-		_losted = false;
 		if (_waiting)
 		{
 			_waiting = false;
@@ -1735,16 +1778,6 @@ private:
 			assert(_msgBuff.empty());
 			_sendCount++;
 			_msgPump->receive_msg_tick(std::move(mt), hostActor);
-// 			if (_msgBuff.empty())
-// 			{
-// 				_msgPump->receive_msg_tick(std::move(mt), hostActor);
-// 			}
-// 			else
-// 			{
-// 				_msgPump->receive_msg_tick(std::move(_msgBuff.front()), hostActor);
-// 				_msgBuff.pop_front();
-// 				_msgBuff.push_back(std::move(mt));
-// 			}
 		}
 		else
 		{
@@ -1763,22 +1796,29 @@ private:
 		}
 		else
 		{
-			_strand->post(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPool_>& sharedThis, const msg_type& msg)
+			_strand->post(std::bind([](actor_handle& hostActor, const std::shared_ptr<MsgPool_>& sharedThis, msg_type& msg)
 			{
-				sharedThis->send_msg(std::move((msg_type&)msg), std::move((actor_handle&)hostActor));
+				sharedThis->send_msg(msg, hostActor);
 			}, hostActor, _weakThis.lock(), std::move(mt)));
 		}
 	}
 
-	void _lost_msg(const actor_handle& hostActor)
+	void _lost_msg(actor_handle& hostActor)
 	{
-		if (!_closed && _msgPump)
+		if (_closed) return;
+
+		if (_waiting)
 		{
-			_msgPump->lost_msg(std::move((actor_handle&)hostActor));
+			_waiting = false;
+			assert(_msgPump);
+			assert(_msgBuff.empty());
+			_sendCount++;
+			_msgPump->lost_msg(std::move(hostActor));
 		}
 		else
 		{
-			_losted = true;
+			assert(_msgBuff.size() < _msgBuff.fixed_size());
+			_msgBuff.push_back(msg_pck());
 		}
 	}
 
@@ -1786,7 +1826,7 @@ private:
 	{
 		if (!_closed)
 		{
-			_strand->try_tick(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPool_>& sharedThis)
+			_strand->try_tick(std::bind([](actor_handle& hostActor, const std::shared_ptr<MsgPool_>& sharedThis)
 			{
 				sharedThis->_lost_msg(hostActor);
 			}, hostActor, _weakThis.lock()));
@@ -1797,14 +1837,14 @@ private:
 	{
 		if (!_closed)
 		{
-			_strand->try_tick(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPool_>& sharedThis)
+			_strand->try_tick(std::bind([](actor_handle& hostActor, const std::shared_ptr<MsgPool_>& sharedThis)
 			{
 				sharedThis->_lost_msg(hostActor);
 			}, std::move(hostActor), _weakThis.lock()));
 		}
 	}
 
-	pump_handler connect_pump(const std::shared_ptr<msg_pump_type>& msgPump, bool& losted)
+	pump_handler connect_pump(const std::shared_ptr<msg_pump_type>& msgPump)
 	{
 		assert(msgPump);
 		assert(_strand->running_in_this_thread());
@@ -1814,7 +1854,6 @@ private:
 		compHandler._msgPump = msgPump;
 		_sendCount = 0;
 		_waiting = false;
-		losted = _losted && _msgBuff.empty();
 		return compHandler;
 	}
 
@@ -1834,21 +1873,41 @@ private:
 	void backflow(stack_obj<msg_type>& suck)
 	{
 		assert(_strand->running_in_this_thread());
-		assert(suck.has());
-		_msgBuff.push_front(std::move(suck.get()));
+		if (suck.has())
+		{
+			_msgBuff.push_front(std::move(suck.get()));
+		}
+		else
+		{
+			_msgBuff.push_front(msg_pck());
+		}
 	}
 private:
 	std::weak_ptr<MsgPool_> _weakThis;
 	shared_strand _strand;
 	std::shared_ptr<msg_pump_type> _msgPump;
-	msg_queue<msg_type> _msgBuff;
+	msg_queue<msg_pck> _msgBuff;
 	unsigned char _sendCount;
 	bool _waiting : 1;
 	bool _closed : 1;
-	bool _losted : 1;
 };
 
 class MsgPumpVoid_;
+
+struct VoidBuffer_ 
+{
+	void push_back();
+	void pop_front();
+	void push_front();
+	void push_lost_back();
+	void push_lost_front();
+	bool front_is_lost_msg();
+	bool back_is_lost_msg();
+	size_t length();
+	bool empty();
+	msg_queue<int> _buff;
+	size_t _length = 0;
+};
 
 class MsgPoolVoid_ :public MsgPoolBase_
 {
@@ -1866,7 +1925,7 @@ class MsgPoolVoid_ :public MsgPoolBase_
 
 		void start_pump(unsigned char pumpID);
 		void pump_msg(unsigned char pumpID, actor_handle&& hostActor);
-		bool try_pump(my_actor* host, unsigned char pumpID, bool& wait);
+		bool try_pump(my_actor* host, unsigned char pumpID, bool& wait, bool& losted);
 		size_t size(my_actor* host, unsigned char pumpID);
 		size_t snap_size(unsigned char pumpID);
 		void post_pump(unsigned char pumpID);
@@ -1885,13 +1944,13 @@ protected:
 	MsgPoolVoid_(const shared_strand& strand);
 	virtual ~MsgPoolVoid_();
 protected:
-	void send_msg(actor_handle&& hostActor);
+	void send_msg(actor_handle& hostActor);
 	void post_msg(const actor_handle& hostActor);
 	void push_msg(const actor_handle& hostActor);
 	void lost_msg(const actor_handle& hostActor);
 	void lost_msg(actor_handle&& hostActor);
-	void _lost_msg(const actor_handle& hostActor);
-	pump_handler connect_pump(const std::shared_ptr<msg_pump_type>& msgPump, bool& losted);
+	void _lost_msg(actor_handle& hostActor);
+	pump_handler connect_pump(const std::shared_ptr<msg_pump_type>& msgPump);
 	void disconnect();
 	void expand_fixed(size_t fixedSize){};
 	void backflow(stack_obj<msg_type>& suck);
@@ -1899,11 +1958,10 @@ protected:
 	std::weak_ptr<MsgPoolVoid_> _weakThis;
 	shared_strand _strand;
 	std::shared_ptr<msg_pump_type> _msgPump;
-	size_t _msgBuff;
+	VoidBuffer_ _msgBuff;
 	unsigned char _sendCount;
 	bool _waiting : 1;
 	bool _closed : 1;
-	bool _losted : 1;
 };
 
 class MsgPumpVoid_ : public MsgPumpBase_
@@ -1937,10 +1995,10 @@ protected:
 	size_t size();
 	size_t snap_size();
 	void stop_waiting();
-	void connect(const pump_handler& pumpHandler, const bool& losted);
+	void connect(const pump_handler& pumpHandler);
 	void clear();
 	void close();
-	void backflow(stack_obj<msg_type>& suck);
+	void backflow(stack_obj<msg_type>& suck, bool& losted);
 	bool isDisconnected();
 protected:
 	std::weak_ptr<MsgPumpVoid_> _weakThis;
@@ -4682,11 +4740,15 @@ class my_actor
 						typedef typename pump_type::msg_type msg_type;
 						assert(_msgPool);
 						stack_obj<msg_type> suck;
-						_msgPump->backflow(suck);
-						_hostActor->send_after_quited(_msgPool->_strand, [&]
+						bool losted = false;
+						_msgPump->backflow(suck, losted);
+						if (suck.has() || losted)
 						{
-							_msgPool->backflow(suck);
-						});
+							_hostActor->send_after_quited(_msgPool->_strand, [this, &suck]
+							{
+								_msgPool->backflow(suck);
+							});
+						}
 					}
 					_msgPump->close();
 				}
@@ -5568,25 +5630,25 @@ public:
 	void cancel_delay_trig();
 public:
 	/*!
-	@brief 发送一个异步函数到shared_strand中执行（如果是和self一样的shared_strand直接执行），配合quit_guard使用防止引用失效，完成后返回
+	@brief 发送一个异步函数到shared_strand中执行（如果是和当前一样的shared_strand直接执行），配合quit_guard使用防止引用失效，完成后返回
 	*/
 	template <typename H>
 	__yield_interrupt void send(const shared_strand& exeStrand, H&& h)
 	{
 		assert_enter();
+		quit_guard qg(this);
 		if (exeStrand != _strand)
 		{
-			bool sign = false;
-			exeStrand->asyncInvokeVoid(TRY_MOVE(h), std::bind([&sign](const actor_handle& self)
+			exeStrand->post(std::bind([&h](actor_handle& shared_this)
 			{
-				my_actor* this_ = self.get();
-				this_->_strand->post(wrap_trig_run_one(std::move((actor_handle&)self), &sign));
+				h();
+				my_actor* this_ = shared_this.get();
+				this_->_strand->post(std::bind([](actor_handle& shared_this)
+				{
+					shared_this->pull_yield();
+				}, std::move(shared_this)));
 			}, shared_from_this()));
-			if (!sign)
-			{
-				sign = true;
-				push_yield();
-			}
+			push_yield();
 		}
 		else
 		{
@@ -5598,17 +5660,21 @@ public:
 	__yield_interrupt R send(const shared_strand& exeStrand, H&& h)
 	{
 		assert_enter();
+		quit_guard qg(this);
 		if (exeStrand != _strand)
 		{
-			bool sign = false;
-			std::tuple<stack_obj<TYPE_PIPE(R)>> dstRec;
-			exeStrand->asyncInvoke(TRY_MOVE(h), async_invoke_handler<std::tuple<stack_obj<TYPE_PIPE(R)>>, R>(shared_from_this(), &sign, dstRec));
-			if (!sign)
+			stack_obj<R> res;
+			exeStrand->post(std::bind([&h, &res](actor_handle& shared_this)
 			{
-				sign = true;
-				push_yield();
-			}
-			return std::move(std::get<0>(dstRec).get());
+				res.create(h());
+				my_actor* this_ = shared_this.get();
+				this_->_strand->post(std::bind([](actor_handle& shared_this)
+				{
+					shared_this->pull_yield();
+				}, std::move(shared_this)));
+			}, shared_from_this()));
+			push_yield();
+			return std::move(res.get());
 		}
 		return h();
 	}
@@ -5620,23 +5686,36 @@ public:
 	__yield_interrupt void run_in_thread_stack(H&& h)
 	{
 		assert_enter();
-		bool sign = false;
-		_strand->asyncInvokeVoid(TRY_MOVE(h), std::bind([&sign](const actor_handle& self)
+		quit_guard qg(this);
+		_strand->next_tick(std::bind([&h](actor_handle& shared_this)
 		{
-			my_actor* this_ = self.get();
-			this_->_strand->next_tick(wrap_trig_run_one(std::move((actor_handle&)self), &sign));
+			h();
+			my_actor* this_ = shared_this.get();
+			this_->_strand->next_tick(std::bind([](actor_handle& shared_this)
+			{
+				shared_this->pull_yield();
+			}, std::move(shared_this)));
 		}, shared_from_this()));
-		if (!sign)
-		{
-			sign = true;
-			push_yield();
-		}
+		push_yield();
 	}
 
 	template <typename R, typename H>
 	__yield_interrupt R run_in_thread_stack(H&& h)
 	{
-		return async_send<R>(_strand, TRY_MOVE(h));
+		assert_enter();
+		quit_guard qg(this);
+		stack_obj<R> res;
+		_strand->next_tick(std::bind([&h, &res](actor_handle& shared_this)
+		{
+			res.create(h());
+			my_actor* this_ = shared_this.get();
+			this_->_strand->next_tick(std::bind([](actor_handle& shared_this)
+			{
+				shared_this->pull_yield();
+			}, std::move(shared_this)));
+		}, shared_from_this()));
+		push_yield();
+		return std::move(res.get());
 	}
 
 	/*!
@@ -5648,16 +5727,14 @@ public:
 	{
 		assert_enter();
 		bool sign = false;
-		exeStrand->asyncInvokeVoid(TRY_MOVE(h), std::bind([&sign](const actor_handle& self)
+		exeStrand->asyncInvokeVoid(TRY_MOVE(h), std::bind([&sign](actor_handle& shared_this)
 		{
-			my_actor* this_ = self.get();
-			this_->_strand->try_tick(wrap_trig_run_one(std::move((actor_handle&)self), &sign));
+			my_actor* this_ = shared_this.get();
+			this_->_strand->try_tick(wrap_trig_run_one(std::move(shared_this), &sign));
 		}, shared_from_this()));
-		if (!sign)
-		{
-			sign = true;
-			push_yield();
-		}
+		assert(!sign);
+		sign = true;
+		push_yield();
 	}
 
 	template <typename R, typename H>
@@ -5667,11 +5744,9 @@ public:
 		bool sign = false;
 		std::tuple<stack_obj<TYPE_PIPE(R)>> dstRec;
 		exeStrand->asyncInvoke(TRY_MOVE(h), async_invoke_handler<std::tuple<stack_obj<TYPE_PIPE(R)>>, R>(shared_from_this(), &sign, dstRec));
-		if (!sign)
-		{
-			sign = true;
-			push_yield();
-		}
+		assert(!sign);
+		sign = true;
+		push_yield();
 		return std::move(std::get<0>(dstRec).get());
 	}
 
@@ -5686,34 +5761,70 @@ public:
 	{
 		return async_send<R>(_strand, TRY_MOVE(h));
 	}
+
+	template <typename H>
+	__yield_interrupt bool timed_send(int tm, const shared_strand& exeStrand, H&& h)
+	{
+		assert_enter();
+		quit_guard qg(this);
+		if (exeStrand != _strand)
+		{
+			bool running = false;
+			actor_trig_handle<> ath;
+			actor_trig_notifer<> ntf = make_trig_notifer_to_self(ath);
+			std::shared_ptr<std::mutex> mutex(new std::mutex);
+			exeStrand->try_tick(std::bind([&h, &running, &ntf](std::shared_ptr<std::mutex>& mutex, shared_bool& deadSign)
+			{
+				bool run = false;
+				mutex->lock();
+				if (!deadSign)
+				{
+					running = true;
+					run = true;
+				}
+				mutex->unlock();
+				if (run)
+				{
+					h();
+					ntf();
+				}
+			}, mutex, ath.dead_sign()));
+			if (!timed_wait_trig(tm, ath))
+			{
+				mutex->lock();
+				if (!running)
+				{
+					close_trig_notifer(ath);
+					mutex->unlock();
+					return false;
+				}
+				mutex->unlock();
+				wait_trig(ath);
+			}
+			return true;
+		}
+		else
+		{
+			h();
+			return true;
+		}
+	}
 private:
 	template <typename H>
 	__yield_interrupt void send_after_quited(const shared_strand& exeStrand, H&& h)
 	{
 		if (exeStrand != _strand)
 		{
-			bool sign = false;
-			exeStrand->asyncInvokeVoid(TRY_MOVE(h), std::bind([&sign](const actor_handle& self)
+			exeStrand->try_tick(std::bind([&h](actor_handle& shared_this)
 			{
-				my_actor* this_ = self.get();
-				this_->_strand->post(std::bind([&sign](const actor_handle& self)
+				h();
+				my_actor* this_ = shared_this.get();
+				this_->_strand->try_tick(std::bind([](actor_handle& shared_this)
 				{
-					assert(!self->_inActor);
-					if (sign)
-					{
-						self->pull_yield_after_quited();
-					}
-					else
-					{
-						sign = true;
-					}
-				}, std::move((actor_handle&)self)));
+					shared_this->pull_yield_after_quited();
+				}, std::move(shared_this)));
 			}, shared_from_this()));
-			if (!sign)
-			{
-				sign = true;
-				push_yield_after_quited();
-			}
+			push_yield_after_quited();
 		}
 		else
 		{
@@ -5722,30 +5833,18 @@ private:
 	}
 
 	template <typename H>
-	__yield_interrupt void async_send_after_quited(const shared_strand& exeStrand, H&& h)
+	__yield_interrupt void run_in_thread_stack_after_quited(H&& h)
 	{
-		bool sign = false;
-		exeStrand->asyncInvokeVoid(TRY_MOVE(h), std::bind([&sign](const actor_handle& self)
+		_strand->next_tick(std::bind([&h](actor_handle& shared_this)
 		{
-			my_actor* this_ = self.get();
-			this_->_strand->try_tick(std::bind([&sign](const actor_handle& self)
+			h();
+			my_actor* this_ = shared_this.get();
+			this_->_strand->next_tick(std::bind([](actor_handle& shared_this)
 			{
-				assert(!self->_inActor);
-				if (sign)
-				{
-					self->pull_yield_after_quited();
-				}
-				else
-				{
-					sign = true;
-				}
-			}, std::move((actor_handle&)self)));
+				shared_this->pull_yield_after_quited();
+			}, std::move(shared_this)));
 		}, shared_from_this()));
-		if (!sign)
-		{
-			sign = true;
-			push_yield_after_quited();
-		}
+		push_yield_after_quited();
 	}
 public:
 	/*!
@@ -5796,9 +5895,9 @@ public:
 		lock_quit();
 		bool sign = false;
 		std::tuple<Outs&...> res(dargs...);
-		_strand->next_tick(std::bind([&h, &res, &sign](const actor_handle& self)
+		_strand->next_tick(std::bind([&h, &res, &sign](actor_handle& shared_this)
 		{
-			h(trig_once_notifer<Outs...>(std::move((actor_handle&)self), &res, &sign));
+			h(trig_once_notifer<Outs...>(std::move(shared_this), &res, &sign));
 		}, shared_from_this()));
 		if (!sign)
 		{
@@ -5814,9 +5913,9 @@ public:
 		assert_enter();
 		lock_quit();
 		bool sign = false;
-		_strand->next_tick(std::bind([&h, &sign](const actor_handle& self)
+		_strand->next_tick(std::bind([&h, &sign](actor_handle& shared_this)
 		{
-			h(trig_once_notifer<>(std::move((actor_handle&)self), NULL, &sign));
+			h(trig_once_notifer<>(std::move(shared_this), NULL, &sign));
 		}, shared_from_this()));
 		if (!sign)
 		{
@@ -6633,12 +6732,13 @@ private:
 		if (msgPump)
 		{
 			stack_obj<msg_type> suck;
-			host->send(msgPump->_strand, [&msgPump, &suck]
+			bool losted = false;
+			host->send(msgPump->_strand, [&msgPump, &suck, &losted]
 			{
-				msgPump->backflow(suck);
+				msgPump->backflow(suck, losted);
 				msgPump->clear();
 			});
-			if (suck.has())
+			if (suck.has() || losted)
 			{
 				assert(msgPool);
 				host->send(msgPool->_strand, [&msgPool, &suck]
@@ -6711,14 +6811,13 @@ private:
 			{
 				if (msgPool_)
 				{
-					bool losted = false;
-					auto ph = send<pump_handler>(msgPool_->_strand, [&pckIt, &losted]()->pump_handler
+					auto ph = send<pump_handler>(msgPool_->_strand, [&pckIt]()->pump_handler
 					{
-						return pckIt->_msgPool->connect_pump(pckIt->_msgPump, losted);
+						return pckIt->_msgPool->connect_pump(pckIt->_msgPump);
 					});
-					send(msgPump_->_strand, [&msgPump_, &ph, &losted]
+					send(msgPump_->_strand, [&msgPump_, &ph]
 					{
-						msgPump_->connect(ph, losted);
+						msgPump_->connect(std::move(ph));
 					});
 				}
 				else
@@ -7036,11 +7135,10 @@ public:
 					auto& msgPool_ = msgPck->_msgPool;
 					if (msgPool_)
 					{
-						bool losted = false;
-						msgPump_->connect(this->send<pump_handler>(msgPool_->_strand, [&msgPck, &losted]()->pump_handler
+						msgPump_->connect(this->send<pump_handler>(msgPool_->_strand, [&msgPck]()->pump_handler
 						{
-							return msgPck->_msgPool->connect_pump(msgPck->_msgPump, losted);
-						}), losted);
+							return msgPck->_msgPool->connect_pump(msgPck->_msgPump);
+						}));
 					}
 					else
 					{
@@ -7303,6 +7401,8 @@ private:
 		host->lock_suspend();
 		host->lock_quit();
 		auto msgPck = msg_pool_pck<Args...>(id, host);
+		auto& msgPump_ = msgPck->_msgPump;
+		auto& msgPool_ = msgPck->_msgPool;
 		msgPck->lock(host);
 		if (msgPck->_next)
 		{
@@ -7311,8 +7411,10 @@ private:
 			msgPck->_next->unlock(host);
 			msgPck->_next.reset();
 		}
-		auto& msgPump_ = msgPck->_msgPump;
-		auto& msgPool_ = msgPck->_msgPool;
+		else
+		{
+			disconnect_pump<Args...>(host, msgPool_, msgPump_);
+		}
 		if (!msgPump_)
 		{
 			msgPump_ = pump_type::make(host, checkLost);
@@ -7323,11 +7425,10 @@ private:
 		}
 		if (msgPool_)
 		{
-			bool losted = false;
-			msgPump_->connect(host->send<pump_handler>(msgPool_->_strand, [&msgPck, &losted]()->pump_handler
+			msgPump_->connect(host->send<pump_handler>(msgPool_->_strand, [&msgPck]()->pump_handler
 			{
-				return msgPck->_msgPool->connect_pump(msgPck->_msgPump, losted);
-			}), losted);
+				return msgPck->_msgPool->connect_pump(msgPck->_msgPump);
+			}));
 		}
 		else
 		{

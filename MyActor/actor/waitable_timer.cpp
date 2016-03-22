@@ -6,7 +6,7 @@
 
 WaitableTimer_::WaitableTimer_()
 :_eventsQueue(1024), _exited(false), _extMaxTick(0), _extFinishTime(-1),
-_timerHandle(CreateWaitableTimer(NULL, FALSE, NULL))
+_timerHandle(::CreateWaitableTimer(NULL, FALSE, NULL))
 {
 	run_thread th([this] { timerThread(); });
 	_timerThread.swap(th);
@@ -20,10 +20,10 @@ WaitableTimer_::~WaitableTimer_()
 		_exited = true;
 		LARGE_INTEGER sleepTime;
 		sleepTime.QuadPart = 0;
-		SetWaitableTimer(_timerHandle, &sleepTime, 0, NULL, NULL, FALSE);
+		::SetWaitableTimer(_timerHandle, &sleepTime, 0, NULL, NULL, FALSE);
 	}
 	_timerThread.join();
-	CloseHandle(_timerHandle);
+	::CloseHandle(_timerHandle);
 }
 
 void WaitableTimer_::appendEvent(long long us, WaitableTimerEvent_* h)
@@ -48,16 +48,16 @@ void WaitableTimer_::appendEvent(long long us, WaitableTimerEvent_* h)
 		LARGE_INTEGER sleepTime;
 		sleepTime.QuadPart = us * 10;
 		sleepTime.QuadPart = -sleepTime.QuadPart;
-		SetWaitableTimer(_timerHandle, &sleepTime, 0, NULL, NULL, FALSE);
+		::SetWaitableTimer(_timerHandle, &sleepTime, 0, NULL, NULL, FALSE);
 	}
 }
 
 void WaitableTimer_::timerThread()
 {
-	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+	::SetThreadPriority(::GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 	while (true)
 	{
-		if (WAIT_OBJECT_0 == WaitForSingleObject(_timerHandle, INFINITE) && !_exited)
+		if (WAIT_OBJECT_0 == ::WaitForSingleObject(_timerHandle, INFINITE) && !_exited)
 		{
 			unsigned long long nt = get_tick_us();
 			std::lock_guard<std::mutex> lg(_ctrlMutex);
@@ -71,7 +71,7 @@ void WaitableTimer_::timerThread()
 					LARGE_INTEGER sleepTime;
 					sleepTime.QuadPart = nt - iter->first;
 					sleepTime.QuadPart *= 10;
-					SetWaitableTimer(_timerHandle, &sleepTime, 0, NULL, NULL, FALSE);
+					::SetWaitableTimer(_timerHandle, &sleepTime, 0, NULL, NULL, FALSE);
 					break;
 				} 
 				else
@@ -93,7 +93,7 @@ void WaitableTimer_::timerThread()
 
 WaitableTimer_::WaitableTimer_()
 :_eventsQueue(1024), _exited(false), _extMaxTick(0), _extFinishTime(-1),
-_timerFd(timerfd_create(CLOCK_MONOTONIC, 0))
+_timerFd(::timerfd_create(CLOCK_MONOTONIC, 0))
 {
 	run_thread th([this] { timerThread(); });
 	_timerThread.swap(th);
@@ -106,10 +106,10 @@ WaitableTimer_::~WaitableTimer_()
 		assert(_eventsQueue.empty());
 		_exited = true;
 		struct itimerspec newValue = { { 0, 0 }, { 0, 1 } };
-		timerfd_settime(_timerFd, TFD_TIMER_ABSTIME, &newValue, NULL);
+		::timerfd_settime(_timerFd, TFD_TIMER_ABSTIME, &newValue, NULL);
 	}
 	_timerThread.join();
-	close(_timerFd);
+	::close(_timerFd);
 }
 
 void WaitableTimer_::appendEvent(long long us, WaitableTimerEvent_* h)
@@ -135,7 +135,7 @@ void WaitableTimer_::appendEvent(long long us, WaitableTimerEvent_* h)
 		newValue.it_interval = { 0, 0 };
 		newValue.it_value.tv_nsec = _extFinishTime % 1000 * 1000;
 		newValue.it_value.tv_sec = _extFinishTime / 1000000;
-		timerfd_settime(_timerFd, TFD_TIMER_ABSTIME, &newValue, NULL);
+		::timerfd_settime(_timerFd, TFD_TIMER_ABSTIME, &newValue, NULL);
 	}
 }
 
@@ -143,13 +143,13 @@ void WaitableTimer_::timerThread()
 {
 	pthread_attr_t threadAttr;
 	struct sched_param pm = { 83 };
-	pthread_attr_init(&threadAttr);
-	pthread_attr_setschedpolicy(&threadAttr, SCHED_FIFO);
-	pthread_attr_setschedparam(&threadAttr, &pm);
+	::pthread_attr_init(&threadAttr);
+	::pthread_attr_setschedpolicy(&threadAttr, SCHED_FIFO);
+	::pthread_attr_setschedparam(&threadAttr, &pm);
 	unsigned long long exp = 0;
 	while (true)
 	{
-		if (sizeof(exp) == read(_timerFd, &exp, sizeof(exp)) && !_exited)
+		if (sizeof(exp) == ::read(_timerFd, &exp, sizeof(exp)) && !_exited)
 		{
 			unsigned long long nt = get_tick_us();
 			std::lock_guard<std::mutex> lg(_ctrlMutex);
@@ -164,7 +164,7 @@ void WaitableTimer_::timerThread()
 					newValue.it_interval = { 0, 0 };
 					newValue.it_value.tv_nsec = _extFinishTime % 1000 * 1000;
 					newValue.it_value.tv_sec = _extFinishTime / 1000000;
-					timerfd_settime(_timerFd, TFD_TIMER_ABSTIME, &newValue, NULL);
+					::timerfd_settime(_timerFd, TFD_TIMER_ABSTIME, &newValue, NULL);
 					break;
 				}
 				else
@@ -179,7 +179,7 @@ void WaitableTimer_::timerThread()
 			break;
 		}
 	}
-	pthread_attr_destroy(&threadAttr);
+	::pthread_attr_destroy(&threadAttr);
 }
 #endif
 

@@ -48,7 +48,7 @@ struct pc_cycle
 	pc_cycle()
 	{
 		LARGE_INTEGER frep;
-		if (!QueryPerformanceFrequency(&frep))
+		if (!::QueryPerformanceFrequency(&frep))
 		{
 			_sCycle = 0;
 			_msCycle = 0;
@@ -304,34 +304,34 @@ void enable_high_resolution()
 				ULONG ActualTime = 0;
 				if (!_NtSetTimerResolution(MinimumTime, TRUE, &ActualTime))
 				{
-					FreeLibrary(hNtDll);
+					::FreeLibrary(hNtDll);
 					return;
 				}
 			}
 		}
-		FreeLibrary(hNtDll);
+		::FreeLibrary(hNtDll);
 	}
-	timeBeginPeriod(1);
+	::timeBeginPeriod(1);
 }
 
 long long get_tick_us()
 {
 	LARGE_INTEGER quadPart;
-	QueryPerformanceCounter(&quadPart);
+	::QueryPerformanceCounter(&quadPart);
 	return (long long)((double)quadPart.QuadPart*_pcCycle._usCycle);
 }
 
 long long get_tick_ms()
 {
 	LARGE_INTEGER quadPart;
-	QueryPerformanceCounter(&quadPart);
+	::QueryPerformanceCounter(&quadPart);
 	return (long long)((double)quadPart.QuadPart*_pcCycle._msCycle);
 }
 
 int get_tick_s()
 {
 	LARGE_INTEGER quadPart;
-	QueryPerformanceCounter(&quadPart);
+	::QueryPerformanceCounter(&quadPart);
 	return (int)((double)quadPart.QuadPart*_pcCycle._sCycle);
 }
 
@@ -344,21 +344,21 @@ void enable_high_resolution()
 long long get_tick_us()
 {
 	struct timespec ts;
-	clock_gettime(CLOCK_MONOTONIC, &ts);
+	::clock_gettime(CLOCK_MONOTONIC, &ts);
 	return (long long)ts.tv_sec * 1000000 + ts.tv_nsec/1000;
 }
 
 long long get_tick_ms()
 {
 	struct timespec ts;
-	clock_gettime(CLOCK_MONOTONIC, &ts);
+	::clock_gettime(CLOCK_MONOTONIC, &ts);
 	return (long long)ts.tv_sec * 1000 + ts.tv_nsec/1000000;
 }
 
 int get_tick_s()
 {
 	struct timespec ts;
-	clock_gettime(CLOCK_MONOTONIC, &ts);
+	::clock_gettime(CLOCK_MONOTONIC, &ts);
 	return (int)ts.tv_sec;
 }
 
@@ -392,7 +392,7 @@ unsigned long long cpu_tick()
 	return ((unsigned long long)__a) | (((unsigned long long)__d) << 32);
 #elif __arm__
 	struct timespec ts;
-	clock_gettime(CLOCK_MONOTONIC, &ts);
+	::clock_gettime(CLOCK_MONOTONIC, &ts);
 	return (unsigned long long)ts.tv_sec * 1000000000 + ts.tv_nsec;
 #endif
 }
@@ -402,42 +402,42 @@ unsigned long long cpu_tick()
 #ifdef WIN32
 tls_space::tls_space()
 {
-	_index = TlsAlloc();
+	_index = ::TlsAlloc();
 }
 
 tls_space::~tls_space()
 {
-	TlsFree(_index);
+	::TlsFree(_index);
 }
 
 void tls_space::set_space(void** val)
 {
-	TlsSetValue(_index, (LPVOID)val);
+	::TlsSetValue(_index, (LPVOID)val);
 }
 
 void** tls_space::get_space()
 {
-	return (void**)TlsGetValue(_index);
+	return (void**)::TlsGetValue(_index);
 }
 #elif __linux__
 tls_space::tls_space()
 {
-	pthread_key_create(&_key, NULL);
+	::pthread_key_create(&_key, NULL);
 }
 
 tls_space::~tls_space()
 {
-	pthread_key_delete(_key);
+	::pthread_key_delete(_key);
 }
 
 void tls_space::set_space(void** val)
 {
-	pthread_setspecific(_key, val);
+	::pthread_setspecific(_key, val);
 }
 
 void** tls_space::get_space()
 {
-	return (void**)pthread_getspecific(_key);
+	return (void**)::pthread_getspecific(_key);
 }
 #endif
 //////////////////////////////////////////////////////////////////////////

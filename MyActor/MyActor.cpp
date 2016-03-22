@@ -37,6 +37,30 @@ void wait_multi_msg()
 				return false;
 			}), mutex_block_quit(self, [&]()
 			{
+				msg_pump_handle<int> pump1 = self->connect_msg_pump<int>(true);
+				msg_pump_handle<move_test> pump2 = self->connect_msg_pump<move_test>(true);
+				while (true)
+				{
+					try
+					{
+						trace_comma(self->self_id(), "lost msg", self->pump_msg(pump1));
+					}
+					catch (ntf_lost_exception&)
+					{
+						break;
+					}
+				}
+				while (true)
+				{
+					try
+					{
+						trace_comma(self->self_id(), "lost msg", self->pump_msg(pump2));
+					}
+					catch (ntf_lost_exception&)
+					{
+						break;
+					}
+				}
 				trace_comma(self->self_id(), "begin end");
 				self->sleep(1000);
 				return true;
@@ -44,7 +68,7 @@ void wait_multi_msg()
 		});
 		child_actor_handle ch2 = self->create_child_actor([&](my_actor* self)
 		{
-			auto ntf = self->connect_msg_notifer_to<int>(act1);
+			auto ntf = self->connect_msg_notifer_to<int>(act1, true);
 			if (ntf)
 			{
 				self->sleep(1000);
@@ -57,7 +81,7 @@ void wait_multi_msg()
 		});
 		child_actor_handle ch3 = self->create_child_actor([&](my_actor* self)
 		{
-			auto ntf = self->connect_msg_notifer_to<move_test>(act1);
+			auto ntf = self->connect_msg_notifer_to<move_test>(act1, true);
 			if (ntf)
 			{
 				for (int i = 0; i < 3; i++)

@@ -53,7 +53,48 @@ void run_thread::swap(run_thread& s)
 	}
 }
 
+size_t run_thread::cpu_core_number()
+{
+	size_t cores = 0;
+	DWORD size = 0;
+
+	::GetLogicalProcessorInformation(NULL, &size);
+	if (ERROR_INSUFFICIENT_BUFFER != GetLastError())
+	{
+		return 0;
+	}
+
+	std::vector<SYSTEM_LOGICAL_PROCESSOR_INFORMATION> buffer(size);
+	if (::GetLogicalProcessorInformation(&buffer.front(), &size) == FALSE)
+	{
+		return 0;
+	}
+
+	const size_t Elements = size / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION);
+
+	for (size_t i = 0; i < Elements; ++i)
+	{
+		if (buffer[i].Relationship == RelationProcessorCore)
+		{
+			cores++;
+		}
+	}
+	return cores;
+}
+
+size_t run_thread::cpu_thread_number()
+{
+	SYSTEM_INFO info;
+	::GetSystemInfo(&info);
+	return (size_t)info.dwNumberOfProcessors;
+}
+
 #elif __linux__
+
+#include <fstream>
+#include <string>
+#include <sys/sysinfo.h>
+#include <boost/thread.hpp>
 
 run_thread::run_thread()
 {
@@ -102,6 +143,67 @@ void run_thread::swap(run_thread& s)
 	}
 }
 
+size_t run_thread::cpu_core_number()
+{
+	try
+	{
+		std::ifstream proc_cpuinfo ("/proc/cpuinfo");
+		const std::string physical_id("physical id");
+		const std::string core_id("core id");
+		size_t cores = 0;
+		std::string line;
+		while (getline(proc_cpuinfo, line))
+		{
+			if (!line.empty())
+			{
+				const size_t i = line.find(':');
+				if (i >= line.size())
+				{
+					return cpu_thread_number();
+				}
+				if (i >= core_id.size())
+				{
+					const size_t j = line.find(core_id);
+					if (j < line.size())
+					{
+						size_t k = 0;
+						for (; k < j; k++)
+						{
+							if ('\t' != line[k] && ' ' != line[k])
+							{
+								break;
+							}
+						}
+						if (k == j)
+						{
+							for (k += core_id.size(); k < i; k++)
+							{
+								if ('\t' != line[k] && ' ' != line[k])
+								{
+									break;
+								}
+							}
+							if (k == i)
+							{
+								cores++;
+							}
+						}
+					}
+				}
+			}
+		}
+		return 0 != cores ? cores : cpu_thread_number();
+	}
+	catch (...)
+	{
+		return cpu_thread_number();
+	}
+}
+
+size_t run_thread::cpu_thread_number()
+{
+	return (size_t)get_nprocs();
+}
 #endif
 
 bool run_thread::thread_id::operator<(const thread_id& s) const

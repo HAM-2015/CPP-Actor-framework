@@ -479,14 +479,78 @@ long long MutexBlock_::actor_id(my_actor* host)
 
 //////////////////////////////////////////////////////////////////////////
 
+bool VoidBuffer_::empty()
+{
+	return 0 == _length;
+}
+
+size_t VoidBuffer_::length()
+{
+	return _length;
+}
+
+bool VoidBuffer_::back_is_lost_msg()
+{
+	return _buff.back() < 0;
+}
+
+bool VoidBuffer_::front_is_lost_msg()
+{
+	return _buff.front() < 0;
+}
+
+void VoidBuffer_::push_lost_front()
+{
+	_buff.push_front(-1);
+}
+
+void VoidBuffer_::push_lost_back()
+{
+	_buff.push_back(-1);
+}
+
+void VoidBuffer_::push_front()
+{
+	if (!empty() && !front_is_lost_msg())
+	{
+		_buff.front()++;
+	}
+	else
+	{
+		_buff.push_front(1);
+	}
+	_length++;
+}
+
+void VoidBuffer_::pop_front()
+{
+	if (front_is_lost_msg() || 0 == --_buff.front())
+	{
+		_buff.pop_front();
+		_length--;
+	}
+}
+
+void VoidBuffer_::push_back()
+{
+	if (!empty() && !back_is_lost_msg())
+	{
+		_buff.back()++;
+	}
+	else
+	{
+		_buff.push_back(1);
+	}
+	_length++;
+}
+//////////////////////////////////////////////////////////////////////////
+
 MsgPoolVoid_::MsgPoolVoid_(const shared_strand& strand)
 {
 	_strand = strand;
 	_waiting = false;
 	_closed = false;
-	_losted = false;
 	_sendCount = 0;
-	_msgBuff = 0;
 }
 
 MsgPoolVoid_::~MsgPoolVoid_()
@@ -494,7 +558,7 @@ MsgPoolVoid_::~MsgPoolVoid_()
 
 }
 
-MsgPoolVoid_::pump_handler MsgPoolVoid_::connect_pump(const std::shared_ptr<msg_pump_type>& msgPump, bool& losted)
+MsgPoolVoid_::pump_handler MsgPoolVoid_::connect_pump(const std::shared_ptr<msg_pump_type>& msgPump)
 {
 	assert(msgPump);
 	assert(_strand->running_in_this_thread());
@@ -504,36 +568,37 @@ MsgPoolVoid_::pump_handler MsgPoolVoid_::connect_pump(const std::shared_ptr<msg_
 	compHandler._msgPump = msgPump;
 	_waiting = false;
 	_sendCount = 0;
-	losted = _losted && !_msgBuff;
 	return compHandler;
 }
 
 void MsgPoolVoid_::push_msg(const actor_handle& hostActor)
 {
-	//if (_closed) return;
-
 	if (_strand->running_in_this_thread())
 	{
 		post_msg(hostActor);
 	}
 	else
 	{
-		_strand->post(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPoolVoid_>& sharedThis)
+		_strand->post(std::bind([](actor_handle& hostActor, const std::shared_ptr<MsgPoolVoid_>& sharedThis)
 		{
-			sharedThis->send_msg(std::move((actor_handle&)hostActor));
+			sharedThis->send_msg(hostActor);
 		}, hostActor, _weakThis.lock()));
 	}
 }
 
-void MsgPoolVoid_::_lost_msg(const actor_handle& hostActor)
+void MsgPoolVoid_::_lost_msg(actor_handle& hostActor)
 {
-	if (!_closed && _msgPump)
+	if (_waiting)
 	{
-		_msgPump->lost_msg(std::move((actor_handle&)hostActor));
+		_waiting = false;
+		assert(_msgPump);
+		assert(0 == _msgBuff.length());
+		_sendCount++;
+		_msgPump->lost_msg(std::move(hostActor));
 	}
 	else
 	{
-		_losted = true;
+		_msgBuff.push_lost_back();
 	}
 }
 
@@ -541,7 +606,7 @@ void MsgPoolVoid_::lost_msg(const actor_handle& hostActor)
 {
 	if (!_closed)
 	{
-		_strand->try_tick(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPoolVoid_>& sharedThis)
+		_strand->try_tick(std::bind([](actor_handle& hostActor, const std::shared_ptr<MsgPoolVoid_>& sharedThis)
 		{
 			sharedThis->_lost_msg(hostActor);
 		}, hostActor, _weakThis.lock()));
@@ -552,46 +617,42 @@ void MsgPoolVoid_::lost_msg(actor_handle&& hostActor)
 {
 	if (!_closed)
 	{
-		_strand->try_tick(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPoolVoid_>& sharedThis)
+		_strand->try_tick(std::bind([](actor_handle& hostActor, const std::shared_ptr<MsgPoolVoid_>& sharedThis)
 		{
 			sharedThis->_lost_msg(hostActor);
 		}, std::move(hostActor), _weakThis.lock()));
 	}
 }
 
-void MsgPoolVoid_::send_msg(actor_handle&& hostActor)
+void MsgPoolVoid_::send_msg(actor_handle& hostActor)
 {
-	//if (_closed) return;
-
-	_losted = false;
 	if (_waiting)
 	{
 		_waiting = false;
 		assert(_msgPump);
-		assert(0 == _msgBuff);
+		assert(0 == _msgBuff.length());
 		_sendCount++;
 		_msgPump->receive_msg(std::move(hostActor));
 	}
 	else
 	{
-		_msgBuff++;
+		_msgBuff.push_back();
 	}
 }
 
 void MsgPoolVoid_::post_msg(const actor_handle& hostActor)
 {
-	_losted = false;
 	if (_waiting)
 	{
 		_waiting = false;
 		assert(_msgPump);
-		assert(0 == _msgBuff);
+		assert(0 == _msgBuff.length());
 		_sendCount++;
 		_msgPump->receive_msg_tick(hostActor);
 	}
 	else
 	{
-		_msgBuff++;
+		_msgBuff.push_back();
 	}
 }
 
@@ -605,8 +666,14 @@ void MsgPoolVoid_::disconnect()
 void MsgPoolVoid_::backflow(stack_obj<msg_type>& suck)
 {
 	assert(_strand->running_in_this_thread());
-	assert(suck.has());
-	_msgBuff++;
+	if (suck.has())
+	{
+		_msgBuff.push_front();
+	}
+	else
+	{
+		_msgBuff.push_lost_front();
+	}
 }
 
 void MsgPoolVoid_::pump_handler::clear()
@@ -627,18 +694,22 @@ void MsgPoolVoid_::pump_handler::pump_msg(unsigned char pumpID, actor_handle&& h
 	{
 		if (pumpID == _thisPool->_sendCount)
 		{
-			if (_thisPool->_msgBuff)
+			if (!_thisPool->_msgBuff.empty())
 			{
-				_thisPool->_msgBuff--;
 				_thisPool->_sendCount++;
-				_msgPump->receive_msg(std::move(hostActor));
-			}
 #ifdef ENABLE_CHECK_LOST
-			else if (_thisPool->_losted)
-			{
-				_msgPump->lost_msg(std::move(hostActor));
-			}
+				if (_thisPool->_msgBuff.front_is_lost_msg())
+				{
+					_thisPool->_msgBuff.pop_front();
+					_msgPump->lost_msg(std::move(hostActor));
+				} 
+				else
 #endif
+				{
+					_thisPool->_msgBuff.pop_front();
+					_msgPump->receive_msg(std::move(hostActor));
+				}
+			}
 			else
 			{
 				_thisPool->_waiting = true;
@@ -652,16 +723,16 @@ void MsgPoolVoid_::pump_handler::pump_msg(unsigned char pumpID, actor_handle&& h
 	}
 	else
 	{
-		assert(!_thisPool->_msgBuff);
+		assert(_thisPool->_msgBuff.empty());
 		assert(pumpID == _thisPool->_sendCount);
 	}
 }
 
-bool MsgPoolVoid_::pump_handler::try_pump(my_actor* host, unsigned char pumpID, bool& wait)
+bool MsgPoolVoid_::pump_handler::try_pump(my_actor* host, unsigned char pumpID, bool& wait, bool& losted)
 {
 	assert(_thisPool);
 	host->lock_quit();
-	auto h = [&wait, pumpID](pump_handler& pump)->bool
+	auto h = [&wait, &losted, pumpID](pump_handler& pump)->bool
 	{
 		bool ok = false;
 		auto& thisPool_ = pump._thisPool;
@@ -669,17 +740,22 @@ bool MsgPoolVoid_::pump_handler::try_pump(my_actor* host, unsigned char pumpID, 
 		{
 			if (pumpID == thisPool_->_sendCount)
 			{
-				if (thisPool_->_msgBuff)
+				if (!thisPool_->_msgBuff.empty())
 				{
-					thisPool_->_msgBuff--;
-					ok = true;
-				}
 #ifdef ENABLE_CHECK_LOST
-				else// if (thisPool_->_losted)
-				{
-					wait = thisPool_->_losted;
-				}
+					if (thisPool_->_msgBuff.front_is_lost_msg())
+					{
+						thisPool_->_msgBuff.pop_front();
+						losted = true;
+						ok = true;
+					}
+					else
 #endif
+					{
+						thisPool_->_msgBuff.pop_front();
+						ok = true;
+					}
+				}
 			}
 			else
 			{//上次消息没取到，重新取，但实际中间已经post出去了
@@ -714,11 +790,11 @@ size_t MsgPoolVoid_::pump_handler::size(my_actor* host, unsigned char pumpID)
 		{
 			if (pumpID == thisPool_->_sendCount)
 			{
-				return thisPool_->_msgBuff;
+				return thisPool_->_msgBuff.length();
 			}
 			else
 			{
-				return thisPool_->_msgBuff + 1;
+				return thisPool_->_msgBuff.length() + 1;
 			}
 		}
 		return 0;
@@ -746,16 +822,16 @@ size_t MsgPoolVoid_::pump_handler::snap_size(unsigned char pumpID)
 		{
 			if (pumpID == _thisPool->_sendCount)
 			{
-				return _thisPool->_msgBuff;
+				return _thisPool->_msgBuff.length();
 			}
 			else
 			{
-				return _thisPool->_msgBuff + 1;
+				return _thisPool->_msgBuff.length() + 1;
 			}
 		}
 		return 0;
 	}
-	return _thisPool->_msgBuff;
+	return _thisPool->_msgBuff.length();
 }
 
 void MsgPoolVoid_::pump_handler::post_pump(unsigned char pumpID)
@@ -858,35 +934,26 @@ void MsgPumpVoid_::close()
 	_hostActor = NULL;
 }
 
-void MsgPumpVoid_::backflow(stack_obj<msg_type>& suck)
+void MsgPumpVoid_::backflow(stack_obj<msg_type>& suck, bool& losted)
 {
 	if (_hasMsg)
 	{
 		_hasMsg = false;
 		suck.create();
 	}
+	losted = _losted;
+	_losted = false;
 }
 
-void MsgPumpVoid_::connect(const pump_handler& pumpHandler, const bool& losted)
+void MsgPumpVoid_::connect(const pump_handler& pumpHandler)
 {
 	assert(_strand->running_in_this_thread());
 	assert(_hostActor);
 	_pumpHandler = pumpHandler;
 	_pumpCount = 0;
-	_losted = losted;
 	if (_waiting)
 	{
-#ifdef ENABLE_CHECK_LOST
-		if (_losted && _checkLost)
-		{
-			_waiting = false;
-			ActorFunc_::pull_yield(_hostActor);
-		} 
-		else
-#endif
-		{
-			_pumpHandler.start_pump(_pumpCount);
-		}
+		_pumpHandler.start_pump(_pumpCount);
 	}
 	else if (_waitConnect)
 	{
@@ -927,6 +994,7 @@ void MsgPumpVoid_::_lost_msg()
 	{
 		_waiting = false;
 		_checkDis = false;
+		_dstRec = NULL;
 		ActorFunc_::pull_yield(_hostActor);
 	}
 }
@@ -1027,24 +1095,36 @@ bool MsgPumpVoid_::try_read()
 #endif
 	{
 		bool wait = false;
-		if (_pumpHandler.try_pump(_hostActor, _pumpCount, wait))
+		bool losted = false;
+		if (_pumpHandler.try_pump(_hostActor, _pumpCount, wait, losted))
 		{
+#ifdef ENABLE_CHECK_LOST
 			if (wait)
 			{
-				if (!_hasMsg)
+				_waiting = true;
+				ActorFunc_::push_yield(_hostActor);
+				assert(!_waiting);
+				if (!_losted)
 				{
-					_waiting = true;
-					ActorFunc_::push_yield(_hostActor);
-					assert(_hasMsg);
-					assert(!_waiting);
+					return true;
 				}
-				_hasMsg = false;
+				return false;
+			}
+			else if (!losted)
+			{
+				return true;
+			}
+			_losted = true;
+#else
+			if (wait)
+			{
+				_waiting = true;
+				ActorFunc_::push_yield(_hostActor);
+				assert(!_waiting);
 			}
 			return true;
-		}
-#ifdef ENABLE_CHECK_LOST
-		_losted = wait;
 #endif
+		}
 	}
 	return false;
 }
@@ -1559,7 +1639,7 @@ public:
 		{
 			MEMORY_BASIC_INFORMATION mbi;
 			const size_t i = rangeA + (rangeB - rangeA) / 2;
-			VirtualQuery(sb + i * PAGE_SIZE, &mbi, sizeof(mbi));
+			::VirtualQuery(sb + i * PAGE_SIZE, &mbi, sizeof(mbi));
 			if ((PAGE_READWRITE | PAGE_GUARD) == mbi.Protect)
 			{
 				return i * PAGE_SIZE + PAGE_SIZE;
@@ -1587,9 +1667,9 @@ public:
 		{
 			//释放物理内存，保留地址空间
 			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
-			VirtualFree(sb + cleanSize - PAGE_SIZE, info->reserveSize - cleanSize, MEM_DECOMMIT);
+			::VirtualFree(sb + cleanSize - PAGE_SIZE, info->reserveSize - cleanSize, MEM_DECOMMIT);
 			DWORD oldPro = 0;
-			VirtualProtect(sb + info->reserveSize - PAGE_SIZE, PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
+			::VirtualProtect(sb + info->reserveSize - PAGE_SIZE, PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
 		}
 	}
 #ifndef _MSC_VER
@@ -1598,7 +1678,7 @@ public:
 		actor_handler(actorPush);
 		if (_actor._checkStack)
 		{
-			_actor.async_send_after_quited(_actor.self_strand(), [this]
+			_actor.run_in_thread_stack_after_quited([this]
 			{
 				check_stack();
 				exit_notify();
@@ -1617,7 +1697,7 @@ public:
 			actor_handler(actorPush);			
 			if (_actor._checkStack)
 			{//从实际栈底查看有多少个PAGE的PAGE_GUARD标记消失和用了多少栈预留空间
-				_actor.async_send_after_quited(_actor.self_strand(), [this]
+				_actor.run_in_thread_stack_after_quited([this]
 				{
 					check_stack();
 					exit_notify();
@@ -1654,21 +1734,21 @@ public:
 			{
 				if (violationAddr - PAGE_SIZE >= sb)
 				{
-					VirtualAlloc(violationAddr - PAGE_SIZE, PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD);
+					::VirtualAlloc(violationAddr - PAGE_SIZE, PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD);
 				}
 				size_t l = 0;
 				while (violationAddr + l < sp)
 				{
 					DWORD oldPro = 0;
 					MEMORY_BASIC_INFORMATION mbi;
-					VirtualQuery(violationAddr + l, &mbi, sizeof(mbi));
+					::VirtualQuery(violationAddr + l, &mbi, sizeof(mbi));
 					if (MEM_RESERVE == mbi.State)
 					{
-						VirtualAlloc(violationAddr + l, PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE);
+						::VirtualAlloc(violationAddr + l, PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE);
 					}
 					else
 					{
-						VirtualProtect(violationAddr + l, PAGE_SIZE, PAGE_READWRITE, &oldPro);
+						::VirtualProtect(violationAddr + l, PAGE_SIZE, PAGE_READWRITE, &oldPro);
 						if ((PAGE_READWRITE | PAGE_GUARD) == oldPro)
 						{
 							break;
@@ -1695,7 +1775,7 @@ public:
 		context_yield::context_info* const info = ((actor_pull_type*)self->_actorPull)->_coroInfo;
 		const size_t totalStackSize = info->stackSize + info->reserveSize;
 		char* const sb = (char*)info->stackTop - totalStackSize;
-		bool ok = 0 == mincore(sb, totalStackSize, mvec);
+		bool ok = 0 == ::mincore(sb, totalStackSize, mvec);
 		assert(ok);
 		size_t i = 0;
 		size_t rangeA = 0;
@@ -1712,12 +1792,12 @@ public:
 			}
 			else
 			{
-				mprotect(pi, PAGE_SIZE, PROT_NONE);
+				::mprotect(pi, PAGE_SIZE, PROT_NONE);
 				rangeA = i + 1;
 			}
 			if (0 == mvec[i])
 			{
-				madvise(pi, PAGE_SIZE, MADV_DONTNEED);
+				::madvise(pi, PAGE_SIZE, MADV_DONTNEED);
 			}
 		} while (rangeA < rangeB);
 		const bool acc = self->_sigsegvSign;
@@ -1731,7 +1811,7 @@ public:
 		unsigned char mvec[256];
 		const size_t totalStackSize = info->stackSize + info->reserveSize;
 		char* const sb = (char*)info->stackTop - totalStackSize;
-		bool ok = 0 == mincore(sb, totalStackSize, mvec);
+		bool ok = 0 == ::mincore(sb, totalStackSize, mvec);
 		assert(ok);
 		for (size_t i = 0; i < totalStackSize; i += PAGE_SIZE)
 		{
@@ -1754,7 +1834,7 @@ public:
 		{
 			//释放物理内存，保留地址空间
 			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
-			madvise(sb + cleanSize, info->reserveSize - cleanSize, MADV_DONTNEED);
+			::madvise(sb + cleanSize, info->reserveSize - cleanSize, MADV_DONTNEED);
 		}
 	}
 
@@ -1763,7 +1843,7 @@ public:
 		actor_handler(actorPush);
 		if (_actor._checkStack)
 		{
-			_actor.async_send_after_quited(_actor.self_strand(), [this]
+			_actor.run_in_thread_stack_after_quited([this]
 			{
 				check_stack();
 				exit_notify();
@@ -1793,7 +1873,7 @@ public:
 						char* const st = (char*)info->stackTop - self->_usingStackSize;
 						while (violationAddr + l < st)
 						{
-							mprotect(violationAddr + l, PAGE_SIZE, PROT_READ | PROT_WRITE);
+							::mprotect(violationAddr + l, PAGE_SIZE, PROT_READ | PROT_WRITE);
 							l += PAGE_SIZE;
 						}
 						if (violationAddr < (char*)info->stackTop - self->_usingStackSize)
@@ -1812,7 +1892,7 @@ public:
 				else
 				{
 					self->_sigsegvSign = false;
-					mprotect(violationAddr, PAGE_SIZE, PROT_READ | PROT_WRITE);
+					::mprotect(violationAddr, PAGE_SIZE, PROT_READ | PROT_WRITE);
 					return -1;
 				}
 			}
@@ -3544,7 +3624,7 @@ void my_actor::check_stack()
 my_actor* my_actor::self_actor()
 {
 #if (WIN32 && (defined CHECK_SELF) && (_WIN32_WINNT >= 0x0502))
-	return (my_actor*)FlsGetValue(ContextPool_::coro_pull_interface::_actorFlsIndex);
+	return (my_actor*)::FlsGetValue(ContextPool_::coro_pull_interface::_actorFlsIndex);
 #elif (__linux__ || (WIN32 && (defined CHECK_SELF)))
 	void** buff = io_engine::getTlsValueBuff();
 	if (buff)
@@ -3625,15 +3705,15 @@ void my_actor::stack_decommit(bool calcUsingStack)
 			_usingStackSize = std::max(_usingStackSize, info->stackSize + info->reserveSize - actor_run::clean_size(info));
 		}
 		DWORD oldPro = 0;
-		VirtualProtect(sp - PAGE_SIZE, PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
+		::VirtualProtect(sp - PAGE_SIZE, PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
 		size_t l = 2 * PAGE_SIZE;
 		while (sp - l >= sb)
 		{
 			MEMORY_BASIC_INFORMATION mbi;
-			VirtualQuery(sp - l, &mbi, sizeof(mbi));
+			::VirtualQuery(sp - l, &mbi, sizeof(mbi));
 			if (MEM_RESERVE != mbi.State)
 			{
-				VirtualFree(sp - l, PAGE_SIZE, MEM_DECOMMIT);
+				::VirtualFree(sp - l, PAGE_SIZE, MEM_DECOMMIT);
 				l += PAGE_SIZE;
 			}
 			else
@@ -3649,7 +3729,7 @@ void my_actor::stack_decommit(bool calcUsingStack)
 		{
 			_usingStackSize = std::max(_usingStackSize, info->stackSize + info->reserveSize - actor_run::clean_size(info));
 		}
-		madvise(sb, sp - sb, MADV_DONTNEED);
+		::madvise(sb, sp - sb, MADV_DONTNEED);
 	}
 #endif
 	end_RUN_IN_THREAD_STACK();
@@ -3674,7 +3754,7 @@ void my_actor::none_stack_decommit(bool calcUsingStack)
 			_usingStackSize = std::max(_usingStackSize, info->stackSize + info->reserveSize - actor_run::none_size(this));
 			tlsBuff[ACTOR_TLS_INDEX] = old;
 		}
-		madvise(sb, sp - sb, MADV_DONTNEED);
+		::madvise(sb, sp - sb, MADV_DONTNEED);
 	}
 	end_RUN_IN_THREAD_STACK();
 #endif

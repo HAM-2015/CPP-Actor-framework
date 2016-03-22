@@ -28,6 +28,12 @@
 	friend std::_Sp_counted_ptr<__T__*, __gnu_cxx::__default_lock_policy>;
 #endif
 
+#ifdef _MSC_VER
+#define __disable_noexcept
+#elif __GNUG__
+#define __disable_noexcept noexcept(false)
+#endif
+
 template <typename CL>
 struct out_of_scope
 {
@@ -35,7 +41,7 @@ struct out_of_scope
 	out_of_scope(TC&& cl)
 		:_cl(TRY_MOVE(cl)) {}
 
-	~out_of_scope()
+	~out_of_scope() __disable_noexcept
 	{
 		_cl();
 	}
@@ -136,23 +142,13 @@ if (__catched) {
 }
 
 #define RUN_IN_THREAD_STACK(__host__, __exp__) {\
-(__host__)->lock_quit(); \
-(__host__)->run_in_thread_stack([&] {__exp__; });}\
-(__host__)->unlock_quit();
+(__host__)->run_in_thread_stack([&] {__exp__; });}
 
 #define begin_RUN_IN_THREAD_STACK(__host__) {\
 	my_actor* const ___host = __host__; \
-	___host->lock_quit(); \
 	___host->run_in_thread_stack([&] {
 
-#define end_RUN_IN_THREAD_STACK() });\
-	___host->unlock_quit(); }
-
-#ifdef _MSC_VER
-#define __disable_noexcept
-#elif __GNUG__
-#define __disable_noexcept noexcept(false)
-#endif
+#define end_RUN_IN_THREAD_STACK() });}
 
 /*!
 @brief 这个类在测试消息传递时使用
