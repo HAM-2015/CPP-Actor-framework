@@ -11,7 +11,7 @@ class msg_queue_mt : public MUTEX
 {
 	struct node
 	{
-		char _data[sizeof(T)];
+		__space_align char _data[sizeof(T)];
 		node* _next;
 	};
 

@@ -113,6 +113,24 @@ private:
 	__T__(const __T__&); \
 	void operator =(const __T__&);
 
+#ifdef _MSC_VER
+
+#ifdef _WIN64
+#define __space_align _declspec (align(8))
+#elif _WIN32
+#define __space_align _declspec (align(4))
+#endif
+
+#elif __GNUG__
+
+#if (defined __x86_64__ || defined _ARM64)
+#define __space_align __attribute__((aligned(8)))
+#elif (__i386__ || _ARM32)
+#define __space_align __attribute__((aligned(4)))
+#endif
+
+#endif
+
 //////////////////////////////////////////////////////////////////////////
 
 #define BEGIN_TRY_ {\

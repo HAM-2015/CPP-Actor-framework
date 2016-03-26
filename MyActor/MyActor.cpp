@@ -19,13 +19,17 @@ void wait_multi_msg()
 		actor_handle act1 = my_actor::create(self->self_strand(), [](my_actor* self)
 		{
 			my_actor::quit_guard qg(self);
-			self->run_mutex_blocks_safe(mutex_block_pump<int>(self, [&](int msg)
+			self->run_mutex_blocks_safe(mutex_block_pump_check_state<int>(self, [&](int msg)
 			{
 				trace_comma(self->self_id(), "begin msg int");
 				self->sleep(500);
 				trace_comma(self->self_id(), msg);
 				self->sleep(500);
 				trace_comma(self->self_id(), "end msg int");
+				return false;
+			}, [](pump_check_state s)
+			{
+				trace_line("msg int state ", s);
 				return false;
 			}), mutex_block_pump<move_test>(self, [&](const move_test& msg)
 			{
@@ -404,27 +408,45 @@ void agent_test()
 				msg_pump_handle<move_test> pp = self->connect_msg_pump<move_test>(true);
 				try
 				{
+					self->wait_connect(pp);
 					while (true)
 					{
-						trace_comma(self->self_id(), self->pump_msg(pp));
+						trace_comma(self->self_id(), self->pump_msg(true, pp));
 					}
 				}
 				catch (ntf_lost_exception&)
 				{
 					trace_comma(self->self_id(), "notifer lost");
 				}
+				catch (pump_disconnected_exception&)
+				{
+					trace_comma(self->self_id(), "pump disconnected");
+				}
 			});
 			self->child_actor_run(ch1);
 			self->msg_agent_to<move_test>(ch1);
+			self->sleep(1000);
+			msg_pump_handle<move_test> pp = self->connect_msg_pump<move_test>(true);
+			try
+			{
+				while (true)
+				{
+					trace_comma(self->self_id(), self->pump_msg(true, pp));
+				}
+			}
+			catch (ntf_lost_exception&)
+			{
+				trace_comma(self->self_id(), "notifer lost");
+			}
 			self->child_actor_wait_quit(ch1);
 		});
 		self->child_actor_run(ch);
 		{
 			auto ntf = self->connect_msg_notifer_to<move_test>(ch, true);
-			for (int i = 0; i < 3; i++)
+			for (int i = 0; i < 15; i++)
 			{
 				ntf(move_test(i));
-				self->sleep(1000);
+				self->sleep(100);
 			}
 		}
 		self->child_actor_wait_quit(ch);

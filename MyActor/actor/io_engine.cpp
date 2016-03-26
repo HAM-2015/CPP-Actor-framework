@@ -100,16 +100,16 @@ void io_engine::_run(size_t threadNum, sched policy)
 				{
 					{
 #ifdef WIN32
-						::SetThreadPriority(::GetCurrentThread(), _priority);
-						::DuplicateHandle(::GetCurrentProcess(), ::GetCurrentThread(), ::GetCurrentProcess(), &_handleList[i], 0, FALSE, DUPLICATE_SAME_ACCESS);
+						SetThreadPriority(GetCurrentThread(), _priority);
+						DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &_handleList[i], 0, FALSE, DUPLICATE_SAME_ACCESS);
 #elif __linux__
-						::pthread_attr_init(&_handleList[i]);
-						::pthread_attr_setschedpolicy (&_handleList[i], _policy);
+						pthread_attr_init(&_handleList[i]);
+						pthread_attr_setschedpolicy (&_handleList[i], _policy);
 						if (0 == i)
 						{
 							struct sched_param pm;
-							int rs = ::pthread_attr_getschedparam(&_handleList[i], &pm);
-							_priority = (priority)pm.__sched_priority;
+							int rs = pthread_attr_getschedparam(&_handleList[i], &pm);
+							_priority = (priority)pm.sched_priority;
 						}
 #endif
 						auto lockMutex = blockMutex;
@@ -125,7 +125,7 @@ void io_engine::_run(size_t threadNum, sched policy)
 						}
 					}
 #ifdef __linux__
-					char actorExtraStack[16 kB];
+					__space_align char actorExtraStack[16 kB];
 					my_actor::install_sigsegv(actorExtraStack, sizeof(actorExtraStack));
 #endif
 					context_yield::convert_thread_to_fiber();
@@ -191,9 +191,9 @@ void io_engine::_stop()
 		for (auto& ele : _handleList)
 		{
 #ifdef WIN32
-			::CloseHandle(ele);
+			CloseHandle(ele);
 #elif __linux__
-			::pthread_attr_destroy(&ele);
+			pthread_attr_destroy(&ele);
 #endif
 		}
 		_handleList.clear();
@@ -236,7 +236,7 @@ void io_engine::suspend()
 	std::lock_guard<std::mutex> lg(_ctrlMutex);
 	for (auto& ele : _handleList)
 	{
-		::SuspendThread(ele);
+		SuspendThread(ele);
 	}
 }
 
@@ -245,7 +245,7 @@ void io_engine::resume()
 	std::lock_guard<std::mutex> lg(_ctrlMutex);
 	for (auto& ele : _handleList)
 	{
-		::ResumeThread(ele);
+		ResumeThread(ele);
 	}
 }
 #endif
@@ -257,7 +257,7 @@ void io_engine::runPriority(priority pri)
 	_priority = pri;
 	for (auto& ele : _handleList)
 	{
-		::SetThreadPriority(ele, _priority);
+		SetThreadPriority(ele, _priority);
 	}
 #elif __linux__
 	if (sched_fifo == _policy || sched_rr == _policy)
@@ -266,7 +266,7 @@ void io_engine::runPriority(priority pri)
 		struct sched_param pm = { pri };
 		for (auto& ele : _handleList)
 		{
-			::pthread_attr_setschedparam(&ele, &pm);
+			pthread_attr_setschedparam(&ele, &pm);
 		}
 	}
 #endif

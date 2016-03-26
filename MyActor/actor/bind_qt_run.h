@@ -388,7 +388,7 @@ private:
 	std::mutex _mutex;
 #ifdef ENABLE_QT_ACTOR
 	shared_qt_strand _qtStrand;
-#endif;
+#endif
 protected:
 	DEBUG_OPERATION(std::atomic<size_t> _taskCount);
 	QEventLoop* _eventLoop;

@@ -11,7 +11,7 @@ run_thread::~run_thread()
 {
 	if (_handle)
 	{
-		::CloseHandle(_handle);
+		CloseHandle(_handle);
 	}
 }
 
@@ -26,7 +26,7 @@ void run_thread::join()
 {
 	if (_handle)
 	{
-		::WaitForSingleObject(_handle, INFINITE);
+		WaitForSingleObject(_handle, INFINITE);
 	}
 }
 
@@ -40,7 +40,7 @@ run_thread::thread_id run_thread::get_id()
 run_thread::thread_id run_thread::this_thread_id()
 {
 	thread_id r;
-	r._id = ::GetCurrentThreadId();
+	r._id = GetCurrentThreadId();
 	return r;
 }
 
@@ -58,14 +58,14 @@ size_t run_thread::cpu_core_number()
 	size_t cores = 0;
 	DWORD size = 0;
 
-	::GetLogicalProcessorInformation(NULL, &size);
+	GetLogicalProcessorInformation(NULL, &size);
 	if (ERROR_INSUFFICIENT_BUFFER != GetLastError())
 	{
 		return 0;
 	}
 
 	std::vector<SYSTEM_LOGICAL_PROCESSOR_INFORMATION> buffer(size);
-	if (::GetLogicalProcessorInformation(&buffer.front(), &size) == FALSE)
+	if (GetLogicalProcessorInformation(&buffer.front(), &size) == FALSE)
 	{
 		return 0;
 	}
@@ -85,16 +85,15 @@ size_t run_thread::cpu_core_number()
 size_t run_thread::cpu_thread_number()
 {
 	SYSTEM_INFO info;
-	::GetSystemInfo(&info);
+	GetSystemInfo(&info);
 	return (size_t)info.dwNumberOfProcessors;
 }
 
 #elif __linux__
 
+#include <unistd.h>
 #include <fstream>
 #include <string>
-#include <sys/sysinfo.h>
-#include <boost/thread.hpp>
 
 run_thread::run_thread()
 {
@@ -117,7 +116,7 @@ void run_thread::join()
 {
 	if (_pthread)
 	{
-		::pthread_join(_pthread, NULL);
+		pthread_join(_pthread, NULL);
 	}
 }
 
@@ -131,7 +130,7 @@ run_thread::thread_id run_thread::get_id()
 run_thread::thread_id run_thread::this_thread_id()
 {
 	thread_id r;
-	r._id = ::pthread_self();
+	r._id = pthread_self();
 	return r;
 }
 
@@ -159,7 +158,7 @@ size_t run_thread::cpu_core_number()
 				const size_t i = line.find(':');
 				if (i >= line.size())
 				{
-					return cpu_thread_number();
+					return sysconf(_SC_NPROCESSORS_CONF);
 				}
 				if (i >= core_id.size())
 				{
@@ -192,17 +191,17 @@ size_t run_thread::cpu_core_number()
 				}
 			}
 		}
-		return 0 != cores ? cores : cpu_thread_number();
+		return 0 != cores ? cores : sysconf(_SC_NPROCESSORS_CONF);
 	}
 	catch (...)
 	{
-		return cpu_thread_number();
+		return sysconf(_SC_NPROCESSORS_CONF);
 	}
 }
 
 size_t run_thread::cpu_thread_number()
 {
-	return (size_t)get_nprocs();
+	return (size_t)sysconf(_SC_NPROCESSORS_ONLN);
 }
 #endif
 

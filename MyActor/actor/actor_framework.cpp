@@ -967,7 +967,6 @@ void MsgPumpVoid_::receiver()
 	if (_hostActor)
 	{
 		assert(!_hasMsg);
-		_losted = false;
 		_pumpCount++;
 		if (_waiting)
 		{
@@ -982,6 +981,7 @@ void MsgPumpVoid_::receiver()
 		}
 		else
 		{
+			_losted = false;
 			_hasMsg = true;
 		}
 	}
@@ -990,6 +990,7 @@ void MsgPumpVoid_::receiver()
 void MsgPumpVoid_::_lost_msg()
 {
 	_losted = true;
+	_pumpCount++;
 	if (_waiting && _checkLost)
 	{
 		_waiting = false;
@@ -1545,7 +1546,7 @@ public:
 			assert(!_actor._inActor);
 			_actor._inActor = true;
 		}
-		catch (my_actor::pump_disconnected_exception&)
+		catch (pump_disconnected_exception&)
 		{
 			trace_line("\nerror: ", "pump_disconnected_exception");
 			assert(false);
@@ -1634,15 +1635,15 @@ public:
 	{
 		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 		size_t rangeA = 0;
-		size_t rangeB = (info->stackSize + info->reserveSize) / PAGE_SIZE;
+		size_t rangeB = (info->stackSize + info->reserveSize) / MEM_PAGE_SIZE;
 		do
 		{
 			MEMORY_BASIC_INFORMATION mbi;
 			const size_t i = rangeA + (rangeB - rangeA) / 2;
-			::VirtualQuery(sb + i * PAGE_SIZE, &mbi, sizeof(mbi));
+			VirtualQuery(sb + i * MEM_PAGE_SIZE, &mbi, sizeof(mbi));
 			if ((PAGE_READWRITE | PAGE_GUARD) == mbi.Protect)
 			{
-				return i * PAGE_SIZE + PAGE_SIZE;
+				return i * MEM_PAGE_SIZE + MEM_PAGE_SIZE;
 			} 
 			else if (MEM_RESERVE == mbi.State)
 			{
@@ -1663,13 +1664,13 @@ public:
 		_actor._usingStackSize = std::max(_actor._usingStackSize, info->stackSize + info->reserveSize - cleanSize);
 		//记录本次实际消耗的栈空间
 		s_autoActorStackMng->update_stack_size(_actor._actorKey, _actor._usingStackSize);
-		if (cleanSize < info->reserveSize - PAGE_SIZE)
+		if (cleanSize < info->reserveSize - MEM_PAGE_SIZE)
 		{
 			//释放物理内存，保留地址空间
 			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
-			::VirtualFree(sb + cleanSize - PAGE_SIZE, info->reserveSize - cleanSize, MEM_DECOMMIT);
+			VirtualFree(sb + cleanSize - MEM_PAGE_SIZE, info->reserveSize - cleanSize, MEM_DECOMMIT);
 			DWORD oldPro = 0;
-			::VirtualProtect(sb + info->reserveSize - PAGE_SIZE, PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
+			VirtualProtect(sb + info->reserveSize - MEM_PAGE_SIZE, MEM_PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
 		}
 	}
 #ifndef _MSC_VER
@@ -1719,11 +1720,11 @@ public:
 		context_yield::context_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
 		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 #ifdef _WIN64
-		char* const sp = (char*)((size_t)eInfo->ContextRecord->Rsp & (0 - PAGE_SIZE));
+		char* const sp = (char*)((size_t)eInfo->ContextRecord->Rsp & (0 - MEM_PAGE_SIZE));
 #else
-		char* const sp = (char*)((size_t)eInfo->ContextRecord->Esp & (0 - PAGE_SIZE));
+		char* const sp = (char*)((size_t)eInfo->ContextRecord->Esp & (0 - MEM_PAGE_SIZE));
 #endif
-		char* const violationAddr = (char*)((size_t)eInfo->ExceptionRecord->ExceptionInformation[1] & (0 - PAGE_SIZE));
+		char* const violationAddr = (char*)((size_t)eInfo->ExceptionRecord->ExceptionInformation[1] & (0 - MEM_PAGE_SIZE));
 		if (violationAddr >= sb && violationAddr < info->stackTop)
 		{
 			if (STATUS_STACK_OVERFLOW == ecd)
@@ -1732,29 +1733,29 @@ public:
 			}
 			else if (STATUS_ACCESS_VIOLATION == ecd)
 			{
-				if (violationAddr - PAGE_SIZE >= sb)
+				if (violationAddr - MEM_PAGE_SIZE >= sb)
 				{
-					::VirtualAlloc(violationAddr - PAGE_SIZE, PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD);
+					VirtualAlloc(violationAddr - MEM_PAGE_SIZE, MEM_PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD);
 				}
 				size_t l = 0;
 				while (violationAddr + l < sp)
 				{
 					DWORD oldPro = 0;
 					MEMORY_BASIC_INFORMATION mbi;
-					::VirtualQuery(violationAddr + l, &mbi, sizeof(mbi));
+					VirtualQuery(violationAddr + l, &mbi, sizeof(mbi));
 					if (MEM_RESERVE == mbi.State)
 					{
-						::VirtualAlloc(violationAddr + l, PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE);
+						VirtualAlloc(violationAddr + l, MEM_PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE);
 					}
 					else
 					{
-						::VirtualProtect(violationAddr + l, PAGE_SIZE, PAGE_READWRITE, &oldPro);
+						VirtualProtect(violationAddr + l, MEM_PAGE_SIZE, PAGE_READWRITE, &oldPro);
 						if ((PAGE_READWRITE | PAGE_GUARD) == oldPro)
 						{
 							break;
 						}
 					}
-					l += PAGE_SIZE;
+					l += MEM_PAGE_SIZE;
 				}
 				return EXCEPTION_CONTINUE_EXECUTION;
 			}
@@ -1775,16 +1776,16 @@ public:
 		context_yield::context_info* const info = ((actor_pull_type*)self->_actorPull)->_coroInfo;
 		const size_t totalStackSize = info->stackSize + info->reserveSize;
 		char* const sb = (char*)info->stackTop - totalStackSize;
-		bool ok = 0 == ::mincore(sb, totalStackSize, mvec);
+		bool ok = 0 == mincore(sb, totalStackSize, mvec);
 		assert(ok);
 		size_t i = 0;
 		size_t rangeA = 0;
-		size_t rangeB = (info->stackSize + info->reserveSize) / PAGE_SIZE;
+		size_t rangeB = (info->stackSize + info->reserveSize) / MEM_PAGE_SIZE;
 		do
 		{
 			self->_sigsegvSign = true;
 			i = rangeA + (rangeB - rangeA) / 2;
-			char* const pi = sb + i * PAGE_SIZE;
+			char* const pi = sb + i * MEM_PAGE_SIZE;
 			char t = *pi;
 			if (self->_sigsegvSign)
 			{
@@ -1792,17 +1793,17 @@ public:
 			}
 			else
 			{
-				::mprotect(pi, PAGE_SIZE, PROT_NONE);
+				mprotect(pi, MEM_PAGE_SIZE, PROT_NONE);
 				rangeA = i + 1;
 			}
 			if (0 == mvec[i])
 			{
-				::madvise(pi, PAGE_SIZE, MADV_DONTNEED);
+				madvise(pi, MEM_PAGE_SIZE, MADV_DONTNEED);
 			}
 		} while (rangeA < rangeB);
 		const bool acc = self->_sigsegvSign;
 		self->_sigsegvSign = false;
-		return i * PAGE_SIZE + (acc ? 0 : PAGE_SIZE);
+		return i * MEM_PAGE_SIZE + (acc ? 0 : MEM_PAGE_SIZE);
 	}
 #pragma GCC pop_options
 
@@ -1811,11 +1812,11 @@ public:
 		unsigned char mvec[256];
 		const size_t totalStackSize = info->stackSize + info->reserveSize;
 		char* const sb = (char*)info->stackTop - totalStackSize;
-		bool ok = 0 == ::mincore(sb, totalStackSize, mvec);
+		bool ok = 0 == mincore(sb, totalStackSize, mvec);
 		assert(ok);
-		for (size_t i = 0; i < totalStackSize; i += PAGE_SIZE)
+		for (size_t i = 0; i < totalStackSize; i += MEM_PAGE_SIZE)
 		{
-			if (0 != mvec[i / PAGE_SIZE])
+			if (0 != mvec[i / MEM_PAGE_SIZE])
 			{
 				return i;
 			}
@@ -1834,7 +1835,7 @@ public:
 		{
 			//释放物理内存，保留地址空间
 			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
-			::madvise(sb + cleanSize, info->reserveSize - cleanSize, MADV_DONTNEED);
+			madvise(sb + cleanSize, info->reserveSize - cleanSize, MADV_DONTNEED);
 		}
 	}
 
@@ -1861,7 +1862,7 @@ public:
 		if (self)
 		{
 			context_yield::context_info* const info = ((actor_pull_type*)self->_actorPull)->_coroInfo;
-			char* const violationAddr = (char*)((size_t)fault_address & (0 - PAGE_SIZE));
+			char* const violationAddr = (char*)((size_t)fault_address & (0 - MEM_PAGE_SIZE));
 			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 			if (violationAddr >= sb && violationAddr < info->stackTop)
 			{
@@ -1873,8 +1874,8 @@ public:
 						char* const st = (char*)info->stackTop - self->_usingStackSize;
 						while (violationAddr + l < st)
 						{
-							::mprotect(violationAddr + l, PAGE_SIZE, PROT_READ | PROT_WRITE);
-							l += PAGE_SIZE;
+							mprotect(violationAddr + l, MEM_PAGE_SIZE, PROT_READ | PROT_WRITE);
+							l += MEM_PAGE_SIZE;
 						}
 						if (violationAddr < (char*)info->stackTop - self->_usingStackSize)
 						{
@@ -1892,7 +1893,7 @@ public:
 				else
 				{
 					self->_sigsegvSign = false;
-					::mprotect(violationAddr, PAGE_SIZE, PROT_READ | PROT_WRITE);
+					mprotect(violationAddr, MEM_PAGE_SIZE, PROT_READ | PROT_WRITE);
 					return -1;
 				}
 			}
@@ -1909,16 +1910,20 @@ public:
 	static void install_sigsegv(void* actorExtraStack, size_t size)
 	{
 		s_sigsegvMutex->lock();
+#ifndef DISABLE_SIGSEGV
 		stackoverflow_install_handler(stackoverflow_handler, actorExtraStack, size);
 		sigsegv_install_handler(sigsegv_handler);
+#endif
 		s_sigsegvMutex->unlock();
 	}
 
 	static void deinstall_sigsegv()
 	{
 		s_sigsegvMutex->lock();
+#ifndef DISABLE_SIGSEGV
 		sigsegv_deinstall_handler();
 		stackoverflow_deinstall_handler();
+#endif
 		s_sigsegvMutex->unlock();
 	}
 #endif
@@ -2671,21 +2676,21 @@ void my_actor::enable_check_stack(bool decommit)
 		}
 		else
 		{
-			char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
+			char* const sp = (char*)((size_t)get_sp() & (0 - MEM_PAGE_SIZE));
 			begin_RUN_IN_THREAD_STACK(this);
 			context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 			char* const sm = (char*)info->stackTop - info->stackSize;
 			//分页加PAGE_GUARD标记
-			size_t l = PAGE_SIZE;
+			size_t l = MEM_PAGE_SIZE;
 			while (sp - l >= sm)
 			{
 				DWORD oldPro = 0;
-				BOOL ok = VirtualProtect(sp - l, PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
+				BOOL ok = VirtualProtect(sp - l, MEM_PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
 				if (!ok || (PAGE_READWRITE | PAGE_GUARD) == oldPro)
 				{
 					break;
 				}
-				l += PAGE_SIZE;
+				l += MEM_PAGE_SIZE;
 			}
 			end_RUN_IN_THREAD_STACK();
 		}
@@ -2696,7 +2701,7 @@ void my_actor::enable_check_stack(bool decommit)
 		}
 		else
 		{
-			char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
+			char* const sp = (char*)((size_t)get_sp() & (0 - MEM_PAGE_SIZE));
 			begin_RUN_IN_THREAD_STACK(this);
 			context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
@@ -3693,7 +3698,7 @@ size_t my_actor::none_stack_size()
 
 void my_actor::stack_decommit(bool calcUsingStack)
 {
-	char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
+	char* const sp = (char*)((size_t)get_sp() & (0 - MEM_PAGE_SIZE));
 	begin_RUN_IN_THREAD_STACK(this);
 	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
@@ -3705,16 +3710,16 @@ void my_actor::stack_decommit(bool calcUsingStack)
 			_usingStackSize = std::max(_usingStackSize, info->stackSize + info->reserveSize - actor_run::clean_size(info));
 		}
 		DWORD oldPro = 0;
-		::VirtualProtect(sp - PAGE_SIZE, PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
-		size_t l = 2 * PAGE_SIZE;
+		VirtualProtect(sp - MEM_PAGE_SIZE, MEM_PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
+		size_t l = 2 * MEM_PAGE_SIZE;
 		while (sp - l >= sb)
 		{
 			MEMORY_BASIC_INFORMATION mbi;
-			::VirtualQuery(sp - l, &mbi, sizeof(mbi));
+			VirtualQuery(sp - l, &mbi, sizeof(mbi));
 			if (MEM_RESERVE != mbi.State)
 			{
-				::VirtualFree(sp - l, PAGE_SIZE, MEM_DECOMMIT);
-				l += PAGE_SIZE;
+				VirtualFree(sp - l, MEM_PAGE_SIZE, MEM_DECOMMIT);
+				l += MEM_PAGE_SIZE;
 			}
 			else
 			{
@@ -3729,7 +3734,7 @@ void my_actor::stack_decommit(bool calcUsingStack)
 		{
 			_usingStackSize = std::max(_usingStackSize, info->stackSize + info->reserveSize - actor_run::clean_size(info));
 		}
-		::madvise(sb, sp - sb, MADV_DONTNEED);
+		madvise(sb, sp - sb, MADV_DONTNEED);
 	}
 #endif
 	end_RUN_IN_THREAD_STACK();
@@ -3740,7 +3745,7 @@ void my_actor::none_stack_decommit(bool calcUsingStack)
 #ifdef WIN32
 	stack_decommit(calcUsingStack);
 #elif __linux__
-	char* const sp = (char*)((size_t)get_sp() & (0 - PAGE_SIZE));
+	char* const sp = (char*)((size_t)get_sp() & (0 - MEM_PAGE_SIZE));
 	begin_RUN_IN_THREAD_STACK(this);
 	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
@@ -3754,7 +3759,7 @@ void my_actor::none_stack_decommit(bool calcUsingStack)
 			_usingStackSize = std::max(_usingStackSize, info->stackSize + info->reserveSize - actor_run::none_size(this));
 			tlsBuff[ACTOR_TLS_INDEX] = old;
 		}
-		::madvise(sb, sp - sb, MADV_DONTNEED);
+		madvise(sb, sp - sb, MADV_DONTNEED);
 	}
 	end_RUN_IN_THREAD_STACK();
 #endif
@@ -3810,7 +3815,7 @@ bool my_actor::try_pump_msg(bool checkDis, const msg_pump_handle<>& pump)
 	{
 		if (checkDis && pump.get()->isDisconnected())
 		{
-			throw pump_disconnected<>();
+			throw msg_pump_handle<>::pump_disconnected(pump.get_id());
 		}
 #ifdef ENABLE_CHECK_LOST
 		if (pump.get()->_losted && pump.get()->_checkLost)

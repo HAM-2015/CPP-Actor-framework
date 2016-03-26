@@ -1,8 +1,8 @@
 并发逻辑控制框架(Actor Model)，适用于复杂业务逻辑，有问题或BUG反馈至591170887@qq.com;
 依赖于boost 1.59;
 暂无开发文档，等作者认为可以定型后开放文档;
-目前仅在 VS2013,MINGW49_x64,GCC4.9-linux_x86_x64_arm32 编译器中测试;
-可以用来构建服务端/客户端，也可以用在与网络无关的程序中;
+目前仅在 VS2013,MINGW49_x64,GCC4.9-linux_x86_x64_arm32,arm-linux-eabi-gcc49(android4.4.3) 中测试;
+可以用来构建服务端/客户端，也可以用在与网络无关的程序中（例如UI控制逻辑）;
 可以任意使用或编辑源码，而不需通知作者，当然作者也不对使用本框架造成的任何损失负责.
 
 github url:
@@ -11,6 +11,9 @@ https://github.com/HAM-2015/CPP-Actor-framework
 oschina url:
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
+
+2016-03-26
+移植到arm-android(4.4.3+)平台(支持在 QT-UI For Android 框架中运行).
 
 2016-03-15
 移植到arm-linux平台.
@@ -24,9 +27,6 @@ http://www.oschina.net/code/snippet_2274073_45577
 
 2015-12-18
 添加对mingw的支持.
-
-2015-12-14
-添加对linux-ucontext库的支持.
 
 2015-12-09
 扩展对windows平台下的稳定定时器支持.

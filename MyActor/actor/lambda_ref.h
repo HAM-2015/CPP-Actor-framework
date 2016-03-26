@@ -491,7 +491,7 @@ struct InvokerType_<Handler, _Rt(C::*)(_Types...) const>
 	const auto& NAME_BOND(__temp_, __name__) = __lmd__; \
 	typedef RM_REF_(decltype(NAME_BOND(__temp_, __name__))) NAME_BOND(__lmd_type_, __name__); \
 	typedef InvokerType_<NAME_BOND(__lmd_type_, __name__), decltype(&NAME_BOND(__lmd_type_, __name__)::operator())>::type NAME_BOND(__invoker_type_, __name__); \
-	char NAME_BOND(__space_, __name__)[sizeof(NAME_BOND(__invoker_type_, __name__))]; \
+	__space_align char NAME_BOND(__space_, __name__)[sizeof(NAME_BOND(__invoker_type_, __name__))]; \
 	__name__.set_handler(__lmd__, NAME_BOND(__space_, __name__)); \
 
 #define SET_RECURSIVE_FUNC(__name__, __lmd__)\

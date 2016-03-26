@@ -79,7 +79,7 @@ struct mem_alloc_mt : protected MUTEX, public mem_alloc_base
 
 	union BUFFER
 	{
-		unsigned char _space[MEM_ALIGN(sizeof(DATA), sizeof(void*))];
+		__space_align char _space[MEM_ALIGN(sizeof(DATA), sizeof(void*))];
 		node_space* _link;
 	};
 
@@ -1069,7 +1069,7 @@ class ObjPool_ : protected MUTEX, public obj_pool<T>
 {
 	struct node
 	{
-		unsigned char _data[sizeof(T)];
+		__space_align char _data[sizeof(T)];
 		node* _link;
 	};
 public:

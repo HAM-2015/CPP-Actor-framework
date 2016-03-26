@@ -115,7 +115,7 @@ class sync_msg
 	{
 		bool* can_move;
 		bool& notified;
-		unsigned char* dst;
+		char* dst;
 		actor_trig_notifer<bool>& takeOk;
 		actor_trig_notifer<bool> ntf;
 	};
@@ -303,7 +303,7 @@ public:
 		host->lock_quit();
 		actor_trig_handle<bool> ath;
 		actor_trig_notifer<bool> ntf;
-		unsigned char msgBuf[sizeof(RT)];
+		__space_align char msgBuf[sizeof(RT)];
 		bool wait = false;
 		bool closed = false;
 		bool notified = false;
@@ -474,7 +474,7 @@ private:
 		actor_trig_handle<bool> ath;
 		actor_trig_notifer<bool> ntf;
 		typename msg_list<take_wait>::iterator mit;
-		unsigned char msgBuf[sizeof(RT)];
+		__space_align char msgBuf[sizeof(RT)];
 		bool wait = false;
 		bool closed = false;
 		bool notified = false;
@@ -561,7 +561,7 @@ class CspChannel_
 	{
 		bool& notified;
 		T& srcMsg;
-		unsigned char* res;
+		char* res;
 		actor_trig_notifer<bool> ntf;
 	};
 
@@ -569,7 +569,7 @@ class CspChannel_
 	{
 		bool& notified;
 		T*& srcMsg;
-		unsigned char*& res;
+		char*& res;
 		actor_trig_notifer<bool>& ntfSend;
 		actor_trig_notifer<bool> ntf;
 	};
@@ -590,7 +590,7 @@ public:
 	{
 		host->lock_quit();
 		actor_trig_handle<bool> ath;
-		unsigned char resBuf[sizeof(R)];
+		__space_align char resBuf[sizeof(R)];
 		bool closed = false;
 		bool notified = false;
 		LAMBDA_THIS_REF6(ref6, host, msg, ath, resBuf, closed, notified);
@@ -647,7 +647,7 @@ public:
 	{
 		host->lock_quit();
 		actor_trig_handle<bool> ath;
-		unsigned char resBuf[sizeof(R)];
+		__space_align char resBuf[sizeof(R)];
 		bool closed = false;
 		bool has = false;
 		LAMBDA_THIS_REF6(ref6, host, msg, ath, resBuf, closed, has);
@@ -705,7 +705,7 @@ public:
 	{
 		host->lock_quit();
 		actor_trig_handle<bool> ath;
-		unsigned char resBuf[sizeof(R)];
+		__space_align char resBuf[sizeof(R)];
 		typename msg_list<send_wait>::iterator nit;
 		bool closed = false;
 		bool notified = false;
@@ -792,7 +792,7 @@ public:
 		actor_trig_handle<bool> ath;
 		actor_trig_notifer<bool> ntfSend;
 		T* srcMsg = NULL;
-		unsigned char* res = NULL;
+		char* res = NULL;
 		bool wait = false;
 		bool closed = false;
 		bool notified = false;
@@ -860,7 +860,7 @@ public:
 		host->lock_quit();
 		actor_trig_notifer<bool> ntfSend;
 		T* srcMsg = NULL;
-		unsigned char* res = NULL;
+		char* res = NULL;
 		bool closed = false;
 		bool has = false;
 		LAMBDA_REF2(ref2, closed, has);
@@ -926,7 +926,7 @@ public:
 		actor_trig_notifer<bool> ntfSend;
 		typename msg_list<take_wait>::iterator wit;
 		T* srcMsg = NULL;
-		unsigned char* res = NULL;
+		char* res = NULL;
 		bool wait = false;
 		bool closed = false;
 		bool notified = false;

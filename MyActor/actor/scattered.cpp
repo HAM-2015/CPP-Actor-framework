@@ -304,34 +304,34 @@ void enable_high_resolution()
 				ULONG ActualTime = 0;
 				if (!_NtSetTimerResolution(MinimumTime, TRUE, &ActualTime))
 				{
-					::FreeLibrary(hNtDll);
+					FreeLibrary(hNtDll);
 					return;
 				}
 			}
 		}
-		::FreeLibrary(hNtDll);
+		FreeLibrary(hNtDll);
 	}
-	::timeBeginPeriod(1);
+	timeBeginPeriod(1);
 }
 
 long long get_tick_us()
 {
 	LARGE_INTEGER quadPart;
-	::QueryPerformanceCounter(&quadPart);
+	QueryPerformanceCounter(&quadPart);
 	return (long long)((double)quadPart.QuadPart*_pcCycle._usCycle);
 }
 
 long long get_tick_ms()
 {
 	LARGE_INTEGER quadPart;
-	::QueryPerformanceCounter(&quadPart);
+	QueryPerformanceCounter(&quadPart);
 	return (long long)((double)quadPart.QuadPart*_pcCycle._msCycle);
 }
 
 int get_tick_s()
 {
 	LARGE_INTEGER quadPart;
-	::QueryPerformanceCounter(&quadPart);
+	QueryPerformanceCounter(&quadPart);
 	return (int)((double)quadPart.QuadPart*_pcCycle._sCycle);
 }
 
@@ -344,21 +344,21 @@ void enable_high_resolution()
 long long get_tick_us()
 {
 	struct timespec ts;
-	::clock_gettime(CLOCK_MONOTONIC, &ts);
+	clock_gettime(CLOCK_MONOTONIC, &ts);
 	return (long long)ts.tv_sec * 1000000 + ts.tv_nsec/1000;
 }
 
 long long get_tick_ms()
 {
 	struct timespec ts;
-	::clock_gettime(CLOCK_MONOTONIC, &ts);
+	clock_gettime(CLOCK_MONOTONIC, &ts);
 	return (long long)ts.tv_sec * 1000 + ts.tv_nsec/1000000;
 }
 
 int get_tick_s()
 {
 	struct timespec ts;
-	::clock_gettime(CLOCK_MONOTONIC, &ts);
+	clock_gettime(CLOCK_MONOTONIC, &ts);
 	return (int)ts.tv_sec;
 }
 
@@ -392,7 +392,7 @@ unsigned long long cpu_tick()
 	return ((unsigned long long)__a) | (((unsigned long long)__d) << 32);
 #elif __arm__
 	struct timespec ts;
-	::clock_gettime(CLOCK_MONOTONIC, &ts);
+	clock_gettime(CLOCK_MONOTONIC, &ts);
 	return (unsigned long long)ts.tv_sec * 1000000000 + ts.tv_nsec;
 #endif
 }
@@ -402,17 +402,17 @@ unsigned long long cpu_tick()
 #ifdef WIN32
 tls_space::tls_space()
 {
-	_index = ::TlsAlloc();
+	_index = TlsAlloc();
 }
 
 tls_space::~tls_space()
 {
-	::TlsFree(_index);
+	TlsFree(_index);
 }
 
 void tls_space::set_space(void** val)
 {
-	::TlsSetValue(_index, (LPVOID)val);
+	TlsSetValue(_index, (LPVOID)val);
 }
 
 void** tls_space::get_space()
@@ -422,17 +422,17 @@ void** tls_space::get_space()
 #elif __linux__
 tls_space::tls_space()
 {
-	::pthread_key_create(&_key, NULL);
+	pthread_key_create(&_key, NULL);
 }
 
 tls_space::~tls_space()
 {
-	::pthread_key_delete(_key);
+	pthread_key_delete(_key);
 }
 
 void tls_space::set_space(void** val)
 {
-	::pthread_setspecific(_key, val);
+	pthread_setspecific(_key, val);
 }
 
 void** tls_space::get_space()
@@ -470,13 +470,13 @@ void stack_overflow_format(int size, std::shared_ptr<std::list<stack_line_info>>
 
 bool _loadAllModules()
 {
-	HANDLE hProcess = ::GetCurrentProcess();
+	HANDLE hProcess = GetCurrentProcess();
 	static const int maxHandles = 4096;
 	HMODULE aryHandles[maxHandles] = { 0 };
 
 	unsigned bytes = 0;
 
-	BOOL result = ::EnumProcessModules(
+	BOOL result = EnumProcessModules(
 		hProcess, aryHandles, sizeof(aryHandles), (LPDWORD)&bytes);
 
 	if (FALSE == result)
@@ -492,11 +492,11 @@ bool _loadAllModules()
 		char imageName[256] = { 0 };
 		MODULEINFO Info;
 
-		::GetModuleInformation(hProcess, aryHandles[i], &Info, sizeof(Info));
-		::GetModuleFileNameExA(hProcess, aryHandles[i], imageName, 256);
-		::GetModuleBaseNameA(hProcess, aryHandles[i], moduleName, 256);
+		GetModuleInformation(hProcess, aryHandles[i], &Info, sizeof(Info));
+		GetModuleFileNameExA(hProcess, aryHandles[i], imageName, 256);
+		GetModuleBaseNameA(hProcess, aryHandles[i], moduleName, 256);
 
-		::SymLoadModule64(hProcess, aryHandles[i], imageName, moduleName, (DWORD64)Info.lpBaseOfDll, (DWORD)Info.SizeOfImage);
+		SymLoadModule64(hProcess, aryHandles[i], imageName, moduleName, (DWORD64)Info.lpBaseOfDll, (DWORD)Info.SizeOfImage);
 	}
 
 	return true;
@@ -505,12 +505,12 @@ bool _loadAllModules()
 bool _initialize()
 {
 	// …Ë÷√∑˚∫≈“˝«Ê
-	DWORD symOpts = ::SymGetOptions();
+	DWORD symOpts = SymGetOptions();
 	symOpts |= SYMOPT_LOAD_LINES;
 	symOpts |= SYMOPT_DEBUG;
-	::SymSetOptions(symOpts);
+	SymSetOptions(symOpts);
 
-	if (FALSE == ::SymInitialize(::GetCurrentProcess(), NULL, TRUE))
+	if (FALSE == SymInitialize(GetCurrentProcess(), NULL, TRUE))
 	{
 		return false;
 	}
@@ -525,12 +525,12 @@ bool _initialize()
 size_t _stackwalk(QWORD *pTrace, size_t maxDepth, CONTEXT *pContext)
 {
 	STACKFRAME64 stackFrame64;
-	HANDLE hProcess = ::GetCurrentProcess();
-	HANDLE hThread = ::GetCurrentThread();
+	HANDLE hProcess = GetCurrentProcess();
+	HANDLE hThread = GetCurrentThread();
 
 	size_t depth = 0;
 
-	::ZeroMemory(&stackFrame64, sizeof(stackFrame64));
+	ZeroMemory(&stackFrame64, sizeof(stackFrame64));
 #ifdef _MSC_VER
 	__try
 #endif
@@ -555,7 +555,7 @@ size_t _stackwalk(QWORD *pTrace, size_t maxDepth, CONTEXT *pContext)
 
 		while (successed && (depth < maxDepth))
 		{
-			successed = ::StackWalk64(
+			successed = StackWalk64(
 #ifdef _WIN64
 				IMAGE_FILE_MACHINE_AMD64,
 #else
@@ -612,7 +612,7 @@ std::list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool m
 	QWORD trace[33];
 	CONTEXT context;
 
-	::ZeroMemory(&context, sizeof(context));
+	ZeroMemory(&context, sizeof(context));
 	context.ContextFlags = CONTEXT_FULL;
 #ifdef _WIN64
 	get_bp_sp_ip((void**)&context.Rbp, (void**)&context.Rsp, (void**)&context.Rip);
@@ -622,7 +622,7 @@ std::list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool m
 	size_t depths = _stackwalk(trace, maxDepth + 1, &context);
 
 	std::list<stack_line_info> imageList;
-	HANDLE hProcess = ::GetCurrentProcess();
+	HANDLE hProcess = GetCurrentProcess();
 	for (size_t i = 1 + offset; i < depths; i++)
 	{
 		stack_line_info stackResult;
@@ -632,7 +632,7 @@ std::list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool m
 			IMAGEHLP_LINE64 imageHelpLine;
 			imageHelpLine.SizeOfStruct = sizeof(imageHelpLine);
 
-			if (::SymGetLineFromAddr64(hProcess, trace[i], &symbolDisplacement, &imageHelpLine))
+			if (SymGetLineFromAddr64(hProcess, trace[i], &symbolDisplacement, &imageHelpLine))
 			{
 				stackResult.file = string(imageHelpLine.FileName, check_file_name(imageHelpLine.FileName));
 				memset(imageHelpLine.FileName, 0, stackResult.file.size() + 1);
@@ -654,7 +654,7 @@ std::list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool m
 			symbol->SizeOfStruct = sizeof(symbolBf);
 			symbol->MaxNameLength = maxNameLength;
 
-			if (::SymGetSymFromAddr64(
+			if (SymGetSymFromAddr64(
 				hProcess,
 				trace[i],
 				&symbolDisplacement64,
@@ -673,7 +673,7 @@ std::list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool m
 			IMAGEHLP_MODULE64 imageHelpModule;
 			imageHelpModule.SizeOfStruct = sizeof(imageHelpModule);
 
-			if (::SymGetModuleInfo64(hProcess, trace[i], &imageHelpModule))
+			if (SymGetModuleInfo64(hProcess, trace[i], &imageHelpModule))
 			{
 				stackResult.module = string(imageHelpModule.ImageName, check_file_name(imageHelpModule.ImageName));
 				memset(imageHelpModule.ImageName, 0, stackResult.module.size() + 1);

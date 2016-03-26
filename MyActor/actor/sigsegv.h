@@ -18,8 +18,6 @@
 #ifndef _SIGSEGV_H
 #define _SIGSEGV_H
 
-#include <ucontext.h>
-
 /* HAVE_SIGSEGV_RECOVERY
    is defined if the system supports catching SIGSEGV.  */
 #if 1
@@ -115,7 +113,7 @@ extern void sigsegv_leave_handler (void);
  * on some platforms it is a 'struct sigcontext *', on others merely an
  * opaque 'void *'.
  */
-typedef ucontext_t *stackoverflow_context_t;
+typedef void *stackoverflow_context_t;
 
 /*
  * The type of a stack overflow handler.

@@ -30,7 +30,7 @@ class fixed_buffer
 			return *(T*)space;
 		}
 
-		char space[sizeof(T)];
+		__space_align char space[sizeof(T)];
 	};
 public:
 	fixed_buffer(size_t maxSize)
@@ -326,7 +326,7 @@ public:
 	*/
 	T pop(my_actor* host)
 	{
-		char resBuf[sizeof(T)];
+		__space_align char resBuf[sizeof(T)];
 		_pop(host, [&]()->bool
 		{
 			new(resBuf)T(std::move(_buffer.front()));

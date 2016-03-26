@@ -50,7 +50,7 @@ class ActorMutex_;
 #endif
 
 //检测 pump_msg 是否有 pump_disconnected_exception 异常抛出，因为在 catch 内部不能安全的进行coro切换
-#define CATCH_PUMP_DISCONNECTED CATCH_FOR(my_actor::pump_disconnected_exception)
+#define CATCH_PUMP_DISCONNECTED CATCH_FOR(pump_disconnected_exception)
 //包装actor_msg_handle, actor_trig_handle关闭事件
 #define wrap_close_msg_handle(__handle__) [&__handle__]{__handle__.close(); }
 
@@ -135,7 +135,15 @@ struct ActorFunc_
 };
 //////////////////////////////////////////////////////////////////////////
 
+/*!
+@brief 通知句柄丢失
+*/
 struct ntf_lost_exception {};
+
+/*!
+@brief 消息泵被断开
+*/
+struct pump_disconnected_exception { };
 
 #ifdef ENABLE_CHECK_LOST
 class CheckLost_
@@ -286,9 +294,19 @@ template <typename... ARGS>
 class actor_trig_handle;
 
 template <typename... ARGS>
+class mutex_block_pump_check_state;
+
+template <typename... ARGS>
 class MsgNotiferBase_;
 
 struct run_mutex_block_force_quit {};
+
+enum pump_check_state
+{
+	pump_connected = 0,
+	pump_disconnted,
+	pump_ntf_losted
+};
 
 #ifdef ENABLE_CHECK_LOST
 
@@ -968,8 +986,8 @@ public:
 		return _hasMsg ? 1 : 0;
 	}
 private:
+	__space_align char _msgBuff[sizeof(msg_type)];
 	dst_receiver* _dstRec;
-	unsigned char _msgBuff[sizeof(msg_type)];
 	bool _hasMsg;
 };
 
@@ -1129,6 +1147,7 @@ class MsgPump_ : public MsgPumpBase_
 	friend my_actor;
 	friend MsgPool_<ARGS...>;
 	friend mutex_block_pump<ARGS...>;
+	friend mutex_block_pump_check_state<ARGS...>;
 	friend pump_handler;
 	friend msg_pump_handle<ARGS...>;
 #ifdef ENABLE_CHECK_LOST
@@ -1427,8 +1446,8 @@ private:
 		return _pumpHandler.empty();
 	}
 private:
+	__space_align char _msgSpace[sizeof(msg_type)];
 	std::weak_ptr<MsgPump_> _weakThis;
-	unsigned char _msgSpace[sizeof(msg_type)];
 	pump_handler _pumpHandler;
 	shared_strand _strand;
 	dst_receiver* _dstRec;
@@ -1521,7 +1540,7 @@ class MsgPool_ : public MsgPoolBase_
 			return *(msg_type*)_msg;
 		}
 
-		char _msg[sizeof(msg_type)];
+		__space_align char _msg[sizeof(msg_type)];
 		bool _isMsg;
 	private:
 		void operator=(const msg_pck&) {}
@@ -1973,6 +1992,7 @@ class MsgPumpVoid_ : public MsgPumpBase_
 	friend my_actor;
 	friend MsgPoolVoid_;
 	friend mutex_block_pump<>;
+	friend mutex_block_pump_check_state<>;
 	friend pump_handler;
 #ifdef ENABLE_CHECK_LOST
 	friend mutex_block_pump_check_lost<>;
@@ -2040,6 +2060,7 @@ class MsgPump_<> : public MsgPumpVoid_
 {
 	friend my_actor;
 	friend mutex_block_pump<>;
+	friend mutex_block_pump_check_state<>;
 	friend msg_pump_handle<>;
 #ifdef ENALBE_CHECK_LOST
 	friend mutex_block_pump_check_lost<>;
@@ -2074,6 +2095,7 @@ class msg_pump_handle
 {
 	friend my_actor;
 	friend mutex_block_pump<ARGS...>;
+	friend mutex_block_pump_check_state<ARGS...>;
 #ifdef ENABLE_CHECK_LOST
 	friend mutex_block_pump_check_lost<ARGS...>;
 #endif
@@ -2083,6 +2105,14 @@ public:
 	struct lost_exception : public ntf_lost_exception
 	{
 		lost_exception(int id)
+		:_id(id) {}
+
+		int _id;
+	};
+
+	struct pump_disconnected : public pump_disconnected_exception
+	{
+		pump_disconnected(int id)
 		:_id(id) {}
 
 		int _id;
@@ -2425,14 +2455,7 @@ public:
 
 	template <typename Handler>
 	mutex_block_pump(const int id, my_actor* host, Handler&& handler, bool checkLost = false)
-#ifdef _MSC_VER
-		:_handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(host)))
-#elif __GNUG__
-		:_handler(TRY_MOVE(handler))
-#endif
-	{
-		_msgHandle = ActorFunc_::connect_msg_pump<ARGS...>(id, host, checkLost);
-	}
+		: mutex_block_pump(ActorFunc_::connect_msg_pump<ARGS...>(id, host, checkLost), TRY_MOVE(handler)) {}
 
 	template <typename Handler>
 	mutex_block_pump(const pump_handle& pump, Handler&& handler)
@@ -2634,14 +2657,7 @@ public:
 
 	template <typename Handler>
 	mutex_block_pump(const int id, my_actor* host, Handler&& handler, bool checkLost = false)
-#ifdef _MSC_VER
-		:_handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(host))), _has(false)
-#elif __GNUG__
-		:_handler(TRY_MOVE(handler)), _has(false)
-#endif
-	{
-		_msgHandle = ActorFunc_::connect_msg_pump(id, host, checkLost);
-	}
+		: mutex_block_pump(ActorFunc_::connect_msg_pump(id, host, checkLost), TRY_MOVE(handler)) {}
 
 	template <typename Handler>
 	mutex_block_pump(const pump_handle& pump, Handler&& handler)
@@ -2751,6 +2767,256 @@ private:
 };
 //////////////////////////////////////////////////////////////////////////
 
+template <typename... ARGS>
+class mutex_block_pump_check_state : public MutexBlock_
+{
+	typedef msg_pump_handle<ARGS...> pump_handle;
+	typedef DstReceiverBuff_<ARGS...> dst_receiver;
+
+	friend my_actor;
+public:
+	template <typename Handler, typename StateHandler>
+	mutex_block_pump_check_state(my_actor* host, Handler&& handler, StateHandler&& stateHandler)
+		:mutex_block_pump_check_state(0, host, TRY_MOVE(handler), TRY_MOVE(stateHandler)) {}
+
+	template <typename Handler, typename StateHandler>
+	mutex_block_pump_check_state(const int id, my_actor* host, Handler&& handler, StateHandler&& stateHandler)
+		:mutex_block_pump_check_state(ActorFunc_::connect_msg_pump<ARGS...>(id, host, true), TRY_MOVE(handler), TRY_MOVE(stateHandler)) {}
+
+	template <typename Handler, typename StateHandler>
+	mutex_block_pump_check_state(const pump_handle& pump, Handler&& handler, StateHandler&& stateHandler)
+#ifdef _MSC_VER
+		:_msgHandle(pump), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))),
+		_stateHandler(TRY_MOVE(stateHandler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))),
+#elif __GNUG__
+		:_msgHandle(pump), _handler(TRY_MOVE(handler)), _stateHandler(TRY_MOVE(stateHandler)),
+#endif
+		_readySign(0), _connected(false), _disconnected(false), _lostNtfed(false)
+	{
+	}
+private:
+	bool ready()
+	{
+		assert(!_msgBuff.has());
+		assert(!_msgHandle.check_closed());
+		_readySign = 1;
+		if (!_connected)
+		{
+			if (_msgHandle.is_connected())
+			{
+				return true;
+			}
+			_msgHandle._handle->_waitConnect = true;
+			return false;
+		}
+		if (_msgHandle._handle->read_msg(_msgBuff) || is_losted())
+		{
+			return true;
+		}
+		_msgHandle._handle->_checkDis = true;
+		return _msgHandle._handle->isDisconnected();
+	}
+
+	void cancel()
+	{
+		assert(!_msgHandle.check_closed());
+		_msgHandle._handle->stop_waiting();
+		_readySign--;
+	}
+
+	bool is_losted()
+	{
+		assert(_msgHandle.get()->_checkLost);
+		return _msgHandle.get()->_losted && !_lostNtfed;
+	}
+
+	void check_lost()
+	{
+	}
+
+	bool go(bool& isRun)
+	{
+		assert(!_msgHandle.check_closed());
+		if (0 == _readySign)
+		{
+			if (!_connected && _msgHandle.is_connected())
+			{
+				_connected = true;
+				_disconnected = false;
+				isRun = true;
+				return _stateHandler(pump_check_state::pump_connected);
+			}
+			else if (_msgBuff.has())
+			{
+				isRun = true;
+				_lostNtfed = false;
+				OUT_OF_SCOPE({ _msgBuff.clear(); });
+				return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
+			}
+			else if (_connected && !_disconnected && !_msgHandle.is_connected())
+			{
+				_disconnected = true;
+				_connected = false;
+				isRun = true;
+				return _stateHandler(pump_check_state::pump_disconnted);
+			}
+			else if (is_losted())
+			{
+				isRun = true;
+				_lostNtfed = true;
+				return _stateHandler(pump_check_state::pump_ntf_losted);
+			}
+		}
+		isRun = false;
+		return false;
+	}
+
+	size_t snap_id()
+	{
+		assert(!_msgHandle.check_closed());
+		return (size_t)_msgHandle._handle;
+	}
+
+	long long host_id()
+	{
+		return MutexBlock_::actor_id(_msgHandle.get()->_hostActor);
+	}
+private:
+	pump_handle _msgHandle;
+	std::function<bool(ARGS...)> _handler;
+	std::function<bool(pump_check_state)> _stateHandler;
+	dst_receiver _msgBuff;
+	int _readySign;
+	bool _connected;
+	bool _disconnected;
+	bool _lostNtfed;
+};
+
+template <>
+class mutex_block_pump_check_state<> : public MutexBlock_
+{
+	typedef msg_pump_handle<> pump_handle;
+
+	friend my_actor;
+public:
+	template <typename Handler, typename StateHandler>
+	mutex_block_pump_check_state(my_actor* host, Handler&& handler, StateHandler&& stateHandler)
+		:mutex_block_pump_check_state(0, host, TRY_MOVE(handler), TRY_MOVE(stateHandler)) {}
+
+	template <typename Handler, typename StateHandler>
+	mutex_block_pump_check_state(const int id, my_actor* host, Handler&& handler, StateHandler&& stateHandler)
+		: mutex_block_pump_check_state(ActorFunc_::connect_msg_pump<>(id, host, true), TRY_MOVE(handler), TRY_MOVE(stateHandler)) {}
+
+	template <typename Handler, typename StateHandler>
+	mutex_block_pump_check_state(const pump_handle& pump, Handler&& handler, StateHandler&& stateHandler)
+#ifdef _MSC_VER
+		:_msgHandle(pump), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))),
+		_stateHandler(TRY_MOVE(stateHandler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))),
+#elif __GNUG__
+		:_msgHandle(pump), _handler(TRY_MOVE(handler)), _stateHandler(TRY_MOVE(stateHandler)),
+#endif
+		_readySign(0), _has(false), _connected(false), _disconnected(false), _lostNtfed(false)
+	{
+	}
+private:
+	bool ready()
+	{
+		assert(!_has);
+		assert(!_msgHandle.check_closed());
+		_readySign = 1;
+		if (!_connected)
+		{
+			if (_msgHandle.is_connected())
+			{
+				return true;
+			}
+			_msgHandle._handle->_waitConnect = true;
+			return false;
+		}
+		if (_msgHandle._handle->read_msg(_has) || is_losted())
+		{
+			return true;
+		}
+		_msgHandle._handle->_checkDis = true;
+		return _msgHandle._handle->isDisconnected();
+	}
+
+	void cancel()
+	{
+		assert(!_msgHandle.check_closed());
+		_msgHandle._handle->stop_waiting();
+		_readySign--;
+	}
+
+	bool is_losted()
+	{
+		assert(_msgHandle.get()->_checkLost);
+		return _msgHandle.get()->_losted && !_lostNtfed;
+	}
+
+	void check_lost()
+	{
+	}
+
+	bool go(bool& isRun)
+	{
+		assert(!_msgHandle.check_closed());
+		if (0 == _readySign)
+		{
+			if (!_connected && _msgHandle.is_connected())
+			{
+				_connected = true;
+				_disconnected = false;
+				isRun = true;
+				return _stateHandler(pump_check_state::pump_connected);
+			}
+			else if (_has)
+			{
+				isRun = true;
+				_lostNtfed = false;
+				_has = false;
+				return _handler();
+			}
+			else if (_connected && !_disconnected && !_msgHandle.is_connected())
+			{
+				_disconnected = true;
+				_connected = false;
+				isRun = true;
+				return _stateHandler(pump_check_state::pump_disconnted);
+			}
+			else if (is_losted())
+			{
+				isRun = true;
+				_lostNtfed = true;
+				return _stateHandler(pump_check_state::pump_ntf_losted);
+			}
+		}
+		isRun = false;
+		return false;
+	}
+
+	size_t snap_id()
+	{
+		assert(!_msgHandle.check_closed());
+		return (size_t)_msgHandle._handle;
+	}
+
+	long long host_id()
+	{
+		return MutexBlock_::actor_id(_msgHandle.get()->_hostActor);
+	}
+private:
+	pump_handle _msgHandle;
+	std::function<bool()> _handler;
+	std::function<bool(pump_check_state)> _stateHandler;
+	int _readySign;
+	bool _has;
+	bool _connected;
+	bool _disconnected;
+	bool _lostNtfed;
+};
+//////////////////////////////////////////////////////////////////////////
+
 #ifdef ENABLE_CHECK_LOST
 
 /*!
@@ -2768,10 +3034,11 @@ public:
 	mutex_block_msg_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
 #ifdef _MSC_VER
 		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
-		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))), _lostNtfed(false)
+		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
 #elif __GNUG__
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _lostNtfed(false)
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)),
 #endif
+		_readySign(0), _lostNtfed(false)
 	{
 		_msgHandle.check_lost(true);
 	}
@@ -2779,12 +3046,14 @@ private:
 	bool ready()
 	{
 		assert(!_msgBuff.has());
+		_readySign = 1;
 		return _msgHandle.read_msg(_msgBuff) || is_losted();
 	}
 
 	void cancel()
 	{
 		_msgHandle.stop_waiting();
+		_readySign--;
 	}
 
 	bool is_losted()
@@ -2799,18 +3068,21 @@ private:
 
 	bool go(bool& isRun)
 	{
-		if (_msgBuff.has())
+		if (0 == _readySign)
 		{
-			assert(!_lostNtfed);
-			isRun = true;
-			OUT_OF_SCOPE({ _msgBuff.clear(); });
-			return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
-		}
-		else if (is_losted())
-		{
-			isRun = true;
-			_lostNtfed = true;
-			return _lostHandler();
+			if (_msgBuff.has())
+			{
+				assert(!_lostNtfed);
+				isRun = true;
+				OUT_OF_SCOPE({ _msgBuff.clear(); });
+				return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
+			}
+			else if (is_losted())
+			{
+				isRun = true;
+				_lostNtfed = true;
+				return _lostHandler();
+			}
 		}
 		isRun = false;
 		return false;
@@ -2830,6 +3102,7 @@ private:
 	std::function<bool(ARGS...)> _handler;
 	std::function<bool()> _lostHandler;
 	dst_receiver _msgBuff;
+	int _readySign;
 	bool _lostNtfed;
 };
 
@@ -2848,16 +3121,18 @@ public:
 	mutex_block_trig_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
 #ifdef _MSC_VER
 		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
-		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))), _triged(false), _lostNtfed(false)
+		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
 #elif __GNUG__
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _triged(false), _lostNtfed(false)
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)),
 #endif
+		_readySign(0), _triged(false), _lostNtfed(false)
 	{
 		_msgHandle.check_lost(true);
 	}
 private:
 	bool ready()
 	{
+		_readySign = 1;
 		if (!_triged)
 		{
 			assert(!_msgBuff.has());
@@ -2869,6 +3144,7 @@ private:
 	void cancel()
 	{
 		_msgHandle.stop_waiting();
+		_readySign--;
 	}
 
 	bool is_losted()
@@ -2883,20 +3159,23 @@ private:
 
 	bool go(bool& isRun)
 	{
-		if (_msgBuff.has())
+		if (0 == _readySign)
 		{
-			assert(!_lostNtfed);
-			isRun = true;
-			_triged = true;
-			OUT_OF_SCOPE({ _msgBuff.clear(); });
-			return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
-		}
-		else if (is_losted())
-		{
-			isRun = true;
-			_triged = true;
-			_lostNtfed = true;
-			return _lostHandler();
+			if (_msgBuff.has())
+			{
+				assert(!_lostNtfed);
+				isRun = true;
+				_triged = true;
+				OUT_OF_SCOPE({ _msgBuff.clear(); });
+				return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
+			}
+			else if (is_losted())
+			{
+				isRun = true;
+				_triged = true;
+				_lostNtfed = true;
+				return _lostHandler();
+			}
 		}
 		isRun = false;
 		return false;
@@ -2916,6 +3195,7 @@ private:
 	std::function<bool(ARGS...)> _handler;
 	std::function<bool()> _lostHandler;
 	dst_receiver _msgBuff;
+	int _readySign;
 	bool _triged;
 	bool _lostNtfed;
 };
@@ -2937,24 +3217,17 @@ public:
 
 	template <typename Handler, typename LostHandler>
 	mutex_block_pump_check_lost(const int id, my_actor* host, Handler&& handler, LostHandler&& lostHandler)
-#ifdef _MSC_VER
-		:_handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(host))),
-		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(host))), _lostNtfed(false)
-#elif __GNUG__
-		:_handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _lostNtfed(false)
-#endif
-	{
-		_msgHandle = ActorFunc_::connect_msg_pump<ARGS...>(id, host, true);
-	}
+		: mutex_block_pump_check_lost(ActorFunc_::connect_msg_pump<ARGS...>(id, host, true), TRY_MOVE(handler), TRY_MOVE(lostHandler)) {}
 
 	template <typename Handler, typename LostHandler>
 	mutex_block_pump_check_lost(const pump_handle& pump, Handler&& handler, LostHandler&& lostHandler)
 #ifdef _MSC_VER
 		: _msgHandle(pump), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))),
-		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))), _lostNtfed(false)
+		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))),
 #elif __GNUG__
-		: _msgHandle(pump), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _lostNtfed(false)
+		: _msgHandle(pump), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)),
 #endif
+		_readySign(0), _lostNtfed(false)
 	{
 		_msgHandle.check_lost(true);
 	}
@@ -2963,6 +3236,7 @@ private:
 	{
 		assert(!_msgBuff.has());
 		assert(!_msgHandle.check_closed());
+		_readySign = 1;
 		return _msgHandle._handle->read_msg(_msgBuff) || is_losted();
 	}
 
@@ -2970,6 +3244,7 @@ private:
 	{
 		assert(!_msgHandle.check_closed());
 		_msgHandle._handle->stop_waiting();
+		_readySign--;
 	}
 
 	bool is_losted()
@@ -2985,18 +3260,21 @@ private:
 	bool go(bool& isRun)
 	{
 		assert(!_msgHandle.check_closed());
-		if (_msgBuff.has())
+		if (0 == _readySign)
 		{
-			isRun = true;
-			_lostNtfed = false;
-			OUT_OF_SCOPE({ _msgBuff.clear(); });
-			return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
-		}
-		else if (is_losted())
-		{
-			isRun = true;
-			_lostNtfed = true;
-			return _lostHandler();
+			if (_msgBuff.has())
+			{
+				isRun = true;
+				_lostNtfed = false;
+				OUT_OF_SCOPE({ _msgBuff.clear(); });
+				return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
+			}
+			else if (is_losted())
+			{
+				isRun = true;
+				_lostNtfed = true;
+				return _lostHandler();
+			}
 		}
 		isRun = false;
 		return false;
@@ -3017,6 +3295,7 @@ private:
 	std::function<bool(ARGS...)> _handler;
 	std::function<bool()> _lostHandler;
 	dst_receiver _msgBuff;
+	int _readySign;
 	bool _lostNtfed;
 };
 
@@ -3031,10 +3310,11 @@ public:
 	mutex_block_msg_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
 #ifdef _MSC_VER
 		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
-		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))), _has(false), _lostNtfed(false)
+		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
 #elif __GNUG__
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _has(false), _lostNtfed(false)
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)),
 #endif
+		_readySign(0), _has(false), _lostNtfed(false)
 	{
 		_msgHandle.check_lost(true);
 	}
@@ -3042,12 +3322,14 @@ private:
 	bool ready()
 	{
 		assert(!_has);
+		_readySign = 1;
 		return _msgHandle.read_msg(_has) || is_losted();
 	}
 
 	void cancel()
 	{
 		_msgHandle.stop_waiting();
+		_readySign--;
 	}
 
 	bool is_losted()
@@ -3062,18 +3344,21 @@ private:
 
 	bool go(bool& isRun)
 	{
-		if (_has)
+		if (0 == _readySign)
 		{
-			assert(!_lostNtfed);
-			_has = false;
-			isRun = true;
-			return _handler();
-		}
-		else if (is_losted())
-		{
-			isRun = true;
-			_lostNtfed = true;
-			return _lostHandler();
+			if (_has)
+			{
+				assert(!_lostNtfed);
+				_has = false;
+				isRun = true;
+				return _handler();
+			}
+			else if (is_losted())
+			{
+				isRun = true;
+				_lostNtfed = true;
+				return _lostHandler();
+			}
 		}
 		isRun = false;
 		return false;
@@ -3092,6 +3377,7 @@ private:
 	msg_handle& _msgHandle;
 	std::function<bool()> _handler;
 	std::function<bool()> _lostHandler;
+	int _readySign;
 	bool _has;
 	bool _lostNtfed;
 };
@@ -3107,16 +3393,18 @@ public:
 	mutex_block_trig_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
 #ifdef _MSC_VER
 		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
-		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))), _has(false), _triged(false), _lostNtfed(false)
+		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
 #elif __GNUG__
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _has(false), _triged(false), _lostNtfed(false)
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)),
 #endif
+		_readySign(0), _has(false), _triged(false), _lostNtfed(false)
 	{
 		_msgHandle.check_lost(true);
 	}
 private:
 	bool ready()
 	{
+		_readySign = 1;
 		if (!_triged)
 		{
 			assert(!_has);
@@ -3128,6 +3416,7 @@ private:
 	void cancel()
 	{
 		_msgHandle.stop_waiting();
+		_readySign--;
 	}
 
 	bool is_losted()
@@ -3142,20 +3431,23 @@ private:
 
 	bool go(bool& isRun)
 	{
-		if (_has)
+		if (0 == _readySign)
 		{
-			assert(!_lostNtfed);
-			_has = false;
-			_triged = true;
-			isRun = true;
-			return _handler();
-		}
-		else if (is_losted())
-		{
-			isRun = true;
-			_triged = true;
-			_lostNtfed = true;
-			return _lostHandler();
+			if (_has)
+			{
+				assert(!_lostNtfed);
+				_has = false;
+				_triged = true;
+				isRun = true;
+				return _handler();
+			}
+			else if (is_losted())
+			{
+				isRun = true;
+				_triged = true;
+				_lostNtfed = true;
+				return _lostHandler();
+			}
 		}
 		isRun = false;
 		return false;
@@ -3174,6 +3466,7 @@ private:
 	msg_handle& _msgHandle;
 	std::function<bool()> _handler;
 	std::function<bool()> _lostHandler;
+	int _readySign;
 	bool _has;
 	bool _triged;
 	bool _lostNtfed;
@@ -3192,24 +3485,17 @@ public:
 
 	template <typename Handler, typename LostHandler>
 	mutex_block_pump_check_lost(const int id, my_actor* host, Handler&& handler, LostHandler&& lostHandler)
-#ifdef _MSC_VER
-		: _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(host))),
-		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(host))), _has(false), _lostNtfed(false)
-#elif __GNUG__
-		: _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _has(false), _lostNtfed(false)
-#endif
-	{
-		_msgHandle = ActorFunc_::connect_msg_pump(id, host, true);
-	}
+		: mutex_block_pump_check_lost(ActorFunc_::connect_msg_pump(id, host, true), TRY_MOVE(handler), TRY_MOVE(lostHandler)) {}
 
 	template <typename Handler, typename LostHandler>
 	mutex_block_pump_check_lost(const pump_handle& pump, Handler&& handler, LostHandler&& lostHandler)
 #ifdef _MSC_VER
 		: _msgHandle(pump), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))),
-		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))), _has(false), _lostNtfed(false)
+		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))),
 #elif __GNUG__
-		: _msgHandle(pump), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)), _has(false), _lostNtfed(false)
+		: _msgHandle(pump), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)),
 #endif
+		_readySign(0), _has(false), _lostNtfed(false)
 	{
 		_msgHandle.check_lost(true);
 	}
@@ -3218,6 +3504,7 @@ private:
 	{
 		assert(!_has);
 		assert(!_msgHandle.check_closed());
+		_readySign = 1;
 		return _msgHandle._handle->read_msg(_has) || is_losted();
 	}
 
@@ -3225,6 +3512,7 @@ private:
 	{
 		assert(!_msgHandle.check_closed());
 		_msgHandle._handle->stop_waiting();
+		_readySign--;
 	}
 
 	bool is_losted()
@@ -3240,18 +3528,21 @@ private:
 	bool go(bool& isRun)
 	{
 		assert(!_msgHandle.check_closed());
-		if (_has)
+		if (0 == _readySign)
 		{
-			_has = false;
-			_lostNtfed = false;
-			isRun = true;
-			return _handler();
-		}
-		else if (is_losted())
-		{
-			isRun = true;
-			_lostNtfed = true;
-			return _lostHandler();
+			if (_has)
+			{
+				_has = false;
+				_lostNtfed = false;
+				isRun = true;
+				return _handler();
+			}
+			else if (is_losted())
+			{
+				isRun = true;
+				_lostNtfed = true;
+				return _lostHandler();
+			}
 		}
 		isRun = false;
 		return false;
@@ -3271,6 +3562,7 @@ private:
 	pump_handle _msgHandle;
 	std::function<bool()> _handler;
 	std::function<bool()> _lostHandler;
+	int _readySign;
 	bool _has;
 	bool _lostNtfed;
 };
@@ -3293,6 +3585,12 @@ template <typename Handler, typename... ARGS>
 mutex_block_pump<ARGS...> make_mutex_block_pump(const msg_pump_handle<ARGS...>& msgHandle, Handler&& handler)
 {
 	return mutex_block_pump<ARGS...>(msgHandle, TRY_MOVE(handler));
+}
+
+template <typename Handler, typename StateHandler, typename... ARGS>
+mutex_block_pump_check_state<ARGS...> make_mutex_block_pump_check_state(const msg_pump_handle<ARGS...>& msgHandle, Handler&& handler, StateHandler&& stateHandler)
+{
+	return mutex_block_pump_check_state<ARGS...>(msgHandle, TRY_MOVE(handler), TRY_MOVE(stateHandler));
 }
 
 #ifdef ENABLE_CHECK_LOST
@@ -5182,14 +5480,6 @@ public:
 	@brief Actor被强制退出的异常类型
 	*/
 	struct force_quit_exception { };
-
-	/*!
-	@brief 消息泵被断开
-	*/
-	struct pump_disconnected_exception { };
-
-	template <typename... Args>
-	struct pump_disconnected : pump_disconnected_exception {};
 
 	/*!
 	@brief Actor入口函数体
@@ -7457,7 +7747,7 @@ private:
 			});
 			if (checkDis && pump.get()->isDisconnected())
 			{
-				throw pump_disconnected<Args...>();
+				throw typename msg_pump_handle<Args...>::pump_disconnected(pump.get_id());
 			}
 #ifdef ENABLE_CHECK_LOST
 			if (pump.get()->_losted && pump.get()->_checkLost)
@@ -7488,7 +7778,7 @@ private:
 			if (pump.get()->_checkDis)
 			{
 				assert(checkDis);
-				throw pump_disconnected<Args...>();
+				throw typename msg_pump_handle<Args...>::pump_disconnected(pump.get_id());
 			}
 #ifdef ENABLE_CHECK_LOST
 			if (pump.get()->_losted && pump.get()->_checkLost)
@@ -7522,7 +7812,7 @@ private:
 		{
 			if (checkDis && pump.get()->isDisconnected())
 			{
-				throw pump_disconnected<Args...>();
+				throw typename msg_pump_handle<Args...>::pump_disconnected(pump.get_id());
 			}
 #ifdef ENABLE_CHECK_LOST
 			if (pump.get()->_losted && pump.get()->_checkLost)
@@ -7631,7 +7921,7 @@ public:
 			});
 			if (checkDis && pump.get()->isDisconnected())
 			{
-				throw pump_disconnected<>();
+				throw msg_pump_handle<>::pump_disconnected(pump.get_id());
 			}
 #ifdef ENABLE_CHECK_LOST
 			if (pump.get()->_losted && pump.get()->_checkLost)
@@ -7662,7 +7952,7 @@ public:
 			if (pump.get()->_checkDis)
 			{
 				assert(checkDis);
-				throw pump_disconnected<>();
+				throw msg_pump_handle<>::pump_disconnected(pump.get_id());
 			}
 #ifdef ENABLE_CHECK_LOST
 			if (pump.get()->_losted && pump.get()->_checkLost)

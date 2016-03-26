@@ -59,10 +59,10 @@ public:
 		handler_face* handler = new thread_handler<RM_REF(Handler)>(TRY_MOVE(h));
 #ifdef _WIN32
 		_threadID = 0;
-		_handle = ::CreateThread(NULL, 0, thread_exec, handler, 0, &_threadID);
+		_handle = CreateThread(NULL, 0, thread_exec, handler, 0, &_threadID);
 #elif __linux__
 		_pthread = 0;
-		::pthread_create(&_pthread, NULL, thread_exec, handler);
+		pthread_create(&_pthread, NULL, thread_exec, handler);
 #endif
 	}
 

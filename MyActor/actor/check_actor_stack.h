@@ -58,9 +58,9 @@
 #	endif
 
 //页面大小
-#define PAGE_SIZE					(4 kB)
+#define MEM_PAGE_SIZE					(4 kB)
 
 //栈状态保留空间
-#define CORO_CONTEXT_STATE_SPACE	(1 * PAGE_SIZE)
+#define CORO_CONTEXT_STATE_SPACE	(1 * MEM_PAGE_SIZE)
 
 #endif

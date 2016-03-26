@@ -35,7 +35,7 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <NMakeIncludeSearchPath>E:\cpplib\boost\mingw64;C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\lib\gcc\x86_64-w64-mingw32\4.9.3\include;C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\lib\gcc\x86_64-w64-mingw32\4.9.3\include-fixed;C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\x86_64-w64-mingw32\include;C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\x86_64-w64-mingw32\include\c++;C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\x86_64-w64-mingw32\include\c++\x86_64-w64-mingw32;C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\x86_64-w64-mingw32\include\c++\backward;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <NMakeIncludeSearchPath>$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
     <NMakeForcedIncludes>$(ProjectDir)\gcc_Debug.h;$(VISUALGDB_DIR)\gcc_compat.h;$(NMakeForcedIncludes)</NMakeForcedIncludes>
     <NMakeBuildCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /build "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeBuildCommandLine>
     <NMakeCleanCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /clean "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeCleanCommandLine>
@@ -47,7 +47,7 @@
     <NMakePreprocessorDefinitions>__VisualGDB_CFG_Debug;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <NMakeIncludeSearchPath>E:\cpplib\boost\mingw64;C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\lib\gcc\x86_64-w64-mingw32\4.9.3\include;C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\lib\gcc\x86_64-w64-mingw32\4.9.3\include-fixed;C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\x86_64-w64-mingw32\include;C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\x86_64-w64-mingw32\include\c++;C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\x86_64-w64-mingw32\include\c++\x86_64-w64-mingw32;C:\mingw64\x86_64-4.9.3-release-posix-seh-rt_v4-rev1\mingw64\x86_64-w64-mingw32\include\c++\backward;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <NMakeIncludeSearchPath>$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
     <NMakeForcedIncludes>$(ProjectDir)\gcc_Release.h;$(VISUALGDB_DIR)\gcc_compat.h;$(NMakeForcedIncludes)</NMakeForcedIncludes>
     <NMakeBuildCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /build "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeBuildCommandLine>
     <NMakeCleanCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /clean "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeCleanCommandLine>

@@ -93,7 +93,7 @@ private:
 #endif
 	}
 private:
-	char _space[sizeof(type)];
+	__space_align char _space[sizeof(type)];
 	bool _null;
 };
 
@@ -168,7 +168,7 @@ public:
 		return &get();
 	}
 private:
-	char _space[sizeof(type)];
+	__space_align char _space[sizeof(type)];
 	DEBUG_OPERATION(bool _null);
 };
 

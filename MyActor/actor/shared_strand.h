@@ -236,7 +236,7 @@ class boost_strand
 
 	struct wrap_next_tick_space : public wrap_next_tick_base
 	{
-		unsigned char space[SPACE_SIZE];
+		__space_align char space[SPACE_SIZE];
 	};
 
 	template <typename H, bool = true>
@@ -770,7 +770,7 @@ public:
 	R syncInvoke(H&& h)
 	{
 		assert(!in_this_ios());
-		unsigned char r[sizeof(R)];
+		__space_align char r[sizeof(R)];
 		std::mutex mutex;
 		std::condition_variable con;
 		std::unique_lock<std::mutex> ul(mutex);
