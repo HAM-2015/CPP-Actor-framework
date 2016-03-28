@@ -135,31 +135,34 @@ public:
 		actor_trig_handle<bool> ath;
 		bool closed = false;
 		bool notified = false;
-		LAMBDA_THIS_REF5(ref5, host, msg, ath, closed, notified);
-		host->send(_strand, [&ref5]
+		host->send(_strand, [&]
 		{
-			if (ref5->_closed)
+			if (_closed)
 			{
-				ref5.closed = true;
+				closed = true;
 			} 
 			else
 			{
-				auto& _takeWait = ref5->_takeWait;
 				if (_takeWait.empty())
 				{
-					ref5->_sendWait.push_front({ try_move<TM&&>::can_move, ref5.notified, (ST&)ref5.msg });
-					ref5->_sendWait.front().ntf = ref5.host->make_trig_notifer_to_self(ref5.ath);
+					_sendWait.push_front({ try_move<TM&&>::can_move, notified, (ST&)msg });
+					_sendWait.front().ntf = host->make_trig_notifer_to_self(ath);
+					if (!_takeNtfQueue.empty())
+					{
+						_takeNtfQueue.front()();
+						_takeNtfQueue.pop_front();
+					}
 				}
 				else
 				{
 					take_wait& wt = _takeWait.back();
-					new(wt.dst)RT(SendMove_<T, TM&&>::move(ref5.msg));
+					new(wt.dst)RT(SendMove_<T, TM&&>::move(msg));
 					if (wt.can_move)
 					{
 						*wt.can_move = try_move<TM&&>::can_move || !(std::is_reference<T>::value);
 					}
 					wt.notified = true;
-					wt.takeOk = ref5.host->make_trig_notifer_to_self(ref5.ath);
+					wt.takeOk = host->make_trig_notifer_to_self(ath);
 					wt.ntf(false);
 					_takeWait.pop_back();
 				}
@@ -188,28 +191,35 @@ public:
 		actor_trig_handle<bool> ath;
 		bool ok = false;
 		bool closed = false;
-		LAMBDA_THIS_REF5(ref5, host, msg, ath, ok, closed);
-		host->send(_strand, [&ref5]
+		bool notified = false;
+		host->send(_strand, [&]
 		{
-			if (ref5->_closed)
+			if (_closed)
 			{
-				ref5.closed = true;
+				closed = true;
 			}
 			else
 			{
-				auto& _takeWait = ref5->_takeWait;
 				if (!_takeWait.empty())
 				{
-					ref5.ok = true;
+					ok = true;
 					take_wait& wt = _takeWait.back();
-					new(wt.dst)RT(SendMove_<T, TM&&>::move(ref5.msg));
+					new(wt.dst)RT(SendMove_<T, TM&&>::move(msg));
 					if (wt.can_move)
 					{
 						*wt.can_move = try_move<TM&&>::can_move || !(std::is_reference<T>::value);
 					}
-					wt.takeOk = ref5.host->make_trig_notifer_to_self(ref5.ath);
+					wt.takeOk = host->make_trig_notifer_to_self(ath);
 					wt.ntf(false);
 					_takeWait.pop_back();
+				}
+				else if (!_takeNtfQueue.empty())
+				{
+					ok = true;
+					_sendWait.push_front({ try_move<TM&&>::can_move, notified, (T&)msg });
+					_sendWait.front().ntf = host->make_trig_notifer_to_self(ath);
+					_takeNtfQueue.front()();
+					_takeNtfQueue.pop_front();
 				}
 			}
 		});
@@ -238,32 +248,35 @@ public:
 		typename msg_list<send_wait>::iterator mit;
 		bool closed = false;
 		bool notified = false;
-		LAMBDA_THIS_REF6(ref6, host, msg, ath, mit, closed, notified);
-		host->send(_strand, [&ref6]
+		host->send(_strand, [&]
 		{
-			if (ref6->_closed)
+			if (_closed)
 			{
-				ref6.closed = true;
+				closed = true;
 			}
 			else
 			{
-				auto& _takeWait = ref6->_takeWait;
 				if (_takeWait.empty())
 				{
-					ref6->_sendWait.push_front({ try_move<TM&&>::can_move, ref6.notified, (T&)ref6.msg });
-					ref6->_sendWait.front().ntf = ref6.host->make_trig_notifer_to_self(ref6.ath);
-					ref6.mit = ref6->_sendWait.begin();
+					_sendWait.push_front({ try_move<TM&&>::can_move, notified, (T&)msg });
+					_sendWait.front().ntf = host->make_trig_notifer_to_self(ath);
+					mit = _sendWait.begin();
+					if (!_takeNtfQueue.empty())
+					{
+						_takeNtfQueue.front()();
+						_takeNtfQueue.pop_front();
+					}
 				}
 				else
 				{
 					take_wait& wt = _takeWait.back();
-					new(wt.dst)RT(SendMove_<T, TM&&>::move(ref6.msg));
+					new(wt.dst)RT(SendMove_<T, TM&&>::move(msg));
 					if (wt.can_move)
 					{
 						*wt.can_move = try_move<TM&&>::can_move || !(std::is_reference<T>::value);
 					}
 					wt.notified = true;
-					wt.takeOk = ref6.host->make_trig_notifer_to_self(ref6.ath);
+					wt.takeOk = host->make_trig_notifer_to_self(ath);
 					wt.ntf(false);
 					_takeWait.pop_back();
 				}
@@ -273,11 +286,11 @@ public:
 		{
 			if (!host->timed_wait_trig(tm, ath, closed))
 			{
-				host->send(_strand, [&ref6]
+				host->send(_strand, [&]
 				{
-					if (!ref6.notified)
+					if (!notified)
 					{
-						ref6->_sendWait.erase(ref6.mit);
+						_sendWait.erase(mit);
 					}
 				});
 				if (notified)
@@ -307,28 +320,26 @@ public:
 		bool wait = false;
 		bool closed = false;
 		bool notified = false;
-		LAMBDA_THIS_REF7(ref6, host, ath, ntf, msgBuf, wait, closed, notified);
-		host->send(_strand, [&ref6]
+		host->send(_strand, [&]
 		{
-			if (ref6->_closed)
+			if (_closed)
 			{
-				ref6.closed = true;
+				closed = true;
 			}
 			else
 			{
-				auto& _sendWait = ref6->_sendWait;
 				if (_sendWait.empty())
 				{
-					ref6.wait = true;
-					ref6->_takeWait.push_front({ NULL, ref6.notified, ref6.msgBuf, ref6.ntf });
-					ref6->_takeWait.front().ntf = ref6.host->make_trig_notifer_to_self(ref6.ath);
+					wait = true;
+					_takeWait.push_front({ NULL, notified, msgBuf, ntf });
+					_takeWait.front().ntf = host->make_trig_notifer_to_self(ath);
 				}
 				else
 				{
 					send_wait& wt = _sendWait.back();
-					new(ref6.msgBuf)RT(wt.can_move ? TakeMove_<T>::move(wt.src_msg) : wt.src_msg);
+					new(msgBuf)RT(wt.can_move ? TakeMove_<T>::move(wt.src_msg) : wt.src_msg);
 					wt.notified = true;
-					ref6.ntf = std::move(wt.ntf);
+					ntf = std::move(wt.ntf);
 					_sendWait.pop_back();
 				}
 			}
@@ -395,6 +406,27 @@ public:
 	}
 
 	/*!
+	@brief 注册一个take消息通知，只触发一次
+	*/
+	template <typename Ntf>
+	void regist_take_ntf(my_actor* host, Ntf&& ntf)
+	{
+		host->lock_quit();
+		host->send(_strand, [&]
+		{
+			if (!_sendWait.empty())
+			{
+				ntf();
+			}
+			else
+			{
+				_takeNtfQueue.push_back((Ntf&&)ntf);
+			}
+		});
+		host->unlock_quit();
+	}
+
+	/*!
 	@brief 关闭消息通道，所有执行者将抛出 close_exception 异常
 	*/
 	void close(my_actor* host)
@@ -417,6 +449,7 @@ public:
 				st.ntf(true);
 				_sendWait.pop_front();
 			}
+			_takeNtfQueue.clear();
 		});
 		host->unlock_quit();
 	}
@@ -434,24 +467,21 @@ private:
 	bool try_take_ct(my_actor* host, const CT& ct)
 	{
 		host->lock_quit();
-		actor_trig_handle<bool> ath;
 		bool ok = false;
 		bool closed = false;
-		LAMBDA_THIS_REF5(ref5, host, ct, ath, ok, closed);
-		host->send(_strand, [&ref5]
+		host->send(_strand, [&]
 		{
-			if (ref5->_closed)
+			if (_closed)
 			{
-				ref5.closed = true;
+				closed = true;
 			}
 			else
 			{
-				auto& _sendWait = ref5->_sendWait;
 				if (!_sendWait.empty())
 				{
-					ref5.ok = true;
+					ok = true;
 					send_wait& wt = _sendWait.back();
-					ref5.ct(wt.can_move, wt.src_msg);
+					ct(wt.can_move, wt.src_msg);
 					wt.notified = true;
 					wt.ntf(false);
 					_sendWait.pop_back();
@@ -479,29 +509,25 @@ private:
 		bool closed = false;
 		bool notified = false;
 		bool can_move = false;
-		LAMBDA_REF5(ref4, wait, closed, notified, can_move, ntf);
-		LAMBDA_THIS_REF6(ref6, ref4, host, ct, ath, mit, msgBuf);
-		host->send(_strand, [&ref6]
+		host->send(_strand, [&]
 		{
-			auto& ref4 = ref6.ref9;
-			if (ref6->_closed)
+			if (_closed)
 			{
-				ref4.closed = true;
+				closed = true;
 			}
 			else
 			{
-				auto& _sendWait = ref6->_sendWait;
 				if (_sendWait.empty())
 				{
-					ref4.wait = true;
-					ref6->_takeWait.push_front({ &ref4.can_move, ref4.notified, ref6.msgBuf, ref4.ntf });
-					ref6->_takeWait.front().ntf = ref6.host->make_trig_notifer_to_self(ref6.ath);
-					ref6.mit = ref6->_takeWait.begin();
+					wait = true;
+					_takeWait.push_front({ &can_move, notified, msgBuf, ntf });
+					_takeWait.front().ntf = host->make_trig_notifer_to_self(ath);
+					mit = _takeWait.begin();
 				}
 				else
 				{
 					send_wait& wt = _sendWait.back();
-					ref6.ct(wt.can_move, wt.src_msg);
+					ct(wt.can_move, wt.src_msg);
 					wt.notified = true;
 					wt.ntf(false);
 					_sendWait.pop_back();
@@ -513,11 +539,11 @@ private:
 		{
 			if (!host->timed_wait_trig(tm, ath, closed))
 			{
-				host->send(_strand, [&ref6]
+				host->send(_strand, [&]
 				{
-					if (!ref6.ref9.notified)
+					if (!notified)
 					{
-						ref6->_takeWait.erase(ref6.mit);
+						_takeWait.erase(mit);
 					}
 				});
 				ok = notified;
@@ -548,6 +574,7 @@ private:
 	shared_strand _strand;
 	msg_list<take_wait> _takeWait;
 	msg_list<send_wait> _sendWait;
+	msg_queue<std::function<void()>> _takeNtfQueue;
 	bool _closed;
 };
 
@@ -580,7 +607,7 @@ protected:
 		DEBUG_OPERATION(_thrownCloseExp = false);
 	}
 	~CspChannel_() {}
-public:
+protected:
 	/*!
 	@brief 开始准备执行对方的一个函数，执行完毕后返回结果
 	@return 返回结果
@@ -593,28 +620,31 @@ public:
 		__space_align char resBuf[sizeof(R)];
 		bool closed = false;
 		bool notified = false;
-		LAMBDA_THIS_REF6(ref6, host, msg, ath, resBuf, closed, notified);
-		host->send(_strand, [&ref6]
+		host->send(_strand, [&]
 		{
-			if (ref6->_closed)
+			if (_closed)
 			{
-				ref6.closed = true;
+				closed = true;
 			}
 			else
 			{
-				auto& _takeWait = ref6->_takeWait;
 				if (_takeWait.empty())
 				{
-					ref6->_sendWait.push_front({ ref6.notified, ref6.msg, ref6.resBuf });
-					ref6->_sendWait.front().ntf = ref6.host->make_trig_notifer_to_self(ref6.ath);
+					_sendWait.push_front({ notified, msg, resBuf });
+					_sendWait.front().ntf = host->make_trig_notifer_to_self(ath);
+					if (!_takeNtfQueue.empty())
+					{
+						_takeNtfQueue.front()();
+						_takeNtfQueue.pop_front();
+					}
 				}
 				else
 				{
 					take_wait& wt = _takeWait.back();
-					wt.srcMsg = &ref6.msg;
+					wt.srcMsg = &msg;
 					wt.notified = true;
-					wt.res = ref6.resBuf;
-					wt.ntfSend = ref6.host->make_trig_notifer_to_self(ref6.ath);
+					wt.res = resBuf;
+					wt.ntfSend = host->make_trig_notifer_to_self(ath);
 					wt.ntf(false);
 					_takeWait.pop_back();
 				}
@@ -649,27 +679,34 @@ public:
 		actor_trig_handle<bool> ath;
 		__space_align char resBuf[sizeof(R)];
 		bool closed = false;
+		bool notified = false;
 		bool has = false;
-		LAMBDA_THIS_REF6(ref6, host, msg, ath, resBuf, closed, has);
-		host->send(_strand, [&ref6]
+		host->send(_strand, [&]
 		{
-			if (ref6->_closed)
+			if (_closed)
 			{
-				ref6.closed = true;
+				closed = true;
 			}
 			else
 			{
-				auto& _takeWait = ref6->_takeWait;
 				if (!_takeWait.empty())
 				{
-					ref6.has = true;
+					has = true;
 					take_wait& wt = _takeWait.back();
-					wt.srcMsg = &ref6.msg;
+					wt.srcMsg = &msg;
 					wt.notified = true;
-					wt.res = ref6.resBuf;
-					wt.ntfSend = ref6.host->make_trig_notifer_to_self(ref6.ath);
+					wt.res = resBuf;
+					wt.ntfSend = host->make_trig_notifer_to_self(ath);
 					wt.ntf(false);
 					_takeWait.pop_back();
+				}
+				else if (!_takeNtfQueue.empty())
+				{
+					has = true;
+					_sendWait.push_front({ notified, msg, resBuf });
+					_sendWait.front().ntf = host->make_trig_notifer_to_self(ath);
+					_takeNtfQueue.front()();
+					_takeNtfQueue.pop_front();
 				}
 			}
 		});
@@ -710,30 +747,33 @@ public:
 		bool closed = false;
 		bool notified = false;
 		bool has = false;
-		LAMBDA_THIS_REF8(ref8, host, msg, ath, resBuf, nit, closed, notified, has);
-		host->send(_strand, [&ref8]
+		host->send(_strand, [&]
 		{
-			if (ref8->_closed)
+			if (_closed)
 			{
-				ref8.closed = true;
+				closed = true;
 			}
 			else
 			{
-				auto& _takeWait = ref8->_takeWait;
 				if (_takeWait.empty())
 				{
-					ref8->_sendWait.push_front({ ref8.notified, ref8.msg, ref8.resBuf });
-					ref8->_sendWait.front().ntf = ref8.host->make_trig_notifer_to_self(ref8.ath);
-					ref8.nit = ref8->_sendWait.begin();
+					_sendWait.push_front({ notified, msg, resBuf });
+					_sendWait.front().ntf = host->make_trig_notifer_to_self(ath);
+					nit = _sendWait.begin();
+					if (!_takeNtfQueue.empty())
+					{
+						_takeNtfQueue.front()();
+						_takeNtfQueue.pop_front();
+					}
 				}
 				else
 				{
-					ref8.has = true;
+					has = true;
 					take_wait& wt = _takeWait.back();
-					wt.srcMsg = &ref8.msg;
+					wt.srcMsg = &msg;
 					wt.notified = true;
-					wt.res = ref8.resBuf;
-					wt.ntfSend = ref8.host->make_trig_notifer_to_self(ref8.ath);
+					wt.res = resBuf;
+					wt.ntfSend = host->make_trig_notifer_to_self(ath);
 					wt.ntf(false);
 					_takeWait.pop_back();
 				}
@@ -745,15 +785,15 @@ public:
 			{
 				if (!host->timed_wait_trig(tm, ath, closed))
 				{
-					host->send(_strand, [&ref8]
+					host->send(_strand, [&]
 					{
-						if (ref8.notified)
+						if (notified)
 						{
-							ref8.has = true;
+							has = true;
 						}
 						else
 						{
-							ref8->_sendWait.erase(ref8.nit);
+							_sendWait.erase(nit);
 						}
 					});
 					if (!has)
@@ -796,29 +836,27 @@ public:
 		bool wait = false;
 		bool closed = false;
 		bool notified = false;
-		LAMBDA_THIS_REF8(ref8, host, ath, ntfSend, srcMsg, res, wait, closed, notified);
-		host->send(_strand, [&ref8]
+		host->send(_strand, [&]
 		{
-			if (ref8->_closed)
+			if (_closed)
 			{
-				ref8.closed = true;
+				closed = true;
 			}
 			else
 			{
-				auto& _sendWait = ref8->_sendWait;
 				if (_sendWait.empty())
 				{
-					ref8.wait = true;
-					ref8->_takeWait.push_front({ ref8.notified, ref8.srcMsg, ref8.res, ref8.ntfSend });
-					ref8->_takeWait.front().ntf = ref8.host->make_trig_notifer_to_self(ref8.ath);
+					wait = true;
+					_takeWait.push_front({ notified, srcMsg, res, ntfSend });
+					_takeWait.front().ntf = host->make_trig_notifer_to_self(ath);
 				}
 				else
 				{
 					send_wait& wt = _sendWait.back();
-					ref8.srcMsg = &wt.srcMsg;
+					srcMsg = &wt.srcMsg;
 					wt.notified = true;
-					ref8.ntfSend = std::move(wt.ntf);
-					ref8.res = wt.res;
+					ntfSend = std::move(wt.ntf);
+					res = wt.res;
 					_sendWait.pop_back();
 				}
 			}
@@ -863,26 +901,22 @@ public:
 		char* res = NULL;
 		bool closed = false;
 		bool has = false;
-		LAMBDA_REF2(ref2, closed, has);
-		LAMBDA_THIS_REF5(ref5, ref2, host, ntfSend, srcMsg, res);
-		host->send(_strand, [&ref5]
+		host->send(_strand, [&]
 		{
-			auto& ref2 = ref5.ref2;
-			if (ref5->_closed)
+			if (_closed)
 			{
-				ref2.closed = true;
+				closed = true;
 			}
 			else
 			{
-				auto& _sendWait = ref5->_sendWait;
 				if (!_sendWait.empty())
 				{
-					ref2.has = true;
+					has = true;
 					send_wait& wt = _sendWait.back();
-					ref5.srcMsg = &wt.srcMsg;
+					srcMsg = &wt.srcMsg;
 					wt.notified = true;
-					ref5.ntfSend = std::move(wt.ntf);
-					ref5.res = wt.res;
+					ntfSend = std::move(wt.ntf);
+					res = wt.res;
 					_sendWait.pop_back();
 				}
 			}
@@ -930,30 +964,28 @@ public:
 		bool wait = false;
 		bool closed = false;
 		bool notified = false;
-		LAMBDA_THIS_REF9(ref9, wait, closed, notified, wit, host, ath, ntfSend, srcMsg, res);
-		host->send(_strand, [&ref9]
+		host->send(_strand, [&]
 		{
-			if (ref9->_closed)
+			if (_closed)
 			{
-				ref9.closed = true;
+				closed = true;
 			}
 			else
 			{
-				auto& _sendWait = ref9->_sendWait;
 				if (_sendWait.empty())
 				{
-					ref9.wait = true;
-					ref9->_takeWait.push_front({ ref9.notified, ref9.srcMsg, ref9.res, ref9.ntfSend });
-					ref9->_takeWait.front().ntf = ref9.host->make_trig_notifer_to_self(ref9.ath);
-					ref9.wit = ref9->_takeWait.begin();
+					wait = true;
+					_takeWait.push_front({ notified, srcMsg, res, ntfSend });
+					_takeWait.front().ntf = host->make_trig_notifer_to_self(ath);
+					wit = _takeWait.begin();
 				}
 				else
 				{
 					send_wait& wt = _sendWait.back();
-					ref9.srcMsg = &wt.srcMsg;
+					srcMsg = &wt.srcMsg;
 					wt.notified = true;
-					ref9.ntfSend = std::move(wt.ntf);
-					ref9.res = wt.res;
+					ntfSend = std::move(wt.ntf);
+					res = wt.res;
 					_sendWait.pop_back();
 				}
 			}
@@ -964,12 +996,12 @@ public:
 			{
 				if (!host->timed_wait_trig(tm, ath, closed))
 				{
-					host->send(_strand, [&ref9]
+					host->send(_strand, [&]
 					{
-						ref9.wait = ref9.notified;
-						if (!ref9.notified)
+						wait = notified;
+						if (!notified)
 						{
-							ref9->_takeWait.erase(ref9.wit);
+							_takeWait.erase(wit);
 						}
 					});
 					if (wait)
@@ -1006,6 +1038,27 @@ public:
 		ok = true;
 		host->unlock_quit();
 	}
+public:
+	/*!
+	@brief 注册一个take消息通知，只触发一次
+	*/
+	template <typename Ntf>
+	void regist_take_ntf(my_actor* host, Ntf&& ntf)
+	{
+		host->lock_quit();
+		host->send(_strand, [&]
+		{
+			if (!_sendWait.empty())
+			{
+				ntf();
+			}
+			else
+			{
+				_takeNtfQueue.push_back((Ntf&&)ntf);
+			}
+		});
+		host->unlock_quit();
+	}
 
 	/*!
 	@brief 关闭执行通道，所有执行抛出 close_exception 异常
@@ -1031,6 +1084,7 @@ public:
 				st.ntf(true);
 				_sendWait.pop_front();
 			}
+			_takeNtfQueue.clear();
 		});
 		host->unlock_quit();
 	}
@@ -1057,6 +1111,7 @@ private:
 	shared_strand _strand;
 	msg_list<take_wait> _takeWait;
 	msg_list<send_wait> _sendWait;
+	msg_queue<std::function<void()>> _takeNtfQueue;
 	bool _closed;
 protected:
 	DEBUG_OPERATION(bool _thrownCloseExp);

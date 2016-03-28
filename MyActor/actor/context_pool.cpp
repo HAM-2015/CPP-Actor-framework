@@ -112,13 +112,13 @@ ContextPool_::~ContextPool_()
 
 ContextPool_::coro_pull_interface* ContextPool_::getContext(size_t size)
 {
-	assert(size && size % 4096 == 0 && size <= 1024 * 1024);
+	assert(size && size % MEM_PAGE_SIZE == 0 && size <= 1024 * 1024);
 	assert(context_yield::is_thread_a_fiber());
 	size = std::max(size, (size_t)CORO_CONTEXT_STATE_SPACE);
 	do
 	{
 		{
-			context_pool_pck& pool = _fiberPool->_contextPool[size / 4096 - 1];
+			context_pool_pck& pool = _fiberPool->_contextPool[size / MEM_PAGE_SIZE - 1];
 			pool._mutex->lock();
 			if (!pool._pool.empty())
 			{
@@ -156,7 +156,7 @@ ContextPool_::coro_pull_interface* ContextPool_::getContext(size_t size)
 void ContextPool_::recovery(coro_pull_interface* coro)
 {
 	coro->_tick = get_tick_s();
-	context_pool_pck& pool = _fiberPool->_contextPool[coro->_coroInfo->stackSize / 4096 - 1];
+	context_pool_pck& pool = _fiberPool->_contextPool[coro->_coroInfo->stackSize / MEM_PAGE_SIZE - 1];
 	std::lock_guard<std::mutex> lg(*pool._mutex);
 	pool._pool.push_back(coro);
 }

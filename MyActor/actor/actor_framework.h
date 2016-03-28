@@ -2381,19 +2381,15 @@ public:
 	template <typename Handler>
 	mutex_block_trig(msg_handle& msgHandle, Handler&& handler)
 #ifdef _MSC_VER
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))), _triged(false) {}
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))) {}
 #elif __GNUG__
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _triged(false) {}
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)) {}
 #endif
 private:
 	bool ready()
 	{
-		if (!_triged)
-		{
-			assert(!_msgBuff.has());
-			return _msgHandle.read_msg(_msgBuff);
-		}
-		return false;
+		assert(!_msgBuff.has());
+		return _msgHandle.read_msg(_msgBuff);
 	}
 
 	void cancel()
@@ -2414,7 +2410,6 @@ private:
 		if (_msgBuff.has())
 		{
 			isRun = true;
-			_triged = true;
 			OUT_OF_SCOPE({ _msgBuff.clear(); });
 			return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 		}
@@ -2435,7 +2430,6 @@ private:
 	msg_handle& _msgHandle;
 	std::function<bool(ARGS...)> _handler;
 	dst_receiver _msgBuff;
-	bool _triged;
 };
 
 /*!
@@ -2587,19 +2581,15 @@ public:
 	template <typename Handler>
 	mutex_block_trig(msg_handle& msgHandle, Handler&& handler)
 #ifdef _MSC_VER
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))), _has(false), _triged(false) {}
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))), _has(false) {}
 #elif __GNUG__
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _has(false), _triged(false) {}
+		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _has(false) {}
 #endif
 private:
 	bool ready()
 	{
-		if (!_triged)
-		{
-			assert(!_has);
-			return _msgHandle.read_msg(_has);
-		}
-		return false;
+		assert(!_has);
+		return _msgHandle.read_msg(_has);
 	}
 
 	void cancel()
@@ -2620,7 +2610,6 @@ private:
 		if (_has)
 		{
 			_has = false;
-			_triged = true;
 			isRun = true;
 			return _handler();
 		}
@@ -2641,7 +2630,6 @@ private:
 	msg_handle& _msgHandle;
 	std::function<bool()> _handler;
 	bool _has;
-	bool _triged;
 };
 
 template <>
@@ -3072,8 +3060,8 @@ private:
 		{
 			if (_msgBuff.has())
 			{
-				assert(!_lostNtfed);
 				isRun = true;
+				_lostNtfed = false;
 				OUT_OF_SCOPE({ _msgBuff.clear(); });
 				return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 			}
@@ -3125,7 +3113,7 @@ public:
 #elif __GNUG__
 		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)),
 #endif
-		_readySign(0), _triged(false), _lostNtfed(false)
+		_readySign(0), _lostNtfed(false)
 	{
 		_msgHandle.check_lost(true);
 	}
@@ -3133,12 +3121,8 @@ private:
 	bool ready()
 	{
 		_readySign = 1;
-		if (!_triged)
-		{
-			assert(!_msgBuff.has());
-			return _msgHandle.read_msg(_msgBuff) || is_losted();
-		}
-		return false;
+		assert(!_msgBuff.has());
+		return _msgHandle.read_msg(_msgBuff) || is_losted();
 	}
 
 	void cancel()
@@ -3163,16 +3147,14 @@ private:
 		{
 			if (_msgBuff.has())
 			{
-				assert(!_lostNtfed);
 				isRun = true;
-				_triged = true;
+				_lostNtfed = false;
 				OUT_OF_SCOPE({ _msgBuff.clear(); });
 				return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 			}
 			else if (is_losted())
 			{
 				isRun = true;
-				_triged = true;
 				_lostNtfed = true;
 				return _lostHandler();
 			}
@@ -3196,7 +3178,6 @@ private:
 	std::function<bool()> _lostHandler;
 	dst_receiver _msgBuff;
 	int _readySign;
-	bool _triged;
 	bool _lostNtfed;
 };
 
@@ -3348,9 +3329,9 @@ private:
 		{
 			if (_has)
 			{
-				assert(!_lostNtfed);
 				_has = false;
 				isRun = true;
+				_lostNtfed = false;
 				return _handler();
 			}
 			else if (is_losted())
@@ -3397,7 +3378,7 @@ public:
 #elif __GNUG__
 		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)),
 #endif
-		_readySign(0), _has(false), _triged(false), _lostNtfed(false)
+		_readySign(0), _has(false), _lostNtfed(false)
 	{
 		_msgHandle.check_lost(true);
 	}
@@ -3405,12 +3386,8 @@ private:
 	bool ready()
 	{
 		_readySign = 1;
-		if (!_triged)
-		{
-			assert(!_has);
-			return _msgHandle.read_msg(_has) || is_losted();
-		}
-		return false;
+		assert(!_has);
+		return _msgHandle.read_msg(_has) || is_losted();
 	}
 
 	void cancel()
@@ -3435,16 +3412,14 @@ private:
 		{
 			if (_has)
 			{
-				assert(!_lostNtfed);
 				_has = false;
-				_triged = true;
 				isRun = true;
+				_lostNtfed = false;
 				return _handler();
 			}
 			else if (is_losted())
 			{
 				isRun = true;
-				_triged = true;
 				_lostNtfed = true;
 				return _lostHandler();
 			}
@@ -3468,7 +3443,6 @@ private:
 	std::function<bool()> _lostHandler;
 	int _readySign;
 	bool _has;
-	bool _triged;
 	bool _lostNtfed;
 };
 

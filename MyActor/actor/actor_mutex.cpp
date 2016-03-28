@@ -185,23 +185,19 @@ void actor_mutex::lock(my_actor* host)
 	bool complete = false;
 	MutexTrigHandle_ ath(host);
 	MutexTrigNotifer_ ntf;
-	LAMBDA_THIS_REF4(ref4, host, complete, ath, ntf);
-	host->send(_strand, [&ref4]
+	host->send(_strand, [&]
 	{
-		auto& lockActorID_ = ref4->_lockActorID;
-		auto& host_ = ref4.host;
-		if (!lockActorID_ || host_->self_id() == lockActorID_)
+		if (!_lockActorID || host->self_id() == _lockActorID)
 		{
-			lockActorID_ = host_->self_id();
-			ref4->_recCount++;
-			ref4.complete = true;
+			_lockActorID = host->self_id();
+			_recCount++;
+			complete = true;
 		}
 		else
 		{
-			auto& ntf_ = ref4.ntf;
-			ntf_ = ref4.ath.make_notifer();
-			ref4->_waitQueue.push_front({ ntf_, host_->self_id() });
-			ref4.complete = false;
+			ntf = ath.make_notifer();
+			_waitQueue.push_front({ ntf, host->self_id() });
+			complete = false;
 		}
 	});
 
@@ -239,20 +235,17 @@ bool actor_mutex::try_lock(my_actor* host)
 	host->assert_enter();
 	host->lock_quit();
 	bool complete = false;
-	LAMBDA_THIS_REF2(ref2, host, complete);
-	host->send(_strand, [&ref2]
+	host->send(_strand, [&]
 	{
-		auto& lockActorID_ = ref2->_lockActorID;
-		auto& host_ = ref2.host;
-		if (!lockActorID_ || host_->self_id() == lockActorID_)
+		if (!_lockActorID || host->self_id() == _lockActorID)
 		{
-			lockActorID_ = host_->self_id();
-			ref2->_recCount++;
-			ref2.complete = true;
+			_lockActorID = host->self_id();
+			_recCount++;
+			complete = true;
 		}
 		else
 		{
-			ref2.complete = false;
+			complete = false;
 		}
 	});
 	host->unlock_quit();
@@ -267,24 +260,20 @@ bool actor_mutex::timed_lock(int tm, my_actor* host)
 	bool complete = false;
 	MutexTrigHandle_ ath(host);
 	MutexTrigNotifer_ ntf;
-	LAMBDA_THIS_REF5(ref5, host, nit, complete, ath, ntf);
-	host->send(_strand, [&ref5]
+	host->send(_strand, [&]
 	{
-		auto& lockActorID_ = ref5->_lockActorID;
-		auto& host_ = ref5.host;
-		if (!lockActorID_ || host_->self_id() == lockActorID_)
+		if (!_lockActorID || host->self_id() == _lockActorID)
 		{
-			lockActorID_ = host_->self_id();
-			ref5->_recCount++;
-			ref5.complete = true;
+			_lockActorID = host->self_id();
+			_recCount++;
+			complete = true;
 		}
 		else
 		{
-			auto& ntf_ = ref5.ntf;
-			ntf_ = ref5.ath.make_notifer();
-			ref5->_waitQueue.push_front({ ntf_, host_->self_id() });
-			ref5.nit = ref5->_waitQueue.begin();
-			ref5.complete = false;
+			ntf = ath.make_notifer();
+			_waitQueue.push_front({ ntf, host->self_id() });
+			nit = _waitQueue.begin();
+			complete = false;
 		}
 	});
 
@@ -292,15 +281,13 @@ bool actor_mutex::timed_lock(int tm, my_actor* host)
 	{
 		if (!ath.timed_wait(tm))
 		{
-			host->send(_strand, [&ref5]
+			host->send(_strand, [&]
 			{
-				auto& notified_ = ref5.ntf._notified;
-				auto& complete_ = ref5.complete;
-				complete_ = notified_;
-				notified_ = true;
-				if (!complete_)
+				complete = ntf._notified;
+				ntf._notified = true;
+				if (!complete)
 				{
-					ref5->_waitQueue.erase(ref5.nit);
+					_waitQueue.erase(nit);
 				}
 			});
 			if (!complete)
@@ -419,11 +406,10 @@ void actor_condition_variable::wait(my_actor* host, actor_lock_guard& mutex)
 	host->lock_quit();
 	MutexTrigHandle_ ath(host);
 	MutexTrigNotifer_ ntf;
-	LAMBDA_THIS_REF2(ref2, ath, ntf);
-	host->send(_strand, [&ref2]
+	host->send(_strand, [&]
 	{
-		ref2.ntf = ref2.ath.make_notifer();
-		ref2->_waitQueue.push_back({ ref2.ntf });
+		ntf = ath.make_notifer();
+		_waitQueue.push_back({ ntf });
 	});
 	mutex.unlock();
 	ath.wait();
@@ -440,22 +426,21 @@ bool actor_condition_variable::timed_wait(int tm, my_actor* host, actor_lock_gua
 	MutexTrigNotifer_ ntf;
 	msg_list<wait_node>::iterator nit;
 	bool timed = false;
-	LAMBDA_THIS_REF4(ref4, ath, nit, ntf, timed);
-	host->send(_strand, [&ref4]
+	host->send(_strand, [&]
 	{
-		ref4.ntf = ref4.ath.make_notifer();
-		ref4->_waitQueue.push_front({ ref4.ntf });
-		ref4.nit = ref4->_waitQueue.begin();
+		ntf = ath.make_notifer();
+		_waitQueue.push_front({ ntf });
+		nit = _waitQueue.begin();
 	});
 	mutex.unlock();
 	if (!ath.timed_wait(tm))
 	{
-		host->send(_strand, [&ref4]
+		host->send(_strand, [&]
 		{
-			if (!ref4.ntf._notified)
+			if (!ntf._notified)
 			{
-				ref4.timed = true;
-				ref4->_waitQueue.erase(ref4.nit);
+				timed = true;
+				_waitQueue.erase(nit);
 			}
 		});
 		if (!timed)
@@ -473,16 +458,13 @@ bool actor_condition_variable::notify_one(my_actor* host)
 	host->assert_enter();
 	host->lock_quit();
 	bool complete = false;
-	LAMBDA_THIS_REF1(ref1, complete);
-	host->send(_strand, [&ref1]
+	host->send(_strand, [&]
 	{
-		auto& complete_ = ref1.complete;
-		auto& waitQueue_ = ref1->_waitQueue;
-		complete_ = !waitQueue_.empty();
-		if (complete_)
+		complete = !_waitQueue.empty();
+		if (complete)
 		{
-			waitQueue_.back().ntf();
-			waitQueue_.pop_back();
+			_waitQueue.back().ntf();
+			_waitQueue.pop_back();
 		}
 	});
 	host->unlock_quit();
@@ -494,15 +476,13 @@ size_t actor_condition_variable::notify_all(my_actor* host)
 	host->assert_enter();
 	host->lock_quit();
 	size_t count = 0;
-	LAMBDA_THIS_REF1(ref1, count);
-	host->send(_strand, [&ref1]
+	host->send(_strand, [&]
 	{
-		auto& waitQueue_ = ref1->_waitQueue;
-		ref1.count = waitQueue_.size();
-		while (!waitQueue_.empty())
+		count = _waitQueue.size();
+		while (!_waitQueue.empty())
 		{
-			waitQueue_.back().ntf();
-			waitQueue_.pop_back();
+			_waitQueue.back().ntf();
+			_waitQueue.pop_back();
 		}
 	});
 	host->unlock_quit();
@@ -533,23 +513,20 @@ void actor_shared_mutex::lock(my_actor* host)
 	bool complete = false;
 	MutexTrigHandle_ ath(host);
 	MutexTrigNotifer_ ntf;
-	LAMBDA_THIS_REF4(ref4, host, complete, ath, ntf);
-	host->send(_strand, [&ref4]
+	host->send(_strand, [&]
 	{
-		assert(ref4->_inSet.find(ref4.host->self_id()) == ref4->_inSet.end());
-		auto& inSet_ = ref4->_inSet;
-		if (inSet_.empty())
+		assert(_inSet.find(host->self_id()) == _inSet.end());
+		if (_inSet.empty())
 		{
-			ref4.complete = true;
-			ref4->_status = st_unique;
-			inSet_[ref4.host->self_id()] = st_unique;
+			complete = true;
+			_status = st_unique;
+			_inSet[host->self_id()] = st_unique;
 		}
 		else
 		{
-			auto& ntf_ = ref4.ntf;
-			ref4.complete = false;
-			ntf_ = ref4.ath.make_notifer();
-			ref4->_waitQueue.push_front({ ntf_, ref4.host->self_id(), st_unique });
+			complete = false;
+			ntf = ath.make_notifer();
+			_waitQueue.push_front({ ntf, host->self_id(), st_unique });
 		}
 	});
 	if (!complete)
@@ -565,15 +542,14 @@ bool actor_shared_mutex::try_lock(my_actor* host)
 	host->assert_enter();
 	host->lock_quit();
 	bool complete = false;
-	LAMBDA_THIS_REF2(ref2, host, complete);
-	host->send(_strand, [&ref2]
+	host->send(_strand, [&]
 	{
-		assert(ref2->_inSet.find(ref2.host->self_id()) == ref2->_inSet.end());
-		if (ref2->_inSet.empty())
+		assert(_inSet.find(host->self_id()) == _inSet.end());
+		if (_inSet.empty())
 		{
-			ref2.complete = true;
-			ref2->_status = st_unique;
-			ref2->_inSet[ref2.host->self_id()] = st_unique;
+			complete = true;
+			_status = st_unique;
+			_inSet[host->self_id()] = st_unique;
 		}
 	});
 	assert(!complete || st_unique == _status);
@@ -589,39 +565,33 @@ bool actor_shared_mutex::timed_lock(int tm, my_actor* host)
 	MutexTrigHandle_ ath(host);
 	MutexTrigNotifer_ ntf;
 	msg_list<wait_node>::iterator nit;
-	LAMBDA_THIS_REF5(ref5, host, complete, ath, ntf, nit);
-	host->send(_strand, [&ref5]
+	host->send(_strand, [&]
 	{
-		assert(ref5->_inSet.find(ref5.host->self_id()) == ref5->_inSet.end());
-		auto& inSet_ = ref5->_inSet;
-		if (inSet_.empty())
+		assert(_inSet.find(host->self_id()) == _inSet.end());
+		if (_inSet.empty())
 		{
-			ref5.complete = true;
-			ref5->_status = st_unique;
-			inSet_[ref5.host->self_id()] = st_unique;
+			complete = true;
+			_status = st_unique;
+			_inSet[host->self_id()] = st_unique;
 		}
 		else
 		{
-			auto& ntf_ = ref5.ntf;
-			auto& waitQueue_ = ref5->_waitQueue;
-			ntf_ = ref5.ath.make_notifer();
-			waitQueue_.push_front({ ntf_, ref5.host->self_id(), st_unique });
-			ref5.nit = waitQueue_.begin();
+			ntf = ath.make_notifer();
+			_waitQueue.push_front({ ntf, host->self_id(), st_unique });
+			nit = _waitQueue.begin();
 		}
 	});
 	if (!complete)
 	{
 		if (!ath.timed_wait(tm))
 		{
-			host->send(_strand, [&ref5]
+			host->send(_strand, [&]
 			{
-				auto& complete_ = ref5.complete;
-				auto& notified_ = ref5.ntf._notified;
-				complete_ = notified_;
-				notified_ = true;
-				if (!complete_)
+				complete = ntf._notified;
+				ntf._notified = true;
+				if (!complete)
 				{
-					ref5->_waitQueue.erase(ref5.nit);
+					_waitQueue.erase(nit);
 				}
 			});
 			if (!complete)
@@ -644,20 +614,18 @@ void actor_shared_mutex::lock_shared(my_actor* host)
 	bool complete = false;
 	MutexTrigHandle_ ath(host);
 	MutexTrigNotifer_ ntf;
-	LAMBDA_THIS_REF4(ref4, host, complete, ath, ntf);
-	host->send(_strand, [&ref4]
+	host->send(_strand, [&]
 	{
-		assert(ref4->_inSet.find(ref4.host->self_id()) == ref4->_inSet.end());
-		if (st_shared == ref4->_status)
+		assert(_inSet.find(host->self_id()) == _inSet.end());
+		if (st_shared == _status)
 		{
-			ref4.complete = true;
-			ref4->_inSet[ref4.host->self_id()] = st_shared;
+			complete = true;
+			_inSet[host->self_id()] = st_shared;
 		}
 		else
 		{
-			auto& ntf_ = ref4.ntf;
-			ntf_ = ref4.ath.make_notifer();
-			ref4->_waitQueue.push_front({ ntf_, ref4.host->self_id(), st_shared });
+			ntf = ath.make_notifer();
+			_waitQueue.push_front({ ntf, host->self_id(), st_shared });
 		}
 	});
 	if (!complete)
@@ -673,14 +641,13 @@ bool actor_shared_mutex::try_lock_shared(my_actor* host)
 	host->assert_enter();
 	host->lock_quit();
 	bool complete = false;
-	LAMBDA_THIS_REF2(ref2, host, complete);
-	host->send(_strand, [&ref2]
+	host->send(_strand, [&]
 	{
-		assert(ref2->_inSet.find(ref2.host->self_id()) == ref2->_inSet.end());
-		if (st_shared == ref2->_status)
+		assert(_inSet.find(host->self_id()) == _inSet.end());
+		if (st_shared == _status)
 		{
-			ref2.complete = true;
-			ref2->_inSet[ref2.host->self_id()] = st_shared;
+			complete = true;
+			_inSet[host->self_id()] = st_shared;
 		}
 	});
 	assert(!complete || st_shared == _status);
@@ -696,37 +663,32 @@ bool actor_shared_mutex::timed_lock_shared(int tm, my_actor* host)
 	MutexTrigHandle_ ath(host);
 	MutexTrigNotifer_ ntf;
 	msg_list<wait_node>::iterator nit;
-	LAMBDA_THIS_REF5(ref5, host, complete, ath, ntf, nit);
-	host->send(_strand, [&ref5]
+	host->send(_strand, [&]
 	{
-		assert(ref5->_inSet.find(ref5.host->self_id()) == ref5->_inSet.end());
-		if (st_shared == ref5->_status)
+		assert(_inSet.find(host->self_id()) == _inSet.end());
+		if (st_shared == _status)
 		{
-			ref5.complete = true;
-			ref5->_inSet[ref5.host->self_id()] = st_shared;
+			complete = true;
+			_inSet[host->self_id()] = st_shared;
 		}
 		else
 		{
-			auto& ntf_ = ref5.ntf;
-			auto& waitQueue_ = ref5->_waitQueue;
-			ntf_ = ref5.ath.make_notifer();
-			waitQueue_.push_front({ ntf_, ref5.host->self_id(), st_shared });
-			ref5.nit = waitQueue_.begin();
+			ntf = ath.make_notifer();
+			_waitQueue.push_front({ ntf, host->self_id(), st_shared });
+			nit = _waitQueue.begin();
 		}
 	});
 	if (!complete)
 	{
 		if (!ath.timed_wait(tm))
 		{
-			host->send(_strand, [&ref5]
+			host->send(_strand, [&]
 			{
-				auto& complete_ = ref5.complete;
-				auto& notified_ = ref5.ntf._notified;
-				complete_ = notified_;
-				notified_ = true;
-				if (!complete_)
+				complete = ntf._notified;
+				ntf._notified = true;
+				if (!complete)
 				{
-					ref5->_waitQueue.erase(ref5.nit);
+					_waitQueue.erase(nit);
 				}
 			});
 			if (!complete)
@@ -749,26 +711,23 @@ void actor_shared_mutex::lock_upgrade(my_actor* host)
 	bool complete = false;
 	MutexTrigHandle_ ath(host);
 	MutexTrigNotifer_ ntf;
-	LAMBDA_THIS_REF4(ref4, host, complete, ath, ntf);
-	host->send(_strand, [&ref4]
+	host->send(_strand, [&]
 	{
-		auto& inSet_ = ref4->_inSet;
-		auto it = inSet_.find(ref4.host->self_id());
-		assert(st_shared == ref4->_status);
-		assert(it != ref4->_inSet.end());
+		auto it = _inSet.find(host->self_id());
+		assert(st_shared == _status);
+		assert(it != _inSet.end());
 		assert(st_shared == it->second);
-		if (inSet_.size() == 1)
+		if (_inSet.size() == 1)
 		{
-			ref4.complete = true;
-			ref4->_status = st_upgrade;
-			inSet_[ref4.host->self_id()] = st_upgrade;
+			complete = true;
+			_status = st_upgrade;
+			_inSet[host->self_id()] = st_upgrade;
 		}
 		else
 		{
-			inSet_.erase(it);
-			auto& ntf_ = ref4.ntf;
-			ntf_ = ref4.ath.make_notifer();
-			ref4->_waitQueue.push_front({ ntf_, ref4.host->self_id(), st_upgrade });
+			_inSet.erase(it);
+			ntf = ath.make_notifer();
+			_waitQueue.push_front({ ntf, host->self_id(), st_upgrade });
 		}
 	});
 	if (!complete)
@@ -784,17 +743,16 @@ bool actor_shared_mutex::try_lock_upgrade(my_actor* host)
 	host->assert_enter();
 	host->lock_quit();
 	bool complete = false;
-	LAMBDA_THIS_REF2(ref2, host, complete);
-	host->send(_strand, [&ref2]
+	host->send(_strand, [&]
 	{
-		assert(st_shared == ref2->_status);
-		assert(ref2->_inSet.find(ref2.host->self_id()) != ref2->_inSet.end());
-		assert(st_shared == ref2->_inSet.find(ref2.host->self_id())->second);
-		if (ref2->_inSet.size() == 1)
+		assert(st_shared == _status);
+		assert(_inSet.find(host->self_id()) != _inSet.end());
+		assert(st_shared == _inSet.find(host->self_id())->second);
+		if (_inSet.size() == 1)
 		{
-			ref2.complete = true;
-			ref2->_status = st_upgrade;
-			ref2->_inSet[ref2.host->self_id()] = st_upgrade;
+			complete = true;
+			_status = st_upgrade;
+			_inSet[host->self_id()] = st_upgrade;
 		}
 	});
 	assert(!complete || st_upgrade == _status);
@@ -810,43 +768,37 @@ bool actor_shared_mutex::timed_lock_upgrade(int tm, my_actor* host)
 	MutexTrigHandle_ ath(host);
 	MutexTrigNotifer_ ntf;
 	msg_list<wait_node>::iterator nit;
-	LAMBDA_THIS_REF5(ref5, host, complete, ath, ntf, nit);
-	host->send(_strand, [&ref5]
+	host->send(_strand, [&]
 	{
-		auto& inSet_ = ref5->_inSet;
-		auto it = inSet_.find(ref5.host->self_id());
-		assert(st_shared == ref5->_status);
-		assert(it != inSet_.end());
+		auto it = _inSet.find(host->self_id());
+		assert(st_shared == _status);
+		assert(it != _inSet.end());
 		assert(st_shared == it->second);
-		if (inSet_.size() == 1)
+		if (_inSet.size() == 1)
 		{
-			ref5.complete = true;
-			ref5->_status = st_upgrade;
-			inSet_[ref5.host->self_id()] = st_upgrade;
+			complete = true;
+			_status = st_upgrade;
+			_inSet[host->self_id()] = st_upgrade;
 		}
 		else
 		{
-			inSet_.erase(it);
-			auto& waitQueue_ = ref5->_waitQueue;
-			auto& ntf_ = ref5.ntf;
-			ntf_ = ref5.ath.make_notifer();
-			waitQueue_.push_front({ ntf_, ref5.host->self_id(), st_upgrade });
-			ref5.nit = waitQueue_.begin();
+			_inSet.erase(it);
+			ntf = ath.make_notifer();
+			_waitQueue.push_front({ ntf, host->self_id(), st_upgrade });
+			nit = _waitQueue.begin();
 		}
 	});
 	if (!complete)
 	{
 		if (!ath.timed_wait(tm))
 		{
-			host->send(_strand, [&ref5]
+			host->send(_strand, [&]
 			{
-				auto& complete_ = ref5.complete;
-				auto& notified_ = ref5.ntf._notified;
-				complete_ = notified_;
-				notified_ = true;
-				if (!complete_)
+				complete = ntf._notified;
+				ntf._notified = true;
+				if (!complete)
 				{
-					ref5->_waitQueue.erase(ref5.nit);
+					_waitQueue.erase(nit);
 				}
 			});
 			if (!complete)

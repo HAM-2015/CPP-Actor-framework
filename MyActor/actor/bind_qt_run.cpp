@@ -130,10 +130,12 @@ void bind_qt_run_base::uninstall()
 }
 
 bind_qt_run_base::bind_qt_run_base()
-:_waitClose(false), _eventLoop(NULL), _waitCount(0), _inCloseScope(false)
+:_eventLoop(NULL), _waitCount(0), _waitClose(false), _inCloseScope(false), _locked(false)
 {
 	DEBUG_OPERATION(_taskCount = 0);
 	_threadID = run_thread::this_thread_id();
+	_readyQueue = new msg_queue<wrap_handler_face*>(32);
+	_waitQueue = new msg_queue<wrap_handler_face*>(32);
 #ifdef ENABLE_QT_ACTOR
 	ui_tls::init();
 #endif
@@ -146,6 +148,11 @@ bind_qt_run_base::~bind_qt_run_base()
 	assert(0 == _taskCount);
 	assert(!_waitClose);
 	assert(!_eventLoop);
+	assert(!_locked);
+	assert(_readyQueue->empty());
+	assert(_waitQueue->empty());
+	delete _readyQueue;
+	delete _waitQueue;
 #ifdef ENABLE_QT_ACTOR
 	_qtStrand.reset();
 	ui_tls::reset();
@@ -214,13 +221,46 @@ std::function<void()> bind_qt_run_base::wrap_check_close()
 #endif
 }
 
-void bind_qt_run_base::run_one_task(wrap_handler_face* h)
+void bind_qt_run_base::append_task(wrap_handler_face* h)
+{
+	_queueMutex.lock();
+	if (_locked)
+	{
+		_waitQueue->push_back(h);
+		_queueMutex.unlock();
+	}
+	else
+	{
+		_locked = true;
+		_readyQueue->push_back(h);
+		_queueMutex.unlock();
+		post_task_event();
+	}
+}
+
+void bind_qt_run_base::run_one_task()
 {
 #ifdef ENABLE_QT_ACTOR
 	ui_tls* uiTls = ui_tls::push_stack(this);
 #endif
-	h->invoke();
-	_reuMem.deallocate(h);
+	while (!_readyQueue->empty())
+	{
+		_readyQueue->front()->invoke();
+		_reuMem.deallocate(_readyQueue->front());
+		_readyQueue->pop_front();
+	}
+	_queueMutex.lock();
+	if (!_waitQueue->empty())
+	{
+		std::swap(_readyQueue, _waitQueue);
+		_queueMutex.unlock();
+		post_task_event();
+	}
+	else
+	{
+		_locked = false;
+		_queueMutex.unlock();
+	}
 #ifdef ENABLE_QT_ACTOR
 	bind_qt_run_base* r = ui_tls::pop_stack(uiTls);
 	assert(this == r);
@@ -253,7 +293,7 @@ void bind_qt_run_base::ui_yield(my_actor* host)
 {
 	host->trig_guard([this](trig_once_notifer<>&& cb)
 	{
-		post_task_event(make_wrap_handler(_reuMem, std::bind([](const trig_once_notifer<>& cb)
+		append_task(make_wrap_handler(_reuMem, std::bind([](const trig_once_notifer<>& cb)
 		{
 			cb();
 		}, std::move(cb))));

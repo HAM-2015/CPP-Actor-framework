@@ -208,11 +208,10 @@ protected:
 	struct task_event : public QEvent
 	{
 		template <typename... Args>
-		task_event(wrap_handler_face* handler, Args&&... args)
-			:QEvent(TRY_MOVE(args)...), _handler(handler) {}
+		task_event(Args&&... args)
+			:QEvent(TRY_MOVE(args)...) {}
 		void* operator new(size_t s);
 		void operator delete(void* p);
-		wrap_handler_face* _handler;
 		static mem_alloc_mt2<task_event>* _taskAlloc;
 	};
 private:
@@ -269,7 +268,7 @@ public:
 	template <typename Handler>
 	void post(Handler&& handler)
 	{
-		post_task_event(make_wrap_handler(_reuMem, TRY_MOVE(handler)));
+		append_task(make_wrap_handler(_reuMem, TRY_MOVE(handler)));
 	}
 
 	/*!
@@ -280,7 +279,7 @@ public:
 	{
 		host->trig_guard([&](trig_once_notifer<>&& cb)
 		{
-			post_task_event(make_wrap_handler(_reuMem, std::bind([&handler](const trig_once_notifer<>& cb)
+			append_task(make_wrap_handler(_reuMem, std::bind([&handler](const trig_once_notifer<>& cb)
 			{
 				handler();
 				cb();
@@ -298,7 +297,7 @@ public:
 		bool running = false;
 		actor_trig_handle<> ath;
 		actor_trig_notifer<> ntf = host->make_trig_notifer_to_self(ath);
-		post_task_event(make_wrap_timed_handler(_reuMem, _mutex, ath.dead_sign(), running, [&handler, &ntf]
+		append_task(make_wrap_timed_handler(_reuMem, _checkTimedMutex, ath.dead_sign(), running, [&handler, &ntf]
 		{
 			handler();
 			ntf();
@@ -306,15 +305,15 @@ public:
 
 		if (!host->timed_wait_trig(tm, ath))
 		{
-			_mutex.lock();
+			_checkTimedMutex.lock();
 			if (!running)
 			{
 				host->close_trig_notifer(ath);
-				_mutex.unlock();
+				_checkTimedMutex.unlock();
 				host->unlock_quit();
 				return false;
 			}
-			_mutex.unlock();
+			_checkTimedMutex.unlock();
 			host->wait_trig(ath);
 		}
 		host->unlock_quit();
@@ -375,17 +374,22 @@ public:
 	child_actor_handle create_qt_child_actor(my_actor* host, const my_actor::main_func& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE);
 	child_actor_handle create_qt_child_actor(my_actor* host, my_actor::main_func&& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE);
 #endif
+private:
+	void append_task(wrap_handler_face*);
 protected:
-	virtual void post_task_event(wrap_handler_face*) = 0;
+	virtual void post_task_event() = 0;
 	virtual void enter_loop() = 0;
 	virtual void close_now() = 0;
-	void run_one_task(wrap_handler_face* h);
+	void run_one_task();
 	void check_close();
 	void enter_wait_close();
 private:
 	run_thread::thread_id _threadID;
 	reusable_mem_mt<> _reuMem;
-	std::mutex _mutex;
+	std::mutex _checkTimedMutex;
+	std::mutex _queueMutex;
+	msg_queue<wrap_handler_face*>* _waitQueue;
+	msg_queue<wrap_handler_face*>* _readyQueue;
 #ifdef ENABLE_QT_ACTOR
 	shared_qt_strand _qtStrand;
 #endif
@@ -396,6 +400,7 @@ protected:
 private:
 	bool _waitClose;
 	bool _inCloseScope;
+	bool _locked;
 };
 
 #ifdef ENABLE_QT_ACTOR
@@ -536,10 +541,10 @@ public:
 	}
 #endif
 private:
-	void post_task_event(wrap_handler_face* h) override final
+	void post_task_event() override final
 	{
 		DEBUG_OPERATION(_taskCount++);
-		QCoreApplication::postEvent(this, new task_event(h, QEvent::Type(QT_POST_TASK)));
+		QCoreApplication::postEvent(this, new task_event(QEvent::Type(QT_POST_TASK)));
 	}
 
 	void customEvent(QEvent* e) override final
@@ -548,7 +553,7 @@ private:
 		{
 			assert(dynamic_cast<task_event*>(e));
 			DEBUG_OPERATION(_taskCount--);
-			bind_qt_run_base::run_one_task(static_cast<task_event*>(e)->_handler);
+			bind_qt_run_base::run_one_task();
 		}
 		else
 		{

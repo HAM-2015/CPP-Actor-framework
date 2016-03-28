@@ -1768,8 +1768,8 @@ public:
 	}
 #endif
 #elif __linux__
-#pragma GCC push_options
-#pragma GCC optimize("O0")
+
+__attribute__((optimize("O0")))
 	static size_t none_size(my_actor* self)
 	{
 		unsigned char mvec[256];
@@ -1805,7 +1805,6 @@ public:
 		self->_sigsegvSign = false;
 		return i * MEM_PAGE_SIZE + (acc ? 0 : MEM_PAGE_SIZE);
 	}
-#pragma GCC pop_options
 
 	static size_t clean_size(context_yield::context_info* const info)
 	{
@@ -3183,22 +3182,20 @@ void my_actor::outside_wait_quit()
 	std::mutex mutex;
 	std::condition_variable conVar;
 	std::unique_lock<std::mutex> ul(mutex);
-	LAMBDA_THIS_REF2(ref2, conVar, mutex);
-	_strand->post([&ref2]
+	_strand->post([&]
 	{
-		assert(ref2->_strand->running_in_this_thread());
-		if (ref2->_exited)
+		assert(_strand->running_in_this_thread());
+		if (_exited)
 		{
-			std::lock_guard<std::mutex> lg(ref2.mutex);
-			ref2.conVar.notify_one();
+			std::lock_guard<std::mutex> lg(mutex);
+			conVar.notify_one();
 		}
 		else
 		{
-			auto& ref2_ = ref2;
-			ref2->_quitCallback.push_back([&ref2_]()
+			_quitCallback.push_back([&]()
 			{
-				std::lock_guard<std::mutex> lg(ref2_.mutex);
-				ref2_.conVar.notify_one();
+				std::lock_guard<std::mutex> lg(mutex);
+				conVar.notify_one();
 			});
 		}
 	});

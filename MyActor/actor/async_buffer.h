@@ -446,6 +446,48 @@ public:
 		});
 	}
 
+	/*!
+	@brief 注册一个pop消息通知，只触发一次
+	*/
+	template <typename Ntf>
+	void regist_pop_ntf(my_actor* host, Ntf&& ntf)
+	{
+		host->lock_quit();
+		host->send(_strand, [&]
+		{
+			if (!_buffer.empty())
+			{
+				ntf();
+			}
+			else
+			{
+				_popNtfQueue.push_back((Ntf&&)ntf);
+			}
+		});
+		host->unlock_quit();
+	}
+
+	/*!
+	@brief 注册一个push消息通知，只触发一次
+	*/
+	template <typename Ntf>
+	void regist_push_ntf(my_actor* host, Ntf&& ntf)
+	{
+		host->lock_quit();
+		host->send(_strand, [&]
+		{
+			if (_buffer.size() <= _halfLength)
+			{
+				ntf();
+			}
+			else
+			{
+				_pushNtfQueue.push_back((Ntf&&)ntf);
+			}
+		});
+		host->unlock_quit();
+	}
+
 	void close(my_actor* host, bool clearBuff = true)
 	{
 		host->lock_quit();
@@ -466,6 +508,8 @@ public:
 				_popWait.front()(true);
 				_popWait.pop_front();
 			}
+			_pushNtfQueue.clear();
+			_popNtfQueue.clear();
 		});
 		host->unlock_quit();
 	}
@@ -506,30 +550,33 @@ private:
 			bool notified = false;
 			bool isFull = false;
 			bool closed = false;
-			LAMBDA_THIS_REF6(ref6, host, h, ath, notified, isFull, closed);
-			host->send(_strand, [&ref6]
+			host->send(_strand, [&]
 			{
-				ref6.closed = ref6->_closed;
-				if (!ref6->_closed)
+				closed = _closed;
+				if (!_closed)
 				{
 					while (true)
 					{
 						bool break_ = true;
-						ref6.isFull = ref6->_buffer.full();
-						if (!ref6.isFull)
+						isFull = _buffer.full();
+						if (!isFull)
 						{
-							break_ = ref6.h();
-							auto& _popWait = ref6->_popWait;
+							break_ = h();
 							if (!_popWait.empty())
 							{
 								_popWait.back()(false);
 								_popWait.pop_back();
 							}
+							else if (!_popNtfQueue.empty())
+							{
+								_popNtfQueue.front()();
+								_popNtfQueue.pop_front();
+							}
 						}
 						else
 						{
-							ref6->_pushWait.push_front({ ref6.notified });
-							ref6->_pushWait.front().ntf = ref6.host->make_trig_notifer_to_self(ref6.ath);
+							_pushWait.push_front({ notified });
+							_pushWait.front().ntf = host->make_trig_notifer_to_self(ath);
 						}
 						if (break_)
 						{
@@ -563,24 +610,27 @@ private:
 		host->lock_quit();
 		bool closed = false;
 		size_t pushCount = 0;
-		LAMBDA_THIS_REF4(ref4, host, h, closed, pushCount);
-		host->send(_strand, [&ref4]
+		host->send(_strand, [&]
 		{
-			ref4.closed = ref4->_closed;
-			if (!ref4->_closed)
+			closed = _closed;
+			if (!_closed)
 			{
 				while (true)
 				{
 					bool break_ = true;
-					if (!ref4->_buffer.full())
+					if (!_buffer.full())
 					{
-						ref4.pushCount++;
-						break_ = ref4.h();
-						auto& _popWait = ref4->_popWait;
+						pushCount++;
+						break_ = h();
 						if (!_popWait.empty())
 						{
 							_popWait.back()(false);
 							_popWait.pop_back();
+						}
+						else if (!_popNtfQueue.empty())
+						{
+							_popNtfQueue.front()();
+							_popNtfQueue.pop_front();
 						}
 					}
 					if (break_)
@@ -612,32 +662,35 @@ private:
 			bool notified = false;
 			bool isFull = false;
 			bool closed = false;
-			LAMBDA_THIS_REF8(ref8, notified, isFull, closed, host, h, ath, mit, pushCount);
-			host->send(_strand, [&ref8]
+			host->send(_strand, [&]
 			{
-				ref8.closed = ref8->_closed;
-				if (!ref8->_closed)
+				closed = _closed;
+				if (!_closed)
 				{
 					while (true)
 					{
 						bool break_ = true;
-						ref8.isFull = ref8->_buffer.full();
-						if (!ref8.isFull)
+						isFull = _buffer.full();
+						if (!isFull)
 						{
-							ref8.pushCount++;
-							break_ = ref8.h();
-							auto& _popWait = ref8->_popWait;
+							pushCount++;
+							break_ = h();
 							if (!_popWait.empty())
 							{
 								_popWait.back()(false);
 								_popWait.pop_back();
 							}
+							else if (!_popNtfQueue.empty())
+							{
+								_popNtfQueue.front()();
+								_popNtfQueue.pop_front();
+							}
 						}
 						else
 						{
-							ref8->_pushWait.push_front({ ref8.notified });
-							ref8->_pushWait.front().ntf = ref8.host->make_trig_notifer_to_self(ref8.ath);
-							ref8.mit = ref8->_pushWait.begin();
+							_pushWait.push_front({ notified });
+							_pushWait.front().ntf = host->make_trig_notifer_to_self(ath);
+							mit = _pushWait.begin();
 						}
 						if (break_)
 						{
@@ -656,11 +709,11 @@ private:
 				long long bt = get_tick_us();
 				if (!host->timed_wait_trig(utm / 1000, ath, closed))
 				{
-					host->send(_strand, [&ref8]
+					host->send(_strand, [&]
 					{
-						if (!ref8.notified)
+						if (!notified)
 						{
-							ref8->_pushWait.erase(ref8.mit);
+							_pushWait.erase(mit);
 						}
 					});
 					if (notified)
@@ -691,25 +744,28 @@ private:
 		host->lock_quit();
 		bool closed = false;
 		size_t lostCount = 0;
-		LAMBDA_THIS_REF4(ref4, host, h, closed, lostCount);
-		host->send(_strand, [&ref4]
+		host->send(_strand, [&]
 		{
-			ref4.closed = ref4->_closed;
-			if (!ref4->_closed)
+			closed = _closed;
+			if (!_closed)
 			{
 				while (true)
 				{
-					if (ref4->_buffer.full())
+					if (_buffer.full())
 					{
-						ref4.lostCount++;
-						ref4->_buffer.pop_front();
+						lostCount++;
+						_buffer.pop_front();
 					}
-					bool break_ = ref4.h();
-					auto& _popWait = ref4->_popWait;
+					bool break_ = h();
 					if (!_popWait.empty())
 					{
 						_popWait.back()(false);
 						_popWait.pop_back();
+					}
+					else if (!_popNtfQueue.empty())
+					{
+						_popNtfQueue.front()();
+						_popNtfQueue.pop_front();
 					}
 					if (break_)
 					{
@@ -737,31 +793,36 @@ private:
 			bool notified = false;
 			bool isEmpty = false;
 			bool closed = false;
-			LAMBDA_THIS_REF6(ref6, host, out, ath, notified, isEmpty, closed);
-			host->send(_strand, [&ref6]
+			host->send(_strand, [&]
 			{
-				ref6.closed = ref6->_closed;
-				if (!ref6->_closed)
+				closed = _closed;
+				if (!_closed)
 				{
 					while (true)
 					{
 						bool break_ = true;
-						auto& _buffer = ref6->_buffer;
-						auto& _pushWait = ref6->_pushWait;
-						ref6.isEmpty = _buffer.empty();
-						if (!ref6.isEmpty)
+						isEmpty = _buffer.empty();
+						if (!isEmpty)
 						{
-							break_ = ref6.out();
+							break_ = out();
 						}
 						else
 						{
-							ref6->_popWait.push_front({ ref6.notified });
-							ref6->_popWait.front().ntf = ref6.host->make_trig_notifer_to_self(ref6.ath);
+							_popWait.push_front({ notified });
+							_popWait.front().ntf = host->make_trig_notifer_to_self(ath);
 						}
-						if (!_pushWait.empty() && _buffer.size() <= ref6->_halfLength)
+						if (_buffer.size() <= _halfLength)
 						{
-							_pushWait.back()(false);
-							_pushWait.pop_back();
+							if (!_pushWait.empty())
+							{
+								_pushWait.back()(false);
+								_pushWait.pop_back();
+							}
+							else if (!_pushNtfQueue.empty())
+							{
+								_pushNtfQueue.front()();
+								_pushNtfQueue.pop_front();
+							}
 						}
 						if (break_)
 						{
@@ -795,26 +856,31 @@ private:
 		host->lock_quit();
 		bool closed = false;
 		bool popCount = 0;
-		LAMBDA_THIS_REF4(ref4, host, out, closed, popCount);
-		host->send(_strand, [&ref4]
+		host->send(_strand, [&]
 		{
-			ref4.closed = ref4->_closed;
-			if (!ref4->_closed)
+			closed = _closed;
+			if (!_closed)
 			{
 				while (true)
 				{
 					bool break_ = true;
-					auto& _buffer = ref4->_buffer;
-					auto& _pushWait = ref4->_pushWait;
 					if (!_buffer.empty())
 					{
-						ref4.popCount++;
-						break_ = ref4.out();
+						popCount++;
+						break_ = out();
 					}
-					if (!_pushWait.empty() && _buffer.size() <= ref4->_halfLength)
+					if (_buffer.size() <= _halfLength)
 					{
-						_pushWait.back()(false);
-						_pushWait.pop_back();
+						if (!_pushWait.empty())
+						{
+							_pushWait.back()(false);
+							_pushWait.pop_back();
+						}
+						else if (!_pushNtfQueue.empty())
+						{
+							_pushNtfQueue.front()();
+							_pushNtfQueue.pop_front();
+						}
 					}
 					if (break_)
 					{
@@ -845,33 +911,38 @@ private:
 			bool notified = false;
 			bool isEmpty = false;
 			bool closed = false;
-			LAMBDA_THIS_REF8(ref8, notified, isEmpty, closed, host, out, ath, mit, popCount);
-			host->send(_strand, [&ref8]
+			host->send(_strand, [&]
 			{
-				ref8.closed = ref8->_closed;
-				if (!ref8->_closed)
+				closed = _closed;
+				if (!_closed)
 				{
 					while (true)
 					{
 						bool break_ = true;
-						auto& _buffer = ref8->_buffer;
-						auto& _pushWait = ref8->_pushWait;
-						ref8.isEmpty = _buffer.empty();
-						if (!ref8.isEmpty)
+						isEmpty = _buffer.empty();
+						if (!isEmpty)
 						{
-							ref8.popCount++;
-							break_ = ref8.out();
+							popCount++;
+							break_ = out();
 						}
 						else
 						{
-							ref8->_popWait.push_front({ ref8.notified });
-							ref8->_popWait.front().ntf = ref8.host->make_trig_notifer_to_self(ref8.ath);
-							ref8.mit = ref8->_popWait.begin();
+							_popWait.push_front({ notified });
+							_popWait.front().ntf = host->make_trig_notifer_to_self(ath);
+							mit = _popWait.begin();
 						}
-						if (!_pushWait.empty() && _buffer.size() <= ref8->_halfLength)
+						if (_buffer.size() <= _halfLength)
 						{
-							_pushWait.back()(false);
-							_pushWait.pop_back();
+							if (!_pushWait.empty())
+							{
+								_pushWait.back()(false);
+								_pushWait.pop_back();
+							}
+							else if (!_pushNtfQueue.empty())
+							{
+								_pushNtfQueue.front()();
+								_pushNtfQueue.pop_front();
+							}
 						}
 						if (break_)
 						{
@@ -890,11 +961,11 @@ private:
 				long long bt = get_tick_us();
 				if (!host->timed_wait_trig(utm / 1000, ath, closed))
 				{
-					host->send(_strand, [&ref8]
+					host->send(_strand, [&]
 					{
-						if (!ref8.notified)
+						if (!notified)
 						{
-							ref8->_popWait.erase(ref8.mit);
+							_popWait.erase(mit);
 						}
 					});
 					if (notified)
@@ -923,6 +994,8 @@ private:
 	fixed_buffer<T> _buffer;
 	msg_list<push_pck> _pushWait;
 	msg_list<pop_pck> _popWait;
+	msg_queue<std::function<void()>> _popNtfQueue;
+	msg_queue<std::function<void()>> _pushNtfQueue;
 	size_t _halfLength;
 	bool _closed;
 };
