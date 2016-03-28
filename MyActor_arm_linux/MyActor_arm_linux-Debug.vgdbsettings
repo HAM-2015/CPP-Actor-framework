@@ -134,7 +134,7 @@
     <PreBuildActions />
     <PostBuildActions>
       <CustomActionBase xsi:type="CommandLineAction">
-        <SkipWhenRunningCommandList>true</SkipWhenRunningCommandList>
+        <SkipWhenRunningCommandList>false</SkipWhenRunningCommandList>
         <RemoteHost>
           <HostName>192.168.0.106</HostName>
           <Transport>SSH</Transport>
@@ -148,7 +148,7 @@
         </Environment>
       </CustomActionBase>
       <CustomActionBase xsi:type="CommandLineAction">
-        <SkipWhenRunningCommandList>true</SkipWhenRunningCommandList>
+        <SkipWhenRunningCommandList>false</SkipWhenRunningCommandList>
         <RemoteHost>
           <HostName>192.168.0.106</HostName>
           <Transport>SSH</Transport>
