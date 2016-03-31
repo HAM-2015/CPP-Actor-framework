@@ -93,6 +93,33 @@ struct sync_msg_result_type<T&&>
 	typedef T type;
 };
 
+struct NtfHandle_
+{
+	NtfHandle_(shared_bool&& b, std::function<void()>&& n)
+		:sign(std::move(b)), ntf(std::move(n)) {}
+
+	void operator()()
+	{
+		if (!sign.empty())
+		{
+			sign = true;
+		}
+		ntf();
+	}
+
+	void set()
+	{
+		if (!sign.empty())
+		{
+			sign = true;
+		}
+	}
+
+	shared_bool sign;
+	std::function<void()> ntf;
+	RVALUE_COPY_CONSTRUCTION(NtfHandle_, sign, ntf)
+};
+
 /*!
 @brief 同步发送消息（多读多写，角色可转换），发送方等到消息取出才返回
 */
@@ -121,6 +148,32 @@ class sync_msg
 	};
 public:
 	struct close_exception : public sync_msg_close_exception {};
+
+	class ntf_handle
+	{
+		friend sync_msg;
+	public:
+		ntf_handle() {}
+	private:
+		bool ntfed()
+		{
+			if (!sign.empty())
+			{
+				return sign;
+			}
+			return true;
+		}
+
+		void set()
+		{
+			assert(!sign.empty());
+			sign = true;
+		}
+
+		shared_bool sign;
+		msg_list<NtfHandle_>::iterator it;
+		RVALUE_COPY_CONSTRUCTION(ntf_handle, sign, it)
+	};
 public:
 	sync_msg(const shared_strand& strand)
 		:_closed(false), _strand(strand), _sendWait(4), _takeWait(4) {}
@@ -420,10 +473,55 @@ public:
 			}
 			else
 			{
-				_takeNtfQueue.push_back((Ntf&&)ntf);
+				_takeNtfQueue.push_back(NtfHandle_(shared_bool(), (Ntf&&)ntf));
 			}
 		});
 		host->unlock_quit();
+	}
+
+	/*!
+	@brief 注册一个take消息通知，只触发一次，返回注册句柄
+	*/
+	template <typename Ntf>
+	ntf_handle regist_take_ntf2(my_actor* host, Ntf&& ntf)
+	{
+		host->lock_quit();
+		ntf_handle h;
+		host->send(_strand, [&]
+		{
+			if (!_sendWait.empty())
+			{
+				ntf();
+			}
+			else
+			{
+				h.sign = shared_bool::new_(false);
+				_takeNtfQueue.push_back(NtfHandle_(h.sign, (Ntf&&)ntf));
+				h.it = --_takeNtfQueue.end();
+			}
+		});
+		host->unlock_quit();
+		return h;
+	}
+
+	/*!
+	@brief 移除通知句柄，成功返回true
+	*/
+	bool remove_ntf(my_actor* host, ntf_handle& h)
+	{
+		host->lock_quit();
+		bool r = false;
+		host->send(_strand, [&]
+		{
+			if (!h.ntfed())
+			{
+				h.set();
+				r = true;
+				_takeNtfQueue.erase(h.it);
+			}
+		});
+		host->unlock_quit();
+		return r;
 	}
 
 	/*!
@@ -449,7 +547,11 @@ public:
 				st.ntf(true);
 				_sendWait.pop_front();
 			}
-			_takeNtfQueue.clear();
+			while (!_takeNtfQueue.empty())
+			{
+				_takeNtfQueue.front().set();
+				_takeNtfQueue.pop_front();
+			}
 		});
 		host->unlock_quit();
 	}
@@ -574,7 +676,7 @@ private:
 	shared_strand _strand;
 	msg_list<take_wait> _takeWait;
 	msg_list<send_wait> _sendWait;
-	msg_queue<std::function<void()>> _takeNtfQueue;
+	msg_list<NtfHandle_> _takeNtfQueue;
 	bool _closed;
 };
 
@@ -607,6 +709,17 @@ protected:
 		DEBUG_OPERATION(_thrownCloseExp = false);
 	}
 	~CspChannel_() {}
+public:
+	class ntf_handle
+	{
+		friend CspChannel_;
+	public:
+		ntf_handle() {}
+	private:
+		shared_bool sign;
+		msg_list<NtfHandle_>::iterator it;
+		RVALUE_COPY_CONSTRUCTION(ntf_handle, sign, it)
+	};
 protected:
 	/*!
 	@brief 开始准备执行对方的一个函数，执行完毕后返回结果
@@ -1061,6 +1174,51 @@ public:
 	}
 
 	/*!
+	@brief 注册一个take消息通知，只触发一次，返回注册句柄
+	*/
+	template <typename Ntf>
+	ntf_handle regist_take_ntf2(my_actor* host, Ntf&& ntf)
+	{
+		host->lock_quit();
+		ntf_handle h;
+		host->send(_strand, [&]
+		{
+			if (!_sendWait.empty())
+			{
+				ntf();
+			}
+			else
+			{
+				h.sign = shared_bool::new_(false);
+				_takeNtfQueue.push_back(NtfHandle_(h.sign, (Ntf&&)ntf));
+				h.it = --_takeNtfQueue.end();
+			}
+		});
+		host->unlock_quit();
+		return h;
+	}
+
+	/*!
+	@brief 移除通知句柄，成功返回true
+	*/
+	bool remove_ntf(my_actor* host, ntf_handle& h)
+	{
+		host->lock_quit();
+		bool r = false;
+		host->send(_strand, [&]
+		{
+			if (!h.ntfed())
+			{
+				h.set();
+				r = true;
+				_takeNtfQueue.erase(h.it);
+			}
+		});
+		host->unlock_quit();
+		return r;
+	}
+
+	/*!
 	@brief 关闭执行通道，所有执行抛出 close_exception 异常
 	*/
 	void close(my_actor* host)
@@ -1084,7 +1242,11 @@ public:
 				st.ntf(true);
 				_sendWait.pop_front();
 			}
-			_takeNtfQueue.clear();
+			while (!_takeNtfQueue.empty())
+			{
+				_takeNtfQueue.front().set();
+				_takeNtfQueue.pop_front();
+			}
 		});
 		host->unlock_quit();
 	}
@@ -1111,7 +1273,7 @@ private:
 	shared_strand _strand;
 	msg_list<take_wait> _takeWait;
 	msg_list<send_wait> _sendWait;
-	msg_queue<std::function<void()>> _takeNtfQueue;
+	msg_list<NtfHandle_> _takeNtfQueue;
 	bool _closed;
 protected:
 	DEBUG_OPERATION(bool _thrownCloseExp);

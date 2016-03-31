@@ -1634,27 +1634,41 @@ public:
 	static size_t clean_size(context_yield::context_info* const info)
 	{
 		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
-		size_t rangeA = 0;
-		size_t rangeB = (info->stackSize + info->reserveSize) / MEM_PAGE_SIZE;
-		do
+		MEMORY_BASIC_INFORMATION mbi;
+		VirtualQuery(sb, &mbi, sizeof(mbi));
+		assert(sb == mbi.AllocationBase);
+		if (MEM_RESERVE == mbi.State)
 		{
-			MEMORY_BASIC_INFORMATION mbi;
-			const size_t i = rangeA + (rangeB - rangeA) / 2;
-			VirtualQuery(sb + i * MEM_PAGE_SIZE, &mbi, sizeof(mbi));
-			if ((PAGE_READWRITE | PAGE_GUARD) == mbi.Protect)
-			{
-				return i * MEM_PAGE_SIZE + MEM_PAGE_SIZE;
-			} 
-			else if (MEM_RESERVE == mbi.State)
-			{
-				rangeA = i + 1;
-			}
-			else
-			{
-				rangeB = i;
-			}
-		} while (rangeA < rangeB);
+			assert(0 == mbi.Protect);
+			return mbi.RegionSize + MEM_PAGE_SIZE;
+		}
+		else if ((PAGE_READWRITE | PAGE_GUARD) == mbi.Protect)
+		{
+			assert(MEM_COMMIT == mbi.State && MEM_PAGE_SIZE == mbi.RegionSize);
+			return MEM_PAGE_SIZE;
+		}
 		return 0;
+// 		size_t rangeA = 0;
+// 		size_t rangeB = (info->stackSize + info->reserveSize) / MEM_PAGE_SIZE;
+// 		do
+// 		{
+// 			MEMORY_BASIC_INFORMATION mbi;
+// 			const size_t i = rangeA + (rangeB - rangeA) / 2;
+// 			VirtualQuery(sb + i * MEM_PAGE_SIZE, &mbi, sizeof(mbi));
+// 			if ((PAGE_READWRITE | PAGE_GUARD) == mbi.Protect)
+// 			{
+// 				return i * MEM_PAGE_SIZE + MEM_PAGE_SIZE;
+// 			} 
+// 			else if (MEM_RESERVE == mbi.State)
+// 			{
+// 				rangeA = i + 1;
+// 			}
+// 			else
+// 			{
+// 				rangeB = i;
+// 			}
+// 		} while (rangeA < rangeB);
+// 		return 0;
 	}
 
 	void check_stack()

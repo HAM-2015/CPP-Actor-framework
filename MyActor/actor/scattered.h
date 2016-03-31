@@ -334,4 +334,80 @@ static decltype(std::placeholders::_7) __7;
 static decltype(std::placeholders::_8) __8;
 static decltype(std::placeholders::_9) __9;
 
+#define RVALUE_COPY_CONSTRUCTION1(__name__, __val1__) public:\
+	__name__(const __name__& s)	:__val1__(s.__val1__) {}\
+	__name__(__name__&& s) :__val1__(std::move(s.__val1__)) {}\
+	void operator=(const __name__& s) { if (this != &s) { __val1__ = s.__val1__; } }\
+	void operator=(__name__&& s) { if (this != &s) { __val1__ = std::move(s.__val1__); } }
+
+#define RVALUE_COPY_CONSTRUCTION2(__name__, __val1__, __val2__) public:\
+	__name__(const __name__& s) :__val1__(s.__val1__), __val2__(s.__val2__) {}\
+	__name__(__name__&& s) : __val1__(std::move(s.__val1__)), __val2__(std::move(s.__val2__)) {}\
+	void operator=(const __name__& s) { if (this != &s) { __val1__ = s.__val1__; __val2__ = s.__val2__; } }\
+	void operator=(__name__&& s) { if (this != &s) { __val1__ = std::move(s.__val1__); __val2__ = std::move(s.__val2__); } }
+
+#define RVALUE_COPY_CONSTRUCTION3(__name__, __val1__, __val2__, __val3__) public:\
+	__name__(const __name__& s) :__val1__(s.__val1__), __val2__(s.__val2__), __val3__(s.__val3__) {}\
+	__name__(__name__&& s) : __val1__(std::move(s.__val1__)), __val2__(std::move(s.__val2__)), __val3__(std::move(s.__val3__)) {}\
+	void operator=(const __name__& s) { if (this != &s) { __val1__ = s.__val1__; __val2__ = s.__val2__; __val3__ = s.__val3__; } }\
+	void operator=(__name__&& s) { if (this != &s) { __val1__ = std::move(s.__val1__); __val2__ = std::move(s.__val2__); __val3__ = std::move(s.__val3__); } }
+
+#define RVALUE_COPY_CONSTRUCTION4(__name__, __val1__, __val2__, __val3__, __val4__) public:\
+	__name__(const __name__& s) :__val1__(s.__val1__), __val2__(s.__val2__), __val3__(s.__val3__), __val4__(s.__val4__) {}\
+	__name__(__name__&& s) : __val1__(std::move(s.__val1__)), __val2__(std::move(s.__val2__)), __val3__(std::move(s.__val3__)), __val4__(std::move(s.__val4__)) {}\
+	void operator=(const __name__& s) { if (this != &s) { __val1__ = s.__val1__; __val2__ = s.__val2__; __val3__ = s.__val3__; __val4__ = s.__val4__; } }\
+	void operator=(__name__&& s) { if (this != &s) { __val1__ = std::move(s.__val1__); __val2__ = std::move(s.__val2__); __val3__ = std::move(s.__val3__); __val4__ = std::move(s.__val4__); } }
+
+#define RVALUE_COPY_CONSTRUCTION5(__name__, __val1__, __val2__, __val3__, __val4__, __val5__) public:\
+	__name__(const __name__& s) :__val1__(s.__val1__), __val2__(s.__val2__), __val3__(s.__val3__), __val4__(s.__val4__), \
+	__val5__(s.__val5__) {}\
+	__name__(__name__&& s) : __val1__(std::move(s.__val1__)), __val2__(std::move(s.__val2__)), __val3__(std::move(s.__val3__)), __val4__(std::move(s.__val4__)), \
+	__val5__(std::move(s.__val5__)) {}\
+	void operator=(const __name__& s) { if (this != &s) { __val1__ = s.__val1__; __val2__ = s.__val2__; __val3__ = s.__val3__; __val4__ = s.__val4__; \
+	__val5__ = s.__val5__; } }\
+	void operator=(__name__&& s) { if (this != &s) { __val1__ = std::move(s.__val1__); __val2__ = std::move(s.__val2__); __val3__ = std::move(s.__val3__); __val4__ = std::move(s.__val4__); \
+	__val5__ = std::move(s.__val5__); } }
+
+#define RVALUE_COPY_CONSTRUCTION6(__name__, __val1__, __val2__, __val3__, __val4__, __val5__, __val6__) public:\
+	__name__(const __name__& s) :__val1__(s.__val1__), __val2__(s.__val2__), __val3__(s.__val3__), __val4__(s.__val4__), \
+	__val5__(s.__val5__), __val6__(s.__val6__) {}\
+	__name__(__name__&& s) : __val1__(std::move(s.__val1__)), __val2__(std::move(s.__val2__)), __val3__(std::move(s.__val3__)), __val4__(std::move(s.__val4__)), \
+	__val5__(std::move(s.__val5__)), __val6__(std::move(s.__val6__)) {}\
+	void operator=(const __name__& s) { if (this != &s) { __val1__ = s.__val1__; __val2__ = s.__val2__; __val3__ = s.__val3__; __val4__ = s.__val4__; \
+	__val5__ = s.__val5__; __val6__ = s.__val6__; } }\
+	void operator=(__name__&& s) { if (this != &s) { __val1__ = std::move(s.__val1__); __val2__ = std::move(s.__val2__); __val3__ = std::move(s.__val3__); __val4__ = std::move(s.__val4__); \
+	__val5__ = std::move(s.__val5__); __val6__ = std::move(s.__val6__); } }
+
+#define RVALUE_COPY_CONSTRUCTION(__name__, ...) _BOND_LR__(RVALUE_COPY_CONSTRUCTION, _PP_NARG(__VA_ARGS__))(__name__, __VA_ARGS__)
+
+#define RVALUE_MOVE1(__name__, __val1__) public:\
+	__name__(__name__&& s) : __val1__(std::move(s.__val1__)) {}\
+	void operator=(__name__&& s) { if (this != &s) { __val1__ = std::move(s.__val1__); } }
+
+#define RVALUE_MOVE2(__name__, __val1__, __val2__) public:\
+	__name__(__name__&& s) : __val1__(std::move(s.__val1__)), __val2__(std::move(s.__val2__)) {}\
+	void operator=(__name__&& s) { if (this != &s) { __val1__ = std::move(s.__val1__); __val2__ = std::move(s.__val2__); } }
+
+#define RVALUE_MOVE3(__name__, __val1__, __val2__, __val3__) public:\
+	__name__(__name__&& s) : __val1__(std::move(s.__val1__)), __val2__(std::move(s.__val2__)), __val3__(std::move(s.__val3__)) {}\
+	void operator=(__name__&& s) { if (this != &s) { __val1__ = std::move(s.__val1__); __val2__ = std::move(s.__val2__); __val3__ = std::move(s.__val3__); } }
+
+#define RVALUE_MOVE4(__name__, __val1__, __val2__, __val3__, __val4__) public:\
+	__name__(__name__&& s) : __val1__(std::move(s.__val1__)), __val2__(std::move(s.__val2__)), __val3__(std::move(s.__val3__)), __val4__(std::move(s.__val4__)) {}\
+	void operator=(__name__&& s) { if (this != &s) { __val1__ = std::move(s.__val1__); __val2__ = std::move(s.__val2__); __val3__ = std::move(s.__val3__); __val4__ = std::move(s.__val4__); } }
+
+#define RVALUE_MOVE5(__name__, __val1__, __val2__, __val3__, __val4__, __val5__) public:\
+	__name__(__name__&& s) : __val1__(std::move(s.__val1__)), __val2__(std::move(s.__val2__)), __val3__(std::move(s.__val3__)), __val4__(std::move(s.__val4__)), \
+	__val5__(std::move(s.__val5__)) {}\
+	void operator=(__name__&& s) { if (this != &s) { __val1__ = std::move(s.__val1__); __val2__ = std::move(s.__val2__); __val3__ = std::move(s.__val3__); __val4__ = std::move(s.__val4__); \
+	__val5__ = std::move(s.__val5__); } }
+
+#define RVALUE_MOVE6(__name__, __val1__, __val2__, __val3__, __val4__, __val5__, __val6__) public:\
+	__name__(__name__&& s) : __val1__(std::move(s.__val1__)), __val2__(std::move(s.__val2__)), __val3__(std::move(s.__val3__)), __val4__(std::move(s.__val4__)), \
+	__val5__(std::move(s.__val5__)), __val6__(std::move(s.__val6__)) {}\
+	void operator=(__name__&& s) { if (this != &s) { __val1__ = std::move(s.__val1__); __val2__ = std::move(s.__val2__); __val3__ = std::move(s.__val3__); __val4__ = std::move(s.__val4__); \
+	__val5__ = std::move(s.__val5__); __val6__ = std::move(s.__val6__); } }
+
+#define RVALUE_MOVE(__name__, ...) _BOND_LR__(RVALUE_MOVE, _PP_NARG(__VA_ARGS__))(__name__, __VA_ARGS__)
+
 #endif
