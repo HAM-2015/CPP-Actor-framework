@@ -35,45 +35,45 @@
 #endif
 
 template <typename CL>
-struct out_of_scope
+struct break_of_scope
 {
 	template <typename TC>
-	out_of_scope(TC&& cl)
+	break_of_scope(TC&& cl)
 		:_cl(TRY_MOVE(cl)) {}
 
-	~out_of_scope() __disable_noexcept
+	~break_of_scope() __disable_noexcept
 	{
 		_cl();
 	}
 
 	CL _cl;
 private:
-	out_of_scope(const out_of_scope&){};
-	void operator =(const out_of_scope&){}
+	break_of_scope(const break_of_scope&){};
+	void operator =(const break_of_scope&){}
 };
 
 #define BOND_LINE(__P__, __L__) NAME_BOND(__P__, __L__)
 
 //作用域退出时自动调用lambda
-#define OUT_OF_SCOPE(__CL__) \
+#define BREAK_OF_SCOPE(__CL__) \
 	auto BOND_LINE(__t, __LINE__) = [&]__CL__; \
-	out_of_scope<decltype(BOND_LINE(__t, __LINE__))> BOND_LINE(__cl, __LINE__)(BOND_LINE(__t, __LINE__))
+	break_of_scope<decltype(BOND_LINE(__t, __LINE__))> BOND_LINE(__cl, __LINE__)(BOND_LINE(__t, __LINE__))
 
-#define OUT_OF_SCOPE_NAME(__NAME__, __CL__) \
+#define BREAK_OF_SCOPE_NAME(__NAME__, __CL__) \
 	auto NAME_BOND(__t, __NAME__) = [&]__CL__; \
-	out_of_scope<decltype(NAME_BOND(__t, __NAME__))> NAME_BOND(__cl, __NAME__)(NAME_BOND(__t, __NAME__))
+	break_of_scope<decltype(NAME_BOND(__t, __NAME__))> NAME_BOND(__cl, __NAME__)(NAME_BOND(__t, __NAME__))
 
-#define _OUT_OF_SCOPE_EXEC1(__opt1__) OUT_OF_SCOPE({ __opt1__; });
-#define _OUT_OF_SCOPE_EXEC2(__opt1__, __opt2__) OUT_OF_SCOPE({ __opt1__; __opt2__; });
-#define _OUT_OF_SCOPE_EXEC3(__opt1__, __opt2__, __opt3__) OUT_OF_SCOPE({ __opt1__; __opt2__; __opt3__; });
-#define _OUT_OF_SCOPE_EXEC4(__opt1__, __opt2__, __opt3__, __opt4__) OUT_OF_SCOPE({ __opt1__; __opt2__; __opt3__; __opt4__; });
-#define _OUT_OF_SCOPE_EXEC5(__opt1__, __opt2__, __opt3__, __opt4__, __opt5__) OUT_OF_SCOPE({ __opt1__; __opt2__; __opt3__; __opt4__; __opt5__; });
-#define _OUT_OF_SCOPE_EXEC6(__opt1__, __opt2__, __opt3__, __opt4__, __opt5__, __opt6__) OUT_OF_SCOPE({ __opt1__; __opt2__; __opt3__; __opt4__; __opt5__; __opt6__; });
+#define _BREAK_OF_SCOPE_EXEC1(__opt1__) BREAK_OF_SCOPE({ __opt1__; });
+#define _BREAK_OF_SCOPE_EXEC2(__opt1__, __opt2__) BREAK_OF_SCOPE({ __opt1__; __opt2__; });
+#define _BREAK_OF_SCOPE_EXEC3(__opt1__, __opt2__, __opt3__) BREAK_OF_SCOPE({ __opt1__; __opt2__; __opt3__; });
+#define _BREAK_OF_SCOPE_EXEC4(__opt1__, __opt2__, __opt3__, __opt4__) BREAK_OF_SCOPE({ __opt1__; __opt2__; __opt3__; __opt4__; });
+#define _BREAK_OF_SCOPE_EXEC5(__opt1__, __opt2__, __opt3__, __opt4__, __opt5__) BREAK_OF_SCOPE({ __opt1__; __opt2__; __opt3__; __opt4__; __opt5__; });
+#define _BREAK_OF_SCOPE_EXEC6(__opt1__, __opt2__, __opt3__, __opt4__, __opt5__, __opt6__) BREAK_OF_SCOPE({ __opt1__; __opt2__; __opt3__; __opt4__; __opt5__; __opt6__; });
 #ifdef _MSC_VER
-#define _OUT_OF_SCOPE_EXEC(__pl__, ...) _BOND_LR__(_OUT_OF_SCOPE_EXEC, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
-#define OUT_OF_SCOPE_EXEC(...) _OUT_OF_SCOPE_EXEC(__pl__, __VA_ARGS__)
+#define _BREAK_OF_SCOPE_EXEC(__pl__, ...) _BOND_LR__(_BREAK_OF_SCOPE_EXEC, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
+#define BREAK_OF_SCOPE_EXEC(...) _BREAK_OF_SCOPE_EXEC(__pl__, __VA_ARGS__)
 #elif __GNUG__
-#define OUT_OF_SCOPE_EXEC(...) _BOND_LR__(_OUT_OF_SCOPE_EXEC, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
+#define BREAK_OF_SCOPE_EXEC(...) _BOND_LR__(_BREAK_OF_SCOPE_EXEC, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
 #endif
 
 #if (_DEBUG || DEBUG)

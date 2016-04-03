@@ -784,7 +784,7 @@ public:
 			mutex.unlock();
 		});
 		con.wait(ul);
-		OUT_OF_SCOPE(
+		BREAK_OF_SCOPE(
 		{
 			typedef R T_;
 			((T_*)r)->~R();

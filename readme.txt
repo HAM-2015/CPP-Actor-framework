@@ -1,7 +1,7 @@
 并发逻辑控制框架(Actor Model)，适用于复杂业务逻辑，有问题或BUG反馈至591170887@qq.com;
 依赖于boost 1.5x;
 暂无开发文档，等作者认为可以定型后开放文档;
-目前仅在 VS2013,MINGW49_x64,GCC4.9-linux_x86_x64_arm32,arm-linux-eabi-gcc49(android4.4.3) 中测试;
+目前仅在 VS2013,MINGW49_x64,GCC4.9-linux_x86_x64,arm-linux-eabi(hf)-gcc49 中测试;
 可以用来构建服务端/客户端，也可以用在与网络无关的程序中（例如UI控制逻辑）;
 可以任意使用或编辑源码，而不需通知作者，当然作者也不对使用本框架造成的任何损失负责.
 
@@ -13,7 +13,7 @@ http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
 2016-03-26
-移植到arm-android(4.4.3+)平台(支持在 QT-UI For Android 框架中运行).
+移植到arm-android(Linux-Kernel-3.4.0+)平台(支持在 QT-UI For Android 框架中运行).
 
 2016-03-15
 移植到arm-linux平台.

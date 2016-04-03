@@ -444,7 +444,7 @@ struct LocalRecursive_<_Rt(_Types...)>
 	{
 		assert(_func);
 		DEBUG_OPERATION(_depth++);
-		DEBUG_OPERATION(OUT_OF_SCOPE({ _depth--; }));
+		DEBUG_OPERATION(BREAK_OF_SCOPE({ _depth--; }));
 		return _func->invoke(std::forward<Args>(args)...);
 	}
 
@@ -496,19 +496,19 @@ struct InvokerType_<Handler, _Rt(C::*)(_Types...) const>
 
 #define SET_RECURSIVE_FUNC(__name__, __lmd__)\
 	_SET_RECURSIVE_FUNC(__name__, __lmd__); \
-	OUT_OF_SCOPE({ __name__.destroy(); });
+	BREAK_OF_SCOPE({ __name__.destroy(); });
 
 #define LOCAL_RECURSIVE1(__name__, __type__, __lmd__)\
 	DEFINE_LOCAL_RECURSIVE(__name__, __type__); \
 	_SET_RECURSIVE_FUNC(__name__, __lmd__) \
-	OUT_OF_SCOPE({ __name__.destroy(); });
+	BREAK_OF_SCOPE({ __name__.destroy(); });
 
 #define LOCAL_RECURSIVE2(__name1__, __name2__, __type1__, __type2__, __lmd1__, __lmd2__)\
 	DEFINE_LOCAL_RECURSIVE(__name1__, __type1__); \
 	DEFINE_LOCAL_RECURSIVE(__name2__, __type2__); \
 	_SET_RECURSIVE_FUNC(__name1__, __lmd1__) \
 	_SET_RECURSIVE_FUNC(__name2__, __lmd2__) \
-	OUT_OF_SCOPE({ __name1__.destroy(); __name2__.destroy(); });
+	BREAK_OF_SCOPE({ __name1__.destroy(); __name2__.destroy(); });
 
 #define LOCAL_RECURSIVE3(__name1__, __name2__, __name3__, __type1__, __type2__, __type3__, __lmd1__, __lmd2__, __lmd3__)\
 	DEFINE_LOCAL_RECURSIVE(__name1__, __type1__); \
@@ -517,7 +517,7 @@ struct InvokerType_<Handler, _Rt(C::*)(_Types...) const>
 	_SET_RECURSIVE_FUNC(__name1__, __lmd1__) \
 	_SET_RECURSIVE_FUNC(__name2__, __lmd2__) \
 	_SET_RECURSIVE_FUNC(__name3__, __lmd3__) \
-	OUT_OF_SCOPE({ __name1__.destroy(); __name2__.destroy(); __name3__.destroy(); });
+	BREAK_OF_SCOPE({ __name1__.destroy(); __name2__.destroy(); __name3__.destroy(); });
 
 #if (_DEBUG || DEBUG)
 #define DEBUG_LOCAL_RECURSIVE(__name__, __type__)\

@@ -3818,7 +3818,7 @@ bool my_actor::try_pump_msg(bool checkDis, const msg_pump_handle<>& pump)
 	assert_enter();
 	assert(!pump.check_closed());
 	assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
-	OUT_OF_SCOPE(
+	BREAK_OF_SCOPE(
 	{
 		pump.get()->stop_waiting();
 	});
@@ -3950,6 +3950,7 @@ bool ActorFunc_::is_quited(my_actor* host)
 
 reusable_mem& ActorFunc_::reu_mem(my_actor* host)
 {
+	assert(host);
 	return host->self_reusable();
 }
 

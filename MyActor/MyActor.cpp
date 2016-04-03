@@ -16,10 +16,34 @@ void wait_multi_msg()
 	ios.run();
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
 	{
-		actor_handle act1 = my_actor::create(self->self_strand(), [](my_actor* self)
+		csp_invoke<void(move_test)> csp(self->self_strand());
+		async_buffer<move_test> buf(self->self_strand(), 1);
+		actor_handle act1 = my_actor::create(self->self_strand(), [&](my_actor* self)
 		{
 			my_actor::quit_guard qg(self);
-			self->run_mutex_blocks_safe(mutex_block_pump_check_state<int>(self, [&](int msg)
+			actor_trig_handle<> cspAth;
+			actor_trig_handle<> bufAth;
+			csp.regist_take_ntf(self, self->make_trig_notifer_to_self(cspAth));
+			buf.regist_pop_ntf(self, self->make_trig_notifer_to_self(bufAth));
+			self->run_mutex_blocks_safe(mutex_block_trig<>(cspAth, [&]()
+			{
+				trace_comma(self->self_id(), "begin wait csp");
+				csp.wait_invoke(self, [&](const move_test& mt)
+				{
+					trace_comma(self->self_id(), "csp msg ", mt);
+				});
+				trace_comma(self->self_id(), "end wait csp");
+				csp.regist_take_ntf(self, self->make_trig_notifer_to_self(cspAth));
+				return false;
+			}), mutex_block_trig<>(bufAth, [&]()
+			{
+				trace_comma(self->self_id(), "begin wait buf");
+				move_test mt = buf.pop(self);
+				trace_comma(self->self_id(), "buf msg ", mt);
+				trace_comma(self->self_id(), "end wait buf");
+				buf.regist_pop_ntf(self, self->make_trig_notifer_to_self(bufAth));
+				return false;
+			}), mutex_block_pump_check_state<int>(self, [&](int msg)
 			{
 				trace_comma(self->self_id(), "begin msg int");
 				self->sleep(500);
@@ -72,6 +96,11 @@ void wait_multi_msg()
 		});
 		child_actor_handle ch2 = self->create_child_actor([&](my_actor* self)
 		{
+			for (int i = 0; i < 3; i++)
+			{
+				buf.push(self, move_test(i));
+				self->sleep(300);
+			}
 			auto ntf = self->connect_msg_notifer_to<int>(act1, true);
 			if (ntf)
 			{
@@ -85,6 +114,11 @@ void wait_multi_msg()
 		});
 		child_actor_handle ch3 = self->create_child_actor([&](my_actor* self)
 		{
+			for (int i = 0; i < 3; i++)
+			{
+				csp.invoke(self, move_test(i));
+				self->sleep(1000);
+			}
 			auto ntf = self->connect_msg_notifer_to<move_test>(act1, true);
 			if (ntf)
 			{

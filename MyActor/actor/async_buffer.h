@@ -333,7 +333,7 @@ public:
 			_buffer.pop_front();
 			return true;
 		});
-		OUT_OF_SCOPE(
+		BREAK_OF_SCOPE(
 		{
 			typedef T TP_;
 			((TP_*)resBuf)->~TP_();

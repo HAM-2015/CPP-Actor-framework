@@ -98,6 +98,9 @@ struct NtfHandle_
 	NtfHandle_(shared_bool&& b, std::function<void()>&& n)
 		:sign(std::move(b)), ntf(std::move(n)) {}
 
+	NtfHandle_(const shared_bool& b, std::function<void()>&& n)
+		:sign(b), ntf(std::move(n)) {}
+
 	void operator()()
 	{
 		if (!sign.empty())
@@ -318,6 +321,7 @@ public:
 					{
 						_takeNtfQueue.front()();
 						_takeNtfQueue.pop_front();
+						tm = -1;
 					}
 				}
 				else
@@ -403,7 +407,7 @@ public:
 		}
 		if (!closed)
 		{
-			OUT_OF_SCOPE(
+			BREAK_OF_SCOPE(
 			{
 				typedef RT TP_;
 				((TP_*)msgBuf)->~TP_();
@@ -772,7 +776,7 @@ protected:
 			host->unlock_quit();
 			throw_close_exception();
 		}
-		OUT_OF_SCOPE(
+		BREAK_OF_SCOPE(
 		{
 			typedef R TP_;
 			((TP_*)resBuf)->~TP_();
@@ -837,7 +841,7 @@ protected:
 			host->unlock_quit();
 			throw_close_exception();
 		}
-		OUT_OF_SCOPE(
+		BREAK_OF_SCOPE(
 		{
 			typedef R TP_;
 			((TP_*)resBuf)->~TP_();
@@ -877,6 +881,7 @@ protected:
 					{
 						_takeNtfQueue.front()();
 						_takeNtfQueue.pop_front();
+						has = true;
 					}
 				}
 				else
@@ -926,7 +931,7 @@ protected:
 			host->unlock_quit();
 			throw_close_exception();
 		}
-		OUT_OF_SCOPE(
+		BREAK_OF_SCOPE(
 		{
 			typedef R TP_;
 			((TP_*)resBuf)->~TP_();
@@ -981,7 +986,7 @@ protected:
 		if (!closed)
 		{
 			bool ok = false;
-			OUT_OF_SCOPE({ ntfSend(!ok); });
+			BREAK_OF_SCOPE({ ntfSend(!ok); });
 			BEGIN_TRY_
 			{
 				new(res)R(h(*srcMsg));
@@ -1045,7 +1050,7 @@ protected:
 			throw_try_take_exception();
 		}
 		bool ok = false;
-		OUT_OF_SCOPE({ ntfSend(!ok); });
+		BREAK_OF_SCOPE({ ntfSend(!ok); });
 		BEGIN_TRY_
 		{
 			new(res)R(h(*srcMsg));
@@ -1135,7 +1140,7 @@ protected:
 			throw_close_exception();
 		}
 		bool ok = false;
-		OUT_OF_SCOPE({ ntfSend(!ok); });
+		BREAK_OF_SCOPE({ ntfSend(!ok); });
 		BEGIN_TRY_
 		{
 			new(res)R(h(*srcMsg));
@@ -1167,7 +1172,7 @@ public:
 			}
 			else
 			{
-				_takeNtfQueue.push_back((Ntf&&)ntf);
+				_takeNtfQueue.push_back(NtfHandle_(shared_bool(), (Ntf&&)ntf));
 			}
 		});
 		host->unlock_quit();

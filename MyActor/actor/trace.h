@@ -9,12 +9,23 @@
 #include <sstream>
 #include <iostream> 
 #include "try_move.h"
+#ifdef TRACE_ANDROID_LOG
+#include <android/log.h>
+#endif
+
+#ifndef TRACE_ANDROID_LOG
+typedef std::wostringstream _Tracestream;
+typedef std::wostream _Tracestreambase;
+#else
+typedef std::ostringstream _Tracestream;
+typedef std::ostream _Tracestreambase;
+#endif
 
 template <typename T>
 struct TraceMatch_ 
 {
 	template <typename TP>
-	static void trace(std::wostream& out, TP&& s)
+	static void trace(_Tracestreambase& out, TP&& s)
 	{
 		out << s;
 	}
@@ -23,7 +34,7 @@ struct TraceMatch_
 template <>
 struct TraceMatch_<bool> 
 {
-	static void trace(std::wostream& out, bool b)
+	static void trace(_Tracestreambase& out, bool b)
 	{
 		out << (b ? "true" : "false");
 	}
@@ -32,7 +43,7 @@ struct TraceMatch_<bool>
 template <size_t N, typename T>
 struct TraceMatch_<T[N]>
 {
-	static void trace(std::wostream& out, const T(&s)[N])
+	static void trace(_Tracestreambase& out, const T(&s)[N])
 	{
 		out << "[";
 		for (int i = 0; i < (int)N - 1; i++)
@@ -51,7 +62,7 @@ struct TraceMatch_<T[N]>
 template <size_t N>
 struct TraceMatch_<char[N]>
 {
-	static void trace(std::wostream& out, const char(&s)[N])
+	static void trace(_Tracestreambase& out, const char(&s)[N])
 	{
 		out << s;
 	}
@@ -60,7 +71,7 @@ struct TraceMatch_<char[N]>
 template <size_t N>
 struct TraceMatch_<wchar_t[N]>
 {
-	static void trace(std::wostream& out, const wchar_t(&s)[N])
+	static void trace(_Tracestreambase& out, const wchar_t(&s)[N])
 	{
 		out << s;
 	}
@@ -69,7 +80,7 @@ struct TraceMatch_<wchar_t[N]>
 template <>
 struct TraceMatch_<std::string>
 {
-	static void trace(std::wostream& out, const std::string& s)
+	static void trace(_Tracestreambase& out, const std::string& s)
 	{
 		out << s.c_str();
 	}
@@ -78,7 +89,7 @@ struct TraceMatch_<std::string>
 template <>
 struct TraceMatch_<char*>
 {
-	static void trace(std::wostream& out, const char* s)
+	static void trace(_Tracestreambase& out, const char* s)
 	{
 		out << s;
 	}
@@ -87,7 +98,7 @@ struct TraceMatch_<char*>
 template <>
 struct TraceMatch_<wchar_t*>
 {
-	static void trace(std::wostream& out, const wchar_t* s)
+	static void trace(_Tracestreambase& out, const wchar_t* s)
 	{
 		out << s;
 	}
@@ -96,7 +107,7 @@ struct TraceMatch_<wchar_t*>
 template <typename T>
 struct TraceMatch_<std::vector<T>>
 {
-	static void trace(std::wostream& out, const std::vector<T>& s)
+	static void trace(_Tracestreambase& out, const std::vector<T>& s)
 	{
 		out << "[";
 		for (int i = 0; i < (int)s.size() - 1; i++)
@@ -115,7 +126,7 @@ struct TraceMatch_<std::vector<T>>
 template <typename T>
 struct TraceMatch_<std::list<T>>
 {
-	static void trace(std::wostream& out, const std::list<T>& s)
+	static void trace(_Tracestreambase& out, const std::list<T>& s)
 	{
 		out << "{";
 		int l = (int)s.size();
@@ -136,7 +147,7 @@ struct TraceMatch_<std::list<T>>
 template <typename K, typename V>
 struct TraceMatch_<std::map<K, V>>
 {
-	static void trace(std::wostream& out, const std::map<K, V>& s)
+	static void trace(_Tracestreambase& out, const std::map<K, V>& s)
 	{
 		out << "{";
 		int l = (int)s.size();
@@ -161,7 +172,7 @@ struct TraceMatch_<std::map<K, V>>
 template <typename T>
 struct TraceMatch_<std::set<T>>
 {
-	static void trace(std::wostream& out, const std::set<T>& s)
+	static void trace(_Tracestreambase& out, const std::set<T>& s)
 	{
 		out << "{";
 		int l = (int)s.size();
@@ -180,25 +191,25 @@ struct TraceMatch_<std::set<T>>
 };
 
 template <typename First>
-void _trace(std::wostream& out, First&& fst)
+void _trace(_Tracestreambase& out, First&& fst)
 {
 	TraceMatch_<RM_CREF(First)>::trace(out, fst);
 }
 
 template <typename First>
-void _trace_space(std::wostream& out, First&& fst)
+void _trace_space(_Tracestreambase& out, First&& fst)
 {
 	TraceMatch_<RM_CREF(First)>::trace(out, fst);
 }
 
 template <typename First>
-void _trace_comma(std::wostream& out, First&& fst)
+void _trace_comma(_Tracestreambase& out, First&& fst)
 {
 	TraceMatch_<RM_CREF(First)>::trace(out, fst);
 }
 
 template <typename First, typename... Args>
-void _trace(std::wostream& out, First&& fst, Args&&... args)
+void _trace(_Tracestreambase& out, First&& fst, Args&&... args)
 {
 	static_assert(sizeof...(Args) > 0, "");
 	TraceMatch_<RM_CREF(First)>::trace(out, fst);
@@ -206,7 +217,7 @@ void _trace(std::wostream& out, First&& fst, Args&&... args)
 }
 
 template <typename First, typename... Args>
-void _trace_space(std::wostream& out, First&& fst, Args&&... args)
+void _trace_space(_Tracestreambase& out, First&& fst, Args&&... args)
 {
 	static_assert(sizeof...(Args) > 0, "");
 	TraceMatch_<RM_CREF(First)>::trace(out, fst);
@@ -215,7 +226,7 @@ void _trace_space(std::wostream& out, First&& fst, Args&&... args)
 }
 
 template <typename First, typename... Args>
-void _trace_comma(std::wostream& out, First&& fst, Args&&... args)
+void _trace_comma(_Tracestreambase& out, First&& fst, Args&&... args)
 {
 	static_assert(sizeof...(Args) > 0, "");
 	TraceMatch_<RM_CREF(First)>::trace(out, fst);
@@ -238,7 +249,7 @@ struct TraceMutex_
 	static std::mutex* _mutex;
 };
 
-typedef std::wostringstream _Tracestream;
+#ifndef TRACE_ANDROID_LOG
 
 template <typename... Args> void trace(Args&&... args) { _Tracestream oss; _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::flush; } }
 template <typename... Args> void trace_line(Args&&... args) { _Tracestream oss; _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
@@ -271,6 +282,42 @@ template <typename... Args> void warning_trace(Args&&... args) { _Tracestream os
 template <typename... Args> void warning_trace_line(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " WARNING: "); _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
 template <typename... Args> void warning_trace_space(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " WARNING: "); _trace_space(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
 template <typename... Args> void warning_trace_comma(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " WARNING: "); _trace_comma(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
+
+#else
+
+template <typename... Args> void trace(Args&&... args) { _Tracestream oss; _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_UNKNOWN, "UNKNOWN", "%s", oss.str().c_str()); } }
+template <typename... Args> void trace_line(Args&&... args) { _Tracestream oss; _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_UNKNOWN, "UNKNOWN", "%s", oss.str().c_str()); } }
+template <typename... Args> void trace_space(Args&&... args) { _Tracestream oss; _trace_space(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_UNKNOWN, "UNKNOWN", "%s", oss.str().c_str()); } }
+template <typename... Args> void trace_comma(Args&&... args) { _Tracestream oss; _trace_comma(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_UNKNOWN, "UNKNOWN", "%s", oss.str().c_str()); } }
+
+#if (_DEBUG || DEBUG)
+template <typename... Args> void debug_trace(Args&&... args) { _Tracestream oss; _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_DEBUG, "DEBUG", "%s", oss.str().c_str()); } }
+template <typename... Args> void debug_trace_line(Args&&... args) { _Tracestream oss; _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_DEBUG, "DEBUG", "%s", oss.str().c_str()); } }
+template <typename... Args> void debug_trace_space(Args&&... args) { _Tracestream oss; _trace_space(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_DEBUG, "DEBUG", "%s", oss.str().c_str()); } }
+template <typename... Args> void debug_trace_comma(Args&&... args) { _Tracestream oss; _trace_comma(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_DEBUG, "DEBUG", "%s", oss.str().c_str()); } }
+#else
+template <typename... Args> void debug_trace(Args&&... args) {}
+template <typename... Args> void debug_trace_line(Args&&... args) {}
+template <typename... Args> void debug_trace_space(Args&&... args) {}
+template <typename... Args> void debug_trace_comma(Args&&... args) {}
+#endif
+
+template <typename... Args> void info_trace(Args&&... args) { _Tracestream oss; _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_INFO, "ERROR", "%s", oss.str().c_str()); } }
+template <typename... Args> void info_trace_line(Args&&... args) { _Tracestream oss; _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_INFO, "INFO", "%s", oss.str().c_str()); } }
+template <typename... Args> void info_trace_space(Args&&... args) { _Tracestream oss; _trace_space(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_INFO, "INFO", "%s", oss.str().c_str()); } }
+template <typename... Args> void info_trace_comma(Args&&... args) { _Tracestream oss; _trace_comma(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_INFO, "INFO", "%s", oss.str().c_str()); } }
+
+template <typename... Args> void error_trace(Args&&... args) { _Tracestream oss; _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_ERROR, "ERROR", "%s", oss.str().c_str()); } }
+template <typename... Args> void error_trace_line(Args&&... args) { _Tracestream oss; _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_ERROR, "ERROR", "%s", oss.str().c_str()); } }
+template <typename... Args> void error_trace_space(Args&&... args) { _Tracestream oss; _trace_space(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_ERROR, "ERROR", "%s", oss.str().c_str()); } }
+template <typename... Args> void error_trace_comma(Args&&... args) { _Tracestream oss; _trace_comma(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_ERROR, "ERROR", "%s", oss.str().c_str()); } }
+
+template <typename... Args> void warning_trace(Args&&... args) { _Tracestream oss; _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_WARN, "WARNING", "%s", oss.str().c_str()); } }
+template <typename... Args> void warning_trace_line(Args&&... args) { _Tracestream oss; _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_WARN, "WARNING", "%s", oss.str().c_str()); } }
+template <typename... Args> void warning_trace_space(Args&&... args) { _Tracestream oss; _trace_space(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_WARN, "WARNING", "%s", oss.str().c_str()); } }
+template <typename... Args> void warning_trace_comma(Args&&... args) { _Tracestream oss; _trace_comma(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_WARN, "WARNING", "%s", oss.str().c_str()); } }
+
+#endif
 
 struct trace_result
 {

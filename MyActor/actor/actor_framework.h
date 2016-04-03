@@ -56,11 +56,11 @@ class ActorMutex_;
 
 #define _init_my_actor1()\
 	my_actor::install(); \
-	OUT_OF_SCOPE({ my_actor::uninstall(); })
+	BREAK_OF_SCOPE({ my_actor::uninstall(); })
 
 #define _init_my_actor2(__aid__)\
 	my_actor::install(__aid__); \
-	OUT_OF_SCOPE({ my_actor::uninstall(); })
+	BREAK_OF_SCOPE({ my_actor::uninstall(); })
 
 //初始化my_actor框架
 #define init_my_actor(...) _BOND_LR__(_init_my_actor, _PP_NARG(__pl__, __VA_ARGS__))(__VA_ARGS__);
@@ -2320,6 +2320,15 @@ public:
 #elif __GNUG__
 		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)) {}
 #endif
+
+#ifdef __GNUG__
+	mutex_block_msg(mutex_block_msg&& s)
+		:_msgHandle(s._msgHandle), _handler(std::move(s._handler))
+	{
+		assert(false);
+		assert(!_msgBuff.has());
+	}
+#endif
 private:
 	bool ready()
 	{
@@ -2345,7 +2354,7 @@ private:
 		if (_msgBuff.has())
 		{
 			isRun = true;
-			OUT_OF_SCOPE({ _msgBuff.clear(); });
+			BREAK_OF_SCOPE({ _msgBuff.clear(); });
 			return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 		}
 		isRun = false;
@@ -2385,6 +2394,15 @@ public:
 #elif __GNUG__
 		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)) {}
 #endif
+
+#ifdef __GNUG__
+	mutex_block_trig(mutex_block_trig&& s)
+		:_msgHandle(s._msgHandle), _handler(std::move(s._handler))
+	{
+		assert(false);
+		assert(!_msgBuff.has());
+	}
+#endif
 private:
 	bool ready()
 	{
@@ -2410,7 +2428,7 @@ private:
 		if (_msgBuff.has())
 		{
 			isRun = true;
-			OUT_OF_SCOPE({ _msgBuff.clear(); });
+			BREAK_OF_SCOPE({ _msgBuff.clear(); });
 			return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 		}
 		isRun = false;
@@ -2458,6 +2476,15 @@ public:
 #elif __GNUG__
 		: _msgHandle(pump), _handler(TRY_MOVE(handler)) {}
 #endif
+
+#ifdef __GNUG__
+	mutex_block_pump(mutex_block_pump&& s)
+		:_msgHandle(s._msgHandle), _handler(std::move(s._handler))
+	{
+		assert(false);
+		assert(!_msgBuff.has());
+	}
+#endif
 private:
 	bool ready()
 	{
@@ -2487,7 +2514,7 @@ private:
 		if (_msgBuff.has())
 		{
 			isRun = true;
-			OUT_OF_SCOPE({ _msgBuff.clear(); });
+			BREAK_OF_SCOPE({ _msgBuff.clear(); });
 			return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 		}
 		isRun = false;
@@ -2523,6 +2550,15 @@ public:
 		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))), _has(false) {}
 #elif __GNUG__
 		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _has(false) {}
+#endif
+
+#ifdef __GNUG__
+	mutex_block_msg(mutex_block_msg&& s)
+		:_msgHandle(s._msgHandle), _handler(std::move(s._handler))
+	{
+		assert(false);
+		assert(!_has);
+	}
 #endif
 private:
 	bool ready()
@@ -2584,6 +2620,15 @@ public:
 		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))), _has(false) {}
 #elif __GNUG__
 		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _has(false) {}
+#endif
+
+#ifdef __GNUG__
+	mutex_block_trig(mutex_block_trig&& s)
+		:_msgHandle(s._msgHandle), _handler(std::move(s._handler))
+	{
+		assert(false);
+		assert(!_has);
+	}
 #endif
 private:
 	bool ready()
@@ -2653,6 +2698,15 @@ public:
 		: _msgHandle(pump), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))), _has(false) {}
 #elif __GNUG__
 		: _msgHandle(pump), _handler(TRY_MOVE(handler)), _has(false) {}
+#endif
+
+#ifdef __GNUG__
+	mutex_block_pump(mutex_block_pump&& s)
+		:_msgHandle(s._msgHandle), _handler(std::move(s._handler))
+	{
+		assert(false);
+		assert(!_has);
+	}
 #endif
 private:
 	bool ready()
@@ -2782,6 +2836,16 @@ public:
 		_readySign(0), _connected(false), _disconnected(false), _lostNtfed(false)
 	{
 	}
+
+#ifdef __GNUG__
+	mutex_block_pump_check_state(mutex_block_pump_check_state&& s)
+		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _stateHandler(std::move(s._stateHandler)),
+		_readySign(s._readySign), _connected(s._connected), _disconnected(s._disconnected), _lostNtfed(s._lostNtfed)
+	{
+		assert(false);
+		assert(!_msgBuff.has());
+	}
+#endif
 private:
 	bool ready()
 	{
@@ -2838,7 +2902,7 @@ private:
 			{
 				isRun = true;
 				_lostNtfed = false;
-				OUT_OF_SCOPE({ _msgBuff.clear(); });
+				BREAK_OF_SCOPE({ _msgBuff.clear(); });
 				return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 			}
 			else if (_connected && !_disconnected && !_msgHandle.is_connected())
@@ -2906,6 +2970,16 @@ public:
 		_readySign(0), _has(false), _connected(false), _disconnected(false), _lostNtfed(false)
 	{
 	}
+
+#ifdef __GNUG__
+	mutex_block_pump_check_state(mutex_block_pump_check_state&& s)
+		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _stateHandler(std::move(s._stateHandler)),
+		_readySign(s._readySign), _connected(s._connected), _disconnected(s._disconnected), _lostNtfed(s._lostNtfed)
+	{
+		assert(false);
+		assert(!_has);
+	}
+#endif
 private:
 	bool ready()
 	{
@@ -3030,6 +3104,16 @@ public:
 	{
 		_msgHandle.check_lost(true);
 	}
+
+#ifdef __GNUG__
+	mutex_block_msg_check_lost(mutex_block_msg_check_lost&& s)
+		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _lostHandler(std::move(s._lostHandler)),
+		_readySign(s._readySign), _lostNtfed(s._lostNtfed)
+	{
+		assert(false);
+		assert(!_msgBuff.has());
+	}
+#endif
 private:
 	bool ready()
 	{
@@ -3062,7 +3146,7 @@ private:
 			{
 				isRun = true;
 				_lostNtfed = false;
-				OUT_OF_SCOPE({ _msgBuff.clear(); });
+				BREAK_OF_SCOPE({ _msgBuff.clear(); });
 				return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 			}
 			else if (is_losted())
@@ -3117,6 +3201,16 @@ public:
 	{
 		_msgHandle.check_lost(true);
 	}
+
+#ifdef __GNUG__
+	mutex_block_trig_check_lost(mutex_block_trig_check_lost&& s)
+		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _lostHandler(std::move(s._lostHandler)),
+		_readySign(s._readySign), _lostNtfed(s._lostNtfed)
+	{
+		assert(false);
+		assert(!_msgBuff.has());
+	}
+#endif
 private:
 	bool ready()
 	{
@@ -3149,7 +3243,7 @@ private:
 			{
 				isRun = true;
 				_lostNtfed = false;
-				OUT_OF_SCOPE({ _msgBuff.clear(); });
+				BREAK_OF_SCOPE({ _msgBuff.clear(); });
 				return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 			}
 			else if (is_losted())
@@ -3212,6 +3306,16 @@ public:
 	{
 		_msgHandle.check_lost(true);
 	}
+	
+#ifdef __GNUG__
+	mutex_block_pump_check_lost(mutex_block_pump_check_lost&& s)
+		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _lostHandler(std::move(s._lostHandler)),
+		_readySign(s._readySign), _lostNtfed(s._lostNtfed)
+	{
+		assert(false);
+		assert(!_msgBuff.has());
+	}
+#endif
 private:
 	bool ready()
 	{
@@ -3247,7 +3351,7 @@ private:
 			{
 				isRun = true;
 				_lostNtfed = false;
-				OUT_OF_SCOPE({ _msgBuff.clear(); });
+				BREAK_OF_SCOPE({ _msgBuff.clear(); });
 				return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 			}
 			else if (is_losted())
@@ -3299,6 +3403,16 @@ public:
 	{
 		_msgHandle.check_lost(true);
 	}
+	
+#ifdef __GNUG__
+	mutex_block_msg_check_lost(mutex_block_msg_check_lost&& s)
+		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _lostHandler(std::move(s._lostHandler)),
+		_readySign(s._readySign), _lostNtfed(s._lostNtfed)
+	{
+		assert(false);
+		assert(!_has);
+	}
+#endif
 private:
 	bool ready()
 	{
@@ -3382,6 +3496,16 @@ public:
 	{
 		_msgHandle.check_lost(true);
 	}
+	
+#ifdef __GNUG__
+	mutex_block_trig_check_lost(mutex_block_trig_check_lost&& s)
+		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _lostHandler(std::move(s._lostHandler)),
+		_readySign(s._readySign), _lostNtfed(s._lostNtfed)
+	{
+		assert(false);
+		assert(!_has);
+	}
+#endif
 private:
 	bool ready()
 	{
@@ -3473,6 +3597,16 @@ public:
 	{
 		_msgHandle.check_lost(true);
 	}
+	
+#ifdef __GNUG__
+	mutex_block_pump_check_lost(mutex_block_pump_check_lost&& s)
+		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _lostHandler(std::move(s._lostHandler)),
+		_readySign(s._readySign), _lostNtfed(s._lostNtfed)
+	{
+		assert(false);
+		assert(!_has);
+	}
+#endif
 private:
 	bool ready()
 	{
@@ -6315,7 +6449,7 @@ private:
 		assert(amh._hostActor && amh._hostActor->self_id() == self_id());
 		if (!amh.read_msg(dstRec))
 		{
-			OUT_OF_SCOPE(
+			BREAK_OF_SCOPE(
 			{
 				amh.stop_waiting();
 			});
@@ -6441,7 +6575,7 @@ public:
 		assert(amh._hostActor && amh._hostActor->self_id() == self_id());
 		if (!amh.read_msg())
 		{
-			OUT_OF_SCOPE(
+			BREAK_OF_SCOPE(
 			{
 				amh.stop_waiting();
 			});
@@ -6755,7 +6889,7 @@ public:
 		assert(ath._hostActor && ath._hostActor->self_id() == self_id());
 		if (!ath.read_msg())
 		{
-			OUT_OF_SCOPE(
+			BREAK_OF_SCOPE(
 			{
 				ath.stop_waiting();
 			});
@@ -6910,7 +7044,7 @@ public:
 		const size_t mask = (size_t)1 << id;
 		if (!(mask & _trigSignMask))
 		{
-			OUT_OF_SCOPE(
+			BREAK_OF_SCOPE(
 			{
 				_waitingTrigMask &= (-1 ^ mask);
 			});
@@ -7715,7 +7849,7 @@ private:
 		assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
 		if (!pump.get()->read_msg(dstRec))
 		{
-			OUT_OF_SCOPE(
+			BREAK_OF_SCOPE(
 			{
 				pump.get()->stop_waiting();
 			});
@@ -7778,7 +7912,7 @@ private:
 	{
 		assert(!pump.check_closed());
 		assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
-		OUT_OF_SCOPE(
+		BREAK_OF_SCOPE(
 		{
 			pump.get()->stop_waiting();
 		});
@@ -7816,7 +7950,7 @@ private:
 			{
 				return false;
 			}
-			OUT_OF_SCOPE(
+			BREAK_OF_SCOPE(
 			{
 				pump.get()->stop_waiting();
 			});
@@ -7889,7 +8023,7 @@ public:
 		assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
 		if (!pump.get()->read_msg())
 		{
-			OUT_OF_SCOPE(
+			BREAK_OF_SCOPE(
 			{
 				pump.get()->stop_waiting();
 			});
@@ -8363,7 +8497,7 @@ private:
 		lock_quit();
 		DEBUG_OPERATION(_check_host_id(this, mbList, N));//判断句柄是不是都是自己的
 		assert(_cmp_snap_id(mbList, N));//判断有没有重复参数
-		OUT_OF_SCOPE(
+		BREAK_OF_SCOPE(
 		{
 			_mutex_cancel(mbList, N);
 		});
@@ -8393,7 +8527,7 @@ private:
 		size_t runCount = 0;
 		DEBUG_OPERATION(_check_host_id(this, mbList, N));//判断句柄是不是都是自己的
 		assert(_cmp_snap_id(mbList, N));//判断有没有重复参数
-		OUT_OF_SCOPE(
+		BREAK_OF_SCOPE(
 		{
 			_mutex_cancel(mbList, N);
 		});

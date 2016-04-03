@@ -176,13 +176,15 @@ namespace context_yield
 
 	void delete_context(context_yield::context_info* info)
 	{
-		munmap((char*)info->stackTop - info->stackSize - info->reserveSize, info->stackSize + info->reserveSize);
+		const size_t s = info->stackSize + info->reserveSize;
+		munmap((char*)info->stackTop - s, s);
 		delete info;
 	}
 
 	void decommit_context(context_yield::context_info* info)
 	{
-		madvise((char*)info->stackTop - info->stackSize - info->reserveSize, info->stackSize + info->reserveSize, MADV_DONTNEED);
+		const size_t s = info->stackSize + info->reserveSize;
+		madvise((char*)info->stackTop - (s - MEM_PAGE_SIZE), s - 2 * MEM_PAGE_SIZE, MADV_DONTNEED);
 	}
 #endif
 }
