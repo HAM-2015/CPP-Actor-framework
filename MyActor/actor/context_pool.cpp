@@ -173,14 +173,11 @@ void ContextPool_::contextHandler(context_yield::context_info* info, void* param
 #if (WIN32 && (defined CHECK_SELF) && (_WIN32_WINNT >= 0x0502))
 	FlsSetValue(coro_pull_interface::_actorFlsIndex, (my_actor*)space);
 #endif
-	context_yield::push_yield(info);
 	while (true)
 	{
-		{
-			coro_push_interface push = { info };
-			pull->_currentHandler(push, pull->_param);
-		}
 		context_yield::push_yield(info);
+		coro_push_interface push = { info };
+		pull->_currentHandler(push, pull->_param);
 	}
 }
 

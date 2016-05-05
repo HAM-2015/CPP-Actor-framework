@@ -38,40 +38,25 @@
     <SkipBuildIfNoSourceFilesChanged>false</SkipBuildIfNoSourceFilesChanged>
     <IgnoreFileTransferErrors>false</IgnoreFileTransferErrors>
     <RemoveRemoteDirectoryOnClean>false</RemoveRemoteDirectoryOnClean>
+    <SkipDeploymentTests>false</SkipDeploymentTests>
+    <MainSourceDirectoryForLocalBuilds>$(ProjectDir)</MainSourceDirectoryForLocalBuilds>
   </Project>
   <Build xsi:type="com.visualgdb.build.make">
     <MakeFilePathRelativeToSourceDir>Makefile</MakeFilePathRelativeToSourceDir>
     <MakeConfigurationName>Debug</MakeConfigurationName>
     <AdditionalMakeArguments>-j2</AdditionalMakeArguments>
     <Toolchain>
-      <Name>Default GCC toolchain on 127.0.0.1</Name>
+      <Name>Custom toolchain</Name>
+      <Location>/usr/gcc-4.9.3/bin/</Location>
       <UnixSystem>true</UnixSystem>
-      <GCC>gcc</GCC>
-      <GXX>g++</GXX>
-      <GDB>gdb</GDB>
-      <AR>ar</AR>
-      <OBJCOPY>objcopy</OBJCOPY>
+      <GCC>/usr/gcc-4.9.3/bin/gcc</GCC>
+      <GXX>/usr/gcc-4.9.3/bin/g++</GXX>
+      <GDB>/usr/gcc-4.9.3/bin/gdb</GDB>
+      <AR>/usr/gcc-4.9.3/bin/ar</AR>
+      <OBJCOPY>/usr/gcc-4.9.3/bin/objcopy</OBJCOPY>
       <Make>make</Make>
       <RequireCmdExe>false</RequireCmdExe>
       <RequireCtrlBreak>false</RequireCtrlBreak>
-      <RequiredLinuxPackages>
-        <TestableLinuxPackage>
-          <UserFriendlyName>GCC</UserFriendlyName>
-          <DefaultPackageName>g++</DefaultPackageName>
-          <AlternativeRPMPackageName>gcc-c++</AlternativeRPMPackageName>
-          <BinaryToCheck>g++</BinaryToCheck>
-        </TestableLinuxPackage>
-        <TestableLinuxPackage>
-          <UserFriendlyName>GDB</UserFriendlyName>
-          <DefaultPackageName>gdb</DefaultPackageName>
-          <BinaryToCheck>gdb</BinaryToCheck>
-        </TestableLinuxPackage>
-        <TestableLinuxPackage>
-          <UserFriendlyName>GNU Make</UserFriendlyName>
-          <DefaultPackageName>make</DefaultPackageName>
-          <BinaryToCheck>make</BinaryToCheck>
-        </TestableLinuxPackage>
-      </RequiredLinuxPackages>
     </Toolchain>
     <MakeCommandTemplate>
       <SkipWhenRunningCommandList>false</SkipWhenRunningCommandList>
@@ -114,6 +99,7 @@
         <ThreadInfoSupported>false</ThreadInfoSupported>
         <PendingBreakpointsSupported>false</PendingBreakpointsSupported>
         <SupportTargetCommand>false</SupportTargetCommand>
+        <ReliableBreakpointNotifications>false</ReliableBreakpointNotifications>
       </Features>
       <DisableDisassembly>false</DisableDisassembly>
       <ExamineMemoryWithXCommand>false</ExamineMemoryWithXCommand>
@@ -121,6 +107,8 @@
       <ExamineRegistersInRawFormat>true</ExamineRegistersInRawFormat>
       <EnableSmartStepping>false</EnableSmartStepping>
       <DisableSignals>false</DisableSignals>
+      <EnableAsyncExecutionMode>false</EnableAsyncExecutionMode>
+      <EnableNonStopMode>false</EnableNonStopMode>
     </AdditionalGDBSettings>
     <LaunchGDBSettings xsi:type="GDBLaunchParametersNewInstance">
       <GDBEnvironment>
@@ -139,7 +127,7 @@
     <X11WindowMode>Local</X11WindowMode>
     <KeepConsoleAfterExit>false</KeepConsoleAfterExit>
     <RunGDBUnderSudo>false</RunGDBUnderSudo>
-    <SkipDeployment>false</SkipDeployment>
+    <DeploymentMode>Auto</DeploymentMode>
     <DeployWhenLaunchedWithoutDebugging>true</DeployWhenLaunchedWithoutDebugging>
   </Debug>
   <CustomBuild>
@@ -151,6 +139,7 @@
   <CustomDebug>
     <PreDebugActions />
     <PostDebugActions />
+    <DebugStopActions />
     <BreakMode>Default</BreakMode>
   </CustomDebug>
   <CustomShortcuts>
@@ -158,4 +147,11 @@
     <ShowMessageAfterExecuting>true</ShowMessageAfterExecuting>
   </CustomShortcuts>
   <UserDefinedVariables />
+  <ImportedPropertySheets />
+  <CodeSense>
+    <Enabled>Unknown</Enabled>
+    <ExtraSettings>
+      <HideErrorsInSystemHeaders>true</HideErrorsInSystemHeaders>
+    </ExtraSettings>
+  </CodeSense>
 </VisualGDBProjectSettings2>

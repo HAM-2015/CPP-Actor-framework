@@ -133,7 +133,7 @@ void WaitableTimer_::appendEvent(long long us, WaitableTimerEvent_* h)
 		_extFinishTime = et;
 		struct itimerspec newValue;
 		newValue.it_interval = { 0, 0 };
-		newValue.it_value.tv_nsec = _extFinishTime % 1000 * 1000;
+		newValue.it_value.tv_nsec = _extFinishTime % 1000000 * 1000;
 		newValue.it_value.tv_sec = _extFinishTime / 1000000;
 		timerfd_settime(_timerFd, TFD_TIMER_ABSTIME, &newValue, NULL);
 	}
@@ -162,7 +162,7 @@ void WaitableTimer_::timerThread()
 					_extFinishTime = iter->first;
 					struct itimerspec newValue;
 					newValue.it_interval = { 0, 0 };
-					newValue.it_value.tv_nsec = _extFinishTime % 1000 * 1000;
+					newValue.it_value.tv_nsec = _extFinishTime % 1000000 * 1000;
 					newValue.it_value.tv_sec = _extFinishTime / 1000000;
 					timerfd_settime(_timerFd, TFD_TIMER_ABSTIME, &newValue, NULL);
 					break;

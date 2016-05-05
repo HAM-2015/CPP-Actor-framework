@@ -35,21 +35,21 @@
 #endif
 
 template <typename CL>
-struct break_of_scope
+struct BreakOfScope_
 {
 	template <typename TC>
-	break_of_scope(TC&& cl)
-		:_cl(TRY_MOVE(cl)) {}
+	BreakOfScope_(TC&& cl)
+		:_cl(cl) {}
 
-	~break_of_scope() __disable_noexcept
+	~BreakOfScope_() __disable_noexcept
 	{
 		_cl();
 	}
 
-	CL _cl;
+	CL& _cl;
 private:
-	break_of_scope(const break_of_scope&){};
-	void operator =(const break_of_scope&){}
+	BreakOfScope_(const BreakOfScope_&){};
+	void operator =(const BreakOfScope_&){}
 };
 
 #define BOND_LINE(__P__, __L__) NAME_BOND(__P__, __L__)
@@ -57,11 +57,11 @@ private:
 //作用域退出时自动调用lambda
 #define BREAK_OF_SCOPE(__CL__) \
 	auto BOND_LINE(__t, __LINE__) = [&]__CL__; \
-	break_of_scope<decltype(BOND_LINE(__t, __LINE__))> BOND_LINE(__cl, __LINE__)(BOND_LINE(__t, __LINE__))
+	BreakOfScope_<decltype(BOND_LINE(__t, __LINE__))> BOND_LINE(__cl, __LINE__)(BOND_LINE(__t, __LINE__))
 
 #define BREAK_OF_SCOPE_NAME(__NAME__, __CL__) \
 	auto NAME_BOND(__t, __NAME__) = [&]__CL__; \
-	break_of_scope<decltype(NAME_BOND(__t, __NAME__))> NAME_BOND(__cl, __NAME__)(NAME_BOND(__t, __NAME__))
+	BreakOfScope_<decltype(NAME_BOND(__t, __NAME__))> NAME_BOND(__cl, __NAME__)(NAME_BOND(__t, __NAME__))
 
 #define _BREAK_OF_SCOPE_EXEC1(__opt1__) BREAK_OF_SCOPE({ __opt1__; });
 #define _BREAK_OF_SCOPE_EXEC2(__opt1__, __opt2__) BREAK_OF_SCOPE({ __opt1__; __opt2__; });
@@ -324,15 +324,15 @@ private:
 };
 #endif
 
-static decltype(std::placeholders::_1) __1;
-static decltype(std::placeholders::_2) __2;
-static decltype(std::placeholders::_3) __3;
-static decltype(std::placeholders::_4) __4;
-static decltype(std::placeholders::_5) __5;
-static decltype(std::placeholders::_6) __6;
-static decltype(std::placeholders::_7) __7;
-static decltype(std::placeholders::_8) __8;
-static decltype(std::placeholders::_9) __9;
+#define __1 std::placeholders::_1
+#define __2 std::placeholders::_2
+#define __3 std::placeholders::_3
+#define __4 std::placeholders::_4
+#define __5 std::placeholders::_5
+#define __6 std::placeholders::_6
+#define __7 std::placeholders::_7
+#define __8 std::placeholders::_8
+#define __9 std::placeholders::_9
 
 #define RVALUE_COPY_CONSTRUCTION1(__name__, __val1__) public:\
 	__name__(const __name__& s)	:__val1__(s.__val1__) {}\

@@ -137,9 +137,6 @@
     <ClInclude Include="actor\context_yield.h">
       <Filter>头文件\actor</Filter>
     </ClInclude>
-    <ClInclude Include="actor\coro_choice.h">
-      <Filter>头文件\actor</Filter>
-    </ClInclude>
     <ClInclude Include="actor\async_timer.h">
       <Filter>头文件\actor</Filter>
     </ClInclude>

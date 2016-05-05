@@ -519,6 +519,15 @@ struct InvokerType_<Handler, _Rt(C::*)(_Types...) const>
 	_SET_RECURSIVE_FUNC(__name3__, __lmd3__) \
 	BREAK_OF_SCOPE({ __name1__.destroy(); __name2__.destroy(); __name3__.destroy(); });
 
+#define LOCAL_ACTOR1(__name__, __lmd__)\
+	LOCAL_RECURSIVE1(__name__, void(my_actor*), __lmd__)
+
+#define LOCAL_ACTOR2(__name1__, __name2__, __lmd1__, __lmd2__)\
+	LOCAL_RECURSIVE2(__name1__, __name2__, void(my_actor*), void(my_actor*), __lmd1__, __lmd2__)
+
+#define LOCAL_ACTOR3(__name1__, __name2__, __name3__, __lmd1__, __lmd2__, __lmd3__)\
+	LOCAL_RECURSIVE3(__name1__, __name2__, __name3__, void(my_actor*), void(my_actor*), void(my_actor*), __lmd1__, __lmd2__, __lmd3__)
+
 #if (_DEBUG || DEBUG)
 #define DEBUG_LOCAL_RECURSIVE(__name__, __type__)\
 	std::function<__type__> __name__

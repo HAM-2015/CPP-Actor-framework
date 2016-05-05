@@ -59,7 +59,7 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <NMakeIncludeSearchPath>$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <NMakeIncludeSearchPath>$(LOCALAPPDATA)\VisualGDB\RemoteSourceCache\127.0.0.1\0004\4.9.3;$(LOCALAPPDATA)\VisualGDB\RemoteSourceCache\127.0.0.1\0004\4.9.3\x86_64-pc-linux-gnu;$(LOCALAPPDATA)\VisualGDB\RemoteSourceCache\127.0.0.1\0004\4.9.3\backward;$(LOCALAPPDATA)\VisualGDB\RemoteSourceCache\127.0.0.1\0005\include;$(LOCALAPPDATA)\VisualGDB\RemoteSourceCache\127.0.0.1\0006\include-fixed;$(LOCALAPPDATA)\VisualGDB\RemoteSourceCache\127.0.0.1\0007\include;$(LOCALAPPDATA)\VisualGDB\RemoteSourceCache\127.0.0.1\0003\include;$(LOCALAPPDATA)\VisualGDB\RemoteSourceCache\127.0.0.1\0000\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
     <NMakeForcedIncludes>$(ProjectDir)\gcc_Debug.h;$(VISUALGDB_DIR)\gcc_compat.h;$(NMakeForcedIncludes)</NMakeForcedIncludes>
     <NMakeBuildCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /build "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeBuildCommandLine>
     <NMakeCleanCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /clean "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeCleanCommandLine>
@@ -83,9 +83,8 @@
     <NMakePreprocessorDefinitions>__VisualGDB_CFG_Debug;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <NMakeIncludeSearchPath>$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <NMakeIncludeSearchPath>$(LOCALAPPDATA)\VisualGDB\RemoteSourceCache\127.0.0.1\0008\boost;$(LOCALAPPDATA)\VisualGDB\RemoteSourceCache\127.0.0.1\0004\4.9.3;$(LOCALAPPDATA)\VisualGDB\RemoteSourceCache\127.0.0.1\0004\4.9.3\x86_64-pc-linux-gnu;$(LOCALAPPDATA)\VisualGDB\RemoteSourceCache\127.0.0.1\0004\4.9.3\backward;$(LOCALAPPDATA)\VisualGDB\RemoteSourceCache\127.0.0.1\0005\include;$(LOCALAPPDATA)\VisualGDB\RemoteSourceCache\127.0.0.1\0006\include-fixed;$(LOCALAPPDATA)\VisualGDB\RemoteSourceCache\127.0.0.1\0007\include;$(LOCALAPPDATA)\VisualGDB\RemoteSourceCache\127.0.0.1\0003\include;$(LOCALAPPDATA)\VisualGDB\RemoteSourceCache\127.0.0.1\0000\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
     <NMakeForcedIncludes>$(ProjectDir)\gcc_Release.h;$(VISUALGDB_DIR)\gcc_compat.h;$(NMakeForcedIncludes)</NMakeForcedIncludes>
-    <NMakePreprocessorDefinitions>__VisualGDB_CFG_Release;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
     <NMakeBuildCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /build "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeBuildCommandLine>
     <NMakeCleanCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /clean "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeCleanCommandLine>
     <NMakeReBuildCommandLine>"$(VISUALGDB_DIR)\VisualGDB.exe" /rebuild "$(ProjectPath)" "/solution:$(SolutionPath)" "/config:$(Configuration)" "/platform:$(Platform)"</NMakeReBuildCommandLine>
@@ -93,6 +92,7 @@
     <IncludePath />
     <ReferencePath />
     <LibraryPath />
+    <NMakePreprocessorDefinitions>__VisualGDB_CFG_Release;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <NMakeIncludeSearchPath>$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>

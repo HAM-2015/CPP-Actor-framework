@@ -793,7 +793,7 @@ void create_child_test()
 	io_engine ios;
 	ios.run();
 	int count = 0;
-	LOCAL_RECURSIVE1(createActor, void(my_actor*), [&](my_actor* self)
+	LOCAL_ACTOR1(createActor, [&](my_actor* self)
 	{
 		if (++count < 100)
 		{

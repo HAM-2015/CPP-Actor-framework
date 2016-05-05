@@ -95,17 +95,15 @@ public:
 	*/
 	size_t threadNumber();
 
-#ifdef WIN32
 	/*!
-	@brief 挂起调度器所有线程（仅在win下有效）
+	@brief 挂起任务
 	*/
 	void suspend();
 
 	/*!
-	@brief 恢复调度器所有线程（仅在win下有效）
+	@brief 恢复任务
 	*/
 	void resume();
-#endif
 
 	/*!
 	@brief 调度器线程优先级设置，（linux下 sched_fifo, sched_rr 有效 ）
@@ -168,6 +166,7 @@ private:
 	void _stop();
 private:
 	bool _opend;
+	bool _suspend;
 	shared_obj_pool<boost_strand>* _strandPool;
 #ifdef DISABLE_BOOST_TIMER
 #ifdef ENABLE_GLOBAL_TIMER

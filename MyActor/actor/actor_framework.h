@@ -8730,11 +8730,6 @@ public:
 	__yield_interrupt size_t clean_stack_size();
 
 	/*!
-	@brief 当前还未使用过的栈空间(linux下使用,win下等效clean_stack_size)
-	*/
-	__yield_interrupt size_t none_stack_size();
-
-	/*!
 	@brief 获取当前Actor剩余安全栈空间
 	*/
 	size_t stack_idle_space();
@@ -8744,12 +8739,6 @@ public:
 	@param calcUsingStack 是否计算已经使用的空间大小
 	*/
 	__yield_interrupt void stack_decommit(bool calcUsingStack = true);
-
-	/*!
-	@brief 释放已经被使用过的栈空间
-	@param calcUsingStack 是否计算已经使用的空间大小(计算PROT_NONE，linux下使用,win下等效stack_decommit)
-	*/
-	__yield_interrupt void none_stack_decommit(bool calcUsingStack = true);
 
 	/*!
 	@brief 获取当前Actor调度器
@@ -9192,9 +9181,6 @@ private:
 	bool _checkStack : 1;///<是否检测栈空间
 	bool _holdedSuspendSign : 1;///<挂起恢复操作没挂起标记
 	bool _waitingQuit : 1;///<等待退出标记
-#ifdef __linux__
-	bool _sigsegvSign : 1;///<sigsegv信号检测栈标记
-#endif
 #ifdef PRINT_ACTOR_STACK
 public:
 	bool _checkStackFree : 1;///<是否检测堆栈过多
