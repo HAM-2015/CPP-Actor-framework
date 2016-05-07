@@ -381,4 +381,10 @@ inline R try_rval_invoke(Handler&& h)
 	return h();
 }
 
+template <typename... Type>
+std::tuple<Type&&...> wrap_tuple(Type&&... args)
+{
+	return std::tuple<Type&&...>(std::forward<Type>(args)...);
+}
+
 #endif

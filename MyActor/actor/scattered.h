@@ -334,6 +334,13 @@ private:
 #define __8 std::placeholders::_8
 #define __9 std::placeholders::_9
 
+template <typename...>
+struct null_handler 
+{
+	template <typename... Args>
+	void operator()(Args&&...) {}
+};
+
 #define RVALUE_COPY_CONSTRUCTION1(__name__, __val1__) public:\
 	__name__(const __name__& s)	:__val1__(s.__val1__) {}\
 	__name__(__name__&& s) :__val1__(std::move(s.__val1__)) {}\

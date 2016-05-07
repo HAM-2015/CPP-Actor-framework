@@ -401,8 +401,6 @@ template <typename... _Types>
 struct LocalRecursiveFace_;
 template <typename Handler, typename _Rt, typename... _Types>
 struct LocalRecursiveInvoker_;
-template <typename Handler, typename... _Types>
-struct InvokerType_;
 
 template <typename _Rt, typename... _Types>
 struct LocalRecursiveFace_<_Rt(_Types...)>
@@ -414,9 +412,8 @@ struct LocalRecursiveFace_<_Rt(_Types...)>
 template <typename Handler, typename _Rt, typename... _Types>
 struct LocalRecursiveInvoker_<Handler, _Rt(_Types...)> : public LocalRecursiveFace_<_Rt(_Types...)>
 {
-	template <typename H>
-	LocalRecursiveInvoker_(H&& h)
-		:_handler(std::forward<H>(h)) {}
+	LocalRecursiveInvoker_(Handler& handler)
+		:_handler(handler) {}
 
 	_Rt invoke(_Types... args)
 	{
@@ -429,7 +426,7 @@ struct LocalRecursiveInvoker_<Handler, _Rt(_Types...)> : public LocalRecursiveFa
 		DEBUG_OPERATION(memset(this, 0xcf, sizeof(*this)));
 	}
 
-	Handler _handler;
+	Handler& _handler;
 };
 
 template <typename _Rt, typename... _Types>
@@ -437,62 +434,49 @@ struct LocalRecursive_<_Rt(_Types...)>
 {
 	typedef LocalRecursiveFace_<_Rt(_Types...)> func_type;
 	LocalRecursive_() {}
-	~LocalRecursive_() { assert(!_depth && !_func); }
+	~LocalRecursive_() { assert(!_depth && !_has); }
 
 	template <typename... Args>
 	_Rt operator()(Args&&... args)
 	{
-		assert(_func);
 		DEBUG_OPERATION(_depth++);
 		DEBUG_OPERATION(BREAK_OF_SCOPE({ _depth--; }));
-		return _func->invoke(std::forward<Args>(args)...);
+		assert(_has);
+		return ((func_type*)_space)->invoke(std::forward<Args>(args)...);
 	}
 
-	template <typename Handler, size_t N>
-	void set_handler(Handler&& h, char (&space)[N])
+	template <typename Handler>
+	void set_handler(Handler& handler)
 	{
-		typedef LocalRecursiveInvoker_<RM_REF(Handler), _Rt(_Types...)> invoker_type;
-		static_assert(N == sizeof(invoker_type), "");
+		typedef LocalRecursiveInvoker_<Handler, _Rt(_Types...)> invoker_type;
+		static_assert(sizeof(_space) == sizeof(invoker_type), "");
 		destroy();
-		_func = new(space)invoker_type(std::forward<Handler>(h));
+		new(_space)invoker_type(handler);
+		_has = true;
 	}
 
 	void destroy()
 	{
 		assert(0 == _depth);
-		if (_func)
+		if (_has)
 		{
-			_func->destroy();
-			_func = NULL;
+			((func_type*)_space)->destroy();
+			_has = false;
 		}
 	}
 
 	DEBUG_OPERATION(size_t _depth = 0);
-	func_type* _func = NULL;
+	__space_align char _space[sizeof(LocalRecursiveInvoker_<null_handler<>, void()>)];
+	bool _has = false;
 	NONE_COPY(LocalRecursive_);
-};
-
-template <typename Handler, typename C, typename _Rt, typename... _Types>
-struct InvokerType_<Handler, _Rt(C::*)(_Types...)>
-{
-	typedef LocalRecursiveInvoker_<Handler, _Rt(_Types...)> type;
-};
-
-template <typename Handler, typename C, typename _Rt, typename... _Types>
-struct InvokerType_<Handler, _Rt(C::*)(_Types...) const>
-{
-	typedef LocalRecursiveInvoker_<Handler, _Rt(_Types...)> type;
 };
 
 #define DEFINE_LOCAL_RECURSIVE(__name__, __type__)\
 	LocalRecursive_<__type__> __name__;
 
 #define _SET_RECURSIVE_FUNC(__name__, __lmd__)\
-	const auto& NAME_BOND(__temp_, __name__) = __lmd__; \
-	typedef RM_REF_(decltype(NAME_BOND(__temp_, __name__))) NAME_BOND(__lmd_type_, __name__); \
-	typedef InvokerType_<NAME_BOND(__lmd_type_, __name__), decltype(&NAME_BOND(__lmd_type_, __name__)::operator())>::type NAME_BOND(__invoker_type_, __name__); \
-	__space_align char NAME_BOND(__space_, __name__)[sizeof(NAME_BOND(__invoker_type_, __name__))]; \
-	__name__.set_handler(__lmd__, NAME_BOND(__space_, __name__)); \
+	const auto NAME_BOND(__lambda_, __name__) = __lmd__; \
+	__name__.set_handler(NAME_BOND(__lambda_, __name__));
 
 #define SET_RECURSIVE_FUNC(__name__, __lmd__)\
 	_SET_RECURSIVE_FUNC(__name__, __lmd__); \
@@ -527,6 +511,18 @@ struct InvokerType_<Handler, _Rt(C::*)(_Types...) const>
 
 #define LOCAL_ACTOR3(__name1__, __name2__, __name3__, __lmd1__, __lmd2__, __lmd3__)\
 	LOCAL_RECURSIVE3(__name1__, __name2__, __name3__, void(my_actor*), void(my_actor*), void(my_actor*), __lmd1__, __lmd2__, __lmd3__)
+
+#define BEGIN_RECURSIVE(__name__, __ret__, __type__)\
+	LocalRecursive_<__ret__ __type__> __name__; \
+	const auto NAME_BOND(__lambda_, __name__) = [&]__type__{
+
+#define END_RECURSIVE(__name__) }; \
+	__name__.set_handler(NAME_BOND(__lambda_, __name__)); \
+	BREAK_OF_SCOPE({ __name__.destroy(); });
+
+#define BEGIN_RECURSIVE_ACTOR(__name__) BEGIN_RECURSIVE(__name__, void, (my_actor* self))
+
+#define END_RECURSIVE_ACTOR(__name__)  END_RECURSIVE(__name__)
 
 #if (_DEBUG || DEBUG)
 #define DEBUG_LOCAL_RECURSIVE(__name__, __type__)\

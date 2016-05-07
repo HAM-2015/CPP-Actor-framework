@@ -4007,15 +4007,10 @@ class tm_callback__handler<types_pck<ARGS...>, types_pck<OUTS...>> : public Trig
 	friend my_actor;
 public:
 	template <typename... Outs>
-	tm_callback__handler(my_actor* host, int tm, bool& timed, Outs&... outs)
+	tm_callback__handler(my_actor* host, Outs&... outs)
 		:_closed(shared_bool::new_(false)), _selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
-		ActorFunc_::delay_trig(host, tm, [this, &timed]
-		{
-			timed = true;
-			ActorFunc_::pull_yield(_selfEarly);
-		});
 	}
 
 	~tm_callback__handler() __disable_noexcept
@@ -4187,15 +4182,10 @@ class asio_tm_cb_handler<types_pck<ARGS...>, types_pck<OUTS...>> : public TrigOn
 	friend my_actor;
 public:
 	template <typename... Outs>
-	asio_tm_cb_handler(my_actor* host, int tm, bool& timed, Outs&... outs)
+	asio_tm_cb_handler(my_actor* host, Outs&... outs)
 		:_closed(shared_bool::new_(false)), _selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
-		ActorFunc_::delay_trig(host, tm, [this, &timed]
-		{
-			timed = true;
-			ActorFunc_::pull_yield(_selfEarly);
-		});
 	}
 
 	~asio_tm_cb_handler() __disable_noexcept
@@ -6746,7 +6736,13 @@ public:
 	tm_callback__handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_context(int tm, bool& timed, Outs&... outs)
 	{
 		assert_enter();
-		return tm_callback__handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, tm, timed, outs...);
+		timed = false;
+		delay_trig(tm, [this, &timed]
+		{
+			timed = true;
+			pull_yield();
+		});
+		return tm_callback__handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, outs...);
 	}
 
 	/*!
@@ -6788,7 +6784,13 @@ public:
 	asio_tm_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_asio_timed_context(int tm, bool& timed, Outs&... outs)
 	{
 		assert_enter();
-		return asio_tm_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, tm, timed, outs...);
+		timed = false;
+		delay_trig(tm, [this, &timed]
+		{
+			timed = true;
+			pull_yield();
+		});
+		return asio_tm_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, outs...);
 	}
 
 	/*!
