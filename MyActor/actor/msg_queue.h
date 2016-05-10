@@ -6,8 +6,8 @@
 #include <set>
 #include <list>
 
-template <typename T, typename TAlloc = mem_alloc_mt<>, typename MUTEX = std::mutex>
-class msg_queue_mt : public MUTEX
+template <typename T, typename TAlloc = mem_alloc<>>
+class msg_queue
 {
 	struct node
 	{
@@ -17,10 +17,10 @@ class msg_queue_mt : public MUTEX
 
 	typedef typename TAlloc::template rebind<node>::other allocator;
 public:
-	msg_queue_mt(size_t poolSize = sizeof(void*))
+	msg_queue(size_t poolSize = sizeof(void*))
 		:_alloc(poolSize), _size(0), _head(NULL), _tail(NULL) {}
 
-	~msg_queue_mt()
+	~msg_queue()
 	{
 		clear();
 	}
@@ -45,26 +45,6 @@ public:
 		new(new_front()->_data)T(std::move(p));
 	}
 
-	void push_back_unsafe(const T& p)
-	{
-		new(new_back_unsafe()->_data)T(p);
-	}
-
-	void push_back_unsafe(T&& p)
-	{
-		new(new_back_unsafe()->_data)T(std::move(p));
-	}
-
-	void push_front_unsafe(const T& p)
-	{
-		new(new_front_unsafe()->_data)T(p);
-	}
-
-	void push_front_unsafe(T&& p)
-	{
-		new(new_front_unsafe()->_data)T(std::move(p));
-	}
-
 	T& front()
 	{
 		assert(_size && _head);
@@ -78,22 +58,6 @@ public:
 	}
 
 	void pop_front()
-	{
-		MUTEX::lock();
-		assert(_size);
-		node* frontNode = _head;
-		_head = _head->_next;
-		if (0 == --_size)
-		{
-			assert(!_head);
-			_tail = NULL;
-		}
-		MUTEX::unlock();
-		((T*)frontNode->_data)->~T();
-		_alloc.deallocate(frontNode);
-	}
-
-	void pop_front_unsafe()
 	{
 		assert(_size);
 		node* frontNode = _head;
@@ -119,7 +83,6 @@ public:
 
 	void clear()
 	{
-		MUTEX::lock();
 		node* pIt = _head;
 		while (pIt)
 		{
@@ -133,17 +96,14 @@ public:
 		assert(0 == _size);
 		_head = NULL;
 		_tail = NULL;
-		MUTEX::unlock();
 	}
 
 	void expand_fixed(size_t fixedSize)
 	{
-		MUTEX::lock();
 		if (fixedSize > _alloc._poolMaxSize)
 		{
 			_alloc._poolMaxSize = fixedSize;
 		}
-		MUTEX::unlock();
 	}
 
 	size_t fixed_size()
@@ -154,7 +114,6 @@ private:
 	node* new_back()
 	{
 		node* newNode = (node*)_alloc.allocate();
-		MUTEX::lock();
 		newNode->_next = NULL;
 		if (!_head)
 		{
@@ -166,43 +125,10 @@ private:
 		}
 		_tail = newNode;
 		_size++;
-		MUTEX::unlock();
 		return newNode;
 	}
 
 	node* new_front()
-	{
-		node* newNode = (node*)_alloc.allocate();
-		MUTEX::lock();
-		newNode->_next = _head;
-		_head = newNode;
-		if (!_tail)
-		{
-			_tail = newNode;
-		}
-		_size++;
-		MUTEX::unlock();
-		return newNode;
-	}
-
-	node* new_back_unsafe()
-	{
-		node* newNode = (node*)_alloc.allocate();
-		newNode->_next = NULL;
-		if (!_head)
-		{
-			_head = newNode;
-		}
-		else
-		{
-			_tail->_next = newNode;
-		}
-		_tail = newNode;
-		_size++;
-		return newNode;
-	}
-
-	node* new_front_unsafe()
 	{
 		node* newNode = (node*)_alloc.allocate();
 		newNode->_next = _head;
@@ -221,12 +147,118 @@ private:
 	allocator _alloc;
 };
 
-template <typename T, typename TAlloc = mem_alloc<> >
-class msg_queue : public msg_queue_mt<T, TAlloc, null_mutex>
+template <typename T>
+class node_queue
 {
 public:
-	msg_queue(size_t poolSize = sizeof(void*))
-		:msg_queue_mt<T, TAlloc, null_mutex>(poolSize) {}
+	struct node
+	{
+		friend node_queue;
+
+		~node()
+		{
+			assert(!_has);
+		}
+
+		T& get()
+		{
+			assert(_has);
+			return *(T*)_data;
+		}
+
+		template <typename... Args>
+		void set(Args&&... args)
+		{
+			assert(!_has);
+			new(_data)T(TRY_MOVE(args)...);
+			DEBUG_OPERATION(_has = true);
+		}
+
+		void destroy()
+		{
+			assert(_has);
+			((T*)_data)->~T();
+			DEBUG_OPERATION(_has = false);
+		}
+	private:
+		__space_align char _data[sizeof(T)];
+		node* _next;
+		DEBUG_OPERATION(bool _has = false);
+	};
+public:
+	node_queue()
+		:_size(0), _head(NULL), _tail(NULL) {}
+
+	~node_queue()
+	{
+		assert(empty());
+	}
+public:
+	void push_back(node* newNode)
+	{
+		newNode->_next = NULL;
+		if (!_head)
+		{
+			_head = newNode;
+		}
+		else
+		{
+			_tail->_next = newNode;
+		}
+		_tail = newNode;
+		_size++;
+	}
+
+	void push_front(node* newNode)
+	{
+		newNode->_next = _head;
+		_head = newNode;
+		if (!_tail)
+		{
+			_tail = newNode;
+		}
+		_size++;
+		return newNode;
+	}
+
+	T& front()
+	{
+		assert(_size && _head);
+		return _head->get();
+	}
+
+	T& back()
+	{
+		assert(_size && _tail);
+		return _tail->get();
+	}
+
+	node* pop_front()
+	{
+		assert(_size);
+		node* frontNode = _head;
+		_head = _head->_next;
+		if (0 == --_size)
+		{
+			assert(!_head);
+			_tail = NULL;
+		}
+		return frontNode;
+	}
+
+	size_t size()
+	{
+		return _size;
+	}
+
+	bool empty()
+	{
+		return !_size;
+	}
+private:
+	node* _head;
+	node* _tail;
+	size_t _size;
 };
 //////////////////////////////////////////////////////////////////////////
 

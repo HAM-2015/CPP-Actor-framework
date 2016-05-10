@@ -823,8 +823,10 @@ void auto_stack_test()
 	ios.run();
 	for (int i = 0; i < 3; i++)
 	{
-		actor_handle ah = my_actor::create(boost_strand::create(ios), auto_stack([](my_actor* self)
+		actor_handle ah = my_actor::create(boost_strand::create(ios), auto_stack([i](my_actor* self)
 		{
+			int count = 0;
+			HEARTBEAT_EXEC(self, 300, trace_space("heartbeat", i, count++));
 			self->sleep(1000);
 		}));
 		ah->notify_run();

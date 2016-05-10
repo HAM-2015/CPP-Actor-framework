@@ -76,6 +76,33 @@ private:
 #define BREAK_OF_SCOPE_EXEC(...) _BOND_LR__(_BREAK_OF_SCOPE_EXEC, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
 #endif
 
+//在Actor作用域内定时触发某个操作
+#define HEARTBEAT_TRACE_NAME(__name__, __self__, __tm__, __handler__)\
+	async_timer __name__ = __self__->self_strand()->make_timer(); \
+	LOCAL_RECURSIVE1(BOND_LINE(__heartbeatHandler, __LINE__), void(), [&]() \
+	{ \
+		__name__->timeout(__tm__, wrap_ref_handler(BOND_LINE(__heartbeatHandler, __LINE__))); \
+		([&]__handler__)(); \
+	}); \
+	__name__->timeout(__tm__, wrap_ref_handler(BOND_LINE(__heartbeatHandler, __LINE__))); \
+	BREAK_OF_SCOPE_NAME(BOND_LINE(__cencelHeartbeatTimer, __LINE__), { __name__->cancel(); });
+
+//在Actor作用域内定时触发某个操作
+#define HEARTBEAT_TRACE(__self__, __tm__, __handler__) HEARTBEAT_TRACE_NAME(BOND_LINE(__heartbeatTimer, __LINE__), __self__, __tm__, __handler__)
+
+#define _HEARTBEAT_EXEC1(__self__, __tm__, __opt1__) HEARTBEAT_TRACE(__self__, __tm__, { __opt1__; });
+#define _HEARTBEAT_EXEC2(__self__, __tm__, __opt1__, __opt2__) HEARTBEAT_TRACE(__self__, __tm__, { __opt1__; __opt2__; });
+#define _HEARTBEAT_EXEC3(__self__, __tm__, __opt1__, __opt2__, __opt3__) HEARTBEAT_TRACE(__self__, __tm__, { __opt1__; __opt2__; __opt3__; });
+#define _HEARTBEAT_EXEC4(__self__, __tm__, __opt1__, __opt2__, __opt3__, __opt4__) HEARTBEAT_TRACE(__self__, __tm__, { __opt1__; __opt2__; __opt3__; __opt4__; });
+#define _HEARTBEAT_EXEC5(__self__, __tm__, __opt1__, __opt2__, __opt3__, __opt4__, __opt5__) HEARTBEAT_TRACE(__self__, __tm__, { __opt1__; __opt2__; __opt3__; __opt4__; __opt5__; });
+#define _HEARTBEAT_EXEC6(__self__, __tm__, __opt1__, __opt2__, __opt3__, __opt4__, __opt5__, __opt6__) HEARTBEAT_TRACE(__self__, __tm__, { __opt1__; __opt2__; __opt3__; __opt4__; __opt5__; __opt6__; });
+#ifdef _MSC_VER
+#define _HEARTBEAT_EXEC(__self__, __tm__, ...) _BOND_LR__(_HEARTBEAT_EXEC, _PP_NARG(__VA_ARGS__))(__self__, __tm__, __VA_ARGS__)
+#define HEARTBEAT_EXEC(__self__, __tm__, ...) _HEARTBEAT_EXEC(__self__, __tm__, __VA_ARGS__)
+#elif __GNUG__
+#define HEARTBEAT_EXEC(__self__, __tm__, ...) _BOND_LR__(_HEARTBEAT_EXEC, _PP_NARG(__VA_ARGS__))(__self__, __tm__, __VA_ARGS__)
+#endif
+
 #if (_DEBUG || DEBUG)
 #define DEBUG_OPERATION(__exp__)	__exp__
 #else

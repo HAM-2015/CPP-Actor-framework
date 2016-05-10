@@ -9144,7 +9144,8 @@ private:
 	id _selfID;///<ActorID
 	void* _actorPull;///<Actor中断点恢复
 	void* _actorPush;///<Actor中断点
-	wrap_timer_handler_face* _timerStateCb = NULL;///<定时器触发回调
+	ActorTimer_* _timer;///<定时器
+	wrap_timer_handler_face* _timerStateCb;///<定时器触发回调
 	size_t _actorKey;///<该Actor处理模块的全局唯一key
 	size_t _lockQuit;///<锁定当前Actor，如果当前接收到退出消息，暂时不退，等到解锁后退出
 	size_t _lockSuspend;///锁定当前Actor的挂起操作，如果当前接收到挂起消息，暂时不挂起，等到解锁后挂起
@@ -9163,7 +9164,6 @@ private:
 	actor_handle _parentActor;///<父Actor，子Actor都析构后，父Actor才能析构
 	ActorTimer_::timer_handle _timerStateHandle;///<定时器句柄
 	reusable_mem _reuMem;///<定时器内存管理
-	ActorTimer_* _timer;///<定时器
 	main_func _mainFunc;///<Actor入口
 	msg_list_shared_alloc<suspend_resume_option> _suspendResumeQueue;///<挂起/恢复操作队列
 	msg_list_shared_alloc<std::function<void()> > _quitCallback;///<Actor结束后的回调函数

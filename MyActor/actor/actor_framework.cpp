@@ -1905,6 +1905,7 @@ _childActorList(*_childActorListAll)
 	_actorPull = NULL;
 	_actorPush = NULL;
 	_timer = NULL;
+	_timerStateCb = NULL;
 	_quited = false;
 	_exited = false;
 	_started = false;
@@ -1937,7 +1938,6 @@ _childActorList(*_childActorListAll)
 	_timerStateTime = 0;
 	_timerStateStampBegin = 0;
 	_timerStateStampEnd = 0;
-	_timerStateCb = NULL;
 }
 
 my_actor::my_actor(const my_actor&)
