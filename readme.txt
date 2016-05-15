@@ -13,7 +13,7 @@ http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
 
 2016-03-26
-移植到arm-android(Linux-Kernel-3.4.0+)平台(支持在 QT-UI For Android 框架中运行).
+移植到arm-android(Linux-Kernel-3.4.0+)平台(包括 QT For Android 异步UI驱动).
 
 2016-03-15
 移植到arm-linux平台.
@@ -29,13 +29,13 @@ http://www.oschina.net/code/snippet_2274073_45577
 添加对mingw的支持.
 
 2015-12-09
-扩展对windows平台下的稳定定时器支持.
+优化windows,linux平台下的定时器性能.
 
 2015-11-13
-添加对windows-fiber的支持.
+修改windows下使用Fiber驱动上下文切换.
 
 2015-11-11
-添加在QT-UI线程中运行Actor.
+添加在QT-UI线程中运行Actor，驱动异步UI.
 
 2015-11-05
 添加"通知句柄"丢失检测，消息等待时可以捕获通知句柄丢失异常.

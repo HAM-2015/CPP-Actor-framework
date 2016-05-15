@@ -25,24 +25,24 @@ public:
 		clear();
 	}
 
-	void push_back(const T& p)
+	template <typename... Args>
+	void push_back(Args&&... args)
 	{
-		new(new_back()->_data)T(p);
+		BEGIN_CHECK_EXCEPTION;
+		void* newNode = _alloc.allocate();
+		new(newNode)T(TRY_MOVE(args)...);
+		new_back((node*)newNode);
+		END_CHECK_EXCEPTION;
 	}
 
-	void push_back(T&& p)
+	template <typename... Args>
+	void push_front(Args&&... args)
 	{
-		new(new_back()->_data)T(std::move(p));
-	}
-
-	void push_front(const T& p)
-	{
-		new(new_front()->_data)T(p);
-	}
-
-	void push_front(T&& p)
-	{
-		new(new_front()->_data)T(std::move(p));
+		BEGIN_CHECK_EXCEPTION;
+		void* newNode = _alloc.allocate();
+		new(newNode)T(TRY_MOVE(args)...);
+		new_front((node*)newNode);
+		END_CHECK_EXCEPTION;
 	}
 
 	T& front()
@@ -111,9 +111,8 @@ public:
 		return _alloc._poolMaxSize;
 	}
 private:
-	node* new_back()
+	void new_back(node* newNode)
 	{
-		node* newNode = (node*)_alloc.allocate();
 		newNode->_next = NULL;
 		if (!_head)
 		{
@@ -125,12 +124,10 @@ private:
 		}
 		_tail = newNode;
 		_size++;
-		return newNode;
 	}
 
-	node* new_front()
+	void new_front(node* newNode)
 	{
-		node* newNode = (node*)_alloc.allocate();
 		newNode->_next = _head;
 		_head = newNode;
 		if (!_tail)
@@ -138,7 +135,6 @@ private:
 			_tail = newNode;
 		}
 		_size++;
-		return newNode;
 	}
 private:
 	node* _head;
@@ -170,8 +166,10 @@ public:
 		void set(Args&&... args)
 		{
 			assert(!_has);
+			BEGIN_CHECK_EXCEPTION;
 			new(_data)T(TRY_MOVE(args)...);
 			DEBUG_OPERATION(_has = true);
+			END_CHECK_EXCEPTION;
 		}
 
 		void destroy()

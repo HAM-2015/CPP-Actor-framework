@@ -15,7 +15,7 @@ OBJCOPY := D:/cpplib/arm-linux-gnueabihf-gcc49/bin/arm-linux-gnueabihf-objcopy.e
 PREPROCESSOR_MACROS := NDEBUG _ARM32 RELEASE ENABLE_NEXT_TICK ENABLE_CHECK_LOST DISABLE_BOOST_TIMER
 INCLUDE_DIRS := D:\cpplib\boost
 LIBRARY_DIRS := D:\cpplib\boost\lib_arm32-linux-gcc492 ../MyActor/actor
-LIBRARY_NAMES := pthread sigsegv_armhf32 fcontext_armhf32 boost_thread-mt-s  boost_system-mt-s  boost_chrono-mt-s
+LIBRARY_NAMES := pthread sigsegv_armhf32 fcontext_armhf32 boost_thread boost_system boost_chrono
 ADDITIONAL_LINKER_INPUTS := 
 MACOS_FRAMEWORKS := 
 LINUX_PACKAGES := 
@@ -23,8 +23,8 @@ LINUX_PACKAGES :=
 CFLAGS := -ffunction-sections -O3
 CXXFLAGS := -ffunction-sections -O3 -std=c++11
 ASFLAGS := 
-LDFLAGS := -Wl,-gc-sections
-COMMONFLAGS := -static
+LDFLAGS := -Wl,-gc-sections -static
+COMMONFLAGS := 
 
 START_GROUP := -Wl,--start-group
 END_GROUP := -Wl,--end-group

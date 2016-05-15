@@ -318,7 +318,27 @@ public:
 			bp((TMS&&)(msgs)...);
 #endif
 			return sizeof...(TMS) == ++pushCount;
-		});
+		}, [](const T&){});
+	}
+
+	template <typename Recovery, typename... TMS>
+	size_t force_push_recovery(my_actor* host, Recovery&& recovery, TMS&&... msgs)
+	{
+		static_assert(sizeof...(TMS) > 0, "");
+		size_t pushCount = 0;
+#if ((__GNUG__ == 4) && (__GNUC_MINOR__ <= 8))
+		std::tuple<TMS&&...> msgsTup(TRY_MOVE(msgs)...);
+#endif
+		return _force_push(host, [&]()->bool
+		{
+			buff_push bp = { this, pushCount };
+#if ((__GNUG__ == 4) && (__GNUC_MINOR__ <= 8))
+			tuple_invoke(bp, msgsTup);
+#else
+			bp((TMS&&)(msgs)...);
+#endif
+			return sizeof...(TMS) == ++pushCount;
+		}, TRY_MOVE(recovery));
 	}
 
 	/*!
@@ -738,8 +758,8 @@ private:
 		return pushCount;
 	}
 
-	template <typename Func>
-	size_t _force_push(my_actor* host, Func&& h)
+	template <typename Func, typename Recovery>
+	size_t _force_push(my_actor* host, Func&& h, Recovery&& rf)
 	{
 		host->lock_quit();
 		bool closed = false;
@@ -754,6 +774,7 @@ private:
 					if (_buffer.full())
 					{
 						lostCount++;
+						rf(_buffer.front());
 						_buffer.pop_front();
 					}
 					bool break_ = h();

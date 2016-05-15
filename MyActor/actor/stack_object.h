@@ -23,7 +23,7 @@ public:
 private:
 	stack_obj(const stack_obj&){};
 	void operator =(const stack_obj&){};
-	void* operator new(size_t){ return 0; };
+	void* operator new(size_t){ return NULL; };
 	void operator delete(void*){};
 public:
 	/*!
@@ -114,7 +114,7 @@ public:
 private:
 	stack_obj(const stack_obj&){};
 	void operator =(const stack_obj&){};
-	void* operator new(size_t){ return 0; };
+	void* operator new(size_t){ return NULL; };
 	void operator delete(void*){};
 public:
 	/*!

@@ -738,13 +738,14 @@ void async_timer_test()
 	trace_line("begin async_timer_test");
 	io_engine ios;
 	ios.run();
-	shared_strand strand = boost_strand::create(ios);
 	{
+		shared_strand strand = boost_strand::create(ios);
 		async_timer timer1 = strand->make_timer();
 		async_timer timer2 = strand->make_timer();
 		async_timer timer3 = strand->make_timer();
 		strand->post([=]
 		{
+			const shared_strand& lockStrand = strand;
 			timer1->timeout(500, [timer1]
 			{
 				info_trace_line("timer1 ", 1);
@@ -793,7 +794,7 @@ void create_child_test()
 	io_engine ios;
 	ios.run();
 	int count = 0;
-	BEGIN_RECURSIVE_ACTOR(createActor);
+	BEGIN_RECURSIVE_ACTOR(createActor, self);
 	if (++count < 100)
 	{
 		info_trace_line("create_child_actor ", count);
@@ -810,6 +811,7 @@ void create_child_test()
 		self->child_actor_run(child1, child2);
 		self->child_actor_wait_quit(child1, child2);
 	}
+	self->after_exit_clean_stack();
 	END_RECURSIVE_ACTOR(createActor);
 	my_actor::create(boost_strand::create(ios), wrap_ref_handler(createActor))->notify_run();
 	ios.stop();
@@ -840,6 +842,7 @@ void auto_stack_test()
 int main(int argc, char *argv[])
 {
 	init_my_actor();
+	enable_high_resolution();
 	auto_stack_test();
 	trace("\n");
 	create_child_test();

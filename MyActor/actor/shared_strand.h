@@ -100,65 +100,6 @@ else\
 	post_ui(TRY_MOVE(handler)); \
 }
 
-template <typename Handler>
-struct once_handler
-{
-	template <typename H>
-	once_handler(bool pl, H&& h)
-		:_handler(TRY_MOVE(h)) {}
-
-	once_handler(const once_handler<Handler>& s)
-		:_handler(std::move(s._handler)) {}
-
-	template <typename... Args>
-	void operator()(Args&&... args)
-	{
-		_handler(TRY_MOVE(args)...);
-	}
-
-	template <typename... Args>
-	void operator()(Args&&... args) const
-	{
-		_handler(TRY_MOVE(args)...);
-	}
-
-	mutable Handler _handler;
-};
-
-template <typename Handler>
-once_handler<RM_REF(Handler)> wrap_once_handler(Handler&& handler)
-{
-	return once_handler<RM_REF(Handler)>(bool(), TRY_MOVE(handler));
-}
-
-template <typename Handler>
-struct ref_handler 
-{
-	ref_handler(bool bl, Handler& h)
-		:_handler(h) {}
-
-	template <typename... Args>
-	void operator()(Args&&... args)
-	{
-		_handler(TRY_MOVE(args)...);
-	}
-
-	template <typename... Args>
-	void operator()(Args&&... args) const
-	{
-		_handler(TRY_MOVE(args)...);
-	}
-
-	Handler& _handler;
-};
-
-template <typename Handler>
-ref_handler<Handler> wrap_ref_handler(Handler& handler)
-{
-	static_assert(!std::is_rvalue_reference<Handler&>::value, "");
-	return ref_handler<Handler>(bool(), handler);
-}
-
 #ifdef DISABLE_BOOST_TIMER
 struct TimerBoostCompletedEventFace_
 {
@@ -364,7 +305,11 @@ class boost_strand
 	friend TimerBoost_;
 protected:
 	boost_strand();
+#ifdef ENABLE_QT_ACTOR 
 	virtual ~boost_strand();
+#else
+	~boost_strand();
+#endif
 public:
 	static shared_strand create(io_engine& ioEngine);
 	static std::vector<shared_strand> create_multi(size_t n, io_engine& ioEngine);

@@ -23,8 +23,22 @@
 #define end_RUN_IN_QT_UI() });}
 //////////////////////////////////////////////////////////////////////////
 //在Actor中，嵌入一段在qt-ui线程中执行的语句
-#define RUN_IN_QT_UI_AT(__this_ui__, __host__, __exp__) {(__this_ui__)->send(__host__, [&]() {__exp__;});}
-#define RUN_IN_QT_UI(__exp__) RUN_IN_QT_UI_AT(this, self, __exp__)
+#define _RUN_IN_QT_UI_AT1(__this_ui__, __host__, __exp1__) {(__this_ui__)->send(__host__, [&]{__exp1__;});}
+#define _RUN_IN_QT_UI_AT2(__this_ui__, __host__, __exp1__, __exp2__) {(__this_ui__)->send(__host__, [&]{__exp1__; __exp2__;});}
+#define _RUN_IN_QT_UI_AT3(__this_ui__, __host__, __exp1__, __exp2__, __exp3__) {(__this_ui__)->send(__host__, [&]{__exp1__; __exp2__; __exp3__;});}
+#define _RUN_IN_QT_UI_AT4(__this_ui__, __host__, __exp1__, __exp2__, __exp3__, __exp4__) {(__this_ui__)->send(__host__, [&]{__exp1__; __exp2__; __exp3__; __exp4__;});}
+#define _RUN_IN_QT_UI_AT5(__this_ui__, __host__, __exp1__, __exp2__, __exp3__, __exp4__, __exp5__) {(__this_ui__)->send(__host__, [&]{__exp1__; __exp2__; __exp3__; __exp4__; __exp5__;});}
+#define _RUN_IN_QT_UI_AT6(__this_ui__, __host__, __exp1__, __exp2__, __exp3__, __exp4__, __exp5__, __exp6__) {(__this_ui__)->send(__host__, [&]{__exp1__; __exp2__; __exp3__; __exp4__; __exp5__; __exp6__;});}
+
+#ifdef _MSC_VER
+#define _RUN_IN_QT_UI_AT(__this_ui__, __host__, ...) _BOND_LR__(_RUN_IN_QT_UI_AT, _PP_NARG(__VA_ARGS__))(__this_ui__, __host__, __VA_ARGS__)
+#define RUN_IN_QT_UI_AT(__this_ui__, __host__, ...) _RUN_IN_QT_UI_AT(__this_ui__, __host__, __VA_ARGS__)
+#elif __GNUG__
+#define RUN_IN_QT_UI_AT(__this_ui__, __host__, ...) _BOND_LR__(_RUN_IN_QT_UI_AT, _PP_NARG(__VA_ARGS__))(__this_ui__, __host__, __VA_ARGS__)
+#endif
+
+//在Actor中，嵌入一段在qt-ui线程中执行的语句
+#define RUN_IN_QT_UI(...) RUN_IN_QT_UI_AT(this, self, __VA_ARGS__)
 //////////////////////////////////////////////////////////////////////////
 //在Actor中，嵌入一段在qt-ui线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用begin_RUN_IN_QT_UI_AT）
 #define begin_ACTOR_RUN_IN_QT_UI_AT(__this_ui__, __host__, __ios__) {\

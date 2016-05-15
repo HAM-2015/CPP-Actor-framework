@@ -5580,6 +5580,11 @@ public:
 	struct force_quit_exception { };
 
 	/*!
+	@brief 栈空间耗尽异常
+	*/
+	struct stack_exhaustion_exception { };
+
+	/*!
 	@brief Actor入口函数体
 	*/
 	typedef std::function<void(my_actor*)> main_func;
@@ -6078,11 +6083,7 @@ public:
 		_strand->next_tick(std::bind([&h](actor_handle& shared_this)
 		{
 			h();
-			my_actor* this_ = shared_this.get();
-			this_->_strand->next_tick(std::bind([](actor_handle& shared_this)
-			{
-				shared_this->pull_yield();
-			}, std::move(shared_this)));
+			shared_this->pull_yield();
 		}, shared_from_this()));
 		push_yield();
 	}
@@ -6096,11 +6097,7 @@ public:
 		_strand->next_tick(std::bind([&h, &res](actor_handle& shared_this)
 		{
 			res.create(h());
-			my_actor* this_ = shared_this.get();
-			this_->_strand->next_tick(std::bind([](actor_handle& shared_this)
-			{
-				shared_this->pull_yield();
-			}, std::move(shared_this)));
+			shared_this->pull_yield();
 		}, shared_from_this()));
 		push_yield();
 		return std::move(res.get());
@@ -6203,11 +6200,11 @@ private:
 	{
 		if (exeStrand != _strand)
 		{
-			exeStrand->try_tick(std::bind([&h](actor_handle& shared_this)
+			exeStrand->post(std::bind([&h](actor_handle& shared_this)
 			{
 				h();
 				my_actor* this_ = shared_this.get();
-				this_->_strand->try_tick(std::bind([](actor_handle& shared_this)
+				this_->_strand->post(std::bind([](actor_handle& shared_this)
 				{
 					shared_this->pull_yield_after_quited();
 				}, std::move(shared_this)));
@@ -6226,11 +6223,7 @@ private:
 		_strand->next_tick(std::bind([&h](actor_handle& shared_this)
 		{
 			h();
-			my_actor* this_ = shared_this.get();
-			this_->_strand->next_tick(std::bind([](actor_handle& shared_this)
-			{
-				shared_this->pull_yield_after_quited();
-			}, std::move(shared_this)));
+			shared_this->pull_yield_after_quited();
 		}, shared_from_this()));
 		push_yield_after_quited();
 	}
@@ -8884,6 +8877,11 @@ public:
 	bool is_locked_quit();
 
 	/*!
+	@brief Actor结束后释放栈内存
+	*/
+	void after_exit_clean_stack();
+
+	/*!
 	@brief 暂停Actor
 	*/
 	void notify_suspend();
@@ -9183,6 +9181,7 @@ private:
 	bool _checkStack : 1;///<是否检测栈空间
 	bool _holdedSuspendSign : 1;///<挂起恢复操作没挂起标记
 	bool _waitingQuit : 1;///<等待退出标记
+	bool _afterExitCleanStack : 1;///<结束后清栈
 #ifdef PRINT_ACTOR_STACK
 public:
 	bool _checkStackFree : 1;///<是否检测堆栈过多

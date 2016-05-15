@@ -68,6 +68,8 @@ msg_list_shared_alloc<std::function<void()> >::shared_node_alloc* my_actor::_qui
 msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc* my_actor::_suspendResumeQueueAll = NULL;
 msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc* my_actor::msg_pool_status::_msgTypeMapAll = NULL;
 
+#define MEM_POOL_LENGTH 100000
+
 void my_actor::install()
 {
 	if (!s_inited)
@@ -87,22 +89,22 @@ void my_actor::install()
 #ifdef ENABLE_CHECK_LOST
 		auto& s_checkLostObjAlloc_ = s_checkLostObjAlloc;
 		auto& s_checkPumpLostObjAlloc_ = s_checkPumpLostObjAlloc;
-		s_checkLostObjAlloc_ = new mem_alloc_mt<CheckLost_>(100000);
-		s_checkPumpLostObjAlloc_ = new mem_alloc_mt<CheckPumpLost_>(100000);
-		s_checkLostRefCountAlloc = make_ref_count_alloc<CheckLost_, std::mutex>(100000, [s_checkLostObjAlloc_](CheckLost_*){});
-		s_checkPumpLostRefCountAlloc = make_ref_count_alloc<CheckPumpLost_, std::mutex>(100000, [s_checkPumpLostObjAlloc_](CheckPumpLost_*){});
+		s_checkLostObjAlloc_ = new mem_alloc_mt<CheckLost_>(MEM_POOL_LENGTH);
+		s_checkPumpLostObjAlloc_ = new mem_alloc_mt<CheckPumpLost_>(MEM_POOL_LENGTH);
+		s_checkLostRefCountAlloc = make_ref_count_alloc<CheckLost_, std::mutex>(MEM_POOL_LENGTH, [s_checkLostObjAlloc_](CheckLost_*){});
+		s_checkPumpLostRefCountAlloc = make_ref_count_alloc<CheckPumpLost_, std::mutex>(MEM_POOL_LENGTH, [s_checkPumpLostObjAlloc_](CheckPumpLost_*){});
 #endif
 		s_autoActorStackMng = new autoActorStackMng;
 #ifdef __linux__
 		s_sigsegvMutex = new std::mutex;
 #endif
-		shared_bool::_sharedBoolPool = create_shared_pool_mt<bool, std::mutex>(100000);
+		shared_bool::_sharedBoolPool = create_shared_pool_mt<bool, std::mutex>(MEM_POOL_LENGTH);
 		my_actor::_actorIDCount = new std::atomic<my_actor::id>(0);
 		s_shared_initer._actorIDCount = my_actor::_actorIDCount;
-		my_actor::_childActorListAll = new msg_list_shared_alloc<actor_handle>::shared_node_alloc(100000);
-		my_actor::_quitExitCallbackAll = new msg_list_shared_alloc<std::function<void()> >::shared_node_alloc(100000);
-		my_actor::_suspendResumeQueueAll = new msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc(100000);
-		my_actor::msg_pool_status::_msgTypeMapAll = new msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc(100000);
+		my_actor::_childActorListAll = new msg_list_shared_alloc<actor_handle>::shared_node_alloc(MEM_POOL_LENGTH);
+		my_actor::_quitExitCallbackAll = new msg_list_shared_alloc<std::function<void()> >::shared_node_alloc(MEM_POOL_LENGTH);
+		my_actor::_suspendResumeQueueAll = new msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc(MEM_POOL_LENGTH);
+		my_actor::msg_pool_status::_msgTypeMapAll = new msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc(MEM_POOL_LENGTH);
 	}
 }
 
@@ -125,22 +127,22 @@ void my_actor::install(const shared_initer* initer)
 #ifdef ENABLE_CHECK_LOST
 		auto& s_checkLostObjAlloc_ = s_checkLostObjAlloc;
 		auto& s_checkPumpLostObjAlloc_ = s_checkPumpLostObjAlloc;
-		s_checkLostObjAlloc_ = new mem_alloc_mt<CheckLost_>(100000);
-		s_checkPumpLostObjAlloc_ = new mem_alloc_mt<CheckPumpLost_>(100000);
-		s_checkLostRefCountAlloc = make_ref_count_alloc<CheckLost_, std::mutex>(100000, [s_checkLostObjAlloc_](CheckLost_*){});
-		s_checkPumpLostRefCountAlloc = make_ref_count_alloc<CheckPumpLost_, std::mutex>(100000, [s_checkPumpLostObjAlloc_](CheckPumpLost_*){});
+		s_checkLostObjAlloc_ = new mem_alloc_mt<CheckLost_>(MEM_POOL_LENGTH);
+		s_checkPumpLostObjAlloc_ = new mem_alloc_mt<CheckPumpLost_>(MEM_POOL_LENGTH);
+		s_checkLostRefCountAlloc = make_ref_count_alloc<CheckLost_, std::mutex>(MEM_POOL_LENGTH, [s_checkLostObjAlloc_](CheckLost_*){});
+		s_checkPumpLostRefCountAlloc = make_ref_count_alloc<CheckPumpLost_, std::mutex>(MEM_POOL_LENGTH, [s_checkPumpLostObjAlloc_](CheckPumpLost_*){});
 #endif
 		s_autoActorStackMng = new autoActorStackMng;
 #ifdef __linux__
 		s_sigsegvMutex = new std::mutex;
 #endif
-		shared_bool::_sharedBoolPool = create_shared_pool_mt<bool, std::mutex>(100000);
+		shared_bool::_sharedBoolPool = create_shared_pool_mt<bool, std::mutex>(MEM_POOL_LENGTH);
 		my_actor::_actorIDCount = initer->_actorIDCount;
 		s_shared_initer._actorIDCount = initer->_actorIDCount;
-		my_actor::_childActorListAll = new msg_list_shared_alloc<actor_handle>::shared_node_alloc(100000);
-		my_actor::_quitExitCallbackAll = new msg_list_shared_alloc<std::function<void()> >::shared_node_alloc(100000);
-		my_actor::_suspendResumeQueueAll = new msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc(100000);
-		my_actor::msg_pool_status::_msgTypeMapAll = new msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc(100000);
+		my_actor::_childActorListAll = new msg_list_shared_alloc<actor_handle>::shared_node_alloc(MEM_POOL_LENGTH);
+		my_actor::_quitExitCallbackAll = new msg_list_shared_alloc<std::function<void()> >::shared_node_alloc(MEM_POOL_LENGTH);
+		my_actor::_suspendResumeQueueAll = new msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc(MEM_POOL_LENGTH);
+		my_actor::msg_pool_status::_msgTypeMapAll = new msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc(MEM_POOL_LENGTH);
 	}
 }
 
@@ -1546,6 +1548,12 @@ public:
 			assert(!_actor._inActor);
 			_actor._inActor = true;
 		}
+		catch (my_actor::stack_exhaustion_exception&)
+		{
+			trace_line("\nerror: ", "stack_exhaustion_exception");
+			assert(false);
+			exit(10);
+		}
 		catch (pump_disconnected_exception&)
 		{
 			trace_line("\nerror: ", "pump_disconnected_exception");
@@ -1648,27 +1656,6 @@ public:
 			return MEM_PAGE_SIZE;
 		}
 		return 0;
-// 		size_t rangeA = 0;
-// 		size_t rangeB = (info->stackSize + info->reserveSize) / MEM_PAGE_SIZE;
-// 		do
-// 		{
-// 			MEMORY_BASIC_INFORMATION mbi;
-// 			const size_t i = rangeA + (rangeB - rangeA) / 2;
-// 			VirtualQuery(sb + i * MEM_PAGE_SIZE, &mbi, sizeof(mbi));
-// 			if ((PAGE_READWRITE | PAGE_GUARD) == mbi.Protect)
-// 			{
-// 				return i * MEM_PAGE_SIZE + MEM_PAGE_SIZE;
-// 			} 
-// 			else if (MEM_RESERVE == mbi.State)
-// 			{
-// 				rangeA = i + 1;
-// 			}
-// 			else
-// 			{
-// 				rangeB = i;
-// 			}
-// 		} while (rangeA < rangeB);
-// 		return 0;
 	}
 
 	void check_stack()
@@ -1678,7 +1665,11 @@ public:
 		_actor._usingStackSize = std::max(_actor._usingStackSize, info->stackSize + info->reserveSize - cleanSize);
 		//记录本次实际消耗的栈空间
 		s_autoActorStackMng->update_stack_size(_actor._actorKey, _actor._usingStackSize);
-		if (cleanSize < info->reserveSize - MEM_PAGE_SIZE)
+		if (_actor._afterExitCleanStack)
+		{
+			context_yield::decommit_context(info);
+		}
+		else if (cleanSize < info->reserveSize - MEM_PAGE_SIZE)
 		{
 			//释放物理内存，保留地址空间
 			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
@@ -1690,6 +1681,7 @@ public:
 #ifndef _MSC_VER
 	void operator ()(actor_push_type& actorPush)
 	{
+		assert((size_t)get_sp() > (size_t)(((actor_pull_type*)_actor._actorPull)->_coroInfo)->stackTop - MEM_PAGE_SIZE + 256);
 		actor_handler(actorPush);
 		if (_actor._checkStack)
 		{
@@ -1702,6 +1694,13 @@ public:
 		else
 		{
 			exit_notify();
+			if (_actor._afterExitCleanStack)
+			{
+				_actor.run_in_thread_stack_after_quited([this]
+				{
+					context_yield::decommit_context(((actor_pull_type*)_actor._actorPull)->_coroInfo);
+				});
+			}
 		}
 	}
 #else
@@ -1709,6 +1708,7 @@ public:
 	{
 		__try
 		{
+			assert((size_t)get_sp() > (size_t)(((actor_pull_type*)_actor._actorPull)->_coroInfo)->stackTop - MEM_PAGE_SIZE + 256);
 			actor_handler(actorPush);			
 			if (_actor._checkStack)
 			{//从实际栈底查看有多少个PAGE的PAGE_GUARD标记消失和用了多少栈预留空间
@@ -1721,6 +1721,13 @@ public:
 			else
 			{
 				exit_notify();
+				if (_actor._afterExitCleanStack)
+				{
+					_actor.run_in_thread_stack_after_quited([this]
+					{
+						context_yield::decommit_context(((actor_pull_type*)_actor._actorPull)->_coroInfo);
+					});
+				}
 			}
 		}
 		__except (seh_exception_handler(GetExceptionCode(), GetExceptionInformation()))
@@ -1807,7 +1814,11 @@ public:
 		_actor._usingStackSize = std::max(_actor._usingStackSize, info->stackSize + info->reserveSize - cleanSize);
 		//记录本次实际消耗的栈空间
 		s_autoActorStackMng->update_stack_size(_actor._actorKey, _actor._usingStackSize);
-		if (cleanSize < info->reserveSize)
+		if (_actor._afterExitCleanStack)
+		{
+			context_yield::decommit_context(info);
+		}
+		else if (cleanSize < info->reserveSize)
 		{
 			//释放物理内存，保留地址空间
 			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
@@ -1817,6 +1828,7 @@ public:
 
 	void operator ()(actor_push_type& actorPush)
 	{
+		assert((size_t)get_sp() > (size_t)(((actor_pull_type*)_actor._actorPull)->_coroInfo)->stackTop - MEM_PAGE_SIZE + 256);
 		actor_handler(actorPush);
 		if (_actor._checkStack)
 		{
@@ -1829,6 +1841,13 @@ public:
 		else
 		{
 			exit_notify();
+			if (_actor._afterExitCleanStack)
+			{
+				_actor.run_in_thread_stack_after_quited([this]
+				{
+					context_yield::decommit_context(((actor_pull_type*)_actor._actorPull)->_coroInfo);
+				});
+			}
 		}
 	}
 
@@ -1922,6 +1941,7 @@ _childActorList(*_childActorListAll)
 	_timerStateCompleted = true;
 	_holdedSuspendSign = false;
 	_waitingQuit = false;
+	_afterExitCleanStack = false;
 	_selfID = ++(*_actorIDCount);
 	_actorKey = -1;
 	_lockQuit = 0;
@@ -1981,6 +2001,12 @@ actor_handle my_actor::create(const shared_strand& actorStrand, const main_func&
 actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize)
 {
 	actor_pull_type* pull = ContextPool_::getContext(stackSize);
+	if (!pull)
+	{
+		error_trace_line("stack memory exhaustion");
+		throw stack_exhaustion_exception();
+		return actor_handle();
+	}
 	actor_handle newActor(new(pull->_space)my_actor(), [](my_actor* p){p->~my_actor(); }, actor_ref_count_alloc<void>(pull));
 	newActor->_weakThis = newActor;
 	newActor->_strand = actorStrand;
@@ -2024,8 +2050,8 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 	}
 	if (!pull)
 	{
-		error_trace_line("stack memory deficiented");
-		exit(-2);
+		error_trace_line("stack memory exhaustion");
+		throw stack_exhaustion_exception();
 		return actor_handle();
 	}
 	actor_handle newActor(new(pull->_space)my_actor(), [](my_actor* p){p->~my_actor(); }, actor_ref_count_alloc<void>(pull));
@@ -2877,6 +2903,12 @@ bool my_actor::is_locked_quit()
 {
 	assert_enter();
 	return 0 != _lockQuit;
+}
+
+void my_actor::after_exit_clean_stack()
+{
+	assert(_strand->running_in_this_thread());
+	_afterExitCleanStack = true;
 }
 
 void my_actor::notify_suspend()
