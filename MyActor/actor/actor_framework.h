@@ -4371,7 +4371,7 @@ public:
 		_result.reset();
 	}
 
-	~sync_cb_handler()
+	~sync_cb_handler() __disable_noexcept
 	{
 		if (_selfEarly)
 		{
@@ -4380,15 +4380,7 @@ public:
 				if (!_result._sign)
 				{
 					_result._sign = true;
-#ifdef _MSC_VER
 					ActorFunc_::push_yield(_selfEarly);
-#elif __GNUG__
-					try
-					{
-						ActorFunc_::push_yield(_selfEarly);
-					}
-					catch (...) {}
-#endif
 				}
 			}
 			Parent::_hostActor.reset();
@@ -4472,7 +4464,7 @@ public:
 		_result.reset();
 	}
 
-	~sync_cb_handler()
+	~sync_cb_handler() __disable_noexcept
 	{
 		if (_selfEarly)
 		{
@@ -4481,15 +4473,7 @@ public:
 				if (!_result._sign)
 				{
 					_result._sign = true;
-#ifdef _MSC_VER
 					ActorFunc_::push_yield(_selfEarly);
-#elif __GNUG__
-					try
-					{
-						ActorFunc_::push_yield(_selfEarly);
-					}
-					catch (...) {}
-#endif
 				}
 			}
 			Parent::_hostActor.reset();
@@ -4909,7 +4893,7 @@ public:
 public:
 	child_actor_handle();
 	child_actor_handle(child_actor_handle&& s);
-	~child_actor_handle();
+	~child_actor_handle() __disable_noexcept;
 	void operator =(child_actor_handle&& s);
 	const actor_handle& get_actor() const;
 	my_actor* operator ->() const;

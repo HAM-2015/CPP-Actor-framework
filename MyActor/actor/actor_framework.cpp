@@ -352,7 +352,7 @@ void child_actor_handle::operator =(child_actor_handle&& s)
 	}
 }
 
-child_actor_handle::~child_actor_handle()
+child_actor_handle::~child_actor_handle() __disable_noexcept
 {
 	if (!_quited)
 	{
@@ -362,15 +362,7 @@ child_actor_handle::~child_actor_handle()
 		{
 			assert(parent->_inActor);
 			assert(_started);
-#ifdef _MSC_VER
 			parent->wait_trig(_quiteAth);
-#elif __GNUG__
-			try
-			{
-				parent->wait_trig(_quiteAth);
-			}
-			catch (...) {}
-#endif
 			peel();
 		}
 	}
