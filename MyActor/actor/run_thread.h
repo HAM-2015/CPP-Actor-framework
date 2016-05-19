@@ -77,6 +77,7 @@ public:
 	void join();
 	thread_id get_id();
 	void swap(run_thread& s);
+	static void set_current_thread_name(const char* name);
 	static thread_id this_thread_id();
 	static size_t cpu_core_number();
 	static size_t cpu_thread_number();

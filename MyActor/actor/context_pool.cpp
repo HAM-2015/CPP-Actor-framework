@@ -6,8 +6,15 @@
 #endif
 
 //清理最小周期(秒)
-#define CONTEXT_MIN_CLEAR_CYCLE		30
-#define CONTEXT_MIN_DELETE_CYCLE		300
+#ifndef CONTEXT_MIN_CLEAR_CYCLE
+#define CONTEXT_MIN_CLEAR_CYCLE 30
+#endif
+#ifndef CONTEXT_MIN_DELETE_CYCLE
+#define CONTEXT_MIN_DELETE_CYCLE 300
+#endif
+
+static_assert(1 < CONTEXT_MIN_CLEAR_CYCLE, "");
+static_assert(1 < CONTEXT_MIN_DELETE_CYCLE, "");
 
 void ContextPool_::coro_push_interface::yield()
 {
@@ -39,7 +46,7 @@ void ContextPool_::install()
 		ContextPool_::coro_pull_interface::_actorFlsIndex = FlsAlloc(NULL);
 #endif
 		ContextPool_::context_pool_pck::_mutex = new std::mutex;
-		ContextPool_::context_pool_pck::_alloc = new context_pool_pck::pool_queue::shared_node_alloc(1000000);
+		ContextPool_::context_pool_pck::_alloc = new context_pool_pck::pool_queue::shared_node_alloc(MEM_POOL_LENGTH);
 		_fiberPool = new ContextPool_;
 	}
 }
@@ -64,7 +71,7 @@ void ContextPool_::uninstall()
 ContextPool_::ContextPool_()
 :_exitSign(false), _clearWait(false), _stackCount(0), _stackTotalSize(0)
 {
-	run_thread th([this] { clearThread(); });
+	run_thread th([this] { cleanThread(); });
 	_clearThread.swap(th);
 }
 
@@ -153,12 +160,12 @@ ContextPool_::coro_pull_interface* ContextPool_::getContext(size_t size)
 	return NULL;
 }
 
-void ContextPool_::recovery(coro_pull_interface* coro)
+void ContextPool_::recovery(coro_pull_interface* pull)
 {
-	coro->_tick = get_tick_s();
-	context_pool_pck& pool = _fiberPool->_contextPool[coro->_coroInfo->stackSize / MEM_PAGE_SIZE - 1];
+	pull->_tick = get_tick_s();
+	context_pool_pck& pool = _fiberPool->_contextPool[pull->_coroInfo->stackSize / MEM_PAGE_SIZE - 1];
 	std::lock_guard<std::mutex> lg(*pool._mutex);
-	pool._pool.push_back(coro);
+	pool._pool.push_back(pull);
 }
 
 void ContextPool_::contextHandler(context_yield::context_info* info, void* param)
@@ -178,11 +185,16 @@ void ContextPool_::contextHandler(context_yield::context_info* info, void* param
 		context_yield::push_yield(info);
 		coro_push_interface push = { info };
 		pull->_currentHandler(push, pull->_param);
+		if (pull->_tick)
+		{
+			context_yield::decommit_context(info);
+		}
 	}
 }
 
-void ContextPool_::clearThread()
+void ContextPool_::cleanThread()
 {
+	run_thread::set_current_thread_name("actor stack clean thread");
 	while (true)
 	{
 		{

@@ -68,8 +68,6 @@ msg_list_shared_alloc<std::function<void()> >::shared_node_alloc* my_actor::_qui
 msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc* my_actor::_suspendResumeQueueAll = NULL;
 msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc* my_actor::msg_pool_status::_msgTypeMapAll = NULL;
 
-#define MEM_POOL_LENGTH 100000
-
 void my_actor::install()
 {
 	if (!s_inited)
@@ -201,8 +199,6 @@ const shared_initer* my_actor::get_initer()
 {
 	return &s_shared_initer;
 }
-
-#define ACTOR_TLS_INDEX 0
 //////////////////////////////////////////////////////////////////////////
 
 void shared_bool::reset()
@@ -1524,10 +1520,6 @@ public:
 				_actor._inActor = true;
 			}
 			assert(_actor._strand->running_in_this_thread());
-			if (_actor._checkStack)
-			{
-				_actor.stack_decommit(false);
-			}
 			_actor._mainFunc(&_actor);
 			assert(_actor._inActor);
 			assert(!_actor._lockQuit);
@@ -1657,11 +1649,7 @@ public:
 		_actor._usingStackSize = std::max(_actor._usingStackSize, info->stackSize + info->reserveSize - cleanSize);
 		//记录本次实际消耗的栈空间
 		s_autoActorStackMng->update_stack_size(_actor._actorKey, _actor._usingStackSize);
-		if (_actor._afterExitCleanStack)
-		{
-			context_yield::decommit_context(info);
-		}
-		else if (cleanSize < info->reserveSize - MEM_PAGE_SIZE)
+		if (!_actor._afterExitCleanStack && cleanSize < info->reserveSize - MEM_PAGE_SIZE)
 		{
 			//释放物理内存，保留地址空间
 			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
@@ -1673,7 +1661,6 @@ public:
 #ifndef _MSC_VER
 	void operator ()(actor_push_type& actorPush)
 	{
-		assert((size_t)get_sp() > (size_t)(((actor_pull_type*)_actor._actorPull)->_coroInfo)->stackTop - MEM_PAGE_SIZE + 256);
 		actor_handler(actorPush);
 		if (_actor._checkStack)
 		{
@@ -1686,13 +1673,10 @@ public:
 		else
 		{
 			exit_notify();
-			if (_actor._afterExitCleanStack)
-			{
-				_actor.run_in_thread_stack_after_quited([this]
-				{
-					context_yield::decommit_context(((actor_pull_type*)_actor._actorPull)->_coroInfo);
-				});
-			}
+		}
+		if (_actor._afterExitCleanStack)
+		{
+			((actor_pull_type*)_actor._actorPull)->_tick = 1;
 		}
 	}
 #else
@@ -1700,7 +1684,6 @@ public:
 	{
 		__try
 		{
-			assert((size_t)get_sp() > (size_t)(((actor_pull_type*)_actor._actorPull)->_coroInfo)->stackTop - MEM_PAGE_SIZE + 256);
 			actor_handler(actorPush);			
 			if (_actor._checkStack)
 			{//从实际栈底查看有多少个PAGE的PAGE_GUARD标记消失和用了多少栈预留空间
@@ -1713,13 +1696,10 @@ public:
 			else
 			{
 				exit_notify();
-				if (_actor._afterExitCleanStack)
-				{
-					_actor.run_in_thread_stack_after_quited([this]
-					{
-						context_yield::decommit_context(((actor_pull_type*)_actor._actorPull)->_coroInfo);
-					});
-				}
+			}
+			if (_actor._afterExitCleanStack)
+			{
+				((actor_pull_type*)_actor._actorPull)->_tick = 1;
 			}
 		}
 		__except (seh_exception_handler(GetExceptionCode(), GetExceptionInformation()))
@@ -1733,11 +1713,11 @@ public:
 		context_yield::context_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
 		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
 #ifdef _WIN64
-		char* const sp = (char*)((size_t)eInfo->ContextRecord->Rsp & (0 - MEM_PAGE_SIZE));
+		char* const sp = (char*)((size_t)eInfo->ContextRecord->Rsp & (-MEM_PAGE_SIZE));
 #else
-		char* const sp = (char*)((size_t)eInfo->ContextRecord->Esp & (0 - MEM_PAGE_SIZE));
+		char* const sp = (char*)((size_t)eInfo->ContextRecord->Esp & (-MEM_PAGE_SIZE));
 #endif
-		char* const violationAddr = (char*)((size_t)eInfo->ExceptionRecord->ExceptionInformation[1] & (0 - MEM_PAGE_SIZE));
+		char* const violationAddr = (char*)((size_t)eInfo->ExceptionRecord->ExceptionInformation[1] & (-MEM_PAGE_SIZE));
 		if (violationAddr >= sb && violationAddr < info->stackTop)
 		{
 			if (STATUS_STACK_OVERFLOW == ecd)
@@ -1806,11 +1786,7 @@ public:
 		_actor._usingStackSize = std::max(_actor._usingStackSize, info->stackSize + info->reserveSize - cleanSize);
 		//记录本次实际消耗的栈空间
 		s_autoActorStackMng->update_stack_size(_actor._actorKey, _actor._usingStackSize);
-		if (_actor._afterExitCleanStack)
-		{
-			context_yield::decommit_context(info);
-		}
-		else if (cleanSize < info->reserveSize)
+		if (!_actor._afterExitCleanStack && cleanSize < info->reserveSize)
 		{
 			//释放物理内存，保留地址空间
 			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
@@ -1820,7 +1796,6 @@ public:
 
 	void operator ()(actor_push_type& actorPush)
 	{
-		assert((size_t)get_sp() > (size_t)(((actor_pull_type*)_actor._actorPull)->_coroInfo)->stackTop - MEM_PAGE_SIZE + 256);
 		actor_handler(actorPush);
 		if (_actor._checkStack)
 		{
@@ -1833,13 +1808,10 @@ public:
 		else
 		{
 			exit_notify();
-			if (_actor._afterExitCleanStack)
-			{
-				_actor.run_in_thread_stack_after_quited([this]
-				{
-					context_yield::decommit_context(((actor_pull_type*)_actor._actorPull)->_coroInfo);
-				});
-			}
+		}
+		if (_actor._afterExitCleanStack)
+		{
+			((actor_pull_type*)_actor._actorPull)->_tick = 1;
 		}
 	}
 
@@ -2010,7 +1982,10 @@ actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& main
 #endif
 
 	pull->_param = newActor.get();
-	pull->_currentHandler = [](actor_push_type& push, void* p) {actor_run(*(my_actor*)p)(push); };
+	pull->_currentHandler = [](actor_push_type& push, void* p)
+	{
+		(actor_run(*(my_actor*)p))(push);
+	};
 	pull->yield();
 	return newActor;
 }
@@ -2059,7 +2034,11 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 #endif
 
 	pull->_param = newActor.get();
-	pull->_currentHandler = [](actor_push_type& push, void* p) {actor_run(*(my_actor*)p)(push); };
+	pull->_currentHandler = [](actor_push_type& push, void* p)
+	{
+		context_yield::decommit_context(push._coroInfo);
+		(actor_run(*(my_actor*)p))(push);
+	};
 	pull->yield();
 	return newActor;
 }
@@ -2627,55 +2606,6 @@ size_t my_actor::stack_total_size()
 {
 	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	return info->stackSize + info->reserveSize;
-}
-
-void my_actor::enable_check_stack(bool decommit)
-{
-	if (!_checkStack)
-	{
-		_checkStack = true;
-#ifdef WIN32
-		if (decommit)
-		{
-			stack_decommit(false);
-		}
-		else
-		{
-			char* const sp = (char*)((size_t)get_sp() & (0 - MEM_PAGE_SIZE));
-			begin_RUN_IN_THREAD_STACK(this);
-			context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
-			char* const sm = (char*)info->stackTop - info->stackSize;
-			//分页加PAGE_GUARD标记
-			size_t l = MEM_PAGE_SIZE;
-			while (sp - l >= sm)
-			{
-				DWORD oldPro = 0;
-				BOOL ok = VirtualProtect(sp - l, MEM_PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
-				if (!ok || (PAGE_READWRITE | PAGE_GUARD) == oldPro)
-				{
-					break;
-				}
-				l += MEM_PAGE_SIZE;
-			}
-			end_RUN_IN_THREAD_STACK();
-		}
-#elif __linux__
-		if (decommit)
-		{
-			stack_decommit(false);
-		}
-		else
-		{
-			char* const sp = (char*)((size_t)get_sp() & (0 - MEM_PAGE_SIZE));
-			begin_RUN_IN_THREAD_STACK(this);
-			context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
-			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
-			bool ok = 0 == mprotect(sb, sp - sb, PROT_NONE);
-			assert(ok);
-			end_RUN_IN_THREAD_STACK();
-		}
-#endif
-	}
 }
 
 size_t my_actor::yield_count()
@@ -3616,80 +3546,6 @@ void my_actor::check_self()
 	assert(self);
 	assert(this == self);
 #endif
-}
-
-my_actor::stack_info my_actor::self_stack()
-{
-	assert_enter();
-	void* const sp = get_sp();
-	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
-	return { info->stackTop,
-		sp, info->stackSize,
-		(size_t)info->stackTop - (size_t)sp,
-		_usingStackSize,
-		info->reserveSize,
-		info->stackSize + info->reserveSize - ((size_t)info->stackTop - (size_t)sp) };
-}
-
-size_t my_actor::stack_idle_space()
-{
-	assert_enter();
-	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
-	return info->stackSize + info->reserveSize - ((size_t)info->stackTop - (size_t)get_sp());
-}
-
-size_t my_actor::clean_stack_size()
-{
-	size_t s = 0;
-	begin_RUN_IN_THREAD_STACK(this);
-	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
-	s = actor_run::clean_size(info);
-	end_RUN_IN_THREAD_STACK();
-	return s;
-}
-
-void my_actor::stack_decommit(bool calcUsingStack)
-{
-	char* const sp = (char*)((size_t)get_sp() & (0 - MEM_PAGE_SIZE));
-	begin_RUN_IN_THREAD_STACK(this);
-	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
-	char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
-#ifdef WIN32
-	if (sp > sb)
-	{
-		if (calcUsingStack)
-		{
-			_usingStackSize = std::max(_usingStackSize, info->stackSize + info->reserveSize - actor_run::clean_size(info));
-		}
-		DWORD oldPro = 0;
-		VirtualProtect(sp - MEM_PAGE_SIZE, MEM_PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
-		size_t l = 2 * MEM_PAGE_SIZE;
-		while (sp - l >= sb)
-		{
-			MEMORY_BASIC_INFORMATION mbi;
-			VirtualQuery(sp - l, &mbi, sizeof(mbi));
-			if (MEM_RESERVE != mbi.State)
-			{
-				VirtualFree(sp - l, MEM_PAGE_SIZE, MEM_DECOMMIT);
-				l += MEM_PAGE_SIZE;
-			}
-			else
-			{
-				break;
-			}
-		}
-	}
-#elif __linux__
-	if (sp > sb + MEM_PAGE_SIZE)
-	{
-		if (calcUsingStack)
-		{
-			_usingStackSize = std::max(_usingStackSize, info->stackSize + info->reserveSize - actor_run::clean_size(info));
-		}
-		madvise(sb + MEM_PAGE_SIZE, sp - (sb + MEM_PAGE_SIZE), MADV_DONTNEED);
-	}
-#endif
-	end_RUN_IN_THREAD_STACK();
 }
 
 void my_actor::close_msg_notifer(actor_msg_handle_base& amh)

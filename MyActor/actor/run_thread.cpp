@@ -53,6 +53,24 @@ void run_thread::swap(run_thread& s)
 	}
 }
 
+void run_thread::set_current_thread_name(const char* name)
+{
+	//https://msdn.microsoft.com/en-us/library/xcb2z8hs(v=VS.71).aspx
+	struct
+	{
+		DWORD dwType; // must be 0x1000
+		LPCSTR szName; // pointer to name (in user addr space)
+		DWORD dwThreadID; // thread ID (-1=caller thread)
+		DWORD dwFlags; // reserved for future use, must be zero
+	} info = { 0x1000, name, GetCurrentThreadId(), 0 };
+#ifdef _MSC_VER
+	__try { RaiseException(0x406D1388, 0, sizeof(info) / sizeof(DWORD), (ULONG_PTR*)&info); }
+	__except (EXCEPTION_EXECUTE_HANDLER) {}
+#elif __GNUG__
+	RaiseException(0x406D1388, 0, sizeof(info) / sizeof(DWORD), (ULONG_PTR*)&info);
+#endif
+}
+
 size_t run_thread::cpu_core_number()
 {
 	size_t cores = 0;
@@ -94,6 +112,7 @@ size_t run_thread::cpu_thread_number()
 #include <unistd.h>
 #include <fstream>
 #include <string>
+#include <sys/prctl.h>
 
 run_thread::run_thread()
 {
@@ -140,6 +159,11 @@ void run_thread::swap(run_thread& s)
 	{
 		std::swap(_pthread, s._pthread);
 	}
+}
+
+void run_thread::set_current_thread_name(const char* name)
+{
+	prctl(PR_SET_NAME, name);
 }
 
 size_t run_thread::cpu_core_number()

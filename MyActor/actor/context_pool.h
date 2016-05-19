@@ -63,7 +63,7 @@ public:
 	static void uninstall();
 private:
 	static void contextHandler(context_yield::context_info* info, void* param);
-	void clearThread();
+	void cleanThread();
 private:
 	volatile bool _exitSign;
 	volatile bool _clearWait;

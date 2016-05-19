@@ -20,7 +20,7 @@ typedef long long micseconds;
 
 ActorTimer_::ActorTimer_(const shared_strand& strand)
 :_weakStrand(strand->_weakThis), _looping(false), _timerCount(0),
-_extMaxTick(0), _extFinishTime(-1), _handlerQueue(65536)
+_extMaxTick(0), _extFinishTime(-1), _handlerQueue(MEM_POOL_LENGTH)
 {
 #ifdef DISABLE_BOOST_TIMER
 	_timer = new timer_type(strand->get_io_engine(), this);

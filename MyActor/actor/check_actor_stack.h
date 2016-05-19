@@ -3,10 +3,17 @@
 
 #define kB	*1024
 
+//Ò³Ãæ´óÐ¡
+#ifndef MEM_PAGE_SIZE
+#define MEM_PAGE_SIZE (4 kB)
+#endif
+
+#ifndef STACK_BLOCK_SIZE
 #ifdef WIN32
-#define STACK_BLOCK_SIZE	(64 kB)
+#define STACK_BLOCK_SIZE (64 kB)
 #elif __linux__
-#define STACK_BLOCK_SIZE	(32 kB)
+#define STACK_BLOCK_SIZE (32 kB)
+#endif
 #endif
 
 //Ä¬ÈÏ¶ÑÕ»
@@ -44,23 +51,30 @@
 
 //¶ÑÕ»µ×Ô¤Áô¿Õ¼ä£¬¼ì²â¶ÑÕ»Òç³ö
 #if (_DEBUG || DEBUG)
-#		if (defined _WIN64) || (defined __x86_64__)
-#define STACK_RESERVED_SPACE_SIZE		(24 kB)
-#		else
-#define STACK_RESERVED_SPACE_SIZE		(16 kB)
-#		endif
+#	if (defined _WIN64) || (defined __x86_64__)
+#define STACK_RESERVED_SPACE_SIZE (24 kB)
 #	else
-#		if (defined _WIN64) || (defined __x86_64__)
-#define STACK_RESERVED_SPACE_SIZE		(16 kB)
-#		else
-#define STACK_RESERVED_SPACE_SIZE		(8 kB)
-#		endif
+#define STACK_RESERVED_SPACE_SIZE (16 kB)
 #	endif
-
-//Ò³Ãæ´óÐ¡
-#define MEM_PAGE_SIZE					(4 kB)
+#else
+#	if (defined _WIN64) || (defined __x86_64__)
+#define STACK_RESERVED_SPACE_SIZE (16 kB)
+#	else
+#define STACK_RESERVED_SPACE_SIZE (8 kB)
+#	endif
+#endif
 
 //Õ»×´Ì¬±£Áô¿Õ¼ä
-#define CORO_CONTEXT_STATE_SPACE	(1 * MEM_PAGE_SIZE)
+#define CORO_CONTEXT_STATE_SPACE (1 * MEM_PAGE_SIZE)
+
+#ifndef MEM_POOL_LENGTH
+#define MEM_POOL_LENGTH 100000
+#endif
+
+#define ACTOR_TLS_INDEX 0
+
+static_assert(0 < MEM_PAGE_SIZE && MEM_PAGE_SIZE % (4 kB) == 0, "");
+static_assert(0 < MEM_POOL_LENGTH && MEM_POOL_LENGTH < 10000000, "");
+static_assert(STACK_BLOCK_SIZE >= (32 kB) && STACK_BLOCK_SIZE % MEM_PAGE_SIZE == 0, "");
 
 #endif

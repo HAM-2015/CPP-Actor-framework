@@ -54,6 +54,7 @@ void WaitableTimer_::appendEvent(long long us, WaitableTimerEvent_* h)
 
 void WaitableTimer_::timerThread()
 {
+	run_thread::set_current_thread_name("waitable timer thread");
 	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 	while (true)
 	{
@@ -141,6 +142,7 @@ void WaitableTimer_::appendEvent(long long us, WaitableTimerEvent_* h)
 
 void WaitableTimer_::timerThread()
 {
+	run_thread::set_current_thread_name("waitable timer thread");
 	pthread_attr_t threadAttr;
 	struct sched_param pm = { 83 };
 	pthread_attr_init(&threadAttr);

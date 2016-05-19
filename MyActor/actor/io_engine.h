@@ -65,7 +65,7 @@ public:
 	};
 #endif
 public:
-	io_engine(bool enableTimer = true);
+	io_engine(bool enableTimer = true, const char* title = NULL);
 	~io_engine();
 public:
 	/*!
@@ -126,6 +126,11 @@ public:
 	const std::set<run_thread::thread_id>& threadsID();
 
 	/*!
+	@brief ios title
+	*/
+	const std::string& title();
+
+	/*!
 	@brief 调度器对象引用
 	*/
 	operator boost::asio::io_service& () const;
@@ -176,6 +181,7 @@ private:
 #endif
 #endif
 	priority _priority;
+	std::string _title;
 	std::mutex _runMutex;
 	std::mutex _ctrlMutex;
 	std::atomic<long long> _runCount;

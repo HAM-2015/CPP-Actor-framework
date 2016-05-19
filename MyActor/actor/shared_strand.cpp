@@ -43,9 +43,9 @@ shared_strand boost_strand::create(io_engine& ioEngine)
 		res->_strand = new strand_type(ioEngine);
 #ifdef ENABLE_NEXT_TICK
 		res->_reuMemAlloc = new reusable_mem();
-		res->_nextTickAlloc = new mem_alloc2<wrap_next_tick_space>(8192);
-		res->_frontTickQueue = new msg_queue<wrap_next_tick_base*, mem_alloc2<>>(8192);
-		res->_backTickQueue = new msg_queue<wrap_next_tick_base*, mem_alloc2<>>(8192);
+		res->_nextTickAlloc = new mem_alloc2<wrap_next_tick_space>(MEM_POOL_LENGTH);
+		res->_frontTickQueue = new msg_queue<wrap_next_tick_base*, mem_alloc2<>>(MEM_POOL_LENGTH);
+		res->_backTickQueue = new msg_queue<wrap_next_tick_base*, mem_alloc2<>>(MEM_POOL_LENGTH);
 #endif
 		res->_actorTimer = new ActorTimer_(res);
 		res->_timerBoost = new TimerBoost_(res);

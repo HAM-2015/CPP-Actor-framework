@@ -305,7 +305,7 @@ class boost_strand
 	friend TimerBoost_;
 protected:
 	boost_strand();
-#ifdef ENABLE_QT_ACTOR 
+#ifdef ENABLE_QT_ACTOR
 	virtual ~boost_strand();
 #else
 	~boost_strand();

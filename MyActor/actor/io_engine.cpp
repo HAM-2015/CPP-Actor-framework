@@ -30,18 +30,19 @@ void io_engine::uninstall()
 #endif
 }
 
-io_engine::io_engine(bool enableTimer)
+io_engine::io_engine(bool enableTimer, const char* title)
 {
 	_opend = false;
 	_suspend = false;
 	_runLock = NULL;
+	_title = title ? title : "io_engine";
 #ifdef WIN32
 	_priority = normal;
 #elif __linux__
 	_priority = idle;
 	_policy = sched_other;
 #endif
-	_strandPool = create_shared_pool_mt<boost_strand, std::mutex>(1024, [](void* p)
+	_strandPool = create_shared_pool_mt<boost_strand, std::mutex>(2 * run_thread::cpu_thread_number(), [](void* p)
 	{
 		new(p)boost_strand();
 	}, [](boost_strand* p)->bool
@@ -102,6 +103,7 @@ void io_engine::_run(size_t threadNum, sched policy)
 			try
 			{
 				{
+					run_thread::set_current_thread_name(_title.c_str());
 #ifdef WIN32
 					SetThreadPriority(GetCurrentThread(), _priority);
 					DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &_handleList[i], 0, FALSE, DUPLICATE_SAME_ACCESS);
@@ -302,6 +304,11 @@ long long io_engine::getRunCount()
 const std::set<run_thread::thread_id>& io_engine::threadsID()
 {
 	return _threadsID;
+}
+
+const std::string& io_engine::title()
+{
+	return _title;
 }
 
 io_engine::operator boost::asio::io_service&() const
