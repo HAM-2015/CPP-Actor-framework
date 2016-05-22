@@ -17,6 +17,13 @@ namespace context_yield
 		void* _stackBottom;
 	};
 
+	struct fiber_info_ref
+	{
+		context_yield::context_handler handler;
+		context_yield::context_info* info;
+		void* p;
+	};
+
 	bool is_thread_a_fiber()
 	{
 #if _WIN32_WINNT >= 0x0600
@@ -67,29 +74,26 @@ namespace context_yield
 		VirtualFree(sb, (size_t)sp - (size_t)sb, MEM_DECOMMIT);
 	}
 
+	void WINAPI fiber_handler(void* param)
+	{
+		fiber_info_ref* ref = (fiber_info_ref*)param;
+		assert((size_t)get_sp() > (size_t)ref->info->stackTop - MEM_PAGE_SIZE + 256);
+		adjust_stack(ref->info);
+		ref->handler(ref->info, ref->p);
+	}
+
 	context_yield::context_info* make_context(size_t stackSize, context_yield::context_handler handler, void* p)
 	{
 		size_t allocSize = MEM_ALIGN(stackSize + STACK_RESERVED_SPACE_SIZE, STACK_BLOCK_SIZE);
 		context_yield::context_info* info = new context_yield::context_info;
 		info->stackSize = stackSize;
 		info->reserveSize = allocSize - info->stackSize;
-		struct local_ref
-		{
-			context_yield::context_handler handler;
-			context_yield::context_info* info;
-			void* p;
-		} ref = { handler, info, p };
+		fiber_info_ref ref = { handler, info, p };
 #if _WIN32_WINNT >= 0x0502
-		info->obj = CreateFiberEx(0, allocSize, FIBER_FLAG_FLOAT_SWITCH, [](void* param)
+		info->obj = CreateFiberEx(0, allocSize, FIBER_FLAG_FLOAT_SWITCH, fiber_handler, &ref);
 #else//#elif _WIN32_WINNT == 0x0501
-		info->obj = CreateFiber(allocSize, [](void* param)
+		info->obj = CreateFiber(allocSize, fiber_handler, &ref);
 #endif
-		{
-			local_ref* ref = (local_ref*)param;
-			assert((size_t)get_sp() > (size_t)ref->info->stackTop - MEM_PAGE_SIZE + 256);
-			adjust_stack(ref->info);
-			ref->handler(ref->info, ref->p);
-		}, &ref);
 		if (!info->obj)
 		{
 			delete info;

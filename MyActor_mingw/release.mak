@@ -14,8 +14,8 @@ OBJCOPY :=
 #Additional flags
 PREPROCESSOR_MACROS := NDEBUG RELEASE WIN32 _WIN64 _WIN32_WINNT=0x0600 ENABLE_NEXT_TICK ENABLE_CHECK_LOST DISABLE_BOOST_TIMER
 INCLUDE_DIRS := D:\cpplib\boost
-LIBRARY_DIRS := D:\cpplib\boost\lib_posix_seh_x64
-LIBRARY_NAMES := Mswsock Winmm ws2_32 boost_thread-mgw49-mt-s-1_59 boost_system-mgw49-mt-s-1_59 boost_chrono-mgw49-mt-s-1_59
+LIBRARY_DIRS := D:\cpplib\boost\lib_mingw49\x64
+LIBRARY_NAMES := Mswsock Winmm ws2_32 boost_thread boost_system boost_chrono
 ADDITIONAL_LINKER_INPUTS := 
 MACOS_FRAMEWORKS := 
 LINUX_PACKAGES := 

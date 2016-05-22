@@ -66,8 +66,10 @@ void run_thread::set_current_thread_name(const char* name)
 #ifdef _MSC_VER
 	__try { RaiseException(0x406D1388, 0, sizeof(info) / sizeof(DWORD), (ULONG_PTR*)&info); }
 	__except (EXCEPTION_EXECUTE_HANDLER) {}
-#elif __GNUG__
-	RaiseException(0x406D1388, 0, sizeof(info) / sizeof(DWORD), (ULONG_PTR*)&info);
+#elif (__GNUG__ && ENABLE_GCC_SEH)
+	__seh_try { RaiseException(0x406D1388, 0, sizeof(info) / sizeof(DWORD), (ULONG_PTR*)&info); }
+	__seh_except(EXCEPTION_EXECUTE_HANDLER) {}
+	__seh_end_except
 #endif
 }
 

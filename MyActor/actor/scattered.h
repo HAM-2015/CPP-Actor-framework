@@ -17,6 +17,16 @@
 #endif // _WIN64
 #endif
 
+#if (WIN32 && __GNUG__)
+#ifdef ENABLE_GCC_SEH
+#include <seh.h>
+#else
+#define __seh_try
+#define __seh_except(...) if (false)
+#define __seh_end_except
+#endif
+#endif
+
 #ifdef _MSC_VER
 #define FRIEND_SHARED_PTR(__T__)\
 	friend std::shared_ptr<__T__>;\
@@ -29,7 +39,11 @@
 #endif
 
 #ifdef _MSC_VER
+#if (_MSC_VER < 1900)
 #define __disable_noexcept
+#else
+#define __disable_noexcept noexcept(false)
+#endif
 #elif __GNUG__
 #define __disable_noexcept noexcept(false)
 #endif

@@ -659,6 +659,8 @@ struct reusable_alloc;
 template <typename _Reusalble>
 struct reusable_alloc<void, _Reusalble>
 {
+	typedef void value_type;
+
 	template <typename _Other>
 	struct rebind
 	{
@@ -674,6 +676,14 @@ struct reusable_alloc<void, _Reusalble>
 template <typename _Ty, typename _Reusalble>
 struct reusable_alloc
 {
+	typedef typename std::allocator<_Ty>::pointer pointer;
+	typedef typename std::allocator<_Ty>::difference_type difference_type;
+	typedef typename std::allocator<_Ty>::reference reference;
+	typedef typename std::allocator<_Ty>::const_pointer const_pointer;
+	typedef typename std::allocator<_Ty>::const_reference const_reference;
+	typedef typename std::allocator<_Ty>::size_type size_type;
+	typedef typename std::allocator<_Ty>::value_type value_type;
+
 	template <typename _Other>
 	struct rebind
 	{
@@ -687,7 +697,7 @@ public:
 		:_reuMem(&reu) {}
 
 	template <typename _Other>
-	reusable_alloc(reusable_alloc<_Other, _Reusalble>& reu)
+	reusable_alloc(const reusable_alloc<_Other, _Reusalble>& reu)
 		:_reuMem(reu._reuMem) {}
 
 	void* allocate(size_t n)
@@ -719,6 +729,8 @@ template <typename _All>
 class pool_alloc_mt<void, _All>
 {
 public:
+	typedef void value_type;
+
 	template <typename _Other>
 	struct rebind
 	{
@@ -730,6 +742,12 @@ public:
 	{
 		typedef pool_alloc_mt<_Other, _All> other;
 	};
+
+	pool_alloc_mt(size_t poolSize, bool shared = true)
+		:_poolSize(poolSize), _shared(shared) {}
+
+	size_t _poolSize;
+	bool _shared;
 };
 
 template <typename _Ty, typename _All>
@@ -775,6 +793,9 @@ public:
 	{
 	}
 
+	pool_alloc_mt(const pool_alloc_mt<void, _All>& s)
+		:pool_alloc_mt(s._poolSize, s._shared) {}
+
 	pool_alloc_mt(const pool_alloc_mt& s)
 	{
 		if (s.is_shared())
@@ -809,6 +830,12 @@ public:
 	}
 
 	pool_alloc_mt& operator=(const pool_alloc_mt& s)
+	{
+		assert(false);
+		return *this;
+	}
+
+	pool_alloc_mt& operator=(const pool_alloc_mt<void, _All>& s)
 	{
 		assert(false);
 		return *this;
@@ -882,6 +909,8 @@ template <typename _All>
 class pool_alloc<void, _All>
 {
 public:
+	typedef void value_type;
+
 	template <typename _Other>
 	struct rebind
 	{
@@ -893,6 +922,11 @@ public:
 	{
 		typedef pool_alloc<_Other, _All> other;
 	};
+
+	pool_alloc(size_t poolSize = sizeof(void*))
+		:_poolSize(poolSize) {}
+
+	size_t _poolSize;
 };
 
 template <typename _Ty, typename _All>
@@ -930,16 +964,15 @@ public:
 	{
 	}
 
+	pool_alloc(const pool_alloc<void, _All>& s)
+		:_memAlloc(s._poolSize) {}
+
 	pool_alloc(const pool_alloc& s)
-		:_memAlloc(s._memAlloc._poolMaxSize)
-	{
-	}
+		:_memAlloc(s._memAlloc._poolMaxSize) {}
 
 	template <typename _Other>
-	pool_alloc(const pool_alloc<_Other>& s)
-		: _memAlloc(s._memAlloc._poolMaxSize)
-	{
-	}
+	pool_alloc(const pool_alloc<_Other, _All>& s)
+		: _memAlloc(s._memAlloc._poolMaxSize) {}
 
 	pool_alloc& operator=(const pool_alloc& s)
 	{
@@ -948,10 +981,15 @@ public:
 	}
 
 	template <typename _Other>
-	pool_alloc& operator=(const pool_alloc<_Other>& s)
+	pool_alloc& operator=(const pool_alloc<_Other, _All>& s)
 	{
 		assert(false);
 		return *this;
+	}
+
+	bool operator==(const pool_alloc<void, _All>& s)
+	{
+		return true;
 	}
 
 	bool operator==(const pool_alloc& s)

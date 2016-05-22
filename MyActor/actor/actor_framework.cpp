@@ -3,8 +3,18 @@
 #include "sync_msg.h"
 #include "context_pool.h"
 #include "bind_qt_run.h"
+#if (_MSC_VER >= 1900 || (__GNUG__*10 + __GNUC_MINOR__) >= 61)
+#include <shared_mutex>
+typedef std::shared_mutex _shared_mutex;
+#define _shared_lock std::shared_lock
+#define _unique_lock std::unique_lock
+#else
 #include <boost/thread/shared_mutex.hpp>
 #include <boost/thread/locks.hpp>
+typedef boost::shared_mutex _shared_mutex;
+#define _shared_lock boost::shared_lock
+#define _unique_lock boost::unique_lock
+#endif
 #if (WIN32 && __GNUG__)
 #include <fibersapi.h>
 #endif
@@ -33,7 +43,7 @@ struct autoActorStackMng
 {
 	size_t get_stack_size(size_t key)
 	{
-		boost::shared_lock<boost::shared_mutex> sl(_mutex);
+		_shared_lock<_shared_mutex> sl(_mutex);
 		auto it = _table.find(key);
 		if (_table.end() != it)
 		{
@@ -44,12 +54,12 @@ struct autoActorStackMng
 
 	void update_stack_size(size_t key, size_t ns)
 	{
-		boost::unique_lock<boost::shared_mutex> ul(_mutex);
+		_unique_lock<_shared_mutex> ul(_mutex);
 		_table[key] = ns;
 	}
 
 	std::map<size_t, size_t> _table;
-	boost::shared_mutex _mutex;
+	_shared_mutex _mutex;
 };
 
 struct shared_initer 
@@ -1658,29 +1668,8 @@ public:
 			VirtualProtect(sb + info->reserveSize - MEM_PAGE_SIZE, MEM_PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
 		}
 	}
-#ifndef _MSC_VER
-	void operator ()(actor_push_type& actorPush)
-	{
-		actor_handler(actorPush);
-		if (_actor._checkStack)
-		{
-			_actor.run_in_thread_stack_after_quited([this]
-			{
-				check_stack();
-				exit_notify();
-			});
-		}
-		else
-		{
-			exit_notify();
-		}
-		if (_actor._afterExitCleanStack)
-		{
-			((actor_pull_type*)_actor._actorPull)->_tick = 1;
-		}
-	}
-#else
-	void operator ()(actor_push_type& actorPush)
+#ifdef _MSC_VER
+	void run(actor_push_type& actorPush)
 	{
 		__try
 		{
@@ -1707,6 +1696,36 @@ public:
 			exit(100);
 		}
 	}
+#elif __GNUG__
+	void run(actor_push_type& actorPush)
+	{
+		__seh_try
+		{
+			actor_handler(actorPush);
+			if (_actor._checkStack)
+			{//从实际栈底查看有多少个PAGE的PAGE_GUARD标记消失和用了多少栈预留空间
+				_actor.run_in_thread_stack_after_quited([this]
+				{
+					check_stack();
+					exit_notify();
+				});
+			}
+			else
+			{
+				exit_notify();
+			}
+			if (_actor._afterExitCleanStack)
+			{
+				((actor_pull_type*)_actor._actorPull)->_tick = 1;
+			}
+		}
+		__seh_except(seh_exception_handler(GetExceptionCode(), GetExceptionInformation()))
+		{
+			exit(100);
+		}
+		__seh_end_except
+	}
+#endif
 
 	DWORD seh_exception_handler(DWORD ecd, _EXCEPTION_POINTERS* eInfo)
 	{
@@ -1759,7 +1778,6 @@ public:
 		}
 		return EXCEPTION_CONTINUE_SEARCH;
 	}
-#endif
 #elif __linux__
 
 	static size_t clean_size(context_yield::context_info* const info)
@@ -1794,7 +1812,7 @@ public:
 		}
 	}
 
-	void operator ()(actor_push_type& actorPush)
+	void run(actor_push_type& actorPush)
 	{
 		actor_handler(actorPush);
 		if (_actor._checkStack)
@@ -1984,7 +2002,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& main
 	pull->_param = newActor.get();
 	pull->_currentHandler = [](actor_push_type& push, void* p)
 	{
-		(actor_run(*(my_actor*)p))(push);
+		(actor_run(*(my_actor*)p)).run(push);
 	};
 	pull->yield();
 	return newActor;
@@ -2036,9 +2054,9 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 	pull->_param = newActor.get();
 	pull->_currentHandler = [](actor_push_type& push, void* p)
 	{
-		context_yield::decommit_context(push._coroInfo);
-		(actor_run(*(my_actor*)p))(push);
+		(actor_run(*(my_actor*)p)).run(push);
 	};
+	pull->_tick = 1;
 	pull->yield();
 	return newActor;
 }

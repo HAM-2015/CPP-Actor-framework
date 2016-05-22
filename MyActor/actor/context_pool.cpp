@@ -183,6 +183,11 @@ void ContextPool_::contextHandler(context_yield::context_info* info, void* param
 	while (true)
 	{
 		context_yield::push_yield(info);
+		if (pull->_tick)
+		{
+			pull->_tick = 0;
+			context_yield::decommit_context(info);
+		}
 		coro_push_interface push = { info };
 		pull->_currentHandler(push, pull->_param);
 		if (pull->_tick)

@@ -2302,6 +2302,16 @@ protected:
 	long long actor_id(my_actor* host);
 };
 
+#ifdef _MSC_VER
+#if (_MSC_VER >= 1900)
+#define __MUTEX_BLOCK_HANDLER_WRAP(__dst__, __src__, __host__) __dst__(std::allocator_arg, reusable_alloc<>(ActorFunc_::reu_mem(__host__)), __src__)
+#else
+#define __MUTEX_BLOCK_HANDLER_WRAP(__dst__, __src__, __host__) __dst__(__src__, reusable_alloc<>(ActorFunc_::reu_mem(__host__)))
+#endif
+#elif __GNUG__
+#define __MUTEX_BLOCK_HANDLER_WRAP(__dst__, __src__, __host__) __dst__(__src__)
+#endif
+
 /*!
 @brief actor_msg_handleœ˚œ¢ª•≥‚÷¥––øÈ
 */
@@ -2315,11 +2325,7 @@ class mutex_block_msg : public MutexBlock_
 public:
 	template <typename Handler>
 	mutex_block_msg(msg_handle& msgHandle, Handler&& handler)
-#ifdef _MSC_VER
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))) {}
-#elif __GNUG__
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)) {}
-#endif
+		:_msgHandle(msgHandle), __MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor) {}
 
 #ifdef __GNUG__
 	mutex_block_msg(mutex_block_msg&& s)
@@ -2389,11 +2395,7 @@ class mutex_block_trig : public MutexBlock_
 public:
 	template <typename Handler>
 	mutex_block_trig(msg_handle& msgHandle, Handler&& handler)
-#ifdef _MSC_VER
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))) {}
-#elif __GNUG__
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)) {}
-#endif
+		:_msgHandle(msgHandle), __MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor) {}
 
 #ifdef __GNUG__
 	mutex_block_trig(mutex_block_trig&& s)
@@ -2471,11 +2473,7 @@ public:
 
 	template <typename Handler>
 	mutex_block_pump(const pump_handle& pump, Handler&& handler)
-#ifdef _MSC_VER
-		: _msgHandle(pump), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))) {}
-#elif __GNUG__
-		: _msgHandle(pump), _handler(TRY_MOVE(handler)) {}
-#endif
+		: _msgHandle(pump), __MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), pump.get()->_hostActor) {}
 
 #ifdef __GNUG__
 	mutex_block_pump(mutex_block_pump&& s)
@@ -2546,11 +2544,7 @@ class mutex_block_msg<> : public MutexBlock_
 public:
 	template <typename Handler>
 	mutex_block_msg(msg_handle& msgHandle, Handler&& handler)
-#ifdef _MSC_VER
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))), _has(false) {}
-#elif __GNUG__
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _has(false) {}
-#endif
+		:_msgHandle(msgHandle), _has(false), __MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor) {}
 
 #ifdef __GNUG__
 	mutex_block_msg(mutex_block_msg&& s)
@@ -2616,11 +2610,7 @@ class mutex_block_trig<> : public MutexBlock_
 public:
 	template <typename Handler>
 	mutex_block_trig(msg_handle& msgHandle, Handler&& handler)
-#ifdef _MSC_VER
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))), _has(false) {}
-#elif __GNUG__
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _has(false) {}
-#endif
+		:_msgHandle(msgHandle), _has(false), __MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor) {}
 
 #ifdef __GNUG__
 	mutex_block_trig(mutex_block_trig&& s)
@@ -2694,11 +2684,7 @@ public:
 
 	template <typename Handler>
 	mutex_block_pump(const pump_handle& pump, Handler&& handler)
-#ifdef _MSC_VER
-		: _msgHandle(pump), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))), _has(false) {}
-#elif __GNUG__
-		: _msgHandle(pump), _handler(TRY_MOVE(handler)), _has(false) {}
-#endif
+		: _msgHandle(pump), _has(false), __MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), pump.get()->_hostActor) {}
 
 #ifdef __GNUG__
 	mutex_block_pump(mutex_block_pump&& s)
@@ -2827,13 +2813,9 @@ public:
 
 	template <typename Handler, typename StateHandler>
 	mutex_block_pump_check_state(const pump_handle& pump, Handler&& handler, StateHandler&& stateHandler)
-#ifdef _MSC_VER
-		:_msgHandle(pump), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))),
-		_stateHandler(TRY_MOVE(stateHandler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))),
-#elif __GNUG__
-		:_msgHandle(pump), _handler(TRY_MOVE(handler)), _stateHandler(TRY_MOVE(stateHandler)),
-#endif
-		_readySign(0), _connected(false), _disconnected(false), _lostNtfed(false)
+		:_msgHandle(pump), _readySign(0), _connected(false), _disconnected(false), _lostNtfed(false),
+		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), pump.get()->_hostActor),
+		__MUTEX_BLOCK_HANDLER_WRAP(_stateHandler, TRY_MOVE(stateHandler), pump.get()->_hostActor)		
 	{
 	}
 
@@ -2961,13 +2943,9 @@ public:
 
 	template <typename Handler, typename StateHandler>
 	mutex_block_pump_check_state(const pump_handle& pump, Handler&& handler, StateHandler&& stateHandler)
-#ifdef _MSC_VER
-		:_msgHandle(pump), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))),
-		_stateHandler(TRY_MOVE(stateHandler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))),
-#elif __GNUG__
-		:_msgHandle(pump), _handler(TRY_MOVE(handler)), _stateHandler(TRY_MOVE(stateHandler)),
-#endif
-		_readySign(0), _has(false), _connected(false), _disconnected(false), _lostNtfed(false)
+		:_msgHandle(pump), _readySign(0), _has(false), _connected(false), _disconnected(false), _lostNtfed(false),
+		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), pump.get()->_hostActor),
+		__MUTEX_BLOCK_HANDLER_WRAP(_stateHandler, TRY_MOVE(stateHandler), pump.get()->_hostActor)
 	{
 	}
 
@@ -3094,13 +3072,9 @@ class mutex_block_msg_check_lost : public MutexBlock_
 public:
 	template <typename Handler, typename LostHandler>
 	mutex_block_msg_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
-#ifdef _MSC_VER
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
-		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
-#elif __GNUG__
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)),
-#endif
-		_readySign(0), _lostNtfed(false)
+		:_msgHandle(msgHandle), _readySign(0), _lostNtfed(false),
+		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor),
+		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, TRY_MOVE(lostHandler), msgHandle._hostActor)
 	{
 		_msgHandle.check_lost(true);
 	}
@@ -3191,13 +3165,9 @@ class mutex_block_trig_check_lost : public MutexBlock_
 public:
 	template <typename Handler, typename LostHandler>
 	mutex_block_trig_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
-#ifdef _MSC_VER
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
-		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
-#elif __GNUG__
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)),
-#endif
-		_readySign(0), _lostNtfed(false)
+		:_msgHandle(msgHandle), _readySign(0), _lostNtfed(false),
+		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor),
+		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, TRY_MOVE(lostHandler), msgHandle._hostActor)
 	{
 		_msgHandle.check_lost(true);
 	}
@@ -3296,13 +3266,9 @@ public:
 
 	template <typename Handler, typename LostHandler>
 	mutex_block_pump_check_lost(const pump_handle& pump, Handler&& handler, LostHandler&& lostHandler)
-#ifdef _MSC_VER
-		: _msgHandle(pump), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))),
-		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))),
-#elif __GNUG__
-		: _msgHandle(pump), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)),
-#endif
-		_readySign(0), _lostNtfed(false)
+		:_msgHandle(pump), _readySign(0), _lostNtfed(false),
+		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), pump.get()->_hostActor),
+		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, TRY_MOVE(lostHandler), pump.get()->_hostActor)
 	{
 		_msgHandle.check_lost(true);
 	}
@@ -3393,13 +3359,9 @@ class mutex_block_msg_check_lost<> : public MutexBlock_
 public:
 	template <typename Handler, typename LostHandler>
 	mutex_block_msg_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
-#ifdef _MSC_VER
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
-		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
-#elif __GNUG__
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)),
-#endif
-		_readySign(0), _has(false), _lostNtfed(false)
+		:_msgHandle(msgHandle), _readySign(0), _has(false), _lostNtfed(false),
+		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor),
+		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, TRY_MOVE(lostHandler), msgHandle._hostActor)
 	{
 		_msgHandle.check_lost(true);
 	}
@@ -3486,13 +3448,9 @@ class mutex_block_trig_check_lost<> : public MutexBlock_
 public:
 	template <typename Handler, typename LostHandler>
 	mutex_block_trig_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
-#ifdef _MSC_VER
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
-		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(msgHandle._hostActor))),
-#elif __GNUG__
-		:_msgHandle(msgHandle), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)),
-#endif
-		_readySign(0), _has(false), _lostNtfed(false)
+		:_msgHandle(msgHandle), _readySign(0), _has(false), _lostNtfed(false),
+		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor),
+		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, TRY_MOVE(lostHandler), msgHandle._hostActor)
 	{
 		_msgHandle.check_lost(true);
 	}
@@ -3587,13 +3545,9 @@ public:
 
 	template <typename Handler, typename LostHandler>
 	mutex_block_pump_check_lost(const pump_handle& pump, Handler&& handler, LostHandler&& lostHandler)
-#ifdef _MSC_VER
-		: _msgHandle(pump), _handler(TRY_MOVE(handler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))),
-		_lostHandler(TRY_MOVE(lostHandler), reusable_alloc<>(ActorFunc_::reu_mem(pump.get()->_hostActor))),
-#elif __GNUG__
-		: _msgHandle(pump), _handler(TRY_MOVE(handler)), _lostHandler(TRY_MOVE(lostHandler)),
-#endif
-		_readySign(0), _has(false), _lostNtfed(false)
+		:_msgHandle(pump), _readySign(0), _has(false), _lostNtfed(false),
+		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), pump.get()->_hostActor),
+		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, TRY_MOVE(lostHandler), pump.get()->_hostActor)
 	{
 		_msgHandle.check_lost(true);
 	}

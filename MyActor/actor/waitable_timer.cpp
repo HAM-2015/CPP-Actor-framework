@@ -46,8 +46,7 @@ void WaitableTimer_::appendEvent(long long us, WaitableTimerEvent_* h)
 	{
 		_extFinishTime = et;
 		LARGE_INTEGER sleepTime;
-		sleepTime.QuadPart = us * 10;
-		sleepTime.QuadPart = -sleepTime.QuadPart;
+		sleepTime.QuadPart = -(LONGLONG)(us * 10);
 		SetWaitableTimer(_timerHandle, &sleepTime, 0, NULL, NULL, FALSE);
 	}
 }
@@ -70,8 +69,7 @@ void WaitableTimer_::timerThread()
 				{
 					_extFinishTime = iter->first;
 					LARGE_INTEGER sleepTime;
-					sleepTime.QuadPart = nt - iter->first;
-					sleepTime.QuadPart *= 10;
+					sleepTime.QuadPart = -(LONGLONG)((iter->first - nt) * 10);
 					SetWaitableTimer(_timerHandle, &sleepTime, 0, NULL, NULL, FALSE);
 					break;
 				} 
