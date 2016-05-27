@@ -4,8 +4,6 @@
 
 #ifdef ENABLE_QT_ACTOR
 
-#define QT_UI_TLS_INDEX 1
-
 bind_qt_run_base::ui_tls::ui_tls()
 :_uiStack(64)
 {

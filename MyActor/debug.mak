@@ -14,7 +14,7 @@ OBJCOPY := objcopy
 #Additional flags
 PREPROCESSOR_MACROS := DEBUG _DEBUG ENABLE_NEXT_TICK ENABLE_CHECK_LOST DISABLE_BOOST_TIMER
 INCLUDE_DIRS := /home/ham/cpplib/boost
-LIBRARY_DIRS := /home/ham/cpplib/boost/stage/lib ./actor
+LIBRARY_DIRS := /home/ham/cpplib/boost/stage/lib ./actor/lib
 LIBRARY_NAMES := pthread rt sigsegv_x64 fcontext_x64 boost_thread boost_system boost_chrono
 ADDITIONAL_LINKER_INPUTS := 
 MACOS_FRAMEWORKS := 

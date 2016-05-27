@@ -192,6 +192,17 @@ std::string get_time_string_s()
 	return buff;
 }
 
+std::string get_time_string_file_s()
+{
+	auto tm = boost::posix_time::microsec_clock::local_time();
+	auto date = tm.date();
+	auto time = tm.time_of_day();
+	char buff[32];
+	snPrintf(buff, sizeof(buff), "%u-%02u-%02u %02u.%02u.%02u", (int)date.year(), (int)date.month(), (int)date.day(), \
+		(int)time.hours(), (int)time.minutes(), (int)time.seconds());
+	return buff;
+}
+
 void print_time_us()
 {
 	auto tm = boost::posix_time::microsec_clock::local_time();
@@ -607,6 +618,19 @@ size_t check_file_name(char* name)
 
 std::list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool module, bool symbolName)
 {
+	void* bp = NULL;
+	void* sp = NULL;
+	void* ip = NULL;
+#ifdef _WIN64
+	get_bp_sp_ip((void**)&bp, (void**)&sp, (void**)&ip);
+#else
+	get_bp_sp_ip((void**)&bp, (void**)&sp, (void**)&ip);
+#endif
+	return get_stack_list(bp, sp, ip, maxDepth, offset, module, symbolName);
+}
+
+std::list<stack_line_info> get_stack_list(void* bp, void* sp, void* ip, size_t maxDepth, size_t offset, bool module, bool symbolName)
+{
 	assert(maxDepth <= 32);
 
 	QWORD trace[33];
@@ -615,9 +639,13 @@ std::list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool m
 	ZeroMemory(&context, sizeof(context));
 	context.ContextFlags = CONTEXT_FULL;
 #ifdef _WIN64
-	get_bp_sp_ip((void**)&context.Rbp, (void**)&context.Rsp, (void**)&context.Rip);
+	context.Rbp = (DWORD64)bp;
+	context.Rsp = (DWORD64)sp;
+	context.Rip = (DWORD64)ip;
 #else
-	get_bp_sp_ip((void**)&context.Ebp, (void**)&context.Esp, (void**)&context.Eip);
+	context.Ebp = (DWORD)bp;
+	context.Esp = (DWORD)sp;
+	context.Eip = (DWORD)ip;
 #endif
 	size_t depths = _stackwalk(trace, maxDepth + 1, &context);
 
@@ -634,7 +662,7 @@ std::list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool m
 
 			if (SymGetLineFromAddr64(hProcess, trace[i], &symbolDisplacement, &imageHelpLine))
 			{
-				stackResult.file = string(imageHelpLine.FileName, check_file_name(imageHelpLine.FileName));
+				stackResult.file = std::string(imageHelpLine.FileName, check_file_name(imageHelpLine.FileName));
 				memset(imageHelpLine.FileName, 0, stackResult.file.size() + 1);
 				stackResult.line = (int)imageHelpLine.LineNumber;
 			}
@@ -675,13 +703,13 @@ std::list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool m
 
 			if (SymGetModuleInfo64(hProcess, trace[i], &imageHelpModule))
 			{
-				stackResult.module = string(imageHelpModule.ImageName, check_file_name(imageHelpModule.ImageName));
+				stackResult.module = std::string(imageHelpModule.ImageName, check_file_name(imageHelpModule.ImageName));
 				memset(imageHelpModule.ImageName, 0, stackResult.module.size() + 1);
 			}
 		}
 		imageList.push_back(std::move(stackResult));
 	}
-	return std::move(imageList);
+	return imageList;
 }
 
 struct init_mod
@@ -691,13 +719,13 @@ struct init_mod
 		bool ok = _initialize();
 		assert(ok);
 		auto stk = get_stack_list(1, 0, true, true);
-		string moduleName;
+		std::string moduleName;
 		if (!stk.empty())
 		{
 			moduleName = &stk.front().module[stk.front().module.find_last_of('\\') + 1];
 		}
 		_mkdir((moduleName + " stack_log\\").c_str());
-		_stackLogFile.open(moduleName + " stack_log\\" + get_time_string_s_file() + ".log");
+		_stackLogFile.open(moduleName + " stack_log\\" + get_time_string_file_s() + ".log");
 		if (_stackLogFile.good())
 		{
 			_stackLogIos = new boost::asio::io_service;

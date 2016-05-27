@@ -64,11 +64,7 @@ namespace context_yield
 
 	void adjust_stack(context_yield::context_info* info)
 	{
-#if _WIN32_WINNT >= 0x0502
 		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
-#else//#elif _WIN32_WINNT == 0x0501
-		char* const sb = (char*)info->stackTop - 1024 kB;
-#endif
 		char* const sp = (char*)info->stackTop - 2 * MEM_PAGE_SIZE;
 		VirtualAlloc(sp, MEM_PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD);
 		VirtualFree(sb, (size_t)sp - (size_t)sb, MEM_DECOMMIT);

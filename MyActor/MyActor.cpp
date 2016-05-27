@@ -710,7 +710,7 @@ void perfor_test()
 					while (true)
 					{
 						count[i]++;
-						self->yield_guard();
+						self->tick_yield();
 					}
 				}))));
 			}

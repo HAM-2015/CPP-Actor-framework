@@ -14,7 +14,7 @@ OBJCOPY := D:/cpplib/arm-linux-gnueabihf-gcc49/bin/arm-linux-gnueabihf-objcopy.e
 #Additional flags
 PREPROCESSOR_MACROS := DEBUG _ARM32 _DEBUG ENABLE_NEXT_TICK ENABLE_CHECK_LOST DISABLE_BOOST_TIMER
 INCLUDE_DIRS := D:\cpplib\boost
-LIBRARY_DIRS := D:\cpplib\boost\lib_arm32-linux-gcc492 ../MyActor/actor
+LIBRARY_DIRS := D:\cpplib\boost\lib_armhf-linux-gcc492 ../MyActor/actor/lib
 LIBRARY_NAMES := pthread sigsegv_armhf32 fcontext_armhf32 boost_thread boost_system boost_chrono
 ADDITIONAL_LINKER_INPUTS := 
 MACOS_FRAMEWORKS := 

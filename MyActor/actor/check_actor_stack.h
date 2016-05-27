@@ -10,7 +10,11 @@
 
 #ifndef STACK_BLOCK_SIZE
 #ifdef WIN32
+#if _WIN32_WINNT >= 0x0502
 #define STACK_BLOCK_SIZE (64 kB)
+#else
+#define STACK_BLOCK_SIZE (1024 kB)
+#endif
 #elif __linux__
 #define STACK_BLOCK_SIZE (32 kB)
 #endif
@@ -72,6 +76,7 @@
 #endif
 
 #define ACTOR_TLS_INDEX 0
+#define QT_UI_TLS_INDEX 1
 
 static_assert(0 < MEM_PAGE_SIZE && MEM_PAGE_SIZE % (4 kB) == 0, "");
 static_assert(0 < MEM_POOL_LENGTH && MEM_POOL_LENGTH < 10000000, "");

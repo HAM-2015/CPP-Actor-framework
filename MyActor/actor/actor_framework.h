@@ -5522,6 +5522,9 @@ public:
 	@param mainFunc Actor执行入口
 	@param stackSize Actor栈大小，默认64k字节，必须是4k的整数倍，最小4k，最大1M
 	*/
+	static actor_handle create(shared_strand&& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	static actor_handle create(shared_strand&& actorStrand, main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	static actor_handle create(shared_strand&& actorStrand, AutoStackActorFace_&& wrapActor);
 	static actor_handle create(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 	static actor_handle create(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 	static actor_handle create(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor);
@@ -5533,12 +5536,15 @@ public:
 	@param stackSize Actor栈大小，4k的整数倍（最大1MB）
 	@return 子Actor句柄
 	*/
-	child_actor_handle create_child_actor(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	child_actor_handle create_child_actor(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_actor_handle create_child_actor(shared_strand&& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_actor_handle create_child_actor(shared_strand&& actorStrand, main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 	child_actor_handle create_child_actor(const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 	child_actor_handle create_child_actor(main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	child_actor_handle create_child_actor(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor);
+	child_actor_handle create_child_actor(shared_strand&& actorStrand, AutoStackActorFace_&& wrapActor);
 	child_actor_handle create_child_actor(AutoStackActorFace_&& wrapActor);
+	child_actor_handle create_child_actor(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_actor_handle create_child_actor(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_actor_handle create_child_actor(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor);
 
 	/*!
 	@brief 开始运行子Actor，只能调用一次
@@ -5854,8 +5860,12 @@ public:
 	/*!
 	@brief 创建另一个Actor，Actor执行完成后返回
 	*/
-	__yield_interrupt void run_child_actor_complete(const shared_strand& actorStrand, const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
+	__yield_interrupt void run_child_actor_complete(shared_strand&& actorStrand, const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
+	__yield_interrupt void run_child_actor_complete(shared_strand&& actorStrand, main_func&& h, size_t stackSize = DEFAULT_STACKSIZE);
 	__yield_interrupt void run_child_actor_complete(const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
+	__yield_interrupt void run_child_actor_complete(main_func&& h, size_t stackSize = DEFAULT_STACKSIZE);
+	__yield_interrupt void run_child_actor_complete(const shared_strand& actorStrand, const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
+	__yield_interrupt void run_child_actor_complete(const shared_strand& actorStrand, main_func&& h, size_t stackSize = DEFAULT_STACKSIZE);
 
 	/*!
 	@brief 延时等待，Actor内部禁止使用操作系统API Sleep()
@@ -5877,12 +5887,12 @@ public:
 	/*!
 	@brief 锁定退出后，中断时间片
 	*/
-	__yield_interrupt void yield_guard();
+	__yield_interrupt void tick_yield();
 
 	/*!
 	@brief 尝试yield_guard，如果当前yield计数和上次try_yield没变，就yield_guard一次
 	*/
-	__yield_interrupt void try_yield_guard();
+	__yield_interrupt void try_tick_yield();
 
 	/*!
 	@brief 获取父Actor
@@ -5952,8 +5962,8 @@ public:
 			exeStrand->post(std::bind([&h](actor_handle& shared_this)
 			{
 				h();
-				my_actor* this_ = shared_this.get();
-				this_->_strand->post(std::bind([](actor_handle& shared_this)
+				my_actor* const self = shared_this.get();
+				self->_strand->post(std::bind([](actor_handle& shared_this)
 				{
 					shared_this->pull_yield();
 				}, std::move(shared_this)));
@@ -5977,8 +5987,8 @@ public:
 			exeStrand->post(std::bind([&h, &res](actor_handle& shared_this)
 			{
 				res.create(h());
-				my_actor* this_ = shared_this.get();
-				this_->_strand->post(std::bind([](actor_handle& shared_this)
+				my_actor* const self = shared_this.get();
+				self->_strand->post(std::bind([](actor_handle& shared_this)
 				{
 					shared_this->pull_yield();
 				}, std::move(shared_this)));
@@ -6031,8 +6041,8 @@ public:
 		bool sign = false;
 		exeStrand->asyncInvokeVoid(TRY_MOVE(h), std::bind([&sign](actor_handle& shared_this)
 		{
-			my_actor* this_ = shared_this.get();
-			this_->_strand->try_tick(wrap_trig_run_one(std::move(shared_this), &sign));
+			my_actor* const self = shared_this.get();
+			self->_strand->try_tick(wrap_trig_run_one(std::move(shared_this), &sign));
 		}, shared_from_this()));
 		assert(!sign);
 		sign = true;
@@ -6120,8 +6130,8 @@ private:
 			exeStrand->post(std::bind([&h](actor_handle& shared_this)
 			{
 				h();
-				my_actor* this_ = shared_this.get();
-				this_->_strand->post(std::bind([](actor_handle& shared_this)
+				my_actor* const self = shared_this.get();
+				self->_strand->post(std::bind([](actor_handle& shared_this)
 				{
 					shared_this->pull_yield_after_quited();
 				}, std::move(shared_this)));

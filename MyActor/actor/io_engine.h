@@ -147,6 +147,12 @@ public:
 	static void* getTlsValue(int i);
 
 	/*!
+	@brief 获取tls值引用
+	@param 0 <= i < 64
+	*/
+	static void*& getTlsValueRef(int i);
+
+	/*!
 	@brief 设置tls值
 	@param 0 <= i < 64
 	*/

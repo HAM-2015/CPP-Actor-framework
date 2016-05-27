@@ -115,27 +115,9 @@ class boost_strand
 
 	struct capture_base
 	{
-		capture_base(boost_strand* strand)
-		:_strand(strand) {}
-
-		void begin_run()
-		{
-			if (_strand->_beginNextRound)
-			{
-				_strand->run_tick_front();
-			}
-		}
-
-		void end_run()
-		{
-			_strand->_thisRoundCount++;
-			_strand->_beginNextRound = _strand->ready_empty();
-			if (_strand->_beginNextRound)
-			{
-				_strand->run_tick_back();
-			}
-		}
-
+		capture_base(boost_strand* strand);
+		void begin_run();
+		void end_run();
 		boost_strand* _strand;
 	};
 
@@ -671,7 +653,6 @@ protected:
 	bool waiting_empty();
 	void run_tick_front();
 	void run_tick_back();
-	bool _beginNextRound;
 	size_t _thisRoundCount;
 	reusable_mem* _reuMemAlloc;
 	mem_alloc2<wrap_next_tick_space>* _nextTickAlloc;

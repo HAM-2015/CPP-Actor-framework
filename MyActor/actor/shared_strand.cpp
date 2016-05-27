@@ -2,10 +2,34 @@
 #include "actor_timer.h"
 #include "async_timer.h"
 
+#ifdef ENABLE_NEXT_TICK
+
+boost_strand::capture_base::capture_base(boost_strand* strand)
+:_strand(strand) {}
+
+void boost_strand::capture_base::begin_run()
+{
+	if (0 == _strand->_thisRoundCount)
+	{
+		_strand->run_tick_front();
+	}
+}
+
+void boost_strand::capture_base::end_run()
+{
+	_strand->_thisRoundCount++;
+	if (_strand->ready_empty())
+	{
+		_strand->run_tick_back();
+		_strand->_thisRoundCount = 0;
+	}
+}
+
+#endif
+
 boost_strand::boost_strand()
 #ifdef ENABLE_NEXT_TICK
-:_beginNextRound(false),
-_thisRoundCount(64),
+:_thisRoundCount(0),
 _nextTickAlloc(NULL),
 _reuMemAlloc(NULL),
 _frontTickQueue(NULL),
@@ -177,8 +201,6 @@ bool boost_strand::waiting_empty()
 
 void boost_strand::run_tick_front()
 {
-	assert(_beginNextRound);
-	_thisRoundCount = 64;
 	while (!_frontTickQueue->empty())
 	{
 		wrap_next_tick_base* tick = _frontTickQueue->front();

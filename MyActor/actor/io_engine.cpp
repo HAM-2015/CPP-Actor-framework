@@ -327,6 +327,12 @@ void* io_engine::getTlsValue(int i)
 	return _tls->get_space()[i];
 }
 
+void*& io_engine::getTlsValueRef(int i)
+{
+	assert(i >= 0 && i < 64);
+	return _tls->get_space()[i];
+}
+
 void io_engine::setTlsValue(int i, void* val)
 {
 	assert(i >= 0 && i < 64);

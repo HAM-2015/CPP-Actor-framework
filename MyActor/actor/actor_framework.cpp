@@ -1835,7 +1835,7 @@ public:
 
 	static int sigsegv_handler(void* fault_address, int serious)
 	{
-		my_actor* self = my_actor::self_actor();
+		my_actor* const self = my_actor::self_actor();
 		if (self)
 		{
 			context_yield::context_info* const info = ((actor_pull_type*)self->_actorPull)->_coroInfo;
@@ -1975,12 +1975,12 @@ my_actor& my_actor::operator =(const my_actor&)
 	return *this;
 }
 
-actor_handle my_actor::create(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize)
+actor_handle my_actor::create(shared_strand&& actorStrand, const main_func& mainFunc, size_t stackSize)
 {
-	return my_actor::create(actorStrand, main_func(mainFunc), stackSize);
+	return my_actor::create(std::move(actorStrand), main_func(mainFunc), stackSize);
 }
 
-actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize)
+actor_handle my_actor::create(shared_strand&& actorStrand, main_func&& mainFunc, size_t stackSize)
 {
 	actor_pull_type* pull = ContextPool_::getContext(stackSize);
 	if (!pull)
@@ -1991,9 +1991,9 @@ actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& main
 	}
 	actor_handle newActor(new(pull->_space)my_actor(), [](my_actor* p){p->~my_actor(); }, actor_ref_count_alloc<void>(pull));
 	newActor->_weakThis = newActor;
-	newActor->_strand = actorStrand;
-	newActor->_mainFunc = std::move(mainFunc);
 	newActor->_timer = actorStrand->actor_timer();
+	newActor->_strand = std::move(actorStrand);
+	newActor->_mainFunc = std::move(mainFunc);
 	newActor->_actorPull = pull;
 #ifdef PRINT_ACTOR_STACK
 	newActor->_createStack = std::shared_ptr<std::list<stack_line_info>>(new std::list<stack_line_info>(get_stack_list(8, 1)));
@@ -2008,7 +2008,7 @@ actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& main
 	return newActor;
 }
 
-actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor)
+actor_handle my_actor::create(shared_strand&& actorStrand, AutoStackActorFace_&& wrapActor)
 {
 	actor_pull_type* pull = NULL;
 	const size_t nsize = wrapActor.stack_size();
@@ -2041,11 +2041,11 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 	}
 	actor_handle newActor(new(pull->_space)my_actor(), [](my_actor* p){p->~my_actor(); }, actor_ref_count_alloc<void>(pull));
 	newActor->_weakThis = newActor;
-	newActor->_strand = actorStrand;
+	newActor->_timer = actorStrand->actor_timer();
+	newActor->_strand = std::move(actorStrand);
 	newActor->_checkStack = checkStack;
 	wrapActor.swap(newActor->_mainFunc);
 	newActor->_actorKey = wrapActor.key();
-	newActor->_timer = actorStrand->actor_timer();
 	newActor->_actorPull = pull;
 #ifdef PRINT_ACTOR_STACK
 	newActor->_createStack = std::shared_ptr<std::list<stack_line_info>>(new std::list<stack_line_info>(get_stack_list(8, 1)));
@@ -2061,18 +2061,33 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 	return newActor;
 }
 
-child_actor_handle my_actor::create_child_actor(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize)
+actor_handle my_actor::create(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize)
+{
+	return create(shared_strand(actorStrand), main_func(mainFunc), stackSize);
+}
+
+actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize)
+{
+	return create(shared_strand(actorStrand), std::move(mainFunc), stackSize);
+}
+
+actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor)
+{
+	return create(shared_strand(actorStrand), std::move(wrapActor));
+}
+
+child_actor_handle my_actor::create_child_actor(shared_strand&& actorStrand, const main_func& mainFunc, size_t stackSize)
 {
 	assert_enter();
-	actor_handle childActor = my_actor::create(actorStrand, mainFunc, stackSize);
+	actor_handle childActor = my_actor::create(std::move(actorStrand), mainFunc, stackSize);
 	childActor->_parentActor = shared_from_this();
 	return child_actor_handle(std::move(childActor));
 }
 
-child_actor_handle my_actor::create_child_actor(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize)
+child_actor_handle my_actor::create_child_actor(shared_strand&& actorStrand, main_func&& mainFunc, size_t stackSize)
 {
 	assert_enter();
-	actor_handle childActor = my_actor::create(actorStrand, std::move(mainFunc), stackSize);
+	actor_handle childActor = my_actor::create(std::move(actorStrand), std::move(mainFunc), stackSize);
 	childActor->_parentActor = shared_from_this();
 	return child_actor_handle(std::move(childActor));
 }
@@ -2087,12 +2102,27 @@ child_actor_handle my_actor::create_child_actor(main_func&& mainFunc, size_t sta
 	return create_child_actor(_strand, std::move(mainFunc), stackSize);
 }
 
-child_actor_handle my_actor::create_child_actor(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor)
+child_actor_handle my_actor::create_child_actor(shared_strand&& actorStrand, AutoStackActorFace_&& wrapActor)
 {
 	assert_enter();
-	actor_handle childActor = my_actor::create(actorStrand, std::move(wrapActor));
+	actor_handle childActor = my_actor::create(std::move(actorStrand), std::move(wrapActor));
 	childActor->_parentActor = shared_from_this();
 	return child_actor_handle(std::move(childActor));
+}
+
+child_actor_handle my_actor::create_child_actor(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize)
+{
+	return create_child_actor(shared_strand(actorStrand), mainFunc, stackSize);
+}
+
+child_actor_handle my_actor::create_child_actor(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize)
+{
+	return create_child_actor(shared_strand(actorStrand), std::move(mainFunc), stackSize);
+}
+
+child_actor_handle my_actor::create_child_actor(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor)
+{
+	return create_child_actor(shared_strand(actorStrand), std::move(wrapActor));
 }
 
 child_actor_handle my_actor::create_child_actor(AutoStackActorFace_&& wrapActor)
@@ -2396,10 +2426,18 @@ void my_actor::child_actors_resume(std::list<child_actor_handle>& actorHandles)
 	close_msg_notifer(amh);
 }
 
-void my_actor::run_child_actor_complete(const shared_strand& actorStrand, const main_func& h, size_t stackSize)
+void my_actor::run_child_actor_complete(shared_strand&& actorStrand, const main_func& h, size_t stackSize)
 {
 	assert_enter();
-	child_actor_handle actorHandle = create_child_actor(actorStrand, h, stackSize);
+	child_actor_handle actorHandle = create_child_actor(std::move(actorStrand), h, stackSize);
+	child_actor_run(actorHandle);
+	child_actor_wait_quit(actorHandle);
+}
+
+void my_actor::run_child_actor_complete(shared_strand&& actorStrand, main_func&& h, size_t stackSize)
+{
+	assert_enter();
+	child_actor_handle actorHandle = create_child_actor(std::move(actorStrand), std::move(h), stackSize);
 	child_actor_run(actorHandle);
 	child_actor_wait_quit(actorHandle);
 }
@@ -2407,6 +2445,21 @@ void my_actor::run_child_actor_complete(const shared_strand& actorStrand, const 
 void my_actor::run_child_actor_complete(const main_func& h, size_t stackSize)
 {
 	run_child_actor_complete(self_strand(), h, stackSize);
+}
+
+void my_actor::run_child_actor_complete(main_func&& h, size_t stackSize)
+{
+	run_child_actor_complete(self_strand(), std::move(h), stackSize);
+}
+
+void my_actor::run_child_actor_complete(const shared_strand& actorStrand, const main_func& h, size_t stackSize)
+{
+	run_child_actor_complete(shared_strand(actorStrand), h, stackSize);
+}
+
+void my_actor::run_child_actor_complete(const shared_strand& actorStrand, main_func&& h, size_t stackSize)
+{
+	run_child_actor_complete(shared_strand(actorStrand), std::move(h), stackSize);
 }
 
 void my_actor::sleep(int ms)
@@ -2462,7 +2515,7 @@ void my_actor::try_yield()
 	_lastYield = _yieldCount;
 }
 
-void my_actor::yield_guard()
+void my_actor::tick_yield()
 {
 	assert_enter();
 	lock_quit();
@@ -2474,11 +2527,11 @@ void my_actor::yield_guard()
 	unlock_quit();
 }
 
-void my_actor::try_yield_guard()
+void my_actor::try_tick_yield()
 {
 	if (_lastYield == _yieldCount)
 	{
-		yield_guard();
+		tick_yield();
 	}
 	_lastYield = _yieldCount;
 }
@@ -2643,7 +2696,7 @@ void my_actor::notify_run()
 {
 	_strand->try_tick(std::bind([](const actor_handle& shared_this)
 	{
-		my_actor* self = shared_this.get();
+		my_actor* const self = shared_this.get();
 		if (!self->_quited && !self->_started)
 		{
 			self->_started = true;
@@ -2835,7 +2888,7 @@ void my_actor::unlock_suspend()
 				shared_this->resume();
 			}, shared_from_this()));
 		}
-		yield_guard();
+		tick_yield();
 	}
 }
 
@@ -3063,7 +3116,7 @@ void my_actor::switch_pause_play(const std::function<void(bool)>& h)
 		else if (h)
 		{
 			DEBUG_OPERATION(size_t yc = shared_this->yield_count());
-			CHECK_EXCEPTION1(h, true);
+			CHECK_EXCEPTION(h, true);
 			assert(shared_this->yield_count() == yc);
 		}
 	}, shared_from_this(), h));
@@ -3074,7 +3127,7 @@ void my_actor::notify_trig_sign(int id)
 	assert(id >= 0 && id < 8 * sizeof(void*));
 	_strand->try_tick(std::bind([id](const actor_handle& shared_this)
 	{
-		my_actor* self = shared_this.get();
+		my_actor* const self = shared_this.get();
 		if (!self->_quited)
 		{
 			const size_t mask = (size_t)1 << id;
@@ -3321,11 +3374,11 @@ void my_actor::run_one()
 void my_actor::pull_yield_tls()
 {
 #if ((__linux__ && (!(defined DISABLE_SIGSEGV) || (defined CHECK_SELF))) || (WIN32 && (_WIN32_WINNT < 0x0502) && (defined CHECK_SELF)))
-	void** tlsBuff = io_engine::getTlsValueBuff();
-	void* old = tlsBuff[ACTOR_TLS_INDEX];
-	tlsBuff[ACTOR_TLS_INDEX] = this;
+	void*& tlsVal = io_engine::getTlsValueRef(ACTOR_TLS_INDEX);
+	void* old = tlsVal;
+	tlsVal = this;
 	((actor_pull_type*)_actorPull)->yield();
-	tlsBuff[ACTOR_TLS_INDEX] = old;
+	tlsVal = old;
 #else
 	((actor_pull_type*)_actorPull)->yield();
 #endif

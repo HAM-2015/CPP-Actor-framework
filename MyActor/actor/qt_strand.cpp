@@ -6,9 +6,6 @@
 qt_strand::qt_strand()
 {
 	_ui = NULL;
-#ifdef ENABLE_NEXT_TICK
-	_beginNextRound = true;
-#endif
 }
 
 qt_strand::~qt_strand()

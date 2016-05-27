@@ -11,9 +11,9 @@
 
 #ifdef _MSC_VER
 #ifdef _WIN64
-#pragma comment(lib, BOND_NAME(__FILE__, "./../fcontext_x64.lib"))
+#pragma comment(lib, BOND_NAME(__FILE__, "./../lib/fcontext_x64.lib"))
 #else
-#pragma comment(lib, BOND_NAME(__FILE__, "./../fcontext_x86.lib"))
+#pragma comment(lib, BOND_NAME(__FILE__, "./../lib/fcontext_x86.lib"))
 #endif // _WIN64
 #endif
 
@@ -68,25 +68,62 @@ private:
 #define _BOND_LINE(__P__, __L__) BOND_NAME(__P__, __L__)
 #define BOND_LINE(__P__) _BOND_LINE(__P__, __LINE__)
 
+#define _param_pck1()
+#define _param_pck2(__p1__) __p1__
+#define _param_pck3(__p1__, __p2__) __p1__, __p2__
+#define _param_pck4(__p1__, __p2__, __p3__) __p1__, __p2__, __p3__
+#define _param_pck5(__p1__, __p2__, __p3__, __p4__) __p1__, __p2__, __p3__, __p4__
+#define _param_pck6(__p1__, __p2__, __p3__, __p4__, __p5__) __p1__, __p2__, __p3__, __p4__, __p5__
+#define _param_pck7(__p1__, __p2__, __p3__, __p4__, __p5__, __p6__) __p1__, __p2__, __p3__, __p4__, __p5__, __p6__
+
+#define _param_right_pck1()
+#define _param_right_pck2(__p1__) , __p1__
+#define _param_right_pck3(__p1__, __p2__) , __p1__, __p2__
+#define _param_right_pck4(__p1__, __p2__, __p3__) , __p1__, __p2__, __p3__
+#define _param_right_pck5(__p1__, __p2__, __p3__, __p4__) , __p1__, __p2__, __p3__, __p4__
+#define _param_right_pck6(__p1__, __p2__, __p3__, __p4__, __p5__) , __p1__, __p2__, __p3__, __p4__, __p5__
+#define _param_right_pck7(__p1__, __p2__, __p3__, __p4__, __p5__, __p6__) , __p1__, __p2__, __p3__, __p4__, __p5__, __p6__
+
+#define _param_left_pck1()
+#define _param_left_pck2(__p1__) __p1__,
+#define _param_left_pck3(__p1__, __p2__) __p1__, __p2__,
+#define _param_left_pck4(__p1__, __p2__, __p3__) __p1__, __p2__, __p3__,
+#define _param_left_pck5(__p1__, __p2__, __p3__, __p4__) __p1__, __p2__, __p3__, __p4__,
+#define _param_left_pck6(__p1__, __p2__, __p3__, __p4__, __p5__) __p1__, __p2__, __p3__, __p4__, __p5__,
+#define _param_left_pck7(__p1__, __p2__, __p3__, __p4__, __p5__, __p6__) __p1__, __p2__, __p3__, __p4__, __p5__, __p6__,
+
+#define _option_pck1()
+#define _option_pck2(__p1__) __p1__;
+#define _option_pck3(__p1__, __p2__) __p1__; __p2__;
+#define _option_pck4(__p1__, __p2__, __p3__) __p1__; __p2__; __p3__;
+#define _option_pck5(__p1__, __p2__, __p3__, __p4__) __p1__; __p2__; __p3__; __p4__;
+#define _option_pck6(__p1__, __p2__, __p3__, __p4__, __p5__) __p1__; __p2__; __p3__; __p4__; __p5__;
+#define _option_pck7(__p1__, __p2__, __p3__, __p4__, __p5__, __p6__) __p1__; __p2__; __p3__; __p4__; __p5__; __p6__;
+
+#ifdef _MSC_VER
+#define _param_pck(__pl__, ...) _BOND_LR__(_param_pck, _PP_NARG(__pl__, __VA_ARGS__))(__VA_ARGS__)
+#define param_pck(...) _param_pck(__pl__, __VA_ARGS__)
+#define _param_right_pck(__pl__, ...) _BOND_LR__(_param_right_pck, _PP_NARG(__pl__, __VA_ARGS__))(__VA_ARGS__)
+#define param_right_pck(...) _param_right_pck(__pl__, __VA_ARGS__)
+#define _param_left_pck(__pl__, ...) _BOND_LR__(_param_left_pck, _PP_NARG(__pl__, __VA_ARGS__))(__VA_ARGS__)
+#define param_left_pck(...) _param_left_pck(__pl__, __VA_ARGS__)
+#define _option_pck(__pl__, ...) _BOND_LR__(_option_pck, _PP_NARG(__pl__, __VA_ARGS__))(__VA_ARGS__)
+#define option_pck(...) _option_pck(__pl__, __VA_ARGS__)
+#elif __GNUG__
+#define param_pck(...) _BOND_LR__(_param_pck, _PP_NARG(__pl__, __VA_ARGS__))(__VA_ARGS__)
+#define param_right_pck(...) _BOND_LR__(_param_right_pck, _PP_NARG(__pl__, __VA_ARGS__))(__VA_ARGS__)
+#define param_left_pck(...) _BOND_LR__(_param_left_pck, _PP_NARG(__pl__, __VA_ARGS__))(__VA_ARGS__)
+#define option_pck(...) _BOND_LR__(_option_pck, _PP_NARG(__pl__, __VA_ARGS__))(__VA_ARGS__)
+#endif
+
 //作用域退出时自动调用lambda
 #define BREAK_OF_SCOPE_NAME(__name__, __handler__) \
 	auto BOND_NAME(__raiiHandler, __name__) = [&]__handler__; \
 	BreakOfScope_<decltype(BOND_NAME(__raiiHandler, __name__))> BOND_NAME(__raiiCall, __name__)(BOND_NAME(__raiiHandler, __name__))
 
 #define BREAK_OF_SCOPE(__handler__) BREAK_OF_SCOPE_NAME(__LINE__, __handler__)
+#define BREAK_OF_SCOPE_EXEC(...) BREAK_OF_SCOPE({ option_pck(__VA_ARGS__) });
 
-#define _BREAK_OF_SCOPE_EXEC1(__opt1__) BREAK_OF_SCOPE({ __opt1__; });
-#define _BREAK_OF_SCOPE_EXEC2(__opt1__, __opt2__) BREAK_OF_SCOPE({ __opt1__; __opt2__; });
-#define _BREAK_OF_SCOPE_EXEC3(__opt1__, __opt2__, __opt3__) BREAK_OF_SCOPE({ __opt1__; __opt2__; __opt3__; });
-#define _BREAK_OF_SCOPE_EXEC4(__opt1__, __opt2__, __opt3__, __opt4__) BREAK_OF_SCOPE({ __opt1__; __opt2__; __opt3__; __opt4__; });
-#define _BREAK_OF_SCOPE_EXEC5(__opt1__, __opt2__, __opt3__, __opt4__, __opt5__) BREAK_OF_SCOPE({ __opt1__; __opt2__; __opt3__; __opt4__; __opt5__; });
-#define _BREAK_OF_SCOPE_EXEC6(__opt1__, __opt2__, __opt3__, __opt4__, __opt5__, __opt6__) BREAK_OF_SCOPE({ __opt1__; __opt2__; __opt3__; __opt4__; __opt5__; __opt6__; });
-#ifdef _MSC_VER
-#define _BREAK_OF_SCOPE_EXEC(__pl__, ...) _BOND_LR__(_BREAK_OF_SCOPE_EXEC, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
-#define BREAK_OF_SCOPE_EXEC(...) _BREAK_OF_SCOPE_EXEC(__pl__, __VA_ARGS__)
-#elif __GNUG__
-#define BREAK_OF_SCOPE_EXEC(...) _BOND_LR__(_BREAK_OF_SCOPE_EXEC, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
-#endif
 
 //在Actor作用域内定时触发某个操作
 #define HEARTBEAT_TRACE_NAME(__name__, __self__, __tm__, __handler__)\
@@ -101,19 +138,7 @@ private:
 
 //在Actor作用域内定时触发某个操作
 #define HEARTBEAT_TRACE(__self__, __tm__, __handler__) HEARTBEAT_TRACE_NAME(BOND_LINE(__heartbeatTimer), __self__, __tm__, __handler__)
-
-#define _HEARTBEAT_EXEC1(__self__, __tm__, __opt1__) HEARTBEAT_TRACE(__self__, __tm__, { __opt1__; });
-#define _HEARTBEAT_EXEC2(__self__, __tm__, __opt1__, __opt2__) HEARTBEAT_TRACE(__self__, __tm__, { __opt1__; __opt2__; });
-#define _HEARTBEAT_EXEC3(__self__, __tm__, __opt1__, __opt2__, __opt3__) HEARTBEAT_TRACE(__self__, __tm__, { __opt1__; __opt2__; __opt3__; });
-#define _HEARTBEAT_EXEC4(__self__, __tm__, __opt1__, __opt2__, __opt3__, __opt4__) HEARTBEAT_TRACE(__self__, __tm__, { __opt1__; __opt2__; __opt3__; __opt4__; });
-#define _HEARTBEAT_EXEC5(__self__, __tm__, __opt1__, __opt2__, __opt3__, __opt4__, __opt5__) HEARTBEAT_TRACE(__self__, __tm__, { __opt1__; __opt2__; __opt3__; __opt4__; __opt5__; });
-#define _HEARTBEAT_EXEC6(__self__, __tm__, __opt1__, __opt2__, __opt3__, __opt4__, __opt5__, __opt6__) HEARTBEAT_TRACE(__self__, __tm__, { __opt1__; __opt2__; __opt3__; __opt4__; __opt5__; __opt6__; });
-#ifdef _MSC_VER
-#define _HEARTBEAT_EXEC(__self__, __tm__, ...) _BOND_LR__(_HEARTBEAT_EXEC, _PP_NARG(__VA_ARGS__))(__self__, __tm__, __VA_ARGS__)
-#define HEARTBEAT_EXEC(__self__, __tm__, ...) _HEARTBEAT_EXEC(__self__, __tm__, __VA_ARGS__)
-#elif __GNUG__
-#define HEARTBEAT_EXEC(__self__, __tm__, ...) _BOND_LR__(_HEARTBEAT_EXEC, _PP_NARG(__VA_ARGS__))(__self__, __tm__, __VA_ARGS__)
-#endif
+#define HEARTBEAT_EXEC(__self__, __tm__, ...) HEARTBEAT_TRACE(__self__, __tm__, { option_pck(__VA_ARGS__) });
 
 //在Actor作用域内延时触发某个操作
 #define DELAY_TRACE_NAME(__name__, __self__, __tm__, __handler__)\
@@ -124,38 +149,14 @@ private:
 
 //在Actor作用域内延时触发某个操作
 #define DELAY_TRACE(__self__, __tm__, __handler__) DELAY_TRACE_NAME(BOND_LINE(__delayTimer), __self__, __tm__, __handler__)
-
-#define _DELAY_EXEC1(__self__, __tm__, __opt1__) DELAY_TRACE(__self__, __tm__, { __opt1__; });
-#define _DELAY_EXEC2(__self__, __tm__, __opt1__, __opt2__) DELAY_TRACE(__self__, __tm__, { __opt1__; __opt2__; });
-#define _DELAY_EXEC3(__self__, __tm__, __opt1__, __opt2__, __opt3__) DELAY_TRACE(__self__, __tm__, { __opt1__; __opt2__; __opt3__; });
-#define _DELAY_EXEC4(__self__, __tm__, __opt1__, __opt2__, __opt3__, __opt4__) DELAY_TRACE(__self__, __tm__, { __opt1__; __opt2__; __opt3__; __opt4__; });
-#define _DELAY_EXEC5(__self__, __tm__, __opt1__, __opt2__, __opt3__, __opt4__, __opt5__) DELAY_TRACE(__self__, __tm__, { __opt1__; __opt2__; __opt3__; __opt4__; __opt5__; });
-#define _DELAY_EXEC6(__self__, __tm__, __opt1__, __opt2__, __opt3__, __opt4__, __opt5__, __opt6__) DELAY_TRACE(__self__, __tm__, { __opt1__; __opt2__; __opt3__; __opt4__; __opt5__; __opt6__; });
-#ifdef _MSC_VER
-#define _DELAY_EXEC(__self__, __tm__, ...) _BOND_LR__(_DELAY_EXEC, _PP_NARG(__VA_ARGS__))(__self__, __tm__, __VA_ARGS__)
-#define DELAY_EXEC(__self__, __tm__, ...) _DELAY_EXEC(__self__, __tm__, __VA_ARGS__)
-#elif __GNUG__
-#define DELAY_EXEC(__self__, __tm__, ...) _BOND_LR__(_DELAY_EXEC, _PP_NARG(__VA_ARGS__))(__self__, __tm__, __VA_ARGS__)
-#endif
+#define DELAY_EXEC(__self__, __tm__, ...)  DELAY_TRACE(__self__, __tm__, { option_pck(__VA_ARGS__) });
 
 //在Actor作用域内延时触发某个操作
 #define SELF_DELAY_TRACE(__self__, __tm__, __handler__)\
 	auto BOND_LINE(__selfDelayHandler_) = [&]__handler__; \
 	__self__->delay_trig(__tm__, wrap_ref_handler(BOND_LINE(__selfDelayHandler_))); \
 	BREAK_OF_SCOPE_NAME(BOND_LINE(__selfDelayHandler_), { __self__->cancel_delay_trig(); });
-
-#define _SELF_DELAY_EXEC1(__self__, __tm__, __opt1__) SELF_DELAY_TRACE(__self__, __tm__, { __opt1__; });
-#define _SELF_DELAY_EXEC2(__self__, __tm__, __opt1__, __opt2__) SELF_DELAY_TRACE(__self__, __tm__, { __opt1__; __opt2__; });
-#define _SELF_DELAY_EXEC3(__self__, __tm__, __opt1__, __opt2__, __opt3__) SELF_DELAY_TRACE(__self__, __tm__, { __opt1__; __opt2__; __opt3__; });
-#define _SELF_DELAY_EXEC4(__self__, __tm__, __opt1__, __opt2__, __opt3__, __opt4__) SELF_DELAY_TRACE(__self__, __tm__, { __opt1__; __opt2__; __opt3__; __opt4__; });
-#define _SELF_DELAY_EXEC5(__self__, __tm__, __opt1__, __opt2__, __opt3__, __opt4__, __opt5__) SELF_DELAY_TRACE(__self__, __tm__, { __opt1__; __opt2__; __opt3__; __opt4__; __opt5__; });
-#define _SELF_DELAY_EXEC6(__self__, __tm__, __opt1__, __opt2__, __opt3__, __opt4__, __opt5__, __opt6__) SELF_DELAY_TRACE(__self__, __tm__, { __opt1__; __opt2__; __opt3__; __opt4__; __opt5__; __opt6__; });
-#ifdef _MSC_VER
-#define _SELF_DELAY_EXEC(__self__, __tm__, ...) _BOND_LR__(_SELF_DELAY_EXEC, _PP_NARG(__VA_ARGS__))(__self__, __tm__, __VA_ARGS__)
-#define SELF_DELAY_EXEC(__self__, __tm__, ...) _SELF_DELAY_EXEC(__self__, __tm__, __VA_ARGS__)
-#elif __GNUG__
-#define SELF_DELAY_EXEC(__self__, __tm__, ...) _BOND_LR__(_SELF_DELAY_EXEC, _PP_NARG(__VA_ARGS__))(__self__, __tm__, __VA_ARGS__)
-#endif
+#define SELF_DELAY_EXEC(__self__, __tm__, ...) SELF_DELAY_TRACE(__self__, __tm__, { option_pck(__VA_ARGS__) });
 
 #if (_DEBUG || DEBUG)
 #define DEBUG_OPERATION(__exp__)	__exp__
@@ -165,20 +166,14 @@ private:
 
 #if (_DEBUG || DEBUG)
 
-#define CHECK_EXCEPTION(__h) try { (__h)(); } catch (...) { assert(false); }
-#define CHECK_EXCEPTION1(__h, __p0) try { (__h)(__p0); } catch (...) { assert(false); }
-#define CHECK_EXCEPTION2(__h, __p0, __p1) try { (__h)(__p0, __p1); } catch (...) { assert(false); }
-#define CHECK_EXCEPTION3(__h, __p0, __p1, __p2) try { (__h)(__p0, __p1, __p2); } catch (...) { assert(false); }
+#define CHECK_EXCEPTION(__h, ...) try { (__h)(__VA_ARGS__); } catch (...) { assert(false); }
 
 #define BEGIN_CHECK_EXCEPTION try {
 #define END_CHECK_EXCEPTION } catch (...) { assert(false); }
 
 #else
 
-#define CHECK_EXCEPTION(__h) (__h)()
-#define CHECK_EXCEPTION1(__h, __p0) (__h)(__p0)
-#define CHECK_EXCEPTION2(__h, __p0, __p1) (__h)(__p0, __p1)
-#define CHECK_EXCEPTION3(__h, __p0, __p1, __p2) (__h)(__p0, __p1, __p2)
+#define CHECK_EXCEPTION(__h, ...) (__h)(__VA_ARGS__)
 
 #define BEGIN_CHECK_EXCEPTION
 #define END_CHECK_EXCEPTION
@@ -284,6 +279,7 @@ void enable_high_resolution();
 std::string get_time_string_us();
 std::string get_time_string_ms();
 std::string get_time_string_s();
+std::string get_time_string_file_s();
 void print_time_us();
 void print_time_ms();
 void print_time_s();
@@ -347,6 +343,7 @@ struct stack_line_info
 @brief 获取当前调用堆栈信息
 @param maxDepth 获取当前堆栈向下最高层次，最大32层
 */
+std::list<stack_line_info> get_stack_list(void* bp, void* sp, void* ip, size_t maxDepth = 32, size_t offset = 0, bool module = false, bool symbolName = false);
 std::list<stack_line_info> get_stack_list(size_t maxDepth = 32, size_t offset = 0, bool module = false, bool symbolName = false);
 
 /*!
