@@ -19,8 +19,7 @@ http://www.oschina.net/code/snippet_2274073_45577
 移植到arm-linux平台.
 
 2015-12-28
-添加linux平台下的自动栈空间伸缩管理;
-感谢libsigsegv(http://www.gnu.org/software/libsigsegv/).
+添加linux平台下的自动栈空间伸缩管理.
 
 2015-12-25
 添加windows平台下的自动栈空间伸缩管理.

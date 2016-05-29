@@ -63,6 +63,9 @@
     <ClCompile Include="actor\run_thread.cpp">
       <Filter>源文件\actor</Filter>
     </ClCompile>
+    <ClCompile Include="actor\trace_stack.cpp">
+      <Filter>源文件\actor</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="actor\actor_timer.h">

@@ -129,19 +129,19 @@ void io_engine::_run(size_t threadNum, sched policy)
 						lockConVar->wait(ul);
 					}
 				}
-#ifdef __linux__
-				__space_align char actorExtraStack[16 kB];
-				my_actor::install_sigsegv(actorExtraStack, sizeof(actorExtraStack));
-#endif
 				context_yield::convert_thread_to_fiber();
-				void* tlsBuff[64] = { 0 };
+				__space_align void* tlsBuff[64] = { 0 };
 				_tls->set_space(tlsBuff);
+#if (__linux__ && ENABLE_DUMP_STACK)
+				__space_align char dumpStack[8 kB] = { 0 };
+				my_actor::dump_segmentation_fault(dumpStack, sizeof(dumpStack));
+#endif
 				_runCount += _ios.run();
+#if (__linux__ && ENABLE_DUMP_STACK)
+				my_actor::undump_segmentation_fault();
+#endif
 				_tls->set_space(NULL);
 				context_yield::convert_fiber_to_thread();
-#ifdef __linux__
-				my_actor::deinstall_sigsegv();
-#endif
 			}
 			catch (boost::exception&)
 			{

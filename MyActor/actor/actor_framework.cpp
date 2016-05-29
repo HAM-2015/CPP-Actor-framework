@@ -19,7 +19,7 @@ typedef boost::shared_mutex _shared_mutex;
 #include <fibersapi.h>
 #endif
 #ifdef __linux__
-#include "sigsegv.h"
+#include <signal.h>
 #include <sys/mman.h>
 #endif
 
@@ -64,14 +64,14 @@ struct autoActorStackMng
 
 struct shared_initer 
 {
-	std::mutex* _traceMutex = NULL;
+	std::recursive_mutex* _traceMutex = NULL;
 	std::atomic<my_actor::id>* _actorIDCount = NULL;
 };
 static shared_initer s_shared_initer;
 static bool s_isSharedIniter = false;
 static autoActorStackMng* s_autoActorStackMng = NULL;
 shared_obj_pool<bool>* shared_bool::_sharedBoolPool = NULL;
-std::mutex* TraceMutex_::_mutex = NULL;
+std::recursive_mutex* TraceMutex_::_mutex = NULL;
 std::atomic<my_actor::id>* my_actor::_actorIDCount = NULL;
 msg_list_shared_alloc<actor_handle>::shared_node_alloc* my_actor::_childActorListAll = NULL;
 msg_list_shared_alloc<std::function<void()> >::shared_node_alloc* my_actor::_quitExitCallbackAll = NULL;
@@ -84,7 +84,7 @@ void my_actor::install()
 	{
 		s_inited = true;
 		s_isSharedIniter = false;
-		TraceMutex_::_mutex = new std::mutex;
+		TraceMutex_::_mutex = new std::recursive_mutex;
 		s_shared_initer._traceMutex = TraceMutex_::_mutex;
 		DEBUG_OPERATION(s_installID = run_thread::this_thread_id());
 		io_engine::install();
@@ -1673,7 +1673,7 @@ public:
 	{
 		__try
 		{
-			actor_handler(actorPush);			
+			actor_handler(actorPush);
 			if (_actor._checkStack)
 			{//从实际栈底查看有多少个PAGE的PAGE_GUARD标记消失和用了多少栈预留空间
 				_actor.run_in_thread_stack_after_quited([this]
@@ -1730,20 +1730,18 @@ public:
 	DWORD seh_exception_handler(DWORD ecd, _EXCEPTION_POINTERS* eInfo)
 	{
 		context_yield::context_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
-		char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
+		size_t const ts = info->stackSize + info->reserveSize;
+		char* const sb = (char*)info->stackTop - ts;
 #ifdef _WIN64
 		char* const sp = (char*)((size_t)eInfo->ContextRecord->Rsp & (-MEM_PAGE_SIZE));
 #else
 		char* const sp = (char*)((size_t)eInfo->ContextRecord->Esp & (-MEM_PAGE_SIZE));
 #endif
-		char* const violationAddr = (char*)((size_t)eInfo->ExceptionRecord->ExceptionInformation[1] & (-MEM_PAGE_SIZE));
+		void* const fault_address = (void*)eInfo->ExceptionRecord->ExceptionInformation[1];
+		char* const violationAddr = (char*)((size_t)fault_address & (-MEM_PAGE_SIZE));
 		if (violationAddr >= sb && violationAddr < info->stackTop)
 		{
-			if (STATUS_STACK_OVERFLOW == ecd)
-			{
-				return EXCEPTION_CONTINUE_EXECUTION;
-			}
-			else if (STATUS_ACCESS_VIOLATION == ecd)
+			if (STATUS_ACCESS_VIOLATION == ecd)
 			{
 				if (violationAddr - MEM_PAGE_SIZE >= sb)
 				{
@@ -1775,8 +1773,68 @@ public:
 			{
 				return EXCEPTION_CONTINUE_EXECUTION;
 			}
+			else if (STATUS_STACK_OVERFLOW == ecd)
+			{
+// 				if (violationAddr > sb + MEM_PAGE_SIZE)
+// 				{
+// 					DWORD oldPro = 0;
+// 					VirtualProtect(violationAddr, MEM_PAGE_SIZE, PAGE_READWRITE, &oldPro);
+// 					VirtualProtect(violationAddr - MEM_PAGE_SIZE, MEM_PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &oldPro);
+// 					return EXCEPTION_CONTINUE_EXECUTION;
+// 				}
+			}
 		}
-		return EXCEPTION_CONTINUE_SEARCH;
+		struct local_ref 
+		{
+			size_t ts;
+			void* sb;
+			void* fault_address;
+		} ref = { ts, sb, fault_address };
+		TraceMutex_ mt;
+		ContextPool_::coro_pull_interface* pull = ContextPool_::getContext(DEFAULT_STACKSIZE);
+		pull->_param = &ref;
+		if (STATUS_STACK_OVERFLOW == ecd)
+		{
+			pull->_currentHandler = [](ContextPool_::coro_push_interface& push, void* p)
+			{
+				local_ref* ref = (local_ref*)p;
+				std::cout << "actor stack overflow,";
+				std::cout << " stack base 0x" << (void*)ref->sb;
+				std::cout << ", stack length " << ref->ts;
+				std::cout << ", access address 0x" << ref->fault_address;
+				std::cout << std::endl;
+			};
+		}
+		else
+		{
+			pull->_currentHandler = [](ContextPool_::coro_push_interface& push, void* p)
+			{
+				local_ref* ref = (local_ref*)p;
+				std::cout << "actor segmentation fault address 0x" << ref->fault_address << std::endl;
+			};
+		}
+		pull->yield();
+#ifdef ENABLE_DUMP_STACK
+		pull->_param = eInfo;
+		pull->_currentHandler = [](ContextPool_::coro_push_interface& push, void* p)
+		{
+			_EXCEPTION_POINTERS* eInfo = (_EXCEPTION_POINTERS*)p;
+#ifdef _WIN64
+			std::list<stack_line_info> stackList = get_stack_list((void*)eInfo->ContextRecord->Rbp, (void*)eInfo->ContextRecord->Rsp, (void*)eInfo->ContextRecord->Rip, 32, 0, true, true);
+#else
+			std::list<stack_line_info> stackList = get_stack_list((void*)eInfo->ContextRecord->Ebp, (void*)eInfo->ContextRecord->Esp, (void*)eInfo->ContextRecord->Eip, 32, 0, true, true);
+#endif
+			for (stack_line_info& ele : stackList)
+			{
+				std::wcout << ele << std::endl;
+			}
+			std::wcout << "exit" << std::endl << std::flush;
+		};
+		pull->yield();
+#endif
+		ContextPool_::recovery(pull);
+		exit(102);
+		return EXCEPTION_CONTINUE_EXECUTION;
 	}
 #elif __linux__
 
@@ -1833,65 +1891,88 @@ public:
 		}
 	}
 
-	static int sigsegv_handler(void* fault_address, int serious)
+#if (__linux__ && ENABLE_DUMP_STACK)
+	static void dump_segmentation_fault(void* sp, size_t length)
 	{
-		my_actor* const self = my_actor::self_actor();
-		if (self)
+		stack_t sigaltStack;
+		sigaltStack.ss_size = length;
+		sigaltStack.ss_sp = sp;
+		sigaltStack.ss_flags = 0;
+		sigaltstack(&sigaltStack, NULL);
+
+		struct sigaction sigAction;
+		memset(&sigAction, 0, sizeof(sigAction));
+		sigemptyset(&sigAction.sa_mask);
+		sigAction.sa_flags = SA_SIGINFO | SA_ONSTACK;
+		sigAction.sa_sigaction = [](int signum, siginfo_t* info, void* ptr)
 		{
-			context_yield::context_info* const info = ((actor_pull_type*)self->_actorPull)->_coroInfo;
-			char* const violationAddr = (char*)((size_t)fault_address & (0 - MEM_PAGE_SIZE));
-			char* const sb = (char*)info->stackTop - info->stackSize - info->reserveSize;
-			if (violationAddr >= sb && violationAddr < info->stackTop)
+			TraceMutex_ mt;
+			ucontext_t* const ucontext = (ucontext_t*)ptr;
+			void* const fault_address = (void*)ucontext->uc_sigmask.__val[3];
+			my_actor* const self = my_actor::self_actor();
+			if (self)
 			{
-				//触碰栈哨兵
-				assert(violationAddr == sb);
-				exit(101);
-				return 0;
+				context_yield::context_info* const info = ((actor_pull_type*)self->_actorPull)->_coroInfo;
+				char* const violationAddr = (char*)((size_t)fault_address & (0 - MEM_PAGE_SIZE));
+				size_t const ts = info->stackSize + info->reserveSize;
+				char* const sb = (char*)info->stackTop - ts;
+				if (violationAddr >= sb && violationAddr < info->stackTop)
+				{
+					//触碰栈哨兵
+					assert(violationAddr == sb);
+					std::wcout << "actor stack overflow,";
+					std::wcout << " stack base " << (void*)sb;
+					std::wcout << ", stack length " << ts;
+					std::wcout << ", access address " << fault_address;
+					std::wcout << std::endl;
+				}
+				else
+				{
+					std::wcout << "actor segmentation fault address " << fault_address << std::endl;
+				}
 			}
-		}
-		exit(100);
-		return 0;
-	}
-
-	static void stackoverflow_handler(int emergency, stackoverflow_context_t scp)
-	{
-
-	}
-
-	static void install_sigsegv(void* actorExtraStack, size_t size)
-	{
-		s_sigsegvMutex->lock();
-#ifndef DISABLE_SIGSEGV
-		stackoverflow_install_handler(stackoverflow_handler, actorExtraStack, size);
-		sigsegv_install_handler(sigsegv_handler);
+			else
+			{
+				std::wcout << "segmentation fault address " << fault_address << std::endl;
+			}
+			std::wcout << "analyzing stack..." << std::endl;
+#ifdef REG_RIP
+			std::list<stack_line_info> stk = get_stack_list((void*)ucontext->uc_mcontext.gregs[REG_RBP], NULL, (void*)ucontext->uc_mcontext.gregs[REG_RIP], 32, 0, true, true);
+#elif REG_EIP
+			std::list<stack_line_info> stk = get_stack_list((void*)ucontext->uc_mcontext.gregs[REG_EBP], NULL, (void*)ucontext->uc_mcontext.gregs[REG_EIP], 32, 0, true, true);
 #endif
-		s_sigsegvMutex->unlock();
+			for (stack_line_info& ele : stk)
+			{
+				std::wcout << ele << std::endl;
+			}
+			std::wcout << "exit" << std::endl << std::flush;
+			exit(102);
+		};
+		sigaction(SIGSEGV, &sigAction, NULL);
 	}
 
-	static void deinstall_sigsegv()
+	static void undump_segmentation_fault()
 	{
-		s_sigsegvMutex->lock();
-#ifndef DISABLE_SIGSEGV
-		sigsegv_deinstall_handler();
-		stackoverflow_deinstall_handler();
-#endif
-		s_sigsegvMutex->unlock();
+		stack_t sigaltStack;
+		sigaltstack(NULL, &sigaltStack);
 	}
+#endif
+
 #endif
 
 private:
 	my_actor& _actor;
 };
 
-#ifdef __linux__
-void my_actor::install_sigsegv(void* actorExtraStack, size_t size)
+#if (__linux__ && ENABLE_DUMP_STACK)
+void my_actor::dump_segmentation_fault(void* sp, size_t length)
 {
-	actor_run::install_sigsegv(actorExtraStack, size);
+	actor_run::dump_segmentation_fault(sp, length);
 }
 
-void my_actor::deinstall_sigsegv()
+void my_actor::undump_segmentation_fault()
 {
-	actor_run::deinstall_sigsegv();
+	actor_run::undump_segmentation_fault();
 }
 #endif
 
@@ -1965,7 +2046,7 @@ my_actor::~my_actor()
 	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
 	if (_checkStackFree || _checkStack || _usingStackSize > info->stackSize)
 	{
-		stack_overflow_format(_usingStackSize - info->stackSize, _createStack);
+		stack_overflow_format(_usingStackSize - info->stackSize, std::move(_createStack));
 	}
 #endif
 }
@@ -1996,7 +2077,7 @@ actor_handle my_actor::create(shared_strand&& actorStrand, main_func&& mainFunc,
 	newActor->_mainFunc = std::move(mainFunc);
 	newActor->_actorPull = pull;
 #ifdef PRINT_ACTOR_STACK
-	newActor->_createStack = std::shared_ptr<std::list<stack_line_info>>(new std::list<stack_line_info>(get_stack_list(8, 1)));
+	newActor->_createStack = get_stack_list(8, 1);
 #endif
 
 	pull->_param = newActor.get();
@@ -2048,7 +2129,7 @@ actor_handle my_actor::create(shared_strand&& actorStrand, AutoStackActorFace_&&
 	newActor->_actorKey = wrapActor.key();
 	newActor->_actorPull = pull;
 #ifdef PRINT_ACTOR_STACK
-	newActor->_createStack = std::shared_ptr<std::list<stack_line_info>>(new std::list<stack_line_info>(get_stack_list(8, 1)));
+	newActor->_createStack = get_stack_list(8, 1);
 #endif
 
 	pull->_param = newActor.get();
@@ -3373,7 +3454,7 @@ void my_actor::run_one()
 
 void my_actor::pull_yield_tls()
 {
-#if ((__linux__ && (!(defined DISABLE_SIGSEGV) || (defined CHECK_SELF))) || (WIN32 && (_WIN32_WINNT < 0x0502) && (defined CHECK_SELF)))
+#if ((__linux__ && (defined ENABLE_DUMP_STACK || (defined CHECK_SELF))) || (WIN32 && (_WIN32_WINNT < 0x0502) && (defined CHECK_SELF)))
 	void*& tlsVal = io_engine::getTlsValueRef(ACTOR_TLS_INDEX);
 	void* old = tlsVal;
 	tlsVal = this;
@@ -3600,7 +3681,7 @@ my_actor* my_actor::self_actor()
 {
 #if (WIN32 && (defined CHECK_SELF) && (_WIN32_WINNT >= 0x0502))
 	return (my_actor*)::FlsGetValue(ContextPool_::coro_pull_interface::_actorFlsIndex);
-#elif ((__linux__ && (!(defined DISABLE_SIGSEGV) || (defined CHECK_SELF))) || (WIN32 && (defined CHECK_SELF)))
+#elif ((__linux__ && (defined ENABLE_DUMP_STACK || (defined CHECK_SELF))) || (WIN32 && (defined CHECK_SELF)))
 	void** buff = io_engine::getTlsValueBuff();
 	if (buff)
 	{

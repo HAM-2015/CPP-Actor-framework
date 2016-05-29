@@ -15,6 +15,7 @@
 #include "tuple_option.h"
 #include "trace.h"
 #include "lambda_ref.h"
+#include "trace_stack.h"
 
 class my_actor;
 typedef std::shared_ptr<my_actor> actor_handle;//Actor句柄
@@ -9034,13 +9035,13 @@ private:
 	void at_begin_quit_execute();
 	void child_suspend_cb_handler();
 	void child_resume_cb_handler();
-#ifdef __linux__
-	static void install_sigsegv(void* actorExtraStack, size_t size);
-	static void deinstall_sigsegv();
+#if (__linux__ && ENABLE_DUMP_STACK)
+	static void dump_segmentation_fault(void* sp, size_t length);
+	static void undump_segmentation_fault();
 #endif
 public:
 #ifdef PRINT_ACTOR_STACK
-	std::shared_ptr<std::list<stack_line_info>> _createStack;///<当前Actor创建时的调用堆栈
+	std::list<stack_line_info> _createStack;///<当前Actor创建时的调用堆栈
 #endif
 private:
 	std::weak_ptr<my_actor> _weakThis;

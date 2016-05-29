@@ -12,10 +12,10 @@ AR := ar
 OBJCOPY := objcopy
 
 #Additional flags
-PREPROCESSOR_MACROS := NDEBUG RELEASE ENABLE_NEXT_TICK ENABLE_CHECK_LOST DISABLE_BOOST_TIMER
+PREPROCESSOR_MACROS := NDEBUG RELEASE ENABLE_NEXT_TICK ENABLE_CHECK_LOST DISABLE_BOOST_TIMER ENABLE_DUMP_STACK
 INCLUDE_DIRS := /home/ham/cpplib/boost
 LIBRARY_DIRS := /home/ham/cpplib/boost/stage/lib ./actor/lib
-LIBRARY_NAMES := pthread rt sigsegv_x64 fcontext_x64 boost_thread boost_system boost_chrono
+LIBRARY_NAMES := pthread rt fcontext_x64 boost_thread boost_system boost_chrono
 ADDITIONAL_LINKER_INPUTS := 
 MACOS_FRAMEWORKS := 
 LINUX_PACKAGES := 

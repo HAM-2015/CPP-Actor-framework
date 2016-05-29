@@ -246,7 +246,7 @@ struct TraceMutex_
 		_mutex->unlock();
 	}
 
-	static std::mutex* _mutex;
+	static std::recursive_mutex* _mutex;
 };
 
 #ifndef TRACE_ANDROID_LOG
