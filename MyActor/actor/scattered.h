@@ -199,7 +199,7 @@ private:
 
 #elif __GNUG__
 
-#if (defined __x86_64__ || defined _ARM64)
+#if (__x86_64__ || _ARM64)
 #define __space_align __attribute__((aligned(8)))
 #elif (__i386__ || _ARM32)
 #define __space_align __attribute__((aligned(4)))
@@ -431,5 +431,15 @@ struct null_handler
 	__val5__ = std::move(s.__val5__); __val6__ = std::move(s.__val6__); } }
 
 #define RVALUE_MOVE(__name__, ...) _BOND_LR__(RVALUE_MOVE, _PP_NARG(__VA_ARGS__))(__name__, __VA_ARGS__)
+
+#ifdef _MSC_VER
+#if (_MSC_VER >= 1900)
+#define FUNCTION_ALLOCATOR(__dst__, __src__, __alloc__) __dst__(std::allocator_arg, __alloc__, __src__)
+#else
+#define FUNCTION_ALLOCATOR(__dst__, __src__, __alloc__) __dst__(__src__, __alloc__)
+#endif
+#elif __GNUG__
+#define FUNCTION_ALLOCATOR(__dst__, __src__, __alloc__) __dst__(__src__)
+#endif
 
 #endif

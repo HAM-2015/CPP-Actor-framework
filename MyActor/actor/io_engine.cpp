@@ -133,7 +133,7 @@ void io_engine::_run(size_t threadNum, sched policy)
 				__space_align void* tlsBuff[64] = { 0 };
 				_tls->set_space(tlsBuff);
 #if (__linux__ && ENABLE_DUMP_STACK)
-				__space_align char dumpStack[8 kB] = { 0 };
+				__space_align char dumpStack[8 kB];
 				my_actor::dump_segmentation_fault(dumpStack, sizeof(dumpStack));
 #endif
 				_runCount += _ios.run();

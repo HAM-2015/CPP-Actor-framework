@@ -207,6 +207,61 @@ protected:
 		return new(reuMem.allocate(sizeof(handler_type)))handler_type(mutex, deadSign, running, TRY_MOVE(handler));
 	}
 
+	template <typename Handler, typename R>
+	struct wrap_run_in_ui_handler;
+
+	template <typename Handler>
+	struct wrap_run_in_ui_handler<Handler, void>
+	{
+		template <typename H>
+		wrap_run_in_ui_handler(bind_qt_run_base* ui, H&& h)
+			:_this(ui), _handler(TRY_MOVE(h)) {}
+
+		template <typename... Args>
+		void operator()(my_actor* host, Args&&... args)
+		{
+			if (_this->run_in_ui_thread())
+			{
+				_handler(TRY_MOVE(args)...);
+			}
+			else
+			{
+				RUN_IN_QT_UI_AT(_this, host, _handler((Args&&)args...));
+			}
+		}
+
+		bind_qt_run_base* _this;
+		Handler _handler;
+		RVALUE_COPY_CONSTRUCTION(wrap_run_in_ui_handler, _this, _handler);
+	};
+
+	template <typename Handler, typename R>
+	struct wrap_run_in_ui_handler
+	{
+		template <typename H>
+		wrap_run_in_ui_handler(bind_qt_run_base* ui, H&& h)
+			:_this(ui), _handler(TRY_MOVE(h)) {}
+
+		template <typename... Args>
+		R operator()(my_actor* host, Args&&... args)
+		{
+			if (_this->run_in_ui_thread())
+			{
+				return _handler(TRY_MOVE(args)...);
+			}
+			else
+			{
+				stack_obj<R> obj;
+				RUN_IN_QT_UI_AT(_this, host, obj = _handler((Args&&)args...));
+				return std::move(obj.get());
+			}
+		}
+
+		bind_qt_run_base* _this;
+		Handler _handler;
+		RVALUE_COPY_CONSTRUCTION(wrap_run_in_ui_handler, _this, _handler);
+	};
+
 	struct task_event : public QEvent
 	{
 		template <typename... Args>
@@ -341,18 +396,23 @@ public:
 	{
 		assert(run_in_ui_thread());
 		_waitCount++;
-		return std::function<void()>(wrap(std::bind([this](Handler& handler)
+		return FUNCTION_ALLOCATOR(std::function<void()>, wrap(std::bind([this](Handler& handler)
 		{
 			handler();
 			check_close();
-#ifdef _MSC_VER
-		}, TRY_MOVE(handler))), reusable_alloc<void, reusable_mem_mt<>>(_reuMem));
-#elif __GNUG__
-		}, TRY_MOVE(handler))));
-#endif
+		}, TRY_MOVE(handler))), (reusable_alloc<void, reusable_mem_mt<>>(_reuMem)));
 	}
 
 	std::function<void()> wrap_check_close();
+
+	/*!
+	@brief 绑定一个函数到UI线程中执行
+	*/
+	template <typename R, typename... Args, typename Handler>
+	std::function<R(my_actor*, Args...)> wrap_run_in_ui(Handler&& handler)
+	{
+		return std::function<R(my_actor*, Args...)>(wrap_run_in_ui_handler<RM_REF(Handler), R>(this, TRY_MOVE(handler)));
+	}
 #ifdef ENABLE_QT_ACTOR
 	/*!
 	@brief 开启shared_qt_strand
@@ -475,6 +535,12 @@ public:
 	std::function<void()> wrap_check_close()
 	{
 		return bind_qt_run_base::wrap_check_close();
+	}
+
+	template <typename R = void, typename... Args, typename Handler>
+	std::function<R(my_actor*, Args...)> wrap_run_in_ui(Handler&& handler)
+	{
+		return bind_qt_run_base::wrap_run_in_ui<R, Args...>(TRY_MOVE(handler));
 	}
 
 	void enter_wait_close()

@@ -13,6 +13,9 @@
 #endif
 #elif __linux__
 #include <execinfo.h>
+#if (__i386__ || __x86_64__)
+#include <dlfcn.h>
+#endif
 #endif
 #endif
 
@@ -331,19 +334,25 @@ void uninstall_check_stack()
 #elif __linux__
 //////////////////////////////////////////////////////////////////////////
 
-bool cut_file_line(const char* buff, int& length, int& line)
+void cut_file_line(const char* buff, int& length, int& line)
 {
 	length = 0;
-	while (buff[length])
+	line = -1;
+	int i = 0;
+	int lastColon = -1;
+	while (buff[i])
 	{
-		if (':' == buff[length])
+		if (':' == buff[i])
 		{
-			line = atoi(buff + length + 1);
-			return true;
+			length = i;
+			lastColon = i;
 		}
-		length++;
+		i++;
 	}
-	return false;
+	if (-1 != lastColon)
+	{
+		line = atoi(buff + lastColon + 1);
+	}
 }
 
 #define ADDR2LINE "addr2line -f -e "
@@ -360,7 +369,7 @@ std::list<stack_line_info> get_stack_list(void** traceback, size_t size, bool mo
 		std::string cmd = cmdHead;
 		for (size_t i = 0; i < size; i++)
 		{
-			char tmp[16];
+			char tmp[24];
 			snprintf(tmp, sizeof(tmp), " %p", traceback[i]);
 			cmd.append(tmp);
 		}
@@ -388,16 +397,9 @@ std::list<stack_line_info> get_stack_list(void** traceback, size_t size, bool mo
 					if (fgets(buff, sizeof(buff), fp))
 					{
 						int length, line;
-						if (cut_file_line(buff, length, line))
-						{
-							stackResult.line = line;
-							stackResult.file = std::string(buff, length);
-						}
-						else
-						{
-							stackResult.line = -1;
-							stackResult.file = buff;
-						}
+						cut_file_line(buff, length, line);
+						stackResult.line = line;
+						stackResult.file = std::string(buff, length);
 						imageList.push_back(std::move(stackResult));
 					}
 					else
@@ -428,18 +430,28 @@ std::list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool m
 	return std::list<stack_line_info>();
 }
 
-std::list<stack_line_info> get_stack_list(void* reg_bp, void*, void* reg_ip, size_t maxDepth, size_t offset, bool module, bool symbolName)
+std::list<stack_line_info> get_stack_list(void* reg_bp, void* reg_sp, void* reg_ip, size_t maxDepth, size_t offset, bool module, bool symbolName)
 {
 	assert(maxDepth && maxDepth <= 32);
 	std::vector<void*> traceback;
+#if (__i386__ || __x86_64__)
 	void* ip = reg_ip;
 	void** bp = (void**)reg_bp;
 	while (bp && ip && traceback.size() < 32)
 	{
+		Dl_info dlinfo;
+		if (!dladdr(ip, &dlinfo))
+		{
+			break;
+		}
 		traceback.push_back(ip);
 		ip = bp[1];
 		bp = (void**)bp[0];
 	}
+#elif __arm__
+	//FIXME
+	traceback.push_back(reg_ip);
+#endif
 	if (traceback.size() > offset)
 	{
 		return get_stack_list(&traceback[offset], traceback.size() - offset, module, symbolName);

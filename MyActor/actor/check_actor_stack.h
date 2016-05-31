@@ -82,4 +82,28 @@ static_assert(0 < MEM_PAGE_SIZE && MEM_PAGE_SIZE % (4 kB) == 0, "");
 static_assert(0 < MEM_POOL_LENGTH && MEM_POOL_LENGTH < 10000000, "");
 static_assert(STACK_BLOCK_SIZE >= (32 kB) && STACK_BLOCK_SIZE % MEM_PAGE_SIZE == 0, "");
 
+#ifdef WIN32
+
+#ifdef _WIN64
+static_assert(8 == sizeof(void*), "");
+#else
+static_assert(4 == sizeof(void*), "");
+
+#endif
+#elif __linux__
+
+#if (__x86_64__ || _ARM64)
+static_assert(8 == sizeof(void*), "");
+#elif (__i386__ || _ARM32)
+static_assert(4 == sizeof(void*), "");
+#endif
+
+#ifdef __arm__
+#if !(defined _ARM32) && !(defined _ARM64)
+#error "please define _ARM32 or _ARM64"
+#endif
+#endif
+
+#endif
+
 #endif

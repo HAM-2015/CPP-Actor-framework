@@ -209,14 +209,10 @@ std::function<void()> bind_qt_run_base::wrap_check_close()
 {
 	assert(run_in_ui_thread());
 	_waitCount++;
-	return std::function<void()>(wrap([this]
+	return FUNCTION_ALLOCATOR(std::function<void()>, wrap([this]
 	{
 		check_close();
-#ifdef _MSC_VER
-	}), reusable_alloc<void, reusable_mem_mt<>>(_reuMem));
-#elif __GNUG__
-	}));
-#endif
+	}), (reusable_alloc<void, reusable_mem_mt<>>(_reuMem)));
 }
 
 void bind_qt_run_base::append_task(wrap_handler_face* h)

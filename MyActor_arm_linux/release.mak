@@ -23,7 +23,7 @@ LINUX_PACKAGES :=
 CFLAGS := -ffunction-sections -O3
 CXXFLAGS := -ffunction-sections -O3 -std=c++11
 ASFLAGS := 
-LDFLAGS := -Wl,-gc-sections -static
+LDFLAGS := -Wl,-gc-sections
 COMMONFLAGS := 
 
 START_GROUP := -Wl,--start-group

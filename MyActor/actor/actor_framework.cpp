@@ -1798,8 +1798,8 @@ public:
 			pull->_currentHandler = [](ContextPool_::coro_push_interface& push, void* p)
 			{
 				local_ref* ref = (local_ref*)p;
-				std::cout << "actor stack overflow,";
-				std::cout << " stack base 0x" << (void*)ref->sb;
+				std::cout << "actor stack overflow";
+				std::cout << ", stack base 0x" << (void*)ref->sb;
 				std::cout << ", stack length " << ref->ts;
 				std::cout << ", access address 0x" << ref->fault_address;
 				std::cout << std::endl;
@@ -1908,7 +1908,11 @@ public:
 		{
 			TraceMutex_ mt;
 			ucontext_t* const ucontext = (ucontext_t*)ptr;
+#if (__i386__ || __x86_64__)
 			void* const fault_address = (void*)ucontext->uc_sigmask.__val[3];
+#elif __arm__
+			void* const fault_address = (void*)ucontext->uc_mcontext.fault_address;
+#endif
 			my_actor* const self = my_actor::self_actor();
 			if (self)
 			{
@@ -1920,8 +1924,8 @@ public:
 				{
 					//´¥ÅöÕ»ÉÚ±ø
 					assert(violationAddr == sb);
-					std::wcout << "actor stack overflow,";
-					std::wcout << " stack base " << (void*)sb;
+					std::wcout << "actor stack overflow";
+					std::wcout << ", stack base " << (void*)sb;
 					std::wcout << ", stack length " << ts;
 					std::wcout << ", access address " << fault_address;
 					std::wcout << std::endl;
@@ -1936,10 +1940,12 @@ public:
 				std::wcout << "segmentation fault address " << fault_address << std::endl;
 			}
 			std::wcout << "analyzing stack..." << std::endl;
-#ifdef REG_RIP
+#ifdef __x86_64__
 			std::list<stack_line_info> stk = get_stack_list((void*)ucontext->uc_mcontext.gregs[REG_RBP], NULL, (void*)ucontext->uc_mcontext.gregs[REG_RIP], 32, 0, true, true);
-#elif REG_EIP
+#elif __i386__
 			std::list<stack_line_info> stk = get_stack_list((void*)ucontext->uc_mcontext.gregs[REG_EBP], NULL, (void*)ucontext->uc_mcontext.gregs[REG_EIP], 32, 0, true, true);
+#elif __arm__
+			std::list<stack_line_info> stk = get_stack_list(NULL, (void*)ucontext->uc_mcontext.arm_sp, (void*)ucontext->uc_mcontext.arm_lr, 32, 0, true, true);
 #endif
 			for (stack_line_info& ele : stk)
 			{

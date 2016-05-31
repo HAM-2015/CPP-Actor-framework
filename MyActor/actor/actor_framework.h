@@ -2303,15 +2303,7 @@ protected:
 	long long actor_id(my_actor* host);
 };
 
-#ifdef _MSC_VER
-#if (_MSC_VER >= 1900)
-#define __MUTEX_BLOCK_HANDLER_WRAP(__dst__, __src__, __host__) __dst__(std::allocator_arg, reusable_alloc<>(ActorFunc_::reu_mem(__host__)), __src__)
-#else
-#define __MUTEX_BLOCK_HANDLER_WRAP(__dst__, __src__, __host__) __dst__(__src__, reusable_alloc<>(ActorFunc_::reu_mem(__host__)))
-#endif
-#elif __GNUG__
-#define __MUTEX_BLOCK_HANDLER_WRAP(__dst__, __src__, __host__) __dst__(__src__)
-#endif
+#define __MUTEX_BLOCK_HANDLER_WRAP(__dst__, __src__, __host__)  FUNCTION_ALLOCATOR(__dst__, __src__, (reusable_alloc<>(ActorFunc_::reu_mem(__host__))))
 
 /*!
 @brief actor_msg_handleœ˚œ¢ª•≥‚÷¥––øÈ
