@@ -124,10 +124,21 @@ namespace context_yield
 
 #elif __linux__
 #include <sys/mman.h>
+
+struct transfer_t
+{
+	void* fctx;
+	void* data;
+};
+
 	extern "C"
 	{
 		void* makefcontext(void* sp, size_t size, void(*fn)(void*));
-		void* jumpfcontext(void** ofc, void* nfc, void* vp, bool preserve_fpu);
+		void* jumpfcontext(void** ofc, void* nfc, void* vp, bool preserve_fpu = true);
+
+		void* makenfcontext(void* sp, size_t size, void (*fn)(transfer_t));
+		transfer_t jumpnfcontext(void* const to, void* vp);
+		transfer_t ontopnfcontext(void* const to, void* vp, transfer_t(*fn)(transfer_t));
 	}
 
 	bool is_thread_a_fiber() {return true; }
@@ -154,24 +165,43 @@ namespace context_yield
 			context_yield::context_info* info;
 			void* p;
 		} ref = { handler, info, p };
+#ifdef DISABLE_FLOAT_CONTEXT
+		info->obj = makenfcontext(info->stackTop, allocSize, [](transfer_t transfer)
+		{
+			local_ref* ref = (local_ref*)transfer.data;
+			ref->info->nc = transfer.fctx;
+			assert((size_t)get_sp() > (size_t)ref->info->stackTop - MEM_PAGE_SIZE + 256);
+			ref->handler(ref->info, ref->p);
+		});
+		info->obj = jumpnfcontext(info->obj, &ref).fctx;
+#else
 		info->obj = makefcontext(info->stackTop, allocSize, [](void* param)
 		{
 			local_ref* ref = (local_ref*)param;
 			assert((size_t)get_sp() > (size_t)ref->info->stackTop - MEM_PAGE_SIZE + 256);
 			ref->handler(ref->info, ref->p);
 		});
-		jumpfcontext(&info->nc, info->obj, &ref, true);
+		jumpfcontext(&info->nc, info->obj, &ref);
+#endif
 		return info;
 	}
 
 	void push_yield(context_yield::context_info* info)
 	{
-		jumpfcontext(&info->obj, info->nc, NULL, true);
+#ifdef DISABLE_FLOAT_CONTEXT
+		info->nc = jumpnfcontext(info->nc, NULL).fctx;
+#else
+		jumpfcontext(&info->obj, info->nc, NULL);
+#endif
 	}
 
 	void pull_yield(context_yield::context_info* info)
 	{
-		jumpfcontext(&info->nc, info->obj, NULL, true);
+#ifdef DISABLE_FLOAT_CONTEXT
+		info->obj = jumpnfcontext(info->obj, NULL).fctx;
+#else
+		jumpfcontext(&info->nc, info->obj, NULL);
+#endif
 	}
 
 	void delete_context(context_yield::context_info* info)

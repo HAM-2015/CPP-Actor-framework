@@ -148,6 +148,20 @@
         <IncludeSubdirectories>true</IncludeSubdirectories>
         <SelectedDirectories />
       </CustomActionBase>
+      <CustomActionBase xsi:type="CommandLineAction">
+        <SkipWhenRunningCommandList>false</SkipWhenRunningCommandList>
+        <RemoteHost>
+          <HostName>192.168.0.108</HostName>
+          <Transport>SSH</Transport>
+          <UserName>pi</UserName>
+        </RemoteHost>
+        <Command>chmod</Command>
+        <Arguments>+x $(TargetFileName)</Arguments>
+        <WorkingDirectory>$(DeployDir)</WorkingDirectory>
+        <Environment>
+          <Records />
+        </Environment>
+      </CustomActionBase>
     </PostBuildActions>
     <PreCleanActions />
     <PostCleanActions />
