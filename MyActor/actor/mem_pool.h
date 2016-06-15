@@ -22,6 +22,11 @@ struct mem_alloc_base
 	virtual bool shared() const = 0;
 	virtual size_t alloc_size() const = 0;
 
+	size_t pool_size() const
+	{
+		return _poolMaxSize;
+	}
+
 	bool overflow() const
 	{
 		return _freeNumber >= _poolMaxSize;
@@ -1042,7 +1047,13 @@ template <typename T, typename CREATER, typename DESTROYER, typename MUTEX>
 class SharedObjPool_;
 
 template <typename T, typename CREATER, typename DESTROYER, typename MUTEX>
+class SharedObjPool2_;
+
+template <typename T, typename CREATER, typename DESTROYER, typename MUTEX>
 class ObjPool_;
+
+template <typename T, typename CREATER, typename DESTROYER, typename MUTEX>
+class ObjPool2_;
 
 template <typename T>
 class obj_pool
@@ -1102,6 +1113,55 @@ static obj_pool<T>* create_pool(size_t poolSize)
 	return create_pool_mt<T, null_mutex>(poolSize);
 }
 
+template <typename T, typename MUTEX, typename CREATER, typename DESTROYER>
+static obj_pool<T>* create_pool_mt2(size_t poolSize, CREATER&& creater, DESTROYER&& destroyer)
+{
+	return new ObjPool2_<T, RM_REF(CREATER), RM_REF(DESTROYER), MUTEX>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
+}
+
+template <typename T, typename MUTEX, typename CREATER>
+static obj_pool<T>* create_pool_mt2(size_t poolSize, CREATER&& creater)
+{
+	return create_pool_mt2<T, MUTEX>(poolSize, TRY_MOVE(creater), [](T* p)->bool
+	{
+		typedef T type;
+		p->~type();
+		return true;
+	});
+}
+
+template <typename T, typename MUTEX>
+static obj_pool<T>* create_pool_mt2(size_t poolSize)
+{
+	return create_pool_mt2<T, MUTEX>(poolSize, [](void* p)
+	{
+		new(p)T();
+	}, [](T* p)->bool
+	{
+		typedef T type;
+		p->~type();
+		return true;
+	});
+}
+
+template <typename T, typename CREATER, typename DESTROYER>
+static obj_pool<T>* create_pool2(size_t poolSize, CREATER&& creater, DESTROYER&& destroyer)
+{
+	return create_pool_mt2<T, null_mutex>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
+}
+
+template <typename T, typename CREATER>
+static obj_pool<T>* create_pool2(size_t poolSize, CREATER&& creater)
+{
+	return create_pool_mt2<T, null_mutex>(poolSize, TRY_MOVE(creater));
+}
+
+template <typename T>
+static obj_pool<T>* create_pool2(size_t poolSize)
+{
+	return create_pool_mt2<T, null_mutex>(poolSize);
+}
+
 template <typename T, typename CREATER, typename DESTROYER, typename MUTEX>
 class ObjPool_ : protected MUTEX, public obj_pool<T>
 {
@@ -1113,7 +1173,7 @@ class ObjPool_ : protected MUTEX, public obj_pool<T>
 public:
 	template <typename Creater, typename Destroyer>
 	ObjPool_(size_t poolSize, Creater&& creater, Destroyer&& destroyer)
-		:_creater(TRY_MOVE(creater)), _destroyer(TRY_MOVE(destroyer)), _poolMaxSize(poolSize), _nodeCount(0), _link(NULL)
+		:_creater(TRY_MOVE(creater)), _destroyer(TRY_MOVE(destroyer)), _poolSize(poolSize), _nodeCount(0), _link(NULL)
 	{
 #if (_DEBUG || DEBUG)
 		_blockNumber = 0;
@@ -1179,7 +1239,7 @@ public:
 #if (_DEBUG || DEBUG)
 			_blockNumber--;
 #endif
-			if (_nodeCount < _poolMaxSize)
+			if (_nodeCount < _poolSize)
 			{
 				_nodeCount++;
 				((node*)p)->_link = _link;
@@ -1203,7 +1263,115 @@ private:
 	CREATER _creater;
 	DESTROYER _destroyer;
 	node* _link;
-	size_t _poolMaxSize;
+	size_t _poolSize;
+	size_t _nodeCount;
+#if (_DEBUG || DEBUG)
+	size_t _blockNumber;
+#endif
+};
+
+template <typename T, typename CREATER, typename DESTROYER, typename MUTEX>
+class ObjPool2_ : protected MUTEX, public obj_pool<T>
+{
+	struct node
+	{
+		__space_align char _data[sizeof(T)];
+		node* _link;
+	};
+public:
+	template <typename Creater, typename Destroyer>
+	ObjPool2_(size_t poolSize, Creater&& creater, Destroyer&& destroyer)
+		:_creater(TRY_MOVE(creater)), _destroyer(TRY_MOVE(destroyer)), _nodeAlloc(poolSize), _nodeCount(0), _link(NULL)
+	{
+#if (_DEBUG || DEBUG)
+		_blockNumber = 0;
+#endif
+	}
+public:
+	~ObjPool2_()
+	{
+		std::lock_guard<MUTEX> lg(*this);
+		assert(0 == _blockNumber);
+		node* it = _link;
+		while (it)
+		{
+			assert(_nodeCount > 0);
+			_nodeCount--;
+			node* t = it;
+			it = it->_link;
+			bool ok = _destroyer((T*)t->_data);
+			assert(ok);
+			_nodeAlloc.deallocate(t);
+		}
+		assert(0 == _nodeCount);
+	}
+public:
+	T* pick()
+	{
+		{
+			std::lock_guard<MUTEX> lg(*this);
+#if (_DEBUG || DEBUG)
+			_blockNumber++;
+#endif
+			if (_link)
+			{
+				_nodeCount--;
+				node* r = _link;
+				_link = _link->_link;
+				return (T*)r->_data;
+			}
+		}
+		node* newNode = (node*)_nodeAlloc.allocate();
+		assert((void*)newNode == (void*)newNode->_data);
+		try
+		{
+			_creater(newNode);
+		}
+		catch (...)
+		{
+#if (_DEBUG || DEBUG)
+			MUTEX::lock();
+			_blockNumber--;
+			MUTEX::unlock();
+#endif
+			_nodeAlloc.deallocate(newNode);
+			throw;
+		}
+		return (T*)newNode->_data;
+	}
+
+	void recycle(T* p)
+	{
+		{
+			std::lock_guard<MUTEX> lg(*this);
+#if (_DEBUG || DEBUG)
+			_blockNumber--;
+#endif
+			if (_nodeCount < _nodeAlloc.pool_size())
+			{
+				_nodeCount++;
+				((node*)p)->_link = _link;
+				_link = (node*)p;
+				return;
+			}
+		}
+		if (_destroyer(p))
+		{
+			_nodeAlloc.deallocate(p);
+		}
+		else
+		{
+			std::lock_guard<MUTEX> lg(*this);
+			_nodeCount++;
+			((node*)p)->_link = _link;
+			_link = (node*)p;
+		}
+	}
+private:
+	CREATER _creater;
+	DESTROYER _destroyer;
+	mem_alloc2<node> _nodeAlloc;
+	node* _link;
 	size_t _nodeCount;
 #if (_DEBUG || DEBUG)
 	size_t _blockNumber;
@@ -1268,17 +1436,66 @@ static shared_obj_pool<T>* create_shared_pool(size_t poolSize)
 	return create_shared_pool_mt<T, null_mutex>(poolSize);
 }
 
+template <typename T, typename MUTEX, typename CREATER, typename DESTROYER>
+static shared_obj_pool<T>* create_shared_pool_mt2(size_t poolSize, CREATER&& creater, DESTROYER&& destroyer)
+{
+	return new SharedObjPool2_<T, RM_REF(CREATER), RM_REF(DESTROYER), MUTEX>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
+}
+
+template <typename T, typename MUTEX, typename CREATER>
+static shared_obj_pool<T>* create_shared_pool_mt2(size_t poolSize, CREATER&& creater)
+{
+	return create_shared_pool_mt2<T, MUTEX>(poolSize, TRY_MOVE(creater), [](T* p)->bool
+	{
+		typedef T type;
+		p->~type();
+		return true;
+	});
+}
+
+template <typename T, typename MUTEX>
+static shared_obj_pool<T>* create_shared_pool_mt2(size_t poolSize)
+{
+	return create_shared_pool_mt2<T, MUTEX>(poolSize, [](void* p)
+	{
+		new(p)T();
+	}, [](T* p)->bool
+	{
+		typedef T type;
+		p->~type();
+		return true;
+	});
+}
+
+template <typename T, typename CREATER, typename DESTROYER>
+static shared_obj_pool<T>* create_shared_pool2(size_t poolSize, CREATER&& creater, DESTROYER&& destroyer)
+{
+	return create_shared_pool_mt2<T, null_mutex>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
+}
+
+template <typename T, typename CREATER>
+static shared_obj_pool<T>* create_shared_pool2(size_t poolSize, CREATER&& creater)
+{
+	return create_shared_pool_mt2<T, null_mutex>(poolSize, TRY_MOVE(creater));
+}
+
+template <typename T>
+static shared_obj_pool<T>* create_shared_pool2(size_t poolSize)
+{
+	return create_shared_pool_mt2<T, null_mutex>(poolSize);
+}
+
 struct RefAlloc_ 
 {
 	mem_alloc_base*& _refCountAlloc;
 	size_t _nodeCount;
 };
 
-template <typename _Tp, typename MUTEX>
+template <typename _Tp, typename ALLOC>
 class CreateRefAlloc_;
 
-template <typename MUTEX>
-class CreateRefAlloc_<void, MUTEX>
+template <typename ALLOC>
+class CreateRefAlloc_<void, ALLOC>
 {
 public:
 	typedef size_t      size_type;
@@ -1289,7 +1506,7 @@ public:
 	template <typename _Tp1>
 	struct rebind
 	{
-		typedef CreateRefAlloc_<_Tp1, MUTEX> other;
+		typedef CreateRefAlloc_<_Tp1, ALLOC> other;
 	};
 
 	CreateRefAlloc_(RefAlloc_* refAll)
@@ -1298,9 +1515,10 @@ public:
 	RefAlloc_* _refAll;
 };
 
-template <typename _Tp, typename MUTEX>
+template <typename _Tp, typename ALLOC>
 class CreateRefAlloc_
 {
+	typedef typename ALLOC::template rebind<_Tp>::other alloc_type;
 public:
 	typedef size_t     size_type;
 	typedef _Tp*       pointer;
@@ -1312,7 +1530,7 @@ public:
 	template <typename _Tp1>
 	struct rebind
 	{
-		typedef CreateRefAlloc_<_Tp1, MUTEX> other;
+		typedef CreateRefAlloc_<_Tp1, ALLOC> other;
 	};
 
 	CreateRefAlloc_(RefAlloc_* refAll)
@@ -1322,7 +1540,7 @@ public:
 		:_refAll(s._refAll) {}
 
 	template <typename _Tp1>
-	CreateRefAlloc_(const CreateRefAlloc_<_Tp1, MUTEX>& s)
+	CreateRefAlloc_(const CreateRefAlloc_<_Tp1, ALLOC>& s)
 		: _refAll(s._refAll) {}
 
 	~CreateRefAlloc_()
@@ -1331,7 +1549,7 @@ public:
 	pointer allocate(size_type n, const void* = 0)
 	{
 		assert(1 == n);
-		_refAll->_refCountAlloc = new mem_alloc_mt<_Tp, MUTEX>(_refAll->_nodeCount);
+		_refAll->_refCountAlloc = new alloc_type(_refAll->_nodeCount);
 		throw bool();
 		return NULL;
 	}
@@ -1381,7 +1599,7 @@ public:
 	ref_count_alloc(mem_alloc_base* refCountAlloc)
 		:_refCountAlloc(refCountAlloc)
 	{
-		static_assert(sizeof(ref_count_alloc<void>) == sizeof(CreateRefAlloc_<void, null_mutex>), "");
+		static_assert(sizeof(ref_count_alloc<void>) == sizeof(CreateRefAlloc_<void, mem_alloc<void>>), "");
 	}
 
 	mem_alloc_base* _refCountAlloc;
@@ -1419,7 +1637,7 @@ public:
 
 	~ref_count_alloc()
 	{
-		static_assert(sizeof(ref_count_alloc<_Tp>) == sizeof(CreateRefAlloc_<_Tp, null_mutex>), "");
+		static_assert(sizeof(ref_count_alloc<_Tp>) == sizeof(CreateRefAlloc_<_Tp, mem_alloc<void>>), "");
 	}
 
 	pointer allocate(size_type n, const void* = 0)
@@ -1453,14 +1671,14 @@ public:
 	mem_alloc_base* _refCountAlloc;
 };
 
-template <typename T, typename MUTEX, typename DESTROYER>
+template <typename T, typename ALLOC, typename DESTROYER>
 mem_alloc_base* make_ref_count_alloc(size_t poolSize, DESTROYER&& destroyer)
 {
 	mem_alloc_base* refCountAlloc = NULL;
 	try
 	{
 		RefAlloc_ refAll = { refCountAlloc, poolSize };
-		std::shared_ptr<T>(NULL, TRY_MOVE(destroyer), CreateRefAlloc_<void, MUTEX>(&refAll));
+		std::shared_ptr<T>(NULL, TRY_MOVE(destroyer), CreateRefAlloc_<void, ALLOC>(&refAll));
 	}
 	catch (...) {}
 	return refCountAlloc;
@@ -1473,11 +1691,37 @@ public:
 	template <typename Creater, typename Destroyer>
 	SharedObjPool_(size_t poolSize, Creater&& creater, Destroyer&& destroyer)
 	{
-		_refCountAlloc = make_ref_count_alloc<T, MUTEX>(poolSize, [this](T*){});
+		_refCountAlloc = make_ref_count_alloc<T, mem_alloc_mt<void, MUTEX>>(poolSize, [this](T*){});
 		_dataAlloc = create_pool_mt<T, MUTEX>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
 	}
 public:
 	~SharedObjPool_()
+	{
+		delete _dataAlloc;
+		delete _refCountAlloc;
+	}
+public:
+	std::shared_ptr<T> pick()
+	{
+		return std::shared_ptr<T>(_dataAlloc->pick(), [this](T* p){_dataAlloc->recycle(p); }, ref_count_alloc<void>(_refCountAlloc));
+	}
+private:
+	obj_pool<T>* _dataAlloc;
+	mem_alloc_base* _refCountAlloc;
+};
+
+template <typename T, typename CREATER, typename DESTROYER, typename MUTEX>
+class SharedObjPool2_ : public shared_obj_pool<T>
+{
+public:
+	template <typename Creater, typename Destroyer>
+	SharedObjPool2_(size_t poolSize, Creater&& creater, Destroyer&& destroyer)
+	{
+		_refCountAlloc = make_ref_count_alloc<T, mem_alloc_mt2<void, MUTEX>>(poolSize, [this](T*){});
+		_dataAlloc = create_pool_mt2<T, MUTEX>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
+	}
+public:
+	~SharedObjPool2_()
 	{
 		delete _dataAlloc;
 		delete _refCountAlloc;

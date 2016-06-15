@@ -12,6 +12,7 @@
 #include "check_actor_stack.h"
 #include "actor_timer.h"
 #include "async_timer.h"
+#include "context_pool.h"
 #include "tuple_option.h"
 #include "trace.h"
 #include "lambda_ref.h"
@@ -20,9 +21,8 @@
 class my_actor;
 typedef std::shared_ptr<my_actor> actor_handle;//Actor句柄
 
-class MutexTrigNotifer_;
-class MutexTrigHandle_;
-class ActorMutex_;
+typedef ContextPool_::coro_push_interface actor_push_type;
+typedef ContextPool_::coro_pull_interface actor_pull_type;
 
 //此函数会上下文切换
 #define __yield_interrupt
@@ -105,6 +105,8 @@ struct ActorFunc_
 	static const shared_strand& self_strand(my_actor* host);
 	static void pull_yield(my_actor* host);
 	static void push_yield(my_actor* host);
+	static void pull_yield_after_quited(my_actor* host);
+	static void push_yield_after_quited(my_actor* host);
 	static bool is_quited(my_actor* host);
 	static reusable_mem& reu_mem(my_actor* host);
 	template <typename R, typename H>
@@ -2291,7 +2293,7 @@ class MutexBlock_
 private:
 	virtual bool ready() = 0;
 	virtual void cancel() = 0;
-	virtual bool go(bool& isRun) = 0;
+	virtual bool go_run(bool& isRun) = 0;
 	virtual size_t snap_id() = 0;
 	virtual long long host_id() = 0;
 	virtual void check_lost() = 0;
@@ -2348,7 +2350,7 @@ private:
 		}
 	}
 
-	bool go(bool& isRun)
+	bool go_run(bool& isRun)
 	{
 		if (_msgBuff.has())
 		{
@@ -2418,7 +2420,7 @@ private:
 		}
 	}
 
-	bool go(bool& isRun)
+	bool go_run(bool& isRun)
 	{
 		if (_msgBuff.has())
 		{
@@ -2499,7 +2501,7 @@ private:
 		}
 	}
 
-	bool go(bool& isRun)
+	bool go_run(bool& isRun)
 	{
 		assert(!_msgHandle.check_closed());
 		if (_msgBuff.has())
@@ -2567,7 +2569,7 @@ private:
 		}
 	}
 
-	bool go(bool& isRun)
+	bool go_run(bool& isRun)
 	{
 		if (_has)
 		{
@@ -2633,7 +2635,7 @@ private:
 		}
 	}
 
-	bool go(bool& isRun)
+	bool go_run(bool& isRun)
 	{
 		if (_has)
 		{
@@ -2710,7 +2712,7 @@ private:
 		}
 	}
 
-	bool go(bool& isRun)
+	bool go_run(bool& isRun)
 	{
 		assert(!_msgHandle.check_closed());
 		if (_has)
@@ -2753,7 +2755,7 @@ private:
 	bool ready();
 	void cancel();
 	void check_lost();
-	bool go(bool& isRun);
+	bool go_run(bool& isRun);
 	size_t snap_id();
 	long long host_id();
 	void check_lock_quit();
@@ -2777,7 +2779,7 @@ private:
 	bool ready();
 	void cancel();
 	void check_lost();
-	bool go(bool& isRun);
+	bool go_run(bool& isRun);
 	size_t snap_id();
 	long long host_id();
 private:
@@ -2861,7 +2863,7 @@ private:
 	{
 	}
 
-	bool go(bool& isRun)
+	bool go_run(bool& isRun)
 	{
 		assert(!_msgHandle.check_closed());
 		if (0 == _readySign)
@@ -2991,7 +2993,7 @@ private:
 	{
 	}
 
-	bool go(bool& isRun)
+	bool go_run(bool& isRun)
 	{
 		assert(!_msgHandle.check_closed());
 		if (0 == _readySign)
@@ -3105,7 +3107,7 @@ private:
 	{
 	}
 
-	bool go(bool& isRun)
+	bool go_run(bool& isRun)
 	{
 		if (0 == _readySign)
 		{
@@ -3198,7 +3200,7 @@ private:
 	{
 	}
 
-	bool go(bool& isRun)
+	bool go_run(bool& isRun)
 	{
 		if (0 == _readySign)
 		{
@@ -3301,7 +3303,7 @@ private:
 	{
 	}
 
-	bool go(bool& isRun)
+	bool go_run(bool& isRun)
 	{
 		assert(!_msgHandle.check_closed());
 		if (0 == _readySign)
@@ -3392,7 +3394,7 @@ private:
 	{
 	}
 
-	bool go(bool& isRun)
+	bool go_run(bool& isRun)
 	{
 		if (0 == _readySign)
 		{
@@ -3481,7 +3483,7 @@ private:
 	{
 	}
 
-	bool go(bool& isRun)
+	bool go_run(bool& isRun)
 	{
 		if (0 == _readySign)
 		{
@@ -3580,7 +3582,7 @@ private:
 	{
 	}
 
-	bool go(bool& isRun)
+	bool go_run(bool& isRun)
 	{
 		assert(!_msgHandle.check_closed());
 		if (0 == _readySign)
@@ -4925,6 +4927,12 @@ AutoStackMsgAgentActor_<Handler&&> __auto_stack_msg_agent_actor(Handler&& handle
 #define _auto_stack_msg_agent2(__h__, __s__) __auto_stack_msg_agent_actor(__h__, __s__, __COUNTER__)
 #define _auto_stack_msg_agent3(__h__, __s__, __k__) __auto_stack_msg_agent_actor(__h__, __s__, __k__)
 
+#define begin_auto_stack __auto_stack_actor(
+#define begin_auto_stack_msg_agent __auto_stack_msg_agent_actor(
+#define _end_auto_stack1(__pl__) , 0, __COUNTER__)
+#define _end_auto_stack2(__pl__, __s__) , __s__, __COUNTER__)
+#define _end_auto_stack3(__pl__, __s__, __k__) , __s__, __k__)
+
 template <typename Handler>
 Handler&& no_auto_stack(Handler&& h, ...)
 {
@@ -4951,18 +4959,27 @@ Handler&& auto_stack_msg_agent(Handler&& h, ...)
 	return (Handler&&)h;
 }
 
+#undef begin_auto_stack
+#undef begin_auto_stack_msg_agent
+#define begin_auto_stack
+#define begin_auto_stack_msg_agent
+#define end_auto_stack(...)
+
 #else
 #ifdef _MSC_VER
 #define _auto_stack(__pl__, ...) _BOND_LR__(_auto_stack, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
 #define _auto_stack_msg_agent(__pl__, ...) _BOND_LR__(_auto_stack_msg_agent, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
+#define _end_auto_stack(__pl__, ...) _BOND_LR__(_end_auto_stack, _PP_NARG(__pl__, __VA_ARGS__))(__pl__, __VA_ARGS__)
 //自动栈空间控制
 #define auto_stack(__h__, ...) _auto_stack(__pl__, __h__, __VA_ARGS__)
 #define auto_stack_msg_agent(__h__, ...) _auto_stack_msg_agent(__pl__, __h__, __VA_ARGS__)
+#define end_auto_stack(...) _end_auto_stack(__pl__, __VA_ARGS__)
 
 #elif __GNUG__
 //自动栈空间控制
 #define auto_stack(...) _BOND_LR__(_auto_stack, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
 #define auto_stack_msg_agent(...) _BOND_LR__(_auto_stack_msg_agent, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
+#define end_auto_stack(...) _BOND_LR__(_end_auto_stack, _PP_NARG(__pl__, __VA_ARGS__))(__pl__, __VA_ARGS__)
 
 #endif
 #endif
@@ -5444,11 +5461,8 @@ class my_actor
 	friend MsgPumpBase_;
 	friend actor_msg_handle_base;
 	friend TrigOnceBase_;
-	friend MutexTrigNotifer_;
-	friend MutexTrigHandle_;
 	friend io_engine;
 	friend ActorTimer_;
-	friend ActorMutex_;
 	friend MutexBlock_;
 	friend ActorFunc_;
 public:
@@ -8337,7 +8351,7 @@ private:
 			for (size_t i = 0; i < N; i++)
 			{
 				bool isRun = false;
-				isQuit |= mbs[i]->go(isRun);
+				isQuit |= mbs[i]->go_run(isRun);
 			}
 			return isQuit;
 		}
@@ -8366,7 +8380,7 @@ private:
 			for (size_t i = 0; i < N; i++)
 			{
 				bool isRun = false;
-				isQuit |= mbs[i]->go(isRun);
+				isQuit |= mbs[i]->go_run(isRun);
 				if (isRun)
 				{
 					runCount++;
@@ -8633,6 +8647,16 @@ public:
 	@brief 测试当前下的Actor栈是否安全
 	*/
 	void check_stack();
+
+	/*!
+	@brief 设置actor局部存储
+	*/
+	void als_set(void* val);
+
+	/*!
+	@brief 获取actor局部存储
+	*/
+	void* als_get();
 
 	/*!
 	@brief 获取当前Actor剩余安全栈空间
@@ -9039,8 +9063,9 @@ private:
 	std::weak_ptr<my_actor> _weakThis;
 	shared_strand _strand;///<Actor调度器
 	id _selfID;///<ActorID
-	void* _actorPull;///<Actor中断点恢复
-	void* _actorPush;///<Actor中断点
+	void* _alsVal;///<actor局部存储
+	actor_pull_type* _actorPull;///<Actor中断点恢复
+	actor_push_type* _actorPush;///<Actor中断点
 	ActorTimer_* _timer;///<定时器
 	wrap_timer_handler_face* _timerStateCb;///<定时器触发回调
 	size_t _actorKey;///<该Actor处理模块的全局唯一key
@@ -9091,6 +9116,39 @@ private:
 	static msg_list_shared_alloc<std::function<void()> >::shared_node_alloc* _quitExitCallbackAll;
 	static msg_list_shared_alloc<actor_handle>::shared_node_alloc* _childActorListAll;
 };
+
+//////////////////////////////////////////////////////////////////////////
+
+struct ActorGo_
+{
+	ActorGo_(const shared_strand& strand, size_t stackSize);
+	ActorGo_(shared_strand&& strand, size_t stackSize);
+
+	template <typename Handler>
+	actor_handle operator -(Handler&& handler)
+	{
+		assert(_strand);
+		actor_handle actor = my_actor::create(std::move(_strand), TRY_MOVE(handler), _stackSize);
+		actor->notify_run();
+		return actor;
+	}
+
+	shared_strand _strand;
+	size_t _stackSize;
+	NONE_COPY(ActorGo_);
+};
+
+#define _go1(__strand__) ActorGo_(__strand__, DEFAULT_STACKSIZE)-
+#define _go2(__strand__, __stack_size__) ActorGo_(__strand__, __stack_size__)-
+
+#ifdef _MSC_VER
+#define _go(...) _BOND_LR__(_go, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
+#define go(...) _go(__VA_ARGS__)
+#elif __GNUG__
+#define go(...) _BOND_LR__(_go, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
+#endif
+
+//////////////////////////////////////////////////////////////////////////
 
 template <typename R, typename H>
 R ActorFunc_::send(my_actor* host, const shared_strand& exeStrand, H&& h)

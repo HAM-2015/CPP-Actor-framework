@@ -75,7 +75,6 @@ void run_thread::set_current_thread_name(const char* name)
 
 size_t run_thread::cpu_core_number()
 {
-	size_t cores = 0;
 	DWORD size = 0;
 
 	GetLogicalProcessorInformation(NULL, &size);
@@ -84,14 +83,14 @@ size_t run_thread::cpu_core_number()
 		return 0;
 	}
 
-	std::vector<SYSTEM_LOGICAL_PROCESSOR_INFORMATION> buffer(size);
+	const size_t Elements = size / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION);
+	std::vector<SYSTEM_LOGICAL_PROCESSOR_INFORMATION> buffer(Elements);
 	if (GetLogicalProcessorInformation(&buffer.front(), &size) == FALSE)
 	{
 		return 0;
 	}
 
-	const size_t Elements = size / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION);
-
+	size_t cores = 0;
 	for (size_t i = 0; i < Elements; ++i)
 	{
 		if (buffer[i].Relationship == RelationProcessorCore)

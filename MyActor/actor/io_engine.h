@@ -202,6 +202,7 @@ private:
 	std::vector<pthread_attr_t> _handleList;
 #endif
 	static tls_space* _tls;
+	NONE_COPY(io_engine);
 };
 
 #endif

@@ -839,10 +839,32 @@ void auto_stack_test()
 	trace_line("end auto_stack_test");
 }
 
+void go_test()
+{
+	io_engine ios;
+	ios.run();
+
+	go(boost_strand::create(ios))
+		[](my_actor* self)
+	{
+		trace_line("go");
+		self->sleep(500);
+		trace_line("go.");
+		self->sleep(500);
+		trace_line("go..");
+		self->sleep(500);
+		trace_line("go...");
+	};
+
+	ios.stop();
+}
+
 int main(int argc, char *argv[])
 {
 	init_my_actor();
 	enable_high_resolution();
+	go_test();
+	trace("\n");
 	auto_stack_test();
 	trace("\n");
 	create_child_test();

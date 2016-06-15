@@ -79,6 +79,7 @@ private:
 #endif
 	int _timerCount;
 	bool _looping;
+	NONE_COPY(TimerBoost_);
 };
 
 /*!
@@ -150,6 +151,7 @@ private:
 	TimerBoost_& _timerBoost;
 	std::weak_ptr<AsyncTimer_> _weakThis;
 	TimerBoost_::timer_handle _timerHandle;
+	NONE_COPY(AsyncTimer_);
 };
 
 #endif

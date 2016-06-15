@@ -78,6 +78,7 @@ private:
 #endif
 	int _timerCount;
 	bool _looping;
+	NONE_COPY(ActorTimer_);
 };
 
 #endif

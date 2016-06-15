@@ -665,6 +665,7 @@ protected:
 	io_engine* _ioEngine;
 	strand_type* _strand;
 	std::weak_ptr<boost_strand> _weakThis;
+	NONE_COPY(boost_strand);
 public:
 	/*!
 	@brief 在一个strand中调用某个函数，直到这个函数被执行完成后才返回

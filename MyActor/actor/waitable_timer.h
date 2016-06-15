@@ -47,6 +47,7 @@ private:
 	int _timerFd;
 #endif
 	volatile bool _exited;
+	NONE_COPY(WaitableTimer_);
 };
 
 class WaitableTimerEvent_
@@ -67,6 +68,7 @@ private:
 	TimerBoostCompletedEventFace_* _timerBoost;
 	int _tcId;
 	bool _triged;
+	NONE_COPY(WaitableTimerEvent_);
 };
 #endif
 

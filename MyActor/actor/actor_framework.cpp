@@ -1,7 +1,6 @@
 #include "actor_framework.h"
 #include "async_buffer.h"
 #include "sync_msg.h"
-#include "context_pool.h"
 #include "bind_qt_run.h"
 #if (_MSC_VER >= 1900 || (__GNUG__*10 + __GNUC_MINOR__) >= 61)
 #include <shared_mutex>
@@ -23,15 +22,9 @@ typedef boost::shared_mutex _shared_mutex;
 #include <sys/mman.h>
 #endif
 
-typedef ContextPool_::coro_push_interface actor_push_type;
-typedef ContextPool_::coro_pull_interface actor_pull_type;
-
 DEBUG_OPERATION(static run_thread::thread_id s_installID);
 static bool s_inited = false;
 static bool s_isSelfInitFiber = false;
-#ifdef __linux__
-static std::mutex* s_sigsegvMutex = NULL;
-#endif
 #ifdef ENABLE_CHECK_LOST
 static mem_alloc_mt<CheckLost_>* s_checkLostObjAlloc = NULL;
 static mem_alloc_mt<CheckPumpLost_>* s_checkPumpLostObjAlloc = NULL;
@@ -99,13 +92,10 @@ void my_actor::install()
 		auto& s_checkPumpLostObjAlloc_ = s_checkPumpLostObjAlloc;
 		s_checkLostObjAlloc_ = new mem_alloc_mt<CheckLost_>(MEM_POOL_LENGTH);
 		s_checkPumpLostObjAlloc_ = new mem_alloc_mt<CheckPumpLost_>(MEM_POOL_LENGTH);
-		s_checkLostRefCountAlloc = make_ref_count_alloc<CheckLost_, std::mutex>(MEM_POOL_LENGTH, [s_checkLostObjAlloc_](CheckLost_*){});
-		s_checkPumpLostRefCountAlloc = make_ref_count_alloc<CheckPumpLost_, std::mutex>(MEM_POOL_LENGTH, [s_checkPumpLostObjAlloc_](CheckPumpLost_*){});
+		s_checkLostRefCountAlloc = make_ref_count_alloc<CheckLost_, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [s_checkLostObjAlloc_](CheckLost_*){});
+		s_checkPumpLostRefCountAlloc = make_ref_count_alloc<CheckPumpLost_, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [s_checkPumpLostObjAlloc_](CheckPumpLost_*){});
 #endif
 		s_autoActorStackMng = new autoActorStackMng;
-#ifdef __linux__
-		s_sigsegvMutex = new std::mutex;
-#endif
 		shared_bool::_sharedBoolPool = create_shared_pool_mt<bool, std::mutex>(MEM_POOL_LENGTH);
 		my_actor::_actorIDCount = new std::atomic<my_actor::id>(0);
 		s_shared_initer._actorIDCount = my_actor::_actorIDCount;
@@ -137,13 +127,10 @@ void my_actor::install(const shared_initer* initer)
 		auto& s_checkPumpLostObjAlloc_ = s_checkPumpLostObjAlloc;
 		s_checkLostObjAlloc_ = new mem_alloc_mt<CheckLost_>(MEM_POOL_LENGTH);
 		s_checkPumpLostObjAlloc_ = new mem_alloc_mt<CheckPumpLost_>(MEM_POOL_LENGTH);
-		s_checkLostRefCountAlloc = make_ref_count_alloc<CheckLost_, std::mutex>(MEM_POOL_LENGTH, [s_checkLostObjAlloc_](CheckLost_*){});
-		s_checkPumpLostRefCountAlloc = make_ref_count_alloc<CheckPumpLost_, std::mutex>(MEM_POOL_LENGTH, [s_checkPumpLostObjAlloc_](CheckPumpLost_*){});
+		s_checkLostRefCountAlloc = make_ref_count_alloc<CheckLost_, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [s_checkLostObjAlloc_](CheckLost_*){});
+		s_checkPumpLostRefCountAlloc = make_ref_count_alloc<CheckPumpLost_, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [s_checkPumpLostObjAlloc_](CheckPumpLost_*){});
 #endif
 		s_autoActorStackMng = new autoActorStackMng;
-#ifdef __linux__
-		s_sigsegvMutex = new std::mutex;
-#endif
 		shared_bool::_sharedBoolPool = create_shared_pool_mt<bool, std::mutex>(MEM_POOL_LENGTH);
 		my_actor::_actorIDCount = initer->_actorIDCount;
 		s_shared_initer._actorIDCount = initer->_actorIDCount;
@@ -176,10 +163,6 @@ void my_actor::uninstall()
 		my_actor::msg_pool_status::_msgTypeMapAll = NULL;
 		delete s_autoActorStackMng;
 		s_autoActorStackMng = NULL;
-#ifdef __linux__
-		delete s_sigsegvMutex;
-		s_sigsegvMutex = NULL;
-#endif
 #ifdef ENABLE_CHECK_LOST
 		delete s_checkLostRefCountAlloc;
 		s_checkLostRefCountAlloc = NULL;
@@ -1286,7 +1269,7 @@ void mutex_block_quit::check_lost()
 {
 }
 
-bool mutex_block_quit::go(bool& isRun)
+bool mutex_block_quit::go_run(bool& isRun)
 {
 	if (!_quitNtfed && _host->quit_msg())
 	{
@@ -1329,7 +1312,7 @@ void mutex_block_sign::check_lost()
 {
 }
 
-bool mutex_block_sign::go(bool& isRun)
+bool mutex_block_sign::go_run(bool& isRun)
 {
 	if (!_signNtfed && (_host->_trigSignMask & _mask))
 	{
@@ -1506,6 +1489,14 @@ void my_actor::suspend_guard::unlock()
 }
 //////////////////////////////////////////////////////////////////////////
 
+ActorGo_::ActorGo_(const shared_strand& strand, size_t stackSize)
+: _strand(strand), _stackSize(stackSize) {}
+
+ActorGo_::ActorGo_(shared_strand&& strand, size_t stackSize)
+: _strand(std::move(strand)), _stackSize(stackSize) {}
+
+//////////////////////////////////////////////////////////////////////////
+
 class my_actor::actor_run
 {
 public:
@@ -1522,7 +1513,7 @@ public:
 			{
 				_actor._yieldCount++;
 				_actor._inActor = false;
-				((actor_push_type*)_actor._actorPush)->yield();
+				_actor._actorPush->yield();
 				if (_actor._notifyQuited)
 				{
 					throw force_quit_exception();
@@ -1654,7 +1645,7 @@ public:
 
 	void check_stack()
 	{
-		context_yield::context_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
+		context_yield::context_info* const info = _actor._actorPull->_coroInfo;
 		const size_t cleanSize = clean_size(info);
 		_actor._usingStackSize = std::max(_actor._usingStackSize, info->stackSize + info->reserveSize - cleanSize);
 		//记录本次实际消耗的栈空间
@@ -1688,7 +1679,7 @@ public:
 			}
 			if (_actor._afterExitCleanStack)
 			{
-				((actor_pull_type*)_actor._actorPull)->_tick = 1;
+				_actor._actorPull->_tick = 1;
 			}
 		}
 		__except (seh_exception_handler(GetExceptionCode(), GetExceptionInformation()))
@@ -1716,7 +1707,7 @@ public:
 			}
 			if (_actor._afterExitCleanStack)
 			{
-				((actor_pull_type*)_actor._actorPull)->_tick = 1;
+				_actor._actorPull->_tick = 1;
 			}
 		}
 		__seh_except(seh_exception_handler(GetExceptionCode(), GetExceptionInformation()))
@@ -1729,7 +1720,7 @@ public:
 
 	DWORD seh_exception_handler(DWORD ecd, _EXCEPTION_POINTERS* eInfo)
 	{
-		context_yield::context_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
+		context_yield::context_info* const info = _actor._actorPull->_coroInfo;
 		size_t const ts = info->stackSize + info->reserveSize;
 		char* const sb = (char*)info->stackTop - ts;
 #ifdef _WIN64
@@ -1857,7 +1848,7 @@ public:
 
 	void check_stack()
 	{
-		context_yield::context_info* const info = ((actor_pull_type*)_actor._actorPull)->_coroInfo;
+		context_yield::context_info* const info = _actor._actorPull->_coroInfo;
 		const size_t cleanSize = clean_size(info);
 		_actor._usingStackSize = std::max(_actor._usingStackSize, info->stackSize + info->reserveSize - cleanSize);
 		//记录本次实际消耗的栈空间
@@ -1887,7 +1878,7 @@ public:
 		}
 		if (_actor._afterExitCleanStack)
 		{
-			((actor_pull_type*)_actor._actorPull)->_tick = 1;
+			_actor._actorPull->_tick = 1;
 		}
 	}
 
@@ -1916,7 +1907,7 @@ public:
 			my_actor* const self = my_actor::self_actor();
 			if (self)
 			{
-				context_yield::context_info* const info = ((actor_pull_type*)self->_actorPull)->_coroInfo;
+				context_yield::context_info* const info = self->_actorPull->_coroInfo;
 				char* const violationAddr = (char*)((size_t)fault_address & (0 - MEM_PAGE_SIZE));
 				size_t const ts = info->stackSize + info->reserveSize;
 				char* const sb = (char*)info->stackTop - ts;
@@ -1994,6 +1985,7 @@ _childActorList(*_childActorListAll)
 	_actorPush = NULL;
 	_timer = NULL;
 	_timerStateCb = NULL;
+	_alsVal = NULL;
 	_quited = false;
 	_exited = false;
 	_started = false;
@@ -2049,7 +2041,7 @@ my_actor::~my_actor()
 	assert(_childActorList.empty());
 
 #ifdef PRINT_ACTOR_STACK
-	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	context_yield::context_info* const info = _actorPull->_coroInfo;
 	if (_checkStackFree || _checkStack || _usingStackSize > info->stackSize)
 	{
 		stack_overflow_format(_usingStackSize - info->stackSize, std::move(_createStack));
@@ -2756,13 +2748,12 @@ size_t my_actor::using_stack_size()
 
 size_t my_actor::stack_size()
 {
-	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
-	return info->stackSize;
+	return _actorPull->_coroInfo->stackSize;
 }
 
 size_t my_actor::stack_total_size()
 {
-	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	context_yield::context_info* const info = _actorPull->_coroInfo;
 	return info->stackSize + info->reserveSize;
 }
 
@@ -2798,7 +2789,7 @@ void my_actor::assert_enter()
 	assert(_strand->running_in_this_thread());
 	assert(!_quited);
 	assert(_inActor);
-	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	context_yield::context_info* const info = _actorPull->_coroInfo;
 	assert((size_t)get_sp() >= (size_t)info->stackTop - info->stackSize - info->reserveSize + 1024);
 	check_self();
 #endif
@@ -3464,10 +3455,10 @@ void my_actor::pull_yield_tls()
 	void*& tlsVal = io_engine::getTlsValueRef(ACTOR_TLS_INDEX);
 	void* old = tlsVal;
 	tlsVal = this;
-	((actor_pull_type*)_actorPull)->yield();
+	_actorPull->yield();
 	tlsVal = old;
 #else
-	((actor_pull_type*)_actorPull)->yield();
+	_actorPull->yield();
 #endif
 }
 
@@ -3498,7 +3489,7 @@ void my_actor::push_yield()
 	check_stack();
 	_yieldCount++;
 	_inActor = false;
-	((actor_push_type*)_actorPush)->yield();
+	_actorPush->yield();
 	if (!_notifyQuited || _lockQuit)
 	{
 		_inActor = true;
@@ -3511,7 +3502,7 @@ void my_actor::push_yield_after_quited()
 {
 	check_stack();
 	_inActor = false;
-	((actor_push_type*)_actorPush)->yield();
+	_actorPush->yield();
 	_inActor = true;
 }
 
@@ -3674,7 +3665,7 @@ void my_actor::resume_timer()
 void my_actor::check_stack()
 {
 #ifdef PRINT_ACTOR_STACK
-	context_yield::context_info* const info = ((actor_pull_type*)_actorPull)->_coroInfo;
+	context_yield::context_info* const info = _actorPull->_coroInfo;
 	if ((size_t)get_sp() < (size_t)info->stackTop - info->stackSize)
 	{
 		stack_overflow_format((int)((size_t)get_sp() - (size_t)info->stackTop - info->stackSize), _createStack);
@@ -3704,6 +3695,16 @@ void my_actor::check_self()
 	assert(self);
 	assert(this == self);
 #endif
+}
+
+void my_actor::als_set(void* val)
+{
+	_alsVal = val;
+}
+
+void* my_actor::als_get()
+{
+	return _alsVal;
 }
 
 void my_actor::close_msg_notifer(actor_msg_handle_base& amh)
@@ -3870,6 +3871,18 @@ void ActorFunc_::push_yield(my_actor* host)
 {
 	assert(host);
 	host->push_yield();
+}
+
+void ActorFunc_::pull_yield_after_quited(my_actor* host)
+{
+	assert(host);
+	host->pull_yield_after_quited();
+}
+
+void ActorFunc_::push_yield_after_quited(my_actor* host)
+{
+	assert(host);
+	host->push_yield_after_quited();
 }
 
 bool ActorFunc_::is_quited(my_actor* host)

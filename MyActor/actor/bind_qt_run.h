@@ -408,10 +408,10 @@ public:
 	/*!
 	@brief 绑定一个函数到UI线程中执行
 	*/
-	template <typename R, typename... Args, typename Handler>
-	std::function<R(my_actor*, Args...)> wrap_run_in_ui(Handler&& handler)
+	template <typename R, typename Handler>
+	wrap_run_in_ui_handler<RM_REF(Handler), R> wrap_run_in_ui(Handler&& handler)
 	{
-		return std::function<R(my_actor*, Args...)>(wrap_run_in_ui_handler<RM_REF(Handler), R>(this, TRY_MOVE(handler)));
+		return wrap_run_in_ui_handler<RM_REF(Handler), R>(this, TRY_MOVE(handler));
 	}
 #ifdef ENABLE_QT_ACTOR
 	/*!
@@ -537,10 +537,10 @@ public:
 		return bind_qt_run_base::wrap_check_close();
 	}
 
-	template <typename R = void, typename... Args, typename Handler>
-	std::function<R(my_actor*, Args...)> wrap_run_in_ui(Handler&& handler)
+	template <typename R = void, typename Handler>
+	wrap_run_in_ui_handler<RM_REF(Handler), R> wrap_run_in_ui(Handler&& handler)
 	{
-		return bind_qt_run_base::wrap_run_in_ui<R, Args...>(TRY_MOVE(handler));
+		return bind_qt_run_base::wrap_run_in_ui<R>(TRY_MOVE(handler));
 	}
 
 	void enter_wait_close()

@@ -1,6 +1,8 @@
 #include "actor_mutex.h"
 #include "actor_framework.h"
 
+class MutexTrigHandle_;
+
 class MutexTrigNotifer_
 {
 public:
@@ -13,6 +15,8 @@ public:
 	actor_handle _lockActor;
 	shared_strand _strand;
 	bool _notified;
+	NONE_COPY(MutexTrigNotifer_);
+	RVALUE_MOVE4(MutexTrigNotifer_, _trigHandle, _lockActor, _strand, _notified);
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -33,6 +37,7 @@ public:
 	bool _hasMsg;
 	bool _waiting;
 	bool _outActor;
+	NONE_COPY(MutexTrigHandle_);
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -70,11 +75,11 @@ void MutexTrigHandle_::wait()
 	{
 		if (!_outActor)
 		{
-			_hostActor->push_yield();
+			ActorFunc_::push_yield(_hostActor);
 		} 
 		else
 		{
-			_hostActor->push_yield_after_quited();
+			ActorFunc_::push_yield_after_quited(_hostActor);
 		}
 	}
 }
@@ -85,16 +90,15 @@ bool MutexTrigHandle_::timed_wait(int tm)
 	if (!read_msg())
 	{
 		bool timed = false;
-		LAMBDA_REF2(ref2, _hostActor, timed);
 		if (tm >= 0)
 		{
-			_hostActor->delay_trig(tm, [&ref2]
+			_hostActor->delay_trig(tm, [&]
 			{
-				ref2.timed = true;
-				ref2._hostActor->pull_yield();
+				timed = true;
+				ActorFunc_::pull_yield(_hostActor);
 			});
 		}
-		_hostActor->push_yield();
+		ActorFunc_::push_yield(_hostActor);
 		if (!timed)
 		{
 			if (tm >= 0)
@@ -131,7 +135,7 @@ void MutexTrigHandle_::push_msg()
 			if (_waiting)
 			{
 				_waiting = false;
-				_hostActor->pull_yield();
+				ActorFunc_::pull_yield(_hostActor);
 				return;
 			}
 			_hasMsg = true;
@@ -142,7 +146,7 @@ void MutexTrigHandle_::push_msg()
 		if (_waiting)
 		{
 			_waiting = false;
-			_hostActor->pull_yield_after_quited();
+			ActorFunc_::pull_yield_after_quited(_hostActor);
 			return;
 		}
 		_hasMsg = true;
