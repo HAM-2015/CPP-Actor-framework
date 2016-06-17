@@ -22,6 +22,7 @@
 
 //Ä¬ÈÏ¶ÑÕ»
 #define DEFAULT_STACKSIZE	(STACK_BLOCK_SIZE - STACK_RESERVED_SPACE_SIZE)
+#define MAX_STACKSIZE	(1024 kB - STACK_RESERVED_SPACE_SIZE)
 
 #define TRY_SIZE(__s__) (0x80000000 | (__s__))
 #define IS_TRY_SIZE(__s__) (0x80000000 & (__s__))
@@ -37,13 +38,13 @@
 //////////////////////////////////////////////////////////////////////////
 
 #if (_DEBUG || DEBUG)
-#	if (defined _WIN64) || (defined __x86_64__)
+#	if (defined _WIN64) || (defined __x86_64__) || (defined _ARM64)
 #define STACK_SIZE64(__debug32__, __debug64__, __release32, __release64__) (__debug64__)
 #	else
 #define STACK_SIZE64(__debug32__, __debug64__, __release32, __release64__) (__debug32__)
 #	endif
 #else
-#	if (defined _WIN64) || (defined __x86_64__)
+#	if (defined _WIN64) || (defined __x86_64__) || (defined _ARM64)
 #define STACK_SIZE64(__debug32__, __debug64__, __release32, __release64__) (__release64__)
 #define STACK_SIZE_REL64(__release32__, __release64__) (__release64__)
 #	else
@@ -55,13 +56,13 @@
 
 //¶ÑÕ»µ×Ô¤Áô¿Õ¼ä£¬¼ì²â¶ÑÕ»Òç³ö
 #if (_DEBUG || DEBUG)
-#	if (defined _WIN64) || (defined __x86_64__)
+#	if (defined _WIN64) || (defined __x86_64__) || (defined _ARM64)
 #define STACK_RESERVED_SPACE_SIZE (24 kB)
 #	else
 #define STACK_RESERVED_SPACE_SIZE (16 kB)
 #	endif
 #else
-#	if (defined _WIN64) || (defined __x86_64__)
+#	if (defined _WIN64) || (defined __x86_64__) || (defined _ARM64)
 #define STACK_RESERVED_SPACE_SIZE (16 kB)
 #	else
 #define STACK_RESERVED_SPACE_SIZE (8 kB)

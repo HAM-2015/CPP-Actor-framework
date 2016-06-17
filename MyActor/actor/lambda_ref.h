@@ -434,113 +434,107 @@ struct LocalRecursive_<_Rt(_Types...)>
 {
 	typedef LocalRecursiveFace_<_Rt(_Types...)> func_type;
 	LocalRecursive_() {}
-	~LocalRecursive_() { assert(!_depth && !_has); }
+	~LocalRecursive_() { assert(!_depth && !_func); }
 
 	template <typename... Args>
 	_Rt operator()(Args&&... args)
 	{
 		DEBUG_OPERATION(_depth++);
 		DEBUG_OPERATION(BREAK_OF_SCOPE({ _depth--; }));
-		assert(_has);
-		return ((func_type*)_space)->invoke(std::forward<Args>(args)...);
+		assert(_func);
+		return _func->invoke(std::forward<Args>(args)...);
 	}
 
 	template <typename Handler>
-	void set_handler(Handler& handler)
+	void set_handler(void* space, Handler& handler)
 	{
 		typedef LocalRecursiveInvoker_<Handler, _Rt(_Types...)> invoker_type;
-		static_assert(sizeof(_space) == sizeof(invoker_type), "");
-		destroy();
-		new(_space)invoker_type(handler);
-		_has = true;
+		static_assert(sizeof(LocalRecursiveInvoker_<null_handler<>, void()>) == sizeof(invoker_type), "");
+		assert(!_func);
+		_func = new(space)invoker_type(handler);
 	}
 
 	void destroy()
 	{
-		assert(0 == _depth);
-		if (_has)
-		{
-			((func_type*)_space)->destroy();
-			_has = false;
-		}
+		assert(_func);
+		_func->destroy();
+		_func = NULL;
 	}
 
 	DEBUG_OPERATION(size_t _depth = 0);
-	__space_align char _space[sizeof(LocalRecursiveInvoker_<null_handler<>, void()>)];
-	bool _has = false;
+	func_type* _func = NULL;
 	NONE_COPY(LocalRecursive_);
 };
 
 #define DEFINE_LOCAL_RECURSIVE(__name__, __type__)\
 	LocalRecursive_<__type__> __name__;
 
-#define _SET_RECURSIVE_FUNC(__name__, __lmd__)\
-	const auto BOND_NAME(__lambda_, __name__) = __lmd__; \
-	__name__.set_handler(BOND_NAME(__lambda_, __name__));
+#define BEGIN_SET_RECURSIVE_FUNC(__name__)\
+	const auto BOND_NAME(__lambda_, __name__) =
+
+#define END_SET_RECURSIVE_FUNC(__name__); \
+	__space_align char BOND_NAME(__space_, __name__)[sizeof(LocalRecursiveInvoker_<null_handler<>, void()>)]; \
+	__name__.set_handler(BOND_NAME(__space_, __name__), BOND_NAME(__lambda_, __name__)); \
+	BREAK_OF_SCOPE_NAME(BOND_NAME(__destroy_, __name__), { __name__.destroy(); });
 
 #define SET_RECURSIVE_FUNC(__name__, __lmd__)\
-	_SET_RECURSIVE_FUNC(__name__, __lmd__); \
-	BREAK_OF_SCOPE_NAME(BOND_NAME(__destroy_, __name__), { __name__.destroy(); });
+	BEGIN_SET_RECURSIVE_FUNC(__name__) __lmd__; \
+	END_SET_RECURSIVE_FUNC(__name__)
 
-#define LOCAL_RECURSIVE1(__name__, __type__, __lmd__)\
+#define LOCAL_RECURSIVE(__name__, __type__, __lmd__)\
 	DEFINE_LOCAL_RECURSIVE(__name__, __type__); \
-	_SET_RECURSIVE_FUNC(__name__, __lmd__) \
-	BREAK_OF_SCOPE_NAME(BOND_NAME(__destroy_, __name__), { __name__.destroy(); });
+	SET_RECURSIVE_FUNC(__name__, __lmd__) \
 
-#define LOCAL_RECURSIVE2(__name1__, __name2__, __type1__, __type2__, __lmd1__, __lmd2__)\
-	DEFINE_LOCAL_RECURSIVE(__name1__, __type1__); \
-	DEFINE_LOCAL_RECURSIVE(__name2__, __type2__); \
-	_SET_RECURSIVE_FUNC(__name1__, __lmd1__) \
-	_SET_RECURSIVE_FUNC(__name2__, __lmd2__) \
-	BREAK_OF_SCOPE_NAME(BOND_NAME(__destroy_, __name__), { __name1__.destroy(); __name2__.destroy(); });
+#define LOCAL_ACTOR(__name__, __lmd__)\
+	LOCAL_RECURSIVE(__name__, void(my_actor*), __lmd__)
 
-#define LOCAL_RECURSIVE3(__name1__, __name2__, __name3__, __type1__, __type2__, __type3__, __lmd1__, __lmd2__, __lmd3__)\
-	DEFINE_LOCAL_RECURSIVE(__name1__, __type1__); \
-	DEFINE_LOCAL_RECURSIVE(__name2__, __type2__); \
-	DEFINE_LOCAL_RECURSIVE(__name3__, __type3__); \
-	_SET_RECURSIVE_FUNC(__name1__, __lmd1__) \
-	_SET_RECURSIVE_FUNC(__name2__, __lmd2__) \
-	_SET_RECURSIVE_FUNC(__name3__, __lmd3__) \
-	BREAK_OF_SCOPE_NAME(BOND_NAME(__destroy_, __name__), { __name1__.destroy(); __name2__.destroy(); __name3__.destroy(); });
+#define BEGIN_RECURSIVE(__name__, __type__)\
+	DEFINE_LOCAL_RECURSIVE(__name__, __type__); \
+	BEGIN_SET_RECURSIVE_FUNC(__name__)
 
-#define LOCAL_ACTOR1(__name__, __lmd__)\
-	LOCAL_RECURSIVE1(__name__, void(my_actor*), __lmd__)
+#define END_RECURSIVE(__name__) END_SET_RECURSIVE_FUNC(__name__)
 
-#define LOCAL_ACTOR2(__name1__, __name2__, __lmd1__, __lmd2__)\
-	LOCAL_RECURSIVE2(__name1__, __name2__, void(my_actor*), void(my_actor*), __lmd1__, __lmd2__)
+#define BEGIN_RECURSIVE_ACTOR(__name__, __self__) BEGIN_RECURSIVE(__name__, void(my_actor*)) [&](my_actor* __self__) {
 
-#define LOCAL_ACTOR3(__name1__, __name2__, __name3__, __lmd1__, __lmd2__, __lmd3__)\
-	LOCAL_RECURSIVE3(__name1__, __name2__, __name3__, void(my_actor*), void(my_actor*), void(my_actor*), __lmd1__, __lmd2__, __lmd3__)
-
-#define BEGIN_RECURSIVE(__name__, __ret__, __type__)\
-	LocalRecursive_<__ret__ __type__> __name__; \
-	const auto BOND_NAME(__lambda_, __name__) = [&]__type__{
-
-#define END_RECURSIVE(__name__) }; \
-	__name__.set_handler(BOND_NAME(__lambda_, __name__)); \
-	BREAK_OF_SCOPE_NAME(BOND_NAME(__destroy_, __name__), { __name__.destroy(); });
-
-#define BEGIN_RECURSIVE_ACTOR(__name__, __self__) BEGIN_RECURSIVE(__name__, void, (my_actor* __self__))
-
-#define END_RECURSIVE_ACTOR(__name__)  END_RECURSIVE(__name__)
-
-#if (_DEBUG || DEBUG)
-#define DEBUG_LOCAL_RECURSIVE(__name__, __type__)\
-	std::function<__type__> __name__
-#endif
+#define END_RECURSIVE_ACTOR(__name__)  } END_RECURSIVE(__name__)
 
 #define WRAP_LAMBDA_REF(__name__, __lmd__)\
 	auto BOND_NAME(__lambda, __name__) = __lmd__; \
 	auto __name__ = wrap_ref_handler(BOND_NAME(__lambda, __name__));
 
-template <typename Handler>
-struct once_handler
+template <typename Handler, typename R>
+struct OnceHandler_
 {
 	template <typename H>
-	once_handler(bool pl, H&& h)
+	OnceHandler_(bool, H&& h)
 		:_handler(TRY_MOVE(h)) {}
 
-	once_handler(const once_handler<Handler>& s)
+	OnceHandler_(const OnceHandler_<Handler, R>& s)
+		:_handler(std::move(s._handler)) {}
+
+	template <typename... Args>
+	R operator()(Args&&... args)
+	{
+		return _handler(TRY_MOVE(args)...);
+	}
+
+	template <typename... Args>
+	R operator()(Args&&... args) const
+	{
+		return _handler(TRY_MOVE(args)...);
+	}
+
+	mutable Handler _handler;
+};
+
+template <typename Handler>
+struct OnceHandler_<Handler, void>
+{
+	template <typename H>
+	OnceHandler_(bool, H&& h)
+		:_handler(TRY_MOVE(h)) {}
+
+	OnceHandler_(const OnceHandler_<Handler, void>& s)
 		:_handler(std::move(s._handler)) {}
 
 	template <typename... Args>
@@ -558,16 +552,37 @@ struct once_handler
 	mutable Handler _handler;
 };
 
-template <typename Handler>
-once_handler<RM_REF(Handler)> wrap_once_handler(Handler&& handler)
+template <typename R = void, typename Handler>
+OnceHandler_<RM_REF(Handler), R> wrap_once_handler(Handler&& handler)
 {
-	return once_handler<RM_REF(Handler)>(bool(), TRY_MOVE(handler));
+	return OnceHandler_<RM_REF(Handler), R>(bool(), TRY_MOVE(handler));
 }
 
-template <typename Handler>
-struct ref_handler 
+template <typename Handler, typename R>
+struct RefHandler_
 {
-	ref_handler(bool bl, Handler& h)
+	RefHandler_(bool, Handler& h)
+	:_handler(h) {}
+
+	template <typename... Args>
+	R operator()(Args&&... args)
+	{
+		return _handler(TRY_MOVE(args)...);
+	}
+
+	template <typename... Args>
+	R operator()(Args&&... args) const
+	{
+		return _handler(TRY_MOVE(args)...);
+	}
+
+	Handler& _handler;
+};
+
+template <typename Handler>
+struct RefHandler_<Handler, void>
+{
+	RefHandler_(bool, Handler& h)
 		:_handler(h) {}
 
 	template <typename... Args>
@@ -585,11 +600,11 @@ struct ref_handler
 	Handler& _handler;
 };
 
-template <typename Handler>
-ref_handler<Handler> wrap_ref_handler(Handler& handler)
+template <typename R = void, typename Handler>
+RefHandler_<Handler, R> wrap_ref_handler(Handler& handler)
 {
 	static_assert(!std::is_rvalue_reference<Handler&>::value, "");
-	return ref_handler<Handler>(bool(), handler);
+	return RefHandler_<Handler, R>(bool(), handler);
 }
 
 #endif

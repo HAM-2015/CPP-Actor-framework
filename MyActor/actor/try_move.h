@@ -9,10 +9,14 @@ struct try_move
 {
 	//不正确参数，无法检测是否可移动
 
-	template <typename Arg>
-	static inline Arg&& move(Arg&& p)
+	static inline T& move(T& p)
 	{
-		return (Arg&&)p;
+		return p;
+	}
+
+	static inline T&& move(T&& p)
+	{
+		return (T&&)p;
 	}
 };
 

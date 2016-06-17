@@ -714,8 +714,7 @@ void MsgPoolVoid_::pump_handler::pump_msg(unsigned char pumpID, actor_handle&& h
 bool MsgPoolVoid_::pump_handler::try_pump(my_actor* host, unsigned char pumpID, bool& wait, bool& losted)
 {
 	assert(_thisPool);
-	host->lock_quit();
-	auto h = [&wait, &losted, pumpID](pump_handler& pump)->bool
+	return host->send<bool>(_thisPool->_strand, std::bind([&wait, &losted, pumpID](pump_handler& pump)->bool
 	{
 		bool ok = false;
 		auto& thisPool_ = pump._thisPool;
@@ -749,24 +748,13 @@ bool MsgPoolVoid_::pump_handler::try_pump(my_actor* host, unsigned char pumpID, 
 			}
 		}
 		return ok;
-	};
-	bool r = false;
-	if (host->self_strand() == _thisPool->_strand)
-	{
-		r = h(*this);
-	}
-	else
-	{
-		r = host->async_send<bool>(_thisPool->_strand, std::bind(h, *this));
-	}
-	host->unlock_quit();
-	return r;
+	}, *this));
 }
 
 size_t MsgPoolVoid_::pump_handler::size(my_actor* host, unsigned char pumpID)
 {
 	assert(_thisPool);
-	auto h = [pumpID](pump_handler& pump)->size_t
+	return host->send<size_t>(_thisPool->_strand, std::bind([pumpID](pump_handler& pump)->size_t
 	{
 		auto& thisPool_ = pump._thisPool;
 		if (pump._msgPump == thisPool_->_msgPump)
@@ -781,19 +769,7 @@ size_t MsgPoolVoid_::pump_handler::size(my_actor* host, unsigned char pumpID)
 			}
 		}
 		return 0;
-	};
-	size_t r = 0;
-	if (host->self_strand() == _thisPool->_strand)
-	{
-		r = h(*this);
-	}
-	else
-	{
-		host->lock_quit();
-		r = host->async_send<size_t>(_thisPool->_strand, std::bind(h, *this));
-		host->unlock_quit();
-	}
-	return r;
+	}, *this));
 }
 
 size_t MsgPoolVoid_::pump_handler::snap_size(unsigned char pumpID)
@@ -1495,6 +1471,9 @@ ActorGo_::ActorGo_(const shared_strand& strand, size_t stackSize)
 ActorGo_::ActorGo_(shared_strand&& strand, size_t stackSize)
 : _strand(std::move(strand)), _stackSize(stackSize) {}
 
+ActorGo_::ActorGo_(io_engine& ios, size_t stackSize)
+: _strand(boost_strand::create(ios)), _stackSize(stackSize) {}
+
 //////////////////////////////////////////////////////////////////////////
 
 class my_actor::actor_run
@@ -2110,7 +2089,7 @@ actor_handle my_actor::create(shared_strand&& actorStrand, AutoStackActorFace_&&
 	{
 		size_t lasts = s_autoActorStackMng->get_stack_size(wrapActor.key());
 		checkStack = !lasts;
-		pull = ContextPool_::getContext(lasts ? lasts : DEFAULT_STACKSIZE);
+		pull = ContextPool_::getContext(lasts ? lasts : MAX_STACKSIZE);
 	}
 	if (!pull)
 	{

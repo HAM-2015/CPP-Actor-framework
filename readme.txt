@@ -5,12 +5,18 @@
 可以用来构建服务端/客户端，也可以用在与网络无关的程序中（例如UI控制逻辑）;
 可以任意使用或编辑源码，而不需通知作者，当然作者也不对使用本框架造成的任何损失负责.
 
+svn url(版本保持最新):
+svn://ham2015.6655.la:1000/MyActor
+
 github url:
 https://github.com/HAM-2015/CPP-Actor-framework
 
 oschina url:
 http://git.oschina.net/hamasm/cpp-actor-framework
 http://www.oschina.net/code/snippet_2274073_45577
+
+ftp url:
+ftp://ham2015.6655.la/files/MyActor/
 
 2016-03-26
 移植到arm-android(Linux-Kernel-3.4.0+)平台(包括 QT For Android 异步UI驱动).

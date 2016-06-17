@@ -55,16 +55,10 @@ typedef ContextPool_::coro_pull_interface actor_pull_type;
 //包装actor_msg_handle, actor_trig_handle关闭事件
 #define wrap_close_msg_handle(__handle__) [&__handle__]{__handle__.close(); }
 
-#define _init_my_actor1()\
-	my_actor::install(); \
-	BREAK_OF_SCOPE({ my_actor::uninstall(); })
-
-#define _init_my_actor2(__aid__)\
-	my_actor::install(__aid__); \
-	BREAK_OF_SCOPE({ my_actor::uninstall(); })
-
 //初始化my_actor框架
-#define init_my_actor(...) _BOND_LR__(_init_my_actor, _PP_NARG(__pl__, __VA_ARGS__))(__VA_ARGS__);
+#define init_my_actor(...)\
+	my_actor::install(__VA_ARGS__); \
+	BREAK_OF_SCOPE({ my_actor::uninstall(); })
 
 struct shared_initer;
 //////////////////////////////////////////////////////////////////////////
@@ -1633,7 +1627,7 @@ class MsgPool_ : public MsgPoolBase_
 		bool try_pump(my_actor* host, dst_receiver& dst, unsigned char pumpID, bool& wait, bool& losted)
 		{
 			assert(_thisPool);
-			auto h = [&dst, &wait, &losted, pumpID](pump_handler& pump)->bool
+			return ActorFunc_::send<bool>(host, _thisPool->_strand, std::bind([&dst, &wait, &losted, pumpID](pump_handler& pump)->bool
 			{
 				bool ok = false;
 				auto& thisPool_ = pump._thisPool;
@@ -1669,14 +1663,13 @@ class MsgPool_ : public MsgPoolBase_
 					}
 				}
 				return ok;
-			};
-			return ActorFunc_::send<bool>(host, _thisPool->_strand, std::bind(h, *this));
+			}, *this));
 		}
 
 		size_t size(my_actor* host, unsigned char pumpID)
 		{
 			assert(_thisPool);
-			auto h = [pumpID](pump_handler& pump)->size_t
+			return ActorFunc_::send<size_t>(host, _thisPool->_strand, std::bind([pumpID](pump_handler& pump)->size_t
 			{
 				auto& thisPool_ = pump._thisPool;
 				if (pump._msgPump == thisPool_->_msgPump)
@@ -1692,8 +1685,7 @@ class MsgPool_ : public MsgPoolBase_
 					}
 				}
 				return 0;
-			};
-			return ActorFunc_::send<size_t>(host, _thisPool->_strand, std::bind(h, *this));
+			}, *this));
 		}
 
 		size_t snap_size(unsigned char pumpID)
@@ -4894,6 +4886,8 @@ struct AutoStackActor_ : public AutoStackActorFace_
 	size_t _key;
 	size_t _stackSize;
 	Handler& _h;
+	NONE_COPY(AutoStackActor_);
+	RVALUE_CONSTRUCT(AutoStackActor_, _key, _stackSize, _h);
 };
 
 template <typename Handler>
@@ -4905,81 +4899,71 @@ struct AutoStackMsgAgentActor_
 	size_t _key;
 	size_t _stackSize;
 	Handler& _h;
+	NONE_COPY(AutoStackMsgAgentActor_);
+	RVALUE_CONSTRUCT(AutoStackMsgAgentActor_, _key, _stackSize, _h);
 };
 
-template <typename Handler>
-AutoStackActor_<Handler&&> __auto_stack_actor(Handler&& handler, size_t stackSize, size_t key)
+struct AutoStack_
 {
-	return AutoStackActor_<Handler&&>(handler, stackSize, key);
-}
+	AutoStack_(size_t stackSize, size_t key)
+	:_stackSize(stackSize), _key(key) {}
 
-template <typename Handler>
-AutoStackMsgAgentActor_<Handler&&> __auto_stack_msg_agent_actor(Handler&& handler, size_t stackSize, size_t key)
+	template <typename Handler>
+	AutoStackActor_<Handler&&> operator *(Handler&& handler)
+	{
+		return AutoStackActor_<Handler&&>(handler, _stackSize, _key);
+	}
+
+	size_t _stackSize;
+	size_t _key;
+	NONE_COPY(AutoStack_);
+};
+
+struct AutoStackAgent_
 {
-	return AutoStackMsgAgentActor_<Handler&&>(handler, stackSize, key);
-}
+	AutoStackAgent_(size_t stackSize, size_t key)
+	:_stackSize(stackSize), _key(key) {}
 
-#define _auto_stack1(__h__) __auto_stack_actor(__h__, 0, __COUNTER__)
-#define _auto_stack2(__h__, __s__) __auto_stack_actor(__h__, __s__, __COUNTER__)
-#define _auto_stack3(__h__, __s__, __k__) __auto_stack_actor(__h__, __s__, __k__)
+	template <typename Handler>
+	AutoStackMsgAgentActor_<Handler&&> operator *(Handler&& handler)
+	{
+		return AutoStackMsgAgentActor_<Handler&&>(handler, _stackSize, _key);
+	}
 
-#define _auto_stack_msg_agent1(__h__) __auto_stack_msg_agent_actor(__h__, 0, __COUNTER__)
-#define _auto_stack_msg_agent2(__h__, __s__) __auto_stack_msg_agent_actor(__h__, __s__, __COUNTER__)
-#define _auto_stack_msg_agent3(__h__, __s__, __k__) __auto_stack_msg_agent_actor(__h__, __s__, __k__)
+	size_t _stackSize;
+	size_t _key;
+	NONE_COPY(AutoStackAgent_);
+};
 
-#define begin_auto_stack __auto_stack_actor(
-#define begin_auto_stack_msg_agent __auto_stack_msg_agent_actor(
-#define _end_auto_stack1(__pl__) , 0, __COUNTER__)
-#define _end_auto_stack2(__pl__, __s__) , __s__, __COUNTER__)
-#define _end_auto_stack3(__pl__, __s__, __k__) , __s__, __k__)
+#define _auto_stack1(__s__) AutoStack_(__s__, __COUNTER__)*
+#define _auto_stack2(__s__, __k__) AutoStack_(__s__, __k__)*
 
-template <typename Handler>
-Handler&& no_auto_stack(Handler&& h, ...)
-{
-	return (Handler&&)h;
-}
-
-template <typename Handler>
-Handler&& no_auto_stack_msg_agent(Handler&& h, ...)
-{
-	return (Handler&&)h;
-}
+#define _auto_stack_msg_agent1(__s__) AutoStackAgent_(__s__, __COUNTER__)*
+#define _auto_stack_msg_agent2(__s__, __k__) AutoStackAgent_(__s__, __k__)*
 
 #ifdef DISABLE_AUTO_STACK
 
-template <typename Handler>
-Handler&& auto_stack(Handler&& h, ...)
-{
-	return (Handler&&)h;
-}
-
-template <typename Handler>
-Handler&& auto_stack_msg_agent(Handler&& h, ...)
-{
-	return (Handler&&)h;
-}
-
-#undef begin_auto_stack
-#undef begin_auto_stack_msg_agent
-#define begin_auto_stack
-#define begin_auto_stack_msg_agent
-#define end_auto_stack(...)
+#define auto_stack(...)
+#define auto_stack_msg_agent(...)
+#define auto_stack_
+#define auto_stack_msg_agent_
 
 #else
 #ifdef _MSC_VER
-#define _auto_stack(__pl__, ...) _BOND_LR__(_auto_stack, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
-#define _auto_stack_msg_agent(__pl__, ...) _BOND_LR__(_auto_stack_msg_agent, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
-#define _end_auto_stack(__pl__, ...) _BOND_LR__(_end_auto_stack, _PP_NARG(__pl__, __VA_ARGS__))(__pl__, __VA_ARGS__)
+#define _auto_stack(...) _BOND_LR__(_auto_stack, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
+#define _auto_stack_msg_agent(...) _BOND_LR__(_auto_stack_msg_agent, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
 //自动栈空间控制
-#define auto_stack(__h__, ...) _auto_stack(__pl__, __h__, __VA_ARGS__)
-#define auto_stack_msg_agent(__h__, ...) _auto_stack_msg_agent(__pl__, __h__, __VA_ARGS__)
-#define end_auto_stack(...) _end_auto_stack(__pl__, __VA_ARGS__)
+#define auto_stack(...) _auto_stack(__VA_ARGS__)
+#define auto_stack_msg_agent(...) _auto_stack_msg_agent(__VA_ARGS__)
+#define auto_stack_ AutoStack_(0, __COUNTER__)*
+#define auto_stack_msg_agent_ AutoStackAgent_(0, __COUNTER__)*
 
 #elif __GNUG__
 //自动栈空间控制
 #define auto_stack(...) _BOND_LR__(_auto_stack, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
 #define auto_stack_msg_agent(...) _BOND_LR__(_auto_stack_msg_agent, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
-#define end_auto_stack(...) _BOND_LR__(_end_auto_stack, _PP_NARG(__pl__, __VA_ARGS__))(__pl__, __VA_ARGS__)
+#define auto_stack_ AutoStack_(0, __COUNTER__)*
+#define auto_stack_msg_agent_ AutoStackAgent_(0, __COUNTER__)*
 
 #endif
 #endif
@@ -9123,6 +9107,16 @@ struct ActorGo_
 {
 	ActorGo_(const shared_strand& strand, size_t stackSize);
 	ActorGo_(shared_strand&& strand, size_t stackSize);
+	ActorGo_(io_engine& ios, size_t stackSize);
+
+	template <typename Handler>
+	actor_handle operator -(AutoStackActor_<Handler>&& wrapActor)
+	{
+		assert(_strand);
+		actor_handle actor = my_actor::create(std::move(_strand), std::move(wrapActor));
+		actor->notify_run();
+		return actor;
+	}
 
 	template <typename Handler>
 	actor_handle operator -(Handler&& handler)

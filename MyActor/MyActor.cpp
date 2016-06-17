@@ -705,14 +705,14 @@ void perfor_test()
 			for (int i = 0; i < num; i++)
 			{
 				count[i] = 0;
-				childList.push_front(self->create_child_actor(strands[i%strands.size()], auto_stack(([&count, i](my_actor* self)
+				childList.push_front(self->create_child_actor(strands[i%strands.size()], [&count, i](my_actor* self)
 				{
 					while (true)
 					{
 						count[i]++;
 						self->tick_yield();
 					}
-				}))));
+				}));
 			}
 			long long tk = get_tick_us();
 			self->child_actors_run(childList);
@@ -825,12 +825,12 @@ void auto_stack_test()
 	ios.run();
 	for (int i = 0; i < 3; i++)
 	{
-		actor_handle ah = my_actor::create(boost_strand::create(ios), auto_stack([i](my_actor* self)
+		actor_handle ah = my_actor::create(boost_strand::create(ios), auto_stack_[i](my_actor* self)
 		{
 			int count = 0;
 			HEARTBEAT_EXEC(self, 300, trace_space("heartbeat", i, count++));
 			self->sleep(1000);
-		}));
+		});
 		ah->notify_run();
 		ah->outside_wait_quit();
 		trace_line("stack size:", ah->stack_size(), ", using size:", ah->using_stack_size());
@@ -844,8 +844,7 @@ void go_test()
 	io_engine ios;
 	ios.run();
 
-	go(boost_strand::create(ios))
-		[](my_actor* self)
+	go(ios) [](my_actor* self)
 	{
 		trace_line("go");
 		self->sleep(500);
