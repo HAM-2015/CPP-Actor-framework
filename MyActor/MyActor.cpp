@@ -1,9 +1,7 @@
 #include <iostream>
-#include <boost/asio/ip/address.hpp>
-#include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/buffered_write_stream.hpp>
-#include "./actor/actor_framework.h"
+#include "./actor/my_actor.h"
 #include "./actor/async_buffer.h"
+#include "./actor/actor_socket.h"
 #include "./actor/async_timer.h"
 #include "./actor/msg_queue.h"
 #include "./actor/sync_msg.h"
@@ -603,39 +601,24 @@ void socket_test()
 	{
 		child_actor_handle srv = self->create_child_actor([&](my_actor* self)
 		{
-			stack_obj<boost::asio::ip::tcp::acceptor> acc;
-			try
-			{
-				acc.create(self->self_io_service(), boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), 1234), false);
-			}
-			catch (...)
+			tcp_acceptor acc(self->self_io_service());
+			if (!acc.open_v4(1234))
 			{
 				trace_line("server port conflict");
 				return;
 			}
-			boost::asio::ip::tcp::socket sck(self->self_io_service());
-			boost::system::error_code ec;
+			tcp_socket sck(self->self_io_service());
 			bool timed = false;
-			acc->async_accept(sck, self->make_asio_timed_context(1500, [&]
+			bool ok = acc.timed_accept(self, 1500, timed, sck);
+			if (ok)
 			{
-				timed = true;
-				acc->close(ec);
-			}, ec));
-			if (!timed && !ec)
-			{
-				acc->close(ec);
+				acc.close();
 				char buf[128];
-				size_t s = 0;
 				while (true)
 				{
-					//sck.async_read_some(boost::asio::buffer(buf, sizeof(buf)-1), self->make_asio_context(ec, s));
 					bool timed = false;
-					sck.async_read_some(boost::asio::buffer(buf, sizeof(buf)-1), self->make_asio_timed_context(2000, [&]()
-					{
-						timed = true;
-						sck.close(ec);
-					}, ec, s));
-					if (!timed && !ec)
+					size_t s = sck.timed_read_some(self, 2000, timed, buf, sizeof(buf)-1);
+					if (!timed && s)
 					{
 						buf[s] = 0;
 						trace_comma(self->self_id(), "received", buf);
@@ -652,22 +635,18 @@ void socket_test()
 					}
 				}
 			}
-			sck.close(ec);
+			sck.close();
 		});
 		child_actor_handle cli = self->create_child_actor([&](my_actor* self)
 		{
-			boost::asio::ip::tcp::socket sck(self->self_io_service());
-			boost::system::error_code ec;
-			sck.async_connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 1234), self->make_asio_context(ec));
-			if (!ec)
+			tcp_socket sck(self->self_io_service());
+			if (sck.connect(self, "127.0.0.1", 1234))
 			{
 				char buf[128];
 				for (int i = 0; i < 10; i++)
 				{
 					int l = snPrintf(buf, sizeof(buf), "msg %d", i);
-					size_t s;
-					boost::asio::async_write(sck, boost::asio::buffer(buf, l), self->make_asio_context(ec, s));
-					if (ec)
+					if (!sck.write(self, buf, l))
 					{
 						break;
 					}
@@ -675,7 +654,7 @@ void socket_test()
 				}
 				self->sleep(2000);
 			}
-			sck.close(ec);
+			sck.close();
 		});
 		self->child_actor_run(srv);
 		self->sleep(1000);

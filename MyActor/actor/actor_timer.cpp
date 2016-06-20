@@ -1,6 +1,6 @@
 #include "actor_timer.h"
 #include "scattered.h"
-#include "actor_framework.h"
+#include "my_actor.h"
 #ifndef DISABLE_BOOST_TIMER
 #ifdef DISABLE_HIGH_TIMER
 #include <boost/asio/deadline_timer.hpp>

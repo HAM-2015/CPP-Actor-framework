@@ -151,13 +151,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="actor.cpp" />
-    <ClCompile Include="actor\actor_framework.cpp">
+    <ClCompile Include="actor\actor_mutex.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="actor\actor_mutex.cpp">
+    <ClCompile Include="actor\actor_socket.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
@@ -188,6 +188,12 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="actor\io_engine.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="actor\my_actor.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
@@ -232,8 +238,8 @@
     <ClCompile Include="MyActor.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="actor\actor_framework.h" />
     <ClInclude Include="actor\actor_mutex.h" />
+    <ClInclude Include="actor\actor_socket.h" />
     <ClInclude Include="actor\actor_timer.h" />
     <ClInclude Include="actor\async_buffer.h" />
     <ClInclude Include="actor\async_timer.h" />
@@ -244,6 +250,7 @@
     <ClInclude Include="actor\lambda_ref.h" />
     <ClInclude Include="actor\mem_pool.h" />
     <ClInclude Include="actor\msg_queue.h" />
+    <ClInclude Include="actor\my_actor.h" />
     <ClInclude Include="actor\run_thread.h" />
     <ClInclude Include="actor\scattered.h" />
     <ClInclude Include="actor\shared_strand.h" />

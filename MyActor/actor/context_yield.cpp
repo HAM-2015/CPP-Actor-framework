@@ -2,13 +2,18 @@
 #include "check_actor_stack.h"
 #include "scattered.h"
 
+#ifdef WIN32
+#include <Windows.h>
+#ifdef __GNUG__
+#include <fibersapi.h>
+#endif
+#elif __linux__
+#include <sys/mman.h>
+#endif
+
 namespace context_yield
 {
 #ifdef WIN32
-#include <Windows.h>
-#if (WIN32 && __GNUG__)
-#include <fibersapi.h>
-#endif
 	struct fiber_struct
 	{
 		void* _param;
@@ -123,7 +128,6 @@ namespace context_yield
 	}
 
 #elif __linux__
-#include <sys/mman.h>
 
 struct transfer_t
 {

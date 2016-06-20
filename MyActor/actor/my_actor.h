@@ -1,5 +1,5 @@
-#ifndef __ACTOR_FRAMEWORK_H
-#define __ACTOR_FRAMEWORK_H
+#ifndef __MY_ACTOR_H
+#define __MY_ACTOR_H
 
 #include <list>
 #include <functional>
@@ -114,16 +114,12 @@ struct ActorFunc_
 	static void cancel_timer(my_actor* host);
 	template <typename DST, typename... ARGS>
 	static void _trig_handler(my_actor* host, bool* sign, DST& dstRec, ARGS&&... args);
-	template <typename DST, typename... ARGS>
-	static void _trig_handler2(my_actor* host, bool* sign, DST& dstRec, ARGS&&... args);
 	template <typename SharedBool, typename DST, typename... ARGS>
-	static void _trig_handler3(my_actor* host, SharedBool&& closed, bool* sign, DST& dstRec, ARGS&&... args);
+	static void _trig_handler2(my_actor* host, SharedBool&& closed, bool* sign, DST& dstRec, ARGS&&... args);
 	template <typename DST, typename... ARGS>
 	static void _dispatch_handler(my_actor* host, bool* sign, DST& dstRec, ARGS&&... args);
 	template <typename DST, typename... ARGS>
 	static void _dispatch_handler2(my_actor* host, bool* sign, DST& dstRec, ARGS&&... args);
-	template <typename SharedBool, typename DST, typename... ARGS>
-	static void _dispatch_handler3(my_actor* host, SharedBool&& closed, bool* sign, DST& dstRec, ARGS&&... args);
 #ifdef ENABLE_CHECK_LOST
 	static std::shared_ptr<CheckLost_> new_check_lost(const shared_strand& strand, actor_msg_handle_base* msgHandle);
 	static std::shared_ptr<CheckPumpLost_> new_check_pump_lost(const actor_handle& hostActor, MsgPoolBase_* pool);
@@ -3693,21 +3689,12 @@ protected:
 		reset();
 	}
 
-	template <typename DST, typename... Args>
-	void _trig_handler2(bool* sign, DST& dstRec, Args&&... args) const
-	{
-		assert(!_pIsTrig->exchange(true));
-		assert(_hostActor);
-		ActorFunc_::_trig_handler2(_hostActor.get(), sign, dstRec, TRY_MOVE(args)...);
-		reset();
-	}
-
 	template <typename SharedBool, typename DST, typename... Args>
-	void _trig_handler3(SharedBool&& closed, bool* sign, DST& dstRec, Args&&... args) const
+	void _trig_handler2(SharedBool&& closed, bool* sign, DST& dstRec, Args&&... args) const
 	{
 		assert(!_pIsTrig->exchange(true));
 		assert(_hostActor);
-		ActorFunc_::_trig_handler3(_hostActor.get(), TRY_MOVE(closed), sign, dstRec, TRY_MOVE(args)...);
+		ActorFunc_::_trig_handler2(_hostActor.get(), TRY_MOVE(closed), sign, dstRec, TRY_MOVE(args)...);
 		reset();
 	}
 
@@ -3729,21 +3716,10 @@ protected:
 		reset();
 	}
 
-	template <typename SharedBool, typename DST, typename... Args>
-	void _dispatch_handler3(SharedBool&& closed, bool* sign, DST& dstRec, Args&&... args) const
-	{
-		assert(!_pIsTrig->exchange(true));
-		assert(_hostActor);
-		ActorFunc_::_dispatch_handler3(_hostActor.get(), TRY_MOVE(closed), sign, dstRec, TRY_MOVE(args)...);
-		reset();
-	}
-
 	void tick_handler(bool* sign) const;
 	void tick_handler(const shared_bool& closed, bool* sign) const;
 	void tick_handler(shared_bool&& closed, bool* sign) const;
 	void dispatch_handler(bool* sign) const;
-	void dispatch_handler(const shared_bool& closed, bool* sign) const;
-	void dispatch_handler(shared_bool&& closed, bool* sign) const;
 	virtual void reset() const = 0;
 protected:
 	void copy(const TrigOnceBase_& s);
@@ -3845,22 +3821,16 @@ template <typename... TYPES>
 class callback_handler {};
 
 template <typename... TYPES>
-class tm_callback__handler {};
-
-template <typename... TYPES>
 class asio_cb_handler {};
-
-template <typename... TYPES>
-class asio_tm_cb_handler {};
 
 template <typename... TYPES>
 class sync_cb_handler {};
 
 /*!
-@brief 异步回调器，作为回调函数参数传入，回调后，自动返回到下一行语句继续执行
+@brief 异步回调器(可以多次触发，但只有第一次有效)，作为回调函数参数传入，回调后，自动返回到下一行语句继续执行
 */
 template <typename... ARGS, typename... OUTS>
-class callback_handler<types_pck<ARGS...>, types_pck<OUTS...>>: public TrigOnceBase_
+class callback_handler<types_pck<ARGS...>, types_pck<OUTS...>> : public TrigOnceBase_
 {
 	typedef TrigOnceBase_ Parent;
 	typedef std::tuple<OUTS&...> dst_receiver;
@@ -3869,7 +3839,7 @@ class callback_handler<types_pck<ARGS...>, types_pck<OUTS...>>: public TrigOnceB
 public:
 	template <typename... Outs>
 	callback_handler(my_actor* host, bool hasTm, Outs&... outs)
-		:_selfEarly(host), _bsign(false), _hasTm(hasTm), _sign(&_bsign), _dstRef(outs...)
+		:_closed(shared_bool::new_(false)), _selfEarly(host), _bsign(false), _hasTm(hasTm), _sign(&_bsign), _dstRef(outs...)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
 	}
@@ -3885,6 +3855,7 @@ public:
 					_bsign = true;
 					ActorFunc_::push_yield(_selfEarly);
 				}
+				_closed = true;
 				if (_hasTm)
 				{
 					ActorFunc_::cancel_timer(_selfEarly);
@@ -3895,10 +3866,11 @@ public:
 	}
 
 	callback_handler(const callback_handler& s)
-		:TrigOnceBase_(s), _selfEarly(NULL), _bsign(false), _hasTm(false), _sign(s._sign), _dstRef(s._dstRef) {}
+		:TrigOnceBase_(s), _closed(s._closed), _selfEarly(NULL), _bsign(false), _hasTm(s._hasTm), _sign(s._sign), _dstRef(s._dstRef) {}
 
 	callback_handler(callback_handler&& s)
-		:TrigOnceBase_(std::move(s)), _selfEarly(NULL), _bsign(false), _hasTm(false), _sign(s._sign), _dstRef(s._dstRef)
+		:TrigOnceBase_(std::move(s)), _closed(s._selfEarly ? s._closed : std::move(s._closed)),
+		_selfEarly(NULL), _bsign(false), _hasTm(s._hasTm), _sign(s._sign), _dstRef(s._dstRef)
 	{
 		s._sign = NULL;
 	}
@@ -3907,13 +3879,13 @@ public:
 	void operator()(Args&&... args) const
 	{
 		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
-		Parent::_trig_handler2(_sign, _dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
+		Parent::_trig_handler2(_closed, _sign, _dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
 	}
 
 	void operator()() const
 	{
 		static_assert(sizeof...(ARGS) == 0, "");
-		Parent::tick_handler(_sign);
+		Parent::tick_handler(_closed, _sign);
 	}
 private:
 	void reset() const
@@ -3929,110 +3901,16 @@ private:
 		assert(false);
 	}
 private:
+	shared_bool _closed;
 	dst_receiver _dstRef;
-	bool* _sign;
 	my_actor* const _selfEarly;
+	bool* _sign;
 	bool _bsign;
 	bool _hasTm;
 };
 
 /*!
-@brief 超时异步回调器，作为回调函数参数传入，回调后，自动返回到下一行语句继续执行
-*/
-template <typename... ARGS, typename... OUTS>
-class tm_callback__handler<types_pck<ARGS...>, types_pck<OUTS...>> : public TrigOnceBase_
-{
-	typedef TrigOnceBase_ Parent;
-	typedef std::tuple<OUTS&...> dst_receiver;
-
-	friend my_actor;
-public:
-	template <typename... Outs>
-	tm_callback__handler(my_actor* host, Outs&... outs)
-		:_closed(shared_bool::new_(false)), _selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
-	{
-		Parent::_hostActor = ActorFunc_::shared_from_this(host);
-	}
-
-	~tm_callback__handler() __disable_noexcept
-	{
-		if (_selfEarly)
-		{
-			if (!ActorFunc_::is_quited(_selfEarly))
-			{
-				if (!_bsign)
-				{
-					_bsign = true;
-					ActorFunc_::push_yield(_selfEarly);
-				}
-				_closed = true;
-				ActorFunc_::cancel_timer(_selfEarly);
-			}
-			Parent::_hostActor.reset();
-		}
-	}
-
-	tm_callback__handler(const tm_callback__handler& s)
-		:TrigOnceBase_(s), _closed(s._closed), _selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef) {}
-
-	tm_callback__handler(tm_callback__handler&& s)
-		:TrigOnceBase_(std::move(s)), _closed(s._selfEarly ? s._closed : std::move(s._closed)),
-		_selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef)
-	{
-		s._sign = NULL;
-	}
-public:
-	template <typename... Args>
-	void operator()(Args&&... args) const
-	{
-		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
-		assert(!_closed.empty());
-		if (_selfEarly)
-		{
-			Parent::_trig_handler3(_closed, _sign, _dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
-		}
-		else
-		{
-			Parent::_trig_handler3(std::move(_closed), _sign, _dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
-		}
-	}
-
-	void operator()() const
-	{
-		static_assert(sizeof...(ARGS) == 0, "");
-		assert(!_closed.empty());
-		if (_selfEarly)
-		{
-			Parent::tick_handler(_closed, _sign);
-		}
-		else
-		{
-			Parent::tick_handler(std::move(_closed), _sign);
-		}
-	}
-private:
-	void reset() const
-	{
-		if (!_selfEarly)
-		{
-			Parent::_hostActor.reset();
-		}
-	}
-
-	void operator =(const tm_callback__handler& s)
-	{
-		assert(false);
-	}
-private:
-	shared_bool _closed;
-	my_actor* const _selfEarly;
-	dst_receiver _dstRef;
-	bool* _sign;
-	bool _bsign;
-};
-
-/*!
-@brief ASIO库异步回调器，作为回调函数参数传入，回调后，自动返回到下一行语句继续执行
+@brief ASIO异步回调器(只能触发一次)，作为回调函数参数传入，回调后，自动返回到下一行语句继续执行
 */
 template <typename... ARGS, typename... OUTS>
 class asio_cb_handler<types_pck<ARGS...>, types_pck<OUTS...>> : public TrigOnceBase_
@@ -4070,7 +3948,10 @@ public:
 	}
 
 	asio_cb_handler(const asio_cb_handler& s)
-		:TrigOnceBase_(std::move((asio_cb_handler&)s)), _selfEarly(NULL), _bsign(false), _hasTm(false), _sign(s._sign), _dstRef(s._dstRef) {}
+		:TrigOnceBase_(std::move((asio_cb_handler&)s)), _selfEarly(NULL), _bsign(false), _hasTm(false), _sign(s._sign), _dstRef(s._dstRef)
+	{
+		((asio_cb_handler&)s)._sign = NULL;
+	}
 
 	asio_cb_handler(asio_cb_handler&& s)
 		:TrigOnceBase_(std::move(s)), _selfEarly(NULL), _bsign(false), _hasTm(false), _sign(s._sign), _dstRef(s._dstRef)
@@ -4105,106 +3986,10 @@ private:
 	}
 private:
 	dst_receiver _dstRef;
-	bool* _sign;
 	my_actor* const _selfEarly;
+	bool* _sign;
 	bool _bsign;
 	bool _hasTm;
-};
-
-/*!
-@brief ASIO库超时异步回调器，作为回调函数参数传入，回调后，自动返回到下一行语句继续执行
-*/
-template <typename... ARGS, typename... OUTS>
-class asio_tm_cb_handler<types_pck<ARGS...>, types_pck<OUTS...>> : public TrigOnceBase_
-{
-	typedef TrigOnceBase_ Parent;
-	typedef std::tuple<OUTS&...> dst_receiver;
-
-	friend my_actor;
-public:
-	template <typename... Outs>
-	asio_tm_cb_handler(my_actor* host, Outs&... outs)
-		:_closed(shared_bool::new_(false)), _selfEarly(host), _bsign(false), _sign(&_bsign), _dstRef(outs...)
-	{
-		Parent::_hostActor = ActorFunc_::shared_from_this(host);
-	}
-
-	~asio_tm_cb_handler() __disable_noexcept
-	{
-		if (_selfEarly)
-		{
-			if (!ActorFunc_::is_quited(_selfEarly))
-			{
-				if (!_bsign)
-				{
-					_bsign = true;
-					ActorFunc_::push_yield(_selfEarly);
-				}
-				_closed = true;
-				ActorFunc_::cancel_timer(_selfEarly);
-			}
-			Parent::_hostActor.reset();
-		}
-	}
-
-	asio_tm_cb_handler(const asio_tm_cb_handler& s)
-		:TrigOnceBase_(std::move((asio_tm_cb_handler&)s)), _closed(s._selfEarly ? s._closed : std::move(s._closed)),
-		_selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef) {}
-
-	asio_tm_cb_handler(asio_tm_cb_handler&& s)
-		:TrigOnceBase_(std::move(s)), _closed(s._selfEarly ? s._closed : std::move(s._closed)),
-		_selfEarly(NULL), _bsign(false), _sign(s._sign), _dstRef(s._dstRef)
-	{
-		s._sign = NULL;
-	}
-public:
-	template <typename... Args>
-	void operator()(Args&&... args) const
-	{
-		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
-		assert(!_closed.empty());
-		if (_selfEarly)
-		{
-			Parent::_dispatch_handler3(_closed, _sign, _dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
-		} 
-		else
-		{
-			Parent::_dispatch_handler3(std::move(_closed), _sign, _dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
-		}
-	}
-
-	void operator()() const
-	{
-		static_assert(sizeof...(ARGS) == 0, "");
-		assert(!_closed.empty());
-		if (_selfEarly)
-		{
-			Parent::dispatch_handler(_closed, _sign);
-		} 
-		else
-		{
-			Parent::dispatch_handler(std::move(_closed), _sign);
-		}
-	}
-private:
-	void reset() const
-	{
-		if (!_selfEarly)
-		{
-			Parent::_hostActor.reset();
-		}
-	}
-
-	void operator =(const asio_tm_cb_handler& s)
-	{
-		assert(false);
-	}
-private:
-	mutable shared_bool _closed;
-	my_actor* const _selfEarly;
-	dst_receiver _dstRef;
-	bool* _sign;
-	bool _bsign;
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -4905,7 +4690,7 @@ struct AutoStackMsgAgentActor_
 
 struct AutoStack_
 {
-	AutoStack_(size_t stackSize, size_t key)
+	AutoStack_(size_t stackSize, size_t key, size_t = 0)
 	:_stackSize(stackSize), _key(key) {}
 
 	template <typename Handler>
@@ -4921,7 +4706,7 @@ struct AutoStack_
 
 struct AutoStackAgent_
 {
-	AutoStackAgent_(size_t stackSize, size_t key)
+	AutoStackAgent_(size_t stackSize, size_t key, size_t = 0)
 	:_stackSize(stackSize), _key(key) {}
 
 	template <typename Handler>
@@ -4935,12 +4720,6 @@ struct AutoStackAgent_
 	NONE_COPY(AutoStackAgent_);
 };
 
-#define _auto_stack1(__s__) AutoStack_(__s__, __COUNTER__)*
-#define _auto_stack2(__s__, __k__) AutoStack_(__s__, __k__)*
-
-#define _auto_stack_msg_agent1(__s__) AutoStackAgent_(__s__, __COUNTER__)*
-#define _auto_stack_msg_agent2(__s__, __k__) AutoStackAgent_(__s__, __k__)*
-
 #ifdef DISABLE_AUTO_STACK
 
 #define auto_stack(...)
@@ -4949,23 +4728,13 @@ struct AutoStackAgent_
 #define auto_stack_msg_agent_
 
 #else
-#ifdef _MSC_VER
-#define _auto_stack(...) _BOND_LR__(_auto_stack, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
-#define _auto_stack_msg_agent(...) _BOND_LR__(_auto_stack_msg_agent, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
+
 //自动栈空间控制
-#define auto_stack(...) _auto_stack(__VA_ARGS__)
-#define auto_stack_msg_agent(...) _auto_stack_msg_agent(__VA_ARGS__)
+#define auto_stack(...) AutoStack_(__VA_ARGS__, __COUNTER__)*
+#define auto_stack_msg_agent(...) AutoStackAgent_(__VA_ARGS__, __COUNTER__)*
 #define auto_stack_ AutoStack_(0, __COUNTER__)*
 #define auto_stack_msg_agent_ AutoStackAgent_(0, __COUNTER__)*
 
-#elif __GNUG__
-//自动栈空间控制
-#define auto_stack(...) _BOND_LR__(_auto_stack, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
-#define auto_stack_msg_agent(...) _BOND_LR__(_auto_stack_msg_agent, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
-#define auto_stack_ AutoStack_(0, __COUNTER__)*
-#define auto_stack_msg_agent_ AutoStackAgent_(0, __COUNTER__)*
-
-#endif
 #endif
 
 //////////////////////////////////////////////////////////////////////////
@@ -6233,8 +6002,6 @@ public:
 	}
 private:
 	void dispatch_handler(bool* sign);
-	void dispatch_handler(const shared_bool& closed, bool* sign);
-	void dispatch_handler(shared_bool&& closed, bool* sign);
 	void tick_handler(bool* sign);
 	void tick_handler(const shared_bool& closed, bool* sign);
 	void tick_handler(shared_bool&& closed, bool* sign);
@@ -6259,25 +6026,8 @@ private:
 		}
 	}
 
-	template <typename DST, typename... ARGS>
-	void _trig_handler2(bool* sign, DST& dstRec, ARGS&&... args)
-	{
-		if (_strand->running_in_this_thread())
-		{
-			if (!_quited)
-			{
-				TupleReceiver_(dstRec, TRY_MOVE(args)...);
-				next_tick_handler(sign);
-			}
-		}
-		else
-		{
-			_strand->post(trig_cb_handler2<DST, RM_REF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
-		}
-	}
-
 	template <typename SharedBool, typename DST, typename... ARGS>
-	void _trig_handler3(SharedBool&& closed, bool* sign, DST& dstRec, ARGS&&... args)
+	void _trig_handler2(SharedBool&& closed, bool* sign, DST& dstRec, ARGS&&... args)
 	{
 		if (_strand->running_in_this_thread())
 		{
@@ -6324,23 +6074,6 @@ private:
 		else
 		{
 			_strand->dispatch(trig_cb_handler2<DST, RM_REF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
-		}
-	}
-
-	template <typename SharedBool, typename DST, typename... ARGS>
-	void _dispatch_handler3(SharedBool&& closed, bool* sign, DST& dstRec, ARGS&&... args)
-	{
-		if (_strand->running_in_this_thread())
-		{
-			if (!_quited && !closed)
-			{
-				TupleReceiver_(dstRec, TRY_MOVE(args)...);
-				next_tick_handler(TRY_MOVE(closed), sign);
-			}
-		}
-		else
-		{
-			_strand->dispatch(trig_cb_handler3<DST, RM_REF(ARGS)...>(TRY_MOVE(closed), shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
 		}
 	}
 private:
@@ -6620,7 +6353,7 @@ private:
 	}
 public:
 	/*!
-	@brief 创建上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_context_as_type(...))
+	@brief 创建上下文回调函数(可以多次触发，但只有第一次有效)，直接作为回调函数使用，async_func(..., Handler self->make_context_as_type(...))
 	*/
 	template <typename... Args, typename... Outs>
 	callback_handler<types_pck<Args...>, types_pck<Outs...>> make_context_as_type(Outs&... outs)
@@ -6631,7 +6364,7 @@ public:
 	}
 
 	/*!
-	@brief 创建上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_context(...))
+	@brief 创建上下文回调函数(可以多次触发，但只有第一次有效)，直接作为回调函数使用，async_func(..., Handler self->make_context(...))
 	*/
 	template <typename... Outs>
 	callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_context(Outs&... outs)
@@ -6641,10 +6374,10 @@ public:
 	}
 
 	/*!
-	@brief 创建带超时的上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_timed_context(...))
+	@brief 创建带超时的上下文回调函数(可以多次触发，但只有第一次有效)，直接作为回调函数使用，async_func(..., Handler self->make_timed_context(...))
 	*/
 	template <typename... Outs>
-	tm_callback__handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_context(int tm, bool& timed, Outs&... outs)
+	callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_context(int tm, bool& timed, Outs&... outs)
 	{
 		assert_enter();
 		timed = false;
@@ -6653,11 +6386,11 @@ public:
 			timed = true;
 			pull_yield();
 		});
-		return tm_callback__handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, outs...);
+		return callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, true, outs...);
 	}
 
 	/*!
-	@brief 创建带超时的上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_timed_context(...))
+	@brief 创建带超时的上下文回调函数(可以多次触发，但只有第一次有效)，直接作为回调函数使用，async_func(..., Handler self->make_timed_context(...))
 	*/
 	template <typename TimedHandler, typename... Outs>
 	callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_context(int tm, TimedHandler&& th, Outs&... outs)
@@ -6668,7 +6401,7 @@ public:
 	}
 
 	/*!
-	@brief 创建ASIO库上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_asio_context_as_type(...))
+	@brief 创建ASIO库上下文回调函数(只能触发一次)，直接作为回调函数使用，async_func(..., Handler self->make_asio_context_as_type(...))
 	*/
 	template <typename... Args, typename... Outs>
 	asio_cb_handler<types_pck<Args...>, types_pck<Outs...>> make_asio_context_as_type(Outs&... outs)
@@ -6679,7 +6412,7 @@ public:
 	}
 
 	/*!
-	@brief 创建ASIO库上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_asio_context(...))
+	@brief 创建ASIO库上下文回调函数(只能触发一次)，直接作为回调函数使用，async_func(..., Handler self->make_asio_context(...))
 	*/
 	template <typename... Outs>
 	asio_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_asio_context(Outs&... outs)
@@ -6689,23 +6422,7 @@ public:
 	}
 
 	/*!
-	@brief 创建带超时的ASIO库上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_asio_timed_context(...))
-	*/
-	template <typename... Outs>
-	asio_tm_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_asio_timed_context(int tm, bool& timed, Outs&... outs)
-	{
-		assert_enter();
-		timed = false;
-		delay_trig(tm, [this, &timed]
-		{
-			timed = true;
-			pull_yield();
-		});
-		return asio_tm_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, outs...);
-	}
-
-	/*!
-	@brief 创建带超时的ASIO库上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_asio_timed_context(...))
+	@brief 创建带超时的ASIO库上下文回调函数(只能触发一次)，直接作为回调函数使用，async_func(..., Handler self->make_asio_timed_context(...))
 	*/
 	template <typename TimedHandler, typename... Outs>
 	asio_cb_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_asio_timed_context(int tm, TimedHandler&& th, Outs&... outs)
@@ -9105,9 +8822,9 @@ private:
 
 struct ActorGo_
 {
-	ActorGo_(const shared_strand& strand, size_t stackSize);
-	ActorGo_(shared_strand&& strand, size_t stackSize);
-	ActorGo_(io_engine& ios, size_t stackSize);
+	ActorGo_(const shared_strand& strand, size_t stackSize = DEFAULT_STACKSIZE);
+	ActorGo_(shared_strand&& strand, size_t stackSize = DEFAULT_STACKSIZE);
+	ActorGo_(io_engine& ios, size_t stackSize = DEFAULT_STACKSIZE);
 
 	template <typename Handler>
 	actor_handle operator -(AutoStackActor_<Handler>&& wrapActor)
@@ -9132,15 +8849,7 @@ struct ActorGo_
 	NONE_COPY(ActorGo_);
 };
 
-#define _go1(__strand__) ActorGo_(__strand__, DEFAULT_STACKSIZE)-
-#define _go2(__strand__, __stack_size__) ActorGo_(__strand__, __stack_size__)-
-
-#ifdef _MSC_VER
-#define _go(...) _BOND_LR__(_go, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
-#define go(...) _go(__VA_ARGS__)
-#elif __GNUG__
-#define go(...) _BOND_LR__(_go, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
-#endif
+#define go(...) ActorGo_(__VA_ARGS__)-
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -9179,18 +8888,11 @@ void ActorFunc_::_trig_handler(my_actor* host, bool* sign, DST& dstRec, ARGS&&..
 	host->_trig_handler(sign, dstRec, TRY_MOVE(args)...);
 }
 
-template <typename DST, typename... ARGS>
-void ActorFunc_::_trig_handler2(my_actor* host, bool* sign, DST& dstRec, ARGS&&... args)
-{
-	assert(host);
-	host->_trig_handler2(sign, dstRec, TRY_MOVE(args)...);
-}
-
 template <typename SharedBool, typename DST, typename... ARGS>
-void ActorFunc_::_trig_handler3(my_actor* host, SharedBool&& closed, bool* sign, DST& dstRec, ARGS&&... args)
+void ActorFunc_::_trig_handler2(my_actor* host, SharedBool&& closed, bool* sign, DST& dstRec, ARGS&&... args)
 {
 	assert(host);
-	host->_trig_handler3(TRY_MOVE(closed), sign, dstRec, TRY_MOVE(args)...);
+	host->_trig_handler2(TRY_MOVE(closed), sign, dstRec, TRY_MOVE(args)...);
 }
 
 template <typename DST, typename... ARGS>
@@ -9205,13 +8907,6 @@ void ActorFunc_::_dispatch_handler2(my_actor* host, bool* sign, DST& dstRec, ARG
 {
 	assert(host);
 	host->_dispatch_handler2(sign, dstRec, TRY_MOVE(args)...);
-}
-
-template <typename SharedBool, typename DST, typename... ARGS>
-void ActorFunc_::_dispatch_handler3(my_actor* host, SharedBool&& closed, bool* sign, DST& dstRec, ARGS&&... args)
-{
-	assert(host);
-	host->_dispatch_handler3(TRY_MOVE(closed), sign, dstRec, TRY_MOVE(args)...);
 }
 
 #endif

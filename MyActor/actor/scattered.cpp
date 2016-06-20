@@ -31,7 +31,7 @@ struct pc_cycle
 	pc_cycle()
 	{
 		LARGE_INTEGER frep;
-		if (!::QueryPerformanceFrequency(&frep))
+		if (!QueryPerformanceFrequency(&frep))
 		{
 			_sCycle = 0;
 			_msCycle = 0;
@@ -406,7 +406,7 @@ void tls_space::set_space(void** val)
 
 void** tls_space::get_space()
 {
-	return (void**)::TlsGetValue(_index);
+	return (void**)TlsGetValue(_index);
 }
 #elif __linux__
 tls_space::tls_space()
@@ -426,6 +426,6 @@ void tls_space::set_space(void** val)
 
 void** tls_space::get_space()
 {
-	return (void**)::pthread_getspecific(_key);
+	return (void**)pthread_getspecific(_key);
 }
 #endif

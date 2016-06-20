@@ -1,5 +1,5 @@
 #include "actor_mutex.h"
-#include "actor_framework.h"
+#include "my_actor.h"
 
 class MutexTrigHandle_;
 

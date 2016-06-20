@@ -1,4 +1,4 @@
-#include "actor_framework.h"
+#include "my_actor.h"
 #include "async_buffer.h"
 #include "sync_msg.h"
 #include "bind_qt_run.h"
@@ -1198,22 +1198,6 @@ void TrigOnceBase_::dispatch_handler(bool* sign) const
 	assert(!_pIsTrig->exchange(true));
 	assert(_hostActor);
 	_hostActor->dispatch_handler(sign);
-	reset();
-}
-
-void TrigOnceBase_::dispatch_handler(const shared_bool& closed, bool* sign) const
-{
-	assert(!_pIsTrig->exchange(true));
-	assert(_hostActor);
-	_hostActor->dispatch_handler(closed, sign);
-	reset();
-}
-
-void TrigOnceBase_::dispatch_handler(shared_bool&& closed, bool* sign) const
-{
-	assert(!_pIsTrig->exchange(true));
-	assert(_hostActor);
-	_hostActor->dispatch_handler(std::move(closed), sign);
 	reset();
 }
 
@@ -2631,16 +2615,6 @@ void my_actor::cancel_delay_trig()
 void my_actor::dispatch_handler(bool* sign)
 {
 	_strand->dispatch(wrap_trig_run_one(shared_from_this(), sign));
-}
-
-void my_actor::dispatch_handler(const shared_bool& closed, bool* sign)
-{
-	_strand->dispatch(wrap_check_trig_run_one(closed, shared_from_this(), sign));
-}
-
-void my_actor::dispatch_handler(shared_bool&& closed, bool* sign)
-{
-	_strand->dispatch(wrap_check_trig_run_one(std::move(closed), shared_from_this(), sign));
 }
 
 void my_actor::tick_handler(bool* sign)

@@ -8,7 +8,7 @@
 #include <QtCore/qeventloop.h>
 #include <QtCore/qcoreapplication.h>
 #include "wrapped_post_handler.h"
-#include "actor_framework.h"
+#include "my_actor.h"
 #include "qt_strand.h"
 #include "msg_queue.h"
 #include "run_thread.h"
@@ -49,6 +49,7 @@
 #define __DESTROY_FRAME(__frame__) (__frame__).destroy();
 
 #define __CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __delete__) {\
+	my_actor::quit_guard qg(__host__);\
 	assert(!(__this_ui__)->run_in_ui_thread());\
 	bool __inside_loop = true;\
 	do\
@@ -69,15 +70,16 @@
 }
 
 //在非UI线程Actor中，关闭一个qt-ui对象
-#define CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__) __CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __NO_DELETE_FRAME)
-#define CLOSE_QT_UI(__frame__) CLOSE_QT_UI_AT(this, self, __frame__)
-#define CLOSE_QT_UI_DELETE_AT(__this_ui__, __host__, __frame__) __CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __DELETE_FRAME)
-#define CLOSE_QT_UI_DELETE(__frame__) CLOSE_QT_UI_DELETE_AT(this, self, __frame__)
-#define CLOSE_QT_UI_DESTROY_AT(__this_ui__, __host__, __frame__) __CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __DESTROY_FRAME)
-#define CLOSE_QT_UI_DESTROY(__frame__) CLOSE_QT_UI_DESTROY_AT(this, self, __frame__)
+#define close_qt_ui_at(__this_ui__, __host__, __frame__) __CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __NO_DELETE_FRAME)
+#define close_qt_ui(__frame__) close_qt_ui_at(this, self, __frame__)
+#define close_qt_ui_delete_at(__this_ui__, __host__, __frame__) __CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __DELETE_FRAME)
+#define close_qt_ui_delete(__frame__) close_qt_ui_delete_at(this, self, __frame__)
+#define close_qt_ui_destroy_at(__this_ui__, __host__, __frame__) __CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __DESTROY_FRAME)
+#define close_qt_ui_destroy(__frame__) close_qt_ui_destroy_at(this, self, __frame__)
 
 #ifdef ENABLE_QT_ACTOR
 #define __IN_CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __delete__) {\
+	my_actor::quit_guard qg(__host__);\
 	assert((__this_ui__)->run_in_ui_thread());\
 	assert(!(__frame__)->running_in_this_thread());\
 	bool __check_loop = true;\
@@ -102,12 +104,12 @@
 }
 
 //在UI线程Actor中，关闭一个qt-ui对象
-#define IN_CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__) __IN_CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __NO_DELETE_FRAME)
-#define IN_CLOSE_QT_UI(__frame__) IN_CLOSE_QT_UI_AT(this, self, __frame__)
-#define IN_CLOSE_QT_UI_DELETE_AT(__this_ui__, __host__, __frame__) __IN_CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __DELETE_FRAME)
-#define IN_CLOSE_QT_UI_DELETE(__frame__) IN_CLOSE_QT_UI_DELETE_AT(this, self, __frame__)
-#define IN_CLOSE_QT_UI_DESTROY_AT(__this_ui__, __host__, __frame__) __IN_CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __DESTROY_FRAME)
-#define IN_CLOSE_QT_UI_DESTROY(__frame__) IN_CLOSE_QT_UI_DESTROY_AT(this, self, __frame__)
+#define in_close_qt_ui_at(__this_ui__, __host__, __frame__) __IN_CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __NO_DELETE_FRAME)
+#define in_close_qt_ui(__frame__) in_close_qt_ui_at(this, self, __frame__)
+#define in_close_qt_ui_delete_at(__this_ui__, __host__, __frame__) __IN_CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __DELETE_FRAME)
+#define in_close_qt_ui_delete(__frame__) in_close_qt_ui_delete_at(this, self, __frame__)
+#define in_close_qt_ui_destroy_at(__this_ui__, __host__, __frame__) __IN_CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __DESTROY_FRAME)
+#define in_close_qt_ui_destroy(__frame__) in_close_qt_ui_destroy_at(this, self, __frame__)
 #endif
 
 //////////////////////////////////////////////////////////////////////////

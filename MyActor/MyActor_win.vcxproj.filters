@@ -39,9 +39,6 @@
     <ClCompile Include="actor\strand_ex.cpp">
       <Filter>源文件\actor</Filter>
     </ClCompile>
-    <ClCompile Include="actor\actor_framework.cpp">
-      <Filter>源文件\actor</Filter>
-    </ClCompile>
     <ClCompile Include="actor\actor_mutex.cpp">
       <Filter>源文件\actor</Filter>
     </ClCompile>
@@ -64,6 +61,12 @@
       <Filter>源文件\actor</Filter>
     </ClCompile>
     <ClCompile Include="actor\trace_stack.cpp">
+      <Filter>源文件\actor</Filter>
+    </ClCompile>
+    <ClCompile Include="actor\actor_socket.cpp">
+      <Filter>源文件\actor</Filter>
+    </ClCompile>
+    <ClCompile Include="actor\my_actor.cpp">
       <Filter>源文件\actor</Filter>
     </ClCompile>
   </ItemGroup>
@@ -119,9 +122,6 @@
     <ClInclude Include="actor\wrapped_try_tick_handler.h">
       <Filter>头文件\actor</Filter>
     </ClInclude>
-    <ClInclude Include="actor\actor_framework.h">
-      <Filter>头文件\actor</Filter>
-    </ClInclude>
     <ClInclude Include="actor\actor_mutex.h">
       <Filter>头文件\actor</Filter>
     </ClInclude>
@@ -150,6 +150,12 @@
       <Filter>头文件\actor</Filter>
     </ClInclude>
     <ClInclude Include="actor\run_thread.h">
+      <Filter>头文件\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="actor\actor_socket.h">
+      <Filter>头文件\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="actor\my_actor.h">
       <Filter>头文件\actor</Filter>
     </ClInclude>
   </ItemGroup>

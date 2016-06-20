@@ -1,6 +1,6 @@
 #include "context_pool.h"
 #include "scattered.h"
-#include "actor_framework.h"
+#include "my_actor.h"
 #if (WIN32 && __GNUG__)
 #include <fibersapi.h>
 #endif

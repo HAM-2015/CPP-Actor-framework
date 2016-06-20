@@ -2,7 +2,7 @@
 #define __ASYNC_BUFFER_H
 
 #include <memory>
-#include "actor_framework.h"
+#include "my_actor.h"
 
 struct async_buffer_close_exception {};
 

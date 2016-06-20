@@ -1,7 +1,7 @@
 #ifndef __SYNC_MSG_H
 #define __SYNC_MSG_H
 
-#include "actor_framework.h"
+#include "my_actor.h"
 #include "msg_queue.h"
 #include "try_move.h"
 #include "lambda_ref.h"
