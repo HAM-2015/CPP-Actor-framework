@@ -4,6 +4,7 @@
 #include "shared_strand.h"
 #include "msg_queue.h"
 #include "scattered.h"
+#include "lambda_ref.h"
 
 class my_actor;
 class MutexTrigNotifer_;
@@ -32,6 +33,15 @@ public:
 	void lock(my_actor* host);
 
 	/*!
+	@brief 锁定资源，如果已经被锁定调用lockNtf
+	*/
+	template <typename Ntf>
+	void lock(my_actor* host, Ntf&& lockNtf)
+	{
+		lock(host, (wrap_local_handler_face<void()>&&)wrap_local_handler(TRY_MOVE(lockNtf)));
+	}
+
+	/*!
 	@brief 测试当前是否已经被占用，如果已经被别的持有（被自己持有不算）就放弃；如果没持有，则自己持有，用 unlock 解除持有
 	@return 已经被别的Actor返回 false，成功持有返回true
 	*/
@@ -42,6 +52,15 @@ public:
 	@return 成功返回true，超时失败返回false
 	*/
 	bool timed_lock(int tm, my_actor* host);
+
+	/*!
+	@brief 在一段时间内尝试锁定资源，如果已经被锁定调用lockNtf
+	*/
+	template <typename Ntf>
+	bool timed_lock(int tm, my_actor* host, Ntf&& lockNtf)
+	{
+		return timed_lock(tm, host, (wrap_local_handler_face<void()>&&)wrap_local_handler(TRY_MOVE(lockNtf)));
+	}
 
 	/*!
 	@brief 解除当前Actor对其持有，递归 lock 几次，就需要 unlock 几次
@@ -55,6 +74,8 @@ public:
 private:
 	void quited_lock(my_actor* host);
 	void quited_unlock(my_actor* host);
+	void lock(my_actor*, wrap_local_handler_face<void()>&& lockNtf);
+	bool timed_lock(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
 private:
 	shared_strand _strand;
 	msg_list<wait_node> _waitQueue;
@@ -157,6 +178,18 @@ public:
 	bool try_lock(my_actor* host);
 	bool timed_lock(int tm, my_actor* host);
 
+	template <typename Ntf>
+	void lock(my_actor* host, Ntf&& lockNtf)
+	{
+		lock(host, (wrap_local_handler_face<void()>&&)wrap_local_handler(TRY_MOVE(lockNtf)));
+	}
+
+	template <typename Ntf>
+	bool timed_lock(int tm, my_actor* host, Ntf&& lockNtf)
+	{
+		return timed_lock(tm, host, (wrap_local_handler_face<void()>&&)wrap_local_handler(TRY_MOVE(lockNtf)));
+	}
+
 	/*!
 	@brief 共享锁
 	*/
@@ -164,12 +197,36 @@ public:
 	bool try_lock_shared(my_actor* host);
 	bool timed_lock_shared(int tm, my_actor* host);
 
+	template <typename Ntf>
+	void lock_shared(my_actor* host, Ntf&& lockNtf)
+	{
+		lock_shared(host, (wrap_local_handler_face<void()>&&)wrap_local_handler(TRY_MOVE(lockNtf)));
+	}
+
+	template <typename Ntf>
+	bool timed_lock_shared(int tm, my_actor* host, Ntf&& lockNtf)
+	{
+		return timed_lock_shared(tm, host, (wrap_local_handler_face<void()>&&)wrap_local_handler(TRY_MOVE(lockNtf)));
+	}
+
 	/*!
 	@brief 共享锁提升为独占锁
 	*/
 	void lock_upgrade(my_actor* host);
 	bool try_lock_upgrade(my_actor* host);
 	bool timed_lock_upgrade(int tm, my_actor* host);
+
+	template <typename Ntf>
+	void lock_upgrade(my_actor* host, Ntf&& lockNtf)
+	{
+		lock_upgrade(host, (wrap_local_handler_face<void()>&&)wrap_local_handler(TRY_MOVE(lockNtf)));
+	}
+
+	template <typename Ntf>
+	bool timed_lock_upgrade(int tm, my_actor* host, Ntf&& lockNtf)
+	{
+		return timed_lock_upgrade(tm, host, (wrap_local_handler_face<void()>&&)wrap_local_handler(TRY_MOVE(lockNtf)));
+	}
 
 	/*!
 	@brief 解除独占锁定
@@ -190,6 +247,13 @@ public:
 	@brief 当前依赖的strand
 	*/
 	const shared_strand& self_strand();
+private:
+	void lock(my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
+	bool timed_lock(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
+	void lock_shared(my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
+	bool timed_lock_shared(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
+	void lock_upgrade(my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
+	bool timed_lock_upgrade(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
 private:
 	lock_status _status;
 	shared_strand _strand;

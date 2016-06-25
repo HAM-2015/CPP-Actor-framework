@@ -602,25 +602,25 @@ void socket_test()
 		child_actor_handle srv = self->create_child_actor([&](my_actor* self)
 		{
 			tcp_acceptor acc(self->self_io_service());
-			if (!acc.open_v4(1234))
+			if (!acc.open("127.0.0.1", 1234))
 			{
 				trace_line("server port conflict");
 				return;
 			}
 			tcp_socket sck(self->self_io_service());
 			bool timed = false;
-			bool ok = acc.timed_accept(self, 1500, timed, sck);
-			if (ok)
+			if (acc.timed_accept(self, 1500, timed, sck))
 			{
+				trace_line("new client connected");
 				acc.close();
 				char buf[128];
 				while (true)
 				{
 					bool timed = false;
-					size_t s = sck.timed_read_some(self, 2000, timed, buf, sizeof(buf)-1);
-					if (!timed && s)
+					tcp_socket::result res = sck.timed_read_some(self, 2000, timed, buf, sizeof(buf)-1);
+					if (res.ok)
 					{
-						buf[s] = 0;
+						buf[res.s] = 0;
 						trace_comma(self->self_id(), "received", buf);
 					} 
 					else if (timed)
@@ -646,7 +646,7 @@ void socket_test()
 				for (int i = 0; i < 10; i++)
 				{
 					int l = snPrintf(buf, sizeof(buf), "msg %d", i);
-					if (!sck.write(self, buf, l))
+					if (!sck.write(self, buf, l).ok)
 					{
 						break;
 					}

@@ -184,6 +184,11 @@ actor_mutex::~actor_mutex()
 
 void actor_mutex::lock(my_actor* host)
 {
+	lock(host, []{});
+}
+
+void actor_mutex::lock(my_actor* host, wrap_local_handler_face<void()>&& lockNtf)
+{
 	host->assert_enter();
 	host->lock_quit();
 	bool complete = false;
@@ -207,6 +212,7 @@ void actor_mutex::lock(my_actor* host)
 
 	if (!complete)
 	{
+		lockNtf();
 		ath.wait();
 	}
 	host->unlock_quit();
@@ -258,6 +264,11 @@ bool actor_mutex::try_lock(my_actor* host)
 
 bool actor_mutex::timed_lock(int tm, my_actor* host)
 {
+	return timed_lock(tm, host, []{});
+}
+
+bool actor_mutex::timed_lock(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf)
+{
 	host->assert_enter();
 	host->lock_quit();
 	msg_list<wait_node>::iterator nit;
@@ -283,6 +294,7 @@ bool actor_mutex::timed_lock(int tm, my_actor* host)
 
 	if (!complete)
 	{
+		lockNtf();
 		if (!ath.timed_wait(tm))
 		{
 			host->send(_strand, [&]
@@ -512,6 +524,11 @@ actor_shared_mutex::~actor_shared_mutex()
 
 void actor_shared_mutex::lock(my_actor* host)
 {
+	lock(host, []{});
+}
+
+void actor_shared_mutex::lock(my_actor* host, wrap_local_handler_face<void()>&& lockNtf)
+{
 	host->assert_enter();
 	host->lock_quit();
 	bool complete = false;
@@ -535,6 +552,7 @@ void actor_shared_mutex::lock(my_actor* host)
 	});
 	if (!complete)
 	{
+		lockNtf();
 		ath.wait();
 	}
 	assert(st_unique == _status);
@@ -563,6 +581,11 @@ bool actor_shared_mutex::try_lock(my_actor* host)
 
 bool actor_shared_mutex::timed_lock(int tm, my_actor* host)
 {
+	return timed_lock(tm, host, []{});
+}
+
+bool actor_shared_mutex::timed_lock(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf)
+{
 	host->assert_enter();
 	host->lock_quit();
 	bool complete = false;
@@ -587,6 +610,7 @@ bool actor_shared_mutex::timed_lock(int tm, my_actor* host)
 	});
 	if (!complete)
 	{
+		lockNtf();
 		if (!ath.timed_wait(tm))
 		{
 			host->send(_strand, [&]
@@ -613,6 +637,11 @@ bool actor_shared_mutex::timed_lock(int tm, my_actor* host)
 
 void actor_shared_mutex::lock_shared(my_actor* host)
 {
+	lock_shared(host, []{});
+}
+
+void actor_shared_mutex::lock_shared(my_actor* host, wrap_local_handler_face<void()>&& lockNtf)
+{
 	host->assert_enter();
 	host->lock_quit();
 	bool complete = false;
@@ -634,6 +663,7 @@ void actor_shared_mutex::lock_shared(my_actor* host)
 	});
 	if (!complete)
 	{
+		lockNtf();
 		ath.wait();
 	}
 	assert(st_shared == _status);
@@ -661,6 +691,11 @@ bool actor_shared_mutex::try_lock_shared(my_actor* host)
 
 bool actor_shared_mutex::timed_lock_shared(int tm, my_actor* host)
 {
+	return timed_lock_shared(tm, host, []{});
+}
+
+bool actor_shared_mutex::timed_lock_shared(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf)
+{
 	host->assert_enter();
 	host->lock_quit();
 	bool complete = false;
@@ -684,6 +719,7 @@ bool actor_shared_mutex::timed_lock_shared(int tm, my_actor* host)
 	});
 	if (!complete)
 	{
+		lockNtf();
 		if (!ath.timed_wait(tm))
 		{
 			host->send(_strand, [&]
@@ -708,7 +744,13 @@ bool actor_shared_mutex::timed_lock_shared(int tm, my_actor* host)
 	return true;
 }
 
+
 void actor_shared_mutex::lock_upgrade(my_actor* host)
+{
+	lock_upgrade(host, []{});
+}
+
+void actor_shared_mutex::lock_upgrade(my_actor* host, wrap_local_handler_face<void()>&& lockNtf)
 {
 	host->assert_enter();
 	host->lock_quit();
@@ -736,6 +778,7 @@ void actor_shared_mutex::lock_upgrade(my_actor* host)
 	});
 	if (!complete)
 	{
+		lockNtf();
 		ath.wait();
 	}
 	assert(st_upgrade == _status);
@@ -766,6 +809,11 @@ bool actor_shared_mutex::try_lock_upgrade(my_actor* host)
 
 bool actor_shared_mutex::timed_lock_upgrade(int tm, my_actor* host)
 {
+	return timed_lock_upgrade(tm, host, []{});
+}
+
+bool actor_shared_mutex::timed_lock_upgrade(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf)
+{
 	host->assert_enter();
 	host->lock_quit();
 	bool complete = false;
@@ -794,6 +842,7 @@ bool actor_shared_mutex::timed_lock_upgrade(int tm, my_actor* host)
 	});
 	if (!complete)
 	{
+		lockNtf();
 		if (!ath.timed_wait(tm))
 		{
 			host->send(_strand, [&]

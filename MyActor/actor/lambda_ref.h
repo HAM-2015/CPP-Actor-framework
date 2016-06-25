@@ -607,4 +607,65 @@ RefHandler_<Handler, R> wrap_ref_handler(Handler& handler)
 	return RefHandler_<Handler, R>(bool(), handler);
 }
 
+template <typename... _Types>
+struct wrap_local_handler_face;
+
+template <typename Handler, typename _Rt, typename... _Types>
+struct WrapLocalHandler_;
+
+template <typename _Rt, typename... _Types>
+struct wrap_local_handler_face<_Rt(_Types...)>
+{
+	virtual _Rt operator()(_Types...) = 0;
+	virtual _Rt operator()(_Types...) const = 0;
+};
+
+template <typename Handler, typename _Rt, typename... _Types>
+struct WrapLocalHandler_<Handler, _Rt(_Types...)> : public wrap_local_handler_face<_Rt(_Types...)>
+{
+	WrapLocalHandler_(Handler& handler)
+	:_handler(handler) {}
+
+	_Rt operator()(_Types... args)
+	{
+		return _handler(std::forward<_Types>(args)...);
+	}
+
+	_Rt operator()(_Types... args) const
+	{
+		return _handler(std::forward<_Types>(args)...);
+	}
+
+	Handler& _handler;
+	NONE_COPY(WrapLocalHandler_);
+	RVALUE_CONSTRUCT(WrapLocalHandler_, _handler);
+};
+
+template <typename Handler, typename... _Types>
+struct WrapLocalHandler_<Handler, void(_Types...)> : public wrap_local_handler_face<void(_Types...)>
+{
+	WrapLocalHandler_(Handler& handler)
+	:_handler(handler) {}
+
+	void operator()(_Types... args)
+	{
+		_handler(std::forward<_Types>(args)...);
+	}
+
+	void operator()(_Types... args) const
+	{
+		_handler(std::forward<_Types>(args)...);
+	}
+
+	Handler& _handler;
+	NONE_COPY(WrapLocalHandler_);
+	RVALUE_CONSTRUCT(WrapLocalHandler_, _handler);
+};
+
+template <typename R = void, typename... Types, typename Handler>
+WrapLocalHandler_<RM_REF(Handler), R(Types...)> wrap_local_handler(Handler&& handler)
+{
+	return WrapLocalHandler_<RM_REF(Handler), R(Types...)>(handler);
+}
+
 #endif

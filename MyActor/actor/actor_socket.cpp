@@ -47,129 +47,123 @@ std::string tcp_socket::remote_endpoint(unsigned short& port)
 	return std::string();
 }
 
-bool tcp_socket::connect(my_actor* host, const char* ip, unsigned short port)
+boost::asio::ip::tcp::socket& tcp_socket::boost_socket()
+{
+	return _socket;
+}
+
+bool tcp_socket::connect(my_actor* host, const char* remoteIp, unsigned short remotePort)
 {
 	my_actor::quit_guard qg(host);
-	return host->trig<bool>([this, ip, port](trig_once_notifer<bool>&& h)
+	return host->trig<bool>([&](trig_once_notifer<bool>&& h)
 	{
-		async_connect(ip, port, std::move(h));
+		async_connect(remoteIp, remotePort, std::move(h));
 	});
 }
 
-bool tcp_socket::read(my_actor* host, void* buff, size_t length)
+tcp_socket::result tcp_socket::read(my_actor* host, void* buff, size_t length)
 {
 	my_actor::quit_guard qg(host);
-	return host->trig<bool>([this, buff, length](trig_once_notifer<bool>&& h)
+	return host->trig<result>([&](trig_once_notifer<result>&& h)
 	{
 		async_read(buff, length, std::move(h));
 	});
 }
 
-size_t tcp_socket::read_some(my_actor* host, void* buff, size_t length)
+tcp_socket::result tcp_socket::read_some(my_actor* host, void* buff, size_t length)
 {
 	my_actor::quit_guard qg(host);
-	return host->trig<size_t>([this, buff, length](trig_once_notifer<size_t>&& h)
+	return host->trig<result>([&](trig_once_notifer<result>&& h)
 	{
 		async_read_some(buff, length, std::move(h));
 	});
 }
 
-bool tcp_socket::write(my_actor* host, const void* buff, size_t length)
+tcp_socket::result tcp_socket::write(my_actor* host, const void* buff, size_t length)
 {
 	my_actor::quit_guard qg(host);
-	return host->trig<bool>([this, buff, length](trig_once_notifer<bool>&& h)
+	return host->trig<result>([&](trig_once_notifer<result>&& h)
 	{
 		async_write(buff, length, std::move(h));
 	});
 }
 
-size_t tcp_socket::write_some(my_actor* host, const void* buff, size_t length)
+tcp_socket::result tcp_socket::write_some(my_actor* host, const void* buff, size_t length)
 {
 	my_actor::quit_guard qg(host);
-	return host->trig<size_t>([this, buff, length](trig_once_notifer<size_t>&& h)
+	return host->trig<result>([&](trig_once_notifer<result>&& h)
 	{
 		async_write_some(buff, length, std::move(h));
 	});
 }
 
-bool tcp_socket::timed_connect(my_actor* host, int tm, bool& timed, const char* ip, unsigned short port)
+bool tcp_socket::timed_connect(my_actor* host, int tm, bool& timed, const char* remoteIp, unsigned short remotePort)
 {
 	timed = false;
 	bool ok = false;
-	async_connect(ip, port, host->make_asio_timed_context(tm, [&]()
+	my_actor::quit_guard qg(host);
+	async_connect(remoteIp, remotePort, host->make_asio_timed_context(tm, [&]()
 	{
 		timed = true;
 		close();
 	}, ok));
-	if (timed)
-	{
-		ok = false;
-	}
-	return ok;
+	return timed ? false : ok;
 }
 
-bool tcp_socket::timed_read(my_actor* host, int tm, bool& timed, void* buff, size_t length)
+tcp_socket::result tcp_socket::timed_read(my_actor* host, int tm, bool& timed, void* buff, size_t length)
 {
 	timed = false;
-	bool ok = false;
+	result res = { 0, false };
+	my_actor::quit_guard qg(host);
 	async_read(buff, length, host->make_asio_timed_context(tm, [&]()
 	{
 		timed = true;
 		close();
-	}, ok));
-	if (timed)
-	{
-		ok = false;
-	}
-	return ok;
+	}, res));
+	if (timed) res.ok = false;
+	return res;
 }
 
-size_t tcp_socket::timed_read_some(my_actor* host, int tm, bool& timed, void* buff, size_t length)
+tcp_socket::result tcp_socket::timed_read_some(my_actor* host, int tm, bool& timed, void* buff, size_t length)
 {
 	timed = false;
-	size_t s = 0;
+	result res = { 0, false };
+	my_actor::quit_guard qg(host);
 	async_read_some(buff, length, host->make_asio_timed_context(tm, [&]()
 	{
 		timed = true;
 		close();
-	}, s));
-	if (timed)
-	{
-		s = 0;
-	}
-	return s;
+	}, res));
+	if (timed) res.ok = false;
+	return res;
 }
 
-bool tcp_socket::timed_write(my_actor* host, int tm, bool& timed, const void* buff, size_t length)
+tcp_socket::result tcp_socket::timed_write(my_actor* host, int tm, bool& timed, const void* buff, size_t length)
 {
 	timed = false;
-	bool ok = false;
+	result res = { 0, false };
+	my_actor::quit_guard qg(host);
 	async_write(buff, length, host->make_asio_timed_context(tm, [&]()
 	{
 		timed = true;
 		close();
-	}, ok));
-	if (timed)
-	{
-		ok = false;
-	}
-	return ok;
+	}, res));
+	if (timed) res.ok = false;
+	return res;
 }
 
-size_t tcp_socket::timed_write_some(my_actor* host, int tm, bool& timed, const void* buff, size_t length)
+tcp_socket::result tcp_socket::timed_write_some(my_actor* host, int tm, bool& timed, const void* buff, size_t length)
 {
 	timed = false;
-	size_t s = 0;
+	result res = { 0, false };
+	my_actor::quit_guard qg(host);
 	async_write_some(buff, length, host->make_asio_timed_context(tm, [&]()
 	{
 		timed = true;
 		close();
-	}, s));
-	if (timed)
-	{
-		s = 0;
-	}
-	return s;
+	}, res));
+	if (timed) res.ok = false;
+	return res;
 }
 //////////////////////////////////////////////////////////////////////////
 
@@ -245,10 +239,15 @@ bool tcp_acceptor::close()
 	return false;
 }
 
+boost::asio::ip::tcp::acceptor& tcp_acceptor::boost_acceptor()
+{
+	return _acceptor.get();
+}
+
 bool tcp_acceptor::accept(my_actor* host, tcp_socket& socket)
 {
 	my_actor::quit_guard qg(host);
-	return host->trig<bool>([this, &socket](trig_once_notifer<bool>&& h)
+	return host->trig<bool>([&](trig_once_notifer<bool>&& h)
 	{
 		async_accept(socket, std::move(h));
 	});
@@ -258,16 +257,13 @@ bool tcp_acceptor::timed_accept(my_actor* host, int tm, bool& timed, tcp_socket&
 {
 	timed = false;
 	bool ok = false;
+	my_actor::quit_guard qg(host);
 	async_accept(socket, host->make_asio_timed_context(tm, [&]()
 	{
 		timed = true;
 		close();
 	}, ok));
-	if (timed)
-	{
-		ok = false;
-	}
-	return ok;
+	return timed ? false : ok;
 }
 //////////////////////////////////////////////////////////////////////////
 
@@ -312,6 +308,21 @@ bool udp_socket::bind_v6(unsigned short port)
 	return !ec;
 }
 
+bool udp_socket::open_bind_v4(unsigned short port)
+{
+	return open_v4() && bind_v4(port);
+}
+
+bool udp_socket::open_bind_v6(unsigned short port)
+{
+	return open_v6() && bind_v6(port);
+}
+
+boost::asio::ip::udp::socket& udp_socket::boost_socket()
+{
+	return _socket;
+}
+
 bool udp_socket::close()
 {
 	boost::system::error_code ec;
@@ -320,53 +331,68 @@ bool udp_socket::close()
 	return !ec;
 }
 
+udp_socket::remote_sender_endpoint udp_socket::make_endpoint(const char* remoteIp, unsigned short remotePort)
+{
+	return remote_sender_endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort);
+}
+
 const udp_socket::remote_sender_endpoint& udp_socket::last_remote_sender_endpoint()
 {
 	return _remoteSenderEndpoint;
 }
 
+void udp_socket::reset_remote_sender_endpoint()
+{
+	_remoteSenderEndpoint = remote_sender_endpoint();
+}
+
 bool udp_socket::connect(my_actor* host, const char* remoteIp, unsigned short remotePort)
 {
 	my_actor::quit_guard qg(host);
-	return host->trig<bool>([this, remoteIp, remotePort](trig_once_notifer<bool>&& h)
+	return host->trig<bool>([&](trig_once_notifer<bool>&& h)
 	{
 		async_connect(remoteIp, remotePort, std::move(h));
 	});
 }
 
-bool udp_socket::send_to(my_actor* host, const remote_sender_endpoint& remoteEndpoint, const void* buff, size_t length)
+udp_socket::result udp_socket::send_to(my_actor* host, const remote_sender_endpoint& remoteEndpoint, const void* buff, size_t length, int flags)
 {
 	my_actor::quit_guard qg(host);
-	return host->trig<bool>([this, &remoteEndpoint, buff, length](trig_once_notifer<bool>&& h)
+	return host->trig<result>([&](trig_once_notifer<result>&& h)
 	{
-		async_send_to(remoteEndpoint, buff, length, std::move(h));
+		async_send_to(remoteEndpoint, buff, length, std::move(h), flags);
 	});
 }
 
-bool udp_socket::send(my_actor* host, const void* buff, size_t length)
+udp_socket::result udp_socket::send_to(my_actor* host, const char* remoteIp, unsigned short remotePort, const void* buff, size_t length, int flags)
+{
+	return udp_socket::send_to(host, remote_sender_endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), buff, length, flags);
+}
+
+udp_socket::result udp_socket::send(my_actor* host, const void* buff, size_t length, int flags)
 {
 	my_actor::quit_guard qg(host);
-	return host->trig<bool>([this, buff, length](trig_once_notifer<bool>&& h)
+	return host->trig<result>([&](trig_once_notifer<result>&& h)
 	{
-		async_send(buff, length, std::move(h));
+		async_send(buff, length, std::move(h), flags);
 	});
 }
 
-bool udp_socket::receive_from(my_actor* host, void* buff, size_t length)
+udp_socket::result udp_socket::receive_from(my_actor* host, void* buff, size_t length, int flags)
 {
 	my_actor::quit_guard qg(host);
-	return host->trig<bool>([this, buff, length](trig_once_notifer<bool>&& h)
+	return host->trig<result>([&](trig_once_notifer<result>&& h)
 	{
-		async_receive_from(buff, length, std::move(h));
+		async_receive_from(buff, length, std::move(h), flags);
 	});
 }
 
-bool udp_socket::receive(my_actor* host, void* buff, size_t length)
+udp_socket::result udp_socket::receive(my_actor* host, void* buff, size_t length, int flags)
 {
 	my_actor::quit_guard qg(host);
-	return host->trig<bool>([this, buff, length](trig_once_notifer<bool>&& h)
+	return host->trig<result>([&](trig_once_notifer<result>&& h)
 	{
-		async_receive(buff, length, std::move(h));
+		async_receive(buff, length, std::move(h), flags);
 	});
 }
 
@@ -374,78 +400,72 @@ bool udp_socket::timed_connect(my_actor* host, int tm, bool& timed, const char* 
 {
 	timed = false;
 	bool ok = false;
+	my_actor::quit_guard qg(host);
 	async_connect(remoteIp, remotePort, host->make_asio_timed_context(tm, [&]()
 	{
 		timed = true;
 		close();
 	}, ok));
-	if (timed)
-	{
-		ok = false;
-	}
-	return ok;
+	return timed ? false : ok;
 }
 
-bool udp_socket::timed_send_to(my_actor* host, int tm, bool& timed, const remote_sender_endpoint& remoteEndpoint, const void* buff, size_t length)
+udp_socket::result udp_socket::timed_send_to(my_actor* host, int tm, bool& timed, const remote_sender_endpoint& remoteEndpoint, const void* buff, size_t length, int flags)
 {
 	timed = false;
-	bool ok = false;
+	result res = { 0, false };
+	my_actor::quit_guard qg(host);
 	async_send_to(remoteEndpoint, buff, length, host->make_asio_timed_context(tm, [&]()
 	{
 		timed = true;
 		close();
-	}, ok));
-	if (timed)
-	{
-		ok = false;
-	}
-	return ok;
+	}, res), flags);
+	if (timed) res.ok = false;
+	return res;
 }
 
-bool udp_socket::timed_send(my_actor* host, int tm, bool& timed, const void* buff, size_t length)
+udp_socket::result udp_socket::timed_send_to(my_actor* host, int tm, bool& timed, const char* remoteIp, unsigned short remotePort, const void* buff, size_t length, int flags)
+{
+	return timed_send_to(host, tm, timed, remote_sender_endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), buff, length, flags);
+}
+
+udp_socket::result udp_socket::timed_send(my_actor* host, int tm, bool& timed, const void* buff, size_t length, int flags)
 {
 	timed = false;
-	bool ok = false;
+	result res = { 0, false };
+	my_actor::quit_guard qg(host);
 	async_send(buff, length, host->make_asio_timed_context(tm, [&]()
 	{
 		timed = true;
 		close();
-	}, ok));
-	if (timed)
-	{
-		ok = false;
-	}
-	return ok;
+	}, res), flags);
+	if (timed) res.ok = false;
+	return res;
 }
 
-bool udp_socket::timed_receive_from(my_actor* host, int tm, bool& timed, void* buff, size_t length)
+udp_socket::result udp_socket::timed_receive_from(my_actor* host, int tm, bool& timed, void* buff, size_t length, int flags)
 {
 	timed = false;
-	bool ok = false;
+	result res = { 0, false };
+	my_actor::quit_guard qg(host);
 	async_receive_from(buff, length, host->make_asio_timed_context(tm, [&]()
 	{
 		timed = true;
 		close();
-	}, ok));
-	if (timed)
-	{
-		ok = false;
-	}
-	return ok;
+	}, res), flags);
+	if (timed) res.ok = false;
+	return res;
 }
 
-bool udp_socket::timed_receive(my_actor* host, int tm, bool& timed, void* buff, size_t length)
+udp_socket::result udp_socket::timed_receive(my_actor* host, int tm, bool& timed, void* buff, size_t length, int flags)
 {
 	timed = false;
-	bool ok = false;
+	result res = { 0, false };
+	my_actor::quit_guard qg(host);
 	async_receive(buff, length, host->make_asio_timed_context(tm, [&]()
 	{
 		timed = true;
 		close();
-	}, ok));
-	if (timed)
-	{
-		ok = false;
-	}
-	return ok;
+	}, res), flags);
+	if (timed) res.ok = false;
+	return res;
 }
