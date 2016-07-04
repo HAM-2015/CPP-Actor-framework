@@ -146,7 +146,9 @@
         </FileMasks>
         <TransferNewFilesOnly>true</TransferNewFilesOnly>
         <IncludeSubdirectories>true</IncludeSubdirectories>
-        <SelectedDirectories />
+        <SelectedDirectories>
+          <string>Release</string>
+        </SelectedDirectories>
       </CustomActionBase>
       <CustomActionBase xsi:type="CommandLineAction">
         <SkipWhenRunningCommandList>false</SkipWhenRunningCommandList>

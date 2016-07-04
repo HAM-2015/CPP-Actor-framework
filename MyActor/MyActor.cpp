@@ -797,6 +797,58 @@ void create_child_test()
 	trace_line("end create_child_test");
 }
 
+void suspend_test()
+{
+	trace_line("begin suspend_test");
+	io_engine ios;
+	ios.run();
+	go(ios)[](my_actor* self)
+	{
+		child_actor_handle child = self->create_child_actor([](my_actor* self)
+		{
+			child_actor_handle child = self->create_child_actor([](my_actor* self)
+			{
+				int i = 0;
+				self->sleep(300);
+				info_trace_comma("---child2", i++);
+				info_trace_line("---lock_suspend");
+				self->lock_suspend();
+				for (int j = 0; j < 10; j++)
+				{
+					self->sleep(100);
+					info_trace_comma("---child2", i++);
+				}
+				info_trace_line("---begin_unlock_suspend");
+				self->unlock_suspend();
+				info_trace_line("---end_unlock_suspend");
+				info_trace_comma("---child2", i++);
+				self->sleep(100);
+			});
+			self->child_actor_run(child);
+			int i = 0;
+			self->sleep(100);
+			info_trace_comma("--child1", i++);
+			self->sleep(300);
+			info_trace_comma("--child1", i++);
+			self->sleep(300);
+			info_trace_comma("--child1", i++);
+			self->child_actor_wait_quit(child);
+		});
+		self->child_actor_run(child);
+		self->sleep(500);
+		info_trace_line("-begin suspend");
+		self->child_actor_suspend(child);
+		info_trace_line("-end suspend");
+		self->sleep(1500);
+		info_trace_line("-begin resume");
+		self->child_actor_resume(child);
+		info_trace_line("-end resume");
+		self->child_actor_wait_quit(child);
+	};
+	ios.stop();
+	trace_line("end suspend_test");
+}
+
 void auto_stack_test()
 {
 	trace_line("begin auto_stack_test");
@@ -844,6 +896,8 @@ int main(int argc, char *argv[])
 	go_test();
 	trace("\n");
 	auto_stack_test();
+	trace("\n");
+	suspend_test();
 	trace("\n");
 	create_child_test();
 	trace("\n");

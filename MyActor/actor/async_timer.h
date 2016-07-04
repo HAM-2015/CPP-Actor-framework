@@ -33,10 +33,12 @@ class TimerBoost_
 		void reset()
 		{
 			_null = true;
+			_beginStamp = 0;
 		}
+		long long _beginStamp = 0;
 	private:
-		bool _null = true;
 		handler_queue::iterator _queueNode;
+		bool _null = true;
 	};
 private:
 	TimerBoost_(const shared_strand& strand);
@@ -125,13 +127,14 @@ public:
 	@brief 开启一个定时循环，在依赖的strand线程中调用
 	*/
 	template <typename Handler>
-	void timeout(int tm, Handler&& handler)
+	long long timeout(int tm, Handler&& handler)
 	{
 		assert(self_strand()->running_in_this_thread());
 		assert(!_handler);
 		typedef wrap_handler<RM_REF(Handler)> wrap_type;
 		_handler = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
 		_timerHandle = _timerBoost.timeout(tm * 1000, _weakThis.lock());
+		return _timerHandle._beginStamp;
 	}
 
 	/*!

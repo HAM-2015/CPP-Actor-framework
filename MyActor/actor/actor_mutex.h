@@ -76,6 +76,7 @@ private:
 	void quited_unlock(my_actor* host);
 	void lock(my_actor*, wrap_local_handler_face<void()>&& lockNtf);
 	bool timed_lock(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
+	bool check_self_err_call(my_actor* host);
 private:
 	shared_strand _strand;
 	msg_list<wait_node> _waitQueue;
@@ -254,6 +255,7 @@ private:
 	bool timed_lock_shared(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
 	void lock_upgrade(my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
 	bool timed_lock_upgrade(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
+	bool check_self_err_call(my_actor* host);
 private:
 	lock_status _status;
 	shared_strand _strand;

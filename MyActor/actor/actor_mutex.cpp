@@ -130,7 +130,7 @@ void MutexTrigHandle_::push_msg()
 	assert(_strand->running_in_this_thread());
 	if (!_outActor)
 	{
-		if (!_hostActor->is_quited())
+		if (!ActorFunc_::is_quited(_hostActor))
 		{
 			if (_waiting)
 			{
@@ -164,7 +164,7 @@ MutexTrigHandle_::~MutexTrigHandle_()
 }
 
 MutexTrigHandle_::MutexTrigHandle_(my_actor* hostActor)
-:_hasMsg(false), _waiting(false), _outActor(hostActor->is_quited())
+:_hasMsg(false), _waiting(false), _outActor(ActorFunc_::is_quited(hostActor))
 {
 	_hostActor = hostActor;
 	_strand = hostActor->self_strand();
@@ -182,6 +182,18 @@ actor_mutex::~actor_mutex()
 	assert(!_lockActorID);
 }
 
+bool actor_mutex::check_self_err_call(my_actor* host)
+{
+	for (wait_node& ele : _waitQueue)
+	{
+		if (host->self_id() == ele._waitHostID)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 void actor_mutex::lock(my_actor* host)
 {
 	lock(host, []{});
@@ -196,6 +208,7 @@ void actor_mutex::lock(my_actor* host, wrap_local_handler_face<void()>&& lockNtf
 	MutexTrigNotifer_ ntf;
 	host->send(_strand, [&]
 	{
+		assert(check_self_err_call(host));
 		if (!_lockActorID || host->self_id() == _lockActorID)
 		{
 			_lockActorID = host->self_id();
@@ -223,7 +236,7 @@ void actor_mutex::quited_lock(my_actor* host)
 	assert(host->self_strand()->running_in_this_thread());
 	assert(_strand->running_in_this_thread());
 	assert(host->in_actor());
-	assert(host->is_quited());
+	assert(ActorFunc_::is_quited(host));
 	host->check_stack();
 
 	if (!_lockActorID || host->self_id() == _lockActorID)
@@ -247,6 +260,7 @@ bool actor_mutex::try_lock(my_actor* host)
 	bool complete = false;
 	host->send(_strand, [&]
 	{
+		assert(check_self_err_call(host));
 		if (!_lockActorID || host->self_id() == _lockActorID)
 		{
 			_lockActorID = host->self_id();
@@ -277,6 +291,7 @@ bool actor_mutex::timed_lock(int tm, my_actor* host, wrap_local_handler_face<voi
 	MutexTrigNotifer_ ntf;
 	host->send(_strand, [&]
 	{
+		assert(check_self_err_call(host));
 		if (!_lockActorID || host->self_id() == _lockActorID)
 		{
 			_lockActorID = host->self_id();
@@ -324,6 +339,7 @@ void actor_mutex::unlock(my_actor* host)
 	host->lock_quit();
 	host->send(_strand, [&]
 	{
+		assert(check_self_err_call(host));
 		assert(host->self_id() == _lockActorID);
 		if (0 == --_recCount)
 		{
@@ -348,7 +364,7 @@ void actor_mutex::quited_unlock(my_actor* host)
 	assert(host->self_strand()->running_in_this_thread());
 	assert(_strand->running_in_this_thread());
 	assert(host->in_actor());
-	assert(host->is_quited());
+	assert(ActorFunc_::is_quited(host));
 	host->check_stack();
 
 	assert(host->self_id() == _lockActorID);
@@ -383,7 +399,7 @@ actor_lock_guard::actor_lock_guard(actor_mutex& amutex, my_actor* host)
 
 actor_lock_guard::~actor_lock_guard()
 {
-	assert(!_host->is_quited());
+	assert(!ActorFunc_::is_quited(_host));
 	if (!_isUnlock)
 	{
 		_amutex.unlock(_host);
@@ -522,6 +538,18 @@ actor_shared_mutex::~actor_shared_mutex()
 
 }
 
+bool actor_shared_mutex::check_self_err_call(my_actor* host)
+{
+	for (wait_node& ele : _waitQueue)
+	{
+		if (host->self_id() == ele._waitHostID)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 void actor_shared_mutex::lock(my_actor* host)
 {
 	lock(host, []{});
@@ -536,6 +564,7 @@ void actor_shared_mutex::lock(my_actor* host, wrap_local_handler_face<void()>&& 
 	MutexTrigNotifer_ ntf;
 	host->send(_strand, [&]
 	{
+		assert(check_self_err_call(host));
 		assert(_inSet.find(host->self_id()) == _inSet.end());
 		if (_inSet.empty())
 		{
@@ -566,6 +595,7 @@ bool actor_shared_mutex::try_lock(my_actor* host)
 	bool complete = false;
 	host->send(_strand, [&]
 	{
+		assert(check_self_err_call(host));
 		assert(_inSet.find(host->self_id()) == _inSet.end());
 		if (_inSet.empty())
 		{
@@ -594,6 +624,7 @@ bool actor_shared_mutex::timed_lock(int tm, my_actor* host, wrap_local_handler_f
 	msg_list<wait_node>::iterator nit;
 	host->send(_strand, [&]
 	{
+		assert(check_self_err_call(host));
 		assert(_inSet.find(host->self_id()) == _inSet.end());
 		if (_inSet.empty())
 		{
@@ -649,6 +680,7 @@ void actor_shared_mutex::lock_shared(my_actor* host, wrap_local_handler_face<voi
 	MutexTrigNotifer_ ntf;
 	host->send(_strand, [&]
 	{
+		assert(check_self_err_call(host));
 		assert(_inSet.find(host->self_id()) == _inSet.end());
 		if (st_shared == _status)
 		{
@@ -677,6 +709,7 @@ bool actor_shared_mutex::try_lock_shared(my_actor* host)
 	bool complete = false;
 	host->send(_strand, [&]
 	{
+		assert(check_self_err_call(host));
 		assert(_inSet.find(host->self_id()) == _inSet.end());
 		if (st_shared == _status)
 		{
@@ -704,6 +737,7 @@ bool actor_shared_mutex::timed_lock_shared(int tm, my_actor* host, wrap_local_ha
 	msg_list<wait_node>::iterator nit;
 	host->send(_strand, [&]
 	{
+		assert(check_self_err_call(host));
 		assert(_inSet.find(host->self_id()) == _inSet.end());
 		if (st_shared == _status)
 		{
@@ -760,6 +794,7 @@ void actor_shared_mutex::lock_upgrade(my_actor* host, wrap_local_handler_face<vo
 	host->send(_strand, [&]
 	{
 		auto it = _inSet.find(host->self_id());
+		assert(check_self_err_call(host));
 		assert(st_shared == _status);
 		assert(it != _inSet.end());
 		assert(st_shared == it->second);
@@ -792,6 +827,7 @@ bool actor_shared_mutex::try_lock_upgrade(my_actor* host)
 	bool complete = false;
 	host->send(_strand, [&]
 	{
+		assert(check_self_err_call(host));
 		assert(st_shared == _status);
 		assert(_inSet.find(host->self_id()) != _inSet.end());
 		assert(st_shared == _inSet.find(host->self_id())->second);
@@ -823,6 +859,7 @@ bool actor_shared_mutex::timed_lock_upgrade(int tm, my_actor* host, wrap_local_h
 	host->send(_strand, [&]
 	{
 		auto it = _inSet.find(host->self_id());
+		assert(check_self_err_call(host));
 		assert(st_shared == _status);
 		assert(it != _inSet.end());
 		assert(st_shared == it->second);
@@ -873,8 +910,9 @@ void actor_shared_mutex::unlock(my_actor* host)
 	host->lock_quit();
 	host->send(_strand, [&]
 	{
-		assert(st_unique == _status);
 		auto it = _inSet.find(host->self_id());
+		assert(check_self_err_call(host));
+		assert(st_unique == _status);
 		assert(it != _inSet.end());
 		assert(st_unique == it->second);
 		_inSet.erase(it);
@@ -913,8 +951,9 @@ void actor_shared_mutex::unlock_shared(my_actor* host)
 	host->lock_quit();
 	host->send(_strand, [&]
 	{
-		assert(st_shared == _status);
 		auto it = _inSet.find(host->self_id());
+		assert(check_self_err_call(host));
+		assert(st_shared == _status);
 		assert(it != _inSet.end());
 		assert(st_shared == it->second);
 		_inSet.erase(it);
@@ -940,6 +979,7 @@ void actor_shared_mutex::unlock_upgrade(my_actor* host)
 	host->lock_quit();
 	host->send(_strand, [&]
 	{
+		assert(check_self_err_call(host));
 		assert(_inSet.size() == 1);
 		assert(_inSet.find(host->self_id()) != _inSet.end());
 		assert(st_upgrade == _inSet.find(host->self_id())->second);
@@ -979,7 +1019,7 @@ actor_unique_lock::actor_unique_lock(actor_shared_mutex& amutex, my_actor* host)
 
 actor_unique_lock::~actor_unique_lock()
 {
-	assert(!_host->is_quited());
+	assert(!ActorFunc_::is_quited(_host));
 	if (!_isUnlock)
 	{
 		_amutex.unlock(_host);
@@ -1009,7 +1049,7 @@ actor_shared_lock::actor_shared_lock(actor_shared_mutex& amutex, my_actor* host)
 
 actor_shared_lock::~actor_shared_lock()
 {
-	assert(!_host->is_quited());
+	assert(!ActorFunc_::is_quited(_host));
 	if (!_isUnlock)
 	{
 		_amutex.unlock_shared(_host);

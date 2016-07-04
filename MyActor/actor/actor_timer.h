@@ -32,10 +32,12 @@ class ActorTimer_
 		void reset()
 		{
 			_null = true;
+			_beginStamp = 0;
 		}
+		long long _beginStamp = 0;
 	private:
-		bool _null = true;
 		handler_queue::iterator _queueNode;
+		bool _null = true;
 	};
 private:
 	ActorTimer_(const shared_strand& strand);

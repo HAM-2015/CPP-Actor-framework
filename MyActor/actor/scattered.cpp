@@ -367,7 +367,7 @@ void* get_sp()
 	__asm__("movq %%rsp, %0": "=r"(result));
 #elif __i386__
 	__asm__("movl %%esp, %0": "=r"(result));
-#elif __arm__
+#elif (_ARM32 || _ARM64)
 	__asm__("mov %0, %%sp": "=r"(result));
 #endif
 	return result;
@@ -379,7 +379,7 @@ unsigned long long cpu_tick()
 	unsigned int __a, __d;
 	__asm__("rdtsc" : "=a" (__a), "=d" (__d));
 	return ((unsigned long long)__a) | (((unsigned long long)__d) << 32);
-#elif __arm__
+#elif (_ARM32 || _ARM64)
 	struct timespec ts;
 	clock_gettime(CLOCK_MONOTONIC, &ts);
 	return (unsigned long long)ts.tv_sec * 1000000000 + ts.tv_nsec;

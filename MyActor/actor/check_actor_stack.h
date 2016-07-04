@@ -21,7 +21,21 @@
 #endif
 
 //Ä¬ÈÏ¶ÑÕ»
+#ifdef WIN32
+#	if (_DEBUG || DEBUG) && (_WIN32_WINNT >= 0x0502)
+#define DEFAULT_STACKSIZE	(256 kB - STACK_RESERVED_SPACE_SIZE)
+#	else
 #define DEFAULT_STACKSIZE	(STACK_BLOCK_SIZE - STACK_RESERVED_SPACE_SIZE)
+#	endif
+#elif __linux__
+#	if (_DEBUG || DEBUG)
+#define DEFAULT_STACKSIZE	(256 kB - STACK_RESERVED_SPACE_SIZE)
+#	else
+#define DEFAULT_STACKSIZE	(STACK_BLOCK_SIZE - STACK_RESERVED_SPACE_SIZE)
+#	endif
+#endif
+
+//×î´ó¶ÑÕ»
 #define MAX_STACKSIZE	(1024 kB - STACK_RESERVED_SPACE_SIZE)
 
 #define TRY_SIZE(__s__) (0x80000000 | (__s__))
@@ -99,7 +113,7 @@ static_assert(8 == sizeof(void*), "");
 static_assert(4 == sizeof(void*), "");
 #endif
 
-#ifdef __arm__
+#if (__arm__ || __aarch64__)
 #if !(defined _ARM32) && !(defined _ARM64)
 #error "please define _ARM32 or _ARM64"
 #endif

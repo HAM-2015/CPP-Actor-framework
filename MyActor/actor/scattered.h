@@ -48,23 +48,6 @@
 #define __disable_noexcept noexcept(false)
 #endif
 
-template <typename Handler>
-struct BreakOfScope_
-{
-	BreakOfScope_(Handler& handler)
-		:_handler(handler) {}
-
-	~BreakOfScope_() __disable_noexcept
-	{
-		_handler();
-	}
-
-	Handler& _handler;
-private:
-	BreakOfScope_(const BreakOfScope_&){};
-	void operator =(const BreakOfScope_&){}
-};
-
 #define _BOND_LINE(__P__, __L__) BOND_NAME(__P__, __L__)
 #define BOND_LINE(__P__) _BOND_LINE(__P__, __LINE__)
 
@@ -116,6 +99,53 @@ private:
 #define option_pck(...) _BOND_LR__(_option_pck, _PP_NARG(__pl__, __VA_ARGS__))(__VA_ARGS__)
 #endif
 
+template <typename Handler>
+struct BreakOfScope_
+{
+	BreakOfScope_(Handler& handler)
+	:_handler(handler) {}
+
+	~BreakOfScope_() __disable_noexcept
+	{
+		_handler();
+	}
+
+	Handler& _handler;
+private:
+	BreakOfScope_(const BreakOfScope_&){};
+	void operator =(const BreakOfScope_&){}
+};
+
+template <typename Handler>
+struct BreakOfScope2_
+{
+	template <typename H>
+	BreakOfScope2_(H&& handler)
+	:_handler(TRY_MOVE(handler)) {}
+
+	~BreakOfScope2_() __disable_noexcept
+	{
+		_handler();
+	}
+
+	Handler _handler;
+public:
+	BreakOfScope2_(BreakOfScope2_&& s)
+		:_handler(s._handler) { assert(false);}
+private:
+	BreakOfScope2_(const BreakOfScope2_&){};
+	void operator =(const BreakOfScope2_&){}
+};
+
+struct MakeBreakOfScope2_
+{
+	template <typename Handler>
+	BreakOfScope2_<RM_REF(Handler)> operator -(Handler&& handler)
+	{
+		return BreakOfScope2_<RM_REF(Handler)>(TRY_MOVE(handler));
+	}
+};
+
 //作用域退出时自动调用lambda
 #define BREAK_OF_SCOPE_NAME(__name__, __handler__) \
 	auto BOND_NAME(__raiiHandler, __name__) = [&]__handler__; \
@@ -123,7 +153,7 @@ private:
 
 #define BREAK_OF_SCOPE(__handler__) BREAK_OF_SCOPE_NAME(__LINE__, __handler__)
 #define BREAK_OF_SCOPE_EXEC(...) BREAK_OF_SCOPE({ option_pck(__VA_ARGS__) });
-
+#define break_of_scope_call auto BOND_LINE(__raiiCall) = MakeBreakOfScope2_()-
 
 //在Actor作用域内定时触发某个操作
 #define HEARTBEAT_TRACE_NAME(__name__, __self__, __tm__, __handler__)\
@@ -209,7 +239,7 @@ private:
 
 //////////////////////////////////////////////////////////////////////////
 
-#define BEGIN_TRY_ {\
+#define BEGIN_TRY_ do {\
 	bool __catched = false; \
 	try {
 
@@ -218,31 +248,27 @@ private:
 	DEBUG_OPERATION(catch (...) { assert(false); })\
 if (__catched) {
 
-#define END_TRY_ }}
+#define END_TRY_ }} while (false)
 
-#define RUN_IN_STRAND(__host__, __strand__, __exp__) (__host__)->send(__strand__, [&] {__exp__;})
+#define RUN_IN_STRAND(__host__, __strand__, ...) (__host__)->send(__strand__, [&] { option_pck(__VA_ARGS__) })
 
 #define begin_RUN_IN_STRAND(__host__, __strand__) (__host__)->send(__strand__, [&] {
-
 #define end_RUN_IN_STRAND() })
 
-#define begin_ACTOR_RUN_IN_STRAND(__host__, __strand__) {\
-	my_actor* const ___host = __host__; \
+#define begin_ACTOR_RUN_IN_STRAND(__host__, __strand__) do {\
+	my_actor::quit_guard __qg(__host__);\
+	my_actor* const ___host = __host__;\
 	actor_handle ___actor = my_actor::create(__strand__, [&](my_actor* __host__) {
 
 #define end_ACTOR_RUN_IN_STRAND() });\
 	___actor->notify_run(); \
-	___host->actor_wait_quit(___actor); \
-}
+	___host->actor_wait_quit(___actor);\
+} while (false)
 
-#define RUN_IN_THREAD_STACK(__host__, __exp__) {\
-(__host__)->run_in_thread_stack([&] {__exp__; });}
+#define RUN_IN_THREAD_STACK(__host__, ...) (__host__)->run_in_thread_stack([&] { option_pck(__VA_ARGS__) })
 
-#define begin_RUN_IN_THREAD_STACK(__host__) {\
-	my_actor* const ___host = __host__; \
-	___host->run_in_thread_stack([&] {
-
-#define end_RUN_IN_THREAD_STACK() });}
+#define begin_RUN_IN_THREAD_STACK(__host__)	(__host__)->run_in_thread_stack([&] {
+#define end_RUN_IN_THREAD_STACK() })
 
 /*!
 @brief 这个类在测试消息传递时使用

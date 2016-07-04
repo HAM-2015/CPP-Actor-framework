@@ -46,9 +46,10 @@ ActorTimer_::timer_handle ActorTimer_::timeout(unsigned long long us, actor_hand
 	}
 	assert(_lockStrand->running_in_this_thread());
 	assert(us < 0x80000000LL * 1000);
-	unsigned long long et = (get_tick_us() + us) & -256;
 	timer_handle timerHandle;
 	timerHandle._null = false;
+	timerHandle._beginStamp = get_tick_us();
+	unsigned long long et = (timerHandle._beginStamp + us) & -256;
 	if (et >= _extMaxTick)
 	{
 		_extMaxTick = et;

@@ -45,16 +45,16 @@
     <AdditionalMakeArguments>-j2</AdditionalMakeArguments>
     <Toolchain>
       <Name>arm-linux-gnueabihf</Name>
-      <Location>D:\cpplib\gcc-linaro-arm-linux-gnueabihf-4.8-2014.04\bin</Location>
+      <Location>D:\cpplib\arm-linux-gnueabihf-gcc49\bin</Location>
       <UnixSystem>false</UnixSystem>
-      <GCC>D:\cpplib\gcc-linaro-arm-linux-gnueabihf-4.8-2014.04\bin\arm-linux-gnueabihf-gcc.exe</GCC>
-      <GXX>D:\cpplib\gcc-linaro-arm-linux-gnueabihf-4.8-2014.04\bin\arm-linux-gnueabihf-g++.exe</GXX>
-      <GDB>D:\cpplib\gcc-linaro-arm-linux-gnueabihf-4.8-2014.04\bin\arm-linux-gnueabihf-gdb.exe</GDB>
-      <AR>D:\cpplib\gcc-linaro-arm-linux-gnueabihf-4.8-2014.04\bin\arm-linux-gnueabihf-ar.exe</AR>
-      <OBJCOPY>D:\cpplib\gcc-linaro-arm-linux-gnueabihf-4.8-2014.04\bin\arm-linux-gnueabihf-objcopy.exe</OBJCOPY>
+      <GCC>D:\cpplib\arm-linux-gnueabihf-gcc49\bin\arm-linux-gnueabihf-gcc.exe</GCC>
+      <GXX>D:\cpplib\arm-linux-gnueabihf-gcc49\bin\arm-linux-gnueabihf-g++.exe</GXX>
+      <GDB>D:\cpplib\arm-linux-gnueabihf-gcc49\bin\arm-linux-gnueabihf-gdb.exe</GDB>
+      <AR>D:\cpplib\arm-linux-gnueabihf-gcc49\bin\arm-linux-gnueabihf-ar.exe</AR>
+      <OBJCOPY>D:\cpplib\arm-linux-gnueabihf-gcc49\bin\arm-linux-gnueabihf-objcopy.exe</OBJCOPY>
       <Make>$(VISUALGDB_DIR)\make.exe</Make>
       <AdditionalPathDirectories>
-        <string>D:\cpplib\gcc-linaro-arm-linux-gnueabihf-4.8-2014.04\bin</string>
+        <string>D:\cpplib\arm-linux-gnueabihf-gcc49\bin</string>
       </AdditionalPathDirectories>
       <RequireCmdExe>true</RequireCmdExe>
       <RequireCtrlBreak>false</RequireCtrlBreak>
@@ -79,7 +79,7 @@
           </Record>
           <Record>
             <VariableName>PATH</VariableName>
-            <Value>%PATH%;D:\cpplib\gcc-linaro-arm-linux-gnueabihf-4.8-2014.04\bin</Value>
+            <Value>%PATH%;D:\cpplib\arm-linux-gnueabihf-gcc49\bin</Value>
           </Record>
         </Records>
       </Environment>
@@ -146,7 +146,9 @@
         </FileMasks>
         <TransferNewFilesOnly>true</TransferNewFilesOnly>
         <IncludeSubdirectories>true</IncludeSubdirectories>
-        <SelectedDirectories />
+        <SelectedDirectories>
+          <string>Debug</string>
+        </SelectedDirectories>
       </CustomActionBase>
       <CustomActionBase xsi:type="CommandLineAction">
         <SkipWhenRunningCommandList>false</SkipWhenRunningCommandList>

@@ -17,19 +17,19 @@
 #define	QT_UI_ACTOR_STACK_SIZE	(128 kB - STACK_RESERVED_SPACE_SIZE)
 
 //开始在Actor中，嵌入一段在qt-ui线程中执行的连续逻辑
-#define begin_RUN_IN_QT_UI_AT(__this_ui__, __host__) {(__this_ui__)->send(__host__, [&]() {
+#define begin_RUN_IN_QT_UI_AT(__this_ui__, __host__) do {(__this_ui__)->send(__host__, [&]() {
 #define begin_RUN_IN_QT_UI() begin_RUN_IN_QT_UI_AT(this, self)
 //结束在qt-ui线程中执行的一段连续逻辑，只有当这段逻辑执行完毕后才会执行END后续代码
-#define end_RUN_IN_QT_UI() });}
+#define end_RUN_IN_QT_UI() });} while (false)
 //////////////////////////////////////////////////////////////////////////
 //在Actor中，嵌入一段在qt-ui线程中执行的语句
-#define RUN_IN_QT_UI_AT(__this_ui__, __host__, ...)  {(__this_ui__)->send(__host__, [&]{ option_pck(__VA_ARGS__) });}
+#define RUN_IN_QT_UI_AT(__this_ui__, __host__, ...)  do {(__this_ui__)->send(__host__, [&]{ option_pck(__VA_ARGS__) });} while (false)
 
 //在Actor中，嵌入一段在qt-ui线程中执行的语句
 #define RUN_IN_QT_UI(...) RUN_IN_QT_UI_AT(this, self, __VA_ARGS__)
 //////////////////////////////////////////////////////////////////////////
 //在Actor中，嵌入一段在qt-ui线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用begin_RUN_IN_QT_UI_AT）
-#define begin_ACTOR_RUN_IN_QT_UI_AT(__this_ui__, __host__, __ios__) {\
+#define begin_ACTOR_RUN_IN_QT_UI_AT(__this_ui__, __host__, __ios__) do {\
 	auto ___host = __host__; \
 	my_actor::quit_guard ___qg(__host__); \
 	auto ___tactor = (__this_ui__)->create_qt_actor(__ios__, [&](my_actor* __host__) {
@@ -42,13 +42,13 @@
 	}); \
 	___tactor->notify_run(); \
 	___host->actor_wait_quit(___tactor); \
-}
+} while (false)
 //////////////////////////////////////////////////////////////////////////
 #define __NO_DELETE_FRAME(__frame__)
 #define __DELETE_FRAME(__frame__) delete (__frame__)
 #define __DESTROY_FRAME(__frame__) (__frame__).destroy();
 
-#define __CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __delete__) {\
+#define __CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __delete__) do {\
 	my_actor::quit_guard qg(__host__);\
 	assert(!(__this_ui__)->run_in_ui_thread());\
 	bool __inside_loop = true;\
@@ -67,7 +67,7 @@
 		if (!__inside_loop) { __delete__(__frame__); }\
 		end_RUN_IN_QT_UI();\
 	} while (__inside_loop);\
-}
+} while (false)
 
 //在非UI线程Actor中，关闭一个qt-ui对象
 #define close_qt_ui_at(__this_ui__, __host__, __frame__) __CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __NO_DELETE_FRAME)
@@ -78,7 +78,7 @@
 #define close_qt_ui_destroy(__frame__) close_qt_ui_destroy_at(this, self, __frame__)
 
 #ifdef ENABLE_QT_ACTOR
-#define __IN_CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __delete__) {\
+#define __IN_CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __delete__) do {\
 	my_actor::quit_guard qg(__host__);\
 	assert((__this_ui__)->run_in_ui_thread());\
 	assert(!(__frame__)->running_in_this_thread());\
@@ -101,7 +101,7 @@
 		}\
 	}\
 	__delete__(__frame__);\
-}
+} while (false)
 
 //在UI线程Actor中，关闭一个qt-ui对象
 #define in_close_qt_ui_at(__this_ui__, __host__, __frame__) __IN_CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __NO_DELETE_FRAME)

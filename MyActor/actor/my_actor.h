@@ -4746,8 +4746,14 @@ class my_actor
 {
 	struct suspend_resume_option
 	{
+		template <typename Handler>
+		suspend_resume_option(bool isSuspend, Handler&& h)
+			:_isSuspend(isSuspend), _h(TRY_MOVE(h)) {}
+
 		bool _isSuspend;
 		std::function<void()> _h;
+		NONE_COPY(suspend_resume_option);
+		RVALUE_CONSTRUCT2(suspend_resume_option, _isSuspend, _h);
 	};
 
 	struct msg_pool_status
@@ -5373,16 +5379,8 @@ public:
 			if (!actorHandle->_quited)
 			{
 				assert(actorHandle->get_actor());
-				assert(actorHandle->get_actor()->parent_actor()->self_id() == self_id());
-				my_actor* actor = actorHandle->_actor.get();
-				if (actor->self_strand() == _strand)
-				{
-					actor->force_quit(std::function<void()>());
-				}
-				else
-				{
-					actor->notify_quit();
-				}
+				assert((*actorHandle)->parent_actor()->self_id() == self_id());
+				(*actorHandle)->notify_quit();
 			}
 		}
 		for (auto& actorHandle : actorHandles)
@@ -5404,16 +5402,8 @@ public:
 			if (!actorHandle._quited)
 			{
 				assert(actorHandle.get_actor());
-				assert(actorHandle.get_actor()->parent_actor()->self_id() == self_id());
-				my_actor* actor = actorHandle._actor.get();
-				if (actor->self_strand() == _strand)
-				{
-					actor->force_quit(std::function<void()>());
-				}
-				else
-				{
-					actor->notify_quit();
-				}
+				assert(actorHandle->parent_actor()->self_id() == self_id());
+				actorHandle->notify_quit();
 			}
 		}
 		for (auto& actorHandle : actorHandles)
@@ -5480,8 +5470,10 @@ public:
 	__yield_interrupt void child_actor_suspend(child_actor_handle& actorHandle, Handles&... handles)
 	{
 		static_assert(sizeof...(Handles) >= 1, "");
+		lock_quit();
 		child_actor_suspend(actorHandle);
 		child_actor_suspend(handles...);
+		unlock_quit();
 	}
 
 	/*!
@@ -5494,54 +5486,42 @@ public:
 	__yield_interrupt void child_actors_suspend(std::list<child_actor_handle::ptr, Alloc>& actorHandles)
 	{
 		assert_enter();
+		lock_quit();
 		actor_msg_handle<> amh;
-		auto h = make_msg_notifer_to_self(amh);
+		actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
 		for (auto& actorHandle : actorHandles)
 		{
 			assert(actorHandle->get_actor());
-			assert(actorHandle->get_actor()->parent_actor()->self_id() == self_id());
-			my_actor* actor = actorHandle->get_actor().get();
-			if (actor->self_strand() == _strand)
-			{
-				actor->suspend(h);
-			}
-			else
-			{
-				actor->notify_suspend(h);
-			}
+			assert((*actorHandle)->parent_actor()->self_id() == self_id());
+			(*actorHandle)->notify_suspend(wrap_ref_handler(h));
 		}
 		for (size_t i = actorHandles.size(); i > 0; i--)
 		{
 			wait_msg(amh);
 		}
 		close_msg_notifer(amh);
+		unlock_quit();
 	}
 
 	template <typename Alloc>
 	__yield_interrupt void child_actors_suspend(std::list<child_actor_handle, Alloc>& actorHandles)
 	{
 		assert_enter();
+		lock_quit();
 		actor_msg_handle<> amh;
-		auto h = make_msg_notifer_to_self(amh);
+		actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
 		for (auto& actorHandle : actorHandles)
 		{
 			assert(actorHandle.get_actor());
-			assert(actorHandle.get_actor()->parent_actor()->self_id() == self_id());
-			my_actor* actor = actorHandle.get_actor().get();
-			if (actor->self_strand() == _strand)
-			{
-				actor->suspend(h);
-			}
-			else
-			{
-				actor->notify_suspend(h);
-			}
+			assert(actorHandle->parent_actor()->self_id() == self_id());
+			actorHandle->notify_suspend(wrap_ref_handler(h));
 		}
 		for (size_t i = actorHandles.size(); i > 0; i--)
 		{
 			wait_msg(amh);
 		}
 		close_msg_notifer(amh);
+		unlock_quit();
 	}
 
 	/*!
@@ -5553,8 +5533,10 @@ public:
 	__yield_interrupt void child_actor_resume(child_actor_handle& actorHandle, Handles&... handles)
 	{
 		static_assert(sizeof...(Handles) >= 1, "");
+		lock_quit();
 		child_actor_resume(actorHandle);
 		child_actor_resume(handles...);
+		unlock_quit();
 	}
 
 	/*!
@@ -5567,54 +5549,42 @@ public:
 	__yield_interrupt void child_actors_resume(std::list<child_actor_handle::ptr, Alloc>& actorHandles)
 	{
 		assert_enter();
+		lock_quit();
 		actor_msg_handle<> amh;
-		auto h = make_msg_notifer_to_self(amh);
+		actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
 		for (auto& actorHandle : actorHandles)
 		{
 			assert(actorHandle->get_actor());
-			assert(actorHandle->get_actor()->parent_actor()->self_id() == self_id());
-			my_actor* actor = actorHandle->get_actor().get();
-			if (actor->self_strand() == _strand)
-			{
-				actor->resume(h);
-			}
-			else
-			{
-				actor->notify_resume(h);
-			}
+			assert((*actorHandle)->parent_actor()->self_id() == self_id());
+			(*actorHandle)->notify_resume(wrap_ref_handler(h));
 		}
 		for (size_t i = actorHandles.size(); i > 0; i--)
 		{
 			wait_msg(amh);
 		}
 		close_msg_notifer(amh);
+		unlock_quit();
 	}
 
 	template <typename Alloc>
 	__yield_interrupt void child_actors_resume(std::list<child_actor_handle, Alloc>& actorHandles)
 	{
 		assert_enter();
+		lock_quit();
 		actor_msg_handle<> amh;
-		auto h = make_msg_notifer_to_self(amh);
+		actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
 		for (auto& actorHandle : actorHandles)
 		{
 			assert(actorHandle.get_actor());
-			assert(actorHandle.get_actor()->parent_actor()->self_id() == self_id());
-			my_actor* actor = actorHandle.get_actor().get();
-			if (actor->self_strand() == _strand)
-			{
-				actor->resume(h);
-			}
-			else
-			{
-				actor->notify_resume(h);
-			}
+			assert(actorHandle->parent_actor()->self_id() == self_id());
+			actorHandle->notify_resume(wrap_ref_handler(h));
 		}
 		for (size_t i = actorHandles.size(); i > 0; i--)
 		{
 			wait_msg(amh);
 		}
 		close_msg_notifer(amh);
+		unlock_quit();
 	}
 
 	/*!
@@ -5686,17 +5656,9 @@ public:
 	void delay_trig(int ms, Handler&& handler)
 	{
 		assert_enter();
-		if (ms > 0)
+		if (ms >= 0)
 		{
-			assert(_timer);
 			timeout(ms, TRY_MOVE(handler));
-		}
-		else if (0 == ms)
-		{
-			assert(_timerStateCompleted);
-			_timerStateTime = 0;
-			_timerStateCompleted = false;
-			_strand->post(wrap_delay_trig<RM_REF(Handler)>(shared_from_this(), TRY_MOVE(handler)));
 		}
 		else
 		{
@@ -5721,7 +5683,7 @@ public:
 		{
 			exeStrand->post(std::bind([&h](actor_handle& shared_this)
 			{
-				h();
+				CHECK_EXCEPTION(h);
 				my_actor* const self = shared_this.get();
 				self->_strand->post(std::bind([](actor_handle& shared_this)
 				{
@@ -5732,7 +5694,7 @@ public:
 		}
 		else
 		{
-			h();
+			CHECK_EXCEPTION(h);
 		}
 	}
 
@@ -5746,7 +5708,7 @@ public:
 			stack_obj<R> res;
 			exeStrand->post(std::bind([&h, &res](actor_handle& shared_this)
 			{
-				res.create(h());
+				CHECK_EXCEPTION(res.create, h());
 				my_actor* const self = shared_this.get();
 				self->_strand->post(std::bind([](actor_handle& shared_this)
 				{
@@ -5769,7 +5731,7 @@ public:
 		quit_guard qg(this);
 		_strand->next_tick(std::bind([&h](actor_handle& shared_this)
 		{
-			h();
+			CHECK_EXCEPTION(h);
 			shared_this->pull_yield();
 		}, shared_from_this()));
 		push_yield();
@@ -5783,7 +5745,7 @@ public:
 		stack_obj<R> res;
 		_strand->next_tick(std::bind([&h, &res](actor_handle& shared_this)
 		{
-			res.create(h());
+			CHECK_EXCEPTION(res.create, h());
 			shared_this->pull_yield();
 		}, shared_from_this()));
 		push_yield();
@@ -5857,7 +5819,7 @@ public:
 				mutex->unlock();
 				if (run)
 				{
-					h();
+					CHECK_EXCEPTION(h);
 					ntf();
 				}
 			}, mutex, ath.dead_sign()));
@@ -5877,7 +5839,7 @@ public:
 		}
 		else
 		{
-			h();
+			CHECK_EXCEPTION(h);
 			return true;
 		}
 	}
@@ -5889,7 +5851,7 @@ private:
 		{
 			exeStrand->post(std::bind([&h](actor_handle& shared_this)
 			{
-				h();
+				CHECK_EXCEPTION(h);
 				my_actor* const self = shared_this.get();
 				self->_strand->post(std::bind([](actor_handle& shared_this)
 				{
@@ -5900,7 +5862,7 @@ private:
 		}
 		else
 		{
-			h();
+			CHECK_EXCEPTION(h);
 		}
 	}
 
@@ -5909,7 +5871,7 @@ private:
 	{
 		_strand->next_tick(std::bind([&h](actor_handle& shared_this)
 		{
-			h();
+			CHECK_EXCEPTION(h);
 			shared_this->pull_yield_after_quited();
 		}, shared_from_this()));
 		push_yield_after_quited();
@@ -5924,7 +5886,7 @@ public:
 		assert_enter();
 		bool sign = false;
 		std::tuple<Outs&...> res(dargs...);
-		h(trig_once_notifer<Outs...>(shared_from_this(), &res, &sign));
+		CHECK_EXCEPTION(h, trig_once_notifer<Outs...>(shared_from_this(), &res, &sign));
 		if (!sign)
 		{
 			sign = true;
@@ -5937,7 +5899,7 @@ public:
 	{
 		assert_enter();
 		bool sign = false;
-		h(trig_once_notifer<>(shared_from_this(), NULL, &sign));
+		CHECK_EXCEPTION(h, trig_once_notifer<>(shared_from_this(), NULL, &sign));
 		if (!sign)
 		{
 			sign = true;
@@ -6890,7 +6852,7 @@ private:
 		{
 			childPck = send<pck_type>(childActor->self_strand(), [id, &childActor]()->pck_type
 			{
-				if (!childActor->is_quited())
+				if (!childActor->_quited)
 				{
 					return my_actor::msg_pool_pck<Args...>(id, childActor.get());
 				}
@@ -7124,7 +7086,7 @@ public:
 		{
 			buddyPck = send<pck_type>(buddyActor->self_strand(), [id, &buddyActor]()->pck_type
 			{
-				if (!buddyActor->is_quited())
+				if (!buddyActor->_quited)
 				{
 					return my_actor::msg_pool_pck<Args...>(id, buddyActor.get());
 				}
@@ -7321,7 +7283,7 @@ public:
 		return _strand->syncInvoke<post_type>([&]()->post_type
 		{
 			typedef MsgPool_<Args...> pool_type;
-			if (!parent_actor() && !is_started() && !is_quited())
+			if (!parent_actor() && !_started && !_quited)
 			{
 				auto msgPck = msg_pool_pck<Args...>(id, this);
 				msgPck->_msgPool = pool_type::make(strand, fixedSize);
@@ -7943,7 +7905,7 @@ public:
 		lock_quit();
 		auto msgPck = send<pck_type>(buddyActor->self_strand(), [id, &buddyActor]()->pck_type
 		{
-			if (!buddyActor->is_quited())
+			if (!buddyActor->_quited)
 			{
 				return my_actor::msg_pool_pck<Args...>(id, buddyActor.get(), false);
 			}
@@ -8375,6 +8337,11 @@ public:
 	boost::asio::io_service& self_io_service();
 
 	/*!
+	@brief 获取io_engine调度器
+	*/
+	io_engine& self_io_engine();
+
+	/*!
 	@brief 返回本对象的智能指针
 	*/
 	actor_handle shared_from_this();
@@ -8458,7 +8425,7 @@ public:
 	/*!
 	@brief Actor是否已经退出
 	*/
-	bool is_quited();
+	bool is_exited();
 
 	/*!
 	@brief 是否是强制退出（在Actor确认退出后调用）
@@ -8469,6 +8436,11 @@ public:
 	@brief 是否在Actor中
 	*/
 	bool in_actor();
+
+	/*!
+	@brief 是否在该Actor依赖的同一个strand中运行
+	*/
+	bool running_in_actor_strand();
 
 	/*!
 	@brief lock_quit后检测是否收到退出消息
@@ -8499,6 +8471,11 @@ public:
 	@brief 是否锁定了退出
 	*/
 	bool is_locked_quit();
+
+	/*!
+	@brief 是否锁定了挂起
+	*/
+	bool is_locked_suspend();
 
 	/*!
 	@brief Actor结束后释放栈内存
@@ -8534,6 +8511,7 @@ public:
 	*/
 	void switch_pause_play();
 	void switch_pause_play(const std::function<void(bool)>& h);
+	void switch_pause_play(std::function<void(bool)>&& h);
 
 	/*!
 	@brief 等待Actor退出，在Actor所依赖的ios无关线程中使用
@@ -8582,7 +8560,7 @@ public:
 	{
 		assert_enter();
 		actor_msg_handle<> amh;
-		auto h = make_msg_notifer_to_self(amh);
+		actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
 		for (auto& actorHandle : anotherActors)
 		{
 			actorHandle->notify_quit(h);
@@ -8630,17 +8608,19 @@ public:
 	__yield_interrupt void actors_suspend(const std::list<actor_handle, Alloc>& anotherActors)
 	{
 		assert_enter();
+		lock_quit();
 		actor_msg_handle<> amh;
-		auto h = make_msg_notifer_to_self(amh);
+		actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
 		for (auto& actorHandle : anotherActors)
 		{
-			actorHandle->notify_suspend(h);
+			actorHandle->notify_suspend(wrap_ref_handler(h));
 		}
 		for (size_t i = anotherActors.size(); i > 0; i--)
 		{
 			wait_msg(amh);
 		}
 		close_msg_notifer(amh);
+		unlock_quit();
 	}
 
 	/*!
@@ -8657,17 +8637,19 @@ public:
 	__yield_interrupt void actors_resume(const std::list<actor_handle, Alloc>& anotherActors)
 	{
 		assert_enter();
+		lock_quit();
 		actor_msg_handle<> amh;
-		auto h = make_msg_notifer_to_self(amh);
+		actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
 		for (auto& actorHandle : anotherActors)
 		{
-			actorHandle->notify_resume(h);
+			actorHandle->notify_resume(wrap_ref_handler(h));
 		}
 		for (size_t i = anotherActors.size(); i > 0; i--)
 		{
 			wait_msg(amh);
 		}
 		close_msg_notifer(amh);
+		unlock_quit();
 	}
 
 	/*!
@@ -8686,18 +8668,20 @@ public:
 	__yield_interrupt bool actors_switch(const std::list<actor_handle, Alloc>& anotherActors)
 	{
 		assert_enter();
+		lock_quit();
 		bool isPause = true;
 		actor_msg_handle<bool> amh;
-		auto h = make_msg_notifer_to_self(amh);
+		actor_msg_notifer<bool> h = make_msg_notifer_to_self(amh);
 		for (auto& actorHandle : anotherActors)
 		{
-			actorHandle->switch_pause_play(h);
+			actorHandle->switch_pause_play(wrap_ref_handler(h));
 		}
 		for (size_t i = anotherActors.size(); i > 0; i--)
 		{
 			isPause &= wait_msg(amh);
 		}
 		close_msg_notifer(amh);
+		unlock_quit();
 		return isPause;
 	}
 
@@ -8719,13 +8703,12 @@ private:
 	void timeout(int ms, Handler&& handler)
 	{
 		assert_enter();
-		assert(ms > 0);
+		assert(ms >= 0);
 		assert(_timerStateCompleted);
 		assert(!_timerStateCb);
 		typedef wrap_timer_handler<RM_REF(Handler)> wrap_type;
 		_timerStateCompleted = false;
 		_timerStateTime = (long long)ms * 1000;
-		_timerStateStampBegin = get_tick_us();
 		_timerStateCb = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
 		_timerStateHandle = _timer->timeout(_timerStateTime, shared_from_this());
 	}
@@ -8734,24 +8717,14 @@ private:
 	void cancel_timer();
 	void suspend_timer();
 	void resume_timer();
-	void force_quit(const std::function<void()>& h);
-	void force_quit(std::function<void()>&& h);
-	void suspend(const std::function<void()>& h);
 	void suspend(std::function<void()>&& h);
-	void resume(const std::function<void()>& h);
 	void resume(std::function<void()>&& h);
-	void suspend();
-	void resume();
 	void run_one();
 	void pull_yield_tls();
 	void pull_yield();
 	void pull_yield_after_quited();
 	void push_yield();
 	void push_yield_after_quited();
-	void force_quit_cb_handler();
-	void at_begin_quit_execute();
-	void child_suspend_cb_handler();
-	void child_resume_cb_handler();
 #if (__linux__ && ENABLE_DUMP_STACK)
 	static void dump_segmentation_fault(void* sp, size_t length);
 	static void undump_segmentation_fault();
@@ -8781,7 +8754,6 @@ private:
 	size_t _trigSignMask;///<触发消息标记
 	size_t _waitingTrigMask;///<等待触发消息标记
 	long long _timerStateTime;///<当前定时时间
-	long long _timerStateStampBegin;///<定时起始时间
 	long long _timerStateStampEnd;///<定时结束时间
 	msg_pool_status _msgPoolStatus;///<消息池列表
 	actor_handle _parentActor;///<父Actor，子Actor都析构后，父Actor才能析构
@@ -8790,7 +8762,7 @@ private:
 	main_func _mainFunc;///<Actor入口
 	msg_list_shared_alloc<suspend_resume_option> _suspendResumeQueue;///<挂起/恢复操作队列
 	msg_list_shared_alloc<std::function<void()> > _quitCallback;///<Actor结束后的回调函数
-	msg_list_shared_alloc<std::function<void()> > _atBeginQuitRegistExecutor;///<Actor准备退出时调用的函数，后注册的先执行
+	msg_list_shared_alloc<std::function<void()> > _beginQuitExec;///<Actor准备退出时调用的函数，后注册的先执行
 	msg_list_shared_alloc<actor_handle> _childActorList;///<子Actor集合，子Actor都退出后，父Actor才能退出
 	int _timerStateCount;///<定时器计数
 	bool _timerStateSuspend : 1;///<定时器是否挂起
@@ -8800,11 +8772,11 @@ private:
 	bool _quited : 1;///<_mainFunc已经不再执行
 	bool _exited : 1;///<完全退出
 	bool _suspended : 1;///<Actor挂起标记
-	bool _hasNotify : 1;///<当前Actor挂起，有外部触发准备进入Actor标记
 	bool _isForce : 1;///<是否是强制退出的标记，成功调用了force_quit
-	bool _notifyQuited : 1;///<当前Actor被锁定后，收到退出消息
+	bool _holdPull : 1;///<当前Actor挂起，有外部触发准备进入Actor标记
+	bool _holdQuited : 1;///<当前Actor被锁定后，收到退出消息
+	bool _holdSuspended : 1;///<挂起恢复操作没挂起标记
 	bool _checkStack : 1;///<是否检测栈空间
-	bool _holdedSuspendSign : 1;///<挂起恢复操作没挂起标记
 	bool _waitingQuit : 1;///<等待退出标记
 	bool _afterExitCleanStack : 1;///<结束后清栈
 #ifdef PRINT_ACTOR_STACK
@@ -8822,9 +8794,9 @@ private:
 
 struct ActorGo_
 {
-	ActorGo_(const shared_strand& strand, size_t stackSize = DEFAULT_STACKSIZE);
-	ActorGo_(shared_strand&& strand, size_t stackSize = DEFAULT_STACKSIZE);
-	ActorGo_(io_engine& ios, size_t stackSize = DEFAULT_STACKSIZE);
+	ActorGo_(const shared_strand& strand, size_t stackSize = MAX_STACKSIZE);
+	ActorGo_(shared_strand&& strand, size_t stackSize = MAX_STACKSIZE);
+	ActorGo_(io_engine& ios, size_t stackSize = MAX_STACKSIZE);
 
 	template <typename Handler>
 	actor_handle operator -(AutoStackActor_<Handler>&& wrapActor)
@@ -8849,7 +8821,33 @@ struct ActorGo_
 	NONE_COPY(ActorGo_);
 };
 
+struct ActorReadyGo_
+{
+	ActorReadyGo_(const shared_strand& strand, size_t stackSize = MAX_STACKSIZE);
+	ActorReadyGo_(shared_strand&& strand, size_t stackSize = MAX_STACKSIZE);
+	ActorReadyGo_(io_engine& ios, size_t stackSize = MAX_STACKSIZE);
+
+	template <typename Handler>
+	actor_handle operator -(AutoStackActor_<Handler>&& wrapActor)
+	{
+		assert(_strand);
+		return my_actor::create(std::move(_strand), std::move(wrapActor));
+	}
+
+	template <typename Handler>
+	actor_handle operator -(Handler&& handler)
+	{
+		assert(_strand);
+		return my_actor::create(std::move(_strand), TRY_MOVE(handler), _stackSize);
+	}
+
+	shared_strand _strand;
+	size_t _stackSize;
+	NONE_COPY(ActorReadyGo_);
+};
+
 #define go(...) ActorGo_(__VA_ARGS__)-
+#define ready_go(...) ActorReadyGo_(__VA_ARGS__)-
 
 //////////////////////////////////////////////////////////////////////////
 

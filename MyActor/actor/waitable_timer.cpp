@@ -28,7 +28,7 @@ WaitableTimer_::~WaitableTimer_()
 
 void WaitableTimer_::appendEvent(long long us, WaitableTimerEvent_* h)
 {
-	assert(us > 0);
+	assert(us >= 0);
 	assert(h->_timerHandle._null);
 	h->_timerHandle._null = false;
 	unsigned long long et = us + get_tick_us();
@@ -113,7 +113,7 @@ WaitableTimer_::~WaitableTimer_()
 
 void WaitableTimer_::appendEvent(long long us, WaitableTimerEvent_* h)
 {
-	assert(us > 0);
+	assert(us >= 0);
 	assert(h->_timerHandle._null);
 	h->_timerHandle._null = false;
 	unsigned long long et = us + get_tick_us();

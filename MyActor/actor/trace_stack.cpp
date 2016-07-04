@@ -448,7 +448,7 @@ std::list<stack_line_info> get_stack_list(void* reg_bp, void* reg_sp, void* reg_
 		ip = bp[1];
 		bp = (void**)bp[0];
 	}
-#elif __arm__
+#elif (_ARM32 || _ARM64)
 	//FIXME
 	traceback.push_back(reg_ip);
 #endif
