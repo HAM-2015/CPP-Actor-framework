@@ -2178,7 +2178,7 @@ void my_actor::child_actor_run(child_actor_handle& actorHandle)
 	assert(actorHandle.get_actor());
 	assert(actorHandle->parent_actor()->self_id() == self_id());
 	actorHandle._started = true;
-	actorHandle->notify_run();
+	actorHandle->run();
 }
 
 void my_actor::child_actors_run(std::list<child_actor_handle::ptr>& actorHandles)
@@ -2206,7 +2206,7 @@ void my_actor::child_actor_force_quit(child_actor_handle& actorHandle)
 	{
 		assert(actorHandle.get_actor());
 		assert(actorHandle->parent_actor()->self_id() == self_id());
-		actorHandle->notify_quit();
+		actorHandle->force_quit();
 		wait_trig(actorHandle._quiteAth);
 		actorHandle.peel();
 	}
@@ -2221,7 +2221,7 @@ void my_actor::child_actors_force_quit(std::list<child_actor_handle::ptr>& actor
 		{
 			assert(actorHandle->get_actor());
 			assert((*actorHandle)->parent_actor()->self_id() == self_id());
-			(*actorHandle)->notify_quit();
+			(*actorHandle)->force_quit();
 		}
 	}
 	for (auto& actorHandle : actorHandles)
@@ -2243,7 +2243,7 @@ void my_actor::child_actors_force_quit(std::list<child_actor_handle>& actorHandl
 		{
 			assert(actorHandle.get_actor());
 			assert(actorHandle->parent_actor()->self_id() == self_id());
-			actorHandle->notify_quit();
+			actorHandle->force_quit();
 		}
 	}
 	for (auto& actorHandle : actorHandles)
@@ -2311,7 +2311,7 @@ void my_actor::child_actor_suspend(child_actor_handle& actorHandle)
 	lock_quit();
 	assert(actorHandle.get_actor());
 	assert(actorHandle->parent_actor()->self_id() == self_id());
-	trig([&actorHandle](trig_once_notifer<>&& h){actorHandle->notify_suspend(std::move(h)); });
+	trig([&actorHandle](trig_once_notifer<>&& h){actorHandle->suspend(std::move(h)); });
 	unlock_quit();
 }
 
@@ -2325,7 +2325,7 @@ void my_actor::child_actors_suspend(std::list<child_actor_handle::ptr>& actorHan
 	{
 		assert(actorHandle->get_actor());
 		assert((*actorHandle)->parent_actor()->self_id() == self_id());
-		(*actorHandle)->notify_suspend(wrap_ref_handler(h));
+		(*actorHandle)->suspend(wrap_ref_handler(h));
 	}
 	for (size_t i = actorHandles.size(); i > 0; i--)
 	{
@@ -2345,7 +2345,7 @@ void my_actor::child_actors_suspend(std::list<child_actor_handle>& actorHandles)
 	{
 		assert(actorHandle.get_actor());
 		assert(actorHandle->parent_actor()->self_id() == self_id());
-		actorHandle->notify_suspend(wrap_ref_handler(h));
+		actorHandle->suspend(wrap_ref_handler(h));
 	}
 	for (size_t i = actorHandles.size(); i > 0; i--)
 	{
@@ -2361,7 +2361,7 @@ void my_actor::child_actor_resume(child_actor_handle& actorHandle)
 	lock_quit();
 	assert(actorHandle.get_actor());
 	assert(actorHandle->parent_actor()->self_id() == self_id());
-	trig([&actorHandle](trig_once_notifer<>&& h){actorHandle->notify_resume(std::move(h)); });
+	trig([&actorHandle](trig_once_notifer<>&& h){actorHandle->resume(std::move(h)); });
 	unlock_quit();
 }
 
@@ -2375,7 +2375,7 @@ void my_actor::child_actors_resume(std::list<child_actor_handle::ptr>& actorHand
 	{
 		assert(actorHandle->get_actor());
 		assert((*actorHandle)->parent_actor()->self_id() == self_id());
-		(*actorHandle)->notify_resume(wrap_ref_handler(h));
+		(*actorHandle)->resume(wrap_ref_handler(h));
 	}
 	for (size_t i = actorHandles.size(); i > 0; i--)
 	{
@@ -2395,7 +2395,7 @@ void my_actor::child_actors_resume(std::list<child_actor_handle>& actorHandles)
 	{
 		assert(actorHandle.get_actor());
 		assert(actorHandle->parent_actor()->self_id() == self_id());
-		actorHandle->notify_resume(wrap_ref_handler(h));
+		actorHandle->resume(wrap_ref_handler(h));
 	}
 	for (size_t i = actorHandles.size(); i > 0; i--)
 	{
@@ -2654,7 +2654,7 @@ void my_actor::reset_yield()
 	_lastYield = -1;
 }
 
-void my_actor::notify_run()
+void my_actor::run()
 {
 	_strand->try_tick(std::bind([](const actor_handle& shared_this)
 	{
@@ -2679,17 +2679,17 @@ void my_actor::assert_enter()
 #endif
 }
 
-void my_actor::notify_quit()
+void my_actor::force_quit()
 {
-	notify_quit(std::function<void()>());
+	force_quit(std::function<void()>());
 }
 
-void my_actor::notify_quit(const std::function<void()>& h)
+void my_actor::force_quit(const std::function<void()>& h)
 {
-	notify_quit(std::function<void()>(h));
+	force_quit(std::function<void()>(h));
 }
 
-void my_actor::notify_quit(std::function<void()>&& h)
+void my_actor::force_quit(std::function<void()>&& h)
 {
 	_strand->try_tick(std::bind([](actor_handle& shared_this, std::function<void()>& h)
 	{
@@ -2716,7 +2716,7 @@ void my_actor::notify_quit(std::function<void()>&& h)
 					{
 						actor_handle childActor = std::move(self->_childActorList.front());
 						self->_childActorList.pop_front();
-						childActor->notify_quit(std::bind([](actor_handle& shared_this)
+						childActor->force_quit(std::bind([](actor_handle& shared_this)
 						{
 							my_actor* const self = shared_this.get();
 							self->_childOverCount--;
@@ -2804,7 +2804,7 @@ void my_actor::unlock_quit()
 	if (0 == --_lockQuit && _holdQuited)
 	{
 		_holdQuited = false;
-		notify_quit();
+		force_quit();
 		push_yield();
 	}
 }
@@ -2827,11 +2827,11 @@ void my_actor::unlock_suspend()
 		_suspendResumeQueue.pop_front();
 		if (opt._isSuspend)
 		{
-			notify_suspend(std::move(opt._h));
+			suspend(std::move(opt._h));
 		} 
 		else
 		{
-			notify_resume(std::move(opt._h));
+			resume(std::move(opt._h));
 		}
 		tick_yield();
 	}
@@ -2855,17 +2855,17 @@ void my_actor::after_exit_clean_stack()
 	_afterExitCleanStack = true;
 }
 
-void my_actor::notify_suspend()
+void my_actor::suspend()
 {
-	notify_suspend(std::function<void()>());
+	suspend(std::function<void()>());
 }
 
-void my_actor::notify_suspend(const std::function<void()>& h)
+void my_actor::suspend(const std::function<void()>& h)
 {
-	notify_suspend(std::function<void()>(h));
+	suspend(std::function<void()>(h));
 }
 
-void my_actor::notify_suspend(std::function<void()>&& h)
+void my_actor::suspend(std::function<void()>&& h)
 {
 	_strand->try_tick(std::bind([](actor_handle& shared_this, std::function<void()>& h)
 	{
@@ -2879,7 +2879,7 @@ void my_actor::notify_suspend(std::function<void()>&& h)
 				{
 					self->_suspended = true;
 					self->suspend_timer();
-					self->suspend(std::bind([](actor_handle& shared_this)
+					self->_suspend(std::bind([](actor_handle& shared_this)
 					{
 						my_actor* const self = shared_this.get();
 						suspend_resume_option opt = std::move(self->_suspendResumeQueue.front());
@@ -2894,11 +2894,11 @@ void my_actor::notify_suspend(std::function<void()>&& h)
 							self->_suspendResumeQueue.pop_front();
 							if (opt._isSuspend)
 							{
-								self->notify_suspend(std::move(opt._h));
+								self->suspend(std::move(opt._h));
 							}
 							else
 							{
-								self->notify_resume(std::move(opt._h));
+								self->resume(std::move(opt._h));
 							}
 						}
 					}, std::move(shared_this)));
@@ -2916,7 +2916,7 @@ void my_actor::notify_suspend(std::function<void()>&& h)
 	}, shared_from_this(), std::move(h)));
 }
 
-void my_actor::suspend(std::function<void()>&& h)
+void my_actor::_suspend(std::function<void()>&& h)
 {
 	if (!_childActorList.empty())
 	{
@@ -2924,7 +2924,7 @@ void my_actor::suspend(std::function<void()>&& h)
 		_childSuspendResumeCount = _childActorList.size();
 		for (actor_handle& childActor : _childActorList)
 		{
-			childActor->notify_suspend(std::bind([](actor_handle& shared_this, std::function<void()>& h)
+			childActor->suspend(std::bind([](actor_handle& shared_this, std::function<void()>& h)
 			{
 				my_actor* const self = shared_this.get();
 				self->_childSuspendResumeCount--;
@@ -2941,17 +2941,17 @@ void my_actor::suspend(std::function<void()>&& h)
 	}
 }
 
-void my_actor::notify_resume()
+void my_actor::resume()
 {
-	notify_resume(std::function<void()>());
+	resume(std::function<void()>());
 }
 
-void my_actor::notify_resume(const std::function<void()>& h)
+void my_actor::resume(const std::function<void()>& h)
 {
-	notify_resume(std::function<void()>(h));
+	resume(std::function<void()>(h));
 }
 
-void my_actor::notify_resume(std::function<void()>&& h)
+void my_actor::resume(std::function<void()>&& h)
 {
 	_strand->try_tick(std::bind([](const actor_handle& shared_this, std::function<void()>& h)
 	{
@@ -2963,7 +2963,7 @@ void my_actor::notify_resume(std::function<void()>&& h)
 			{
 				if (1 == self->_suspendResumeQueue.size())
 				{
-					self->resume(std::bind([](actor_handle& shared_this)
+					self->_resume(std::bind([](actor_handle& shared_this)
 					{
 						my_actor* const self = shared_this.get();
 						suspend_resume_option opt = std::move(self->_suspendResumeQueue.front());
@@ -2978,11 +2978,11 @@ void my_actor::notify_resume(std::function<void()>&& h)
 							self->_suspendResumeQueue.pop_front();
 							if (opt._isSuspend)
 							{
-								self->notify_suspend(std::move(opt._h));
+								self->suspend(std::move(opt._h));
 							}
 							else
 							{
-								self->notify_resume(std::move(opt._h));
+								self->resume(std::move(opt._h));
 							}
 						}
 						else
@@ -3010,7 +3010,7 @@ void my_actor::notify_resume(std::function<void()>&& h)
 	}, shared_from_this(), std::move(h)));
 }
 
-void my_actor::resume(std::function<void()>&& h)
+void my_actor::_resume(std::function<void()>&& h)
 {
 	if (!_childActorList.empty())
 	{
@@ -3018,7 +3018,7 @@ void my_actor::resume(std::function<void()>&& h)
 		_childSuspendResumeCount = _childActorList.size();
 		for (actor_handle& childActor : _childActorList)
 		{
-			childActor->notify_resume(std::bind([](actor_handle& shared_this, std::function<void()>& h)
+			childActor->resume(std::bind([](actor_handle& shared_this, std::function<void()>& h)
 			{
 				my_actor* const self = shared_this.get();
 				self->_childSuspendResumeCount--;
@@ -3056,28 +3056,28 @@ void my_actor::switch_pause_play(std::function<void(bool)>&& h)
 			{
 				if (h)
 				{
-					shared_this->notify_resume(std::bind([](std::function<void(bool)>& h)
+					shared_this->resume(std::bind([](std::function<void(bool)>& h)
 					{
 						CHECK_EXCEPTION(h, false);
 					}, std::move(h)));
 				}
 				else
 				{
-					shared_this->notify_resume(std::function<void()>());
+					shared_this->resume(std::function<void()>());
 				}
 			}
 			else
 			{
 				if (h)
 				{
-					shared_this->notify_suspend(std::bind([](std::function<void(bool)>& h)
+					shared_this->suspend(std::bind([](std::function<void(bool)>& h)
 					{
 						CHECK_EXCEPTION(h, true);
 					}, std::move(h)));
 				}
 				else
 				{
-					shared_this->notify_suspend(std::function<void()>());
+					shared_this->suspend(std::function<void()>());
 				}
 			}
 		}
@@ -3206,7 +3206,7 @@ void my_actor::actors_start_run(const std::list<actor_handle>& anotherActors)
 	assert_enter();
 	for (auto& actorHandle : anotherActors)
 	{
-		actorHandle->notify_run();
+		actorHandle->run();
 	}
 }
 
@@ -3214,7 +3214,7 @@ void my_actor::actor_force_quit(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
-	trig([anotherActor](trig_once_notifer<>&& h){anotherActor->notify_quit(std::move(h)); });
+	trig([anotherActor](trig_once_notifer<>&& h){anotherActor->force_quit(std::move(h)); });
 }
 
 void my_actor::actors_force_quit(const std::list<actor_handle>& anotherActors)
@@ -3225,7 +3225,7 @@ void my_actor::actors_force_quit(const std::list<actor_handle>& anotherActors)
 	actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
 	for (auto& actorHandle : anotherActors)
 	{
-		actorHandle->notify_quit(wrap_ref_handler(h));
+		actorHandle->force_quit(wrap_ref_handler(h));
 	}
 	for (size_t i = anotherActors.size(); i > 0; i--)
 	{
@@ -3264,7 +3264,7 @@ void my_actor::actor_suspend(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
-	trig([anotherActor](trig_once_notifer<>&& h){anotherActor->notify_suspend(std::move(h)); });
+	trig([anotherActor](trig_once_notifer<>&& h){anotherActor->suspend(std::move(h)); });
 }
 
 void my_actor::actors_suspend(const std::list<actor_handle>& anotherActors)
@@ -3275,7 +3275,7 @@ void my_actor::actors_suspend(const std::list<actor_handle>& anotherActors)
 	actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
 	for (auto& actorHandle : anotherActors)
 	{
-		actorHandle->notify_suspend(wrap_ref_handler(h));
+		actorHandle->suspend(wrap_ref_handler(h));
 	}
 	for (size_t i = anotherActors.size(); i > 0; i--)
 	{
@@ -3289,7 +3289,7 @@ void my_actor::actor_resume(const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
-	trig([anotherActor](trig_once_notifer<>&& h){anotherActor->notify_resume(std::move(h)); });
+	trig([anotherActor](trig_once_notifer<>&& h){anotherActor->resume(std::move(h)); });
 }
 
 void my_actor::actors_resume(const std::list<actor_handle>& anotherActors)
@@ -3300,7 +3300,7 @@ void my_actor::actors_resume(const std::list<actor_handle>& anotherActors)
 	actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
 	for (auto& actorHandle : anotherActors)
 	{
-		actorHandle->notify_resume(wrap_ref_handler(h));
+		actorHandle->resume(wrap_ref_handler(h));
 	}
 	for (size_t i = anotherActors.size(); i > 0; i--)
 	{

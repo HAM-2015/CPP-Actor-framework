@@ -214,19 +214,11 @@ public:
 	@brief 共享锁提升为独占锁
 	*/
 	void lock_upgrade(my_actor* host);
-	bool try_lock_upgrade(my_actor* host);
-	bool timed_lock_upgrade(int tm, my_actor* host);
 
 	template <typename Ntf>
 	void lock_upgrade(my_actor* host, Ntf&& lockNtf)
 	{
 		lock_upgrade(host, (wrap_local_handler_face<void()>&&)wrap_local_handler(TRY_MOVE(lockNtf)));
-	}
-
-	template <typename Ntf>
-	bool timed_lock_upgrade(int tm, my_actor* host, Ntf&& lockNtf)
-	{
-		return timed_lock_upgrade(tm, host, (wrap_local_handler_face<void()>&&)wrap_local_handler(TRY_MOVE(lockNtf)));
 	}
 
 	/*!
@@ -254,13 +246,16 @@ private:
 	void lock_shared(my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
 	bool timed_lock_shared(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
 	void lock_upgrade(my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
-	bool timed_lock_upgrade(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
 	bool check_self_err_call(my_actor* host);
 private:
 	lock_status _status;
+	size_t _insideCount;
 	shared_strand _strand;
 	msg_list<wait_node> _waitQueue;
+	msg_queue<wait_node> _upgradeQueue;
+#if (_DEBUG || DEBUG)
 	msg_map<long long, lock_status> _inSet;
+#endif
 	NONE_COPY(actor_shared_mutex)
 };
 //////////////////////////////////////////////////////////////////////////

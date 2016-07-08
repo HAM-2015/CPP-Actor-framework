@@ -40,7 +40,7 @@
 //结束在qt-ui线程中执行的Actor，只有当Actor内逻辑执行完毕后才会执行END后续代码
 #define end_ACTOR_RUN_IN_QT_UI()\
 	}); \
-	___tactor->notify_run(); \
+	___tactor->run(); \
 	___host->actor_wait_quit(___tactor); \
 } while (false)
 //////////////////////////////////////////////////////////////////////////

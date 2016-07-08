@@ -261,7 +261,7 @@ if (__catched) {
 	actor_handle ___actor = my_actor::create(__strand__, [&](my_actor* __host__) {
 
 #define end_ACTOR_RUN_IN_STRAND() });\
-	___actor->notify_run(); \
+	___actor->run(); \
 	___host->actor_wait_quit(___actor);\
 } while (false)
 

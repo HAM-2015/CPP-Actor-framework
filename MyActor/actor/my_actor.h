@@ -5380,7 +5380,7 @@ public:
 			{
 				assert(actorHandle->get_actor());
 				assert((*actorHandle)->parent_actor()->self_id() == self_id());
-				(*actorHandle)->notify_quit();
+				(*actorHandle)->force_quit();
 			}
 		}
 		for (auto& actorHandle : actorHandles)
@@ -5403,7 +5403,7 @@ public:
 			{
 				assert(actorHandle.get_actor());
 				assert(actorHandle->parent_actor()->self_id() == self_id());
-				actorHandle->notify_quit();
+				actorHandle->force_quit();
 			}
 		}
 		for (auto& actorHandle : actorHandles)
@@ -5493,7 +5493,7 @@ public:
 		{
 			assert(actorHandle->get_actor());
 			assert((*actorHandle)->parent_actor()->self_id() == self_id());
-			(*actorHandle)->notify_suspend(wrap_ref_handler(h));
+			(*actorHandle)->suspend(wrap_ref_handler(h));
 		}
 		for (size_t i = actorHandles.size(); i > 0; i--)
 		{
@@ -5514,7 +5514,7 @@ public:
 		{
 			assert(actorHandle.get_actor());
 			assert(actorHandle->parent_actor()->self_id() == self_id());
-			actorHandle->notify_suspend(wrap_ref_handler(h));
+			actorHandle->suspend(wrap_ref_handler(h));
 		}
 		for (size_t i = actorHandles.size(); i > 0; i--)
 		{
@@ -5556,7 +5556,7 @@ public:
 		{
 			assert(actorHandle->get_actor());
 			assert((*actorHandle)->parent_actor()->self_id() == self_id());
-			(*actorHandle)->notify_resume(wrap_ref_handler(h));
+			(*actorHandle)->resume(wrap_ref_handler(h));
 		}
 		for (size_t i = actorHandles.size(); i > 0; i--)
 		{
@@ -5577,7 +5577,7 @@ public:
 		{
 			assert(actorHandle.get_actor());
 			assert(actorHandle->parent_actor()->self_id() == self_id());
-			actorHandle->notify_resume(wrap_ref_handler(h));
+			actorHandle->resume(wrap_ref_handler(h));
 		}
 		for (size_t i = actorHandles.size(); i > 0; i--)
 		{
@@ -6928,7 +6928,7 @@ public:
 		msg_agent_to<Args...>(id, childActor);
 		if (autoRun)
 		{
-			childActor->notify_run();
+			childActor->run();
 		}
 		return child_actor_handle(std::move(childActor));
 	}
@@ -6946,7 +6946,7 @@ public:
 		msg_agent_to<Args...>(id, childActor);
 		if (autoRun)
 		{
-			childActor->notify_run();
+			childActor->run();
 		}
 		return child_actor_handle(std::move(childActor));
 	}
@@ -7269,7 +7269,7 @@ public:
 	}
 
 	/*!
-	@brief 创建一个消息通知函数，在该Actor所依赖的ios无关线程中使用，且在该Actor调用 notify_run() 之前
+	@brief 创建一个消息通知函数，在该Actor所依赖的ios无关线程中使用，且在该Actor调用 run() 之前
 	@param strand 消息调度器
 	@param id 相同类型消息id
 	@param fixedSize 消息队列内存池长度
@@ -8404,18 +8404,18 @@ public:
 	/*!
 	@brief 开始运行建立好的Actor
 	*/
-	void notify_run();
+	void run();
 
 	/*!
 	@brief 强制退出该Actor，不可滥用，有可能会造成资源泄漏
 	*/
-	void notify_quit();
+	void force_quit();
 
 	/*!
 	@brief 强制退出该Actor，完成后回调
 	*/
-	void notify_quit(const std::function<void()>& h);
-	void notify_quit(std::function<void()>&& h);
+	void force_quit(const std::function<void()>& h);
+	void force_quit(std::function<void()>&& h);
 
 	/*!
 	@brief Actor是否已经开始运行
@@ -8485,16 +8485,16 @@ public:
 	/*!
 	@brief 暂停Actor
 	*/
-	void notify_suspend();
-	void notify_suspend(const std::function<void()>& h);
-	void notify_suspend(std::function<void()>&& h);
+	void suspend();
+	void suspend(const std::function<void()>& h);
+	void suspend(std::function<void()>&& h);
 
 	/*!
 	@brief 恢复已暂停Actor
 	*/
-	void notify_resume();
-	void notify_resume(const std::function<void()>& h);
-	void notify_resume(std::function<void()>&& h);
+	void resume();
+	void resume(const std::function<void()>& h);
+	void resume(std::function<void()>&& h);
 
 	/*!
 	@brief 触发通知，0 <= id < 32,64
@@ -8541,7 +8541,7 @@ public:
 		assert_enter();
 		for (auto& actorHandle : anotherActors)
 		{
-			actorHandle->notify_run();
+			actorHandle->run();
 		}
 	}
 
@@ -8563,7 +8563,7 @@ public:
 		actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
 		for (auto& actorHandle : anotherActors)
 		{
-			actorHandle->notify_quit(h);
+			actorHandle->force_quit(h);
 		}
 		for (size_t i = anotherActors.size(); i > 0; i--)
 		{
@@ -8613,7 +8613,7 @@ public:
 		actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
 		for (auto& actorHandle : anotherActors)
 		{
-			actorHandle->notify_suspend(wrap_ref_handler(h));
+			actorHandle->suspend(wrap_ref_handler(h));
 		}
 		for (size_t i = anotherActors.size(); i > 0; i--)
 		{
@@ -8642,7 +8642,7 @@ public:
 		actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
 		for (auto& actorHandle : anotherActors)
 		{
-			actorHandle->notify_resume(wrap_ref_handler(h));
+			actorHandle->resume(wrap_ref_handler(h));
 		}
 		for (size_t i = anotherActors.size(); i > 0; i--)
 		{
@@ -8717,8 +8717,8 @@ private:
 	void cancel_timer();
 	void suspend_timer();
 	void resume_timer();
-	void suspend(std::function<void()>&& h);
-	void resume(std::function<void()>&& h);
+	void _suspend(std::function<void()>&& h);
+	void _resume(std::function<void()>&& h);
 	void run_one();
 	void pull_yield_tls();
 	void pull_yield();
@@ -8803,7 +8803,7 @@ struct ActorGo_
 	{
 		assert(_strand);
 		actor_handle actor = my_actor::create(std::move(_strand), std::move(wrapActor));
-		actor->notify_run();
+		actor->run();
 		return actor;
 	}
 
@@ -8812,7 +8812,7 @@ struct ActorGo_
 	{
 		assert(_strand);
 		actor_handle actor = my_actor::create(std::move(_strand), TRY_MOVE(handler), _stackSize);
-		actor->notify_run();
+		actor->run();
 		return actor;
 	}
 

@@ -127,13 +127,13 @@ void wait_multi_msg()
 				}
 			}
 		});
-		act1->notify_run();
+		act1->run();
 		self->child_actor_run(ch2, ch3);
 		self->child_actor_wait_quit(ch2, ch3);
-		act1->notify_quit();
+		act1->force_quit();
 		self->actor_wait_quit(act1);
 	});
-	ah->notify_run();
+	ah->run();
 	ah->outside_wait_quit();
 	ios.stop();
 	trace_line("end wait_multi_msg");
@@ -167,7 +167,7 @@ void async_buffer_test()
 		self->child_actor_run(ch1, ch2);
 		self->child_actor_wait_quit(ch1, ch2);
 	});
-	ah->notify_run();
+	ah->run();
 	ah->outside_wait_quit();
 	ios.stop();
 	trace_line("end async_buffer_test");
@@ -201,7 +201,7 @@ void sync_msg_test()
 		self->child_actor_run(ch1, ch2);
 		self->child_actor_wait_quit(ch1, ch2);
 	});
-	ah->notify_run();
+	ah->run();
 	ah->outside_wait_quit();
 	ios.stop();
 	trace_line("end sync_msg_test");
@@ -244,7 +244,7 @@ void csp_test()
 		self->child_actor_run(ch1, ch2);
 		self->child_actor_wait_quit(ch1, ch2);
 	});
-	ah->notify_run();
+	ah->run();
 	ah->outside_wait_quit();
 	ios.stop();
 	trace_line("end csp_test");
@@ -293,7 +293,7 @@ void mutex_test()
 		self->child_actor_run(ch1, ch2);
 		self->child_actor_wait_quit(ch1, ch2);
 	});
-	ah->notify_run();
+	ah->run();
 	ah->outside_wait_quit();
 	ios.stop();
 	trace_line("end mutex_test");
@@ -311,8 +311,9 @@ void shared_mutex_test()
 		{
 			for (int i = 0; i < 10; i++)
 			{
-				smtx.lock(self);
 				trace_comma(self->self_id(), "A-", "mutex in");
+				smtx.lock(self);
+				trace_comma(self->self_id(), "A-", ">mutex in");
 				trace_comma(self->self_id(), "A-", i, 0);
 				self->sleep(10);
 				trace_comma(self->self_id(), "A-", i, 1);
@@ -328,8 +329,9 @@ void shared_mutex_test()
 		{
 			for (int i = 0; i < 10; i++)
 			{
-				smtx.lock(self);
 				trace_comma(self->self_id(), "A+", "mutex in");
+				smtx.lock(self);
+				trace_comma(self->self_id(), "A+", ">mutex in");
 				trace_comma(self->self_id(), "A+", i, 0);
 				self->sleep(10);
 				trace_comma(self->self_id(), "A+", i, 1);
@@ -351,16 +353,18 @@ void shared_mutex_test()
 		{
 			for (int i = 0; i < 10; i++)
 			{
+				trace_comma(self->self_id(), "B", "shared_mutex in");
 				smtx.lock_shared(self);
-				trace_comma(self->self_id(), "B", "mutex in");
+				trace_comma(self->self_id(), "B", ">shared_mutex in");
 				trace_comma(self->self_id(), "B", i, 0);
 				self->sleep(10);
 				trace_comma(self->self_id(), "B", i, 1);
 				self->sleep(10);
 				trace_comma(self->self_id(), "B", i, 2);
 				self->sleep(10);
+				trace_comma(self->self_id(), "B-", "--upgrade_mutex in");
 				smtx.lock_upgrade(self);
-				trace_comma(self->self_id(), "B-", "-mutex in");
+				trace_comma(self->self_id(), "B-", ">upgrade_mutex in");
 				trace_comma(self->self_id(), "B-", i, 3);
 				self->sleep(10);
 				trace_comma(self->self_id(), "B-", i, 4);
@@ -369,15 +373,16 @@ void shared_mutex_test()
 				self->sleep(10);
 				trace_comma(self->self_id(), "B-", i, 6);
 				self->sleep(10);
-				trace_comma(self->self_id(), "B-", "-mutex out");
+				trace_comma(self->self_id(), "B-", "-upgrade_mutex out");
 				smtx.unlock_upgrade(self);
+				trace_comma(self->self_id(), "B-", ">-upgrade_mutex out");
 				trace_comma(self->self_id(), "B", i, 7);
 				self->sleep(10);
 				trace_comma(self->self_id(), "B", i, 8);
 				self->sleep(10);
 				trace_comma(self->self_id(), "B", i, 9);
 				self->sleep(10);
-				trace_comma(self->self_id(), "B", "mutex out");
+				trace_comma(self->self_id(), "B", "shared_mutex out");
 				smtx.unlock_shared(self);
 				self->sleep(10);
 			}
@@ -386,22 +391,25 @@ void shared_mutex_test()
 		{
 			for (int i = 0; i < 10; i++)
 			{
+				trace_comma(self->self_id(), "C", "shared_mutex in");
 				smtx.lock_shared(self);
-				trace_comma(self->self_id(), "C", "mutex in");
+				trace_comma(self->self_id(), "C", ">shared_mutex in");
 				trace_comma(self->self_id(), "C", i, 0);
 				self->sleep(10);
 				trace_comma(self->self_id(), "C", i, 1);
 				self->sleep(10);
+				trace_comma(self->self_id(), "C-", "--upgrade_mutex in");
 				smtx.lock_upgrade(self);
-				trace_comma(self->self_id(), "C-", "-mutex in");
+				trace_comma(self->self_id(), "C-", ">--upgrade_mutex in");
 				trace_comma(self->self_id(), "C-", i, 2);
 				self->sleep(10);
 				trace_comma(self->self_id(), "C-", i, 3);
 				self->sleep(10);
 				trace_comma(self->self_id(), "C-", i, 4);
 				self->sleep(10);
-				trace_comma(self->self_id(), "C-", "-mutex out");
+				trace_comma(self->self_id(), "C-", "-upgrade_mutex out");
 				smtx.unlock_upgrade(self);
+				trace_comma(self->self_id(), "C-", ">-upgrade_mutex out");
 				trace_comma(self->self_id(), "C", i, 5);
 				self->sleep(10);
 				trace_comma(self->self_id(), "C", i, 6);
@@ -412,7 +420,7 @@ void shared_mutex_test()
 				self->sleep(10);
 				trace_comma(self->self_id(), "C", i, 9);
 				self->sleep(10);
-				trace_comma(self->self_id(), "C", "mutex out");
+				trace_comma(self->self_id(), "C", "shared_mutex out");
 				smtx.unlock_shared(self);
 				self->sleep(10);
 			}
@@ -420,7 +428,7 @@ void shared_mutex_test()
 		self->child_actor_run(ch1, ch2, ch3, ch4);
 		self->child_actor_wait_quit(ch1, ch2, ch3, ch4);
 	});
-	ah->notify_run();
+	ah->run();
 	ah->outside_wait_quit();
 	ios.stop();
 	trace_line("end shared_mutex_test");
@@ -483,7 +491,7 @@ void agent_test()
 		}
 		self->child_actor_wait_quit(ch);
 	});
-	ah->notify_run();
+	ah->run();
 	ah->outside_wait_quit();
 	ios.stop();
 	trace_line("end agent_test");
@@ -522,7 +530,7 @@ void pump_test()
 		}
 		self->child_actor_wait_quit(ch);
 	});
-	ah->notify_run();
+	ah->run();
 	ah->outside_wait_quit();
 	ios.stop();
 	trace_line("end pump_test");
@@ -552,7 +560,7 @@ void msg_test()
 		}
 		self->child_actor_wait_quit(ch);
 	});
-	ah->notify_run();
+	ah->run();
 	ah->outside_wait_quit();
 	ios.stop();
 	trace_line("end msg_test");
@@ -586,7 +594,7 @@ void trig_test()
 		trig(move_test(123));
 		self->child_actor_wait_quit(ch);
 	});
-	ah->notify_run();
+	ah->run();
 	ah->outside_wait_quit();
 	ios.stop();
 	trace_line("end trig_test");
@@ -661,7 +669,7 @@ void socket_test()
 		self->child_actor_run(cli);
 		self->child_actor_wait_quit(srv, cli);
 	});
-	ah->notify_run();
+	ah->run();
 	ah->outside_wait_quit();
 	ios.stop();
 	trace_line("end socket_test");
@@ -706,7 +714,7 @@ void perfor_test()
 			trace_line("Actor number=", num, ", ", "switching frequency=", (int)f);
 		}
 	});
-	ah->notify_run();
+	ah->run();
 	ah->outside_wait_quit();
 	ios.stop();
 	trace_line("end perfor_test");
@@ -792,7 +800,7 @@ void create_child_test()
 	}
 	self->after_exit_clean_stack();
 	END_RECURSIVE_ACTOR(createActor);
-	my_actor::create(boost_strand::create(ios), wrap_ref_handler(createActor))->notify_run();
+	my_actor::create(boost_strand::create(ios), wrap_ref_handler(createActor))->run();
 	ios.stop();
 	trace_line("end create_child_test");
 }
@@ -862,7 +870,7 @@ void auto_stack_test()
 			HEARTBEAT_EXEC(self, 300, trace_space("heartbeat", i, count++));
 			self->sleep(1000);
 		});
-		ah->notify_run();
+		ah->run();
 		ah->outside_wait_quit();
 		trace_line("stack size:", ah->stack_size(), ", using size:", ah->using_stack_size());
 	}

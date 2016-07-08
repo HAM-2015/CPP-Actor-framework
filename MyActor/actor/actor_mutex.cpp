@@ -528,7 +528,10 @@ const shared_strand& actor_condition_variable::self_strand()
 //////////////////////////////////////////////////////////////////////////
 
 actor_shared_mutex::actor_shared_mutex(const shared_strand& strand)
-:_strand(strand), _waitQueue(4), _inSet(4), _status(st_shared)
+:_strand(strand), _waitQueue(4), _upgradeQueue(4), _status(st_shared), _insideCount(0)
+#if (_DEBUG || DEBUG)
+, _inSet(4)
+#endif
 {
 
 }
@@ -566,17 +569,19 @@ void actor_shared_mutex::lock(my_actor* host, wrap_local_handler_face<void()>&& 
 	{
 		assert(check_self_err_call(host));
 		assert(_inSet.find(host->self_id()) == _inSet.end());
-		if (_inSet.empty())
+		assert(_inSet.size() == _insideCount);
+		if (0 == _insideCount)
 		{
 			complete = true;
 			_status = st_unique;
-			_inSet[host->self_id()] = st_unique;
+			_insideCount++;
+			DEBUG_OPERATION(_inSet[host->self_id()] = st_unique);
 		}
 		else
 		{
 			complete = false;
 			ntf = ath.make_notifer();
-			_waitQueue.push_front({ ntf, host->self_id(), st_unique });
+			_waitQueue.push_back({ ntf, host->self_id(), st_unique });
 		}
 	});
 	if (!complete)
@@ -597,11 +602,13 @@ bool actor_shared_mutex::try_lock(my_actor* host)
 	{
 		assert(check_self_err_call(host));
 		assert(_inSet.find(host->self_id()) == _inSet.end());
-		if (_inSet.empty())
+		assert(_inSet.size() == _insideCount);
+		if (0 == _insideCount)
 		{
 			complete = true;
 			_status = st_unique;
-			_inSet[host->self_id()] = st_unique;
+			_insideCount++;
+			DEBUG_OPERATION(_inSet[host->self_id()] = st_unique);
 		}
 	});
 	assert(!complete || st_unique == _status);
@@ -626,17 +633,19 @@ bool actor_shared_mutex::timed_lock(int tm, my_actor* host, wrap_local_handler_f
 	{
 		assert(check_self_err_call(host));
 		assert(_inSet.find(host->self_id()) == _inSet.end());
-		if (_inSet.empty())
+		assert(_inSet.size() == _insideCount);
+		if (0 == _insideCount)
 		{
 			complete = true;
 			_status = st_unique;
-			_inSet[host->self_id()] = st_unique;
+			_insideCount++;
+			DEBUG_OPERATION(_inSet[host->self_id()] = st_unique);
 		}
 		else
 		{
 			ntf = ath.make_notifer();
-			_waitQueue.push_front({ ntf, host->self_id(), st_unique });
-			nit = _waitQueue.begin();
+			_waitQueue.push_back({ ntf, host->self_id(), st_unique });
+			nit = --_waitQueue.end();
 		}
 	});
 	if (!complete)
@@ -682,15 +691,17 @@ void actor_shared_mutex::lock_shared(my_actor* host, wrap_local_handler_face<voi
 	{
 		assert(check_self_err_call(host));
 		assert(_inSet.find(host->self_id()) == _inSet.end());
+		assert(_inSet.size() == _insideCount);
 		if (st_shared == _status)
 		{
 			complete = true;
-			_inSet[host->self_id()] = st_shared;
+			_insideCount++;
+			DEBUG_OPERATION(_inSet[host->self_id()] = st_shared);
 		}
 		else
 		{
 			ntf = ath.make_notifer();
-			_waitQueue.push_front({ ntf, host->self_id(), st_shared });
+			_waitQueue.push_back({ ntf, host->self_id(), st_shared });
 		}
 	});
 	if (!complete)
@@ -711,10 +722,12 @@ bool actor_shared_mutex::try_lock_shared(my_actor* host)
 	{
 		assert(check_self_err_call(host));
 		assert(_inSet.find(host->self_id()) == _inSet.end());
+		assert(_inSet.size() == _insideCount);
 		if (st_shared == _status)
 		{
 			complete = true;
-			_inSet[host->self_id()] = st_shared;
+			_insideCount++;
+			DEBUG_OPERATION(_inSet[host->self_id()] = st_shared);
 		}
 	});
 	assert(!complete || st_shared == _status);
@@ -739,16 +752,18 @@ bool actor_shared_mutex::timed_lock_shared(int tm, my_actor* host, wrap_local_ha
 	{
 		assert(check_self_err_call(host));
 		assert(_inSet.find(host->self_id()) == _inSet.end());
+		assert(_inSet.size() == _insideCount);
 		if (st_shared == _status)
 		{
 			complete = true;
-			_inSet[host->self_id()] = st_shared;
+			_insideCount++;
+			DEBUG_OPERATION(_inSet[host->self_id()] = st_shared);
 		}
 		else
 		{
 			ntf = ath.make_notifer();
-			_waitQueue.push_front({ ntf, host->self_id(), st_shared });
-			nit = _waitQueue.begin();
+			_waitQueue.push_back({ ntf, host->self_id(), st_shared });
+			nit = --_waitQueue.end();
 		}
 	});
 	if (!complete)
@@ -793,22 +808,27 @@ void actor_shared_mutex::lock_upgrade(my_actor* host, wrap_local_handler_face<vo
 	MutexTrigNotifer_ ntf;
 	host->send(_strand, [&]
 	{
-		auto it = _inSet.find(host->self_id());
 		assert(check_self_err_call(host));
-		assert(st_shared == _status);
-		assert(it != _inSet.end());
-		assert(st_shared == it->second);
-		if (_inSet.size() == 1)
+		assert(_inSet.find(host->self_id()) != _inSet.end());
+		assert(st_shared == _inSet.find(host->self_id())->second);
+		assert(_inSet.size() == _insideCount);
+		_status = st_upgrade;
+		if (1 == _insideCount)
 		{
 			complete = true;
-			_status = st_upgrade;
-			_inSet[host->self_id()] = st_upgrade;
+			DEBUG_OPERATION(_inSet[host->self_id()] = st_upgrade);
 		}
 		else
 		{
-			_inSet.erase(it);
 			ntf = ath.make_notifer();
-			_waitQueue.push_front({ ntf, host->self_id(), st_upgrade });
+			_upgradeQueue.push_back(wait_node{ ntf, host->self_id(), st_upgrade });
+			if (_upgradeQueue.size() == _insideCount)
+			{
+				wait_node& queueFront_ = _upgradeQueue.front();
+				DEBUG_OPERATION(_inSet[queueFront_._waitHostID] = st_upgrade);
+				queueFront_.ntf();
+				_upgradeQueue.pop_front();
+			}
 		}
 	});
 	if (!complete)
@@ -820,117 +840,36 @@ void actor_shared_mutex::lock_upgrade(my_actor* host, wrap_local_handler_face<vo
 	host->unlock_quit();
 }
 
-bool actor_shared_mutex::try_lock_upgrade(my_actor* host)
-{
-	host->assert_enter();
-	host->lock_quit();
-	bool complete = false;
-	host->send(_strand, [&]
-	{
-		assert(check_self_err_call(host));
-		assert(st_shared == _status);
-		assert(_inSet.find(host->self_id()) != _inSet.end());
-		assert(st_shared == _inSet.find(host->self_id())->second);
-		if (_inSet.size() == 1)
-		{
-			complete = true;
-			_status = st_upgrade;
-			_inSet[host->self_id()] = st_upgrade;
-		}
-	});
-	assert(!complete || st_upgrade == _status);
-	host->unlock_quit();
-	return complete;
-}
-
-bool actor_shared_mutex::timed_lock_upgrade(int tm, my_actor* host)
-{
-	return timed_lock_upgrade(tm, host, []{});
-}
-
-bool actor_shared_mutex::timed_lock_upgrade(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf)
-{
-	host->assert_enter();
-	host->lock_quit();
-	bool complete = false;
-	MutexTrigHandle_ ath(host);
-	MutexTrigNotifer_ ntf;
-	msg_list<wait_node>::iterator nit;
-	host->send(_strand, [&]
-	{
-		auto it = _inSet.find(host->self_id());
-		assert(check_self_err_call(host));
-		assert(st_shared == _status);
-		assert(it != _inSet.end());
-		assert(st_shared == it->second);
-		if (_inSet.size() == 1)
-		{
-			complete = true;
-			_status = st_upgrade;
-			_inSet[host->self_id()] = st_upgrade;
-		}
-		else
-		{
-			_inSet.erase(it);
-			ntf = ath.make_notifer();
-			_waitQueue.push_front({ ntf, host->self_id(), st_upgrade });
-			nit = _waitQueue.begin();
-		}
-	});
-	if (!complete)
-	{
-		lockNtf();
-		if (!ath.timed_wait(tm))
-		{
-			host->send(_strand, [&]
-			{
-				complete = ntf._notified;
-				ntf._notified = true;
-				if (!complete)
-				{
-					_waitQueue.erase(nit);
-				}
-			});
-			if (!complete)
-			{
-				host->unlock_quit();
-				return false;
-			}
-			ath.wait();
-		}
-	}
-	assert(complete && st_upgrade == _status);
-	host->unlock_quit();
-	return true;
-}
-
 void actor_shared_mutex::unlock(my_actor* host)
 {
 	host->assert_enter();
 	host->lock_quit();
 	host->send(_strand, [&]
 	{
-		auto it = _inSet.find(host->self_id());
 		assert(check_self_err_call(host));
 		assert(st_unique == _status);
-		assert(it != _inSet.end());
-		assert(st_unique == it->second);
-		_inSet.erase(it);
-		assert(_inSet.empty());
+		assert(1 == _inSet.size());
+		assert(_inSet.find(host->self_id()) != _inSet.end());
+		assert(st_unique == _inSet.find(host->self_id())->second);
+		assert(_inSet.size() == _insideCount);
+		_insideCount--;
+		DEBUG_OPERATION(_inSet.erase(host->self_id()));
 		if (!_waitQueue.empty())
 		{
-			auto& queueBack_ = _waitQueue.back();
-			_status = queueBack_._status;
-			_inSet[queueBack_._waitHostID] = _status;
-			queueBack_.ntf();
-			_waitQueue.pop_back();
+			auto& queueFront_ = _waitQueue.front();
+			DEBUG_OPERATION(_inSet[queueFront_._waitHostID] = queueFront_._status);
+			_status = queueFront_._status;
+			_insideCount++;
+			queueFront_.ntf();
+			_waitQueue.pop_front();
 			if (st_shared == _status)
 			{
 				for (auto it = _waitQueue.begin(); it != _waitQueue.end();)
 				{
 					if (st_shared == it->_status)
 					{
-						_inSet[it->_waitHostID] = st_shared;
+						DEBUG_OPERATION(_inSet[it->_waitHostID] = st_shared);
+						_insideCount++;
 						it->ntf();
 						_waitQueue.erase(it++);
 					}
@@ -951,22 +890,39 @@ void actor_shared_mutex::unlock_shared(my_actor* host)
 	host->lock_quit();
 	host->send(_strand, [&]
 	{
-		auto it = _inSet.find(host->self_id());
 		assert(check_self_err_call(host));
-		assert(st_shared == _status);
-		assert(it != _inSet.end());
-		assert(st_shared == it->second);
-		_inSet.erase(it);
-		if (_inSet.empty())
+		assert(st_unique != _status);
+		assert(_inSet.find(host->self_id()) != _inSet.end());
+		assert(st_shared == _inSet.find(host->self_id())->second);
+		assert(_inSet.size() == _insideCount);
+		_insideCount--;
+		DEBUG_OPERATION(_inSet.erase(host->self_id()));
+		if (st_upgrade == _status)
 		{
-			if (!_waitQueue.empty())
+			assert(0 != _insideCount);
+			if (_upgradeQueue.size() == _insideCount)
 			{
-				auto& queueBack_ = _waitQueue.back();
-				_status = queueBack_._status;
-				_inSet[queueBack_._waitHostID] = _status;
-				queueBack_.ntf();
-				_waitQueue.pop_back();
-				assert(st_shared != _status);
+				wait_node& queueFront_ = _upgradeQueue.front();
+				DEBUG_OPERATION(_inSet[queueFront_._waitHostID] = st_upgrade);
+				queueFront_.ntf();
+				_upgradeQueue.pop_front();
+			}
+		}
+		else
+		{
+			assert(st_shared == _status);
+			if (!_insideCount)
+			{
+				if (!_waitQueue.empty())
+				{
+					auto& queueFront_ = _waitQueue.front();
+					assert(st_unique == queueFront_._status);
+					DEBUG_OPERATION(_inSet[queueFront_._waitHostID] = queueFront_._status);
+					_status = queueFront_._status;
+					_insideCount++;
+					queueFront_.ntf();
+					_waitQueue.pop_front();
+				}
 			}
 		}
 	});
@@ -977,29 +933,73 @@ void actor_shared_mutex::unlock_upgrade(my_actor* host)
 {
 	host->assert_enter();
 	host->lock_quit();
+	bool complete = false;
+	MutexTrigHandle_ ath(host);
+	MutexTrigNotifer_ ntf;
 	host->send(_strand, [&]
 	{
 		assert(check_self_err_call(host));
-		assert(_inSet.size() == 1);
+		assert(st_upgrade == _status);
 		assert(_inSet.find(host->self_id()) != _inSet.end());
 		assert(st_upgrade == _inSet.find(host->self_id())->second);
-		assert(st_upgrade == _status);
-		_status = st_shared;
-		_inSet[host->self_id()] = st_shared;
-		for (auto it = _waitQueue.begin(); it != _waitQueue.end();)
+		assert(_inSet.size() == _insideCount);
+		if (1 == _insideCount)
 		{
-			if (st_shared == it->_status)
+			complete = true;
+			_status = st_shared;
+			DEBUG_OPERATION(_inSet[host->self_id()] = st_shared);
+		}
+		else
+		{
+			assert(!_upgradeQueue.empty());
+			wait_node queueFront = _upgradeQueue.front();
+			_upgradeQueue.pop_front();
+			queueFront.ntf();
+			if (st_upgrade == queueFront._status)
 			{
-				_inSet[it->_waitHostID] = st_shared;
-				it->ntf();
-				_waitQueue.erase(it++);
+				DEBUG_OPERATION(_inSet[queueFront._waitHostID] = st_upgrade);
+				ntf = ath.make_notifer();
+				_upgradeQueue.push_back(wait_node{ ntf, host->self_id(), st_shared });
 			}
 			else
 			{
-				it++;
+				DEBUG_OPERATION(_inSet[host->self_id()] = st_shared);
+				DEBUG_OPERATION(_inSet[queueFront._waitHostID] = st_shared);
+				complete = true;
+				_status = st_shared;
+				while (!_upgradeQueue.empty())
+				{
+					wait_node queueFront = _upgradeQueue.front();
+					_upgradeQueue.pop_front();
+					assert(st_shared == queueFront._status);
+					DEBUG_OPERATION(_inSet[queueFront._waitHostID] = st_shared);
+					queueFront.ntf();
+				}
+			}
+		}
+		if (st_shared == _status)
+		{
+			for (auto it = _waitQueue.begin(); it != _waitQueue.end();)
+			{
+				if (st_shared == it->_status)
+				{
+					assert(_inSet.find(it->_waitHostID) == _inSet.end());
+					DEBUG_OPERATION(_inSet[it->_waitHostID] = st_shared);
+					_insideCount++;
+					it->ntf();
+					_waitQueue.erase(it++);
+				}
+				else
+				{
+					it++;
+				}
 			}
 		}
 	});
+	if (!complete)
+	{
+		ath.wait();
+	}
 	host->unlock_quit();
 	assert(st_shared == _status);
 }
