@@ -56,7 +56,7 @@ public:
 	template <typename Handler>
 	run_thread(Handler&& h)
 	{
-		handler_face* handler = new thread_handler<RM_REF(Handler)>(TRY_MOVE(h));
+		handler_face* handler = new thread_handler<RM_CREF(Handler)>(TRY_MOVE(h));
 #ifdef _WIN32
 		_threadID = 0;
 		_handle = CreateThread(NULL, 0, thread_exec, handler, 0, &_threadID);

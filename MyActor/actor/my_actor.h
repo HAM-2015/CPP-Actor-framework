@@ -28,15 +28,12 @@ typedef ContextPool_::coro_pull_interface actor_pull_type;
 #define __yield_interrupt
 
 #if (_DEBUG || DEBUG)
-/*!
-	@brief 用于检测在Actor内调用的函数是否触发了强制退出
-	*/
+
+// 用于检测在Actor内调用的函数是否触发了强制退出
 #define BEGIN_CHECK_FORCE_QUIT try {
 #define END_CHECK_FORCE_QUIT } catch (my_actor::force_quit_exception&) {assert(false);}
 
-/*!
-	@brief 用于锁定actor不强制退出
-	*/
+//用于锁定actor不强制退出
 #define LOCK_QUIT(__self__) __self__->lock_quit(); try {
 #define UNLOCK_QUIT(__self__) } catch (...) { assert (false); } __self__->unlock_quit();
 
@@ -50,15 +47,13 @@ typedef ContextPool_::coro_pull_interface actor_pull_type;
 
 #endif
 
-//检测 pump_msg 是否有 pump_disconnected_exception 异常抛出，因为在 catch 内部不能安全的进行coro切换
-#define CATCH_PUMP_DISCONNECTED CATCH_FOR(pump_disconnected_exception)
-//包装actor_msg_handle, actor_trig_handle关闭事件
+//包装msg_handle, trig_handle关闭事件
 #define wrap_close_msg_handle(__handle__) [&__handle__]{__handle__.close(); }
 
 //初始化my_actor框架
 #define init_my_actor(...)\
 	my_actor::install(__VA_ARGS__); \
-	BREAK_OF_SCOPE({ my_actor::uninstall(); })
+	BREAK_OF_SCOPE_EXEC(my_actor::uninstall());
 
 struct shared_initer;
 //////////////////////////////////////////////////////////////////////////
@@ -67,7 +62,7 @@ template <typename... ARGS>
 class msg_pump_handle;
 class CheckLost_;
 class CheckPumpLost_;
-class actor_msg_handle_base;
+class msg_handle_base;
 class MsgPoolBase_;
 
 struct shared_bool
@@ -121,7 +116,7 @@ struct ActorFunc_
 	template <typename DST, typename... ARGS>
 	static void _dispatch_handler2(my_actor* host, bool* sign, DST& dstRec, ARGS&&... args);
 #ifdef ENABLE_CHECK_LOST
-	static std::shared_ptr<CheckLost_> new_check_lost(const shared_strand& strand, actor_msg_handle_base* msgHandle);
+	static std::shared_ptr<CheckLost_> new_check_lost(const shared_strand& strand, msg_handle_base* msgHandle);
 	static std::shared_ptr<CheckPumpLost_> new_check_pump_lost(const actor_handle& hostActor, MsgPoolBase_* pool);
 	static std::shared_ptr<CheckPumpLost_> new_check_pump_lost(actor_handle&& hostActor, MsgPoolBase_* pool);
 #endif
@@ -144,12 +139,12 @@ class CheckLost_
 	friend ActorFunc_;
 	FRIEND_SHARED_PTR(CheckLost_);
 private:
-	CheckLost_(const shared_strand& strand, actor_msg_handle_base* msgHandle);
+	CheckLost_(const shared_strand& strand, msg_handle_base* msgHandle);
 	~CheckLost_();
 private:
 	shared_strand _strand;
 	shared_bool _closed;
-	actor_msg_handle_base* _handle;
+	msg_handle_base* _handle;
 };
 
 class CheckPumpLost_
@@ -208,6 +203,34 @@ void TupleReceiverRef_(DTuple&& dst, STuple&& src)
 	static_assert(std::tuple_size<RM_REF(DTuple)>::value == std::tuple_size<RM_REF(STuple)>::value, "");
 	TupleTec_<std::tuple_size<RM_REF(DTuple)>::value>::receive_ref(TRY_MOVE(dst), TRY_MOVE(src));
 }
+
+struct none_result
+{
+	template <typename Arg>
+	void operator=(Arg&&)const{}
+};
+
+template <typename... TYPES>
+struct WrapReceiverResult_
+{
+	WrapReceiverResult_(TYPES&... dst)
+	:_dst(dst...) {}
+
+	template <typename... Args>
+	void operator()(Args&&... args)
+	{
+		TupleReceiver_(_dst, std::forward<Args>(args)...);
+	}
+
+	std::tuple<TYPES&...> _dst;
+};
+
+template <typename... Type>
+WrapReceiverResult_<RM_REF(Type)...> wrap_receiver_result(Type&&... dst)
+{
+	return WrapReceiverResult_<RM_REF(Type)...>(dst...);
+}
+
 //////////////////////////////////////////////////////////////////////////
 
 template <typename... TYPES>
@@ -281,10 +304,10 @@ template <typename... ARGS>
 class mutex_block_pump;
 
 template <typename... ARGS>
-class actor_msg_handle;
+class msg_handle;
 
 template <typename... ARGS>
-class actor_trig_handle;
+class trig_handle;
 
 template <typename... ARGS>
 class mutex_block_pump_check_state;
@@ -314,12 +337,12 @@ class mutex_block_pump_check_lost;
 
 #endif
 
-class actor_msg_handle_base
+class msg_handle_base
 {
 	friend CheckLost_;
 protected:
-	actor_msg_handle_base();
-	virtual ~actor_msg_handle_base(){}
+	msg_handle_base();
+	virtual ~msg_handle_base(){}
 public:
 	virtual void close() = 0;
 	virtual size_t size() = 0;
@@ -344,7 +367,7 @@ template <typename... ARGS>
 struct MsgNotiferBaseMsgCapture_;
 
 template <typename... ARGS>
-class ActorMsgHandlePush_ : public actor_msg_handle_base
+class ActorMsgHandlePush_ : public msg_handle_base
 {
 	friend my_actor;
 	friend MsgNotiferBase_<ARGS...>;
@@ -356,7 +379,7 @@ protected:
 };
 
 template <>
-class ActorMsgHandlePush_<> : public actor_msg_handle_base
+class ActorMsgHandlePush_<> : public msg_handle_base
 {
 	friend my_actor;
 	friend MsgNotiferBase_<>;
@@ -371,10 +394,10 @@ protected:
 template <typename... ARGS>
 struct MsgNotiferBaseMsgCapture_
 {
-	typedef ActorMsgHandlePush_<ARGS...> msg_handle;
+	typedef ActorMsgHandlePush_<ARGS...> MsgHandle;
 
 	template <typename ActorHandle, typename Closed, typename... Args>
-	MsgNotiferBaseMsgCapture_(msg_handle* msgHandle, ActorHandle&& host, Closed&& closed, Args&&... args)
+	MsgNotiferBaseMsgCapture_(MsgHandle* msgHandle, ActorHandle&& host, Closed&& closed, Args&&... args)
 		:_msgHandle(msgHandle), _hostActor(TRY_MOVE(host)), _closed(TRY_MOVE(closed)), _args(TRY_MOVE(args)...) {}
 
 	template <typename... Args>
@@ -415,7 +438,7 @@ struct MsgNotiferBaseMsgCapture_
 		}
 	}
 
-	msg_handle* _msgHandle;
+	MsgHandle* _msgHandle;
 	actor_handle _hostActor;
 	shared_bool _closed;
 	mutable std::tuple<TYPE_PIPE(ARGS)...> _args;
@@ -424,10 +447,10 @@ struct MsgNotiferBaseMsgCapture_
 template <>
 struct MsgNotiferBaseMsgCapture_<>
 {
-	typedef ActorMsgHandlePush_<> msg_handle;
+	typedef ActorMsgHandlePush_<> MsgHandle;
 
 	template <typename ActorHandle, typename Closed>
-	MsgNotiferBaseMsgCapture_(msg_handle* msgHandle, ActorHandle&& host, Closed&& closed)
+	MsgNotiferBaseMsgCapture_(MsgHandle* msgHandle, ActorHandle&& host, Closed&& closed)
 	:_msgHandle(msgHandle), _hostActor(TRY_MOVE(host)), _closed(TRY_MOVE(closed)) {}
 
 	MsgNotiferBaseMsgCapture_(const MsgNotiferBaseMsgCapture_& s)
@@ -462,7 +485,7 @@ struct MsgNotiferBaseMsgCapture_<>
 		}
 	}
 
-	msg_handle* _msgHandle;
+	MsgHandle* _msgHandle;
 	actor_handle _hostActor;
 	shared_bool _closed;
 };
@@ -470,12 +493,12 @@ struct MsgNotiferBaseMsgCapture_<>
 template <typename... ARGS>
 class MsgNotiferBase_
 {
-	typedef ActorMsgHandlePush_<ARGS...> msg_handle;
+	typedef ActorMsgHandlePush_<ARGS...> MsgHandle;
 protected:
 	MsgNotiferBase_()
 		:_msgHandle(NULL){}
 
-	MsgNotiferBase_(msg_handle* msgHandle, bool checkLost)
+	MsgNotiferBase_(MsgHandle* msgHandle, bool checkLost)
 		:_msgHandle(msgHandle),
 		_hostActor(ActorFunc_::shared_from_this(_msgHandle->_hostActor)),
 		_closed(msgHandle->_closed)		
@@ -584,7 +607,7 @@ protected:
 		s._msgHandle = NULL;
 	}
 private:
-	msg_handle* _msgHandle;
+	MsgHandle* _msgHandle;
 	actor_handle _hostActor;
 	shared_bool _closed;
 #ifdef ENABLE_CHECK_LOST
@@ -593,66 +616,66 @@ private:
 };
 
 template <typename... ARGS>
-class actor_msg_notifer : public MsgNotiferBase_<ARGS...>
+class msg_notifer : public MsgNotiferBase_<ARGS...>
 {
-	friend actor_msg_handle<ARGS...>;
+	friend msg_handle<ARGS...>;
 public:
-	actor_msg_notifer()	{}
+	msg_notifer()	{}
 private:
-	actor_msg_notifer(ActorMsgHandlePush_<ARGS...>* msgHandle, bool checkLost)
+	msg_notifer(ActorMsgHandlePush_<ARGS...>* msgHandle, bool checkLost)
 		:MsgNotiferBase_<ARGS...>(msgHandle, checkLost) {}
 public:
-	actor_msg_notifer(const actor_msg_notifer<ARGS...>& s)
+	msg_notifer(const msg_notifer<ARGS...>& s)
 		:MsgNotiferBase_<ARGS...>(s) {}
 
-	actor_msg_notifer(actor_msg_notifer<ARGS...>&& s)
+	msg_notifer(msg_notifer<ARGS...>&& s)
 		:MsgNotiferBase_<ARGS...>(std::move(s)) {}
 
-	void operator=(const actor_msg_notifer<ARGS...>& s)
+	void operator=(const msg_notifer<ARGS...>& s)
 	{
 		MsgNotiferBase_<ARGS...>::copy(s);
 	}
 
-	void operator=(actor_msg_notifer<ARGS...>&& s)
+	void operator=(msg_notifer<ARGS...>&& s)
 	{
 		MsgNotiferBase_<ARGS...>::move(std::move(s));
 	}
 };
 
 template <typename... ARGS>
-class actor_trig_notifer : public MsgNotiferBase_<ARGS...>
+class trig_notifer : public MsgNotiferBase_<ARGS...>
 {
-	friend actor_trig_handle<ARGS...>;
+	friend trig_handle<ARGS...>;
 public:
-	actor_trig_notifer() {}
+	trig_notifer() {}
 private:
-	actor_trig_notifer(ActorMsgHandlePush_<ARGS...>* msgHandle, bool checkLost)
+	trig_notifer(ActorMsgHandlePush_<ARGS...>* msgHandle, bool checkLost)
 		:MsgNotiferBase_<ARGS...>(msgHandle, checkLost) {}
 public:
-	actor_trig_notifer(const actor_trig_notifer<ARGS...>& s)
+	trig_notifer(const trig_notifer<ARGS...>& s)
 		:MsgNotiferBase_<ARGS...>(s) {}
 
-	actor_trig_notifer(actor_trig_notifer<ARGS...>&& s)
+	trig_notifer(trig_notifer<ARGS...>&& s)
 		:MsgNotiferBase_<ARGS...>(std::move(s)) {}
 
-	void operator=(const actor_trig_notifer<ARGS...>& s)
+	void operator=(const trig_notifer<ARGS...>& s)
 	{
 		MsgNotiferBase_<ARGS...>::copy(s);
 	}
 
-	void operator=(actor_trig_notifer<ARGS...>&& s)
+	void operator=(trig_notifer<ARGS...>&& s)
 	{
 		MsgNotiferBase_<ARGS...>::move(std::move(s));
 	}
 };
 
 template <typename... ARGS>
-class actor_msg_handle : public ActorMsgHandlePush_<ARGS...>
+class msg_handle : public ActorMsgHandlePush_<ARGS...>
 {
 	typedef ActorMsgHandlePush_<ARGS...> Parent;
 	typedef std::tuple<TYPE_PIPE(ARGS)...> msg_type;
 	typedef DstReceiverBase_<TYPE_PIPE(ARGS)...> dst_receiver;
-	typedef actor_msg_notifer<ARGS...> msg_notifer;
+	typedef msg_notifer<ARGS...> MsgNotifer;
 
 	friend mutex_block_msg<ARGS...>;
 #ifdef ENABLE_CHECK_LOST
@@ -662,20 +685,20 @@ class actor_msg_handle : public ActorMsgHandlePush_<ARGS...>
 public:
 	struct lost_exception : ntf_lost_exception {};
 public:
-	actor_msg_handle(size_t fixedSize = 16)
+	msg_handle(size_t fixedSize = 16)
 		:_msgBuff(fixedSize), _dstRec(NULL) {}
 
-	~actor_msg_handle()
+	~msg_handle()
 	{
 		close();
 	}
 private:
-	msg_notifer make_notifer(my_actor* hostActor, bool checkLost)
+	MsgNotifer make_notifer(my_actor* hostActor, bool checkLost)
 	{
 		close();
 		Parent::set_actor(hostActor);
 		Parent::_closed = shared_bool::new_();
-		return msg_notifer(this, checkLost);
+		return MsgNotifer(this, checkLost);
 	}
 
 	void push_msg(msg_type& msg)
@@ -752,10 +775,10 @@ private:
 };
 
 template <>
-class actor_msg_handle<> : public ActorMsgHandlePush_<>
+class msg_handle<> : public ActorMsgHandlePush_<>
 {
 	typedef ActorMsgHandlePush_<> Parent;
-	typedef actor_msg_notifer<> msg_notifer;
+	typedef msg_notifer<> MsgNotifer;
 
 	friend mutex_block_msg<>;
 #ifdef ENABLE_CHECK_LOST
@@ -765,17 +788,17 @@ class actor_msg_handle<> : public ActorMsgHandlePush_<>
 public:
 	struct lost_exception : ntf_lost_exception {};
 public:
-	~actor_msg_handle()
+	~msg_handle()
 	{
 		close();
 	}
 private:
-	msg_notifer make_notifer(my_actor* hostActor, bool checkLost)
+	MsgNotifer make_notifer(my_actor* hostActor, bool checkLost)
 	{
 		close();
 		Parent::set_actor(hostActor);
 		Parent::_closed = shared_bool::new_();
-		return msg_notifer(this, checkLost);
+		return MsgNotifer(this, checkLost);
 	}
 
 	void push_msg()
@@ -868,12 +891,12 @@ private:
 //////////////////////////////////////////////////////////////////////////
 
 template <typename... ARGS>
-class actor_trig_handle : public ActorMsgHandlePush_<ARGS...>
+class trig_handle : public ActorMsgHandlePush_<ARGS...>
 {
 	typedef ActorMsgHandlePush_<ARGS...> Parent;
 	typedef std::tuple<TYPE_PIPE(ARGS)...> msg_type;
 	typedef DstReceiverBase_<TYPE_PIPE(ARGS)...> dst_receiver;
-	typedef actor_trig_notifer<ARGS...> msg_notifer;
+	typedef trig_notifer<ARGS...> MsgNotifer;
 
 	friend mutex_block_trig<ARGS...>;
 #ifdef ENABLE_CHECK_LOST
@@ -883,20 +906,20 @@ class actor_trig_handle : public ActorMsgHandlePush_<ARGS...>
 public:
 	struct lost_exception : ntf_lost_exception {};
 public:
-	actor_trig_handle()
+	trig_handle()
 		:_hasMsg(false), _dstRec(NULL) {}
 
-	~actor_trig_handle()
+	~trig_handle()
 	{
 		close();
 	}
 private:
-	msg_notifer make_notifer(my_actor* hostActor, bool checkLost)
+	MsgNotifer make_notifer(my_actor* hostActor, bool checkLost)
 	{
 		close();
 		Parent::set_actor(hostActor);
 		Parent::_closed = shared_bool::new_();
-		return msg_notifer(this, checkLost);
+		return MsgNotifer(this, checkLost);
 	}
 
 	void push_msg(msg_type& msg)
@@ -985,10 +1008,10 @@ private:
 };
 
 template <>
-class actor_trig_handle<> : public ActorMsgHandlePush_<>
+class trig_handle<> : public ActorMsgHandlePush_<>
 {
 	typedef ActorMsgHandlePush_<> Parent;
-	typedef actor_trig_notifer<> msg_notifer;
+	typedef trig_notifer<> MsgNotifer;
 
 	friend mutex_block_trig<>;
 #ifdef ENABLE_CHECK_LOST
@@ -998,20 +1021,20 @@ class actor_trig_handle<> : public ActorMsgHandlePush_<>
 public:
 	struct lost_exception : ntf_lost_exception {};
 public:
-	actor_trig_handle()
+	trig_handle()
 		:_hasMsg(false){}
 
-	~actor_trig_handle()
+	~trig_handle()
 	{
 		close();
 	}
 private:
-	msg_notifer make_notifer(my_actor* hostActor, bool checkLost)
+	MsgNotifer make_notifer(my_actor* hostActor, bool checkLost)
 	{
 		close();
 		Parent::set_actor(hostActor);
 		Parent::_closed = shared_bool::new_();
-		return msg_notifer(this, checkLost);
+		return MsgNotifer(this, checkLost);
 	}
 
 	void push_msg()
@@ -2296,18 +2319,18 @@ protected:
 #define __MUTEX_BLOCK_HANDLER_WRAP(__dst__, __src__, __host__)  FUNCTION_ALLOCATOR(__dst__, __src__, (reusable_alloc<>(ActorFunc_::reu_mem(__host__))))
 
 /*!
-@brief actor_msg_handle消息互斥执行块
+@brief msg_handle消息互斥执行块
 */
 template <typename... ARGS>
 class mutex_block_msg : public MutexBlock_
 {
-	typedef actor_msg_handle<ARGS...> msg_handle;
+	typedef msg_handle<ARGS...> MsgHandle;
 	typedef DstReceiverBuff_<ARGS...> dst_receiver;
 
 	friend my_actor;
 public:
 	template <typename Handler>
-	mutex_block_msg(msg_handle& msgHandle, Handler&& handler)
+	mutex_block_msg(MsgHandle& msgHandle, Handler&& handler)
 		:_msgHandle(msgHandle), __MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor) {}
 
 #ifdef __GNUG__
@@ -2334,7 +2357,7 @@ private:
 	{
 		if (_msgHandle._checkLost && _msgHandle._losted)
 		{
-			throw typename actor_msg_handle<ARGS...>::lost_exception();
+			throw typename msg_handle<ARGS...>::lost_exception();
 		}
 	}
 
@@ -2360,24 +2383,24 @@ private:
 		return MutexBlock_::actor_id(_msgHandle._hostActor);
 	}
 private:
-	msg_handle& _msgHandle;
+	MsgHandle& _msgHandle;
 	std::function<bool(ARGS...)> _handler;
 	dst_receiver _msgBuff;
 };
 
 /*!
-@brief actor_trig_handle消息互斥执行块
+@brief trig_handle消息互斥执行块
 */
 template <typename... ARGS>
 class mutex_block_trig : public MutexBlock_
 {
-	typedef actor_trig_handle<ARGS...> msg_handle;
+	typedef trig_handle<ARGS...> MsgHandle;
 	typedef DstReceiverBuff_<ARGS...> dst_receiver;
 
 	friend my_actor;
 public:
 	template <typename Handler>
-	mutex_block_trig(msg_handle& msgHandle, Handler&& handler)
+	mutex_block_trig(MsgHandle& msgHandle, Handler&& handler)
 		:_msgHandle(msgHandle), __MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor) {}
 
 #ifdef __GNUG__
@@ -2404,7 +2427,7 @@ private:
 	{
 		if (_msgHandle._checkLost && _msgHandle._losted)
 		{
-			throw typename actor_trig_handle<ARGS...>::lost_exception();
+			throw typename trig_handle<ARGS...>::lost_exception();
 		}
 	}
 
@@ -2430,7 +2453,7 @@ private:
 		return MutexBlock_::actor_id(_msgHandle._hostActor);
 	}
 private:
-	msg_handle& _msgHandle;
+	MsgHandle& _msgHandle;
 	std::function<bool(ARGS...)> _handler;
 	dst_receiver _msgBuff;
 };
@@ -2521,12 +2544,12 @@ private:
 template <>
 class mutex_block_msg<> : public MutexBlock_
 {
-	typedef actor_msg_handle<> msg_handle;
+	typedef msg_handle<> MsgHandle;
 
 	friend my_actor;
 public:
 	template <typename Handler>
-	mutex_block_msg(msg_handle& msgHandle, Handler&& handler)
+	mutex_block_msg(MsgHandle& msgHandle, Handler&& handler)
 		:_msgHandle(msgHandle), _has(false), __MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor) {}
 
 #ifdef __GNUG__
@@ -2553,7 +2576,7 @@ private:
 	{
 		if (_msgHandle._checkLost && _msgHandle._losted)
 		{
-			throw actor_msg_handle<>::lost_exception();
+			throw msg_handle<>::lost_exception();
 		}
 	}
 
@@ -2579,7 +2602,7 @@ private:
 		return MutexBlock_::actor_id(_msgHandle._hostActor);
 	}
 private:
-	msg_handle& _msgHandle;
+	MsgHandle& _msgHandle;
 	std::function<bool()> _handler;
 	bool _has;
 };
@@ -2587,12 +2610,12 @@ private:
 template <>
 class mutex_block_trig<> : public MutexBlock_
 {
-	typedef actor_trig_handle<> msg_handle;
+	typedef trig_handle<> MsgHandle;
 
 	friend my_actor;
 public:
 	template <typename Handler>
-	mutex_block_trig(msg_handle& msgHandle, Handler&& handler)
+	mutex_block_trig(MsgHandle& msgHandle, Handler&& handler)
 		:_msgHandle(msgHandle), _has(false), __MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor) {}
 
 #ifdef __GNUG__
@@ -2619,7 +2642,7 @@ private:
 	{
 		if (_msgHandle._checkLost && _msgHandle._losted)
 		{
-			throw actor_trig_handle<>::lost_exception();
+			throw trig_handle<>::lost_exception();
 		}
 	}
 
@@ -2645,7 +2668,7 @@ private:
 		return MutexBlock_::actor_id(_msgHandle._hostActor);
 	}
 private:
-	msg_handle& _msgHandle;
+	MsgHandle& _msgHandle;
 	std::function<bool()> _handler;
 	bool _has;
 };
@@ -3043,18 +3066,18 @@ private:
 #ifdef ENABLE_CHECK_LOST
 
 /*!
-@brief actor_msg_handle消息互斥执行块，带通知句柄丢失处理
+@brief msg_handle消息互斥执行块，带通知句柄丢失处理
 */
 template <typename... ARGS>
 class mutex_block_msg_check_lost : public MutexBlock_
 {
-	typedef actor_msg_handle<ARGS...> msg_handle;
+	typedef msg_handle<ARGS...> MsgHandle;
 	typedef DstReceiverBuff_<ARGS...> dst_receiver;
 
 	friend my_actor;
 public:
 	template <typename Handler, typename LostHandler>
-	mutex_block_msg_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+	mutex_block_msg_check_lost(MsgHandle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
 		:_msgHandle(msgHandle), _readySign(0), _lostNtfed(false),
 		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor),
 		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, TRY_MOVE(lostHandler), msgHandle._hostActor)
@@ -3127,7 +3150,7 @@ private:
 		return MutexBlock_::actor_id(_msgHandle._hostActor);
 	}
 private:
-	msg_handle& _msgHandle;
+	MsgHandle& _msgHandle;
 	std::function<bool(ARGS...)> _handler;
 	std::function<bool()> _lostHandler;
 	dst_receiver _msgBuff;
@@ -3136,18 +3159,18 @@ private:
 };
 
 /*!
-@brief actor_trig_handle消息互斥执行块，带通知句柄丢失处理
+@brief trig_handle消息互斥执行块，带通知句柄丢失处理
 */
 template <typename... ARGS>
 class mutex_block_trig_check_lost : public MutexBlock_
 {
-	typedef actor_trig_handle<ARGS...> msg_handle;
+	typedef trig_handle<ARGS...> MsgHandle;
 	typedef DstReceiverBuff_<ARGS...> dst_receiver;
 
 	friend my_actor;
 public:
 	template <typename Handler, typename LostHandler>
-	mutex_block_trig_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+	mutex_block_trig_check_lost(MsgHandle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
 		:_msgHandle(msgHandle), _readySign(0), _lostNtfed(false),
 		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor),
 		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, TRY_MOVE(lostHandler), msgHandle._hostActor)
@@ -3220,7 +3243,7 @@ private:
 		return MutexBlock_::actor_id(_msgHandle._hostActor);
 	}
 private:
-	msg_handle& _msgHandle;
+	MsgHandle& _msgHandle;
 	std::function<bool(ARGS...)> _handler;
 	std::function<bool()> _lostHandler;
 	dst_receiver _msgBuff;
@@ -3336,12 +3359,12 @@ private:
 template <>
 class mutex_block_msg_check_lost<> : public MutexBlock_
 {
-	typedef actor_msg_handle<> msg_handle;
+	typedef msg_handle<> MsgHandle;
 
 	friend my_actor;
 public:
 	template <typename Handler, typename LostHandler>
-	mutex_block_msg_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+	mutex_block_msg_check_lost(MsgHandle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
 		:_msgHandle(msgHandle), _readySign(0), _has(false), _lostNtfed(false),
 		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor),
 		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, TRY_MOVE(lostHandler), msgHandle._hostActor)
@@ -3414,7 +3437,7 @@ private:
 		return MutexBlock_::actor_id(_msgHandle._hostActor);
 	}
 private:
-	msg_handle& _msgHandle;
+	MsgHandle& _msgHandle;
 	std::function<bool()> _handler;
 	std::function<bool()> _lostHandler;
 	int _readySign;
@@ -3425,12 +3448,12 @@ private:
 template <>
 class mutex_block_trig_check_lost<> : public MutexBlock_
 {
-	typedef actor_trig_handle<> msg_handle;
+	typedef trig_handle<> MsgHandle;
 
 	friend my_actor;
 public:
 	template <typename Handler, typename LostHandler>
-	mutex_block_trig_check_lost(msg_handle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+	mutex_block_trig_check_lost(MsgHandle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
 		:_msgHandle(msgHandle), _readySign(0), _has(false), _lostNtfed(false),
 		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor),
 		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, TRY_MOVE(lostHandler), msgHandle._hostActor)
@@ -3503,7 +3526,7 @@ private:
 		return MutexBlock_::actor_id(_msgHandle._hostActor);
 	}
 private:
-	msg_handle& _msgHandle;
+	MsgHandle& _msgHandle;
 	std::function<bool()> _handler;
 	std::function<bool()> _lostHandler;
 	int _readySign;
@@ -3615,13 +3638,13 @@ private:
 //////////////////////////////////////////////////////////////////////////
 
 template <typename Handler, typename... ARGS>
-mutex_block_msg<ARGS...> make_mutex_block_msg(actor_msg_handle<ARGS...>& msgHandle, Handler&& handler)
+mutex_block_msg<ARGS...> make_mutex_block_msg(msg_handle<ARGS...>& msgHandle, Handler&& handler)
 {
 	return mutex_block_msg<ARGS...>(msgHandle, TRY_MOVE(handler));
 }
 
 template <typename Handler, typename... ARGS>
-mutex_block_trig<ARGS...> make_mutex_block_trig(actor_trig_handle<ARGS...>& msgHandle, Handler&& handler)
+mutex_block_trig<ARGS...> make_mutex_block_trig(trig_handle<ARGS...>& msgHandle, Handler&& handler)
 {
 	return mutex_block_trig<ARGS...>(msgHandle, TRY_MOVE(handler));
 }
@@ -3641,13 +3664,13 @@ mutex_block_pump_check_state<ARGS...> make_mutex_block_pump_check_state(const ms
 #ifdef ENABLE_CHECK_LOST
 
 template <typename Handler, typename LostHandler, typename... ARGS>
-mutex_block_msg_check_lost<ARGS...> make_mutex_block_msg_check_lost(actor_msg_handle<ARGS...>& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+mutex_block_msg_check_lost<ARGS...> make_mutex_block_msg_check_lost(msg_handle<ARGS...>& msgHandle, Handler&& handler, LostHandler&& lostHandler)
 {
 	return mutex_block_msg_check_lost<ARGS...>(msgHandle, TRY_MOVE(handler), TRY_MOVE(lostHandler));
 }
 
 template <typename Handler, typename LostHandler, typename... ARGS>
-mutex_block_trig_check_lost<ARGS...> make_mutex_block_trig_check_lost(actor_trig_handle<ARGS...>& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+mutex_block_trig_check_lost<ARGS...> make_mutex_block_trig_check_lost(trig_handle<ARGS...>& msgHandle, Handler&& handler, LostHandler&& lostHandler)
 {
 	return mutex_block_trig_check_lost<ARGS...>(msgHandle, TRY_MOVE(handler), TRY_MOVE(lostHandler));
 }
@@ -3896,7 +3919,7 @@ private:
 		}
 	}
 
-	void operator =(const callback_handler& s)
+	void operator =(const callback_handler&)
 	{
 		assert(false);
 	}
@@ -3980,7 +4003,7 @@ private:
 		}
 	}
 
-	void operator =(const asio_cb_handler& s)
+	void operator =(const asio_cb_handler&)
 	{
 		assert(false);
 	}
@@ -3994,9 +4017,89 @@ private:
 //////////////////////////////////////////////////////////////////////////
 
 /*!
+@brief 异步回调器(Handler将在回调内部直接执行，可能触发线程安全问题)，作为回调函数参数传入，回调后，自动返回到下一行语句继续执行
+*/
+template <typename Handler, typename R>
+class on_callback_handler : public TrigOnceBase_
+{
+	typedef TrigOnceBase_ Parent;
+	friend my_actor;
+public:
+	on_callback_handler(my_actor* host, Handler& h)
+		:_closed(shared_bool::new_(false)), _handler(h), _selfEarly(host), _bsign(false), _sign(&_bsign)
+	{
+		Parent::_hostActor = ActorFunc_::shared_from_this(host);
+	}
+
+	~on_callback_handler() __disable_noexcept
+	{
+		if (_selfEarly)
+		{
+			if (!ActorFunc_::is_quited(_selfEarly))
+			{
+				if (!_bsign)
+				{
+					_bsign = true;
+					ActorFunc_::push_yield(_selfEarly);
+				}
+				_closed = true;
+			}
+			Parent::_hostActor.reset();
+		}
+	}
+
+	on_callback_handler(const on_callback_handler& s)
+		:TrigOnceBase_(s), _closed(s._closed), _handler(s._handler), _selfEarly(NULL), _bsign(false), _sign(s._sign) {}
+
+	on_callback_handler(on_callback_handler&& s)
+		:TrigOnceBase_(std::move(s)), _closed(s._selfEarly ? s._closed : std::move(s._closed)),
+		_handler(s._handler), _selfEarly(NULL), _bsign(false), _sign(s._sign)
+	{
+		s._sign = NULL;
+	}
+public:
+	template <typename... Args>
+	R operator()(Args&&... args) const
+	{
+		stack_obj<R> result;
+		stack_agent_result::invoke(_handler, result, std::forward<Args>(args)...);
+		Parent::tick_handler(_closed, _sign);
+		return stack_obj_move::move(result);
+	}
+
+	template <typename... Args>
+	R operator()(Args&&... args)
+	{
+		stack_obj<R> result;
+		stack_agent_result::invoke(_handler, result, std::forward<Args>(args)...);
+		Parent::tick_handler(_closed, _sign);
+		return stack_obj_move::move(result);
+	}
+private:
+	void reset() const
+	{
+		if (!_selfEarly)
+		{
+			Parent::_hostActor.reset();
+		}
+	}
+
+	void operator =(const on_callback_handler&)
+	{
+		assert(false);
+	}
+private:
+	shared_bool _closed;
+	Handler& _handler;
+	my_actor* const _selfEarly;
+	bool* _sign;
+	bool _bsign;
+};
+
+/*!
 @brief 同步回调传入返回值
 */
-template <typename R = void>
+template <typename R>
 struct sync_result
 {
 	sync_result()
@@ -4040,42 +4143,6 @@ struct sync_result
 	std::condition_variable* _con;
 	stack_obj<R>* _res;
 	bool _sign;
-};
-
-template <>
-struct sync_result<void>
-{
-	sync_result()
-	{
-		_mutex = NULL;
-		_con = NULL;
-		_sign = false;
-		DEBUG_OPERATION(_res = false);
-	}
-
-	void return_()
-	{
-		assert(_res);
-		{
-			assert(_mutex && _con);
-			std::lock_guard<std::mutex> lg(*_mutex);
-			_con->notify_one();
-		}
-		reset();
-	}
-
-	void reset()
-	{
-		_mutex = NULL;
-		_con = NULL;
-		_sign = false;
-		DEBUG_OPERATION(_res = false);
-	}
-
-	std::mutex* _mutex;
-	std::condition_variable* _con;
-	bool _sign;
-	DEBUG_OPERATION(bool _res);
 };
 
 /*!
@@ -4135,7 +4202,7 @@ public:
 			Parent::_dispatch_handler2(&_result._sign, _dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
 			con.wait(ul);
 		}
-		return (R&&)res.get();
+		return stack_obj_move::move(res);
 	}
 
 	R operator()() const
@@ -4153,7 +4220,7 @@ public:
 			Parent::dispatch_handler(&_result._sign);
 			con.wait(ul);
 		}
-		return (R&&)res.get();
+		return stack_obj_move::move(res);
 	}
 private:
 	void reset() const
@@ -4172,95 +4239,6 @@ private:
 	dst_receiver _dstRef;
 	my_actor* const _selfEarly;
 	sync_result<R>& _result;
-};
-
-template <typename... ARGS, typename... OUTS>
-class sync_cb_handler<void, types_pck<ARGS...>, types_pck<OUTS...>> : public TrigOnceBase_
-{
-	typedef TrigOnceBase_ Parent;
-	typedef std::tuple<OUTS&...> dst_receiver;
-
-	friend my_actor;
-public:
-	template <typename... Outs>
-	sync_cb_handler(my_actor* host, sync_result<void>& res, Outs&... outs)
-		:_selfEarly(host), _result(res), _dstRef(outs...)
-	{
-		Parent::_hostActor = ActorFunc_::shared_from_this(host);
-		_result.reset();
-	}
-
-	~sync_cb_handler() __disable_noexcept
-	{
-		if (_selfEarly)
-		{
-			if (!ActorFunc_::is_quited(_selfEarly))
-			{
-				if (!_result._sign)
-				{
-					_result._sign = true;
-					ActorFunc_::push_yield(_selfEarly);
-				}
-			}
-			Parent::_hostActor.reset();
-		}
-	}
-
-	sync_cb_handler(const sync_cb_handler& s)
-		:TrigOnceBase_(s), _selfEarly(NULL), _result(s._result), _dstRef(s._dstRef) {}
-
-	sync_cb_handler(sync_cb_handler&& s)
-		:TrigOnceBase_(std::move(s)), _selfEarly(NULL), _result(s._result), _dstRef(s._dstRef) {}
-public:
-	template <typename... Args>
-	void operator()(Args&&... args) const
-	{
-		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
-		assert(!ActorFunc_::self_strand(Parent::_hostActor.get())->in_this_ios());
-		DEBUG_OPERATION(_result._res = true);
-		{
-			std::mutex mutex;
-			std::condition_variable con;
-			_result._mutex = &mutex;
-			_result._con = &con;
-			std::unique_lock<std::mutex> ul(mutex);
-			Parent::_dispatch_handler2(&_result._sign, _dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
-			con.wait(ul);
-		}
-	}
-
-	void operator()() const
-	{
-		static_assert(sizeof...(ARGS) == 0, "");
-		assert(!ActorFunc_::self_strand(Parent::_hostActor.get())->in_this_ios());
-		DEBUG_OPERATION(_result._res = true);
-		{
-			std::mutex mutex;
-			std::condition_variable con;
-			_result._mutex = &mutex;
-			_result._con = &con;
-			std::unique_lock<std::mutex> ul(mutex);
-			Parent::dispatch_handler(&_result._sign);
-			con.wait(ul);
-		}
-	}
-private:
-	void reset() const
-	{
-		if (!_selfEarly)
-		{
-			Parent::_hostActor.reset();
-		}
-	}
-
-	void operator =(const sync_cb_handler& s)
-	{
-		assert(false);
-	}
-private:
-	dst_receiver _dstRef;
-	my_actor* const _selfEarly;
-	sync_result<void>& _result;
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -4319,7 +4297,7 @@ public:
 			con.wait(ul);
 		}
 		DEBUG_OPERATION(_pIsTrig->exchange(false));
-		return (R&&)res.get();
+		return stack_obj_move::move(res);
 	}
 
 	template <typename... Args>
@@ -4338,89 +4316,11 @@ public:
 			con.wait(ul);
 		}
 		DEBUG_OPERATION(_pIsTrig->exchange(false));
-		return (R&&)res.get();
+		return stack_obj_move::move(res);
 	}
 private:
 	Handler _handler;
 	sync_result<R>* _result;
-	DEBUG_OPERATION(std::shared_ptr<std::atomic<bool> > _pIsTrig);
-};
-
-template <typename Handler>
-class wrapped_sync_handler<void, Handler>
-{
-public:
-	template <typename H>
-	wrapped_sync_handler(H&& h, sync_result<void>& res)
-		:_handler(TRY_MOVE(h)), _result(&res)
-	{
-		DEBUG_OPERATION(_pIsTrig = std::shared_ptr<std::atomic<bool> >(new std::atomic<bool>(false)));
-	}
-
-	wrapped_sync_handler(const wrapped_sync_handler& s)
-		:_handler(s._handler), _result(s._result)
-	{
-		DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
-	}
-
-	wrapped_sync_handler(wrapped_sync_handler&& s)
-		:_handler(std::move(s._handler)), _result(s._result)
-	{
-		s._result = NULL;
-		DEBUG_OPERATION(_pIsTrig = std::move(s._pIsTrig));
-	}
-
-	void operator =(const wrapped_sync_handler& s)
-	{
-		_handler = s._handler;
-		_result = s._result;
-		DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
-	}
-
-	void operator =(wrapped_sync_handler&& s)
-	{
-		_handler = std::move(s._handler);
-		_result = s._result;
-		s._result = NULL;
-		DEBUG_OPERATION(_pIsTrig = std::move(s._pIsTrig));
-	}
-
-	template <typename... Args>
-	void operator()(Args&&... args)
-	{
-		DEBUG_OPERATION(_result->_res = true);
-		assert(!_pIsTrig->exchange(true));
-		{
-			std::mutex mutex;
-			std::condition_variable con;
-			_result->_mutex = &mutex;
-			_result->_con = &con;
-			std::unique_lock<std::mutex> ul(mutex);
-			_handler(TRY_MOVE(args)...);
-			con.wait(ul);
-		}
-		DEBUG_OPERATION(_pIsTrig->exchange(false));
-	}
-
-	template <typename... Args>
-	void operator()(Args&&... args) const
-	{
-		DEBUG_OPERATION(_result->_res = true);
-		assert(!_pIsTrig->exchange(true));
-		{
-			std::mutex mutex;
-			std::condition_variable con;
-			_result->_mutex = &mutex;
-			_result->_con = &con;
-			std::unique_lock<std::mutex> ul(mutex);
-			_handler(TRY_MOVE(args)...);
-			con.wait(ul);
-		}
-		DEBUG_OPERATION(_pIsTrig->exchange(false));
-	}
-private:
-	Handler _handler;
-	sync_result<void>* _result;
 	DEBUG_OPERATION(std::shared_ptr<std::atomic<bool> > _pIsTrig);
 };
 
@@ -4484,7 +4384,7 @@ public:
 			_syncSt->con.wait(ul);
 		}
 		DEBUG_OPERATION(_pIsTrig->exchange(false));
-		return (R&&)res.get();
+		return stack_obj_move::move(res);
 	}
 
 	template <typename... Args>
@@ -4501,7 +4401,7 @@ public:
 			_syncSt->con.wait(ul);
 		}
 		DEBUG_OPERATION(_pIsTrig->exchange(false));
-		return (R&&)res.get();
+		return stack_obj_move::move(res);
 	}
 private:
 	Handler _handler;
@@ -4510,129 +4410,47 @@ private:
 	DEBUG_OPERATION(std::shared_ptr<std::atomic<bool> > _pIsTrig);
 };
 
-template <typename Handler>
-class wrapped_sync_handler2<void, Handler>
-{
-	struct sync_st
-	{
-		std::mutex mutex;
-		std::condition_variable con;
-	};
-public:
-	template <typename H>
-	wrapped_sync_handler2(H&& h, sync_result<void>& res)
-		:_handler(TRY_MOVE(h)), _result(&res), _syncSt(new sync_st)
-	{
-		DEBUG_OPERATION(_pIsTrig = std::shared_ptr<std::atomic<bool> >(new std::atomic<bool>(false)));
-	}
-
-	wrapped_sync_handler2(const wrapped_sync_handler2& s)
-		:_handler(s._handler), _result(s._result), _syncSt(s._syncSt)
-	{
-		DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
-	}
-
-	wrapped_sync_handler2(wrapped_sync_handler2&& s)
-		:_handler(std::move(s._handler)), _result(s._result), _syncSt(std::move(s._syncSt))
-	{
-		s._result = NULL;
-		DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
-	}
-
-	void operator =(const wrapped_sync_handler2& s)
-	{
-		_handler = s._handler;
-		_syncSt = s._syncSt;
-		_result = s._result;
-		DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
-	}
-
-	void operator =(wrapped_sync_handler2&& s)
-	{
-		_handler = std::move(s._handler);
-		_syncSt = std::move(s._syncSt);
-		_result = s._result;
-		s._result = NULL;
-		DEBUG_OPERATION(_pIsTrig = std::move(s._pIsTrig));
-	}
-
-	template <typename... Args>
-	void operator()(Args&&... args)
-	{
-		DEBUG_OPERATION(_result->_res = true);
-		assert(!_pIsTrig->exchange(true));
-		{
-			_result->_mutex = &_syncSt->mutex;
-			_result->_con = &_syncSt->con;
-			std::unique_lock<std::mutex> ul(_syncSt->mutex);
-			_handler(TRY_MOVE(args)...);
-			_syncSt->con.wait(ul);
-		}
-		DEBUG_OPERATION(_pIsTrig->exchange(false));
-	}
-
-	template <typename... Args>
-	void operator()(Args&&... args) const
-	{
-		DEBUG_OPERATION(_result->_res = true);
-		assert(!_pIsTrig->exchange(true));
-		{
-			_result->_mutex = &_syncSt->mutex;
-			_result->_con = &_syncSt->con;
-			std::unique_lock<std::mutex> ul(_syncSt->mutex);
-			_handler(TRY_MOVE(args)...);
-			_syncSt->con.wait(ul);
-		}
-		DEBUG_OPERATION(_pIsTrig->exchange(false));
-	}
-private:
-	Handler _handler;
-	sync_result<void>* _result;
-	std::shared_ptr<sync_st> _syncSt;
-	DEBUG_OPERATION(std::shared_ptr<std::atomic<bool> > _pIsTrig);
-};
-
 /*!
 @brief 包装一个handler到与当前ios无关的线程中同步调用
 */
-template <typename R = void, typename Handler>
-wrapped_sync_handler<R, RM_REF(Handler)> wrap_sync(sync_result<R>& res, Handler&& h)
+template <typename R, typename Handler>
+wrapped_sync_handler<R, RM_CREF(Handler)> wrap_sync(sync_result<R>& res, Handler&& h)
 {
-	return wrapped_sync_handler<R, RM_REF(Handler)>(TRY_MOVE(h), res);
+	return wrapped_sync_handler<R, RM_CREF(Handler)>(TRY_MOVE(h), res);
 }
 
-template <typename R = void, typename Handler>
-wrapped_sync_handler2<R, RM_REF(Handler)> wrap_sync2(sync_result<R>& res, Handler&& h)
+template <typename R, typename Handler>
+wrapped_sync_handler2<R, RM_CREF(Handler)> wrap_sync2(sync_result<R>& res, Handler&& h)
 {
-	return wrapped_sync_handler2<R, RM_REF(Handler)>(TRY_MOVE(h), res);
+	return wrapped_sync_handler2<R, RM_CREF(Handler)>(TRY_MOVE(h), res);
 }
 //////////////////////////////////////////////////////////////////////////
 
 /*!
 @brief 子Actor句柄
 */
-class child_actor_handle
+class child_handle
 {
 	friend my_actor;
 public:
-	typedef std::shared_ptr<child_actor_handle> ptr;
+	typedef std::shared_ptr<child_handle> ptr;
 public:
-	child_actor_handle();
-	child_actor_handle(child_actor_handle&& s);
-	~child_actor_handle() __disable_noexcept;
-	void operator =(child_actor_handle&& s);
+	child_handle();
+	child_handle(child_handle&& s);
+	~child_handle() __disable_noexcept;
+	void operator =(child_handle&& s);
 	const actor_handle& get_actor() const;
 	my_actor* operator ->() const;
 	bool empty() const;
 	static ptr make_ptr();
 private:
 	void peel();
-	child_actor_handle(actor_handle&& actor);
-	child_actor_handle(const child_actor_handle&);
-	void operator =(const child_actor_handle&);
+	child_handle(actor_handle&& actor);
+	child_handle(const child_handle&);
+	void operator =(const child_handle&);
 private:
 	actor_handle _actor;
-	actor_trig_handle<> _quiteAth;
+	trig_handle<> _quiteAth;
 	msg_list_shared_alloc<actor_handle>::iterator _actorIt;
 	msg_list_shared_alloc<std::function<void()> >::iterator _athIt;
 	bool _started : 1;
@@ -5214,11 +5032,11 @@ class my_actor
 
 	class actor_run;
 	friend actor_run;
-	friend child_actor_handle;
+	friend child_handle;
 	friend mutex_block_quit;
 	friend mutex_block_sign;
 	friend MsgPumpBase_;
-	friend actor_msg_handle_base;
+	friend msg_handle_base;
 	friend TrigOnceBase_;
 	friend io_engine;
 	friend ActorTimer_;
@@ -5302,76 +5120,76 @@ public:
 	@param stackSize Actor栈大小，4k的整数倍（最大1MB）
 	@return 子Actor句柄
 	*/
-	child_actor_handle create_child_actor(shared_strand&& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	child_actor_handle create_child_actor(shared_strand&& actorStrand, main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	child_actor_handle create_child_actor(const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	child_actor_handle create_child_actor(main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	child_actor_handle create_child_actor(shared_strand&& actorStrand, AutoStackActorFace_&& wrapActor);
-	child_actor_handle create_child_actor(AutoStackActorFace_&& wrapActor);
-	child_actor_handle create_child_actor(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	child_actor_handle create_child_actor(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	child_actor_handle create_child_actor(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor);
+	child_handle create_child(shared_strand&& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_handle create_child(shared_strand&& actorStrand, main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_handle create_child(const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_handle create_child(main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_handle create_child(shared_strand&& actorStrand, AutoStackActorFace_&& wrapActor);
+	child_handle create_child(AutoStackActorFace_&& wrapActor);
+	child_handle create_child(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_handle create_child(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_handle create_child(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor);
 
 	/*!
 	@brief 开始运行子Actor，只能调用一次
 	*/
-	void child_actor_run(child_actor_handle& actorHandle);
+	void child_run(child_handle& actorHandle);
 
 	template <typename... Handles>
-	void child_actor_run(child_actor_handle& actorHandle, Handles&... handles)
+	void child_run(child_handle& actorHandle, Handles&... handles)
 	{
 		static_assert(sizeof...(Handles) >= 1, "");
-		child_actor_run(actorHandle);
-		child_actor_run(handles...);
+		child_run(actorHandle);
+		child_run(handles...);
 	}
 
 	/*!
 	@brief 开始运行一组子Actor，只能调用一次
 	*/
-	void child_actors_run(std::list<child_actor_handle::ptr>& actorHandles);
-	void child_actors_run(std::list<child_actor_handle>& actorHandles);
+	void children_run(std::list<child_handle::ptr>& actorHandles);
+	void children_run(std::list<child_handle>& actorHandles);
 
 	template <typename Alloc>
-	void child_actors_run(std::list<child_actor_handle::ptr, Alloc>& actorHandles)
+	void children_run(std::list<child_handle::ptr, Alloc>& actorHandles)
 	{
 		assert_enter();
 		for (auto& actorHandle : actorHandles)
 		{
-			child_actor_run(*actorHandle);
+			child_run(*actorHandle);
 		}
 	}
 
 	template <typename Alloc>
-	void child_actors_run(std::list<child_actor_handle, Alloc>& actorHandles)
+	void children_run(std::list<child_handle, Alloc>& actorHandles)
 	{
 		assert_enter();
 		for (auto& actorHandle : actorHandles)
 		{
-			child_actor_run(actorHandle);
+			child_run(actorHandle);
 		}
 	}
 
 	/*!
 	@brief 强制终止一个子Actor
 	*/
-	__yield_interrupt void child_actor_force_quit(child_actor_handle& actorHandle);
+	__yield_interrupt void child_force_quit(child_handle& actorHandle);
 
 	template <typename... Handles>
-	__yield_interrupt void child_actor_force_quit(child_actor_handle& actorHandle, Handles&... handles)
+	__yield_interrupt void child_force_quit(child_handle& actorHandle, Handles&... handles)
 	{
 		static_assert(sizeof...(Handles) >= 1, "");
-		child_actor_force_quit(actorHandle);
-		child_actor_force_quit(handles...);
+		child_force_quit(actorHandle);
+		child_force_quit(handles...);
 	}
 
 	/*!
 	@brief 强制终止一组Actor
 	*/
-	__yield_interrupt void child_actors_force_quit(std::list<child_actor_handle::ptr>& actorHandles);
-	__yield_interrupt void child_actors_force_quit(std::list<child_actor_handle>& actorHandles);
+	__yield_interrupt void children_force_quit(std::list<child_handle::ptr>& actorHandles);
+	__yield_interrupt void children_force_quit(std::list<child_handle>& actorHandles);
 
 	template <typename Alloc>
-	__yield_interrupt void child_actors_force_quit(std::list<child_actor_handle::ptr, Alloc>& actorHandles)
+	__yield_interrupt void children_force_quit(std::list<child_handle::ptr, Alloc>& actorHandles)
 	{
 		assert_enter();
 		for (auto& actorHandle : actorHandles)
@@ -5394,7 +5212,7 @@ public:
 	}
 
 	template <typename Alloc>
-	__yield_interrupt void child_actors_force_quit(std::list<child_actor_handle, Alloc>& actorHandles)
+	__yield_interrupt void children_force_quit(std::list<child_handle, Alloc>& actorHandles)
 	{
 		assert_enter();
 		for (auto& actorHandle : actorHandles)
@@ -5420,75 +5238,75 @@ public:
 	@brief 等待一个子Actor完成后返回
 	@return 正常退出的返回true，否则false
 	*/
-	__yield_interrupt void child_actor_wait_quit(child_actor_handle& actorHandle);
+	__yield_interrupt void child_wait_quit(child_handle& actorHandle);
 
 	template <typename... Handles>
-	__yield_interrupt void child_actor_wait_quit(child_actor_handle& actorHandle, Handles&... handles)
+	__yield_interrupt void child_wait_quit(child_handle& actorHandle, Handles&... handles)
 	{
 		static_assert(sizeof...(Handles) >= 1, "");
-		child_actor_wait_quit(actorHandle);
-		child_actor_wait_quit(handles...);
+		child_wait_quit(actorHandle);
+		child_wait_quit(handles...);
 	}
 
-	__yield_interrupt bool timed_child_actor_wait_quit(int tm, child_actor_handle& actorHandle);
+	__yield_interrupt bool timed_child_wait_quit(int tm, child_handle& actorHandle);
 
 	/*!
 	@brief 等待一组子Actor完成后返回
 	@return 都正常退出的返回true，否则false
 	*/
-	__yield_interrupt void child_actors_wait_quit(std::list<child_actor_handle::ptr>& actorHandles);
-	__yield_interrupt void child_actors_wait_quit(std::list<child_actor_handle>& actorHandles);
+	__yield_interrupt void children_wait_quit(std::list<child_handle::ptr>& actorHandles);
+	__yield_interrupt void children_wait_quit(std::list<child_handle>& actorHandles);
 
 	template <typename Alloc>
-	__yield_interrupt void child_actors_wait_quit(std::list<child_actor_handle::ptr, Alloc>& actorHandles)
+	__yield_interrupt void children_wait_quit(std::list<child_handle::ptr, Alloc>& actorHandles)
 	{
 		assert_enter();
 		for (auto& actorHandle : actorHandles)
 		{
 			assert(actorHandle->get_actor()->parent_actor()->self_id() == self_id());
-			child_actor_wait_quit(*actorHandle);
+			child_wait_quit(*actorHandle);
 		}
 	}
 
 	template <typename Alloc>
-	__yield_interrupt void child_actors_wait_quit(std::list<child_actor_handle, Alloc>& actorHandles)
+	__yield_interrupt void children_wait_quit(std::list<child_handle, Alloc>& actorHandles)
 	{
 		assert_enter();
 		for (auto& actorHandle : actorHandles)
 		{
 			assert(actorHandle.get_actor()->parent_actor()->self_id() == self_id());
-			child_actor_wait_quit(actorHandle);
+			child_wait_quit(actorHandle);
 		}
 	}
 
 	/*!
 	@brief 挂起子Actor
 	*/
-	__yield_interrupt void child_actor_suspend(child_actor_handle& actorHandle);
+	__yield_interrupt void child_suspend(child_handle& actorHandle);
 
 	template <typename... Handles>
-	__yield_interrupt void child_actor_suspend(child_actor_handle& actorHandle, Handles&... handles)
+	__yield_interrupt void child_suspend(child_handle& actorHandle, Handles&... handles)
 	{
 		static_assert(sizeof...(Handles) >= 1, "");
 		lock_quit();
-		child_actor_suspend(actorHandle);
-		child_actor_suspend(handles...);
+		child_suspend(actorHandle);
+		child_suspend(handles...);
 		unlock_quit();
 	}
 
 	/*!
 	@brief 挂起一组子Actor
 	*/
-	__yield_interrupt void child_actors_suspend(std::list<child_actor_handle::ptr>& actorHandles);
-	__yield_interrupt void child_actors_suspend(std::list<child_actor_handle>& actorHandles);
+	__yield_interrupt void children_suspend(std::list<child_handle::ptr>& actorHandles);
+	__yield_interrupt void children_suspend(std::list<child_handle>& actorHandles);
 
 	template <typename Alloc>
-	__yield_interrupt void child_actors_suspend(std::list<child_actor_handle::ptr, Alloc>& actorHandles)
+	__yield_interrupt void children_suspend(std::list<child_handle::ptr, Alloc>& actorHandles)
 	{
 		assert_enter();
 		lock_quit();
-		actor_msg_handle<> amh;
-		actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
+		msg_handle<> amh;
+		msg_notifer<> h = make_msg_notifer_to_self(amh);
 		for (auto& actorHandle : actorHandles)
 		{
 			assert(actorHandle->get_actor());
@@ -5504,12 +5322,12 @@ public:
 	}
 
 	template <typename Alloc>
-	__yield_interrupt void child_actors_suspend(std::list<child_actor_handle, Alloc>& actorHandles)
+	__yield_interrupt void children_suspend(std::list<child_handle, Alloc>& actorHandles)
 	{
 		assert_enter();
 		lock_quit();
-		actor_msg_handle<> amh;
-		actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
+		msg_handle<> amh;
+		msg_notifer<> h = make_msg_notifer_to_self(amh);
 		for (auto& actorHandle : actorHandles)
 		{
 			assert(actorHandle.get_actor());
@@ -5527,31 +5345,31 @@ public:
 	/*!
 	@brief 恢复子Actor
 	*/
-	__yield_interrupt void child_actor_resume(child_actor_handle& actorHandle);
+	__yield_interrupt void child_resume(child_handle& actorHandle);
 
 	template <typename... Handles>
-	__yield_interrupt void child_actor_resume(child_actor_handle& actorHandle, Handles&... handles)
+	__yield_interrupt void child_resume(child_handle& actorHandle, Handles&... handles)
 	{
 		static_assert(sizeof...(Handles) >= 1, "");
 		lock_quit();
-		child_actor_resume(actorHandle);
-		child_actor_resume(handles...);
+		child_resume(actorHandle);
+		child_resume(handles...);
 		unlock_quit();
 	}
 
 	/*!
 	@brief 恢复一组子Actor
 	*/
-	__yield_interrupt void child_actors_resume(std::list<child_actor_handle::ptr>& actorHandles);
-	__yield_interrupt void child_actors_resume(std::list<child_actor_handle>& actorHandles);
+	__yield_interrupt void children_resume(std::list<child_handle::ptr>& actorHandles);
+	__yield_interrupt void children_resume(std::list<child_handle>& actorHandles);
 
 	template <typename Alloc>
-	__yield_interrupt void child_actors_resume(std::list<child_actor_handle::ptr, Alloc>& actorHandles)
+	__yield_interrupt void children_resume(std::list<child_handle::ptr, Alloc>& actorHandles)
 	{
 		assert_enter();
 		lock_quit();
-		actor_msg_handle<> amh;
-		actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
+		msg_handle<> amh;
+		msg_notifer<> h = make_msg_notifer_to_self(amh);
 		for (auto& actorHandle : actorHandles)
 		{
 			assert(actorHandle->get_actor());
@@ -5567,12 +5385,12 @@ public:
 	}
 
 	template <typename Alloc>
-	__yield_interrupt void child_actors_resume(std::list<child_actor_handle, Alloc>& actorHandles)
+	__yield_interrupt void children_resume(std::list<child_handle, Alloc>& actorHandles)
 	{
 		assert_enter();
 		lock_quit();
-		actor_msg_handle<> amh;
-		actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
+		msg_handle<> amh;
+		msg_notifer<> h = make_msg_notifer_to_self(amh);
 		for (auto& actorHandle : actorHandles)
 		{
 			assert(actorHandle.get_actor());
@@ -5590,12 +5408,12 @@ public:
 	/*!
 	@brief 创建另一个Actor，Actor执行完成后返回
 	*/
-	__yield_interrupt void run_child_actor_complete(shared_strand&& actorStrand, const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
-	__yield_interrupt void run_child_actor_complete(shared_strand&& actorStrand, main_func&& h, size_t stackSize = DEFAULT_STACKSIZE);
-	__yield_interrupt void run_child_actor_complete(const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
-	__yield_interrupt void run_child_actor_complete(main_func&& h, size_t stackSize = DEFAULT_STACKSIZE);
-	__yield_interrupt void run_child_actor_complete(const shared_strand& actorStrand, const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
-	__yield_interrupt void run_child_actor_complete(const shared_strand& actorStrand, main_func&& h, size_t stackSize = DEFAULT_STACKSIZE);
+	__yield_interrupt void run_child_complete(shared_strand&& actorStrand, const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
+	__yield_interrupt void run_child_complete(shared_strand&& actorStrand, main_func&& h, size_t stackSize = DEFAULT_STACKSIZE);
+	__yield_interrupt void run_child_complete(const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
+	__yield_interrupt void run_child_complete(main_func&& h, size_t stackSize = DEFAULT_STACKSIZE);
+	__yield_interrupt void run_child_complete(const shared_strand& actorStrand, const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
+	__yield_interrupt void run_child_complete(const shared_strand& actorStrand, main_func&& h, size_t stackSize = DEFAULT_STACKSIZE);
 
 	/*!
 	@brief 延时等待，Actor内部禁止使用操作系统API Sleep()
@@ -5632,7 +5450,7 @@ public:
 	/*!
 	@brief 获取子Actor
 	*/
-	const msg_list_shared_alloc<actor_handle>& child_actors();
+	const msg_list_shared_alloc<actor_handle>& children();
 public:
 	typedef msg_list_shared_alloc<std::function<void()> >::iterator quit_iterator;
 
@@ -5650,7 +5468,7 @@ public:
 	/*!
 	@brief 使用内部定时器延时触发某个函数，在触发完成之前不能多次调用
 	@param ms 触发延时(毫秒)
-	@param h 触发函数
+	@param handler 触发函数
 	*/
 	template <typename Handler>
 	void delay_trig(int ms, Handler&& handler)
@@ -5667,9 +5485,43 @@ public:
 	}
 
 	/*!
+	@brief 使用内部定时器延时循环触发某个函数，在触发完成之前不能多次调用
+	@param ms 触发延时(毫秒)
+	@param handler 触发函数
+	@param cycle 循环次数
+	*/
+	template <typename Handler>
+	void cycle_trig(int ms, Handler&& handler, size_t cycle = -1)
+	{
+		assert_enter();
+		if (ms > 0 && cycle)
+		{
+			_cycle_trig(ms, TRY_MOVE(handler), cycle);
+		}
+		else
+		{
+			assert(false);
+		}
+	}
+
+	/*!
 	@brief 取消内部定时器触发
 	*/
 	void cancel_delay_trig();
+private:
+	template <typename Handler>
+	void _cycle_trig(int ms, Handler&& handler, size_t cycle)
+	{
+		typedef RM_CREF(Handler) Handler_;
+		timeout(ms, std::bind([this, ms, cycle](Handler_& handler)
+		{
+			CHECK_EXCEPTION(handler);
+			if (cycle-1)
+			{
+				_cycle_trig(ms, std::move(handler), cycle-1);
+			}
+		}, TRY_MOVE(handler)));
+	}
 public:
 	/*!
 	@brief 发送一个异步函数到shared_strand中执行（如果是和当前一样的shared_strand直接执行），配合quit_guard使用防止引用失效，完成后返回
@@ -5804,8 +5656,8 @@ public:
 		if (exeStrand != _strand)
 		{
 			bool running = false;
-			actor_trig_handle<> ath;
-			actor_trig_notifer<> ntf = make_trig_notifer_to_self(ath);
+			trig_handle<> ath;
+			trig_notifer<> ntf = make_trig_notifer_to_self(ath);
 			std::shared_ptr<std::mutex> mutex(new std::mutex);
 			exeStrand->try_tick(std::bind([&h, &running, &ntf](std::shared_ptr<std::mutex>& mutex, shared_bool& deadSign)
 			{
@@ -5984,7 +5836,7 @@ private:
 		}
 		else
 		{
-			_strand->post(trig_cb_handler<DST, RM_REF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
+			_strand->post(trig_cb_handler<DST, RM_CREF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
 		}
 	}
 
@@ -6001,7 +5853,7 @@ private:
 		}
 		else
 		{
-			_strand->post(trig_cb_handler3<DST, RM_REF(ARGS)...>(TRY_MOVE(closed), shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
+			_strand->post(trig_cb_handler3<DST, RM_CREF(ARGS)...>(TRY_MOVE(closed), shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
 		}
 	}
 
@@ -6018,7 +5870,7 @@ private:
 		}
 		else
 		{
-			_strand->dispatch(trig_cb_handler<DST, RM_REF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
+			_strand->dispatch(trig_cb_handler<DST, RM_CREF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
 		}
 	}
 
@@ -6035,7 +5887,7 @@ private:
 		}
 		else
 		{
-			_strand->dispatch(trig_cb_handler2<DST, RM_REF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
+			_strand->dispatch(trig_cb_handler2<DST, RM_CREF(ARGS)...>(shared_from_this(), sign, dstRec, TRY_MOVE(args)...));
 		}
 	}
 private:
@@ -6107,7 +5959,7 @@ public:
 	@brief 创建一个消息通知函数
 	*/
 	template <typename... Args>
-	actor_msg_notifer<Args...> make_msg_notifer_to_self(actor_msg_handle<Args...>& amh, bool checkLost = false)
+	msg_notifer<Args...> make_msg_notifer_to_self(msg_handle<Args...>& amh, bool checkLost = false)
 	{
 		return amh.make_notifer(this, checkLost);
 	}
@@ -6116,21 +5968,21 @@ public:
 	@brief 创建一个消息通知函数到buddyActor
 	*/
 	template <typename... Args>
-	actor_msg_notifer<Args...> make_msg_notifer_to(const actor_handle& buddyActor, actor_msg_handle<Args...>& amh, bool checkLost = false)
+	msg_notifer<Args...> make_msg_notifer_to(const actor_handle& buddyActor, msg_handle<Args...>& amh, bool checkLost = false)
 	{
 		assert_enter();
 		return amh.make_notifer(buddyActor.get(), checkLost);
 	}
 
 	template <typename... Args>
-	actor_msg_notifer<Args...> make_msg_notifer_to(my_actor* buddyActor, actor_msg_handle<Args...>& amh, bool checkLost = false)
+	msg_notifer<Args...> make_msg_notifer_to(my_actor* buddyActor, msg_handle<Args...>& amh, bool checkLost = false)
 	{
 		assert_enter();
 		return amh.make_notifer(buddyActor, checkLost);
 	}
 
 	template <typename... Args>
-	actor_msg_notifer<Args...> make_msg_notifer_to(child_actor_handle& childActor, actor_msg_handle<Args...>& amh, bool checkLost = false)
+	msg_notifer<Args...> make_msg_notifer_to(child_handle& childActor, msg_handle<Args...>& amh, bool checkLost = false)
 	{
 		assert_enter();
 		return amh.make_notifer(childActor.get_actor().get(), checkLost);
@@ -6139,7 +5991,7 @@ public:
 	/*!
 	@brief 关闭消息通知句柄
 	*/
-	void close_msg_notifer(actor_msg_handle_base& amh);
+	void close_msg_notifer(msg_handle_base& amh);
 
 	/*!
 	@brief 从消息句柄中提取消息
@@ -6147,7 +5999,7 @@ public:
 	@return 超时完成返回false，成功提取消息返回true
 	*/
 	template <typename... Args, typename... Outs>
-	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<Args...>& amh, Outs&... res)
+	__yield_interrupt bool timed_wait_msg(int tm, msg_handle<Args...>& amh, Outs&... res)
 	{
 		assert_enter();
 		DstReceiverRef_<types_pck<Args...>, types_pck<Outs...>> dstRec(res...);
@@ -6155,17 +6007,17 @@ public:
 	}
 
 	template <typename TimedHandler, typename... Args, typename... Outs>
-	__yield_interrupt bool timed_wait_msg(int tm, TimedHandler&& th, actor_msg_handle<Args...>& amh, Outs&... res)
+	__yield_interrupt bool timed_wait_msg(int tm, TimedHandler&& th, msg_handle<Args...>& amh, Outs&... res)
 	{
 		assert_enter();
 		DstReceiverRef_<types_pck<Args...>, types_pck<Outs...>> dstRec(res...);
 		return _timed_wait_msg(amh, th, dstRec, tm);
 	}
 
-	__yield_interrupt bool timed_wait_msg(int tm, actor_msg_handle<>& amh);
+	__yield_interrupt bool timed_wait_msg(int tm, msg_handle<>& amh);
 
 	template <typename TimedHandler>
-	__yield_interrupt bool timed_wait_msg(int tm, TimedHandler&& th, actor_msg_handle<>& amh)
+	__yield_interrupt bool timed_wait_msg(int tm, TimedHandler&& th, msg_handle<>& amh)
 	{
 		assert_enter();
 		assert(amh._hostActor && amh._hostActor->self_id() == self_id());
@@ -6215,7 +6067,7 @@ public:
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt bool timed_wait_msg_invoke(int tm, actor_msg_handle<Args...>& amh, Handler&& h)
+	__yield_interrupt bool timed_wait_msg_invoke(int tm, msg_handle<Args...>& amh, Handler&& h)
 	{
 		assert_enter();
 		DstReceiverBuff_<Args...> dstRec;
@@ -6228,7 +6080,7 @@ public:
 	}
 
 	template <typename... Args, typename TimedHandler, typename Handler>
-	__yield_interrupt bool timed_wait_msg_invoke(int tm, actor_msg_handle<Args...>& amh, TimedHandler&& th, Handler&& h)
+	__yield_interrupt bool timed_wait_msg_invoke(int tm, msg_handle<Args...>& amh, TimedHandler&& th, Handler&& h)
 	{
 		assert_enter();
 		DstReceiverBuff_<Args...> dstRec;
@@ -6241,15 +6093,15 @@ public:
 	}
 
 	template <typename... Args, typename... Outs>
-	__yield_interrupt bool try_wait_msg(actor_msg_handle<Args...>& amh, Outs&... res)
+	__yield_interrupt bool try_wait_msg(msg_handle<Args...>& amh, Outs&... res)
 	{
 		return timed_wait_msg(0, amh, res...);
 	}
 
-	__yield_interrupt bool try_wait_msg(actor_msg_handle<>& amh);
+	__yield_interrupt bool try_wait_msg(msg_handle<>& amh);
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt bool try_wait_msg_invoke(actor_msg_handle<Args...>& amh, Handler&& h)
+	__yield_interrupt bool try_wait_msg_invoke(msg_handle<Args...>& amh, Handler&& h)
 	{
 		return timed_wait_msg_invoke(0, amh, h);
 	}
@@ -6258,15 +6110,15 @@ public:
 	@brief 从消息句柄中提取消息
 	*/
 	template <typename... Args, typename... Outs>
-	__yield_interrupt void wait_msg(actor_msg_handle<Args...>& amh, Outs&... res)
+	__yield_interrupt void wait_msg(msg_handle<Args...>& amh, Outs&... res)
 	{
 		timed_wait_msg(-1, amh, res...);
 	}
 
-	__yield_interrupt void wait_msg(actor_msg_handle<>& amh);
+	__yield_interrupt void wait_msg(msg_handle<>& amh);
 
 	template <typename R>
-	__yield_interrupt R wait_msg(actor_msg_handle<R>& amh)
+	__yield_interrupt R wait_msg(msg_handle<R>& amh)
 	{
 		assert_enter();
 		DstReceiverBuff_<R> dstRec;
@@ -6275,7 +6127,7 @@ public:
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt void wait_msg_invoke(actor_msg_handle<Args...>& amh, Handler&& h)
+	__yield_interrupt void wait_msg_invoke(msg_handle<Args...>& amh, Handler&& h)
 	{
 		timed_wait_msg_invoke<Args...>(-1, amh, h);
 	}
@@ -6284,7 +6136,7 @@ public:
 	@brief 等待并忽略掉一个消息
 	*/
 	template <typename... Args>
-	__yield_interrupt void wait_ignore_msg(actor_msg_handle<Args...>& amh)
+	__yield_interrupt void wait_ignore_msg(msg_handle<Args...>& amh)
 	{
 		timed_wait_ignore_msg(-1, amh);
 	}
@@ -6293,7 +6145,7 @@ public:
 	@brief 尝试弹出并忽略掉一个消息
 	*/
 	template <typename... Args>
-	__yield_interrupt bool try_wait_ignore_msg(actor_msg_handle<Args...>& amh)
+	__yield_interrupt bool try_wait_ignore_msg(msg_handle<Args...>& amh)
 	{
 		return timed_wait_ignore_msg(0, amh);
 	}
@@ -6302,14 +6154,14 @@ public:
 	@brief 在一定时间内尝试弹出并忽略掉一个消息
 	*/
 	template <typename... Args>
-	__yield_interrupt bool timed_wait_ignore_msg(int tm, actor_msg_handle<Args...>& amh)
+	__yield_interrupt bool timed_wait_ignore_msg(int tm, msg_handle<Args...>& amh)
 	{
 		std::tuple<ignore_msg<Args>...> ignoreMsg;
-		return tuple_invoke<bool>(&my_actor::_timed_wait_ignore_msg<Args...>, std::tuple<my_actor*, int&, actor_msg_handle<Args...>&>(this, tm, amh), ignoreMsg);
+		return tuple_invoke<bool>(&my_actor::_timed_wait_ignore_msg<Args...>, std::tuple<my_actor*, int&, msg_handle<Args...>&>(this, tm, amh), ignoreMsg);
 	}
 private:
 	template <typename... Args>
-	__yield_interrupt static bool _timed_wait_ignore_msg(my_actor* const host, int tm, actor_msg_handle<Args...>& amh, ignore_msg<Args>&... outs)
+	__yield_interrupt static bool _timed_wait_ignore_msg(my_actor* const host, int tm, msg_handle<Args...>& amh, ignore_msg<Args>&... outs)
 	{
 		return host->timed_wait_msg(tm, amh, outs...);
 	}
@@ -6395,6 +6247,16 @@ public:
 	}
 
 	/*!
+	@brief 创建上下文回调函数(Handler将在回调内部直接执行，可能触发线程安全问题)，直接作为回调函数使用，async_func(..., Handler self->make_on_context(...))
+	*/
+	template <typename R = void, typename Handler>
+	on_callback_handler<RM_REF(Handler), R> make_on_callback_context(Handler&& handler)
+	{
+		assert_enter();
+		return on_callback_handler<RM_REF(Handler), R>(this, handler);
+	}
+
+	/*!
 	@brief 创建同步上下文回调函数，直接作为回调函数使用，async_func(..., Handler self->make_sync_context(sync_result, ...))
 	*/
 	template <typename R = void, typename... Args, typename... Outs>
@@ -6416,7 +6278,7 @@ public:
 	@brief 创建一个消息触发函数，只有一次触发有效
 	*/
 	template <typename... Args>
-	actor_trig_notifer<Args...> make_trig_notifer_to_self(actor_trig_handle<Args...>& ath, bool checkLost = false)
+	trig_notifer<Args...> make_trig_notifer_to_self(trig_handle<Args...>& ath, bool checkLost = false)
 	{
 		return ath.make_notifer(this, checkLost);
 	}
@@ -6425,21 +6287,21 @@ public:
 	@brief 创建一个消息触发函数到buddyActor，只有一次触发有效
 	*/
 	template <typename... Args>
-	actor_trig_notifer<Args...> make_trig_notifer_to(const actor_handle& buddyActor, actor_trig_handle<Args...>& ath, bool checkLost = false)
+	trig_notifer<Args...> make_trig_notifer_to(const actor_handle& buddyActor, trig_handle<Args...>& ath, bool checkLost = false)
 	{
 		assert_enter();
 		return ath.make_notifer(buddyActor.get(), checkLost);
 	}
 
 	template <typename... Args>
-	actor_trig_notifer<Args...> make_trig_notifer_to(my_actor* buddyActor, actor_trig_handle<Args...>& ath, bool checkLost = false)
+	trig_notifer<Args...> make_trig_notifer_to(my_actor* buddyActor, trig_handle<Args...>& ath, bool checkLost = false)
 	{
 		assert_enter();
 		return ath.make_notifer(buddyActor, checkLost);
 	}
 
 	template <typename... Args>
-	actor_trig_notifer<Args...> make_trig_notifer_to(child_actor_handle& childActor, actor_trig_handle<Args...>& ath, bool checkLost = false)
+	trig_notifer<Args...> make_trig_notifer_to(child_handle& childActor, trig_handle<Args...>& ath, bool checkLost = false)
 	{
 		assert_enter();
 		return ath.make_notifer(childActor.get_actor().get(), checkLost);
@@ -6448,7 +6310,7 @@ public:
 	/*!
 	@brief 关闭消息触发句柄
 	*/
-	void close_trig_notifer(actor_msg_handle_base& ath);
+	void close_trig_notifer(msg_handle_base& ath);
 
 	/*!
 	@brief 从触发句柄中提取消息
@@ -6456,7 +6318,7 @@ public:
 	@return 超时完成返回false，成功提取消息返回true
 	*/
 	template <typename... Args, typename... Outs>
-	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<Args...>& ath, Outs&... res)
+	__yield_interrupt bool timed_wait_trig(int tm, trig_handle<Args...>& ath, Outs&... res)
 	{
 		assert_enter();
 		DstReceiverRef_<types_pck<Args...>, types_pck<Outs...>> dstRec(res...);
@@ -6464,18 +6326,18 @@ public:
 	}
 
 	template <typename TimedHandler, typename... Args, typename... Outs>
-	__yield_interrupt bool timed_wait_trig(int tm, TimedHandler&& th, actor_trig_handle<Args...>& ath, Outs&... res)
+	__yield_interrupt bool timed_wait_trig(int tm, TimedHandler&& th, trig_handle<Args...>& ath, Outs&... res)
 	{
 		assert_enter();
 		DstReceiverRef_<types_pck<Args...>, types_pck<Outs...>> dstRec(res...);
 		return _timed_wait_msg(ath, th, dstRec, tm);
 	}
 
-	__yield_interrupt bool timed_wait_trig(int tm, actor_trig_handle<>& ath);
+	__yield_interrupt bool timed_wait_trig(int tm, trig_handle<>& ath);
 
 
 	template <typename TimedHandler>
-	__yield_interrupt bool timed_wait_trig(int tm, TimedHandler&& th, actor_trig_handle<>& ath)
+	__yield_interrupt bool timed_wait_trig(int tm, TimedHandler&& th, trig_handle<>& ath)
 	{
 		assert_enter();
 		assert(ath._hostActor && ath._hostActor->self_id() == self_id());
@@ -6525,7 +6387,7 @@ public:
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt bool timed_wait_trig_invoke(int tm, actor_trig_handle<Args...>& ath, Handler&& h)
+	__yield_interrupt bool timed_wait_trig_invoke(int tm, trig_handle<Args...>& ath, Handler&& h)
 	{
 		assert_enter();
 		DstReceiverBuff_<Args...> dstRec;
@@ -6538,7 +6400,7 @@ public:
 	}
 
 	template <typename... Args, typename TimedHandler, typename Handler>
-	__yield_interrupt bool timed_wait_trig_invoke(int tm, actor_trig_handle<Args...>& ath, TimedHandler&& th, Handler&& h)
+	__yield_interrupt bool timed_wait_trig_invoke(int tm, trig_handle<Args...>& ath, TimedHandler&& th, Handler&& h)
 	{
 		assert_enter();
 		DstReceiverBuff_<Args...> dstRec;
@@ -6551,15 +6413,15 @@ public:
 	}
 
 	template <typename... Args, typename... Outs>
-	__yield_interrupt bool try_wait_trig(actor_trig_handle<Args...>& ath, Outs&... res)
+	__yield_interrupt bool try_wait_trig(trig_handle<Args...>& ath, Outs&... res)
 	{
 		return timed_wait_trig(0, ath, res...);
 	}
 
-	__yield_interrupt bool try_wait_trig(actor_trig_handle<>& ath);
+	__yield_interrupt bool try_wait_trig(trig_handle<>& ath);
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt bool try_wait_trig_invoke(actor_trig_handle<Args...>& ath, Handler&& h)
+	__yield_interrupt bool try_wait_trig_invoke(trig_handle<Args...>& ath, Handler&& h)
 	{
 		return timed_wait_trig_invoke(0, ath, h);
 	}
@@ -6568,15 +6430,15 @@ public:
 	@brief 从触发句柄中提取消息
 	*/
 	template <typename... Args, typename... Outs>
-	__yield_interrupt void wait_trig(actor_trig_handle<Args...>& ath, Outs&... res)
+	__yield_interrupt void wait_trig(trig_handle<Args...>& ath, Outs&... res)
 	{
 		timed_wait_trig(-1, ath, res...);
 	}
 
-	__yield_interrupt void wait_trig(actor_trig_handle<>& ath);
+	__yield_interrupt void wait_trig(trig_handle<>& ath);
 
 	template <typename R>
-	__yield_interrupt R wait_trig(actor_trig_handle<R>& ath)
+	__yield_interrupt R wait_trig(trig_handle<R>& ath)
 	{
 		assert_enter();
 		DstReceiverBuff_<R> dstRec;
@@ -6585,7 +6447,7 @@ public:
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt void wait_trig_invoke(actor_trig_handle<Args...>& ath, Handler&& h)
+	__yield_interrupt void wait_trig_invoke(trig_handle<Args...>& ath, Handler&& h)
 	{
 		timed_wait_trig_invoke<Args...>(-1, ath, h);
 	}
@@ -6594,7 +6456,7 @@ public:
 	@brief 等待并忽略掉一个消息
 	*/
 	template <typename... Args>
-	__yield_interrupt void wait_ignore_trig(actor_trig_handle<Args...>& ath)
+	__yield_interrupt void wait_ignore_trig(trig_handle<Args...>& ath)
 	{
 		timed_wait_ignore_trig(-1, ath);
 	}
@@ -6603,7 +6465,7 @@ public:
 	@brief 尝试弹出并忽略掉一个消息
 	*/
 	template <typename... Args>
-	__yield_interrupt bool try_wait_ignore_trig(actor_trig_handle<Args...>& ath)
+	__yield_interrupt bool try_wait_ignore_trig(trig_handle<Args...>& ath)
 	{
 		return timed_wait_ignore_trig(0, ath);
 	}
@@ -6612,10 +6474,10 @@ public:
 	@brief 在一定时间内尝试弹出并忽略掉一个消息
 	*/
 	template <typename... Args>
-	__yield_interrupt bool timed_wait_ignore_trig(int tm, actor_trig_handle<Args...>& ath)
+	__yield_interrupt bool timed_wait_ignore_trig(int tm, trig_handle<Args...>& ath)
 	{
 		std::tuple<ignore_msg<Args>...> ignoreMsg;
-		return tuple_invoke<bool>(&my_actor::_timed_wait_ignore_trig<Args...>, std::tuple<my_actor*, int&, actor_trig_handle<Args...>&>(this, tm, ath), ignoreMsg);
+		return tuple_invoke<bool>(&my_actor::_timed_wait_ignore_trig<Args...>, std::tuple<my_actor*, int&, trig_handle<Args...>&>(this, tm, ath), ignoreMsg);
 	}
 
 	/*!
@@ -6674,7 +6536,7 @@ public:
 	bool try_wait_trig_sign(int id);
 private:
 	template <typename... Args>
-	__yield_interrupt static bool _timed_wait_ignore_trig(my_actor* const host, int tm, actor_trig_handle<Args...>& ath, ignore_msg<Args>&... outs)
+	__yield_interrupt static bool _timed_wait_ignore_trig(my_actor* const host, int tm, trig_handle<Args...>& ath, ignore_msg<Args>&... outs)
 	{
 		return host->timed_wait_trig(tm, ath, outs...);
 	}
@@ -6901,13 +6763,13 @@ private:
 	}
 public:
 	template <typename... Args>
-	__yield_interrupt bool msg_agent_to(const int id, child_actor_handle& childActor)
+	__yield_interrupt bool msg_agent_to(const int id, child_handle& childActor)
 	{
 		return msg_agent_to<Args...>(id, childActor.get_actor());
 	}
 
 	template <typename... Args>
-	__yield_interrupt bool msg_agent_to(child_actor_handle& childActor)
+	__yield_interrupt bool msg_agent_to(child_handle& childActor)
 	{
 		return msg_agent_to<Args...>(0, childActor.get_actor());
 	}
@@ -6917,7 +6779,7 @@ public:
 	@return 返回处理该消息的子Actor句柄
 	*/
 	template <typename... Args, typename Handler>
-	__yield_interrupt child_actor_handle msg_agent_to_actor(const int id, const shared_strand& strand, bool autoRun, Handler&& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_handle msg_agent_to_actor(const int id, const shared_strand& strand, bool autoRun, Handler&& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		actor_handle childActor = my_actor::create(strand, std::bind([id](Handler& agentActor, my_actor* self)
 		{
@@ -6930,11 +6792,11 @@ public:
 		{
 			childActor->run();
 		}
-		return child_actor_handle(std::move(childActor));
+		return child_handle(std::move(childActor));
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt child_actor_handle msg_agent_to_actor(const int id, const shared_strand& strand, bool autoRun, AutoStackMsgAgentActor_<Handler>&& wrapActor)
+	__yield_interrupt child_handle msg_agent_to_actor(const int id, const shared_strand& strand, bool autoRun, AutoStackMsgAgentActor_<Handler>&& wrapActor)
 	{
 		static_assert(std::is_reference<Handler>::value, "");
 		actor_handle childActor = my_actor::create(strand, __auto_stack_actor(std::bind([id](Handler& agentActor, my_actor* self)
@@ -6948,41 +6810,41 @@ public:
 		{
 			childActor->run();
 		}
-		return child_actor_handle(std::move(childActor));
+		return child_handle(std::move(childActor));
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt child_actor_handle msg_agent_to_actor(const int id, bool autoRun, Handler&& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_handle msg_agent_to_actor(const int id, bool autoRun, Handler&& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return msg_agent_to_actor<Args...>(id, self_strand(), autoRun, TRY_MOVE(agentActor), stackSize);
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt child_actor_handle msg_agent_to_actor(const shared_strand& strand, bool autoRun, Handler&& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_handle msg_agent_to_actor(const shared_strand& strand, bool autoRun, Handler&& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return msg_agent_to_actor<Args...>(0, strand, autoRun, TRY_MOVE(agentActor), stackSize);
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt child_actor_handle msg_agent_to_actor(bool autoRun, Handler&& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
+	__yield_interrupt child_handle msg_agent_to_actor(bool autoRun, Handler&& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
 		return msg_agent_to_actor<Args...>(0, self_strand(), autoRun, TRY_MOVE(agentActor), stackSize);
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt child_actor_handle msg_agent_to_actor(const int id, bool autoRun, AutoStackMsgAgentActor_<Handler>&& wrapActor)
+	__yield_interrupt child_handle msg_agent_to_actor(const int id, bool autoRun, AutoStackMsgAgentActor_<Handler>&& wrapActor)
 	{
 		return msg_agent_to_actor<Args...>(id, self_strand(), autoRun, std::move(wrapActor));
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt child_actor_handle msg_agent_to_actor(const shared_strand& strand, bool autoRun, AutoStackMsgAgentActor_<Handler>&& wrapActor)
+	__yield_interrupt child_handle msg_agent_to_actor(const shared_strand& strand, bool autoRun, AutoStackMsgAgentActor_<Handler>&& wrapActor)
 	{
 		return msg_agent_to_actor<Args...>(0, strand, autoRun, std::move(wrapActor));
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt child_actor_handle msg_agent_to_actor(bool autoRun, AutoStackMsgAgentActor_<Handler>&& wrapActor)
+	__yield_interrupt child_handle msg_agent_to_actor(bool autoRun, AutoStackMsgAgentActor_<Handler>&& wrapActor)
 	{
 		return msg_agent_to_actor<Args...>(0, self_strand(), autoRun, std::move(wrapActor));
 	}
@@ -7194,7 +7056,7 @@ public:
 	}
 
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const shared_strand& strand, const int id, child_actor_handle& childActor, bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const shared_strand& strand, const int id, child_handle& childActor, bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
 	{
 		return connect_msg_notifer_to<Args...>(strand, id, childActor.get_actor(), chekcLost, makeNew, fixedSize);
 	}
@@ -7206,7 +7068,7 @@ public:
 	}
 
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const shared_strand& strand, child_actor_handle& childActor, bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const shared_strand& strand, child_handle& childActor, bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
 	{
 		return connect_msg_notifer_to<Args...>(strand, 0, childActor.get_actor(), makeNew, chekcLost, fixedSize);
 	}
@@ -7218,7 +7080,7 @@ public:
 	}
 
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const int id, child_actor_handle& childActor, bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(const int id, child_handle& childActor, bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
 	{
 		return connect_msg_notifer_to<Args...>(childActor->self_strand(), id, childActor.get_actor(), chekcLost, makeNew, fixedSize);
 	}
@@ -7230,7 +7092,7 @@ public:
 	}
 
 	template <typename... Args>
-	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(child_actor_handle& childActor, bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
+	__yield_interrupt post_actor_msg<Args...> connect_msg_notifer_to(child_handle& childActor, bool chekcLost = false, bool makeNew = false, size_t fixedSize = 16)
 	{
 		return connect_msg_notifer_to<Args...>(childActor->self_strand(), 0, childActor.get_actor(), chekcLost, makeNew, fixedSize);
 	}
@@ -7950,7 +7812,7 @@ public:
 	}
 
 	template <typename... Args>
-	__yield_interrupt actor_handle msg_agent_handle(const int id, child_actor_handle& buddyActor)
+	__yield_interrupt actor_handle msg_agent_handle(const int id, child_handle& buddyActor)
 	{
 		return msg_agent_handle<Args...>(id, buddyActor.get_actor());
 	}
@@ -7962,7 +7824,7 @@ public:
 	}
 
 	template <typename... Args>
-	__yield_interrupt actor_handle msg_agent_handle(child_actor_handle& buddyActor)
+	__yield_interrupt actor_handle msg_agent_handle(child_handle& buddyActor)
 	{
 		return msg_agent_handle<Args...>(0, buddyActor.get_actor());
 	}
@@ -8559,8 +8421,8 @@ public:
 	__yield_interrupt void actors_force_quit(const std::list<actor_handle, Alloc>& anotherActors)
 	{
 		assert_enter();
-		actor_msg_handle<> amh;
-		actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
+		msg_handle<> amh;
+		msg_notifer<> h = make_msg_notifer_to_self(amh);
 		for (auto& actorHandle : anotherActors)
 		{
 			actorHandle->force_quit(h);
@@ -8609,8 +8471,8 @@ public:
 	{
 		assert_enter();
 		lock_quit();
-		actor_msg_handle<> amh;
-		actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
+		msg_handle<> amh;
+		msg_notifer<> h = make_msg_notifer_to_self(amh);
 		for (auto& actorHandle : anotherActors)
 		{
 			actorHandle->suspend(wrap_ref_handler(h));
@@ -8638,8 +8500,8 @@ public:
 	{
 		assert_enter();
 		lock_quit();
-		actor_msg_handle<> amh;
-		actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
+		msg_handle<> amh;
+		msg_notifer<> h = make_msg_notifer_to_self(amh);
 		for (auto& actorHandle : anotherActors)
 		{
 			actorHandle->resume(wrap_ref_handler(h));
@@ -8670,8 +8532,8 @@ public:
 		assert_enter();
 		lock_quit();
 		bool isPause = true;
-		actor_msg_handle<bool> amh;
-		actor_msg_notifer<bool> h = make_msg_notifer_to_self(amh);
+		msg_handle<bool> amh;
+		msg_notifer<bool> h = make_msg_notifer_to_self(amh);
 		for (auto& actorHandle : anotherActors)
 		{
 			actorHandle->switch_pause_play(wrap_ref_handler(h));
@@ -8702,11 +8564,10 @@ private:
 	template <typename Handler>
 	void timeout(int ms, Handler&& handler)
 	{
-		assert_enter();
 		assert(ms >= 0);
 		assert(_timerStateCompleted);
 		assert(!_timerStateCb);
-		typedef wrap_timer_handler<RM_REF(Handler)> wrap_type;
+		typedef wrap_timer_handler<RM_CREF(Handler)> wrap_type;
 		_timerStateCompleted = false;
 		_timerStateTime = (long long)ms * 1000;
 		_timerStateCb = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));

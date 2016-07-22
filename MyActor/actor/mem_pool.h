@@ -1067,7 +1067,7 @@ public:
 template <typename T, typename MUTEX, typename CREATER, typename DESTROYER>
 static obj_pool<T>* create_pool_mt(size_t poolSize, CREATER&& creater, DESTROYER&& destroyer)
 {
-	return new ObjPool_<T, RM_REF(CREATER), RM_REF(DESTROYER), MUTEX>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
+	return new ObjPool_<T, RM_CREF(CREATER), RM_CREF(DESTROYER), MUTEX>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
 }
 
 template <typename T, typename MUTEX, typename CREATER>
@@ -1116,7 +1116,7 @@ static obj_pool<T>* create_pool(size_t poolSize)
 template <typename T, typename MUTEX, typename CREATER, typename DESTROYER>
 static obj_pool<T>* create_pool_mt2(size_t poolSize, CREATER&& creater, DESTROYER&& destroyer)
 {
-	return new ObjPool2_<T, RM_REF(CREATER), RM_REF(DESTROYER), MUTEX>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
+	return new ObjPool2_<T, RM_CREF(CREATER), RM_CREF(DESTROYER), MUTEX>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
 }
 
 template <typename T, typename MUTEX, typename CREATER>
@@ -1390,7 +1390,7 @@ public:
 template <typename T, typename MUTEX, typename CREATER, typename DESTROYER>
 static shared_obj_pool<T>* create_shared_pool_mt(size_t poolSize, CREATER&& creater, DESTROYER&& destroyer)
 {
-	return new SharedObjPool_<T, RM_REF(CREATER), RM_REF(DESTROYER), MUTEX>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
+	return new SharedObjPool_<T, RM_CREF(CREATER), RM_CREF(DESTROYER), MUTEX>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
 }
 
 template <typename T, typename MUTEX, typename CREATER>
@@ -1439,7 +1439,7 @@ static shared_obj_pool<T>* create_shared_pool(size_t poolSize)
 template <typename T, typename MUTEX, typename CREATER, typename DESTROYER>
 static shared_obj_pool<T>* create_shared_pool_mt2(size_t poolSize, CREATER&& creater, DESTROYER&& destroyer)
 {
-	return new SharedObjPool2_<T, RM_REF(CREATER), RM_REF(DESTROYER), MUTEX>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
+	return new SharedObjPool2_<T, RM_CREF(CREATER), RM_CREF(DESTROYER), MUTEX>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
 }
 
 template <typename T, typename MUTEX, typename CREATER>

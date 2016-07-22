@@ -138,7 +138,7 @@ class sync_msg
 		bool can_move;
 		bool& notified;
 		ST& src_msg;
-		actor_trig_notifer<bool> ntf;
+		trig_notifer<bool> ntf;
 	};
 
 	struct take_wait
@@ -146,8 +146,8 @@ class sync_msg
 		bool* can_move;
 		bool& notified;
 		char* dst;
-		actor_trig_notifer<bool>& takeOk;
-		actor_trig_notifer<bool> ntf;
+		trig_notifer<bool>& takeOk;
+		trig_notifer<bool> ntf;
 	};
 public:
 	struct close_exception : public sync_msg_close_exception {};
@@ -188,7 +188,7 @@ public:
 	void send(my_actor* host, TM&& msg)
 	{
 		host->lock_quit();
-		actor_trig_handle<bool> ath;
+		trig_handle<bool> ath;
 		bool closed = false;
 		bool notified = false;
 		host->send(_strand, [&]
@@ -244,7 +244,7 @@ public:
 	bool try_send(my_actor* host, TM&& msg)
 	{
 		host->lock_quit();
-		actor_trig_handle<bool> ath;
+		trig_handle<bool> ath;
 		bool ok = false;
 		bool closed = false;
 		bool notified = false;
@@ -300,7 +300,7 @@ public:
 	bool timed_send(int tm, my_actor* host, TM&& msg)
 	{
 		host->lock_quit();
-		actor_trig_handle<bool> ath;
+		trig_handle<bool> ath;
 		typename msg_list<send_wait>::iterator mit;
 		bool closed = false;
 		bool notified = false;
@@ -371,8 +371,8 @@ public:
 	RT take(my_actor* host)
 	{
 		host->lock_quit();
-		actor_trig_handle<bool> ath;
-		actor_trig_notifer<bool> ntf;
+		trig_handle<bool> ath;
+		trig_notifer<bool> ntf;
 		__space_align char msgBuf[sizeof(RT)];
 		bool wait = false;
 		bool closed = false;
@@ -607,8 +607,8 @@ private:
 	bool timed_take_ct(int tm, my_actor* host, const CT& ct)
 	{
 		host->lock_quit();
-		actor_trig_handle<bool> ath;
-		actor_trig_notifer<bool> ntf;
+		trig_handle<bool> ath;
+		trig_notifer<bool> ntf;
 		typename msg_list<take_wait>::iterator mit;
 		__space_align char msgBuf[sizeof(RT)];
 		bool wait = false;
@@ -695,7 +695,7 @@ class CspChannel_
 		bool& notified;
 		T& srcMsg;
 		char* res;
-		actor_trig_notifer<bool> ntf;
+		trig_notifer<bool> ntf;
 	};
 
 	struct take_wait
@@ -703,8 +703,8 @@ class CspChannel_
 		bool& notified;
 		T*& srcMsg;
 		char*& res;
-		actor_trig_notifer<bool>& ntfSend;
-		actor_trig_notifer<bool> ntf;
+		trig_notifer<bool>& ntfSend;
+		trig_notifer<bool> ntf;
 	};
 protected:
 	CspChannel_(const shared_strand& strand)
@@ -733,7 +733,7 @@ protected:
 	R send(my_actor* host, TM&& msg)
 	{
 		host->lock_quit();
-		actor_trig_handle<bool> ath;
+		trig_handle<bool> ath;
 		__space_align char resBuf[sizeof(R)];
 		bool closed = false;
 		bool notified = false;
@@ -793,7 +793,7 @@ protected:
 	R try_send(my_actor* host, TM&& msg)
 	{
 		host->lock_quit();
-		actor_trig_handle<bool> ath;
+		trig_handle<bool> ath;
 		__space_align char resBuf[sizeof(R)];
 		bool closed = false;
 		bool notified = false;
@@ -858,7 +858,7 @@ protected:
 	R timed_send(int tm, my_actor* host, TM&& msg)
 	{
 		host->lock_quit();
-		actor_trig_handle<bool> ath;
+		trig_handle<bool> ath;
 		__space_align char resBuf[sizeof(R)];
 		typename msg_list<send_wait>::iterator nit;
 		bool closed = false;
@@ -947,8 +947,8 @@ protected:
 	void take(my_actor* host, Func&& h)
 	{
 		host->lock_quit();
-		actor_trig_handle<bool> ath;
-		actor_trig_notifer<bool> ntfSend;
+		trig_handle<bool> ath;
+		trig_notifer<bool> ntfSend;
 		T* srcMsg = NULL;
 		char* res = NULL;
 		bool wait = false;
@@ -1014,7 +1014,7 @@ protected:
 	void try_take(my_actor* host, Func&& h)
 	{
 		host->lock_quit();
-		actor_trig_notifer<bool> ntfSend;
+		trig_notifer<bool> ntfSend;
 		T* srcMsg = NULL;
 		char* res = NULL;
 		bool closed = false;
@@ -1074,8 +1074,8 @@ protected:
 	void timed_take(int tm, my_actor* host, Func&& h)
 	{
 		host->lock_quit();
-		actor_trig_handle<bool> ath;
-		actor_trig_notifer<bool> ntfSend;
+		trig_handle<bool> ath;
+		trig_notifer<bool> ntfSend;
 		typename msg_list<take_wait>::iterator wit;
 		T* srcMsg = NULL;
 		char* res = NULL;

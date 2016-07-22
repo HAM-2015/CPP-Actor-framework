@@ -140,9 +140,9 @@ private:
 struct MakeBreakOfScope2_
 {
 	template <typename Handler>
-	BreakOfScope2_<RM_REF(Handler)> operator -(Handler&& handler)
+	BreakOfScope2_<RM_CREF(Handler)> operator -(Handler&& handler)
 	{
-		return BreakOfScope2_<RM_REF(Handler)>(TRY_MOVE(handler));
+		return BreakOfScope2_<RM_CREF(Handler)>(TRY_MOVE(handler));
 	}
 };
 
@@ -379,7 +379,13 @@ template <typename...>
 struct null_handler 
 {
 	template <typename... Args>
-	void operator()(Args&&...) {}
+	void operator()(Args&&...){}
+};
+
+struct none_functor
+{
+	template <typename... Args>
+	void operator()(Args&&...){}
 };
 
 template <typename T>

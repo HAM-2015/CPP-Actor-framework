@@ -32,7 +32,7 @@
 #define begin_ACTOR_RUN_IN_QT_UI_AT(__this_ui__, __host__, __ios__) do {\
 	auto ___host = __host__; \
 	my_actor::quit_guard ___qg(__host__); \
-	auto ___tactor = (__this_ui__)->create_qt_actor(__ios__, [&](my_actor* __host__) {
+	auto ___tactor = (__this_ui__)->create_ui_actor(__ios__, [&](my_actor* __host__) {
 
 //在Actor中，嵌入一段在qt-ui线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用begin_RUN_IN_QT_UI）
 #define begin_ACTOR_RUN_IN_QT_UI(__ios__) begin_ACTOR_RUN_IN_QT_UI_AT(this, self, __ios__)
@@ -198,14 +198,14 @@ protected:
 	template <typename Handler>
 	wrap_handler_face* make_wrap_handler(reusable_mem_mt<>& reuMem, Handler&& handler)
 	{
-		typedef wrap_handler<RM_REF(Handler)> handler_type;
+		typedef wrap_handler<RM_CREF(Handler)> handler_type;
 		return new(reuMem.allocate(sizeof(handler_type)))handler_type(TRY_MOVE(handler));
 	}
 
 	template <typename Handler>
 	wrap_handler_face* make_wrap_timed_handler(reusable_mem_mt<>& reuMem, std::mutex& mutex, const shared_bool& deadSign, bool& running, Handler&& handler)
 	{
-		typedef wrap_timed_handler<RM_REF(Handler)> handler_type;
+		typedef wrap_timed_handler<RM_CREF(Handler)> handler_type;
 		return new(reuMem.allocate(sizeof(handler_type)))handler_type(mutex, deadSign, running, TRY_MOVE(handler));
 	}
 
@@ -354,8 +354,8 @@ public:
 	{
 		host->lock_quit();
 		bool running = false;
-		actor_trig_handle<> ath;
-		actor_trig_notifer<> ntf = host->make_trig_notifer_to_self(ath);
+		trig_handle<> ath;
+		trig_notifer<> ntf = host->make_trig_notifer_to_self(ath);
 		append_task(make_wrap_timed_handler(_reuMem, _checkTimedMutex, ath.dead_sign(), running, [&handler, &ntf]
 		{
 			handler();
@@ -388,9 +388,9 @@ public:
 	@brief 绑定一个函数到UI队列执行
 	*/
 	template <typename Handler>
-	wrapped_post_handler<bind_qt_run_base, Handler> wrap(Handler&& handler)
+	wrapped_post_handler<bind_qt_run_base, RM_CREF(Handler)> wrap(Handler&& handler)
 	{
-		return wrapped_post_handler<bind_qt_run_base, RM_REF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_post_handler<bind_qt_run_base, RM_CREF(Handler)>(this, TRY_MOVE(handler));
 	}
 
 	template <typename Handler>
@@ -411,9 +411,9 @@ public:
 	@brief 绑定一个函数到UI线程中执行
 	*/
 	template <typename R, typename Handler>
-	wrap_run_in_ui_handler<RM_REF(Handler), R> wrap_run_in_ui(Handler&& handler)
+	wrap_run_in_ui_handler<RM_CREF(Handler), R> wrap_run_in_ui(Handler&& handler)
 	{
-		return wrap_run_in_ui_handler<RM_REF(Handler), R>(this, TRY_MOVE(handler));
+		return wrap_run_in_ui_handler<RM_CREF(Handler), R>(this, TRY_MOVE(handler));
 	}
 #ifdef ENABLE_QT_ACTOR
 	/*!
@@ -429,14 +429,14 @@ public:
 	/*!
 	@brief 在UI线程中创建一个Actor，先执行start_qt_strand
 	*/
-	actor_handle create_qt_actor(const my_actor::main_func& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE);
-	actor_handle create_qt_actor(my_actor::main_func&& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE);
+	actor_handle create_ui_actor(const my_actor::main_func& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE);
+	actor_handle create_ui_actor(my_actor::main_func&& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE);
 
 	/*!
 	@brief 在UI线程中创建一个子Actor，先执行start_qt_strand
 	*/
-	child_actor_handle create_qt_child_actor(my_actor* host, const my_actor::main_func& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE);
-	child_actor_handle create_qt_child_actor(my_actor* host, my_actor::main_func&& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE);
+	child_handle create_ui_child_actor(my_actor* host, const my_actor::main_func& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE);
+	child_handle create_ui_child_actor(my_actor* host, my_actor::main_func&& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE);
 #endif
 private:
 	void append_task(wrap_handler_face*);
@@ -540,7 +540,7 @@ public:
 	}
 
 	template <typename R = void, typename Handler>
-	wrap_run_in_ui_handler<RM_REF(Handler), R> wrap_run_in_ui(Handler&& handler)
+	wrap_run_in_ui_handler<RM_CREF(Handler), R> wrap_run_in_ui(Handler&& handler)
 	{
 		return bind_qt_run_base::wrap_run_in_ui<R>(TRY_MOVE(handler));
 	}
@@ -590,24 +590,24 @@ public:
 		return bind_qt_run_base::ui_strand();
 	}
 
-	actor_handle create_qt_actor(const my_actor::main_func& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE)
+	actor_handle create_ui_actor(const my_actor::main_func& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE)
 	{
-		return bind_qt_run_base::create_qt_actor(mainFunc, stackSize);
+		return bind_qt_run_base::create_ui_actor(mainFunc, stackSize);
 	}
 
-	actor_handle create_qt_actor(my_actor::main_func&& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE)
+	actor_handle create_ui_actor(my_actor::main_func&& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE)
 	{
-		return bind_qt_run_base::create_qt_actor(std::move(mainFunc), stackSize);
+		return bind_qt_run_base::create_ui_actor(std::move(mainFunc), stackSize);
 	}
 
-	child_actor_handle create_qt_child_actor(my_actor* host, const my_actor::main_func& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE)
+	child_handle create_ui_child_actor(my_actor* host, const my_actor::main_func& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE)
 	{
-		return bind_qt_run_base::create_qt_child_actor(host, mainFunc, stackSize);
+		return bind_qt_run_base::create_ui_child_actor(host, mainFunc, stackSize);
 	}
 
-	child_actor_handle create_qt_child_actor(my_actor* host, my_actor::main_func&& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE)
+	child_handle create_ui_child_actor(my_actor* host, my_actor::main_func&& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE)
 	{
-		return bind_qt_run_base::create_qt_child_actor(host, std::move(mainFunc), stackSize);
+		return bind_qt_run_base::create_ui_child_actor(host, std::move(mainFunc), stackSize);
 	}
 #endif
 private:
@@ -684,43 +684,14 @@ struct qt_ui_sync_result
 		return _res.has();
 	}
 
-	R& result()
+	stack_obj<R>& result()
 	{
-		return _res.get();
+		return _res;
 	}
 private:
 	DEBUG_OPERATION(bind_qt_run_base* _runBase);
 	QEventLoop& _eventLoop;
 	stack_obj<R> _res;
-};
-
-template <>
-struct qt_ui_sync_result<void>
-{
-#if (_DEBUG || DEBUG)
-	qt_ui_sync_result(bind_qt_run_base* runBase, QEventLoop& eventLoop)
-	:_runBase(runBase), _eventLoop(eventLoop), _has(false) {}
-#else
-	qt_ui_sync_result(QEventLoop& eventLoop)
-	:_eventLoop(eventLoop), _has(false) {}
-#endif
-
-	void return_()
-	{
-		assert(_runBase->running_in_this_thread());
-		assert(!has());
-		_has = true;
-		_eventLoop.exit();
-	}
-
-	bool has()
-	{
-		return _has;
-	}
-private:
-	DEBUG_OPERATION(bind_qt_run_base* _runBase);
-	QEventLoop& _eventLoop;
-	bool _has;
 };
 
 /*!
@@ -763,7 +734,7 @@ struct qt_ui_sync_notifer<R(ARGS...)>
 		{
 			throw ui_sync_closed_exception();
 		}
-		return std::move(res.result());
+		return stack_obj_move::move(res.result());
 	}
 
 	template <typename H>
@@ -792,76 +763,12 @@ private:
 	QObject* _parent;
 	std::function<void(qt_ui_sync_result<R>*, ARGS...)> _handler;
 };
-
-template <typename... ARGS>
-struct qt_ui_sync_notifer<void(ARGS...)>
-{
-	template <typename Parent>
-	explicit qt_ui_sync_notifer(Parent* parent)
-#if (_DEBUG || DEBUG)
-		: _runBase((bind_qt_run_base*)parent), _notifyCount(0), _parent(parent) {}
-#else
-		: _parent(parent) {}
-#endif
-
-	~qt_ui_sync_notifer()
-	{
-	}
-
-	template <typename... Args>
-	void operator()(Args&&... args) const
-	{
-		assert(_runBase->run_in_ui_thread());
-		assert(!empty());
-		DEBUG_OPERATION(_notifyCount++);
-		QEventLoop eventLoop(_parent);
-#if (_DEBUG || DEBUG)
-		qt_ui_sync_result<void> res(_runBase, eventLoop);
-#else
-		qt_ui_sync_result<void> res(eventLoop);
-#endif
-		_handler(&res, TRY_MOVE(args)...);
-		eventLoop.exec();
-		DEBUG_OPERATION(_notifyCount--);
-		if (!res.has())
-		{
-			throw ui_sync_closed_exception();
-		}
-	}
-
-	template <typename H>
-	void set_notifer(H&& h)
-	{
-		assert(_runBase->run_in_ui_thread());
-		assert(0 == _notifyCount);
-		_handler = TRY_MOVE(h);
-	}
-
-	void reset()
-	{
-		assert(_runBase->run_in_ui_thread());
-		assert(0 == _notifyCount);
-		clear_function(_handler);
-	}
-
-	bool empty() const
-	{
-		assert(_runBase->run_in_ui_thread());
-		return !_handler;
-	}
-private:
-	DEBUG_OPERATION(bind_qt_run_base* _runBase);
-	DEBUG_OPERATION(mutable size_t _notifyCount);
-	QObject* _parent;
-	std::function<void(qt_ui_sync_result<void>*, ARGS...)> _handler;
-};
-
 //////////////////////////////////////////////////////////////////////////
 
 template <typename R>
 struct check_lost_qt_ui_sync_result;
 
-template <typename R = void>
+template <typename R>
 struct _check_lost_qt_ui_sync_result
 {
 	friend check_lost_qt_ui_sync_result<R>;
@@ -883,40 +790,14 @@ struct _check_lost_qt_ui_sync_result
 		return _res.has();
 	}
 
-	R& result()
+	stack_obj<R>& result()
 	{
-		return _res.get();
+		return _res;
 	}
 private:
 	bind_qt_run_base* _runBase;
 	QEventLoop& _eventLoop;
 	stack_obj<R> _res;
-};
-
-template <>
-struct _check_lost_qt_ui_sync_result<void>
-{
-	friend check_lost_qt_ui_sync_result<void>;
-
-	_check_lost_qt_ui_sync_result(bind_qt_run_base* runBase, QEventLoop& eventLoop)
-	:_runBase(runBase), _eventLoop(eventLoop), _has(false) {}
-
-	void return_()
-	{
-		assert(_runBase->running_in_this_thread());
-		assert(!has());
-		_has = true;
-		_eventLoop.exit();
-	}
-
-	bool has()
-	{
-		return _has;
-	}
-private:
-	bind_qt_run_base* _runBase;
-	QEventLoop& _eventLoop;
-	bool _has;
 };
 
 /*!
@@ -1023,7 +904,7 @@ struct qt_ui_sync_check_lost_notifer<R(ARGS...)>
 		{
 			throw ui_sync_closed_exception();
 		}
-		return std::move(res.result());
+		return stack_obj_move::move(res.result());
 	}
 
 	template <typename H>
@@ -1052,74 +933,6 @@ private:
 	bind_qt_run_base* _runBase;
 	std::shared_ptr<std::mutex> _mutex;
 	std::function<void(check_lost_qt_ui_sync_result<R>, ARGS...)> _handler;
-};
-
-template <typename... ARGS>
-struct qt_ui_sync_check_lost_notifer<void(ARGS...)>
-{
-	template <typename Parent>
-	explicit qt_ui_sync_check_lost_notifer(Parent* parent)
-		: _runBase((bind_qt_run_base*)parent), _parent(parent), _mutex(std::shared_ptr<std::mutex>(new std::mutex))
-	{
-		DEBUG_OPERATION(_notifyCount = 0);
-	}
-
-	~qt_ui_sync_check_lost_notifer()
-	{
-	}
-
-	template <typename... Args>
-	void operator()(Args&&... args) const
-	{
-		assert(_runBase->run_in_ui_thread());
-		assert(!empty());
-		DEBUG_OPERATION(_notifyCount++);
-		QEventLoop eventLoop(_parent);
-		shared_bool sign = shared_bool::new_(false);
-		_check_lost_qt_ui_sync_result<void> res(_runBase, eventLoop);
-		_handler(check_lost_qt_ui_sync_result<void>(&res, sign, _mutex), TRY_MOVE(args)...);
-		int rcd = eventLoop.exec();
-		_mutex->lock();
-		sign = true;
-		_mutex->unlock();
-		DEBUG_OPERATION(_notifyCount--);
-		if (-1 == rcd)
-		{
-			assert(!res.has());
-			throw ui_sync_lost_exception();
-		}
-		if (!res.has())
-		{
-			throw ui_sync_closed_exception();
-		}
-	}
-
-	template <typename H>
-	void set_notifer(H&& h)
-	{
-		assert(_runBase->run_in_ui_thread());
-		assert(0 == _notifyCount);
-		_handler = TRY_MOVE(h);
-	}
-
-	void reset()
-	{
-		assert(_runBase->run_in_ui_thread());
-		assert(0 == _notifyCount);
-		clear_function(_handler);
-	}
-
-	bool empty() const
-	{
-		assert(_runBase->run_in_ui_thread());
-		return !_handler;
-	}
-private:
-	DEBUG_OPERATION(mutable size_t _notifyCount);
-	QObject* _parent;
-	bind_qt_run_base* _runBase;
-	std::shared_ptr<std::mutex> _mutex;
-	std::function<void(check_lost_qt_ui_sync_result<void>, ARGS...)> _handler;
 };
 #endif
 

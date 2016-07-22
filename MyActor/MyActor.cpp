@@ -19,8 +19,8 @@ void wait_multi_msg()
 		actor_handle act1 = my_actor::create(self->self_strand(), [&](my_actor* self)
 		{
 			my_actor::quit_guard qg(self);
-			actor_trig_handle<> cspAth;
-			actor_trig_handle<> bufAth;
+			trig_handle<> cspAth;
+			trig_handle<> bufAth;
 			csp.regist_take_ntf(self, self->make_trig_notifer_to_self(cspAth));
 			buf.regist_pop_ntf(self, self->make_trig_notifer_to_self(bufAth));
 			self->run_mutex_blocks_safe(mutex_block_trig<>(cspAth, [&]()
@@ -92,7 +92,7 @@ void wait_multi_msg()
 				return true;
 			}));
 		});
-		child_actor_handle ch2 = self->create_child_actor([&](my_actor* self)
+		child_handle ch2 = self->create_child([&](my_actor* self)
 		{
 			for (int i = 0; i < 3; i++)
 			{
@@ -110,7 +110,7 @@ void wait_multi_msg()
 				}
 			}
 		});
-		child_actor_handle ch3 = self->create_child_actor([&](my_actor* self)
+		child_handle ch3 = self->create_child([&](my_actor* self)
 		{
 			for (int i = 0; i < 3; i++)
 			{
@@ -128,8 +128,8 @@ void wait_multi_msg()
 			}
 		});
 		act1->run();
-		self->child_actor_run(ch2, ch3);
-		self->child_actor_wait_quit(ch2, ch3);
+		self->child_run(ch2, ch3);
+		self->child_wait_quit(ch2, ch3);
 		act1->force_quit();
 		self->actor_wait_quit(act1);
 	});
@@ -147,7 +147,7 @@ void async_buffer_test()
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
 	{
 		async_buffer<move_test> asyncMsg(self->self_strand(), 1);
-		child_actor_handle ch1 = self->create_child_actor([&](my_actor* self)
+		child_handle ch1 = self->create_child([&](my_actor* self)
 		{
 			for (int i = 0; i < 3; i++)
 			{
@@ -155,7 +155,7 @@ void async_buffer_test()
 				trace_comma(self->self_id(), asyncMsg.pop(self));
 			}
 		});
-		child_actor_handle ch2 = self->create_child_actor([&](my_actor* self)
+		child_handle ch2 = self->create_child([&](my_actor* self)
 		{
 			for (int i = 0; i < 3; i++)
 			{
@@ -164,8 +164,8 @@ void async_buffer_test()
 				trace_comma(self->self_id(), "push ok", i);
 			}
 		});
-		self->child_actor_run(ch1, ch2);
-		self->child_actor_wait_quit(ch1, ch2);
+		self->child_run(ch1, ch2);
+		self->child_wait_quit(ch1, ch2);
 	});
 	ah->run();
 	ah->outside_wait_quit();
@@ -181,7 +181,7 @@ void sync_msg_test()
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
 	{
 		sync_msg<move_test> syncMsg(self->self_strand());
-		child_actor_handle ch1 = self->create_child_actor([&](my_actor* self)
+		child_handle ch1 = self->create_child([&](my_actor* self)
 		{
 			for (int i = 0; i < 3; i++)
 			{
@@ -189,7 +189,7 @@ void sync_msg_test()
 				trace_comma(self->self_id(), syncMsg.take(self));
 			}
 		});
-		child_actor_handle ch2 = self->create_child_actor([&](my_actor* self)
+		child_handle ch2 = self->create_child([&](my_actor* self)
 		{
 			for (int i = 0; i < 3; i++)
 			{
@@ -198,8 +198,8 @@ void sync_msg_test()
 				trace_comma(self->self_id(), "send ok", i);
 			}
 		});
-		self->child_actor_run(ch1, ch2);
-		self->child_actor_wait_quit(ch1, ch2);
+		self->child_run(ch1, ch2);
+		self->child_wait_quit(ch1, ch2);
 	});
 	ah->run();
 	ah->outside_wait_quit();
@@ -215,7 +215,7 @@ void csp_test()
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
 	{
 		csp_invoke<int(move_test&, bool)> csp(self->self_strand());
-		child_actor_handle ch1 = self->create_child_actor([&](my_actor* self)
+		child_handle ch1 = self->create_child([&](my_actor* self)
 		{
 			for (int i = 0; i < 6; i++)
 			{
@@ -227,7 +227,7 @@ void csp_test()
 				});
 			}
 		});
-		child_actor_handle ch2 = self->create_child_actor([&](my_actor* self)
+		child_handle ch2 = self->create_child([&](my_actor* self)
 		{
 			for (int i = 0; i < 3; i++)
 			{
@@ -241,8 +241,8 @@ void csp_test()
 				trace_comma(self->self_id(), "csp return ", r);
 			}
 		});
-		self->child_actor_run(ch1, ch2);
-		self->child_actor_wait_quit(ch1, ch2);
+		self->child_run(ch1, ch2);
+		self->child_wait_quit(ch1, ch2);
 	});
 	ah->run();
 	ah->outside_wait_quit();
@@ -258,7 +258,7 @@ void mutex_test()
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
 	{
 		actor_mutex mtx(self->self_strand());
-		child_actor_handle ch1 = self->create_child_actor([&](my_actor* self)
+		child_handle ch1 = self->create_child([&](my_actor* self)
 		{
 			for (int i = 0; i < 10; i++)
 			{
@@ -274,7 +274,7 @@ void mutex_test()
 				mtx.unlock(self);
 			}
 		});
-		child_actor_handle ch2 = self->create_child_actor([&](my_actor* self)
+		child_handle ch2 = self->create_child([&](my_actor* self)
 		{
 			for (int i = 0; i < 10; i++)
 			{
@@ -290,8 +290,8 @@ void mutex_test()
 				mtx.unlock(self);
 			}
 		});
-		self->child_actor_run(ch1, ch2);
-		self->child_actor_wait_quit(ch1, ch2);
+		self->child_run(ch1, ch2);
+		self->child_wait_quit(ch1, ch2);
 	});
 	ah->run();
 	ah->outside_wait_quit();
@@ -307,7 +307,7 @@ void shared_mutex_test()
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
 	{
 		actor_shared_mutex smtx(self->self_strand());
-		child_actor_handle ch1 = self->create_child_actor([&](my_actor* self)
+		child_handle ch1 = self->create_child([&](my_actor* self)
 		{
 			for (int i = 0; i < 10; i++)
 			{
@@ -325,7 +325,7 @@ void shared_mutex_test()
 				self->sleep(10);
 			}
 		});
-		child_actor_handle ch2 = self->create_child_actor([&](my_actor* self)
+		child_handle ch2 = self->create_child([&](my_actor* self)
 		{
 			for (int i = 0; i < 10; i++)
 			{
@@ -349,7 +349,7 @@ void shared_mutex_test()
 				self->sleep(10);
 			}
 		});
-		child_actor_handle ch3 = self->create_child_actor([&](my_actor* self)
+		child_handle ch3 = self->create_child([&](my_actor* self)
 		{
 			for (int i = 0; i < 10; i++)
 			{
@@ -387,7 +387,7 @@ void shared_mutex_test()
 				self->sleep(10);
 			}
 		});
-		child_actor_handle ch4 = self->create_child_actor([&](my_actor* self)
+		child_handle ch4 = self->create_child([&](my_actor* self)
 		{
 			for (int i = 0; i < 10; i++)
 			{
@@ -425,8 +425,8 @@ void shared_mutex_test()
 				self->sleep(10);
 			}
 		});
-		self->child_actor_run(ch1, ch2, ch3, ch4);
-		self->child_actor_wait_quit(ch1, ch2, ch3, ch4);
+		self->child_run(ch1, ch2, ch3, ch4);
+		self->child_wait_quit(ch1, ch2, ch3, ch4);
 	});
 	ah->run();
 	ah->outside_wait_quit();
@@ -441,9 +441,9 @@ void agent_test()
 	ios.run(4);
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
 	{
-		child_actor_handle ch = self->create_child_actor(self->self_strand()->clone(), [](my_actor* self)
+		child_handle ch = self->create_child(self->self_strand()->clone(), [](my_actor* self)
 		{
-			child_actor_handle ch1 = self->create_child_actor(self->self_strand()->clone(), [](my_actor* self)
+			child_handle ch1 = self->create_child(self->self_strand()->clone(), [](my_actor* self)
 			{
 				msg_pump_handle<move_test> pp = self->connect_msg_pump<move_test>(true);
 				try
@@ -463,7 +463,7 @@ void agent_test()
 					trace_comma(self->self_id(), "pump disconnected");
 				}
 			});
-			self->child_actor_run(ch1);
+			self->child_run(ch1);
 			self->msg_agent_to<move_test>(ch1);
 			self->sleep(1000);
 			msg_pump_handle<move_test> pp = self->connect_msg_pump<move_test>(true);
@@ -478,9 +478,9 @@ void agent_test()
 			{
 				trace_comma(self->self_id(), "notifer lost");
 			}
-			self->child_actor_wait_quit(ch1);
+			self->child_wait_quit(ch1);
 		});
-		self->child_actor_run(ch);
+		self->child_run(ch);
 		{
 			auto ntf = self->connect_msg_notifer_to<move_test>(ch, true);
 			for (int i = 0; i < 15; i++)
@@ -489,7 +489,7 @@ void agent_test()
 				self->sleep(100);
 			}
 		}
-		self->child_actor_wait_quit(ch);
+		self->child_wait_quit(ch);
 	});
 	ah->run();
 	ah->outside_wait_quit();
@@ -504,7 +504,7 @@ void pump_test()
 	ios.run();
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
 	{
-		child_actor_handle ch = self->create_child_actor([&](my_actor* self)
+		child_handle ch = self->create_child([&](my_actor* self)
 		{
 			msg_pump_handle<move_test> pp = self->connect_msg_pump<move_test>(true);
 			try
@@ -519,7 +519,7 @@ void pump_test()
 				trace_comma(self->self_id(), "notifer lost");
 			}
 		});
-		self->child_actor_run(ch);
+		self->child_run(ch);
 		{
 			auto ntf = self->connect_msg_notifer_to<move_test>(ch, true);
 			for (int i = 0; i < 3; i++)
@@ -528,7 +528,7 @@ void pump_test()
 				self->sleep(1000);
 			}
 		}
-		self->child_actor_wait_quit(ch);
+		self->child_wait_quit(ch);
 	});
 	ah->run();
 	ah->outside_wait_quit();
@@ -543,8 +543,8 @@ void msg_test()
 	ios.run();
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
 	{
-		actor_msg_handle<move_test> amh;
-		child_actor_handle ch = self->create_child_actor([&](my_actor* self)
+		msg_handle<move_test> amh;
+		child_handle ch = self->create_child([&](my_actor* self)
 		{
 			for (int i = 0; i < 3; i++)
 			{
@@ -552,13 +552,13 @@ void msg_test()
 			}
 		});
 		auto ntf = self->make_msg_notifer_to(ch, amh);
-		self->child_actor_run(ch);
+		self->child_run(ch);
 		for (int i = 0; i < 3; i++)
 		{
 			ntf(move_test(i));
 			self->sleep(1000);
 		}
-		self->child_actor_wait_quit(ch);
+		self->child_wait_quit(ch);
 	});
 	ah->run();
 	ah->outside_wait_quit();
@@ -573,15 +573,15 @@ void trig_test()
 	ios.run();
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
 	{
-		actor_trig_handle<move_test> ath;
-		child_actor_handle ch = self->create_child_actor([&](my_actor* self)
+		trig_handle<move_test> ath;
+		child_handle ch = self->create_child([&](my_actor* self)
 		{
 			trace_comma(self->self_id(), "waiting trig");
 			move_test msg = self->wait_trig(ath);
 			trace_comma(self->self_id(), "trig ok", msg);
 		});
 		auto trig = self->make_trig_notifer_to(ch, ath);
-		self->child_actor_run(ch);
+		self->child_run(ch);
 		trace_comma(self->self_id(), "begin trig");
 		self->sleep(500);
 		trace_comma(self->self_id(), "begin trig.");
@@ -592,7 +592,7 @@ void trig_test()
 		self->sleep(500);
 		trace_comma(self->self_id(), "begin triged!!!");
 		trig(move_test(123));
-		self->child_actor_wait_quit(ch);
+		self->child_wait_quit(ch);
 	});
 	ah->run();
 	ah->outside_wait_quit();
@@ -607,7 +607,7 @@ void socket_test()
 	ios.run();
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
 	{
-		child_actor_handle srv = self->create_child_actor([&](my_actor* self)
+		child_handle srv = self->create_child([&](my_actor* self)
 		{
 			tcp_acceptor acc(self->self_io_service());
 			if (!acc.open("127.0.0.1", 1234))
@@ -645,7 +645,7 @@ void socket_test()
 			}
 			sck.close();
 		});
-		child_actor_handle cli = self->create_child_actor([&](my_actor* self)
+		child_handle cli = self->create_child([&](my_actor* self)
 		{
 			tcp_socket sck(self->self_io_service());
 			if (sck.connect(self, "127.0.0.1", 1234))
@@ -664,15 +664,62 @@ void socket_test()
 			}
 			sck.close();
 		});
-		self->child_actor_run(srv);
+		self->child_run(srv);
 		self->sleep(1000);
-		self->child_actor_run(cli);
-		self->child_actor_wait_quit(srv, cli);
+		self->child_run(cli);
+		self->child_wait_quit(srv, cli);
 	});
 	ah->run();
 	ah->outside_wait_quit();
 	ios.stop();
 	trace_line("end socket_test");
+}
+
+void udp_test()
+{
+	trace_line("begin udp_test");
+	io_engine ios;
+	ios.run();
+	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
+	{
+		child_handle sender = self->create_child([](my_actor* self)
+		{
+			self->sleep(100);
+			udp_socket udp(self->self_io_service());
+			udp.connect(self, "127.0.0.1", 1234);
+			char buf[128];
+			for (int i = 0; i < 3; i++)
+			{
+				int l = snPrintf(buf, sizeof(buf), "udp msg %d", i);
+				udp.send(self, buf, l);
+				self->sleep(1000);
+			}
+			udp.close();
+		});
+		child_handle receiver = self->create_child([](my_actor* self)
+		{
+			udp_socket udp(self->self_io_service());
+			udp.open_bind_v4(1234);
+			char buf[128];
+			for (int i = 0; i < 3; i++)
+			{
+				udp_socket::result res = udp.receive(self, buf, sizeof(buf));
+				if (!res.ok)
+				{
+					break;
+				}
+				buf[res.s] = 0;
+				trace_line(buf);
+			}
+			udp.close();
+		});
+		self->child_run(sender, receiver);
+		self->child_wait_quit(sender, receiver);
+	});
+	ah->run();
+	ah->outside_wait_quit();
+	ios.stop();
+	trace_line("end udp_test");
 }
 
 void perfor_test()
@@ -687,12 +734,12 @@ void perfor_test()
 		for (int n = 1; n < 200; n++)
 		{
 			int num = n*n;
-			std::list<child_actor_handle> childList;
+			std::list<child_handle> childList;
 			std::vector<int> count(num);
 			for (int i = 0; i < num; i++)
 			{
 				count[i] = 0;
-				childList.push_front(self->create_child_actor(strands[i%strands.size()], [&count, i](my_actor* self)
+				childList.push_front(self->create_child(strands[i%strands.size()], [&count, i](my_actor* self)
 				{
 					while (true)
 					{
@@ -702,9 +749,9 @@ void perfor_test()
 				}));
 			}
 			long long tk = get_tick_us();
-			self->child_actors_run(childList);
+			self->children_run(childList);
 			self->sleep(1000);
-			self->child_actors_force_quit(childList);
+			self->children_force_quit(childList);
 			int ct = 0;
 			for (int i = 0; i < num; i++)
 			{
@@ -784,19 +831,19 @@ void create_child_test()
 	BEGIN_RECURSIVE_ACTOR(createActor, self);
 	if (++count < 100)
 	{
-		info_trace_line("create_child_actor ", count);
-		child_actor_handle child1 = self->create_child_actor([&](my_actor* self)
+		info_trace_line("create_child ", count);
+		child_handle child1 = self->create_child([&](my_actor* self)
 		{
 			self->sleep(1000);
 			createActor(self);
 		});
-		child_actor_handle child2 = self->create_child_actor([&](my_actor* self)
+		child_handle child2 = self->create_child([&](my_actor* self)
 		{
 			self->sleep(1000);
 			createActor(self);
 		});
-		self->child_actor_run(child1, child2);
-		self->child_actor_wait_quit(child1, child2);
+		self->child_run(child1, child2);
+		self->child_wait_quit(child1, child2);
 	}
 	self->after_exit_clean_stack();
 	END_RECURSIVE_ACTOR(createActor);
@@ -812,9 +859,9 @@ void suspend_test()
 	ios.run();
 	go(ios)[](my_actor* self)
 	{
-		child_actor_handle child = self->create_child_actor([](my_actor* self)
+		child_handle child = self->create_child([](my_actor* self)
 		{
-			child_actor_handle child = self->create_child_actor([](my_actor* self)
+			child_handle child = self->create_child([](my_actor* self)
 			{
 				int i = 0;
 				self->sleep(300);
@@ -832,7 +879,7 @@ void suspend_test()
 				info_trace_comma("---child2", i++);
 				self->sleep(100);
 			});
-			self->child_actor_run(child);
+			self->child_run(child);
 			int i = 0;
 			self->sleep(100);
 			info_trace_comma("--child1", i++);
@@ -840,18 +887,18 @@ void suspend_test()
 			info_trace_comma("--child1", i++);
 			self->sleep(300);
 			info_trace_comma("--child1", i++);
-			self->child_actor_wait_quit(child);
+			self->child_wait_quit(child);
 		});
-		self->child_actor_run(child);
+		self->child_run(child);
 		self->sleep(500);
 		info_trace_line("-begin suspend");
-		self->child_actor_suspend(child);
+		self->child_suspend(child);
 		info_trace_line("-end suspend");
 		self->sleep(1500);
 		info_trace_line("-begin resume");
-		self->child_actor_resume(child);
+		self->child_resume(child);
 		info_trace_line("-end resume");
-		self->child_actor_wait_quit(child);
+		self->child_wait_quit(child);
 	};
 	ios.stop();
 	trace_line("end suspend_test");
@@ -930,6 +977,8 @@ int main(int argc, char *argv[])
 	async_buffer_test();
 	trace("\n");
 	socket_test();
+	trace("\n");
+	udp_test();
 	trace("\n");
 	wait_multi_msg();
 	trace("\n");

@@ -125,7 +125,7 @@ class async_buffer
 		}
 
 		bool& notified;
-		actor_trig_notifer<bool> ntf;
+		trig_notifer<bool> ntf;
 	};
 
 	struct pop_pck
@@ -137,7 +137,7 @@ class async_buffer
 		}
 
 		bool& notified;
-		actor_trig_notifer<bool> ntf;
+		trig_notifer<bool> ntf;
 	};
 	
 	struct buff_push
@@ -566,7 +566,7 @@ private:
 		host->lock_quit();
 		while (true)
 		{
-			actor_trig_handle<bool> ath;
+			trig_handle<bool> ath;
 			bool notified = false;
 			bool isFull = false;
 			bool closed = false;
@@ -677,7 +677,7 @@ private:
 		size_t pushCount = 0;
 		while (true)
 		{
-			actor_trig_handle<bool> ath;
+			trig_handle<bool> ath;
 			typename msg_list<push_pck>::iterator mit;
 			bool notified = false;
 			bool isFull = false;
@@ -810,7 +810,7 @@ private:
 		host->lock_quit();
 		while (true)
 		{
-			actor_trig_handle<bool> ath;
+			trig_handle<bool> ath;
 			bool notified = false;
 			bool isEmpty = false;
 			bool closed = false;
@@ -927,7 +927,7 @@ private:
 		size_t popCount = 0;
 		while (true)
 		{
-			actor_trig_handle<bool> ath;
+			trig_handle<bool> ath;
 			typename msg_list<pop_pck>::iterator mit;
 			bool notified = false;
 			bool isEmpty = false;

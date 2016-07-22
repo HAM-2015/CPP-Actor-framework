@@ -1,6 +1,8 @@
 #ifndef __LAMBDA_REF_H
 #define __LAMBDA_REF_H
 
+#include "stack_object.h"
+
 //用户内嵌lambda的外部变量引用捕获，可以减小直接"&捕获"sizeof(lambda)的大小，提高调度效率
 #define LAMBDA_REF1(__NAME__, __P0__)\
 	typedef decltype(__P0__) _BOND_LR_(type0, __LINE__); \
@@ -502,6 +504,52 @@ struct LocalRecursive_<_Rt(_Types...)>
 	auto BOND_NAME(__lambda, __name__) = __lmd__; \
 	auto __name__ = wrap_ref_handler(BOND_NAME(__lambda, __name__));
 
+struct stack_obj_move
+{
+	template <typename T>
+	static T&& move(stack_obj<T>& src)
+	{
+		return (T&&)src.get();
+	}
+
+	static void move(stack_obj<void>&){}
+};
+
+struct stack_agent_result
+{
+	template <typename Handler, typename T, typename... Args>
+	static void invoke(Handler&& handler, stack_obj<T>& result, Args&&... args)
+	{
+		result.create(handler(std::forward<Args>(args)...));
+	}
+
+	template <typename Handler, typename... Args>
+	static void invoke(Handler&& handler, stack_obj<void>&, Args&&... args)
+	{
+		handler(std::forward<Args>(args)...);
+	}
+};
+
+template <typename R>
+struct agent_result
+{
+	template <typename Handler, typename... Args>
+	static R invoke(Handler&& handler, Args&&... args)
+	{
+		return handler(std::forward<Args>(args)...);
+	}
+};
+
+template <>
+struct agent_result<void>
+{
+	template <typename Handler, typename... Args>
+	static void invoke(Handler&& handler, Args&&... args)
+	{
+		handler(std::forward<Args>(args)...);
+	}
+};
+
 template <typename Handler, typename R>
 struct OnceHandler_
 {
@@ -515,47 +563,22 @@ struct OnceHandler_
 	template <typename... Args>
 	R operator()(Args&&... args)
 	{
-		return _handler(TRY_MOVE(args)...);
+		return agent_result<R>::invoke(_handler, TRY_MOVE(args)...);
 	}
 
 	template <typename... Args>
 	R operator()(Args&&... args) const
 	{
-		return _handler(TRY_MOVE(args)...);
-	}
-
-	mutable Handler _handler;
-};
-
-template <typename Handler>
-struct OnceHandler_<Handler, void>
-{
-	template <typename H>
-	OnceHandler_(bool, H&& h)
-		:_handler(TRY_MOVE(h)) {}
-
-	OnceHandler_(const OnceHandler_<Handler, void>& s)
-		:_handler(std::move(s._handler)) {}
-
-	template <typename... Args>
-	void operator()(Args&&... args)
-	{
-		_handler(TRY_MOVE(args)...);
-	}
-
-	template <typename... Args>
-	void operator()(Args&&... args) const
-	{
-		_handler(TRY_MOVE(args)...);
+		return agent_result<R>::invoke(_handler, TRY_MOVE(args)...);
 	}
 
 	mutable Handler _handler;
 };
 
 template <typename R = void, typename Handler>
-OnceHandler_<RM_REF(Handler), R> wrap_once_handler(Handler&& handler)
+OnceHandler_<RM_CREF(Handler), R> wrap_once_handler(Handler&& handler)
 {
-	return OnceHandler_<RM_REF(Handler), R>(bool(), TRY_MOVE(handler));
+	return OnceHandler_<RM_CREF(Handler), R>(bool(), TRY_MOVE(handler));
 }
 
 template <typename Handler, typename R>
@@ -567,34 +590,13 @@ struct RefHandler_
 	template <typename... Args>
 	R operator()(Args&&... args)
 	{
-		return _handler(TRY_MOVE(args)...);
+		return agent_result<R>::invoke(_handler, TRY_MOVE(args)...);
 	}
 
 	template <typename... Args>
 	R operator()(Args&&... args) const
 	{
-		return _handler(TRY_MOVE(args)...);
-	}
-
-	Handler& _handler;
-};
-
-template <typename Handler>
-struct RefHandler_<Handler, void>
-{
-	RefHandler_(bool, Handler& h)
-		:_handler(h) {}
-
-	template <typename... Args>
-	void operator()(Args&&... args)
-	{
-		_handler(TRY_MOVE(args)...);
-	}
-
-	template <typename... Args>
-	void operator()(Args&&... args) const
-	{
-		_handler(TRY_MOVE(args)...);
+		return agent_result<R>::invoke(_handler, TRY_MOVE(args)...);
 	}
 
 	Handler& _handler;
@@ -628,33 +630,12 @@ struct WrapLocalHandler_<Handler, _Rt(_Types...)> : public wrap_local_handler_fa
 
 	_Rt operator()(_Types... args)
 	{
-		return _handler(std::forward<_Types>(args)...);
+		return agent_result<_Rt>::invoke(_handler, std::forward<_Types>(args)...);
 	}
 
 	_Rt operator()(_Types... args) const
 	{
-		return _handler(std::forward<_Types>(args)...);
-	}
-
-	Handler& _handler;
-	NONE_COPY(WrapLocalHandler_);
-	RVALUE_CONSTRUCT(WrapLocalHandler_, _handler);
-};
-
-template <typename Handler, typename... _Types>
-struct WrapLocalHandler_<Handler, void(_Types...)> : public wrap_local_handler_face<void(_Types...)>
-{
-	WrapLocalHandler_(Handler& handler)
-	:_handler(handler) {}
-
-	void operator()(_Types... args)
-	{
-		_handler(std::forward<_Types>(args)...);
-	}
-
-	void operator()(_Types... args) const
-	{
-		_handler(std::forward<_Types>(args)...);
+		return agent_result<_Rt>::invoke(_handler, std::forward<_Types>(args)...);
 	}
 
 	Handler& _handler;

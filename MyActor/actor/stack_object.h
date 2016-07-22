@@ -175,6 +175,11 @@ private:
 template <bool AutoDestroy>
 class stack_obj<void, AutoDestroy>
 {
+private:
+	stack_obj(const stack_obj&){};
+	void operator =(const stack_obj&){};
+	void* operator new(size_t){ return NULL; };
+	void operator delete(void*){};
 public:
 	stack_obj()
 	{
@@ -186,7 +191,8 @@ public:
 		destroy();
 	}
 
-	void create()
+	template <typename... Args>
+	void create(Args&&... args)
 	{
 		_null = false;
 	}

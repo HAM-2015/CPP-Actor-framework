@@ -252,7 +252,7 @@ shared_bool shared_bool::new_(bool b)
 
 //////////////////////////////////////////////////////////////////////////
 #ifdef ENABLE_CHECK_LOST
-CheckLost_::CheckLost_(const shared_strand& strand, actor_msg_handle_base* msgHandle)
+CheckLost_::CheckLost_(const shared_strand& strand, msg_handle_base* msgHandle)
 :_strand(strand), _handle(msgHandle), _closed(msgHandle->_closed) {}
 
 CheckLost_::~CheckLost_()
@@ -285,18 +285,18 @@ CheckPumpLost_::~CheckPumpLost_()
 
 //////////////////////////////////////////////////////////////////////////
 
-child_actor_handle::child_actor_handle(const child_actor_handle&)
+child_handle::child_handle(const child_handle&)
 {
 	assert(false);
 }
 
-child_actor_handle::child_actor_handle(child_actor_handle&& s)
+child_handle::child_handle(child_handle&& s)
 :_started(false), _quited(true)
 {
 	*this = std::move(s);
 }
 
-child_actor_handle::child_actor_handle(actor_handle&& actor)
+child_handle::child_handle(actor_handle&& actor)
 :_actor(std::move(actor)), _started(false), _quited(false)
 {
 	my_actor* parent = _actor->_parentActor.get();
@@ -306,17 +306,17 @@ child_actor_handle::child_actor_handle(actor_handle&& actor)
 	_athIt = _actor->_quitCallback.begin();
 }
 
-child_actor_handle::child_actor_handle()
+child_handle::child_handle()
 :_started(false), _quited(true)
 {
 }
 
-void child_actor_handle::operator=(const child_actor_handle&)
+void child_handle::operator=(const child_handle&)
 {
 	assert(false);
 }
 
-void child_actor_handle::operator =(child_actor_handle&& s)
+void child_handle::operator =(child_handle&& s)
 {
 	assert(!_started && _quited);
 	if (!s->_quited)
@@ -341,7 +341,7 @@ void child_actor_handle::operator =(child_actor_handle&& s)
 	}
 }
 
-child_actor_handle::~child_actor_handle() __disable_noexcept
+child_handle::~child_handle() __disable_noexcept
 {
 	if (!_quited)
 	{
@@ -357,7 +357,7 @@ child_actor_handle::~child_actor_handle() __disable_noexcept
 	}
 }
 
-const actor_handle& child_actor_handle::get_actor() const
+const actor_handle& child_handle::get_actor() const
 {
 #if (_DEBUG || DEBUG)
 	if (_actor)
@@ -370,7 +370,7 @@ const actor_handle& child_actor_handle::get_actor() const
 	return _actor;
 }
 
-my_actor* child_actor_handle::operator ->() const
+my_actor* child_handle::operator ->() const
 {
 	assert(_actor);
 	my_actor* parent = _actor->_parentActor.get();
@@ -379,7 +379,7 @@ my_actor* child_actor_handle::operator ->() const
 	return _actor.get();
 }
 
-void child_actor_handle::peel()
+void child_handle::peel()
 {
 	if (!_quited)
 	{
@@ -393,12 +393,12 @@ void child_actor_handle::peel()
 	}
 }
 
-child_actor_handle::ptr child_actor_handle::make_ptr()
+child_handle::ptr child_handle::make_ptr()
 {
-	return ptr(new child_actor_handle);
+	return ptr(new child_handle);
 }
 
-bool child_actor_handle::empty() const
+bool child_handle::empty() const
 {
 #if (_DEBUG || DEBUG)
 	if (_actor)
@@ -412,19 +412,19 @@ bool child_actor_handle::empty() const
 }
 
 //////////////////////////////////////////////////////////////////////////
-actor_msg_handle_base::actor_msg_handle_base()
+msg_handle_base::msg_handle_base()
 :_waiting(false), _losted(false), _checkLost(false), _hostActor(NULL)
 {
 
 }
 
-void actor_msg_handle_base::set_actor(my_actor* hostActor)
+void msg_handle_base::set_actor(my_actor* hostActor)
 {
 	_hostActor = hostActor;
 	DEBUG_OPERATION(_strand = hostActor->self_strand());
 }
 
-void actor_msg_handle_base::check_lost(bool checkLost)
+void msg_handle_base::check_lost(bool checkLost)
 {
 	assert(_strand->running_in_this_thread());
 #ifndef ENABLE_CHECK_LOST
@@ -433,7 +433,7 @@ void actor_msg_handle_base::check_lost(bool checkLost)
 	_checkLost = checkLost;
 }
 
-void actor_msg_handle_base::lost_msg()
+void msg_handle_base::lost_msg()
 {
 	assert(_strand->running_in_this_thread());
 	if (!ActorFunc_::is_quited(_hostActor))
@@ -448,7 +448,7 @@ void actor_msg_handle_base::lost_msg()
 	}
 }
 
-const shared_bool& actor_msg_handle_base::dead_sign()
+const shared_bool& msg_handle_base::dead_sign()
 {
 	return _closed;
 }
@@ -2116,61 +2116,61 @@ actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFa
 	return create(shared_strand(actorStrand), std::move(wrapActor));
 }
 
-child_actor_handle my_actor::create_child_actor(shared_strand&& actorStrand, const main_func& mainFunc, size_t stackSize)
+child_handle my_actor::create_child(shared_strand&& actorStrand, const main_func& mainFunc, size_t stackSize)
 {
 	assert_enter();
 	actor_handle childActor = my_actor::create(std::move(actorStrand), mainFunc, stackSize);
 	childActor->_parentActor = shared_from_this();
-	return child_actor_handle(std::move(childActor));
+	return child_handle(std::move(childActor));
 }
 
-child_actor_handle my_actor::create_child_actor(shared_strand&& actorStrand, main_func&& mainFunc, size_t stackSize)
+child_handle my_actor::create_child(shared_strand&& actorStrand, main_func&& mainFunc, size_t stackSize)
 {
 	assert_enter();
 	actor_handle childActor = my_actor::create(std::move(actorStrand), std::move(mainFunc), stackSize);
 	childActor->_parentActor = shared_from_this();
-	return child_actor_handle(std::move(childActor));
+	return child_handle(std::move(childActor));
 }
 
-child_actor_handle my_actor::create_child_actor(const main_func& mainFunc, size_t stackSize)
+child_handle my_actor::create_child(const main_func& mainFunc, size_t stackSize)
 {
-	return create_child_actor(_strand, mainFunc, stackSize);
+	return create_child(_strand, mainFunc, stackSize);
 }
 
-child_actor_handle my_actor::create_child_actor(main_func&& mainFunc, size_t stackSize)
+child_handle my_actor::create_child(main_func&& mainFunc, size_t stackSize)
 {
-	return create_child_actor(_strand, std::move(mainFunc), stackSize);
+	return create_child(_strand, std::move(mainFunc), stackSize);
 }
 
-child_actor_handle my_actor::create_child_actor(shared_strand&& actorStrand, AutoStackActorFace_&& wrapActor)
+child_handle my_actor::create_child(shared_strand&& actorStrand, AutoStackActorFace_&& wrapActor)
 {
 	assert_enter();
 	actor_handle childActor = my_actor::create(std::move(actorStrand), std::move(wrapActor));
 	childActor->_parentActor = shared_from_this();
-	return child_actor_handle(std::move(childActor));
+	return child_handle(std::move(childActor));
 }
 
-child_actor_handle my_actor::create_child_actor(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize)
+child_handle my_actor::create_child(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize)
 {
-	return create_child_actor(shared_strand(actorStrand), mainFunc, stackSize);
+	return create_child(shared_strand(actorStrand), mainFunc, stackSize);
 }
 
-child_actor_handle my_actor::create_child_actor(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize)
+child_handle my_actor::create_child(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize)
 {
-	return create_child_actor(shared_strand(actorStrand), std::move(mainFunc), stackSize);
+	return create_child(shared_strand(actorStrand), std::move(mainFunc), stackSize);
 }
 
-child_actor_handle my_actor::create_child_actor(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor)
+child_handle my_actor::create_child(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor)
 {
-	return create_child_actor(shared_strand(actorStrand), std::move(wrapActor));
+	return create_child(shared_strand(actorStrand), std::move(wrapActor));
 }
 
-child_actor_handle my_actor::create_child_actor(AutoStackActorFace_&& wrapActor)
+child_handle my_actor::create_child(AutoStackActorFace_&& wrapActor)
 {
-	return create_child_actor(_strand, std::move(wrapActor));
+	return create_child(_strand, std::move(wrapActor));
 }
 
-void my_actor::child_actor_run(child_actor_handle& actorHandle)
+void my_actor::child_run(child_handle& actorHandle)
 {
 	assert_enter();
 	assert(!actorHandle._started);
@@ -2181,25 +2181,25 @@ void my_actor::child_actor_run(child_actor_handle& actorHandle)
 	actorHandle->run();
 }
 
-void my_actor::child_actors_run(std::list<child_actor_handle::ptr>& actorHandles)
+void my_actor::children_run(std::list<child_handle::ptr>& actorHandles)
 {
 	assert_enter();
 	for (auto& actorHandle : actorHandles)
 	{
-		child_actor_run(*actorHandle);
+		child_run(*actorHandle);
 	}
 }
 
-void my_actor::child_actors_run(std::list<child_actor_handle>& actorHandles)
+void my_actor::children_run(std::list<child_handle>& actorHandles)
 {
 	assert_enter();
 	for (auto& actorHandle : actorHandles)
 	{
-		child_actor_run(actorHandle);
+		child_run(actorHandle);
 	}
 }
 
-void my_actor::child_actor_force_quit(child_actor_handle& actorHandle)
+void my_actor::child_force_quit(child_handle& actorHandle)
 {
 	assert_enter();
 	if (!actorHandle._quited)
@@ -2212,7 +2212,7 @@ void my_actor::child_actor_force_quit(child_actor_handle& actorHandle)
 	}
 }
 
-void my_actor::child_actors_force_quit(std::list<child_actor_handle::ptr>& actorHandles)
+void my_actor::children_force_quit(std::list<child_handle::ptr>& actorHandles)
 {
 	assert_enter();
 	for (auto& actorHandle : actorHandles)
@@ -2234,7 +2234,7 @@ void my_actor::child_actors_force_quit(std::list<child_actor_handle::ptr>& actor
 	}
 }
 
-void my_actor::child_actors_force_quit(std::list<child_actor_handle>& actorHandles)
+void my_actor::children_force_quit(std::list<child_handle>& actorHandles)
 {
 	assert_enter();
 	for (auto& actorHandle : actorHandles)
@@ -2256,7 +2256,7 @@ void my_actor::child_actors_force_quit(std::list<child_actor_handle>& actorHandl
 	}
 }
 
-void my_actor::child_actor_wait_quit(child_actor_handle& actorHandle)
+void my_actor::child_wait_quit(child_handle& actorHandle)
 {
 	assert_enter();
 	if (!actorHandle._quited)
@@ -2269,27 +2269,27 @@ void my_actor::child_actor_wait_quit(child_actor_handle& actorHandle)
 	}
 }
 
-void my_actor::child_actors_wait_quit(std::list<child_actor_handle::ptr>& actorHandles)
+void my_actor::children_wait_quit(std::list<child_handle::ptr>& actorHandles)
 {
 	assert_enter();
 	for (auto& actorHandle : actorHandles)
 	{
 		assert(actorHandle->get_actor()->parent_actor()->self_id() == self_id());
-		child_actor_wait_quit(*actorHandle);
+		child_wait_quit(*actorHandle);
 	}
 }
 
-void my_actor::child_actors_wait_quit(std::list<child_actor_handle>& actorHandles)
+void my_actor::children_wait_quit(std::list<child_handle>& actorHandles)
 {
 	assert_enter();
 	for (auto& actorHandle : actorHandles)
 	{
 		assert(actorHandle->parent_actor()->self_id() == self_id());
-		child_actor_wait_quit(actorHandle);
+		child_wait_quit(actorHandle);
 	}
 }
 
-bool my_actor::timed_child_actor_wait_quit(int tm, child_actor_handle& actorHandle)
+bool my_actor::timed_child_wait_quit(int tm, child_handle& actorHandle)
 {
 	assert_enter();
 	if (!actorHandle._quited)
@@ -2305,7 +2305,7 @@ bool my_actor::timed_child_actor_wait_quit(int tm, child_actor_handle& actorHand
 	return true;
 }
 
-void my_actor::child_actor_suspend(child_actor_handle& actorHandle)
+void my_actor::child_suspend(child_handle& actorHandle)
 {
 	assert_enter();
 	lock_quit();
@@ -2315,12 +2315,12 @@ void my_actor::child_actor_suspend(child_actor_handle& actorHandle)
 	unlock_quit();
 }
 
-void my_actor::child_actors_suspend(std::list<child_actor_handle::ptr>& actorHandles)
+void my_actor::children_suspend(std::list<child_handle::ptr>& actorHandles)
 {
 	assert_enter();
 	lock_quit();
-	actor_msg_handle<> amh;
-	actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
+	msg_handle<> amh;
+	msg_notifer<> h = make_msg_notifer_to_self(amh);
 	for (auto& actorHandle : actorHandles)
 	{
 		assert(actorHandle->get_actor());
@@ -2335,12 +2335,12 @@ void my_actor::child_actors_suspend(std::list<child_actor_handle::ptr>& actorHan
 	unlock_quit();
 }
 
-void my_actor::child_actors_suspend(std::list<child_actor_handle>& actorHandles)
+void my_actor::children_suspend(std::list<child_handle>& actorHandles)
 {
 	assert_enter();
 	lock_quit();
-	actor_msg_handle<> amh;
-	actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
+	msg_handle<> amh;
+	msg_notifer<> h = make_msg_notifer_to_self(amh);
 	for (auto& actorHandle : actorHandles)
 	{
 		assert(actorHandle.get_actor());
@@ -2355,7 +2355,7 @@ void my_actor::child_actors_suspend(std::list<child_actor_handle>& actorHandles)
 	unlock_quit();
 }
 
-void my_actor::child_actor_resume(child_actor_handle& actorHandle)
+void my_actor::child_resume(child_handle& actorHandle)
 {
 	assert_enter();
 	lock_quit();
@@ -2365,12 +2365,12 @@ void my_actor::child_actor_resume(child_actor_handle& actorHandle)
 	unlock_quit();
 }
 
-void my_actor::child_actors_resume(std::list<child_actor_handle::ptr>& actorHandles)
+void my_actor::children_resume(std::list<child_handle::ptr>& actorHandles)
 {
 	assert_enter();
 	lock_quit();
-	actor_msg_handle<> amh;
-	actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
+	msg_handle<> amh;
+	msg_notifer<> h = make_msg_notifer_to_self(amh);
 	for (auto& actorHandle : actorHandles)
 	{
 		assert(actorHandle->get_actor());
@@ -2385,12 +2385,12 @@ void my_actor::child_actors_resume(std::list<child_actor_handle::ptr>& actorHand
 	unlock_quit();
 }
 
-void my_actor::child_actors_resume(std::list<child_actor_handle>& actorHandles)
+void my_actor::children_resume(std::list<child_handle>& actorHandles)
 {
 	assert_enter();
 	lock_quit();
-	actor_msg_handle<> amh;
-	actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
+	msg_handle<> amh;
+	msg_notifer<> h = make_msg_notifer_to_self(amh);
 	for (auto& actorHandle : actorHandles)
 	{
 		assert(actorHandle.get_actor());
@@ -2405,40 +2405,40 @@ void my_actor::child_actors_resume(std::list<child_actor_handle>& actorHandles)
 	unlock_quit();
 }
 
-void my_actor::run_child_actor_complete(shared_strand&& actorStrand, const main_func& h, size_t stackSize)
+void my_actor::run_child_complete(shared_strand&& actorStrand, const main_func& h, size_t stackSize)
 {
 	assert_enter();
-	child_actor_handle actorHandle = create_child_actor(std::move(actorStrand), h, stackSize);
-	child_actor_run(actorHandle);
-	child_actor_wait_quit(actorHandle);
+	child_handle actorHandle = create_child(std::move(actorStrand), h, stackSize);
+	child_run(actorHandle);
+	child_wait_quit(actorHandle);
 }
 
-void my_actor::run_child_actor_complete(shared_strand&& actorStrand, main_func&& h, size_t stackSize)
+void my_actor::run_child_complete(shared_strand&& actorStrand, main_func&& h, size_t stackSize)
 {
 	assert_enter();
-	child_actor_handle actorHandle = create_child_actor(std::move(actorStrand), std::move(h), stackSize);
-	child_actor_run(actorHandle);
-	child_actor_wait_quit(actorHandle);
+	child_handle actorHandle = create_child(std::move(actorStrand), std::move(h), stackSize);
+	child_run(actorHandle);
+	child_wait_quit(actorHandle);
 }
 
-void my_actor::run_child_actor_complete(const main_func& h, size_t stackSize)
+void my_actor::run_child_complete(const main_func& h, size_t stackSize)
 {
-	run_child_actor_complete(self_strand(), h, stackSize);
+	run_child_complete(self_strand(), h, stackSize);
 }
 
-void my_actor::run_child_actor_complete(main_func&& h, size_t stackSize)
+void my_actor::run_child_complete(main_func&& h, size_t stackSize)
 {
-	run_child_actor_complete(self_strand(), std::move(h), stackSize);
+	run_child_complete(self_strand(), std::move(h), stackSize);
 }
 
-void my_actor::run_child_actor_complete(const shared_strand& actorStrand, const main_func& h, size_t stackSize)
+void my_actor::run_child_complete(const shared_strand& actorStrand, const main_func& h, size_t stackSize)
 {
-	run_child_actor_complete(shared_strand(actorStrand), h, stackSize);
+	run_child_complete(shared_strand(actorStrand), h, stackSize);
 }
 
-void my_actor::run_child_actor_complete(const shared_strand& actorStrand, main_func&& h, size_t stackSize)
+void my_actor::run_child_complete(const shared_strand& actorStrand, main_func&& h, size_t stackSize)
 {
-	run_child_actor_complete(shared_strand(actorStrand), std::move(h), stackSize);
+	run_child_complete(shared_strand(actorStrand), std::move(h), stackSize);
 }
 
 void my_actor::sleep(int ms)
@@ -2509,7 +2509,7 @@ const actor_handle& my_actor::parent_actor()
 	return _parentActor;
 }
 
-const msg_list_shared_alloc<actor_handle>& my_actor::child_actors()
+const msg_list_shared_alloc<actor_handle>& my_actor::children()
 {
 	return _childActorList;
 }
@@ -3221,8 +3221,8 @@ void my_actor::actors_force_quit(const std::list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	lock_quit();
-	actor_msg_handle<> amh;
-	actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
+	msg_handle<> amh;
+	msg_notifer<> h = make_msg_notifer_to_self(amh);
 	for (auto& actorHandle : anotherActors)
 	{
 		actorHandle->force_quit(wrap_ref_handler(h));
@@ -3246,7 +3246,7 @@ bool my_actor::timed_actor_wait_quit(int tm, const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
-	actor_trig_handle<> ath;
+	trig_handle<> ath;
 	anotherActor->append_quit_notify(make_trig_notifer_to_self(ath));
 	return timed_wait_trig(tm, ath);
 }
@@ -3271,8 +3271,8 @@ void my_actor::actors_suspend(const std::list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	lock_quit();
-	actor_msg_handle<> amh;
-	actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
+	msg_handle<> amh;
+	msg_notifer<> h = make_msg_notifer_to_self(amh);
 	for (auto& actorHandle : anotherActors)
 	{
 		actorHandle->suspend(wrap_ref_handler(h));
@@ -3296,8 +3296,8 @@ void my_actor::actors_resume(const std::list<actor_handle>& anotherActors)
 {
 	assert_enter();
 	lock_quit();
-	actor_msg_handle<> amh;
-	actor_msg_notifer<> h = make_msg_notifer_to_self(amh);
+	msg_handle<> amh;
+	msg_notifer<> h = make_msg_notifer_to_self(amh);
 	for (auto& actorHandle : anotherActors)
 	{
 		actorHandle->resume(wrap_ref_handler(h));
@@ -3322,8 +3322,8 @@ bool my_actor::actors_switch(const std::list<actor_handle>& anotherActors)
 	assert_enter();
 	lock_quit();
 	bool isPause = true;
-	actor_msg_handle<bool> amh;
-	actor_msg_notifer<bool> h = make_msg_notifer_to_self(amh);
+	msg_handle<bool> amh;
+	msg_notifer<bool> h = make_msg_notifer_to_self(amh);
 	for (auto& actorHandle : anotherActors)
 	{
 		actorHandle->switch_pause_play(wrap_ref_handler(h));
@@ -3517,13 +3517,13 @@ void* my_actor::als_get()
 	return _alsVal;
 }
 
-void my_actor::close_msg_notifer(actor_msg_handle_base& amh)
+void my_actor::close_msg_notifer(msg_handle_base& amh)
 {
 	assert_enter();
 	amh.close();
 }
 
-bool my_actor::timed_wait_msg(int tm, actor_msg_handle<>& amh)
+bool my_actor::timed_wait_msg(int tm, msg_handle<>& amh)
 {
 	return timed_wait_msg(tm, [this]
 	{
@@ -3531,7 +3531,7 @@ bool my_actor::timed_wait_msg(int tm, actor_msg_handle<>& amh)
 	}, amh);
 }
 
-bool my_actor::try_wait_msg(actor_msg_handle<>& amh)
+bool my_actor::try_wait_msg(msg_handle<>& amh)
 {
 	return timed_wait_msg(0, amh);
 }
@@ -3580,13 +3580,13 @@ bool my_actor::try_pump_msg(bool checkDis, const msg_pump_handle<>& pump)
 	return true;
 }
 
-void my_actor::close_trig_notifer(actor_msg_handle_base& ath)
+void my_actor::close_trig_notifer(msg_handle_base& ath)
 {
 	assert_enter();
 	ath.close();
 }
 
-bool my_actor::timed_wait_trig(int tm, actor_trig_handle<>& ath)
+bool my_actor::timed_wait_trig(int tm, trig_handle<>& ath)
 {
 	return timed_wait_trig(tm, [this]
 	{
@@ -3594,17 +3594,17 @@ bool my_actor::timed_wait_trig(int tm, actor_trig_handle<>& ath)
 	}, ath);
 }
 
-bool my_actor::try_wait_trig(actor_trig_handle<>& ath)
+bool my_actor::try_wait_trig(trig_handle<>& ath)
 {
 	return timed_wait_trig(0, ath);
 }
 
-void my_actor::wait_msg(actor_msg_handle<>& amh)
+void my_actor::wait_msg(msg_handle<>& amh)
 {
 	timed_wait_msg(-1, amh);
 }
 
-void my_actor::wait_trig(actor_trig_handle<>& ath)
+void my_actor::wait_trig(trig_handle<>& ath)
 {
 	timed_wait_trig(-1, ath);
 }
@@ -3714,7 +3714,7 @@ void ActorFunc_::cancel_timer(my_actor* host)
 }
 
 #ifdef ENABLE_CHECK_LOST
-std::shared_ptr<CheckLost_> ActorFunc_::new_check_lost(const shared_strand& strand, actor_msg_handle_base* msgHandle)
+std::shared_ptr<CheckLost_> ActorFunc_::new_check_lost(const shared_strand& strand, msg_handle_base* msgHandle)
 {
 	auto& s_checkLostObjAlloc_ = s_checkLostObjAlloc;
 	return std::shared_ptr<CheckLost_>(new(s_checkLostObjAlloc->allocate())CheckLost_(strand, msgHandle), [s_checkLostObjAlloc_](CheckLost_* p)

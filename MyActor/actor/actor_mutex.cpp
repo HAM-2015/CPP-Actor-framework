@@ -868,6 +868,7 @@ void actor_shared_mutex::unlock(my_actor* host)
 				{
 					if (st_shared == it->_status)
 					{
+						assert(_inSet.find(it->_waitHostID) == _inSet.end());
 						DEBUG_OPERATION(_inSet[it->_waitHostID] = st_shared);
 						_insideCount++;
 						it->ntf();

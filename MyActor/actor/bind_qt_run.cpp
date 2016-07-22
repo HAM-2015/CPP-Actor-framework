@@ -295,28 +295,28 @@ void bind_qt_run_base::ui_yield(my_actor* host)
 }
 
 #ifdef ENABLE_QT_ACTOR
-actor_handle bind_qt_run_base::create_qt_actor(const my_actor::main_func& mainFunc, size_t stackSize /*= QT_UI_ACTOR_STACK_SIZE*/)
+actor_handle bind_qt_run_base::create_ui_actor(const my_actor::main_func& mainFunc, size_t stackSize /*= QT_UI_ACTOR_STACK_SIZE*/)
 {
 	assert(!!_qtStrand);
 	return my_actor::create(_qtStrand, mainFunc, stackSize);
 }
 
-actor_handle bind_qt_run_base::create_qt_actor(my_actor::main_func&& mainFunc, size_t stackSize /*= QT_UI_ACTOR_STACK_SIZE*/)
+actor_handle bind_qt_run_base::create_ui_actor(my_actor::main_func&& mainFunc, size_t stackSize /*= QT_UI_ACTOR_STACK_SIZE*/)
 {
 	assert(!!_qtStrand);
 	return my_actor::create(_qtStrand, std::move(mainFunc), stackSize);
 }
 
-child_actor_handle bind_qt_run_base::create_qt_child_actor(my_actor* host, const my_actor::main_func& mainFunc, size_t stackSize /*= QT_UI_ACTOR_STACK_SIZE*/)
+child_handle bind_qt_run_base::create_ui_child_actor(my_actor* host, const my_actor::main_func& mainFunc, size_t stackSize /*= QT_UI_ACTOR_STACK_SIZE*/)
 {
 	assert(!!_qtStrand);
-	return host->create_child_actor(_qtStrand, mainFunc, stackSize);
+	return host->create_child(_qtStrand, mainFunc, stackSize);
 }
 
-child_actor_handle bind_qt_run_base::create_qt_child_actor(my_actor* host, my_actor::main_func&& mainFunc, size_t stackSize /*= QT_UI_ACTOR_STACK_SIZE*/)
+child_handle bind_qt_run_base::create_ui_child_actor(my_actor* host, my_actor::main_func&& mainFunc, size_t stackSize /*= QT_UI_ACTOR_STACK_SIZE*/)
 {
 	assert(!!_qtStrand);
-	return host->create_child_actor(_qtStrand, std::move(mainFunc), stackSize);
+	return host->create_child(_qtStrand, std::move(mainFunc), stackSize);
 }
 
 void bind_qt_run_base::start_qt_strand(io_engine& ios)
