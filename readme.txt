@@ -7,6 +7,8 @@
 
 svn url(版本保持最新):
 svn://ham2015.6655.la:1000/MyActor
+Node.js版本(支持web前端js)
+svn://ham2015.6655.la:1000/MyActorNodeJs
 
 github url:
 https://github.com/HAM-2015/CPP-Actor-framework

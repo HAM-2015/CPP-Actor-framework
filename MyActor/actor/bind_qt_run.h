@@ -210,34 +210,6 @@ protected:
 	}
 
 	template <typename Handler, typename R>
-	struct wrap_run_in_ui_handler;
-
-	template <typename Handler>
-	struct wrap_run_in_ui_handler<Handler, void>
-	{
-		template <typename H>
-		wrap_run_in_ui_handler(bind_qt_run_base* ui, H&& h)
-			:_this(ui), _handler(TRY_MOVE(h)) {}
-
-		template <typename... Args>
-		void operator()(my_actor* host, Args&&... args)
-		{
-			if (_this->run_in_ui_thread())
-			{
-				_handler(TRY_MOVE(args)...);
-			}
-			else
-			{
-				RUN_IN_QT_UI_AT(_this, host, _handler((Args&&)args...));
-			}
-		}
-
-		bind_qt_run_base* _this;
-		Handler _handler;
-		RVALUE_COPY_CONSTRUCTION(wrap_run_in_ui_handler, _this, _handler);
-	};
-
-	template <typename Handler, typename R>
 	struct wrap_run_in_ui_handler
 	{
 		template <typename H>
@@ -249,13 +221,13 @@ protected:
 		{
 			if (_this->run_in_ui_thread())
 			{
-				return _handler(TRY_MOVE(args)...);
+				return agent_result<R>::invoke(_handler, TRY_MOVE(args)...);
 			}
 			else
 			{
-				stack_obj<R> obj;
-				RUN_IN_QT_UI_AT(_this, host, obj = _handler((Args&&)args...));
-				return std::move(obj.get());
+				stack_obj<R> result;
+				RUN_IN_QT_UI_AT(_this, host, stack_agent_result::invoke(result, _handler, (Args&&)args...));
+				return stack_obj_move::move(result);
 			}
 		}
 

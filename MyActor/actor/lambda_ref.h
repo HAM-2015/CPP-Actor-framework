@@ -517,14 +517,14 @@ struct stack_obj_move
 
 struct stack_agent_result
 {
-	template <typename Handler, typename T, typename... Args>
-	static void invoke(Handler&& handler, stack_obj<T>& result, Args&&... args)
+	template <typename R, typename Handler, typename... Args>
+	static void invoke(stack_obj<R>& result, Handler&& handler, Args&&... args)
 	{
 		result.create(handler(std::forward<Args>(args)...));
 	}
 
 	template <typename Handler, typename... Args>
-	static void invoke(Handler&& handler, stack_obj<void>&, Args&&... args)
+	static void invoke(stack_obj<void>&, Handler&& handler, Args&&... args)
 	{
 		handler(std::forward<Args>(args)...);
 	}

@@ -4062,7 +4062,7 @@ public:
 	R operator()(Args&&... args) const
 	{
 		stack_obj<R> result;
-		stack_agent_result::invoke(_handler, result, std::forward<Args>(args)...);
+		stack_agent_result::invoke(result, _handler, std::forward<Args>(args)...);
 		Parent::tick_handler(_closed, _sign);
 		return stack_obj_move::move(result);
 	}
@@ -4071,7 +4071,7 @@ public:
 	R operator()(Args&&... args)
 	{
 		stack_obj<R> result;
-		stack_agent_result::invoke(_handler, result, std::forward<Args>(args)...);
+		stack_agent_result::invoke(result, _handler, std::forward<Args>(args)...);
 		Parent::tick_handler(_closed, _sign);
 		return stack_obj_move::move(result);
 	}
