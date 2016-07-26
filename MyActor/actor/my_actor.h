@@ -4025,8 +4025,9 @@ class on_callback_handler : public TrigOnceBase_
 	typedef TrigOnceBase_ Parent;
 	friend my_actor;
 public:
-	on_callback_handler(my_actor* host, Handler& h)
-		:_closed(shared_bool::new_(false)), _handler(h), _selfEarly(host), _bsign(false), _sign(&_bsign)
+	template <typename H>
+	on_callback_handler(my_actor* host, H&& h)
+		:_closed(shared_bool::new_(false)), _handler(TRY_MOVE(h)), _selfEarly(host), _bsign(false), _sign(&_bsign)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
 	}
@@ -4053,7 +4054,7 @@ public:
 
 	on_callback_handler(on_callback_handler&& s)
 		:TrigOnceBase_(std::move(s)), _closed(s._selfEarly ? s._closed : std::move(s._closed)),
-		_handler(s._handler), _selfEarly(NULL), _bsign(false), _sign(s._sign)
+		_handler(std::move(s._handler)), _selfEarly(NULL), _bsign(false), _sign(s._sign)
 	{
 		s._sign = NULL;
 	}
@@ -4090,7 +4091,7 @@ private:
 	}
 private:
 	shared_bool _closed;
-	Handler& _handler;
+	Handler _handler;
 	my_actor* const _selfEarly;
 	bool* _sign;
 	bool _bsign;
@@ -6250,10 +6251,10 @@ public:
 	@brief 创建上下文回调函数(Handler将在回调内部直接执行，可能触发线程安全问题)，直接作为回调函数使用，async_func(..., Handler self->make_on_context(...))
 	*/
 	template <typename R = void, typename Handler>
-	on_callback_handler<RM_REF(Handler), R> make_on_callback_context(Handler&& handler)
+	on_callback_handler<RM_CREF(Handler), R> make_on_callback_context(Handler&& handler)
 	{
 		assert_enter();
-		return on_callback_handler<RM_REF(Handler), R>(this, handler);
+		return on_callback_handler<RM_CREF(Handler), R>(this, TRY_MOVE(handler));
 	}
 
 	/*!
