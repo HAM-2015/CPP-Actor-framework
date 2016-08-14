@@ -9,8 +9,8 @@
 #include <QtCore/qcoreapplication.h>
 #include "wrapped_post_handler.h"
 #include "my_actor.h"
-#include "qt_strand.h"
 #include "msg_queue.h"
+#include "run_strand.h"
 #include "run_thread.h"
 
 #define QT_POST_TASK	(QEvent::MaxUser-1)
@@ -441,13 +441,13 @@ private:
 
 #ifdef ENABLE_QT_ACTOR
 template <typename Handler>
-void qt_strand::dispatch_ui(Handler&& handler)
+void qt_strand::_dispatch_ui(Handler&& handler)
 {
 	_ui->post(TRY_MOVE(handler));
 }
 
 template <typename Handler>
-void qt_strand::post_ui(Handler&& handler)
+void qt_strand::_post_ui(Handler&& handler)
 {
 	_ui->post(TRY_MOVE(handler));
 }
@@ -823,9 +823,9 @@ struct check_lost_qt_ui_sync_result
 		_res = NULL;
 	}
 private:
-	check_lost_qt_ui_sync_result(const check_lost_qt_ui_sync_result&) {}
-	void operator=(const check_lost_qt_ui_sync_result&) {}
-	void operator=(check_lost_qt_ui_sync_result&&) {}
+	check_lost_qt_ui_sync_result(const check_lost_qt_ui_sync_result&) = delete;
+	void operator=(const check_lost_qt_ui_sync_result&) = delete;
+	void operator=(check_lost_qt_ui_sync_result&&) = delete;
 private:
 	_check_lost_qt_ui_sync_result<R>* _res;
 	shared_bool _lostSign;

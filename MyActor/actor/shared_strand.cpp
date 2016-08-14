@@ -35,6 +35,9 @@ _reuMemAlloc(NULL),
 _frontTickQueue(NULL),
 _backTickQueue(NULL)
 #endif //ENABLE_NEXT_TICK
+#if (ENABLE_QT_ACTOR && ENABLE_UV_ACTOR)
+,_strandChoose(strand_default)
+#endif
 {
 	_ioEngine = NULL;
 	_strand = NULL;

@@ -673,15 +673,13 @@ private:
 		host->unlock_quit();
 		return ok;
 	}
-
-	sync_msg(const sync_msg&){};
-	void operator=(const sync_msg&){};
 private:
 	shared_strand _strand;
 	msg_list<take_wait> _takeWait;
 	msg_list<send_wait> _sendWait;
 	msg_list<NtfHandle_> _takeNtfQueue;
 	bool _closed;
+	NONE_COPY(sync_msg);
 };
 
 /*!
@@ -1266,9 +1264,6 @@ public:
 		DEBUG_OPERATION(_thrownCloseExp = false);
 	}
 private:
-	CspChannel_(const CspChannel_&){};
-	void operator=(const CspChannel_&){};
-
 	virtual void throw_close_exception() = 0;
 	virtual void throw_try_send_exception() = 0;
 	virtual void throw_timed_send_exception() = 0;
@@ -1282,6 +1277,7 @@ private:
 	bool _closed;
 protected:
 	DEBUG_OPERATION(bool _thrownCloseExp);
+	NONE_COPY(CspChannel_);
 };
 
 //////////////////////////////////////////////////////////////////////////

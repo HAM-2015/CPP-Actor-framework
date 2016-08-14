@@ -4,7 +4,7 @@
 #include <list>
 #include <functional>
 #include "io_engine.h"
-#include "shared_strand.h"
+#include "run_strand.h"
 #include "msg_queue.h"
 #include "actor_mutex.h"
 #include "scattered.h"
@@ -1559,7 +1559,7 @@ class MsgPool_ : public MsgPoolBase_
 		__space_align char _msg[sizeof(msg_type)];
 		bool _isMsg;
 	private:
-		void operator=(const msg_pck&) {}
+		void operator =(const msg_pck&) = delete;
 	};
 
 	struct pump_handler
@@ -2308,12 +2308,10 @@ private:
 	virtual size_t snap_id() = 0;
 	virtual long long host_id() = 0;
 	virtual void check_lost() = 0;
-
-	MutexBlock_(const MutexBlock_&) {}
-	void operator =(const MutexBlock_&) {}
 protected:
 	MutexBlock_() {}
 	long long actor_id(my_actor* host);
+	NONE_COPY(MutexBlock_);
 };
 
 #define __MUTEX_BLOCK_HANDLER_WRAP(__dst__, __src__, __host__)  FUNCTION_ALLOCATOR(__dst__, __src__, (reusable_alloc<>(ActorFunc_::reu_mem(__host__))))
@@ -3919,10 +3917,7 @@ private:
 		}
 	}
 
-	void operator =(const callback_handler&)
-	{
-		assert(false);
-	}
+	void operator =(const callback_handler&) = delete;
 private:
 	shared_bool _closed;
 	dst_receiver _dstRef;
@@ -4003,10 +3998,7 @@ private:
 		}
 	}
 
-	void operator =(const asio_cb_handler&)
-	{
-		assert(false);
-	}
+	void operator =(const asio_cb_handler&) = delete;
 private:
 	dst_receiver _dstRef;
 	my_actor* const _selfEarly;
@@ -4085,10 +4077,7 @@ private:
 		}
 	}
 
-	void operator =(const on_callback_handler&)
-	{
-		assert(false);
-	}
+	void operator =(const on_callback_handler&) = delete;
 private:
 	shared_bool _closed;
 	Handler _handler;
@@ -4232,10 +4221,7 @@ private:
 		}
 	}
 
-	void operator =(const sync_cb_handler& s)
-	{
-		assert(false);
-	}
+	void operator =(const sync_cb_handler& s) = delete;
 private:
 	dst_receiver _dstRef;
 	my_actor* const _selfEarly;
@@ -4447,8 +4433,6 @@ public:
 private:
 	void peel();
 	child_handle(actor_handle&& actor);
-	child_handle(const child_handle&);
-	void operator =(const child_handle&);
 private:
 	actor_handle _actor;
 	trig_handle<> _quiteAth;
@@ -4456,6 +4440,7 @@ private:
 	msg_list_shared_alloc<std::function<void()> >::iterator _athIt;
 	bool _started : 1;
 	bool _quited : 1;
+	NONE_COPY(child_handle);
 };
 //////////////////////////////////////////////////////////////////////////
 
@@ -4742,7 +4727,7 @@ class my_actor
 		DST& _dstRec;
 		bool* _sign;
 	private:
-		void operator =(const async_invoke_handler&);
+		void operator =(const async_invoke_handler&) = delete;
 	};
 
 	template <typename DST, typename ARG>
@@ -4770,7 +4755,7 @@ class my_actor
 		DST& _dstRec;
 		bool* _sign;
 	private:
-		void operator =(const async_invoke_handler&);
+		void operator =(const async_invoke_handler&) = delete;
 	};
 
 	template <typename DST, typename... ARGS>
@@ -4810,7 +4795,7 @@ class my_actor
 		std::tuple<ARGS...> _args;
 		actor_handle _sharedThis;
 	private:
-		void operator =(const trig_cb_handler&);
+		void operator =(const trig_cb_handler&) = delete;
 	};
 
 	template <typename DstRef, typename... ARGS>
@@ -4890,7 +4875,7 @@ class my_actor
 		actor_handle _sharedThis;
 		shared_bool _closed;
 	private:
-		void operator =(const trig_cb_handler3&);
+		void operator =(const trig_cb_handler3&) = delete;
 	};
 
 	template <typename Handler>
@@ -4919,7 +4904,7 @@ class my_actor
 		const int _count;
 		Handler _h;
 	private:
-		void operator =(const wrap_delay_trig&);
+		void operator =(const wrap_delay_trig&) = delete;
 	};
 
 	struct wrap_trig_run_one
@@ -4955,7 +4940,7 @@ class my_actor
 		actor_handle _lockSelf;
 		bool* _sign;
 	private:
-		void operator =(const wrap_trig_run_one&);
+		void operator =(const wrap_trig_run_one&) = delete;
 	};
 
 	struct wrap_check_trig_run_one
@@ -4993,7 +4978,7 @@ class my_actor
 		actor_handle _lockSelf;
 		bool* _sign;
 	private:
-		void operator =(const wrap_check_trig_run_one&);
+		void operator =(const wrap_check_trig_run_one&) = delete;
 	};
 
 	struct wrap_timer_handler_face
@@ -5113,6 +5098,22 @@ public:
 	static actor_handle create(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 	static actor_handle create(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
 	static actor_handle create(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor);
+
+	template <typename SharedStrand, typename MainFunc, typename NotifyFunc>
+	static actor_handle create_and_notify(SharedStrand&& actorStrand, MainFunc&& mainFunc, NotifyFunc&& notifyFunc, size_t stackSize = DEFAULT_STACKSIZE)
+	{
+		actor_handle newActor = create(TRY_MOVE(actorStrand), TRY_MOVE(mainFunc), stackSize);
+		newActor->_quitCallback.push_back(TRY_MOVE(notifyFunc));
+		return newActor;
+	}
+
+	template <typename SharedStrand, typename NotifyFunc>
+	static actor_handle create_and_notify(SharedStrand&& actorStrand, AutoStackActorFace_&& wrapActor, NotifyFunc&& notifyFunc)
+	{
+		actor_handle newActor = create(TRY_MOVE(actorStrand), std::move(wrapActor));
+		newActor->_quitCallback.push_back(TRY_MOVE(notifyFunc));
+		return newActor;
+	}
 public:
 	/*!
 	@brief 创建一个子Actor，父Actor终止时，子Actor也终止（在子Actor都完全退出后，父Actor才结束）
@@ -5410,11 +5411,8 @@ public:
 	@brief 创建另一个Actor，Actor执行完成后返回
 	*/
 	__yield_interrupt void run_child_complete(shared_strand&& actorStrand, const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
-	__yield_interrupt void run_child_complete(shared_strand&& actorStrand, main_func&& h, size_t stackSize = DEFAULT_STACKSIZE);
 	__yield_interrupt void run_child_complete(const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
-	__yield_interrupt void run_child_complete(main_func&& h, size_t stackSize = DEFAULT_STACKSIZE);
 	__yield_interrupt void run_child_complete(const shared_strand& actorStrand, const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
-	__yield_interrupt void run_child_complete(const shared_strand& actorStrand, main_func&& h, size_t stackSize = DEFAULT_STACKSIZE);
 
 	/*!
 	@brief 延时等待，Actor内部禁止使用操作系统API Sleep()
@@ -5487,17 +5485,17 @@ public:
 
 	/*!
 	@brief 使用内部定时器延时循环触发某个函数，在触发完成之前不能多次调用
-	@param ms 触发延时(毫秒)
+	@param ms 间隔延时(毫秒)
 	@param handler 触发函数
 	@param cycle 循环次数
 	*/
 	template <typename Handler>
-	void cycle_trig(int ms, Handler&& handler, size_t cycle = -1)
+	void interval_trig(int ms, Handler&& handler, size_t cycle = -1)
 	{
 		assert_enter();
 		if (ms > 0 && cycle)
 		{
-			_cycle_trig(ms, TRY_MOVE(handler), cycle);
+			_interval_trig(ms, TRY_MOVE(handler), cycle);
 		}
 		else
 		{
@@ -5506,21 +5504,34 @@ public:
 	}
 
 	/*!
+	@brief 使用内部定时器在绝对时间触发某个函数，在触发完成之前不能多次调用
+	@param us 触发时间(微秒)
+	@param handler 触发函数
+	*/
+	template <typename Handler>
+	void deadline_trig(long long us, Handler&& handler)
+	{
+		assert_enter();
+		deadline(us, TRY_MOVE(handler));
+	}
+
+	/*!
 	@brief 取消内部定时器触发
 	*/
 	void cancel_delay_trig();
 private:
 	template <typename Handler>
-	void _cycle_trig(int ms, Handler&& handler, size_t cycle)
+	void _interval_trig(int ms, Handler&& handler, size_t cycle)
 	{
 		typedef RM_CREF(Handler) Handler_;
 		timeout(ms, std::bind([this, ms, cycle](Handler_& handler)
 		{
-			CHECK_EXCEPTION(handler);
-			if (cycle-1)
+			BEGIN_CHECK_EXCEPTION;
+			if (!handler() && cycle-1)
 			{
-				_cycle_trig(ms, std::move(handler), cycle-1);
+				_interval_trig(ms, std::move(handler), cycle - 1);
 			}
+			END_CHECK_EXCEPTION;
 		}, TRY_MOVE(handler)));
 	}
 public:
@@ -8575,6 +8586,18 @@ private:
 		_timerStateHandle = _timer->timeout(_timerStateTime, shared_from_this());
 	}
 
+	template <typename Handler>
+	void deadline(long long us, Handler&& handler)
+	{
+		assert(_timerStateCompleted);
+		assert(!_timerStateCb);
+		typedef wrap_timer_handler<RM_CREF(Handler)> wrap_type;
+		_timerStateCompleted = false;
+		_timerStateCb = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
+		_timerStateHandle = _timer->timeout(us, shared_from_this(), true);
+		_timerStateTime = us > _timerStateHandle._beginStamp ? us - _timerStateHandle._beginStamp : 0;
+	}
+
 	void timeout_handler();
 	void cancel_timer();
 	void suspend_timer();
@@ -8654,45 +8677,26 @@ private:
 
 //////////////////////////////////////////////////////////////////////////
 
-struct ActorGo_
-{
-	ActorGo_(const shared_strand& strand, size_t stackSize = MAX_STACKSIZE);
-	ActorGo_(shared_strand&& strand, size_t stackSize = MAX_STACKSIZE);
-	ActorGo_(io_engine& ios, size_t stackSize = MAX_STACKSIZE);
-
-	template <typename Handler>
-	actor_handle operator -(AutoStackActor_<Handler>&& wrapActor)
-	{
-		assert(_strand);
-		actor_handle actor = my_actor::create(std::move(_strand), std::move(wrapActor));
-		actor->run();
-		return actor;
-	}
-
-	template <typename Handler>
-	actor_handle operator -(Handler&& handler)
-	{
-		assert(_strand);
-		actor_handle actor = my_actor::create(std::move(_strand), TRY_MOVE(handler), _stackSize);
-		actor->run();
-		return actor;
-	}
-
-	shared_strand _strand;
-	size_t _stackSize;
-	NONE_COPY(ActorGo_);
-};
-
 struct ActorReadyGo_
 {
 	ActorReadyGo_(const shared_strand& strand, size_t stackSize = MAX_STACKSIZE);
 	ActorReadyGo_(shared_strand&& strand, size_t stackSize = MAX_STACKSIZE);
 	ActorReadyGo_(io_engine& ios, size_t stackSize = MAX_STACKSIZE);
+	ActorReadyGo_(const shared_strand& strand, std::function<void()>&& notify, size_t stackSize = MAX_STACKSIZE);
+	ActorReadyGo_(const shared_strand& strand, const std::function<void()>& notify, size_t stackSize = MAX_STACKSIZE);
+	ActorReadyGo_(shared_strand&& strand, std::function<void()>&& notify, size_t stackSize = MAX_STACKSIZE);
+	ActorReadyGo_(shared_strand&& strand, const std::function<void()>& notify, size_t stackSize = MAX_STACKSIZE);
+	ActorReadyGo_(io_engine& ios, std::function<void()>&& notify, size_t stackSize = MAX_STACKSIZE);
+	ActorReadyGo_(io_engine& ios, const std::function<void()>& notify, size_t stackSize = MAX_STACKSIZE);
 
 	template <typename Handler>
 	actor_handle operator -(AutoStackActor_<Handler>&& wrapActor)
 	{
 		assert(_strand);
+		if (_notify)
+		{
+			return my_actor::create_and_notify(std::move(_strand), (AutoStackActorFace_&&)wrapActor, std::move(_notify));
+		}
 		return my_actor::create(std::move(_strand), std::move(wrapActor));
 	}
 
@@ -8700,12 +8704,42 @@ struct ActorReadyGo_
 	actor_handle operator -(Handler&& handler)
 	{
 		assert(_strand);
+		if (_notify)
+		{
+			return my_actor::create_and_notify(std::move(_strand), std::move(handler), std::move(_notify), _stackSize);
+		}
 		return my_actor::create(std::move(_strand), TRY_MOVE(handler), _stackSize);
 	}
 
 	shared_strand _strand;
+	std::function<void()> _notify;
 	size_t _stackSize;
 	NONE_COPY(ActorReadyGo_);
+};
+
+struct ActorGo_ : protected ActorReadyGo_
+{
+	template <typename... Args>
+	ActorGo_(Args&&... args)
+		:ActorReadyGo_(TRY_MOVE(args)...) {}
+
+	template <typename Handler>
+	actor_handle operator -(AutoStackActor_<Handler>&& wrapActor)
+	{
+		actor_handle actor = ActorReadyGo_::operator-(std::move(wrapActor));
+		actor->run();
+		return actor;
+	}
+
+	template <typename Handler>
+	actor_handle operator -(Handler&& handler)
+	{
+		actor_handle actor = ActorReadyGo_::operator-(TRY_MOVE(handler));
+		actor->run();
+		return actor;
+	}
+
+	NONE_COPY(ActorGo_);
 };
 
 #define go(...) ActorGo_(__VA_ARGS__)-

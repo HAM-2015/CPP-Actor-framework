@@ -209,7 +209,7 @@ void ContextPool_::cleanThread()
 				break;
 			}
 			_clearWait = true;
-			if (std::cv_status::no_timeout == _clearVar.wait_for(ul, std::chrono::seconds(CONTEXT_MIN_CLEAR_CYCLE)))
+			if (std::cv_status::no_timeout == _clearVar.wait_for(ul, std::chrono::seconds(CONTEXT_MIN_CLEAR_CYCLE)) || !_clearWait)
 			{
 				break;
 			}
@@ -226,7 +226,7 @@ void ContextPool_::cleanThread()
 					break;
 				}
 				_clearWait = true;
-				if (std::cv_status::no_timeout == _clearVar.wait_for(ul, std::chrono::milliseconds(1)))
+				if (std::cv_status::no_timeout == _clearVar.wait_for(ul, std::chrono::milliseconds(1)) || !_clearWait)
 				{
 					break;
 				}

@@ -66,6 +66,14 @@ public:
 #endif
 	}
 
+	template <typename Handler, typename Callback>
+	run_thread(Handler&& h, Callback&& cb)
+		:run_thread(std::bind([](RM_CREF(Handler)& h, RM_CREF(Callback)& cb)
+	{
+		h();
+		cb();
+	}, TRY_MOVE(h), TRY_MOVE(cb))) {}
+
 	~run_thread();
 private:
 #ifdef _WIN32
@@ -81,6 +89,7 @@ public:
 	static thread_id this_thread_id();
 	static size_t cpu_core_number();
 	static size_t cpu_thread_number();
+	static void sleep(int ms);
 private:
 #ifdef _WIN32
 	HANDLE _handle;

@@ -35,7 +35,7 @@ TimerBoost_::~TimerBoost_()
 	delete (timer_type*)_timer;
 }
 
-TimerBoost_::timer_handle TimerBoost_::timeout(unsigned long long us, async_timer&& host)
+TimerBoost_::timer_handle TimerBoost_::timeout(long long us, async_timer&& host, bool deadline)
 {
 	if (!_lockStrand)
 	{
@@ -45,11 +45,10 @@ TimerBoost_::timer_handle TimerBoost_::timeout(unsigned long long us, async_time
 #endif
 	}
 	assert(_lockStrand->running_in_this_thread());
-	assert(us < 0x80000000LL * 1000);
 	timer_handle timerHandle;
 	timerHandle._null = false;
 	timerHandle._beginStamp = get_tick_us();
-	unsigned long long et = (timerHandle._beginStamp + us) & -256;
+	long long et = deadline ? us : (timerHandle._beginStamp + us) & -256;
 	if (et >= _extMaxTick)
 	{
 		_extMaxTick = et;
@@ -65,15 +64,15 @@ TimerBoost_::timer_handle TimerBoost_::timeout(unsigned long long us, async_time
 		_looping = true;
 		assert(_handlerQueue.size() == 1);
 		_extFinishTime = et;
-		timer_loop(us);
+		timer_loop(et, et - timerHandle._beginStamp);
 	}
-	else if (et < _extFinishTime)
+	else if ((unsigned long long)et < (unsigned long long)_extFinishTime)
 	{//定时期限前于当前定时器期限，取消后重新计时
 		boost::system::error_code ec;
 		((timer_type*)_timer)->cancel(ec);
 		_timerCount++;
 		_extFinishTime = et;
-		timer_loop(us);
+		timer_loop(et, et - timerHandle._beginStamp);
 	}
 	return timerHandle;
 }
@@ -111,14 +110,14 @@ void TimerBoost_::cancel(timer_handle& th)
 	}
 }
 
-void TimerBoost_::timer_loop(unsigned long long us)
+void TimerBoost_::timer_loop(long long abs, long long rel)
 {
 	int tc = ++_timerCount;
 #ifdef DISABLE_BOOST_TIMER
-	((timer_type*)_timer)->async_wait(micseconds(us), tc);
+	((timer_type*)_timer)->async_wait(micseconds(abs), micseconds(rel), tc);
 #else
 	boost::system::error_code ec;
-	((timer_type*)_timer)->expires_from_now(micseconds(us), ec);
+	((timer_type*)_timer)->expires_from_now(micseconds(rel), ec);
 #ifdef ENABLE_POST_FRONT
 	((timer_type*)_timer)->async_wait(_lockStrand->wrap_asio_front([this, tc](const boost::system::error_code&)
 #else
@@ -155,14 +154,14 @@ void TimerBoost_::event_handler(int tc)
 	if (tc == _timerCount)
 	{
 		_extFinishTime = 0;
-		unsigned long long nt = get_tick_us();
+		long long nt = get_tick_us();
 		while (!_handlerQueue.empty())
 		{
 			auto iter = _handlerQueue.begin();
 			if (iter->first > nt + 500)
 			{
 				_extFinishTime = iter->first;
-				timer_loop(iter->first - nt);
+				timer_loop(_extFinishTime, _extFinishTime - nt);
 				return;
 			}
 			else

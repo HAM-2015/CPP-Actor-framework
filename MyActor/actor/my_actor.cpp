@@ -285,11 +285,6 @@ CheckPumpLost_::~CheckPumpLost_()
 
 //////////////////////////////////////////////////////////////////////////
 
-child_handle::child_handle(const child_handle&)
-{
-	assert(false);
-}
-
 child_handle::child_handle(child_handle&& s)
 :_started(false), _quited(true)
 {
@@ -309,11 +304,6 @@ child_handle::child_handle(actor_handle&& actor)
 child_handle::child_handle()
 :_started(false), _quited(true)
 {
-}
-
-void child_handle::operator=(const child_handle&)
-{
-	assert(false);
 }
 
 void child_handle::operator =(child_handle&& s)
@@ -1449,15 +1439,6 @@ void my_actor::suspend_guard::unlock()
 }
 //////////////////////////////////////////////////////////////////////////
 
-ActorGo_::ActorGo_(const shared_strand& strand, size_t stackSize)
-: _strand(strand), _stackSize(stackSize) {}
-
-ActorGo_::ActorGo_(shared_strand&& strand, size_t stackSize)
-: _strand(std::move(strand)), _stackSize(stackSize) {}
-
-ActorGo_::ActorGo_(io_engine& ios, size_t stackSize)
-: _strand(boost_strand::create(ios)), _stackSize(stackSize) {}
-
 ActorReadyGo_::ActorReadyGo_(const shared_strand& strand, size_t stackSize)
 : _strand(strand), _stackSize(stackSize) {}
 
@@ -1467,6 +1448,23 @@ ActorReadyGo_::ActorReadyGo_(shared_strand&& strand, size_t stackSize)
 ActorReadyGo_::ActorReadyGo_(io_engine& ios, size_t stackSize)
 : _strand(boost_strand::create(ios)), _stackSize(stackSize) {}
 
+ActorReadyGo_::ActorReadyGo_(const shared_strand& strand, std::function<void()>&& notify, size_t stackSize)
+: _strand(strand), _notify(std::move(notify)), _stackSize(stackSize) {}
+
+ActorReadyGo_::ActorReadyGo_(shared_strand&& strand, std::function<void()>&& notify, size_t stackSize)
+: _strand(std::move(strand)), _notify(std::move(notify)), _stackSize(stackSize) {}
+
+ActorReadyGo_::ActorReadyGo_(const shared_strand& strand, const std::function<void()>& notify, size_t stackSize)
+: _strand(strand), _notify(notify), _stackSize(stackSize) {}
+
+ActorReadyGo_::ActorReadyGo_(shared_strand&& strand, const std::function<void()>& notify, size_t stackSize)
+: _strand(std::move(strand)), _notify(notify), _stackSize(stackSize) {}
+
+ActorReadyGo_::ActorReadyGo_(io_engine& ios, std::function<void()>&& notify, size_t stackSize)
+: _strand(boost_strand::create(ios)), _notify(std::move(notify)), _stackSize(stackSize) {}
+
+ActorReadyGo_::ActorReadyGo_(io_engine& ios, const std::function<void()>& notify, size_t stackSize)
+: _strand(boost_strand::create(ios)), _notify(notify), _stackSize(stackSize) {}
 //////////////////////////////////////////////////////////////////////////
 
 class my_actor::actor_run
@@ -2408,15 +2406,7 @@ void my_actor::children_resume(std::list<child_handle>& actorHandles)
 void my_actor::run_child_complete(shared_strand&& actorStrand, const main_func& h, size_t stackSize)
 {
 	assert_enter();
-	child_handle actorHandle = create_child(std::move(actorStrand), h, stackSize);
-	child_run(actorHandle);
-	child_wait_quit(actorHandle);
-}
-
-void my_actor::run_child_complete(shared_strand&& actorStrand, main_func&& h, size_t stackSize)
-{
-	assert_enter();
-	child_handle actorHandle = create_child(std::move(actorStrand), std::move(h), stackSize);
+	child_handle actorHandle = create_child(std::move(actorStrand), wrap_ref_handler(h), stackSize);
 	child_run(actorHandle);
 	child_wait_quit(actorHandle);
 }
@@ -2426,19 +2416,9 @@ void my_actor::run_child_complete(const main_func& h, size_t stackSize)
 	run_child_complete(self_strand(), h, stackSize);
 }
 
-void my_actor::run_child_complete(main_func&& h, size_t stackSize)
-{
-	run_child_complete(self_strand(), std::move(h), stackSize);
-}
-
 void my_actor::run_child_complete(const shared_strand& actorStrand, const main_func& h, size_t stackSize)
 {
 	run_child_complete(shared_strand(actorStrand), h, stackSize);
-}
-
-void my_actor::run_child_complete(const shared_strand& actorStrand, main_func&& h, size_t stackSize)
-{
-	run_child_complete(shared_strand(actorStrand), std::move(h), stackSize);
 }
 
 void my_actor::sleep(int ms)

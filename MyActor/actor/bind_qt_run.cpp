@@ -81,9 +81,10 @@ bind_qt_run_base* bind_qt_run_base::ui_tls::pop_stack(ui_tls* uiTls)
 
 bool bind_qt_run_base::ui_tls::running_in_this_thread(bind_qt_run_base* s)
 {
-	ui_tls* uiTls = (ui_tls*)io_engine::getTlsValue(QT_UI_TLS_INDEX);
-	if (uiTls)
+	void** const tlsBuff = io_engine::getTlsValueBuff();
+	if (tlsBuff && tlsBuff[QT_UI_TLS_INDEX])
 	{
+		ui_tls* uiTls = (ui_tls*)tlsBuff[QT_UI_TLS_INDEX];
 		for (bind_qt_run_base* const ele : uiTls->_uiStack)
 		{
 			if (ele == s)
@@ -142,6 +143,7 @@ bind_qt_run_base::bind_qt_run_base()
 bind_qt_run_base::~bind_qt_run_base()
 {
 	assert(run_in_ui_thread());
+	assert(!running_in_this_thread());
 	assert(0 == _waitCount);
 	assert(0 == _taskCount);
 	assert(!_waitClose);
@@ -152,7 +154,10 @@ bind_qt_run_base::~bind_qt_run_base()
 	delete _readyQueue;
 	delete _waitQueue;
 #ifdef ENABLE_QT_ACTOR
-	_qtStrand.reset();
+	if (_qtStrand)
+	{
+		_qtStrand->release();
+	}
 	ui_tls::reset();
 #endif
 }
@@ -239,9 +244,10 @@ void bind_qt_run_base::run_one_task()
 #endif
 	while (!_readyQueue->empty())
 	{
-		_readyQueue->front()->invoke();
-		_reuMem.deallocate(_readyQueue->front());
+		wrap_handler_face* h = _readyQueue->front();
 		_readyQueue->pop_front();
+		h->invoke();
+		_reuMem.deallocate(h);
 	}
 	_queueMutex.lock();
 	if (!_waitQueue->empty())

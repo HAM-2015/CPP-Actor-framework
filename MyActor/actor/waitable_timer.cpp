@@ -26,27 +26,25 @@ WaitableTimer_::~WaitableTimer_()
 	CloseHandle(_timerHandle);
 }
 
-void WaitableTimer_::appendEvent(long long us, WaitableTimerEvent_* h)
+void WaitableTimer_::appendEvent(long long abs, long long rel, WaitableTimerEvent_* h)
 {
-	assert(us >= 0);
 	assert(h->_timerHandle._null);
 	h->_timerHandle._null = false;
-	unsigned long long et = us + get_tick_us();
 	std::lock_guard<std::mutex> lg(_ctrlMutex);
-	if (et >= _extMaxTick)
+	if (abs >= _extMaxTick)
 	{
-		_extMaxTick = et;
-		h->_timerHandle._queueNode = _eventsQueue.insert(_eventsQueue.end(), std::make_pair(et, h));
+		_extMaxTick = abs;
+		h->_timerHandle._queueNode = _eventsQueue.insert(_eventsQueue.end(), std::make_pair(abs, h));
 	}
 	else
 	{
-		h->_timerHandle._queueNode = _eventsQueue.insert(std::make_pair(et, h));
+		h->_timerHandle._queueNode = _eventsQueue.insert(std::make_pair(abs, h));
 	}
-	if (et < _extFinishTime)
+	if ((unsigned long long)abs < (unsigned long long)_extFinishTime)
 	{
-		_extFinishTime = et;
+		_extFinishTime = abs;
 		LARGE_INTEGER sleepTime;
-		sleepTime.QuadPart = -(LONGLONG)(us * 10);
+		sleepTime.QuadPart = -(LONGLONG)(rel * 10);
 		SetWaitableTimer(_timerHandle, &sleepTime, 0, NULL, NULL, FALSE);
 	}
 }
@@ -59,7 +57,7 @@ void WaitableTimer_::timerThread()
 	{
 		if (WAIT_OBJECT_0 == WaitForSingleObject(_timerHandle, INFINITE) && !_exited)
 		{
-			unsigned long long nt = get_tick_us();
+			long long nt = get_tick_us();
 			std::lock_guard<std::mutex> lg(_ctrlMutex);
 			_extFinishTime = -1;
 			while (!_eventsQueue.empty())
@@ -111,25 +109,23 @@ WaitableTimer_::~WaitableTimer_()
 	close(_timerFd);
 }
 
-void WaitableTimer_::appendEvent(long long us, WaitableTimerEvent_* h)
+void WaitableTimer_::appendEvent(long long abs, long long rel, WaitableTimerEvent_* h)
 {
-	assert(us >= 0);
 	assert(h->_timerHandle._null);
 	h->_timerHandle._null = false;
-	unsigned long long et = us + get_tick_us();
 	std::lock_guard<std::mutex> lg(_ctrlMutex);
-	if (et >= _extMaxTick)
+	if (abs >= _extMaxTick)
 	{
-		_extMaxTick = et;
-		h->_timerHandle._queueNode = _eventsQueue.insert(_eventsQueue.end(), std::make_pair(et, h));
+		_extMaxTick = abs;
+		h->_timerHandle._queueNode = _eventsQueue.insert(_eventsQueue.end(), std::make_pair(abs, h));
 	}
 	else
 	{
-		h->_timerHandle._queueNode = _eventsQueue.insert(std::make_pair(et, h));
+		h->_timerHandle._queueNode = _eventsQueue.insert(std::make_pair(abs, h));
 	}
-	if (et < _extFinishTime)
+	if ((unsigned long long)abs < (unsigned long long)_extFinishTime)
 	{
-		_extFinishTime = et;
+		_extFinishTime = abs;
 		struct itimerspec newValue;
 		newValue.it_interval = { 0, 0 };
 		newValue.it_value.tv_sec = (__time_t)(_extFinishTime / 1000000);
@@ -146,12 +142,12 @@ void WaitableTimer_::timerThread()
 	pthread_attr_init(&threadAttr);
 	pthread_attr_setschedpolicy(&threadAttr, SCHED_FIFO);
 	pthread_attr_setschedparam(&threadAttr, &pm);
-	unsigned long long exp = 0;
+	long long exp = 0;
 	while (true)
 	{
 		if (sizeof(exp) == read(_timerFd, &exp, sizeof(exp)) && !_exited)
 		{
-			unsigned long long nt = get_tick_us();
+			long long nt = get_tick_us();
 			std::lock_guard<std::mutex> lg(_ctrlMutex);
 			_extFinishTime = -1;
 			while (!_eventsQueue.empty())
@@ -239,12 +235,12 @@ void WaitableTimerEvent_::cancel(boost::system::error_code& ec)
 	}
 }
 
-void WaitableTimerEvent_::async_wait(long long us, int tc)
+void WaitableTimerEvent_::async_wait(long long abs, long long rel, int tc)
 {
 	assert(_triged);
 	_triged = false;
 	_tcId = tc;
-	_ios._waitableTimer->appendEvent(us, this);
+	_ios._waitableTimer->appendEvent(abs, rel, this);
 }
 
 #endif

@@ -35,45 +35,45 @@ typedef std::shared_ptr<boost_strand> shared_strand;
 
 #endif //ENABLE_NEXT_TICK
 
-#define UI_POST()\
+#define CHOOSE_POST()\
 if (_strand)\
 {\
 	_strand->post(RUN_HANDLER); \
 }\
 else\
 {\
-	post_ui(TRY_MOVE(handler)); \
+	post_choose(TRY_MOVE(handler)); \
 };
 
-#define UI_DISPATCH()\
+#define CHOOSE_DISPATCH()\
 if (_strand)\
 {\
 	_strand->dispatch(RUN_HANDLER); \
 }\
 else\
 {\
-	dispatch_ui(TRY_MOVE(handler)); \
+	dispatch_choose(TRY_MOVE(handler)); \
 };
 
 #ifdef ENABLE_POST_FRONT
-#define UI_POST_FRONT()\
+#define CHOOSE_POST_FRONT()\
 if (_strand)\
 {\
 	_strand->post_front(RUN_HANDLER); \
 }\
 else\
 {\
-	post_ui(TRY_MOVE(handler)); \
+	post_choose(TRY_MOVE(handler)); \
 };
 
-#define UI_DISPATCH_FRONT()\
+#define CHOOSE_DISPATCH_FRONT()\
 if (_strand)\
 {\
 	_strand->dispatch_front(RUN_HANDLER); \
 }\
 else\
 {\
-	dispatch_ui(TRY_MOVE(handler)); \
+	dispatch_choose(TRY_MOVE(handler)); \
 };
 #endif //ENABLE_POST_FRONT
 
@@ -90,14 +90,14 @@ else\
 #endif //ENABLE_NEXT_TICK
 
 
-#define UI_TICK()\
+#define CHOOSE_TICK()\
 if (_strand)\
 {\
 	APPEND_TICK(); \
 }\
 else\
 {\
-	post_ui(TRY_MOVE(handler)); \
+	post_choose(TRY_MOVE(handler)); \
 }
 
 #ifdef DISABLE_BOOST_TIMER
@@ -143,7 +143,7 @@ class boost_strand
 
 		mutable H _handler;
 	private:
-		void operator =(const handler_capture&);
+		void operator =(const handler_capture&) = delete;
 	};
 
 	struct wrap_next_tick_base
@@ -251,7 +251,7 @@ class boost_strand
 		mutable H _h;
 		mutable CB _cb;
 	private:
-		void operator=(const wrap_async_invoke&);
+		void operator =(const wrap_async_invoke&) = delete;
 	};
 
 	template <typename H, typename CB>
@@ -278,7 +278,7 @@ class boost_strand
 		mutable H _h;
 		mutable CB _cb;
 	private:
-		void operator=(const wrap_async_invoke_void&);
+		void operator =(const wrap_async_invoke_void&) = delete;
 	};
 
 	friend my_actor;
@@ -286,8 +286,15 @@ class boost_strand
 	friend ActorTimer_;
 	friend TimerBoost_;
 protected:
+	enum strand_choose
+	{
+		strand_default,
+		strand_ui,
+		strand_uv
+	};
+protected:
 	boost_strand();
-#ifdef ENABLE_QT_ACTOR
+#if (ENABLE_QT_ACTOR || ENABLE_UV_ACTOR)
 	virtual ~boost_strand();
 #else
 	~boost_strand();
@@ -322,8 +329,8 @@ public:
 	template <typename Handler>
 	void dispatch(Handler&&  handler)
 	{
-#ifdef ENABLE_QT_ACTOR
-		UI_DISPATCH();
+#if (ENABLE_QT_ACTOR || ENABLE_UV_ACTOR)
+		CHOOSE_DISPATCH();
 #else
 		_strand->dispatch(RUN_HANDLER);
 #endif
@@ -335,8 +342,8 @@ public:
 	template <typename Handler>
 	void post(Handler&& handler)
 	{
-#ifdef ENABLE_QT_ACTOR
-		UI_POST();
+#if (ENABLE_QT_ACTOR || ENABLE_UV_ACTOR)
+		CHOOSE_POST();
 #else
 		_strand->post(RUN_HANDLER);
 #endif
@@ -366,8 +373,8 @@ public:
 	template <typename Handler>
 	void dispatch_front(Handler&&  handler)
 	{
-#ifdef ENABLE_QT_ACTOR
-		UI_DISPATCH_FRONT();
+#if (ENABLE_QT_ACTOR || ENABLE_UV_ACTOR)
+		CHOOSE_DISPATCH_FRONT();
 #else
 		_strand->dispatch_front(RUN_HANDLER);
 #endif
@@ -379,8 +386,8 @@ public:
 	template <typename Handler>
 	void post_front(Handler&& handler)
 	{
-#ifdef ENABLE_QT_ACTOR
-		UI_POST_FRONT();
+#if (ENABLE_QT_ACTOR || ENABLE_UV_ACTOR)
+		CHOOSE_POST_FRONT();
 #else
 		_strand->post_front(RUN_HANDLER);
 #endif
@@ -395,8 +402,8 @@ public:
 	{
 		assert(running_in_this_thread());
 		assert(is_running());//错误, strand还没开始第一个post就已经再投递tick
-#ifdef ENABLE_QT_ACTOR
-		UI_TICK();
+#if (ENABLE_QT_ACTOR || ENABLE_UV_ACTOR)
+		CHOOSE_TICK();
 #else
 		APPEND_TICK();
 #endif
@@ -647,6 +654,52 @@ private:
 	template <typename Handler>
 	void dispatch_ui(Handler&& handler);
 #endif
+#ifdef ENABLE_UV_ACTOR
+	template <typename Handler>
+	void post_uv(Handler&& handler);
+
+	template <typename Handler>
+	void dispatch_uv(Handler&& handler);
+#endif
+#if (ENABLE_QT_ACTOR || ENABLE_UV_ACTOR)
+	template <typename Handler>
+	void post_choose(Handler&& handler)
+	{
+#if (ENABLE_QT_ACTOR && ENABLE_UV_ACTOR)
+		if (strand_ui == _strandChoose)
+		{
+			post_ui(TRY_MOVE(handler));
+		}
+		else
+		{
+			post_uv(TRY_MOVE(handler));
+		}
+#elif ENABLE_QT_ACTOR
+		post_ui(TRY_MOVE(handler));
+#elif ENABLE_UV_ACTOR
+		post_uv(TRY_MOVE(handler));
+#endif
+	}
+
+	template <typename Handler>
+	void dispatch_choose(Handler&& handler)
+	{
+#if (ENABLE_QT_ACTOR && ENABLE_UV_ACTOR)
+		if (strand_ui == _strandChoose)
+		{
+			dispatch_ui(TRY_MOVE(handler));
+		}
+		else
+		{
+			dispatch_uv(TRY_MOVE(handler));
+		}
+#elif ENABLE_QT_ACTOR
+		dispatch_ui(TRY_MOVE(handler));
+#elif ENABLE_UV_ACTOR
+		dispatch_uv(TRY_MOVE(handler));
+#endif
+	}
+#endif
 protected:
 #ifdef ENABLE_NEXT_TICK
 	bool ready_empty();
@@ -659,6 +712,10 @@ protected:
 	msg_queue<wrap_next_tick_base*, mem_alloc2<>>* _backTickQueue;
 	msg_queue<wrap_next_tick_base*, mem_alloc2<>>* _frontTickQueue;
 #endif //ENABLE_NEXT_TICK
+protected:
+#if (ENABLE_QT_ACTOR && ENABLE_UV_ACTOR)
+	strand_choose _strandChoose;
+#endif
 protected:
 	ActorTimer_* _actorTimer;
 	TimerBoost_* _timerBoost;
@@ -738,9 +795,11 @@ public:
 
 #undef SPACE_SIZE
 #undef RUN_HANDLER
-#undef UI_POST
-#undef UI_DISPATCH
+#undef CHOOSE_TICK
+#undef CHOOSE_POST
+#undef CHOOSE_DISPATCH
+#undef CHOOSE_POST_FRONT
+#undef CHOOSE_DISPATCH_FRONT
 #undef APPEND_TICK
-#undef UI_NEXT_TICK
 
 #endif

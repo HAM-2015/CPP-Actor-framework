@@ -92,6 +92,7 @@
 
 #define ACTOR_TLS_INDEX 0
 #define QT_UI_TLS_INDEX 1
+#define UV_TLS_INDEX 2
 
 static_assert(0 < MEM_PAGE_SIZE && MEM_PAGE_SIZE % (4 kB) == 0, "");
 static_assert(0 < MEM_POOL_LENGTH && MEM_POOL_LENGTH < 10000000, "");

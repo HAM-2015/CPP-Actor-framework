@@ -1,7 +1,7 @@
 #ifndef __ACTOR_MUTEX_H
 #define __ACTOR_MUTEX_H
 
-#include "shared_strand.h"
+#include "run_strand.h"
 #include "msg_queue.h"
 #include "scattered.h"
 #include "lambda_ref.h"

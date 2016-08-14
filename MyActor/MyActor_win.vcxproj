@@ -241,6 +241,12 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="actor\uv_strand.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="actor\waitable_timer.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
@@ -265,6 +271,7 @@
     <ClInclude Include="actor\msg_queue.h" />
     <ClInclude Include="actor\my_actor.h" />
     <ClInclude Include="actor\qt_strand.h" />
+    <ClInclude Include="actor\run_strand.h" />
     <ClInclude Include="actor\run_thread.h" />
     <ClInclude Include="actor\scattered.h" />
     <ClInclude Include="actor\shared_strand.h" />
@@ -274,6 +281,7 @@
     <ClInclude Include="actor\trace.h" />
     <ClInclude Include="actor\try_move.h" />
     <ClInclude Include="actor\tuple_option.h" />
+    <ClInclude Include="actor\uv_strand.h" />
     <ClInclude Include="actor\waitable_timer.h" />
     <ClInclude Include="actor\wrapped_capture.h" />
     <ClInclude Include="actor\wrapped_dispatch_handler.h" />

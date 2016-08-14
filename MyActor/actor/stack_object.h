@@ -21,8 +21,6 @@ public:
 		destroy();
 	}
 private:
-	stack_obj(const stack_obj&){};
-	void operator =(const stack_obj&){};
 	void* operator new(size_t){ return NULL; };
 	void operator delete(void*){};
 public:
@@ -95,6 +93,7 @@ private:
 private:
 	__space_align char _space[sizeof(type)];
 	bool _null;
+	NONE_COPY(stack_obj);
 };
 
 template <typename Type>
@@ -112,8 +111,6 @@ public:
 		assert(_null);
 	}
 private:
-	stack_obj(const stack_obj&){};
-	void operator =(const stack_obj&){};
 	void* operator new(size_t){ return NULL; };
 	void operator delete(void*){};
 public:
@@ -170,14 +167,13 @@ public:
 private:
 	__space_align char _space[sizeof(type)];
 	DEBUG_OPERATION(bool _null);
+	NONE_COPY(stack_obj);
 };
 
 template <bool AutoDestroy>
 class stack_obj<void, AutoDestroy>
 {
 private:
-	stack_obj(const stack_obj&){};
-	void operator =(const stack_obj&){};
 	void* operator new(size_t){ return NULL; };
 	void operator delete(void*){};
 public:
@@ -211,6 +207,7 @@ public:
 	}
 
 	bool _null;
+	NONE_COPY(stack_obj);
 };
 
 template <typename Type>

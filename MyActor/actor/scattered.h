@@ -112,8 +112,8 @@ struct BreakOfScope_
 
 	Handler& _handler;
 private:
-	BreakOfScope_(const BreakOfScope_&){};
-	void operator =(const BreakOfScope_&){}
+	BreakOfScope_(const BreakOfScope_&) = delete;
+	void operator =(const BreakOfScope_&) = delete;
 };
 
 template <typename Handler>
@@ -133,8 +133,8 @@ public:
 	BreakOfScope2_(BreakOfScope2_&& s)
 		:_handler(s._handler) { assert(false);}
 private:
-	BreakOfScope2_(const BreakOfScope2_&){};
-	void operator =(const BreakOfScope2_&){}
+	BreakOfScope2_(const BreakOfScope2_&) = delete;
+	void operator =(const BreakOfScope2_&) = delete;
 };
 
 struct MakeBreakOfScope2_
@@ -216,8 +216,8 @@ struct MakeBreakOfScope2_
 //禁用对象拷贝
 #define NONE_COPY(__T__) \
 	private:\
-	__T__(const __T__&); \
-	void operator =(const __T__&);
+	__T__(const __T__&) = delete; \
+	void operator =(const __T__&) = delete;
 
 #ifdef _MSC_VER
 
@@ -269,6 +269,30 @@ if (__catched) {
 
 #define begin_RUN_IN_THREAD_STACK(__host__)	(__host__)->run_in_thread_stack([&] {
 #define end_RUN_IN_THREAD_STACK() })
+
+//////////////////////////////////////////////////////////////////////////
+
+#define begin_CODE_GRINDER_AT(__host__, __dispatch_strand__) {\
+	my_actor::quit_guard __qg(__host__); \
+	shared_strand grinder_dispatcher = __dispatch_strand__; \
+	(__host__)->run_child_complete(grinder_dispatcher, [&](my_actor* self) {
+
+#define begin_CODE_GRINDER() begin_CODE_GRINDER_AT(self, self->self_strand())
+#define code_grinder_BEGIN self->run_child_complete(grinder_dispatcher, [&](my_actor* self) {
+#define code_grinder_END  }, MAX_STACKSIZE);
+#define end_CODE_GRINDER() }, MAX_STACKSIZE);}
+
+//////////////////////////////////////////////////////////////////////////
+
+#define begin_CODE_CUT_AT(__host__, __dispatch_strand__) {\
+	my_actor::quit_guard __qg(__host__); \
+	my_actor* const ___host = __host__; \
+	shared_strand cut_dispatcher = __dispatch_strand__; \
+	___host->async_send(cut_dispatcher, [&] {
+
+#define begin_CODE_CUT() begin_CODE_CUT_AT(self, self->self_strand())
+#define CODE_CUT });___host->async_send(cut_dispatcher, [&] {
+#define end_CODE_CUT() });}
 
 /*!
 @brief 这个类在测试消息传递时使用

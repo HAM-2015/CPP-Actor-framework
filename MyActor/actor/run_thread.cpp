@@ -18,7 +18,9 @@ run_thread::~run_thread()
 DWORD WINAPI run_thread::thread_exec(LPVOID p)
 {
 	handler_face* handler = (handler_face*)p;
+	BEGIN_CHECK_EXCEPTION;
 	handler->invoke();
+	END_CHECK_EXCEPTION;
 	return 0;
 }
 
@@ -108,6 +110,11 @@ size_t run_thread::cpu_thread_number()
 	return (size_t)info.dwNumberOfProcessors;
 }
 
+void run_thread::sleep(int ms)
+{
+	Sleep(ms);
+}
+
 #elif __linux__
 
 #include <unistd.h>
@@ -128,7 +135,9 @@ run_thread::~run_thread()
 void* run_thread::thread_exec(void* p)
 {
 	handler_face* handler = (handler_face*)p;
+	BEGIN_CHECK_EXCEPTION;
 	handler->invoke();
+	END_CHECK_EXCEPTION;
 	return NULL;
 }
 
@@ -228,6 +237,12 @@ size_t run_thread::cpu_thread_number()
 {
 	return (size_t)sysconf(_SC_NPROCESSORS_ONLN);
 }
+
+void run_thread::sleep(int ms)
+{
+	usleep(ms * 1000);
+}
+
 #endif
 
 bool run_thread::thread_id::operator<(const thread_id& s) const

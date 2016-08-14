@@ -8,6 +8,7 @@
 #include <set>
 #include <sstream>
 #include <iostream> 
+#include <mutex>
 #include "try_move.h"
 #ifdef TRACE_ANDROID_LOG
 #include <android/log.h>
@@ -169,10 +170,56 @@ struct TraceMatch_<std::map<K, V>>
 	}
 };
 
+template <typename K, typename V>
+struct TraceMatch_<std::multimap<K, V>>
+{
+	static void trace(_Tracestreambase& out, const std::multimap<K, V>& s)
+	{
+		out << "{";
+		int l = (int)s.size();
+		auto it = s.begin();
+		for (int i = 0; i < l - 1; i++, it++)
+		{
+			TraceMatch_<RM_CREF(K)>::trace(out, it->first);
+			out << ": ";
+			TraceMatch_<RM_CREF(V)>::trace(out, it->second);
+			out << ", ";
+		}
+		if (l)
+		{
+			TraceMatch_<RM_CREF(K)>::trace(out, it->first);
+			out << ": ";
+			TraceMatch_<RM_CREF(V)>::trace(out, it->second);
+		}
+		out << "}";
+	}
+};
+
 template <typename T>
 struct TraceMatch_<std::set<T>>
 {
 	static void trace(_Tracestreambase& out, const std::set<T>& s)
+	{
+		out << "{";
+		int l = (int)s.size();
+		auto it = s.begin();
+		for (int i = 0; i < l - 1; i++, it++)
+		{
+			TraceMatch_<RM_CREF(T)>::trace(out, *it);
+			out << ", ";
+		}
+		if (l)
+		{
+			TraceMatch_<RM_CREF(T)>::trace(out, *it);
+		}
+		out << "}";
+	}
+};
+
+template <typename T>
+struct TraceMatch_<std::multiset<T>>
+{
+	static void trace(_Tracestreambase& out, const std::multiset<T>& s)
 	{
 		out << "{";
 		int l = (int)s.size();

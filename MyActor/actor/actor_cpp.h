@@ -6,6 +6,7 @@
 CHECK_SELF 启用检测当前代码运行在哪个Actor下
 ENABLE_QT_UI 启用QT-UI
 ENABLE_QT_ACTOR 启用在QT-UI线程中运行Actor(在ENABLE_QT_UI下使用)
+ENABLE_UV_ACTOR 启用在Node.js uv线程中运行Actor
 ENABLE_NEXT_TICK 启用next_tick加速
 ENABLE_CHECK_LOST 启用通知句柄丢失检测
 ENABLE_DUMP_STACK 启用栈溢出检测
@@ -33,6 +34,7 @@ ENABLE_TLS_CHECK_SELF 启用TLS技术检测当前代码运行在哪个Actor下
 #include "shared_strand.cpp"
 #include "strand_ex.cpp"
 #include "trace_stack.cpp"
+#include "uv_strand.cpp"
 #include "waitable_timer.cpp"
 
 #endif

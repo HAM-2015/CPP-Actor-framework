@@ -35,9 +35,7 @@ struct mem_alloc_base
 	size_t _nodeCount;
 	size_t _poolMaxSize;
 	size_t _freeNumber;
-private:
-	mem_alloc_base(const mem_alloc_base&){}
-	void operator=(const mem_alloc_base&){}
+	NONE_COPY(mem_alloc_base);
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -82,10 +80,33 @@ struct mem_alloc_mt : protected MUTEX, public mem_alloc_base
 		typedef mem_alloc_mt<_Other, null_mutex> other;
 	};
 
+#if (_DEBUG || DEBUG)
+	struct hold_space
+	{
+		void operator =(node_space* link)
+		{
+			_link = link;
+		}
+
+		operator node_space*()
+		{
+			return _link;
+		}
+
+		__space_align char _[MEM_ALIGN(sizeof(DATA), sizeof(void*))];
+		node_space* _link;
+	};
+#endif
+
 	union BUFFER
 	{
+#if (_DEBUG || DEBUG)
+		__space_align char _space[MEM_ALIGN(sizeof(DATA), sizeof(void*)) + sizeof(void*)];
+		hold_space _link;
+#else
 		__space_align char _space[MEM_ALIGN(sizeof(DATA), sizeof(void*))];
 		node_space* _link;
+#endif
 	};
 
 	struct node_space

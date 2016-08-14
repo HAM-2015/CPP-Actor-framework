@@ -4,7 +4,7 @@
 #ifdef DISABLE_BOOST_TIMER
 #include "msg_queue.h"
 #include "mem_pool.h"
-#include "shared_strand.h"
+#include "run_strand.h"
 #include "run_thread.h"
 
 class ActorTimer_;
@@ -13,7 +13,7 @@ class WaitableTimerEvent_;
 
 class WaitableTimer_
 {
-	typedef msg_multimap<unsigned long long, WaitableTimerEvent_*> handler_queue;
+	typedef msg_multimap<long long, WaitableTimerEvent_*> handler_queue;
 
 	struct timer_handle
 	{
@@ -32,12 +32,12 @@ private:
 	WaitableTimer_();
 	~WaitableTimer_();
 private:
-	void appendEvent(long long us, WaitableTimerEvent_* h);
+	void appendEvent(long long abs, long long rel, WaitableTimerEvent_* h);
 	void removeEvent(timer_handle& th);
 	void timerThread();
 private:
-	unsigned long long _extMaxTick;
-	unsigned long long _extFinishTime;
+	long long _extMaxTick;
+	long long _extFinishTime;
 	handler_queue _eventsQueue;
 	std::mutex _ctrlMutex;
 	run_thread _timerThread;
@@ -61,7 +61,7 @@ private:
 private:
 	void eventHandler();
 	void cancel(boost::system::error_code& ec);
-	void async_wait(long long us, int tc);
+	void async_wait(long long abs, long long rel, int tc);
 private:
 	io_engine& _ios;
 	WaitableTimer_::timer_handle _timerHandle;

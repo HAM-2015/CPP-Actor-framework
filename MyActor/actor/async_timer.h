@@ -2,13 +2,14 @@
 #define __ASYNC_TIMER_H
 
 #include <algorithm>
-#include "shared_strand.h"
+#include "run_strand.h"
 #include "msg_queue.h"
 #include "mem_pool.h"
 #include "stack_object.h"
 
 class AsyncTimer_;
 class qt_strand;
+class uv_strand;
 class boost_strand;
 typedef std::shared_ptr<AsyncTimer_> async_timer;
 
@@ -20,10 +21,11 @@ class TimerBoost_
 	: public TimerBoostCompletedEventFace_
 #endif
 {
-	typedef msg_multimap<unsigned long long, async_timer> handler_queue;
+	typedef msg_multimap<long long, async_timer> handler_queue;
 
 	friend AsyncTimer_;
 	friend qt_strand;
+	friend uv_strand;
 	friend boost_strand;
 
 	class timer_handle
@@ -48,9 +50,10 @@ private:
 	@brief 开始计时
 	@param us 微秒
 	@param host 准备计时的AsyncTimer_
+	@param deadline 是否为绝对时间
 	@return 计时句柄，用于cancel
 	*/
-	timer_handle timeout(unsigned long long us, async_timer&& host);
+	timer_handle timeout(long long us, async_timer&& host, bool deadline);
 
 	/*!
 	@brief 取消计时
@@ -60,7 +63,7 @@ private:
 	/*!
 	@brief timer循环
 	*/
-	void timer_loop(unsigned long long us);
+	void timer_loop(long long abs, long long rel);
 
 	/*!
 	@brief timer事件
@@ -74,8 +77,8 @@ private:
 	std::weak_ptr<boost_strand>& _weakStrand;
 	shared_strand _lockStrand;
 	handler_queue _handlerQueue;
-	unsigned long long _extMaxTick;
-	unsigned long long _extFinishTime;
+	long long _extMaxTick;
+	long long _extFinishTime;
 #ifdef DISABLE_BOOST_TIMER
 	stack_obj<boost::asio::io_service::work, false> _lockIos;
 #endif
@@ -124,7 +127,7 @@ private:
 	~AsyncTimer_();
 public:
 	/*!
-	@brief 开启一个定时循环，在依赖的strand线程中调用
+	@brief 开启一个定时，在依赖的strand线程中调用
 	*/
 	template <typename Handler>
 	long long timeout(int tm, Handler&& handler)
@@ -133,7 +136,21 @@ public:
 		assert(!_handler);
 		typedef wrap_handler<RM_CREF(Handler)> wrap_type;
 		_handler = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
-		_timerHandle = _timerBoost.timeout(tm * 1000, _weakThis.lock());
+		_timerHandle = _timerBoost.timeout(tm * 1000, _weakThis.lock(), false);
+		return _timerHandle._beginStamp;
+	}
+
+	/*!
+	@brief 开启一个绝对定时，在依赖的strand线程中调用
+	*/
+	template <typename Handler>
+	long long deadline(long long us, Handler&& handler)
+	{
+		assert(self_strand()->running_in_this_thread());
+		assert(!_handler);
+		typedef wrap_handler<RM_CREF(Handler)> wrap_type;
+		_handler = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
+		_timerHandle = _timerBoost.timeout(us, _weakThis.lock(), true);
 		return _timerHandle._beginStamp;
 	}
 
