@@ -433,7 +433,6 @@ void msg_handle_base::lost_msg()
 		{
 			_waiting = false;
 			ActorFunc_::pull_yield(_hostActor);
-			return;
 		}
 	}
 }
@@ -548,18 +547,18 @@ void MsgPoolVoid_::push_msg(const actor_handle& hostActor)
 {
 	if (_strand->running_in_this_thread())
 	{
-		post_msg(hostActor);
+		send_msg(ActorFunc_::shared_from_this(hostActor.get()));
 	}
 	else
 	{
 		_strand->post(std::bind([](actor_handle& hostActor, const std::shared_ptr<MsgPoolVoid_>& sharedThis)
 		{
-			sharedThis->send_msg(hostActor);
+			sharedThis->send_msg(std::move(hostActor));
 		}, hostActor, _weakThis.lock()));
 	}
 }
 
-void MsgPoolVoid_::_lost_msg(actor_handle& hostActor)
+void MsgPoolVoid_::_lost_msg(actor_handle&& hostActor)
 {
 	if (_waiting)
 	{
@@ -575,29 +574,18 @@ void MsgPoolVoid_::_lost_msg(actor_handle& hostActor)
 	}
 }
 
-void MsgPoolVoid_::lost_msg(const actor_handle& hostActor)
-{
-	if (!_closed)
-	{
-		_strand->try_tick(std::bind([](actor_handle& hostActor, const std::shared_ptr<MsgPoolVoid_>& sharedThis)
-		{
-			sharedThis->_lost_msg(hostActor);
-		}, hostActor, _weakThis.lock()));
-	}
-}
-
 void MsgPoolVoid_::lost_msg(actor_handle&& hostActor)
 {
 	if (!_closed)
 	{
 		_strand->try_tick(std::bind([](actor_handle& hostActor, const std::shared_ptr<MsgPoolVoid_>& sharedThis)
 		{
-			sharedThis->_lost_msg(hostActor);
+			sharedThis->_lost_msg(std::move(hostActor));
 		}, std::move(hostActor), _weakThis.lock()));
 	}
 }
 
-void MsgPoolVoid_::send_msg(actor_handle& hostActor)
+void MsgPoolVoid_::send_msg(actor_handle&& hostActor)
 {
 	if (_waiting)
 	{
@@ -606,22 +594,6 @@ void MsgPoolVoid_::send_msg(actor_handle& hostActor)
 		assert(0 == _msgBuff.length());
 		_sendCount++;
 		_msgPump->receive_msg(std::move(hostActor));
-	}
-	else
-	{
-		_msgBuff.push_back();
-	}
-}
-
-void MsgPoolVoid_::post_msg(const actor_handle& hostActor)
-{
-	if (_waiting)
-	{
-		_waiting = false;
-		assert(_msgPump);
-		assert(0 == _msgBuff.length());
-		_sendCount++;
-		_msgPump->receive_msg_tick(hostActor);
 	}
 	else
 	{
@@ -949,21 +921,6 @@ void MsgPumpVoid_::_lost_msg()
 	}
 }
 
-void MsgPumpVoid_::lost_msg(const actor_handle& hostActor)
-{
-	if (_strand->running_in_this_thread())
-	{
-		_lost_msg();
-	}
-	else
-	{
-		_strand->post(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPumpVoid_>& sharedThis)
-		{
-			sharedThis->_lost_msg();
-		}, hostActor, _weakThis.lock()));
-	}
-}
-
 void MsgPumpVoid_::lost_msg(actor_handle&& hostActor)
 {
 	if (_strand->running_in_this_thread())
@@ -1107,21 +1064,6 @@ void MsgPumpVoid_::stop_waiting()
 	_dstRec = NULL;
 }
 
-void MsgPumpVoid_::receive_msg(const actor_handle& hostActor)
-{
-	if (_strand->running_in_this_thread())
-	{
-		receiver();
-	}
-	else
-	{
-		_strand->post(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPumpVoid_>& sharedThis)
-		{
-			sharedThis->receiver();
-		}, hostActor, _weakThis.lock()));
-	}
-}
-
 void MsgPumpVoid_::receive_msg(actor_handle&& hostActor)
 {
 	if (_strand->running_in_this_thread())
@@ -1135,22 +1077,6 @@ void MsgPumpVoid_::receive_msg(actor_handle&& hostActor)
 			sharedThis->receiver();
 		}, std::move(hostActor), _weakThis.lock()));
 	}
-}
-
-void MsgPumpVoid_::receive_msg_tick(const actor_handle& hostActor)
-{
-	_strand->try_tick(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPumpVoid_>& sharedThis)
-	{
-		sharedThis->receiver();
-	}, hostActor, _weakThis.lock()));
-}
-
-void MsgPumpVoid_::receive_msg_tick(actor_handle&& hostActor)
-{
-	_strand->try_tick(std::bind([](const actor_handle& hostActor, const std::shared_ptr<MsgPumpVoid_>& sharedThis)
-	{
-		sharedThis->receiver();
-	}, std::move(hostActor), _weakThis.lock()));
 }
 
 bool MsgPumpVoid_::isDisconnected()
@@ -1167,19 +1093,11 @@ void TrigOnceBase_::tick_handler(bool* sign) const
 	reset();
 }
 
-void TrigOnceBase_::tick_handler(const shared_bool& closed, bool* sign) const
+void TrigOnceBase_::tick_handler(shared_bool& closed, bool* sign) const
 {
 	assert(!_pIsTrig->exchange(true));
 	assert(_hostActor);
 	_hostActor->tick_handler(closed, sign);
-	reset();
-}
-
-void TrigOnceBase_::tick_handler(shared_bool&& closed, bool* sign) const
-{
-	assert(!_pIsTrig->exchange(true));
-	assert(_hostActor);
-	_hostActor->tick_handler(std::move(closed), sign);
 	reset();
 }
 
@@ -2525,32 +2443,32 @@ void my_actor::dispatch_handler(bool* sign)
 
 void my_actor::tick_handler(bool* sign)
 {
-	_strand->try_tick(wrap_trig_run_one(shared_from_this(), sign));
+	if (_strand->running_in_this_thread())
+	{
+		if (!_quited)
+		{
+			wrap_trig_run_one::run_one(this, sign);
+		}
+	}
+	else
+	{
+		_strand->post(wrap_trig_run_one(shared_from_this(), sign));
+	}
 }
 
-void my_actor::tick_handler(const shared_bool& closed, bool* sign)
+void my_actor::tick_handler(shared_bool& closed, bool* sign)
 {
-	_strand->try_tick(wrap_check_trig_run_one(closed, shared_from_this(), sign));
-}
-
-void my_actor::tick_handler(shared_bool&& closed, bool* sign)
-{
-	_strand->try_tick(wrap_check_trig_run_one(TRY_MOVE(closed), shared_from_this(), sign));
-}
-
-void my_actor::next_tick_handler(bool* sign)
-{
-	_strand->next_tick(wrap_trig_run_one(shared_from_this(), sign));
-}
-
-void my_actor::next_tick_handler(const shared_bool& closed, bool* sign)
-{
-	_strand->next_tick(wrap_check_trig_run_one(closed, shared_from_this(), sign));
-}
-
-void my_actor::next_tick_handler(shared_bool&& closed, bool* sign)
-{
-	_strand->next_tick(wrap_check_trig_run_one(std::move(closed), shared_from_this(), sign));
+	if (_strand->running_in_this_thread())
+	{
+		if (!_quited && !closed)
+		{
+			wrap_check_trig_run_one::run_one(this, closed, sign);
+		}
+	}
+	else
+	{
+		_strand->post(wrap_check_trig_run_one(closed, shared_from_this(), sign));
+	}
 }
 
 const shared_strand& my_actor::self_strand()
@@ -3073,7 +2991,7 @@ void my_actor::switch_pause_play(std::function<void(bool)>&& h)
 void my_actor::notify_trig_sign(int id)
 {
 	assert(id >= 0 && id < 8 * sizeof(void*));
-	_strand->try_tick(std::bind([id](const actor_handle& shared_this)
+	_strand->distribute(std::bind([id](const actor_handle& shared_this)
 	{
 		my_actor* const self = shared_this.get();
 		if (!self->_quited)
@@ -3130,26 +3048,20 @@ void my_actor::append_quit_notify(const std::function<void()>& h)
 
 void my_actor::append_quit_notify(std::function<void()>&& h)
 {
-	if (_strand->running_in_this_thread())
+	_strand->distribute(std::bind([](const actor_handle& shared_this, std::function<void()>& h)
 	{
-		if (_exited)
+		my_actor* const self = shared_this.get();
+		if (self->_exited)
 		{
-			DEBUG_OPERATION(size_t yc = yield_count());
+			DEBUG_OPERATION(size_t yc = self->yield_count());
 			CHECK_EXCEPTION(h);
-			assert(yield_count() == yc);
+			assert(self->yield_count() == yc);
 		}
 		else
 		{
-			_quitCallback.push_back(std::move(h));
+			self->_quitCallback.push_back(std::move(h));
 		}
-	}
-	else
-	{
-		_strand->post(std::bind([](const actor_handle& shared_this, std::function<void()>& h)
-		{
-			shared_this->append_quit_notify(std::move(h));
-		}, shared_from_this(), std::move(h)));
-	}
+	}, shared_from_this(), std::move(h)));
 }
 
 void my_actor::append_quit_executor(const std::function<void()>& h)
@@ -3159,26 +3071,20 @@ void my_actor::append_quit_executor(const std::function<void()>& h)
 
 void my_actor::append_quit_executor(std::function<void()>&& h)
 {
-	if (_strand->running_in_this_thread())
+	_strand->distribute(std::bind([](const actor_handle& shared_this, std::function<void()>& h)
 	{
-		if (_exited)
+		my_actor* const self = shared_this.get();
+		if (self->_exited)
 		{
-			DEBUG_OPERATION(size_t yc = yield_count());
+			DEBUG_OPERATION(size_t yc = self->yield_count());
 			CHECK_EXCEPTION(h);
-			assert(yield_count() == yc);
+			assert(self->yield_count() == yc);
 		}
 		else
 		{
-			_quitCallback.push_front(std::move(h));
+			self->_quitCallback.push_front(std::move(h));
 		}
-	}
-	else
-	{
-		_strand->post(std::bind([](const actor_handle& shared_this, std::function<void()>& h)
-		{
-			shared_this->append_quit_executor(std::move(h));
-		}, shared_from_this(), std::move(h)));
-	}
+	}, shared_from_this(), std::move(h)));
 }
 
 void my_actor::actors_start_run(const std::list<actor_handle>& anotherActors)

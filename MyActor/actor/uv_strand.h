@@ -11,12 +11,12 @@ class uv_strand;
 typedef std::shared_ptr<uv_strand> shared_uv_strand;
 
 #define BEGIN_CLOSE_UV(__uv_strand__) \
-if (__uv_strand__ && !(__uv_strand__)->released() && !(__uv_strand__)->is_wait_close()) {\
-{ uv_strand* const ___strand = (__uv_strand__).get();
+if (__uv_strand__ && !(__uv_strand__)->released() && !(__uv_strand__)->is_wait_close()) { \
+uv_strand* const ___uv_strand = (__uv_strand__).get(); {
 
-#define WAIT_CLOSE_UV() ___strand->enter_wait_close();}
+#define WAIT_CLOSE_UV() };___uv_strand->async_check_close([&]{
 
-#define END_CLOSE_UV() }
+#define END_CLOSE_UV() });}
 
 class uv_strand : public boost_strand
 {
@@ -71,7 +71,7 @@ private:
 	uv_strand();
 	~uv_strand();
 public:
-	static shared_uv_strand create(io_engine& ioEngine, uv_loop_t* uvLoop = NULL);
+	static shared_uv_strand create(io_engine& ioEngine, uv_loop_t* uvLoop = uv_default_loop());
 	void release();
 	bool released();
 	shared_strand clone();
@@ -113,6 +113,26 @@ public:
 	}
 
 	std::function<void()> wrap_check_close();
+
+	template <typename Handler>
+	void async_check_close(Handler&& handler)
+	{
+		assert(in_this_ios());
+		if (_waitCount)
+		{
+			_waitClose = true;
+			typedef RM_CREF(Handler) Handler_;
+			setImmediate(std::bind([this](Handler_& handler)
+			{
+				async_check_close(std::move(handler));
+			}, TRY_MOVE(handler)));
+		}
+		else
+		{
+			enter_wait_close();
+			handler();
+		}
+	}
 public:
 	template <typename Handler>
 	bool noTopCall(Handler&& handler)
@@ -128,12 +148,12 @@ public:
 	}
 
 	template <typename Handler>
-	static void setImmediate(Handler&& handler, uv_loop_t* uvLoop = NULL)
+	static void setImmediate(Handler&& handler, uv_loop_t* uvLoop = uv_default_loop())
 	{
 		typedef wrap_handler<RM_CREF(Handler)> handler_type;
 		uv_work_t* uvReq = new uv_work_t;
 		uvReq->data = new(malloc(sizeof(handler_type)))handler_type(TRY_MOVE(handler));
-		uv_queue_work(uvLoop ? uvLoop : uv_default_loop(), uvReq, [](uv_work_t*){}, [](uv_work_t* uv_op, int status)
+		uv_queue_work(uvLoop, uvReq, [](uv_work_t*){}, [](uv_work_t* uv_op, int status)
 		{
 			((handler_type*)uv_op->data)->invoke();
 			free(uv_op->data);

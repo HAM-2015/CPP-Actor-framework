@@ -20,8 +20,11 @@ http://www.oschina.net/code/snippet_2274073_45577
 ftp url:
 ftp://ham2015.6655.la/files/MyActor/
 
+2016-08-18
+添加Node.Js与C++扩展模块之间Actor交互(测试Node.Js版本6.2.2).
+
 2016-08-09
-添加可以在Node.Js C++扩展动态库uv线程内运行Actor.
+添加可以在Node.Js C++扩展动态库uv线程内运行Actor(测试Node.Js版本6.2.2).
 
 2016-03-26
 移植到arm-android(Linux-Kernel-3.4.0+)平台(包括 QT For Android 异步UI驱动).

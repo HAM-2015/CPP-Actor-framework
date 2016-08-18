@@ -78,6 +78,9 @@
     <ClCompile Include="actor\uv_strand.cpp">
       <Filter>源文件\actor</Filter>
     </ClCompile>
+    <ClCompile Include="actor\bind_node_run.cpp">
+      <Filter>源文件\actor</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="actor\actor_timer.h">
@@ -177,6 +180,9 @@
       <Filter>头文件\actor</Filter>
     </ClInclude>
     <ClInclude Include="actor\run_strand.h">
+      <Filter>头文件\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="actor\bind_node_run.h">
       <Filter>头文件\actor</Filter>
     </ClInclude>
   </ItemGroup>

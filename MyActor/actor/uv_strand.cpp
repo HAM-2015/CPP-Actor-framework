@@ -90,6 +90,7 @@ bool uv_strand::uv_tls::running_in_this_thread(uv_strand* s)
 uv_strand::uv_strand()
 {
 	_uvLoop = NULL;
+	_waitCount = 0;
 	_locked = false;
 	_doRunWait = false;
 	_doRunSign = false;
@@ -113,7 +114,7 @@ shared_uv_strand uv_strand::create(io_engine& ioEngine, uv_loop_t* uvLoop)
 {
 	shared_uv_strand res(new uv_strand);
 	res->_ioEngine = &ioEngine;
-	res->_uvLoop = uvLoop ? uvLoop : uv_default_loop();
+	res->_uvLoop = uvLoop;
 	res->_threadID = run_thread::this_thread_id();
 	res->_actorTimer = new ActorTimer_(res);
 	res->_timerBoost = new TimerBoost_(res);
@@ -129,6 +130,7 @@ void uv_strand::release()
 	assert(!_doRunWait);
 	assert(!_doRunSign);
 	assert(!_waitClose);
+	assert(!_waitCount);
 	assert(_readyQueue->empty());
 	assert(_waitQueue->empty());
 	if (_uvReq->data)
