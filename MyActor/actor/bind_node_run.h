@@ -731,6 +731,15 @@ static v8::Local<v8::Function> make_js_call_cpp_once(v8::Isolate* isolate, CastH
 //////////////////////////////////////////////////////////////////////////
 
 /*!
+@brief nodejs初始化的时候注册，让cpp可以以全局方式调用js
+*/
+#define NODE_REGIST_GLOBAL()\
+	NODE_SET_METHOD(exports, "regist_global", [](const v8::FunctionCallbackInfo<v8::Value>& args){\
+	js_global::_global = v8::Persistent<v8::Function, v8::CopyablePersistentTraits<v8::Function>>(args.GetIsolate(), v8::Local<v8::Function>::Cast(args[0])); });
+
+//////////////////////////////////////////////////////////////////////////
+
+/*!
 @brief 构造一个C++调用nodejs端方法的对象，必须在Actor内部使用
 */
 class cpp_call_js
@@ -738,7 +747,9 @@ class cpp_call_js
 public:
 	struct result_undefined {};
 public:
+	cpp_call_js();
 	cpp_call_js(v8::Isolate* isolate, const shared_uv_strand& uvStrand, v8::Local<v8::Value> callback, v8::Local<v8::Value> recv = v8::Local<v8::Value>());
+	cpp_call_js(v8::Isolate* isolate, const shared_uv_strand& uvStrand, const v8::Persistent<v8::Function, v8::CopyablePersistentTraits<v8::Function>>& callback, v8::Local<v8::Value> recv = v8::Local<v8::Value>());
 	cpp_call_js(v8::Isolate* isolate, const shared_uv_strand& uvStrand, v8::Local<v8::Value> object, const char* funcName);
 	~cpp_call_js();
 public:
@@ -933,6 +944,15 @@ private:
 	v8::Persistent<v8::Value, v8::CopyablePersistentTraits<v8::Value>> _recv;
 	v8::Persistent<v8::Function, v8::CopyablePersistentTraits<v8::Function>> _callback;
 	RVALUE_COPY_CONSTRUCTION3(cpp_call_js, _uvStrand, _recv, _callback);
+};
+//////////////////////////////////////////////////////////////////////////
+
+struct js_global
+{
+	static void install(v8::Isolate* isolate, const shared_uv_strand& strand);
+	static void uninstall();
+	static v8::Persistent<v8::Function, v8::CopyablePersistentTraits<v8::Function>> _global;
+	static cpp_call_js global;
 };
 
 #endif

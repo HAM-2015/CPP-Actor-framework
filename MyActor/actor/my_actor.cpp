@@ -2991,20 +2991,36 @@ void my_actor::switch_pause_play(std::function<void(bool)>&& h)
 void my_actor::notify_trig_sign(int id)
 {
 	assert(id >= 0 && id < 8 * sizeof(void*));
-	_strand->distribute(std::bind([id](const actor_handle& shared_this)
+	if (_strand->running_in_this_thread())
 	{
-		my_actor* const self = shared_this.get();
-		if (!self->_quited)
+		if (!_quited)
 		{
 			const size_t mask = (size_t)1 << id;
-			self->_trigSignMask |= mask;
-			if (mask & self->_waitingTrigMask)
+			_trigSignMask |= mask;
+			if (mask & _waitingTrigMask)
 			{
-				self->_waitingTrigMask ^= mask;
-				self->pull_yield();
+				_waitingTrigMask ^= mask;
+				pull_yield();
 			}
 		}
-	}, shared_from_this()));
+	}
+	else
+	{
+		_strand->post(std::bind([id](const actor_handle& shared_this)
+		{
+			my_actor* const self = shared_this.get();
+			if (!self->_quited)
+			{
+				const size_t mask = (size_t)1 << id;
+				self->_trigSignMask |= mask;
+				if (mask & self->_waitingTrigMask)
+				{
+					self->_waitingTrigMask ^= mask;
+					self->pull_yield();
+				}
+			}
+		}, shared_from_this()));
+	}
 }
 
 void my_actor::reset_trig_sign(int id)
@@ -3048,20 +3064,32 @@ void my_actor::append_quit_notify(const std::function<void()>& h)
 
 void my_actor::append_quit_notify(std::function<void()>&& h)
 {
-	_strand->distribute(std::bind([](const actor_handle& shared_this, std::function<void()>& h)
+	if (_strand->running_in_this_thread())
 	{
-		my_actor* const self = shared_this.get();
-		if (self->_exited)
+		if (_exited)
 		{
-			DEBUG_OPERATION(size_t yc = self->yield_count());
 			CHECK_EXCEPTION(h);
-			assert(self->yield_count() == yc);
 		}
 		else
 		{
-			self->_quitCallback.push_back(std::move(h));
+			_quitCallback.push_back(std::move(h));
 		}
-	}, shared_from_this(), std::move(h)));
+	}
+	else
+	{
+		_strand->post(std::bind([](const actor_handle& shared_this, std::function<void()>& h)
+		{
+			my_actor* const self = shared_this.get();
+			if (self->_exited)
+			{
+				CHECK_EXCEPTION(h);
+			}
+			else
+			{
+				self->_quitCallback.push_back(std::move(h));
+			}
+		}, shared_from_this(), std::move(h)));
+	}
 }
 
 void my_actor::append_quit_executor(const std::function<void()>& h)
@@ -3071,20 +3099,32 @@ void my_actor::append_quit_executor(const std::function<void()>& h)
 
 void my_actor::append_quit_executor(std::function<void()>&& h)
 {
-	_strand->distribute(std::bind([](const actor_handle& shared_this, std::function<void()>& h)
+	if (_strand->running_in_this_thread())
 	{
-		my_actor* const self = shared_this.get();
-		if (self->_exited)
+		if (_exited)
 		{
-			DEBUG_OPERATION(size_t yc = self->yield_count());
 			CHECK_EXCEPTION(h);
-			assert(self->yield_count() == yc);
 		}
 		else
 		{
-			self->_quitCallback.push_front(std::move(h));
+			_quitCallback.push_front(std::move(h));
 		}
-	}, shared_from_this(), std::move(h)));
+	}
+	else
+	{
+		_strand->post(std::bind([](const actor_handle& shared_this, std::function<void()>& h)
+		{
+			my_actor* const self = shared_this.get();
+			if (self->_exited)
+			{
+				CHECK_EXCEPTION(h);
+			}
+			else
+			{
+				self->_quitCallback.push_front(std::move(h));
+			}
+		}, shared_from_this(), std::move(h)));
+	}
 }
 
 void my_actor::actors_start_run(const std::list<actor_handle>& anotherActors)

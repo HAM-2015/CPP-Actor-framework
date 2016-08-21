@@ -1,13 +1,13 @@
-²¢·¢Âß¼­¿ØÖÆ¿ò¼Ü(Actor Model)£¬ÊÊÓÃÓÚ¸´ÔÓÒµÎñÂß¼­£¬ÓÐÎÊÌâ»òBUG·´À¡ÖÁ591170887@qq.com;
-ÒÀÀµÓÚboost 1.5x;
-ÔÝÎÞ¿ª·¢ÎÄµµ£¬µÈ×÷ÕßÈÏÎª¿ÉÒÔ¶¨ÐÍºó¿ª·ÅÎÄµµ;
-Ä¿Ç°½öÔÚ VS2013,VS2015,MINGW49_x86_x64,GCC4.9-linux_x86_x64,arm-linux-eabi(hf)-gcc49 ÖÐ²âÊÔ;
-¿ÉÒÔÓÃÀ´¹¹½¨·þÎñ¶Ë/¿Í»§¶Ë£¬Ò²¿ÉÒÔÓÃÔÚÓëÍøÂçÎÞ¹ØµÄ³ÌÐòÖÐ£¨ÀýÈçUI¿ØÖÆÂß¼­£©;
-¿ÉÒÔÈÎÒâÊ¹ÓÃ»ò±à¼­Ô´Âë£¬¶ø²»ÐèÍ¨Öª×÷Õß£¬µ±È»×÷ÕßÒ²²»¶ÔÊ¹ÓÃ±¾¿ò¼ÜÔì³ÉµÄÈÎºÎËðÊ§¸ºÔð.
+å¹¶å‘é€»è¾‘æŽ§åˆ¶æ¡†æž¶(Actor Model)ï¼Œé€‚ç”¨äºŽå¤æ‚ä¸šåŠ¡é€»è¾‘ï¼Œæœ‰é—®é¢˜æˆ–BUGåé¦ˆè‡³591170887@qq.com;
+ä¾èµ–äºŽboost 1.5x;
+æš‚æ— å¼€å‘æ–‡æ¡£ï¼Œç­‰ä½œè€…è®¤ä¸ºå¯ä»¥å®šåž‹åŽå¼€æ”¾æ–‡æ¡£;
+ç›®å‰ä»…åœ¨ VS2013,VS2015,MINGW49_x86_x64,GCC4.9-linux_x86_x64,arm-linux-eabi(hf)-gcc49 ä¸­æµ‹è¯•;
+å¯ä»¥ç”¨æ¥æž„å»ºæœåŠ¡ç«¯/å®¢æˆ·ç«¯ï¼Œä¹Ÿå¯ä»¥ç”¨åœ¨ä¸Žç½‘ç»œæ— å…³çš„ç¨‹åºä¸­ï¼ˆä¾‹å¦‚UIæŽ§åˆ¶é€»è¾‘ï¼‰;
+å¯ä»¥ä»»æ„ä½¿ç”¨æˆ–ç¼–è¾‘æºç ï¼Œè€Œä¸éœ€é€šçŸ¥ä½œè€…ï¼Œå½“ç„¶ä½œè€…ä¹Ÿä¸å¯¹ä½¿ç”¨æœ¬æ¡†æž¶é€ æˆçš„ä»»ä½•æŸå¤±è´Ÿè´£.
 
-svn url(°æ±¾±£³Ö×îÐÂ):
+svn url(ç‰ˆæœ¬ä¿æŒæœ€æ–°):
 svn://ham2015.6655.la:1000/MyActor
-Node.js°æ±¾(Ö§³ÖwebÇ°¶Ëjs)
+Node.jsç‰ˆæœ¬(æ”¯æŒwebå‰ç«¯js)
 svn://ham2015.6655.la:1000/MyActorNodeJs
 
 github url:
@@ -21,117 +21,117 @@ ftp url:
 ftp://ham2015.6655.la/files/MyActor/
 
 2016-08-18
-Ìí¼ÓNode.JsÓëC++À©Õ¹Ä£¿éÖ®¼äActor½»»¥(²âÊÔNode.Js°æ±¾6.2.2).
+æ·»åŠ Node.Jsä¸ŽC++æ‰©å±•æ¨¡å—ä¹‹é—´Actoräº¤äº’(æµ‹è¯•Node.Jsç‰ˆæœ¬6.2.2).
 
 2016-08-09
-Ìí¼Ó¿ÉÒÔÔÚNode.Js C++À©Õ¹¶¯Ì¬¿âuvÏß³ÌÄÚÔËÐÐActor(²âÊÔNode.Js°æ±¾6.2.2).
+æ·»åŠ å¯ä»¥åœ¨Node.Js C++æ‰©å±•åŠ¨æ€åº“uvçº¿ç¨‹å†…è¿è¡ŒActor(æµ‹è¯•Node.Jsç‰ˆæœ¬6.2.2).
 
 2016-03-26
-ÒÆÖ²µ½arm-android(Linux-Kernel-3.4.0+)Æ½Ì¨(°üÀ¨ QT For Android Òì²½UIÇý¶¯).
+ç§»æ¤åˆ°arm-android(Linux-Kernel-3.4.0+)å¹³å°(åŒ…æ‹¬ QT For Android å¼‚æ­¥UIé©±åŠ¨).
 
 2016-03-15
-ÒÆÖ²µ½arm-linuxÆ½Ì¨.
+ç§»æ¤åˆ°arm-linuxå¹³å°.
 
 2015-12-28
-Ìí¼ÓlinuxÆ½Ì¨ÏÂµÄ×Ô¶¯Õ»¿Õ¼äÉìËõ¹ÜÀí.
+æ·»åŠ linuxå¹³å°ä¸‹çš„è‡ªåŠ¨æ ˆç©ºé—´ä¼¸ç¼©ç®¡ç†.
 
 2015-12-25
-Ìí¼ÓwindowsÆ½Ì¨ÏÂµÄ×Ô¶¯Õ»¿Õ¼äÉìËõ¹ÜÀí.
+æ·»åŠ windowså¹³å°ä¸‹çš„è‡ªåŠ¨æ ˆç©ºé—´ä¼¸ç¼©ç®¡ç†.
 
 2015-12-18
-Ìí¼Ó¶ÔmingwµÄÖ§³Ö.
+æ·»åŠ å¯¹mingwçš„æ”¯æŒ.
 
 2015-12-09
-ÓÅ»¯windows,linuxÆ½Ì¨ÏÂµÄ¶¨Ê±Æ÷ÐÔÄÜ.
+ä¼˜åŒ–windows,linuxå¹³å°ä¸‹çš„å®šæ—¶å™¨æ€§èƒ½.
 
 2015-11-13
-ÐÞ¸ÄwindowsÏÂÊ¹ÓÃFiberÇý¶¯ÉÏÏÂÎÄÇÐ»».
+ä¿®æ”¹windowsä¸‹ä½¿ç”¨Fiberé©±åŠ¨ä¸Šä¸‹æ–‡åˆ‡æ¢.
 
 2015-11-11
-Ìí¼ÓÔÚQT-UIÏß³ÌÖÐÔËÐÐActor£¬Çý¶¯Òì²½UI.
+æ·»åŠ åœ¨QT-UIçº¿ç¨‹ä¸­è¿è¡ŒActorï¼Œé©±åŠ¨å¼‚æ­¥UI.
 
 2015-11-05
-Ìí¼Ó"Í¨Öª¾ä±ú"¶ªÊ§¼ì²â£¬ÏûÏ¢µÈ´ýÊ±¿ÉÒÔ²¶»ñÍ¨Öª¾ä±ú¶ªÊ§Òì³£.
+æ·»åŠ "é€šçŸ¥å¥æŸ„"ä¸¢å¤±æ£€æµ‹ï¼Œæ¶ˆæ¯ç­‰å¾…æ—¶å¯ä»¥æ•èŽ·é€šçŸ¥å¥æŸ„ä¸¢å¤±å¼‚å¸¸.
 
 2015-10-31
-ÒÆÖ²µ½linuxÏµÍ³.
+ç§»æ¤åˆ°linuxç³»ç»Ÿ.
 
 2015-09-24
-¸Ä½ø²ÉÓÃTLS¼¼Êõ¼ì²âµ±Ç°´úÂëÔËÐÐÔÚÄÄ¸öActorÏÂ.
+æ”¹è¿›é‡‡ç”¨TLSæŠ€æœ¯æ£€æµ‹å½“å‰ä»£ç è¿è¡Œåœ¨å“ªä¸ªActorä¸‹.
 
 2015-09-21
-Ê¹ActorÔÚlock_quit()ºó¼ì²âµ½quit_msgÏûÏ¢ÈÔÈ»¿ÉÒÔÔËÐÐ.
+ä½¿Actoråœ¨lock_quit()åŽæ£€æµ‹åˆ°quit_msgæ¶ˆæ¯ä»ç„¶å¯ä»¥è¿è¡Œ.
 
 2015-08-23
-ÈÃÒ»¸öActorÄÚ¿ÉÒÔÍ¬Ê±Ö§³Ö¶à¸öÏàÍ¬ÀàÐÍÏûÏ¢.
+è®©ä¸€ä¸ªActorå†…å¯ä»¥åŒæ—¶æ”¯æŒå¤šä¸ªç›¸åŒç±»åž‹æ¶ˆæ¯.
 
 2015-08-02
-Ìí¼ÓÔÚÒ»¸öActorÄÚ»¥³âÔËÐÐ¶à¸öÒµÎñÂß¼­¶Î.
+æ·»åŠ åœ¨ä¸€ä¸ªActorå†…äº’æ–¥è¿è¡Œå¤šä¸ªä¸šåŠ¡é€»è¾‘æ®µ.
 
 2015-07-30
-Ö§³ÖÈÎÒâ²ÎÊý¸öÊýÏûÏ¢.
+æ”¯æŒä»»æ„å‚æ•°ä¸ªæ•°æ¶ˆæ¯.
 
 2015-07-12
-ÓÅ»¯ÓÒÖµ×ªÒÆ£¬Ê¹ÏûÏ¢´«µÝÖ§³Ö0¿½±´.
-Ìí¼ÓÖµÒýÓÃÏûÏ¢.
+ä¼˜åŒ–å³å€¼è½¬ç§»ï¼Œä½¿æ¶ˆæ¯ä¼ é€’æ”¯æŒ0æ‹·è´.
+æ·»åŠ å€¼å¼•ç”¨æ¶ˆæ¯.
 
 2015-07-10
-¶þ¼¶µ÷¶ÈÆ÷shared_strandÌí¼Ónext_tick¹¦ÄÜ£¬Ìá¸ßÏûÏ¢´«µÝÐÔÄÜ.
+äºŒçº§è°ƒåº¦å™¨shared_strandæ·»åŠ next_tickåŠŸèƒ½ï¼Œæé«˜æ¶ˆæ¯ä¼ é€’æ€§èƒ½.
 
 2015-06-26
-ÓÅ»¯ActorµÄÄÚ²¿¶¨Ê±Æ÷.
+ä¼˜åŒ–Actorçš„å†…éƒ¨å®šæ—¶å™¨.
 
 2015-06-12
-Ìí¼ÓÍ¬²½ÏûÏ¢(sync_msg)ºÍCSPÄ£ÐÍÏûÏ¢(csp_channel).
+æ·»åŠ åŒæ­¥æ¶ˆæ¯(sync_msg)å’ŒCSPæ¨¡åž‹æ¶ˆæ¯(csp_channel).
 
 2015-06-09
-È¥µô¡°actor_mutex¡±¡¢¡°actor_condition_variable¡±¡¢¡°actor_shared_mutex¡±²»±ØÒªµÄ close ¹¦ÄÜ.
+åŽ»æŽ‰â€œactor_mutexâ€ã€â€œactor_condition_variableâ€ã€â€œactor_shared_mutexâ€ä¸å¿…è¦çš„ close åŠŸèƒ½.
 
 2015-06-06
-Ìí¼ÓÖ±½Ó²úÉúÉÏÏÂÎÄµÄ»Øµ÷º¯Êý£¬¿ÉÒÔ²»ÓÃÏÔÊ¾Ê¹ÓÃawait²Ù×÷µÈ´ý»Øµ÷Íê³É.
+æ·»åŠ ç›´æŽ¥äº§ç”Ÿä¸Šä¸‹æ–‡çš„å›žè°ƒå‡½æ•°ï¼Œå¯ä»¥ä¸ç”¨æ˜¾ç¤ºä½¿ç”¨awaitæ“ä½œç­‰å¾…å›žè°ƒå®Œæˆ.
 
 2015-06-03
-ÓÅ»¯¼ì²â¶ÑÕ»Òç³ö¹¦ÄÜ£¬Êä³ö¾ßÌåÄÄ¸öActorÒç³öÈÕÖ¾.
+ä¼˜åŒ–æ£€æµ‹å †æ ˆæº¢å‡ºåŠŸèƒ½ï¼Œè¾“å‡ºå…·ä½“å“ªä¸ªActoræº¢å‡ºæ—¥å¿—.
 
 2015-06-01
-ÓÅ»¯µÈ´ý×ÓActor½áÊøµÄÐÔÄÜ£¬È¡ÏûµÈ´ý·µ»ØboolÖµ.
+ä¼˜åŒ–ç­‰å¾…å­Actorç»“æŸçš„æ€§èƒ½ï¼Œå–æ¶ˆç­‰å¾…è¿”å›žboolå€¼.
 
 2015-05-29
-Ìí¼Óactor_shared_mutex£¬ÔÚActorÏÂÔËÐÐµÄ¡°»¥³âËø(¿ÉµÝ¹é)¡±¡¢¡°Ìõ¼þ±äÁ¿¡±¡¢¡°¶ÁÐ´Ëø¡±ÒÑ±¸Æë£¬ÓÃÓÚÒµÎñÂß¼­Ö®¼äµÄÍ¬²½.
+æ·»åŠ actor_shared_mutexï¼Œåœ¨Actorä¸‹è¿è¡Œçš„â€œäº’æ–¥é”(å¯é€’å½’)â€ã€â€œæ¡ä»¶å˜é‡â€ã€â€œè¯»å†™é”â€å·²å¤‡é½ï¼Œç”¨äºŽä¸šåŠ¡é€»è¾‘ä¹‹é—´çš„åŒæ­¥.
 
 2015-05-25
-Ìí¼ÓÄÜÔÚActorÏÂÔËÐÐµÄÌõ¼þ±äÁ¿actor_condition_variable.
+æ·»åŠ èƒ½åœ¨Actorä¸‹è¿è¡Œçš„æ¡ä»¶å˜é‡actor_condition_variable.
 
 2015-05-24
-Ìí¼ÓÔÚDEBUGÏÂ´´½¨ActorÊ±±£´æµ÷ÓÃ¶ÑÕ»£¬·½±ãÄ³¸öActorÒì³£Ê±µ÷ÊÔ¸ú×Ù.
+æ·»åŠ åœ¨DEBUGä¸‹åˆ›å»ºActoræ—¶ä¿å­˜è°ƒç”¨å †æ ˆï¼Œæ–¹ä¾¿æŸä¸ªActorå¼‚å¸¸æ—¶è°ƒè¯•è·Ÿè¸ª.
 
 2015-05-15
-Ìí¼Ó¿ÉÒÔ¼ì²âµ±Ç°´úÂëÔËÐÐÔÚÄÄ¸öActorÏÂ.
+æ·»åŠ å¯ä»¥æ£€æµ‹å½“å‰ä»£ç è¿è¡Œåœ¨å“ªä¸ªActorä¸‹.
 
 2015-04-14
-ºËÐÄ¹¦ÄÜÕûÌåÓÅ»¯;
-Ìí¼Óactor_mutex;
-Ìí¼Ó¿ÉÒÔÔÝÊ±Ëø¶¨Actor£¬²»ÈÃÆäÇ¿ÖÆÍË³ö£¬ÓÃÓÚ¹Ø¼üÂß¼­¶Î;
-Ìí¼Ó¶à¼¶ÏûÏ¢´úÀí.
+æ ¸å¿ƒåŠŸèƒ½æ•´ä½“ä¼˜åŒ–;
+æ·»åŠ actor_mutex;
+æ·»åŠ å¯ä»¥æš‚æ—¶é”å®šActorï¼Œä¸è®©å…¶å¼ºåˆ¶é€€å‡ºï¼Œç”¨äºŽå…³é”®é€»è¾‘æ®µ;
+æ·»åŠ å¤šçº§æ¶ˆæ¯ä»£ç†.
 
 2015-04-02
-Ìí¼Ó¿ÉÒÔÖ±½ÓÄÃÒ»¸öActor¾ä±ú·¢ËÍÏûÏ¢£¬È»ºóÍ¨¹ýÆ¥Åäµ¯³öÏûÏ¢.
+æ·»åŠ å¯ä»¥ç›´æŽ¥æ‹¿ä¸€ä¸ªActorå¥æŸ„å‘é€æ¶ˆæ¯ï¼Œç„¶åŽé€šè¿‡åŒ¹é…å¼¹å‡ºæ¶ˆæ¯.
 
 2015-03-19
-Ìí¼ÓÏûÏ¢´«µÝµÄÓÒÖµÓÅ»¯.
+æ·»åŠ æ¶ˆæ¯ä¼ é€’çš„å³å€¼ä¼˜åŒ–.
 
 2015-02-11
-Ìí¼Ó¶¨Ê±ÇåÀíActorÕ»³Ø.
+æ·»åŠ å®šæ—¶æ¸…ç†Actoræ ˆæ± .
 
 2015-02-05
-Ôö¼ÓÍâ²¿¿ÉÒÔÖ±½ÓÄÃÁíÒ»¸öActor¾ä±ú´´½¨Ò»¸öÏûÏ¢¹ÜµÀ»òÍ¨Öª¾ä±ú.
+å¢žåŠ å¤–éƒ¨å¯ä»¥ç›´æŽ¥æ‹¿å¦ä¸€ä¸ªActorå¥æŸ„åˆ›å»ºä¸€ä¸ªæ¶ˆæ¯ç®¡é“æˆ–é€šçŸ¥å¥æŸ„.
 
 2015-02-01
-Ìí¼Ósocket²âÊÔÊ¾Àý.
+æ·»åŠ socketæµ‹è¯•ç¤ºä¾‹.
 
 2015-01-26
-ÐÞ¸ÄÁË¶¨Ê±Æ÷ÔÚ¸ß°æ±¾VSÏÂÒòÓëSTL¿â³åÍ»µ¼ÖÂµÄ±àÒë´íÎóÎÊÌâ;
-Ôö¼ÓÒì²½´¥·¢ºÍÏûÏ¢µÈ´ýµÄ³¬Ê±´¦Àí¹¦ÄÜ.
+ä¿®æ”¹äº†å®šæ—¶å™¨åœ¨é«˜ç‰ˆæœ¬VSä¸‹å› ä¸ŽSTLåº“å†²çªå¯¼è‡´çš„ç¼–è¯‘é”™è¯¯é—®é¢˜;
+å¢žåŠ å¼‚æ­¥è§¦å‘å’Œæ¶ˆæ¯ç­‰å¾…çš„è¶…æ—¶å¤„ç†åŠŸèƒ½.
 
 2015-01-08
-ÐÞ¸ÄÁË¹ÒÆð/»Ö¸´¿ØÖÆÂß¼­£¬Ô­ÓÐÂß¼­ÔÚ¼«¶ËÇé¿öÏÂ´æÔÚ°²È«·çÏÕ.
+ä¿®æ”¹äº†æŒ‚èµ·/æ¢å¤æŽ§åˆ¶é€»è¾‘ï¼ŒåŽŸæœ‰é€»è¾‘åœ¨æžç«¯æƒ…å†µä¸‹å­˜åœ¨å®‰å…¨é£Žé™©.
