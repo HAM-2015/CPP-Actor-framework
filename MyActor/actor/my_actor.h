@@ -5804,14 +5804,14 @@ private:
 #endif
 			if (tm > 0)
 			{
-				bool timed = false;
-				delay_trig(tm, [&timed, &th]
+				bool overtime = false;
+				delay_trig(tm, [&overtime, &th]
 				{
-					timed = true;
+					overtime = true;
 					th();
 				});
 				push_yield();
-				if (timed)
+				if (overtime)
 				{
 					return false;
 				}
@@ -5930,14 +5930,14 @@ public:
 #endif
 			if (tm > 0)
 			{
-				bool timed = false;
-				delay_trig(tm, [&timed, &th]
+				bool overtime = false;
+				delay_trig(tm, [&overtime, &th]
 				{
-					timed = true;
+					overtime = true;
 					th();
 				});
 				push_yield();
-				if (timed)
+				if (overtime)
 				{
 					return false;
 				}
@@ -6086,13 +6086,13 @@ public:
 	@brief 创建带超时的上下文回调函数(可以多次触发，但只有第一次有效)，直接作为回调函数使用，async_func(..., Handler self->make_timed_context(...))
 	*/
 	template <typename... Outs>
-	callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_context(int tm, bool& timed, Outs&... outs)
+	callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_context(int tm, bool& overtime, Outs&... outs)
 	{
 		assert_enter();
-		timed = false;
-		delay_trig(tm, [this, &timed]
+		overtime = false;
+		delay_trig(tm, [this, &overtime]
 		{
-			timed = true;
+			overtime = true;
 			pull_yield();
 		});
 		return callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, true, outs...);
@@ -6250,14 +6250,14 @@ public:
 #endif
 			if (tm > 0)
 			{
-				bool timed = false;
-				delay_trig(tm, [&timed, &th]
+				bool overtime = false;
+				delay_trig(tm, [&overtime, &th]
 				{
-					timed = true;
+					overtime = true;
 					th();
 				});
 				push_yield();
-				if (timed)
+				if (overtime)
 				{
 					return false;
 				}
@@ -6400,14 +6400,14 @@ public:
 			_waitingTrigMask |= mask;
 			if (tm > 0)
 			{
-				bool timed = false;
-				delay_trig(tm, [&timed, &th]
+				bool overtime = false;
+				delay_trig(tm, [&overtime, &th]
 				{
-					timed = true;
+					overtime = true;
 					th();
 				});
 				push_yield();
-				if (timed)
+				if (overtime)
 				{
 					return false;
 				}
@@ -7215,14 +7215,14 @@ private:
 			pump.get()->_checkDis = checkDis;
 			if (tm >= 0)
 			{
-				bool timed = false;
-				delay_trig(tm, [&timed, &th]
+				bool overtime = false;
+				delay_trig(tm, [&overtime, &th]
 				{
-					timed = true;
+					overtime = true;
 					th();
 				});
 				push_yield();
-				if (timed)
+				if (overtime)
 				{
 					return false;
 				}
@@ -7306,14 +7306,14 @@ private:
 			pump.get()->_waitConnect = true;
 			if (tm >= 0)
 			{
-				bool timed = false;
-				delay_trig(tm, [this, &timed]
+				bool overtime = false;
+				delay_trig(tm, [this, &overtime]
 				{
-					timed = true;
+					overtime = true;
 					pull_yield();
 				});
 				push_yield();
-				if (timed)
+				if (overtime)
 				{
 					return false;
 				}
@@ -7389,14 +7389,14 @@ public:
 			pump.get()->_checkDis = checkDis;
 			if (tm >= 0)
 			{
-				bool timed = false;
-				delay_trig(tm, [&timed, &th]
+				bool overtime = false;
+				delay_trig(tm, [&overtime, &th]
 				{
-					timed = true;
+					overtime = true;
 					th();
 				});
 				push_yield();
-				if (timed)
+				if (overtime)
 				{
 					return false;
 				}
@@ -7890,14 +7890,14 @@ private:
 				_mutex_check_lost(mbList, N);
 				if (tm >= 0)
 				{
-					bool timed = false;
-					delay_trig(tm, [this, &timed]
+					bool overtime = false;
+					delay_trig(tm, [this, &overtime]
 					{
-						timed = true;
+						overtime = true;
 						pull_yield();
 					});
 					push_yield();
-					if (timed)
+					if (overtime)
 					{
 						lock_quit();
 						break;

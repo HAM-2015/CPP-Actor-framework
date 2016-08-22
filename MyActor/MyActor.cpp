@@ -616,24 +616,24 @@ void socket_test()
 				return;
 			}
 			tcp_socket sck(self->self_io_service());
-			bool timed = false;
-			if (acc.timed_accept(self, 1500, timed, sck))
+			bool overtime = false;
+			if (acc.timed_accept(self, 1500, overtime, sck))
 			{
 				trace_line("new client connected");
 				acc.close();
 				char buf[128];
 				while (true)
 				{
-					bool timed = false;
-					tcp_socket::result res = sck.timed_read_some(self, 2000, timed, buf, sizeof(buf)-1);
+					bool overtime = false;
+					tcp_socket::result res = sck.timed_read_some(self, 2000, overtime, buf, sizeof(buf)-1);
 					if (res.ok)
 					{
 						buf[res.s] = 0;
 						trace_comma(self->self_id(), "received", buf);
 					} 
-					else if (timed)
+					else if (overtime)
 					{
-						trace_comma(self->self_id(), "receive timeout");
+						trace_comma(self->self_id(), "receive overtime");
 						break;
 					}
 					else

@@ -97,72 +97,72 @@ tcp_socket::result tcp_socket::write_some(my_actor* host, const void* buff, size
 	});
 }
 
-bool tcp_socket::timed_connect(my_actor* host, int tm, bool& timed, const char* remoteIp, unsigned short remotePort)
+bool tcp_socket::timed_connect(my_actor* host, int tm, bool& overtime, const char* remoteIp, unsigned short remotePort)
 {
-	timed = false;
+	overtime = false;
 	bool ok = false;
 	my_actor::quit_guard qg(host);
 	async_connect(remoteIp, remotePort, host->make_asio_timed_context(tm, [&]()
 	{
-		timed = true;
+		overtime = true;
 		close();
 	}, ok));
-	return timed ? false : ok;
+	return overtime ? false : ok;
 }
 
-tcp_socket::result tcp_socket::timed_read(my_actor* host, int tm, bool& timed, void* buff, size_t length)
+tcp_socket::result tcp_socket::timed_read(my_actor* host, int tm, bool& overtime, void* buff, size_t length)
 {
-	timed = false;
+	overtime = false;
 	result res = { 0, false };
 	my_actor::quit_guard qg(host);
 	async_read(buff, length, host->make_asio_timed_context(tm, [&]()
 	{
-		timed = true;
+		overtime = true;
 		close();
 	}, res));
-	if (timed) res.ok = false;
+	if (overtime) res.ok = false;
 	return res;
 }
 
-tcp_socket::result tcp_socket::timed_read_some(my_actor* host, int tm, bool& timed, void* buff, size_t length)
+tcp_socket::result tcp_socket::timed_read_some(my_actor* host, int tm, bool& overtime, void* buff, size_t length)
 {
-	timed = false;
+	overtime = false;
 	result res = { 0, false };
 	my_actor::quit_guard qg(host);
 	async_read_some(buff, length, host->make_asio_timed_context(tm, [&]()
 	{
-		timed = true;
+		overtime = true;
 		close();
 	}, res));
-	if (timed) res.ok = false;
+	if (overtime) res.ok = false;
 	return res;
 }
 
-tcp_socket::result tcp_socket::timed_write(my_actor* host, int tm, bool& timed, const void* buff, size_t length)
+tcp_socket::result tcp_socket::timed_write(my_actor* host, int tm, bool& overtime, const void* buff, size_t length)
 {
-	timed = false;
+	overtime = false;
 	result res = { 0, false };
 	my_actor::quit_guard qg(host);
 	async_write(buff, length, host->make_asio_timed_context(tm, [&]()
 	{
-		timed = true;
+		overtime = true;
 		close();
 	}, res));
-	if (timed) res.ok = false;
+	if (overtime) res.ok = false;
 	return res;
 }
 
-tcp_socket::result tcp_socket::timed_write_some(my_actor* host, int tm, bool& timed, const void* buff, size_t length)
+tcp_socket::result tcp_socket::timed_write_some(my_actor* host, int tm, bool& overtime, const void* buff, size_t length)
 {
-	timed = false;
+	overtime = false;
 	result res = { 0, false };
 	my_actor::quit_guard qg(host);
 	async_write_some(buff, length, host->make_asio_timed_context(tm, [&]()
 	{
-		timed = true;
+		overtime = true;
 		close();
 	}, res));
-	if (timed) res.ok = false;
+	if (overtime) res.ok = false;
 	return res;
 }
 //////////////////////////////////////////////////////////////////////////
@@ -253,17 +253,17 @@ bool tcp_acceptor::accept(my_actor* host, tcp_socket& socket)
 	});
 }
 
-bool tcp_acceptor::timed_accept(my_actor* host, int tm, bool& timed, tcp_socket& socket)
+bool tcp_acceptor::timed_accept(my_actor* host, int tm, bool& overtime, tcp_socket& socket)
 {
-	timed = false;
+	overtime = false;
 	bool ok = false;
 	my_actor::quit_guard qg(host);
 	async_accept(socket, host->make_asio_timed_context(tm, [&]()
 	{
-		timed = true;
+		overtime = true;
 		close();
 	}, ok));
-	return timed ? false : ok;
+	return overtime ? false : ok;
 }
 //////////////////////////////////////////////////////////////////////////
 
@@ -396,76 +396,76 @@ udp_socket::result udp_socket::receive(my_actor* host, void* buff, size_t length
 	});
 }
 
-bool udp_socket::timed_connect(my_actor* host, int tm, bool& timed, const char* remoteIp, unsigned short remotePort)
+bool udp_socket::timed_connect(my_actor* host, int tm, bool& overtime, const char* remoteIp, unsigned short remotePort)
 {
-	timed = false;
+	overtime = false;
 	bool ok = false;
 	my_actor::quit_guard qg(host);
 	async_connect(remoteIp, remotePort, host->make_asio_timed_context(tm, [&]()
 	{
-		timed = true;
+		overtime = true;
 		close();
 	}, ok));
-	return timed ? false : ok;
+	return overtime ? false : ok;
 }
 
-udp_socket::result udp_socket::timed_send_to(my_actor* host, int tm, bool& timed, const remote_sender_endpoint& remoteEndpoint, const void* buff, size_t length, int flags)
+udp_socket::result udp_socket::timed_send_to(my_actor* host, int tm, bool& overtime, const remote_sender_endpoint& remoteEndpoint, const void* buff, size_t length, int flags)
 {
-	timed = false;
+	overtime = false;
 	result res = { 0, false };
 	my_actor::quit_guard qg(host);
 	async_send_to(remoteEndpoint, buff, length, host->make_asio_timed_context(tm, [&]()
 	{
-		timed = true;
+		overtime = true;
 		close();
 	}, res), flags);
-	if (timed) res.ok = false;
+	if (overtime) res.ok = false;
 	return res;
 }
 
-udp_socket::result udp_socket::timed_send_to(my_actor* host, int tm, bool& timed, const char* remoteIp, unsigned short remotePort, const void* buff, size_t length, int flags)
+udp_socket::result udp_socket::timed_send_to(my_actor* host, int tm, bool& overtime, const char* remoteIp, unsigned short remotePort, const void* buff, size_t length, int flags)
 {
-	return timed_send_to(host, tm, timed, remote_sender_endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), buff, length, flags);
+	return timed_send_to(host, tm, overtime, remote_sender_endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), buff, length, flags);
 }
 
-udp_socket::result udp_socket::timed_send(my_actor* host, int tm, bool& timed, const void* buff, size_t length, int flags)
+udp_socket::result udp_socket::timed_send(my_actor* host, int tm, bool& overtime, const void* buff, size_t length, int flags)
 {
-	timed = false;
+	overtime = false;
 	result res = { 0, false };
 	my_actor::quit_guard qg(host);
 	async_send(buff, length, host->make_asio_timed_context(tm, [&]()
 	{
-		timed = true;
+		overtime = true;
 		close();
 	}, res), flags);
-	if (timed) res.ok = false;
+	if (overtime) res.ok = false;
 	return res;
 }
 
-udp_socket::result udp_socket::timed_receive_from(my_actor* host, int tm, bool& timed, void* buff, size_t length, int flags)
+udp_socket::result udp_socket::timed_receive_from(my_actor* host, int tm, bool& overtime, void* buff, size_t length, int flags)
 {
-	timed = false;
+	overtime = false;
 	result res = { 0, false };
 	my_actor::quit_guard qg(host);
 	async_receive_from(buff, length, host->make_asio_timed_context(tm, [&]()
 	{
-		timed = true;
+		overtime = true;
 		close();
 	}, res), flags);
-	if (timed) res.ok = false;
+	if (overtime) res.ok = false;
 	return res;
 }
 
-udp_socket::result udp_socket::timed_receive(my_actor* host, int tm, bool& timed, void* buff, size_t length, int flags)
+udp_socket::result udp_socket::timed_receive(my_actor* host, int tm, bool& overtime, void* buff, size_t length, int flags)
 {
-	timed = false;
+	overtime = false;
 	result res = { 0, false };
 	my_actor::quit_guard qg(host);
 	async_receive(buff, length, host->make_asio_timed_context(tm, [&]()
 	{
-		timed = true;
+		overtime = true;
 		close();
 	}, res), flags);
-	if (timed) res.ok = false;
+	if (overtime) res.ok = false;
 	return res;
 }

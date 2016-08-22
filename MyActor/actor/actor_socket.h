@@ -70,27 +70,27 @@ public:
 	/*!
 	@brief 在tm(ms)时间范围内，客户端模式下连接远端服务器
 	*/
-	bool timed_connect(my_actor* host, int tm, bool& timed, const char* remoteIp, unsigned short remotePort);
+	bool timed_connect(my_actor* host, int tm, bool& overtime, const char* remoteIp, unsigned short remotePort);
 
 	/*!
 	@brief 在tm(ms)时间范围内，往buff缓冲区内读取数据，直到读满
 	*/
-	result timed_read(my_actor* host, int tm, bool& timed, void* buff, size_t length);
+	result timed_read(my_actor* host, int tm, bool& overtime, void* buff, size_t length);
 
 	/*!
 	@brief 在tm(ms)时间范围内，往buff缓冲区内读取数据，有多少读多少
 	*/
-	result timed_read_some(my_actor* host, int tm, bool& timed, void* buff, size_t length);
+	result timed_read_some(my_actor* host, int tm, bool& overtime, void* buff, size_t length);
 
 	/*!
 	@brief 在tm(ms)时间范围内，将buff缓冲区内的数据全部发送出去
 	*/
-	result timed_write(my_actor* host, int tm, bool& timed, const void* buff, size_t length);
+	result timed_write(my_actor* host, int tm, bool& overtime, const void* buff, size_t length);
 
 	/*!
 	@brief 在tm(ms)时间范围内，将buff缓冲区内的数据发送出去，能发多少是多少
 	*/
-	result timed_write_some(my_actor* host, int tm, bool& timed, const void* buff, size_t length);
+	result timed_write_some(my_actor* host, int tm, bool& overtime, const void* buff, size_t length);
 
 	/*!
 	@brief 关闭socket
@@ -207,7 +207,7 @@ public:
 	/*!
 	@brief 在tm(ms)时间范围内，用socket侦听客户端连接
 	*/
-	bool timed_accept(my_actor* host, int tm, bool& timed, tcp_socket& socket);
+	bool timed_accept(my_actor* host, int tm, bool& overtime, tcp_socket& socket);
 
 	/*!
 	@brief 异步模式下，用socket侦听客户端连接
@@ -322,32 +322,32 @@ public:
 	/*!
 	@brief 在tm(ms)时间范围内，发送端设定一个远程端口作为默认发送接收目标
 	*/
-	bool timed_connect(my_actor* host, int tm, bool& timed, const char* remoteIp, unsigned short remotePort);
+	bool timed_connect(my_actor* host, int tm, bool& overtime, const char* remoteIp, unsigned short remotePort);
 
 	/*!
 	@brief 在tm(ms)时间范围内，发送buff缓冲区数据到指定目标
 	*/
-	result timed_send_to(my_actor* host, int tm, bool& timed, const remote_sender_endpoint& remoteEndpoint, const void* buff, size_t length, int flags = 0);
+	result timed_send_to(my_actor* host, int tm, bool& overtime, const remote_sender_endpoint& remoteEndpoint, const void* buff, size_t length, int flags = 0);
 
 	/*!
 	@brief 在tm(ms)时间范围内，发送buff缓冲区数据到指定目标
 	*/
-	result timed_send_to(my_actor* host, int tm, bool& timed, const char* remoteIp, unsigned short remotePort, const void* buff, size_t length, int flags = 0);
+	result timed_send_to(my_actor* host, int tm, bool& overtime, const char* remoteIp, unsigned short remotePort, const void* buff, size_t length, int flags = 0);
 
 	/*!
 	@brief 在tm(ms)时间范围内，发送buff缓冲区数据到默认目标(connect成功后)
 	*/
-	result timed_send(my_actor* host, int tm, bool& timed, const void* buff, size_t length, int flags = 0);
+	result timed_send(my_actor* host, int tm, bool& overtime, const void* buff, size_t length, int flags = 0);
 
 	/*!
 	@brief 在tm(ms)时间范围内，接收远端发送的数据到buff缓冲区，并记录下远端地址
 	*/
-	result timed_receive_from(my_actor* host, int tm, bool& timed, void* buff, size_t length, int flags = 0);
+	result timed_receive_from(my_actor* host, int tm, bool& overtime, void* buff, size_t length, int flags = 0);
 
 	/*!
 	@brief 在tm(ms)时间范围内，接收远端发送的数据到buff缓冲区
 	*/
-	result timed_receive(my_actor* host, int tm, bool& timed, void* buff, size_t length, int flags = 0);
+	result timed_receive(my_actor* host, int tm, bool& overtime, void* buff, size_t length, int flags = 0);
 
 	/*!
 	@brief 创建一个远端目标

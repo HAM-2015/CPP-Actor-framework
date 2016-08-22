@@ -89,17 +89,17 @@ bool MutexTrigHandle_::timed_wait(int tm)
 	assert(!_outActor);
 	if (!read_msg())
 	{
-		bool timed = false;
+		bool overtime = false;
 		if (tm >= 0)
 		{
 			_hostActor->delay_trig(tm, [&]
 			{
-				timed = true;
+				overtime = true;
 				ActorFunc_::pull_yield(_hostActor);
 			});
 		}
 		ActorFunc_::push_yield(_hostActor);
-		if (!timed)
+		if (!overtime)
 		{
 			if (tm >= 0)
 			{
@@ -457,7 +457,7 @@ bool actor_condition_variable::timed_wait(int tm, my_actor* host, actor_lock_gua
 	MutexTrigHandle_ ath(host);
 	MutexTrigNotifer_ ntf;
 	msg_list<wait_node>::iterator nit;
-	bool timed = false;
+	bool overtime = false;
 	host->send(_strand, [&]
 	{
 		ntf = ath.make_notifer();
@@ -471,18 +471,18 @@ bool actor_condition_variable::timed_wait(int tm, my_actor* host, actor_lock_gua
 		{
 			if (!ntf._notified)
 			{
-				timed = true;
+				overtime = true;
 				_waitQueue.erase(nit);
 			}
 		});
-		if (!timed)
+		if (!overtime)
 		{
 			ath.wait();
 		}
 	}
 	mutex.lock();
 	host->unlock_quit();
-	return !timed;
+	return !overtime;
 }
 
 bool actor_condition_variable::notify_one(my_actor* host)
