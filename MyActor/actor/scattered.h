@@ -353,6 +353,30 @@ unsigned long long cpu_tick();
 #endif
 
 /*!
+@brief 根据类型，"计算"一个类型的hash_code，对比typeid(type).hash_code()
+*/
+template <typename...>
+struct type_hash
+{
+	static size_t hash_code()
+	{
+		return (size_t)&_placeholder;
+	}
+private:
+	static bool _placeholder;
+};
+template <typename... Types> bool type_hash<Types...>::_placeholder;
+
+template <>
+struct type_hash<>
+{
+	static size_t hash_code()
+	{
+		return 0;
+	}
+};
+
+/*!
 @brief 清空std::function
 */
 template <typename R, typename... Args>

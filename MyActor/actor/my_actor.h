@@ -4437,19 +4437,33 @@ class my_actor
 
 	struct msg_pool_status
 	{
+#if (_WIN64 || __x86_64__ || _ARM64)
 		struct id_key
 		{
-			id_key(size_t hash, const int id)
-			:_typeHash(hash), _id(id) {}
+			id_key(const size_t hash, const int id)
+			:_id(((unsigned long long)id << 56) | hash) { assert(0 == ((0xFFLL << 56) & hash)); }
 
-			bool operator < (const id_key& r) const
+			operator unsigned long long() const
 			{
-				return _typeHash < r._typeHash || (_typeHash == r._typeHash && _id < r._id);
+				return _id;
 			}
 
-			const size_t _typeHash;
-			const int _id;
+			const unsigned long long _id;
 		};
+#else
+		struct id_key
+		{
+			id_key(const size_t hash, const int id)
+			:_id(((unsigned long long)id << 32) | hash) {}
+
+			operator unsigned long long() const
+			{
+				return _id;
+			}
+
+			const unsigned long long _id;
+		};
+#endif
 
 		msg_pool_status()
 			:_msgTypeMap(*_msgTypeMapAll) {}
@@ -6442,8 +6456,9 @@ private:
 	template <typename... Args>
 	static std::shared_ptr<msg_pool_status::pck<Args...> > msg_pool_pck(const int id, my_actor* const host, const bool make = true)
 	{
+		assert(id >= 0 && id < 256);
 		typedef msg_pool_status::pck<Args...> pck_type;
-		msg_pool_status::id_key typeID(sizeof...(Args) != 0 ? typeid(pck_type).hash_code() : 0, id);
+		msg_pool_status::id_key typeID(type_hash<Args...>::hash_code(), id);
 		if (make)
 		{
 			auto& res = host->_msgPoolStatus._msgTypeMap.insert(make_pair(typeID, std::shared_ptr<pck_type>())).first->second;
@@ -6780,8 +6795,9 @@ public:
 	__yield_interrupt bool reset_msg_pipe(const int id = 0)
 	{
 		assert_enter();
+		assert(id >= 0 && id < 256);
 		typedef msg_pool_status::pck<Args...> pck_type;
-		msg_pool_status::id_key typeID(sizeof...(Args) != 0 ? typeid(pck_type).hash_code() : 0, id);
+		msg_pool_status::id_key typeID(type_hash<Args...>::hash_code(), id);
 		auto it = _msgPoolStatus._msgTypeMap.find(typeID);
 		if (_msgPoolStatus._msgTypeMap.end() != it)
 		{
