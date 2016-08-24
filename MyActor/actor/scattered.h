@@ -355,9 +355,20 @@ unsigned long long cpu_tick();
 /*!
 @brief 根据类型，"计算"一个类型的hash_code，对比typeid(type).hash_code()
 */
-template <typename...>
+template <typename... Types>
 struct type_hash
 {
+#ifdef ENABLE_RTTI_HASH_CODE
+	static size_t hash_code()
+	{
+#if (_WIN64 || __x86_64__ || _ARM64)
+		return (typeid(std::tuple<Types...>).hash_code() << 8) >> 8;
+#else
+		return typeid(std::tuple<Types...>).hash_code();
+#endif
+	}
+};
+#else
 	static size_t hash_code()
 	{
 		return (size_t)&_placeholder;
@@ -366,6 +377,7 @@ private:
 	static bool _placeholder;
 };
 template <typename... Types> bool type_hash<Types...>::_placeholder;
+#endif
 
 template <>
 struct type_hash<>

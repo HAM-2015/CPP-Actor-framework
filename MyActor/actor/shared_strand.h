@@ -23,7 +23,7 @@ class my_actor;
 class boost_strand;
 typedef std::shared_ptr<boost_strand> shared_strand;
 
-#define SPACE_SIZE		(sizeof(void*)*16)
+#define NEXT_TICK_SPACE_SIZE (sizeof(void*)*8)
 
 #ifdef ENABLE_NEXT_TICK
 
@@ -79,10 +79,13 @@ else\
 
 #ifdef ENABLE_NEXT_TICK
 
-#define APPEND_TICK()	\
-	static_assert(sizeof(wrap_next_tick_space) == sizeof(wrap_next_tick_handler<RM_CREF(Handler)>), "next tick wrap error"); \
-	typedef wrap_next_tick_handler<RM_CREF(Handler), sizeof(RM_CREF(Handler)) <= SPACE_SIZE> wrap_tick_type; \
-	_backTickQueue->push_back(wrap_tick_type::create(TRY_MOVE(handler), _nextTickAlloc, _reuMemAlloc));
+#define APPEND_TICK()\
+	typedef wrap_next_tick_handler<RM_CREF(Handler), true> wrap_tick_type1; \
+	typedef wrap_next_tick_handler<RM_CREF(Handler), false> wrap_tick_type2; \
+	void* const space = alloc_space(sizeof(wrap_tick_type1)); \
+	if (space) _backTickQueue->push_back(new(space)wrap_tick_type1(TRY_MOVE(handler))); \
+	else _backTickQueue->push_back(new(_reuMemAlloc->allocate(sizeof(wrap_tick_type2)))wrap_tick_type2(TRY_MOVE(handler)));
+
 #else //ENABLE_NEXT_TICK
 
 #define APPEND_TICK()	post(TRY_MOVE(handler));
@@ -146,84 +149,44 @@ class boost_strand
 		void operator =(const handler_capture&) = delete;
 	};
 
-	struct wrap_next_tick_base
+	struct wrap_next_tick_face
 	{
-		struct result
-		{
-			void* _ptr;
-			int _size;
-		};
-
-		virtual result invoke() = 0;
+		virtual size_t invoke() = 0;
 	};
 
-	struct wrap_next_tick_space : public wrap_next_tick_base
+	template <typename Handler, bool NtSpace>
+	struct wrap_next_tick_handler : public wrap_next_tick_face
 	{
-		__space_align char space[SPACE_SIZE];
-	};
+		template <typename H>
+		wrap_next_tick_handler(H&& h)
+			:_handler(TRY_MOVE(h)) {}
 
-	template <typename H, bool = true>
-	struct wrap_next_tick_handler : public wrap_next_tick_space
-	{
-		template <typename Handler>
-		wrap_next_tick_handler(Handler&& h)
+		size_t invoke()
 		{
-			assert(sizeof(H) <= sizeof(space));
-			new(space)H(TRY_MOVE(h));
-		}
-
-		~wrap_next_tick_handler()
-		{
-			((H*)space)->~H();
-		}
-
-		template <typename Handler>
-		static inline wrap_next_tick_base* create(Handler&& handler, mem_alloc_base* alloc, reusable_mem* reuAlloc)
-		{
-			if (!alloc->overflow())
-			{
-				return new(alloc->allocate())wrap_next_tick_handler<RM_CREF(Handler)>(TRY_MOVE(handler));
-			}
-			else
-			{
-				return wrap_next_tick_handler<RM_CREF(Handler), false>::create(TRY_MOVE(handler), alloc, reuAlloc);
-			}
-		}
-
-		result invoke()
-		{
-			(*(H*)space)();
+			CHECK_EXCEPTION(_handler);
 			this->~wrap_next_tick_handler();
-			return { this, -1 };
+			return sizeof(*this);
 		}
+
+		Handler _handler;
 		NONE_COPY(wrap_next_tick_handler);
 	};
 
-	template <typename H>
-	struct wrap_next_tick_handler<H, false> : public wrap_next_tick_base
+	template <typename Handler>
+	struct wrap_next_tick_handler<Handler, false> : public wrap_next_tick_face
 	{
-		template <typename Handler>
-		wrap_next_tick_handler(Handler&& h)
-			:_h(TRY_MOVE(h)) {}
+		template <typename H>
+		wrap_next_tick_handler(H&& h)
+			:_handler(TRY_MOVE(h)) {}
 
-		~wrap_next_tick_handler()
+		size_t invoke()
 		{
-		}
-
-		template <typename Handler>
-		static inline wrap_next_tick_base* create(Handler&& handler, mem_alloc_base* alloc, reusable_mem* reuAlloc)
-		{
-			return new(reuAlloc->allocate(sizeof(wrap_next_tick_handler<RM_CREF(Handler), false>)))wrap_next_tick_handler<RM_CREF(Handler), false>(TRY_MOVE(handler));
-		}
-
-		result invoke()
-		{
-			_h();
+			CHECK_EXCEPTION(_handler);
 			this->~wrap_next_tick_handler();
-			return { this, sizeof(wrap_next_tick_handler) };
+			return (size_t)-1 >> 1;
 		}
 
-		H _h;
+		Handler _handler;
 		NONE_COPY(wrap_next_tick_handler);
 	};
 #endif //ENABLE_NEXT_TICK
@@ -700,6 +663,7 @@ private:
 #endif
 	}
 #endif
+	void* alloc_space(size_t size);
 protected:
 #ifdef ENABLE_NEXT_TICK
 	bool ready_empty();
@@ -708,9 +672,9 @@ protected:
 	void run_tick_back();
 	size_t _thisRoundCount;
 	reusable_mem* _reuMemAlloc;
-	mem_alloc2<wrap_next_tick_space>* _nextTickAlloc;
-	msg_queue<wrap_next_tick_base*, mem_alloc2<>>* _backTickQueue;
-	msg_queue<wrap_next_tick_base*, mem_alloc2<>>* _frontTickQueue;
+	mem_alloc_base* _nextTickAlloc[3];
+	msg_queue<wrap_next_tick_face*, mem_alloc2<>>* _backTickQueue;
+	msg_queue<wrap_next_tick_face*, mem_alloc2<>>* _frontTickQueue;
 #endif //ENABLE_NEXT_TICK
 protected:
 #if (ENABLE_QT_ACTOR && ENABLE_UV_ACTOR)
@@ -793,7 +757,6 @@ public:
 	}
 };
 
-#undef SPACE_SIZE
 #undef RUN_HANDLER
 #undef CHOOSE_TICK
 #undef CHOOSE_POST
