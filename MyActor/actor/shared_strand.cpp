@@ -28,23 +28,22 @@ void boost_strand::capture_base::end_run()
 #endif
 
 boost_strand::boost_strand()
+:_ioEngine(NULL), _strand(NULL), _actorTimer(NULL), _timerBoost(NULL)
 #ifdef ENABLE_NEXT_TICK
-:_thisRoundCount(0),
-_reuMemAlloc(NULL),
-_frontTickQueue(NULL),
-_backTickQueue(NULL)
+,_thisRoundCount(0)
+,_reuMemAlloc(NULL)
+,_frontTickQueue(NULL)
+,_backTickQueue(NULL)
 #endif //ENABLE_NEXT_TICK
 #if (ENABLE_QT_ACTOR && ENABLE_UV_ACTOR)
 ,_strandChoose(strand_default)
 #endif
 {
-	_ioEngine = NULL;
-	_strand = NULL;
-	_actorTimer = NULL;
-	_timerBoost = NULL;
+#ifdef ENABLE_NEXT_TICK
 	_nextTickAlloc[0] = NULL;
 	_nextTickAlloc[1] = NULL;
 	_nextTickAlloc[2] = NULL;
+#endif
 }
 
 boost_strand::~boost_strand()
