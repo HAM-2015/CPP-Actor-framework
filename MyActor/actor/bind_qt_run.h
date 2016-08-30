@@ -251,7 +251,7 @@ private:
 	static void uninstall();
 protected:
 	bind_qt_run_base();
-	virtual ~bind_qt_run_base();
+	~bind_qt_run_base();
 public:
 	/*!
 	@brief 获取主线程ID
@@ -460,6 +460,8 @@ protected:
 	template <typename... Args>
 	bind_qt_run(Args&&... args)
 		: FRAME(TRY_MOVE(args)...) {}
+
+	~bind_qt_run() {}
 public:
 	run_thread::thread_id thread_id()
 	{

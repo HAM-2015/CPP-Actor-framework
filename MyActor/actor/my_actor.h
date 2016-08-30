@@ -4580,9 +4580,9 @@ class my_actor
 
 		void clear(my_actor* self)
 		{
-			for (auto it = _msgTypeMap.begin(); it != _msgTypeMap.end(); it++) { it->second->_amutex.quited_lock(self); }
-			for (auto it = _msgTypeMap.begin(); it != _msgTypeMap.end(); it++) { it->second->close(); }
-			for (auto it = _msgTypeMap.begin(); it != _msgTypeMap.end(); it++) { it->second->_amutex.quited_unlock(self); }
+			for (auto it = _msgTypeMap.begin(); it != _msgTypeMap.end(); ++it) { it->second->_amutex.quited_lock(self); }
+			for (auto it = _msgTypeMap.begin(); it != _msgTypeMap.end(); ++it) { it->second->close(); }
+			for (auto it = _msgTypeMap.begin(); it != _msgTypeMap.end(); ++it) { it->second->_amutex.quited_unlock(self); }
 			_msgTypeMap.clear();
 		}
 

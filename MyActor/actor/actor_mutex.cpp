@@ -876,7 +876,7 @@ void actor_shared_mutex::unlock(my_actor* host)
 					}
 					else
 					{
-						it++;
+						++it;
 					}
 				}
 			}
@@ -992,7 +992,7 @@ void actor_shared_mutex::unlock_upgrade(my_actor* host)
 				}
 				else
 				{
-					it++;
+					++it;
 				}
 			}
 		}

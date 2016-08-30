@@ -132,7 +132,7 @@ struct TraceMatch_<std::list<T>>
 		out << "{";
 		int l = (int)s.size();
 		auto it = s.begin();
-		for (int i = 0; i < l - 1; i++, it++)
+		for (int i = 0; i < l - 1; i++, ++it)
 		{
 			TraceMatch_<RM_CREF(T)>::trace(out, *it);
 			out << "->";
@@ -153,7 +153,7 @@ struct TraceMatch_<std::map<K, V>>
 		out << "{";
 		int l = (int)s.size();
 		auto it = s.begin();
-		for (int i = 0; i < l - 1; i++, it++)
+		for (int i = 0; i < l - 1; i++, ++it)
 		{
 			TraceMatch_<RM_CREF(K)>::trace(out, it->first);
 			out << ": ";
@@ -178,7 +178,7 @@ struct TraceMatch_<std::multimap<K, V>>
 		out << "{";
 		int l = (int)s.size();
 		auto it = s.begin();
-		for (int i = 0; i < l - 1; i++, it++)
+		for (int i = 0; i < l - 1; i++, ++it)
 		{
 			TraceMatch_<RM_CREF(K)>::trace(out, it->first);
 			out << ": ";
@@ -203,7 +203,7 @@ struct TraceMatch_<std::set<T>>
 		out << "{";
 		int l = (int)s.size();
 		auto it = s.begin();
-		for (int i = 0; i < l - 1; i++, it++)
+		for (int i = 0; i < l - 1; i++, ++it)
 		{
 			TraceMatch_<RM_CREF(T)>::trace(out, *it);
 			out << ", ";
@@ -224,7 +224,7 @@ struct TraceMatch_<std::multiset<T>>
 		out << "{";
 		int l = (int)s.size();
 		auto it = s.begin();
-		for (int i = 0; i < l - 1; i++, it++)
+		for (int i = 0; i < l - 1; i++, ++it)
 		{
 			TraceMatch_<RM_CREF(T)>::trace(out, *it);
 			out << ", ";
