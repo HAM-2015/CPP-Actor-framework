@@ -4,12 +4,9 @@
 #ifdef WIN32
 #include <WinDNS.h>
 #include <DbgHelp.h>
-#include <Psapi.h>
 #include <fstream>
-#include <direct.h>
 #ifdef _MSC_VER
-#pragma comment( lib, "Dbghelp.lib" )
-#pragma comment( lib, "Psapi.lib" )
+#pragma comment(lib, "Dbghelp.lib")
 #endif
 #elif __linux__
 #include <execinfo.h>
@@ -21,68 +18,21 @@
 
 #if (defined ENABLE_DUMP_STACK || defined PRINT_ACTOR_STACK)
 #ifdef WIN32
-bool _loadAllModules()
+bool sym_initialize()
 {
-	HANDLE hProcess = GetCurrentProcess();
-	static const int maxHandles = 4096;
-	HMODULE aryHandles[maxHandles] = { 0 };
-
-	unsigned bytes = 0;
-
-	BOOL result = EnumProcessModules(
-		hProcess, aryHandles, sizeof(aryHandles), (LPDWORD)&bytes);
-
-	if (FALSE == result)
-	{
-		return false;
-	}
-
-	const int iCount = bytes / sizeof(HMODULE);
-
-	for (int i = 0; i < iCount; ++i)
-	{
-		char moduleName[256] = { 0 };
-		char imageName[256] = { 0 };
-		MODULEINFO Info;
-
-		GetModuleInformation(hProcess, aryHandles[i], &Info, sizeof(Info));
-		GetModuleFileNameExA(hProcess, aryHandles[i], imageName, 256);
-		GetModuleBaseNameA(hProcess, aryHandles[i], moduleName, 256);
-
-		SymLoadModule64(hProcess, aryHandles[i], imageName, moduleName, (DWORD64)Info.lpBaseOfDll, (DWORD)Info.SizeOfImage);
-	}
-
-	return true;
-}
-
-bool _initialize()
-{
-	// ÉèÖÃ·ûºÅÒýÇæ
 	DWORD symOpts = SymGetOptions();
 	symOpts |= SYMOPT_LOAD_LINES;
 	symOpts |= SYMOPT_DEBUG;
 	SymSetOptions(symOpts);
-
-	if (FALSE == SymInitialize(GetCurrentProcess(), NULL, TRUE))
-	{
-		return false;
-	}
-
-	// 	if (!_loadAllModules())
-	// 	{
-	// 		return false;
-	// 	}
-	return true;
+	return TRUE == SymInitialize(GetCurrentProcess(), NULL, TRUE);
 }
 
-size_t _stackwalk(QWORD *pTrace, size_t maxDepth, CONTEXT *pContext)
+size_t stack_walk(QWORD *pTrace, size_t maxDepth, CONTEXT *pContext)
 {
 	STACKFRAME64 stackFrame64;
 	HANDLE hProcess = GetCurrentProcess();
 	HANDLE hThread = GetCurrentThread();
-
 	size_t depth = 0;
-
 	ZeroMemory(&stackFrame64, sizeof(stackFrame64));
 #ifdef _MSC_VER
 	__try
@@ -90,25 +40,20 @@ size_t _stackwalk(QWORD *pTrace, size_t maxDepth, CONTEXT *pContext)
 	{
 #ifdef _WIN64
 		stackFrame64.AddrPC.Offset = pContext->Rip;
-		stackFrame64.AddrPC.Mode = AddrModeFlat;
 		stackFrame64.AddrStack.Offset = pContext->Rsp;
-		stackFrame64.AddrStack.Mode = AddrModeFlat;
 		stackFrame64.AddrFrame.Offset = pContext->Rbp;
-		stackFrame64.AddrFrame.Mode = AddrModeFlat;
 #else
 		stackFrame64.AddrPC.Offset = pContext->Eip;
-		stackFrame64.AddrPC.Mode = AddrModeFlat;
 		stackFrame64.AddrStack.Offset = pContext->Esp;
-		stackFrame64.AddrStack.Mode = AddrModeFlat;
 		stackFrame64.AddrFrame.Offset = pContext->Ebp;
-		stackFrame64.AddrFrame.Mode = AddrModeFlat;
 #endif
-
+		stackFrame64.AddrPC.Mode = AddrModeFlat;
+		stackFrame64.AddrStack.Mode = AddrModeFlat;
+		stackFrame64.AddrFrame.Mode = AddrModeFlat;
 		bool successed = true;
-
 		while (successed && (depth < maxDepth))
 		{
-			successed = StackWalk64(
+			successed = TRUE == StackWalk64(
 #ifdef _WIN64
 				IMAGE_FILE_MACHINE_AMD64,
 #else
@@ -122,16 +67,10 @@ size_t _stackwalk(QWORD *pTrace, size_t maxDepth, CONTEXT *pContext)
 				SymFunctionTableAccess64,
 				SymGetModuleBase64,
 				NULL
-				) != FALSE;
+				);
 
 			pTrace[depth] = stackFrame64.AddrPC.Offset;
-
-			if (!successed)
-			{
-				break;
-			}
-
-			if (stackFrame64.AddrFrame.Offset == 0)
+			if (!successed || 0 == stackFrame64.AddrFrame.Offset)
 			{
 				break;
 			}
@@ -139,9 +78,7 @@ size_t _stackwalk(QWORD *pTrace, size_t maxDepth, CONTEXT *pContext)
 		}
 	}
 #ifdef _MSC_VER
-	__except (EXCEPTION_EXECUTE_HANDLER)
-	{
-	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {}
 #endif
 	return depth;
 }
@@ -166,7 +103,7 @@ std::list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool m
 	void* sp = NULL;
 	void* ip = NULL;
 	get_bp_sp_ip((void**)&bp, (void**)&sp, (void**)&ip);
-	return get_stack_list(bp, sp, ip, maxDepth, 2+offset, module, symbolName);
+	return get_stack_list(bp, sp, ip, 2 + maxDepth, 2 + offset, module, symbolName);
 }
 
 std::list<stack_line_info> get_stack_list(void* bp, void* sp, void* ip, size_t maxDepth, size_t offset, bool module, bool symbolName)
@@ -187,19 +124,16 @@ std::list<stack_line_info> get_stack_list(void* bp, void* sp, void* ip, size_t m
 	context.Esp = (DWORD)sp;
 	context.Eip = (DWORD)ip;
 #endif
-	size_t depths = _stackwalk(trace, maxDepth + 1, &context);
-
+	size_t depths = stack_walk(trace, maxDepth + 1, &context);
 	std::list<stack_line_info> imageList;
 	HANDLE hProcess = GetCurrentProcess();
 	for (size_t i = offset; i < depths; i++)
 	{
 		stack_line_info stackResult;
-
 		{
 			DWORD symbolDisplacement = 0;
 			IMAGEHLP_LINE64 imageHelpLine;
 			imageHelpLine.SizeOfStruct = sizeof(imageHelpLine);
-
 			if (SymGetLineFromAddr64(hProcess, trace[i], &symbolDisplacement, &imageHelpLine))
 			{
 				stackResult.file = std::string(imageHelpLine.FileName, check_file_name(imageHelpLine.FileName));
@@ -213,34 +147,19 @@ std::list<stack_line_info> get_stack_list(void* bp, void* sp, void* ip, size_t m
 		}
 		if (symbolName)
 		{
-			static const int maxNameLength = 1024;
+			const int maxNameLength = 1024;
 			char symbolBf[sizeof(IMAGEHLP_SYMBOL64)+maxNameLength] = { 0 };
 			PIMAGEHLP_SYMBOL64 symbol;
 			DWORD64 symbolDisplacement64 = 0;
-
 			symbol = (PIMAGEHLP_SYMBOL64)symbolBf;
 			symbol->SizeOfStruct = sizeof(symbolBf);
 			symbol->MaxNameLength = maxNameLength;
-
-			if (SymGetSymFromAddr64(
-				hProcess,
-				trace[i],
-				&symbolDisplacement64,
-				symbol)
-				)
-			{
-				stackResult.symbolName = symbol->Name;
-			}
-			else
-			{
-				stackResult.symbolName = "unknow...";
-			}
+			stackResult.symbolName = SymGetSymFromAddr64(hProcess, trace[i], &symbolDisplacement64, symbol) ? symbol->Name : "unknow...";
 		}
 		if (module)
 		{
 			IMAGEHLP_MODULE64 imageHelpModule;
 			imageHelpModule.SizeOfStruct = sizeof(imageHelpModule);
-
 			if (SymGetModuleInfo64(hProcess, trace[i], &imageHelpModule))
 			{
 				stackResult.module = std::string(imageHelpModule.ImageName, check_file_name(imageHelpModule.ImageName));
@@ -287,16 +206,16 @@ void stack_overflow_format(int size, std::list<stack_line_info>&& createStack)
 
 void install_check_stack()
 {
-	bool ok = _initialize();
+	bool ok = sym_initialize();
 	assert(ok);
 #ifdef PRINT_ACTOR_STACK
-	auto stk = get_stack_list(1, 0, true, true);
+	std::list<stack_line_info> stk = get_stack_list(1, 0, true, true);
 	std::string moduleName;
 	if (!stk.empty())
 	{
 		moduleName = &stk.front().module[stk.front().module.find_last_of('\\') + 1];
 	}
-	_mkdir((moduleName + " stack_log\\").c_str());
+	CreateDirectoryA((moduleName + " stack_log\\").c_str(), NULL);
 	_stackLogFile.open(moduleName + " stack_log\\" + get_time_string_file_s() + ".log");
 	if (_stackLogFile.good())
 	{

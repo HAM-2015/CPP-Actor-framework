@@ -2721,15 +2721,13 @@ void my_actor::unlock_suspend()
 	{
 		_holdSuspended = false;
 		assert(!_suspendResumeQueue.empty());
-		suspend_resume_option opt = std::move(_suspendResumeQueue.front());
-		_suspendResumeQueue.pop_front();
-		if (opt._isSuspend)
+		if (_suspendResumeQueue.front()._isSuspend)
 		{
-			suspend(std::move(opt._h));
+			begin_suspend();
 		} 
 		else
 		{
-			resume(std::move(opt._h));
+			begin_resume();
 		}
 		tick_yield();
 	}
@@ -2775,31 +2773,7 @@ void my_actor::suspend(std::function<void()>&& h)
 			{
 				if (1 == self->_suspendResumeQueue.size())
 				{
-					self->_suspended = true;
-					self->suspend_timer();
-					self->_suspend(std::bind([](actor_handle& shared_this)
-					{
-						my_actor* const self = shared_this.get();
-						suspend_resume_option opt = std::move(self->_suspendResumeQueue.front());
-						self->_suspendResumeQueue.pop_front();
-						if (opt._h)
-						{
-							opt._h();
-						}
-						if (!self->_suspendResumeQueue.empty())
-						{
-							suspend_resume_option opt = std::move(self->_suspendResumeQueue.front());
-							self->_suspendResumeQueue.pop_front();
-							if (opt._isSuspend)
-							{
-								self->suspend(std::move(opt._h));
-							}
-							else
-							{
-								self->resume(std::move(opt._h));
-							}
-						}
-					}, std::move(shared_this)));
+					self->begin_suspend();
 				}
 			}
 			else
@@ -2814,28 +2788,51 @@ void my_actor::suspend(std::function<void()>&& h)
 	}, shared_from_this(), std::move(h)));
 }
 
-void my_actor::_suspend(std::function<void()>&& h)
+void my_actor::begin_suspend()
 {
+	suspend_timer();
+	_suspended = true;
 	if (!_childActorList.empty())
 	{
 		assert(0 == _childSuspendResumeCount);
 		_childSuspendResumeCount = _childActorList.size();
 		for (actor_handle& childActor : _childActorList)
 		{
-			childActor->suspend(std::bind([](actor_handle& shared_this, std::function<void()>& h)
+			childActor->suspend(std::bind([](actor_handle& shared_this)
 			{
 				my_actor* const self = shared_this.get();
 				self->_childSuspendResumeCount--;
 				if (0 == self->_childSuspendResumeCount)
 				{
-					h();
+					self->child_suspend_then();
 				}
-			}, shared_from_this(), std::move(h)));
+			}, shared_from_this()));
 		}
 	}
 	else
 	{
-		h();
+		child_suspend_then();
+	}
+}
+
+void my_actor::child_suspend_then()
+{
+	suspend_resume_option opt = std::move(_suspendResumeQueue.front());
+	_suspendResumeQueue.pop_front();
+	if (opt._h)
+	{
+		opt._h();
+	}
+	if (!_suspendResumeQueue.empty())
+	{
+		if (_suspendResumeQueue.front()._isSuspend)
+		{
+			begin_suspend();
+		}
+		else
+		{
+			begin_resume();
+		}
 	}
 }
 
@@ -2861,39 +2858,7 @@ void my_actor::resume(std::function<void()>&& h)
 			{
 				if (1 == self->_suspendResumeQueue.size())
 				{
-					self->_resume(std::bind([](actor_handle& shared_this)
-					{
-						my_actor* const self = shared_this.get();
-						suspend_resume_option opt = std::move(self->_suspendResumeQueue.front());
-						self->_suspendResumeQueue.pop_front();
-						if (opt._h)
-						{
-							opt._h();
-						}
-						if (!self->_suspendResumeQueue.empty())
-						{
-							suspend_resume_option opt = std::move(self->_suspendResumeQueue.front());
-							self->_suspendResumeQueue.pop_front();
-							if (opt._isSuspend)
-							{
-								self->suspend(std::move(opt._h));
-							}
-							else
-							{
-								self->resume(std::move(opt._h));
-							}
-						}
-						else
-						{
-							self->resume_timer();
-							self->_suspended = false;
-							if (self->_holdPull)
-							{
-								self->_holdPull = false;
-								self->pull_yield();
-							}
-						}
-					}, std::move(shared_this)));
+					self->begin_resume();
 				}
 			}
 			else
@@ -2908,7 +2873,7 @@ void my_actor::resume(std::function<void()>&& h)
 	}, shared_from_this(), std::move(h)));
 }
 
-void my_actor::_resume(std::function<void()>&& h)
+void my_actor::begin_resume()
 {
 	if (!_childActorList.empty())
 	{
@@ -2916,20 +2881,48 @@ void my_actor::_resume(std::function<void()>&& h)
 		_childSuspendResumeCount = _childActorList.size();
 		for (actor_handle& childActor : _childActorList)
 		{
-			childActor->resume(std::bind([](actor_handle& shared_this, std::function<void()>& h)
+			childActor->resume(std::bind([](actor_handle& shared_this)
 			{
 				my_actor* const self = shared_this.get();
 				self->_childSuspendResumeCount--;
 				if (0 == self->_childSuspendResumeCount)
 				{
-					h();
+					self->child_resume_then();
 				}
-			}, shared_from_this(), std::move(h)));
+			}, shared_from_this()));
 		}
 	}
 	else
 	{
-		h();
+		child_resume_then();
+	}
+}
+
+void my_actor::child_resume_then()
+{
+	resume_timer();
+	_suspended = false;
+	suspend_resume_option opt = std::move(_suspendResumeQueue.front());
+	_suspendResumeQueue.pop_front();
+	if (opt._h)
+	{
+		opt._h();
+	}
+	if (!_suspendResumeQueue.empty())
+	{
+		if (_suspendResumeQueue.front()._isSuspend)
+		{
+			begin_suspend();
+		}
+		else
+		{
+			begin_resume();
+		}
+	}
+	else if (_holdPull)
+	{
+		_holdPull = false;
+		pull_yield();
 	}
 }
 

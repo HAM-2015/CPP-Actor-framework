@@ -8501,8 +8501,10 @@ private:
 	void cancel_timer();
 	void suspend_timer();
 	void resume_timer();
-	void _suspend(std::function<void()>&& h);
-	void _resume(std::function<void()>&& h);
+	void begin_suspend();
+	void begin_resume();
+	void child_suspend_then();
+	void child_resume_then();
 	void run_one();
 	void pull_yield_tls();
 	void pull_yield();

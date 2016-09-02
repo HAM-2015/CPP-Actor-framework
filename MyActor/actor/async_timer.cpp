@@ -83,7 +83,7 @@ void TimerBoost_::cancel(timer_handle& th)
 	{//删除当前定时器节点
 		assert(_lockStrand && _lockStrand->running_in_this_thread());
 		th._null = true;
-		auto itNode = th._queueNode;
+		handler_queue::iterator itNode = th._queueNode;
 		if (_handlerQueue.size() == 1)
 		{
 			_extMaxTick = 0;
@@ -154,14 +154,14 @@ void TimerBoost_::event_handler(int tc)
 	if (tc == _timerCount)
 	{
 		_extFinishTime = 0;
-		long long nt = get_tick_us();
+		long long ct = get_tick_us();
 		while (!_handlerQueue.empty())
 		{
-			auto iter = _handlerQueue.begin();
-			if (iter->first > nt + 500)
+			handler_queue::iterator iter = _handlerQueue.begin();
+			if (iter->first > ct + 500)
 			{
 				_extFinishTime = iter->first;
-				timer_loop(_extFinishTime, _extFinishTime - nt);
+				timer_loop(_extFinishTime, _extFinishTime - ct);
 				return;
 			}
 			else

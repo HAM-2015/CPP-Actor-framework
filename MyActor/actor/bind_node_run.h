@@ -733,8 +733,8 @@ static v8::Local<v8::Function> make_js_call_cpp_once(v8::Isolate* isolate, CastH
 /*!
 @brief nodejs初始化的时候注册，让cpp可以以全局方式调用js
 */
-#define NODE_REGIST_GLOBAL()\
-	NODE_SET_METHOD(exports, "regist_global", [](const v8::FunctionCallbackInfo<v8::Value>& args){\
+#define NODE_SET_GLOBAL()\
+	NODE_SET_METHOD(exports, "set_global", [](const v8::FunctionCallbackInfo<v8::Value>& args){\
 	js_global::_global = v8::Persistent<v8::Function, v8::CopyablePersistentTraits<v8::Function>>(args.GetIsolate(), v8::Local<v8::Function>::Cast(args[0])); });
 
 //////////////////////////////////////////////////////////////////////////

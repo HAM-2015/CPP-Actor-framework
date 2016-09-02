@@ -9,10 +9,7 @@ run_thread::run_thread()
 
 run_thread::~run_thread()
 {
-	if (_handle)
-	{
-		CloseHandle(_handle);
-	}
+	assert(!_handle);
 }
 
 DWORD WINAPI run_thread::thread_exec(LPVOID p)
@@ -26,9 +23,13 @@ DWORD WINAPI run_thread::thread_exec(LPVOID p)
 
 void run_thread::join()
 {
+	assert(this_thread_id() != get_id());
 	if (_handle)
 	{
 		WaitForSingleObject(_handle, INFINITE);
+		CloseHandle(_handle);
+		_handle = NULL;
+		_threadID = 0;
 	}
 }
 
@@ -129,7 +130,7 @@ run_thread::run_thread()
 
 run_thread::~run_thread()
 {
-
+	assert(!_pthread);
 }
 
 void* run_thread::thread_exec(void* p)
@@ -143,9 +144,11 @@ void* run_thread::thread_exec(void* p)
 
 void run_thread::join()
 {
+	assert(this_thread_id() != get_id());
 	if (_pthread)
 	{
 		pthread_join(_pthread, NULL);
+		_pthread = 0;
 	}
 }
 

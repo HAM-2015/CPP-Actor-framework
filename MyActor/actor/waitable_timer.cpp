@@ -53,27 +53,28 @@ void WaitableTimer_::timerThread()
 {
 	run_thread::set_current_thread_name("waitable timer thread");
 	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+	msg_queue<WaitableTimerEvent_*, mem_alloc2<>> tempQueue(1024);
 	while (true)
 	{
 		if (WAIT_OBJECT_0 == WaitForSingleObject(_timerHandle, INFINITE) && !_exited)
 		{
-			long long nt = get_tick_us();
+			long long ct = get_tick_us();
 			std::lock_guard<std::mutex> lg(_ctrlMutex);
 			_extFinishTime = -1;
 			while (!_eventsQueue.empty())
 			{
-				auto iter = _eventsQueue.begin();
-				if (iter->first > nt)
+				handler_queue::iterator iter = _eventsQueue.begin();
+				if (iter->first > ct)
 				{
 					_extFinishTime = iter->first;
 					LARGE_INTEGER sleepTime;
-					sleepTime.QuadPart = -(LONGLONG)((iter->first - nt) * 10);
+					sleepTime.QuadPart = -(LONGLONG)((iter->first - ct) * 10);
 					SetWaitableTimer(_timerHandle, &sleepTime, 0, NULL, NULL, FALSE);
 					break;
 				} 
 				else
 				{
-					iter->second->eventHandler();
+					tempQueue.push_back(iter->second);
 					_eventsQueue.erase(iter);
 				}
 			}
@@ -81,6 +82,11 @@ void WaitableTimer_::timerThread()
 		else
 		{
 			break;
+		}
+		while (!tempQueue.empty())
+		{
+			tempQueue.front()->eventHandler();
+			tempQueue.pop_front();
 		}
 	}
 }
@@ -128,8 +134,8 @@ void WaitableTimer_::appendEvent(long long abs, long long rel, WaitableTimerEven
 		_extFinishTime = abs;
 		struct itimerspec newValue;
 		newValue.it_interval = { 0, 0 };
-		newValue.it_value.tv_sec = (__time_t)(_extFinishTime / 1000000);
-		newValue.it_value.tv_nsec = (long)(_extFinishTime % 1000000) * 1000;
+		newValue.it_value.tv_sec = (__time_t)(abs / 1000000);
+		newValue.it_value.tv_nsec = (long)(abs % 1000000) * 1000;
 		timerfd_settime(_timerFd, TFD_TIMER_ABSTIME, &newValue, NULL);
 	}
 }
@@ -142,18 +148,19 @@ void WaitableTimer_::timerThread()
 	pthread_attr_init(&threadAttr);
 	pthread_attr_setschedpolicy(&threadAttr, SCHED_FIFO);
 	pthread_attr_setschedparam(&threadAttr, &pm);
+	msg_queue<WaitableTimerEvent_*, mem_alloc2<>> tempQueue(1024);
 	long long exp = 0;
 	while (true)
 	{
 		if (sizeof(exp) == read(_timerFd, &exp, sizeof(exp)) && !_exited)
 		{
-			long long nt = get_tick_us();
+			long long ct = get_tick_us();
 			std::lock_guard<std::mutex> lg(_ctrlMutex);
 			_extFinishTime = -1;
 			while (!_eventsQueue.empty())
 			{
-				auto iter = _eventsQueue.begin();
-				if (iter->first > nt)
+				handler_queue::iterator iter = _eventsQueue.begin();
+				if (iter->first > ct)
 				{
 					_extFinishTime = iter->first;
 					struct itimerspec newValue;
@@ -165,7 +172,7 @@ void WaitableTimer_::timerThread()
 				}
 				else
 				{
-					iter->second->eventHandler();
+					tempQueue.push_back(iter->second);
 					_eventsQueue.erase(iter);
 				}
 			}
@@ -173,6 +180,11 @@ void WaitableTimer_::timerThread()
 		else
 		{
 			break;
+		}
+		while (!tempQueue.empty())
+		{
+			tempQueue.front()->eventHandler();
+			tempQueue.pop_front();
 		}
 	}
 	pthread_attr_destroy(&threadAttr);
