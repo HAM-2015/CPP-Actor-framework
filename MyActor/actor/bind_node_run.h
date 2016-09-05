@@ -13,6 +13,10 @@
 #include "my_actor.h"
 #include "run_strand.h"
 
+#ifdef _MSC_VER
+#pragma comment(lib, "node.lib")
+#endif
+
 struct std_buffer
 {
 	void* data;

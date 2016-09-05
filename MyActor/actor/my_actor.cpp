@@ -2783,7 +2783,7 @@ void my_actor::suspend(std::function<void()>&& h)
 		}
 		else if (h)
 		{
-			h();
+			CHECK_EXCEPTION(h);
 		}
 	}, shared_from_this(), std::move(h)));
 }
@@ -2821,7 +2821,7 @@ void my_actor::child_suspend_then()
 	_suspendResumeQueue.pop_front();
 	if (opt._h)
 	{
-		opt._h();
+		CHECK_EXCEPTION(opt._h);
 	}
 	if (!_suspendResumeQueue.empty())
 	{
@@ -2868,7 +2868,7 @@ void my_actor::resume(std::function<void()>&& h)
 		}
 		else if (h)
 		{
-			h();
+			CHECK_EXCEPTION(h);
 		}
 	}, shared_from_this(), std::move(h)));
 }
@@ -2900,13 +2900,11 @@ void my_actor::begin_resume()
 
 void my_actor::child_resume_then()
 {
-	resume_timer();
-	_suspended = false;
 	suspend_resume_option opt = std::move(_suspendResumeQueue.front());
 	_suspendResumeQueue.pop_front();
 	if (opt._h)
 	{
-		opt._h();
+		CHECK_EXCEPTION(opt._h);
 	}
 	if (!_suspendResumeQueue.empty())
 	{
@@ -2919,10 +2917,15 @@ void my_actor::child_resume_then()
 			begin_resume();
 		}
 	}
-	else if (_holdPull)
+	else
 	{
-		_holdPull = false;
-		pull_yield();
+		resume_timer();
+		_suspended = false;
+		if (_holdPull)
+		{
+			_holdPull = false;
+			pull_yield();
+		}
 	}
 }
 

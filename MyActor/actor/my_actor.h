@@ -6517,15 +6517,14 @@ private:
 	template <typename... Args>
 	static void clear_msg_list(my_actor* const host, const std::shared_ptr<msg_pool_status::pck<Args...>>& msgPck)
 	{
-		std::shared_ptr<msg_pool_status::pck<Args...>> uStack[16];
-
 		size_t stackl = 0;
-		auto pckIt = msgPck;
+		msg_pool_status::pck<Args...>* uStack[16];
+		msg_pool_status::pck<Args...>* pckIt = msgPck.get();
 		while (pckIt->_next)
 		{
 			assert(!pckIt->_next->_isHead);
 			pckIt->_msgPool.reset();
-			pckIt = pckIt->_next;
+			pckIt = pckIt->_next.get();
 			pckIt->lock(host);
 			assert(stackl < 15);
 			uStack[stackl++] = pckIt;
@@ -6551,14 +6550,14 @@ private:
 		typedef typename MsgPool_<Args...>::pump_handler pump_handler;
 		typedef typename MsgPump_<Args...>::msg_type msg_type;
 
-		std::shared_ptr<msg_pool_status::pck<Args...>> uStack[16];
 		size_t stackl = 0;
-		auto pckIt = msgPck;
+		msg_pool_status::pck<Args...>* uStack[16];
+		msg_pool_status::pck<Args...>* pckIt = msgPck.get();
 		while (pckIt->_next)
 		{
 			assert(!pckIt->_next->_isHead);
 			pckIt->_msgPool = newPool;
-			pckIt = pckIt->_next;
+			pckIt = pckIt->_next.get();
 			pckIt->lock(this);
 			assert(stackl < 15);
 			uStack[stackl++] = pckIt;
@@ -7686,16 +7685,16 @@ public:
 		});
 		if (msgPck)
 		{
-			std::shared_ptr<msg_pool_status::pck<Args...>> uStack[16];
-			size_t stackl = 0;
 			msgPck->lock(this);
-			auto pckIt = msgPck;
+			size_t stackl = 0;
+			msg_pool_status::pck<Args...>* uStack[16];
+			msg_pool_status::pck<Args...>* pckIt = msgPck.get();
 			while (true)
 			{
 				if (pckIt->_next)
 				{
 					assert(stackl < 15);
-					pckIt = pckIt->_next;
+					pckIt = pckIt->_next.get();
 					uStack[stackl++] = pckIt;
 					pckIt->lock(this);
 				}
