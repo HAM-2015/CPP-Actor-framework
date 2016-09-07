@@ -48,8 +48,9 @@
 #define __disable_noexcept noexcept(false)
 #endif
 
-#define _BOND_LINE(__P__, __L__) BOND_NAME(__P__, __L__)
-#define BOND_LINE(__P__) _BOND_LINE(__P__, __LINE__)
+#define _BOND_ID(__P__, __L__) BOND_NAME(__P__, __L__)
+#define BOND_LINE(__P__) _BOND_ID(__P__, __LINE__)
+#define BOND_COUNT(__P__) _BOND_ID(__P__, __COUNTER__)
 
 #define _param_pck1()
 #define _param_pck2(__p1__) __p1__
@@ -151,9 +152,9 @@ struct MakeBreakOfScope2_
 	auto BOND_NAME(__raiiHandler, __name__) = [&]__handler__; \
 	BreakOfScope_<decltype(BOND_NAME(__raiiHandler, __name__))> BOND_NAME(__raiiCall, __name__)(BOND_NAME(__raiiHandler, __name__))
 
-#define BREAK_OF_SCOPE(__handler__) BREAK_OF_SCOPE_NAME(__LINE__, __handler__)
+#define BREAK_OF_SCOPE(__handler__) BREAK_OF_SCOPE_NAME(__COUNTER__, __handler__)
 #define BREAK_OF_SCOPE_EXEC(...) BREAK_OF_SCOPE({ option_pck(__VA_ARGS__) });
-#define break_of_scope_call auto BOND_LINE(__raiiCall) = MakeBreakOfScope2_()-
+#define break_of_scope_call auto BOND_COUNT(__raiiCall) = MakeBreakOfScope2_()-
 
 //在Actor作用域内定时触发某个操作
 #define HEARTBEAT_TRACE_NAME(__name__, __self__, __tm__, __handler__)\
@@ -167,7 +168,7 @@ struct MakeBreakOfScope2_
 	BREAK_OF_SCOPE_NAME(BOND_NAME(__heartbeatHandler_, __name__), { __name__->cancel(); });
 
 //在Actor作用域内定时触发某个操作
-#define HEARTBEAT_TRACE(__self__, __tm__, __handler__) HEARTBEAT_TRACE_NAME(BOND_LINE(__heartbeatTimer), __self__, __tm__, __handler__)
+#define HEARTBEAT_TRACE(__self__, __tm__, __handler__) HEARTBEAT_TRACE_NAME(BOND_COUNT(__heartbeatTimer), __self__, __tm__, __handler__)
 #define HEARTBEAT_EXEC(__self__, __tm__, ...) HEARTBEAT_TRACE(__self__, __tm__, { option_pck(__VA_ARGS__) });
 
 //在Actor作用域内延时触发某个操作
@@ -178,7 +179,7 @@ struct MakeBreakOfScope2_
 	BREAK_OF_SCOPE_NAME(BOND_NAME(__delayHandler_, __name__), { __name__->cancel(); });
 
 //在Actor作用域内延时触发某个操作
-#define DELAY_TRACE(__self__, __tm__, __handler__) DELAY_TRACE_NAME(BOND_LINE(__delayTimer), __self__, __tm__, __handler__)
+#define DELAY_TRACE(__self__, __tm__, __handler__) DELAY_TRACE_NAME(BOND_COUNT(__delayTimer), __self__, __tm__, __handler__)
 #define DELAY_EXEC(__self__, __tm__, ...)  DELAY_TRACE(__self__, __tm__, { option_pck(__VA_ARGS__) });
 
 //在Actor作用域内延时触发某个操作
@@ -574,5 +575,47 @@ struct ValTryRefMove_<const T&>
 #elif __GNUG__
 #define FUNCTION_ALLOCATOR(__dst__, __src__, __alloc__) __dst__(__src__)
 #endif
+
+//////////////////////////////////////////////////////////////////////////
+#define co_generator generator& gen
+#define co_begin_context struct co_context_tag { int __coNext
+#define co_end_context(__ctx__) } * const __ctx__ = (struct co_context_tag*)gen._ctx;\
+struct co_context_tag*& __ctx = (struct co_context_tag*&)gen._ctx;
+
+#define co_begin if (!__ctx) { __ctx = new co_context_tag(); __ctx->__coNext = 0; return; }\
+	if (__ctx) switch(__ctx->__coNext) { case 0:;
+
+#define co_begin_space(__space__) if (!__ctx) { __ctx = new(__space__)co_context_tag(); __ctx->__coNext = 0; return; }\
+	if (__ctx) switch(__ctx->__coNext) { case 0:;
+
+#define co_begin_alloc(__allocator__) if (!__ctx) {\
+	__ctx = new((__allocator__).allocate(sizeof(co_context_tag)))co_context_tag(); __ctx->__coNext = 0; return; }\
+	if (__ctx) switch(__ctx->__coNext) { case 0:;
+
+#define co_yield \
+do {\
+	__ctx->__coNext = __LINE__; \
+	return; case __LINE__:; \
+} while (0)
+
+#define co_end } delete __ctx; __ctx = NULL; return;
+#define co_end_alloc(__allocator__) } __ctx->~co_context_tag(); (__allocator__).deallocate(__ctx); __ctx = NULL; return;
+
+#define co_sleep(__timer__, __ms__) (__timer__)->timeout(__ms__, std::bind([](generator& gen){gen.next();}, std::move(gen)));co_yield
+
+struct generator
+{
+	generator(generator&& s);
+	generator(std::function<void(generator&)>&& handler);
+	generator(const std::function<void(generator&)>& handler);
+	bool next();
+	bool operator()();
+	bool done();
+	void* _ctx;
+	std::function<void(generator&)> _handler;
+private:
+	generator(const generator&) = delete;
+	void operator=(const generator&) = delete;
+};
 
 #endif

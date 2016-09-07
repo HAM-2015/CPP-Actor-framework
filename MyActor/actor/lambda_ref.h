@@ -442,7 +442,7 @@ struct LocalRecursive_<_Rt(_Types...)>
 	_Rt operator()(Args&&... args)
 	{
 		DEBUG_OPERATION(_depth++);
-		DEBUG_OPERATION(BREAK_OF_SCOPE({ _depth--; }));
+		DEBUG_OPERATION(BREAK_OF_SCOPE_EXEC(_depth--));
 		assert(_func);
 		return _func->invoke(std::forward<Args>(args)...);
 	}
@@ -603,10 +603,10 @@ struct RefHandler_
 };
 
 template <typename R = void, typename Handler>
-RefHandler_<Handler, R> wrap_ref_handler(Handler& handler)
+RefHandler_<RM_REF(Handler), R> wrap_ref_handler(Handler&& handler)
 {
-	static_assert(!std::is_rvalue_reference<Handler&>::value, "");
-	return RefHandler_<Handler, R>(bool(), handler);
+	static_assert(!std::is_rvalue_reference<Handler&&>::value, "");
+	return RefHandler_<RM_REF(Handler), R>(bool(), handler);
 }
 
 template <typename... _Types>
@@ -646,6 +646,7 @@ struct WrapLocalHandler_<Handler, _Rt(_Types...)> : public wrap_local_handler_fa
 template <typename R = void, typename... Types, typename Handler>
 WrapLocalHandler_<RM_REF(Handler), R(Types...)> wrap_local_handler(Handler&& handler)
 {
+	static_assert(!std::is_rvalue_reference<Handler&&>::value, "");
 	return WrapLocalHandler_<RM_REF(Handler), R(Types...)>(handler);
 }
 

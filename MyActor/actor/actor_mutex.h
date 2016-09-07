@@ -38,7 +38,7 @@ public:
 	template <typename Ntf>
 	void lock(my_actor* host, Ntf&& lockNtf)
 	{
-		lock(host, (wrap_local_handler_face<void()>&&)wrap_local_handler(TRY_MOVE(lockNtf)));
+		lock(host, (wrap_local_handler_face<void()>&&)wrap_local_handler(lockNtf));
 	}
 
 	/*!
@@ -59,7 +59,7 @@ public:
 	template <typename Ntf>
 	bool timed_lock(int tm, my_actor* host, Ntf&& lockNtf)
 	{
-		return timed_lock(tm, host, (wrap_local_handler_face<void()>&&)wrap_local_handler(TRY_MOVE(lockNtf)));
+		return timed_lock(tm, host, (wrap_local_handler_face<void()>&&)wrap_local_handler(lockNtf));
 	}
 
 	/*!
@@ -182,13 +182,13 @@ public:
 	template <typename Ntf>
 	void lock(my_actor* host, Ntf&& lockNtf)
 	{
-		lock(host, (wrap_local_handler_face<void()>&&)wrap_local_handler(TRY_MOVE(lockNtf)));
+		lock(host, (wrap_local_handler_face<void()>&&)wrap_local_handler(lockNtf));
 	}
 
 	template <typename Ntf>
 	bool timed_lock(int tm, my_actor* host, Ntf&& lockNtf)
 	{
-		return timed_lock(tm, host, (wrap_local_handler_face<void()>&&)wrap_local_handler(TRY_MOVE(lockNtf)));
+		return timed_lock(tm, host, (wrap_local_handler_face<void()>&&)wrap_local_handler(lockNtf));
 	}
 
 	/*!
@@ -201,13 +201,13 @@ public:
 	template <typename Ntf>
 	void lock_shared(my_actor* host, Ntf&& lockNtf)
 	{
-		lock_shared(host, (wrap_local_handler_face<void()>&&)wrap_local_handler(TRY_MOVE(lockNtf)));
+		lock_shared(host, (wrap_local_handler_face<void()>&&)wrap_local_handler(lockNtf));
 	}
 
 	template <typename Ntf>
 	bool timed_lock_shared(int tm, my_actor* host, Ntf&& lockNtf)
 	{
-		return timed_lock_shared(tm, host, (wrap_local_handler_face<void()>&&)wrap_local_handler(TRY_MOVE(lockNtf)));
+		return timed_lock_shared(tm, host, (wrap_local_handler_face<void()>&&)wrap_local_handler(lockNtf));
 	}
 
 	/*!
@@ -218,7 +218,7 @@ public:
 	template <typename Ntf>
 	void lock_upgrade(my_actor* host, Ntf&& lockNtf)
 	{
-		lock_upgrade(host, (wrap_local_handler_face<void()>&&)wrap_local_handler(TRY_MOVE(lockNtf)));
+		lock_upgrade(host, (wrap_local_handler_face<void()>&&)wrap_local_handler(lockNtf));
 	}
 
 	/*!

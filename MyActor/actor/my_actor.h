@@ -2240,7 +2240,7 @@ private:
 		if (_msgBuff.has())
 		{
 			isRun = true;
-			BREAK_OF_SCOPE({ _msgBuff.clear(); });
+			BREAK_OF_SCOPE_EXEC(_msgBuff.clear());
 			return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 		}
 		isRun = false;
@@ -2310,7 +2310,7 @@ private:
 		if (_msgBuff.has())
 		{
 			isRun = true;
-			BREAK_OF_SCOPE({ _msgBuff.clear(); });
+			BREAK_OF_SCOPE_EXEC(_msgBuff.clear());
 			return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 		}
 		isRun = false;
@@ -2392,7 +2392,7 @@ private:
 		if (_msgBuff.has())
 		{
 			isRun = true;
-			BREAK_OF_SCOPE({ _msgBuff.clear(); });
+			BREAK_OF_SCOPE_EXEC(_msgBuff.clear());
 			return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 		}
 		isRun = false;
@@ -2764,7 +2764,7 @@ private:
 			{
 				isRun = true;
 				_lostNtfed = false;
-				BREAK_OF_SCOPE({ _msgBuff.clear(); });
+				BREAK_OF_SCOPE_EXEC(_msgBuff.clear());
 				return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 			}
 			else if (_connected && !_disconnected && !_msgHandle.is_connected())
@@ -3000,7 +3000,7 @@ private:
 			{
 				isRun = true;
 				_lostNtfed = false;
-				BREAK_OF_SCOPE({ _msgBuff.clear(); });
+				BREAK_OF_SCOPE_EXEC(_msgBuff.clear());
 				return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 			}
 			else if (is_losted())
@@ -3093,7 +3093,7 @@ private:
 			{
 				isRun = true;
 				_lostNtfed = false;
-				BREAK_OF_SCOPE({ _msgBuff.clear(); });
+				BREAK_OF_SCOPE_EXEC(_msgBuff.clear());
 				return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 			}
 			else if (is_losted())
@@ -3197,7 +3197,7 @@ private:
 			{
 				isRun = true;
 				_lostNtfed = false;
-				BREAK_OF_SCOPE({ _msgBuff.clear(); });
+				BREAK_OF_SCOPE_EXEC(_msgBuff.clear());
 				return tuple_invoke<bool>(_handler, std::move(_msgBuff._dstBuff.get()));
 			}
 			else if (is_losted())
@@ -5806,10 +5806,7 @@ private:
 		assert(amh._hostActor && amh._hostActor->self_id() == self_id());
 		if (!amh.read_msg(dstRec))
 		{
-			BREAK_OF_SCOPE(
-			{
-				amh.stop_waiting();
-			});
+			BREAK_OF_SCOPE_EXEC(amh.stop_waiting());
 #ifdef ENABLE_CHECK_LOST
 			if (amh._losted && amh._checkLost)
 			{
@@ -5932,10 +5929,7 @@ public:
 		assert(amh._hostActor && amh._hostActor->self_id() == self_id());
 		if (!amh.read_msg())
 		{
-			BREAK_OF_SCOPE(
-			{
-				amh.stop_waiting();
-			});
+			BREAK_OF_SCOPE_EXEC(amh.stop_waiting());
 #ifdef ENABLE_CHECK_LOST
 			if (amh._losted && amh._checkLost)
 			{
@@ -6252,10 +6246,7 @@ public:
 		assert(ath._hostActor && ath._hostActor->self_id() == self_id());
 		if (!ath.read_msg())
 		{
-			BREAK_OF_SCOPE(
-			{
-				ath.stop_waiting();
-			});
+			BREAK_OF_SCOPE_EXEC(ath.stop_waiting());
 #ifdef ENABLE_CHECK_LOST
 			if (ath._losted && ath._checkLost)
 			{
@@ -6407,10 +6398,7 @@ public:
 		const size_t mask = (size_t)1 << id;
 		if (!(mask & _trigSignMask))
 		{
-			BREAK_OF_SCOPE(
-			{
-				_waitingTrigMask &= (-1 ^ mask);
-			});
+			BREAK_OF_SCOPE_EXEC(_waitingTrigMask &= (-1 ^ mask));
 			_waitingTrigMask |= mask;
 			if (tm > 0)
 			{
@@ -7213,10 +7201,7 @@ private:
 		assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
 		if (!pump.get()->read_msg(dstRec))
 		{
-			BREAK_OF_SCOPE(
-			{
-				pump.get()->stop_waiting();
-			});
+			BREAK_OF_SCOPE_EXEC(pump.get()->stop_waiting());
 			if (checkDis && pump.get()->isDisconnected())
 			{
 				throw typename msg_pump_handle<Args...>::pump_disconnected(pump.get_id());
@@ -7276,10 +7261,7 @@ private:
 	{
 		assert(!pump.check_closed());
 		assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
-		BREAK_OF_SCOPE(
-		{
-			pump.get()->stop_waiting();
-		});
+		BREAK_OF_SCOPE_EXEC(pump.get()->stop_waiting());
 		if (!pump.get()->try_read(dstRec))
 		{
 			if (checkDis && pump.get()->isDisconnected())
@@ -7314,10 +7296,7 @@ private:
 			{
 				return false;
 			}
-			BREAK_OF_SCOPE(
-			{
-				pump.get()->stop_waiting();
-			});
+			BREAK_OF_SCOPE_EXEC(pump.get()->stop_waiting());
 			pump.get()->_waitConnect = true;
 			if (tm >= 0)
 			{
@@ -7387,10 +7366,7 @@ public:
 		assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
 		if (!pump.get()->read_msg())
 		{
-			BREAK_OF_SCOPE(
-			{
-				pump.get()->stop_waiting();
-			});
+			BREAK_OF_SCOPE_EXEC(pump.get()->stop_waiting());
 			if (checkDis && pump.get()->isDisconnected())
 			{
 				throw msg_pump_handle<>::pump_disconnected(pump.get_id());
@@ -7861,10 +7837,7 @@ private:
 		lock_quit();
 		DEBUG_OPERATION(_check_host_id(this, mbList, N));//判断句柄是不是都是自己的
 		assert(_cmp_snap_id(mbList, N));//判断有没有重复参数
-		BREAK_OF_SCOPE(
-		{
-			_mutex_cancel(mbList, N);
-		});
+		BREAK_OF_SCOPE_EXEC(_mutex_cancel(mbList, N));
 		do
 		{
 			DEBUG_OPERATION(auto nt = yield_count());
@@ -7891,10 +7864,7 @@ private:
 		size_t runCount = 0;
 		DEBUG_OPERATION(_check_host_id(this, mbList, N));//判断句柄是不是都是自己的
 		assert(_cmp_snap_id(mbList, N));//判断有没有重复参数
-		BREAK_OF_SCOPE(
-		{
-			_mutex_cancel(mbList, N);
-		});
+		BREAK_OF_SCOPE_EXEC(_mutex_cancel(mbList, N));
 		do
 		{
 			DEBUG_OPERATION(auto nt = yield_count());

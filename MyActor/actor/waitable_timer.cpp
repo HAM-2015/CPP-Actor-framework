@@ -53,7 +53,6 @@ void WaitableTimer_::timerThread()
 {
 	run_thread::set_current_thread_name("waitable timer thread");
 	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
-	msg_queue<WaitableTimerEvent_*, mem_alloc2<>> tempQueue(1024);
 	while (true)
 	{
 		if (WAIT_OBJECT_0 == WaitForSingleObject(_timerHandle, INFINITE) && !_exited)
@@ -74,7 +73,7 @@ void WaitableTimer_::timerThread()
 				} 
 				else
 				{
-					tempQueue.push_back(iter->second);
+					iter->second->eventHandler();
 					_eventsQueue.erase(iter);
 				}
 			}
@@ -82,11 +81,6 @@ void WaitableTimer_::timerThread()
 		else
 		{
 			break;
-		}
-		while (!tempQueue.empty())
-		{
-			tempQueue.front()->eventHandler();
-			tempQueue.pop_front();
 		}
 	}
 }
@@ -148,7 +142,6 @@ void WaitableTimer_::timerThread()
 	pthread_attr_init(&threadAttr);
 	pthread_attr_setschedpolicy(&threadAttr, SCHED_FIFO);
 	pthread_attr_setschedparam(&threadAttr, &pm);
-	msg_queue<WaitableTimerEvent_*, mem_alloc2<>> tempQueue(1024);
 	long long exp = 0;
 	while (true)
 	{
@@ -172,7 +165,7 @@ void WaitableTimer_::timerThread()
 				}
 				else
 				{
-					tempQueue.push_back(iter->second);
+					iter->second->eventHandler();
 					_eventsQueue.erase(iter);
 				}
 			}
@@ -180,11 +173,6 @@ void WaitableTimer_::timerThread()
 		else
 		{
 			break;
-		}
-		while (!tempQueue.empty())
-		{
-			tempQueue.front()->eventHandler();
-			tempQueue.pop_front();
 		}
 	}
 	pthread_attr_destroy(&threadAttr);

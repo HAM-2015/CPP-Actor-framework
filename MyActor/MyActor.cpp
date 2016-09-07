@@ -944,10 +944,39 @@ void go_test()
 	ios.stop();
 }
 
+void co_test()
+{
+	int p = 123;
+	io_engine ios;
+	ios.run();
+	shared_strand strand = boost_strand::create(ios);
+	generator gen(std::bind([&strand](co_generator, int& p)
+	{
+		co_begin_context;
+		int i;
+		async_timer timer;
+		co_end_context(ctx);
+
+		co_begin;
+		ctx->timer = strand->make_timer();
+		for (ctx->i = 0; ctx->i < 3; ++ctx->i)
+		{
+			trace_space("co_test", ctx->i, p);
+			p++;
+			co_sleep(ctx->timer, 1000);
+		}
+		co_end;
+	}, __1, p));
+	strand->post([&]{gen.next(); });
+	ios.stop();
+}
+
 int main(int argc, char *argv[])
 {
 	init_my_actor();
 	enable_high_resolution();
+	co_test();
+	trace("\n");
 	go_test();
 	trace("\n");
 	auto_stack_test();

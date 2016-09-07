@@ -429,3 +429,35 @@ void** tls_space::get_space()
 	return (void**)pthread_getspecific(_key);
 }
 #endif
+
+generator::generator(generator&& s)
+:_ctx(s._ctx), _handler(std::move(s._handler)) {}
+
+generator::generator(const std::function<void(generator&)>& handler)
+: _ctx(NULL), _handler(handler)
+{
+	_handler(*this);
+}
+
+generator::generator(std::function<void(generator&)>&& handler)
+: _ctx(NULL), _handler(std::move(handler))
+{
+	_handler(*this);
+}
+
+bool generator::next()
+{
+	assert(!done());
+	_handler(*this);
+	return !_ctx;
+}
+
+bool generator::operator()()
+{
+	return next();
+}
+
+bool generator::done()
+{
+	return !_ctx;
+}

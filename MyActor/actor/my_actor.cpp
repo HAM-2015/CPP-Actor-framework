@@ -3481,10 +3481,7 @@ bool my_actor::try_pump_msg(bool checkDis, const msg_pump_handle<>& pump)
 	assert_enter();
 	assert(!pump.check_closed());
 	assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
-	BREAK_OF_SCOPE(
-	{
-		pump.get()->stop_waiting();
-	});
+	BREAK_OF_SCOPE_EXEC(pump.get()->stop_waiting());
 	if (!pump.get()->try_read())
 	{
 		if (checkDis && pump.get()->isDisconnected())

@@ -984,7 +984,7 @@ protected:
 		if (!closed)
 		{
 			bool ok = false;
-			BREAK_OF_SCOPE({ ntfSend(!ok); });
+			BREAK_OF_SCOPE_EXEC(ntfSend(!ok));
 			BEGIN_TRY_
 			{
 				new(res)R(h(*srcMsg));
@@ -1048,7 +1048,7 @@ protected:
 			throw_try_take_exception();
 		}
 		bool ok = false;
-		BREAK_OF_SCOPE({ ntfSend(!ok); });
+		BREAK_OF_SCOPE_EXEC(ntfSend(!ok));
 		BEGIN_TRY_
 		{
 			new(res)R(h(*srcMsg));
@@ -1138,7 +1138,7 @@ protected:
 			throw_close_exception();
 		}
 		bool ok = false;
-		BREAK_OF_SCOPE({ ntfSend(!ok); });
+		BREAK_OF_SCOPE_EXEC(ntfSend(!ok));
 		BEGIN_TRY_
 		{
 			new(res)R(h(*srcMsg));
