@@ -925,6 +925,48 @@ void auto_stack_test()
 	trace_line("end auto_stack_test");
 }
 
+void co_test()
+{
+	int p = 123;
+	io_engine ios;
+	ios.run();
+	auto asleep = [](co_generator, async_timer& timer)
+	{
+		co_begin_context;
+		co_end_context(ctx);
+
+		co_begin;
+		co_sleep(timer, 500);
+		co_end;
+	};
+	{
+		shared_strand strand = boost_strand::create(ios);
+		co_go(strand) std::bind([&asleep](co_generator, shared_strand& strand, int& p)
+		{
+			co_begin_context;
+			int i;
+			int j;
+			async_timer timer;
+			co_end_context(ctx);
+
+			co_begin;
+			ctx.timer = strand->make_timer();
+			for (ctx.i = 0; ctx.i < 3; ++ctx.i)
+			{
+				info_trace_space("co_test", ctx.i, p++);
+				co_invoke(asleep, __1, std::ref(ctx.timer));
+				for (ctx.j = 0; ctx.j < 10; ++ctx.j)
+				{
+					co_await ctx.timer->timeout(50, co_async);
+				}
+				co_yield co_tick(strand);
+			}
+			co_end;
+		}, __1, strand, p);
+	}
+	ios.stop();
+}
+
 void go_test()
 {
 	io_engine ios;
@@ -944,40 +986,13 @@ void go_test()
 	ios.stop();
 }
 
-void co_test()
-{
-	int p = 123;
-	io_engine ios;
-	ios.run();
-	shared_strand strand = boost_strand::create(ios);
-	generator gen(std::bind([&strand](co_generator, int& p)
-	{
-		co_begin_context;
-		int i;
-		async_timer timer;
-		co_end_context(ctx);
-
-		co_begin;
-		ctx->timer = strand->make_timer();
-		for (ctx->i = 0; ctx->i < 3; ++ctx->i)
-		{
-			trace_space("co_test", ctx->i, p);
-			p++;
-			co_sleep(ctx->timer, 1000);
-		}
-		co_end;
-	}, __1, p));
-	strand->post([&]{gen.next(); });
-	ios.stop();
-}
-
 int main(int argc, char *argv[])
 {
 	init_my_actor();
 	enable_high_resolution();
-	co_test();
-	trace("\n");
 	go_test();
+	trace("\n");
+	co_test();
 	trace("\n");
 	auto_stack_test();
 	trace("\n");

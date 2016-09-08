@@ -201,7 +201,7 @@ public:
 			{
 				if (_takeWait.empty())
 				{
-					_sendWait.push_front({ try_move<TM&&>::can_move, notified, (ST&)msg });
+					_sendWait.push_front(send_wait{ try_move<TM&&>::can_move, notified, (ST&)msg });
 					_sendWait.front().ntf = host->make_trig_notifer_to_self(ath);
 					if (!_takeNtfQueue.empty())
 					{
@@ -272,7 +272,7 @@ public:
 				else if (!_takeNtfQueue.empty())
 				{
 					ok = true;
-					_sendWait.push_front({ try_move<TM&&>::can_move, notified, (T&)msg });
+					_sendWait.push_front(send_wait{ try_move<TM&&>::can_move, notified, (T&)msg });
 					_sendWait.front().ntf = host->make_trig_notifer_to_self(ath);
 					_takeNtfQueue.front()();
 					_takeNtfQueue.pop_front();
@@ -314,7 +314,7 @@ public:
 			{
 				if (_takeWait.empty())
 				{
-					_sendWait.push_front({ try_move<TM&&>::can_move, notified, (T&)msg });
+					_sendWait.push_front(send_wait{ try_move<TM&&>::can_move, notified, (T&)msg });
 					_sendWait.front().ntf = host->make_trig_notifer_to_self(ath);
 					mit = _sendWait.begin();
 					if (!_takeNtfQueue.empty())
@@ -388,7 +388,7 @@ public:
 				if (_sendWait.empty())
 				{
 					wait = true;
-					_takeWait.push_front({ NULL, notified, msgBuf, ntf });
+					_takeWait.push_front(take_wait{ NULL, notified, msgBuf, ntf });
 					_takeWait.front().ntf = host->make_trig_notifer_to_self(ath);
 				}
 				else
@@ -626,7 +626,7 @@ private:
 				if (_sendWait.empty())
 				{
 					wait = true;
-					_takeWait.push_front({ &can_move, notified, msgBuf, ntf });
+					_takeWait.push_front(take_wait{ &can_move, notified, msgBuf, ntf });
 					_takeWait.front().ntf = host->make_trig_notifer_to_self(ath);
 					mit = _takeWait.begin();
 				}
@@ -745,7 +745,7 @@ protected:
 			{
 				if (_takeWait.empty())
 				{
-					_sendWait.push_front({ notified, msg, resBuf });
+					_sendWait.push_front(send_wait{ notified, msg, resBuf });
 					_sendWait.front().ntf = host->make_trig_notifer_to_self(ath);
 					if (!_takeNtfQueue.empty())
 					{
@@ -818,7 +818,7 @@ protected:
 				else if (!_takeNtfQueue.empty())
 				{
 					has = true;
-					_sendWait.push_front({ notified, msg, resBuf });
+					_sendWait.push_front(send_wait{ notified, msg, resBuf });
 					_sendWait.front().ntf = host->make_trig_notifer_to_self(ath);
 					_takeNtfQueue.front()();
 					_takeNtfQueue.pop_front();
@@ -872,7 +872,7 @@ protected:
 			{
 				if (_takeWait.empty())
 				{
-					_sendWait.push_front({ notified, msg, resBuf });
+					_sendWait.push_front(send_wait{ notified, msg, resBuf });
 					_sendWait.front().ntf = host->make_trig_notifer_to_self(ath);
 					nit = _sendWait.begin();
 					if (!_takeNtfQueue.empty())
@@ -963,7 +963,7 @@ protected:
 				if (_sendWait.empty())
 				{
 					wait = true;
-					_takeWait.push_front({ notified, srcMsg, res, ntfSend });
+					_takeWait.push_front(take_wait{ notified, srcMsg, res, ntfSend });
 					_takeWait.front().ntf = host->make_trig_notifer_to_self(ath);
 				}
 				else
@@ -1091,7 +1091,7 @@ protected:
 				if (_sendWait.empty())
 				{
 					wait = true;
-					_takeWait.push_front({ notified, srcMsg, res, ntfSend });
+					_takeWait.push_front(take_wait{ notified, srcMsg, res, ntfSend });
 					_takeWait.front().ntf = host->make_trig_notifer_to_self(ath);
 					wit = _takeWait.begin();
 				}

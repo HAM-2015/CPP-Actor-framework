@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <functional>
 #include <memory>
+#include <atomic>
 #include <list>
 #include "try_move.h"
 
@@ -188,6 +189,13 @@ struct MakeBreakOfScope2_
 	__self__->delay_trig(__tm__, wrap_ref_handler(BOND_LINE(__selfDelayHandler_))); \
 	BREAK_OF_SCOPE_NAME(BOND_LINE(__selfDelayHandler_), { __self__->cancel_delay_trig(); });
 #define SELF_DELAY_EXEC(__self__, __tm__, ...) SELF_DELAY_TRACE(__self__, __tm__, { option_pck(__VA_ARGS__) });
+
+class ActorTimer_;
+class ActorFace_
+{
+	friend ActorTimer_;
+	virtual void timeout_handler() = 0;
+};
 
 #if (_DEBUG || DEBUG)
 #define DEBUG_OPERATION(__exp__)	__exp__
@@ -412,7 +420,7 @@ struct tls_space
 	void set_space(void** val);
 	void** get_space();
 private:
-	DWORD _index;
+	size_t _index;
 };
 #elif __linux__
 struct tls_space
@@ -578,44 +586,143 @@ struct ValTryRefMove_<const T&>
 
 //////////////////////////////////////////////////////////////////////////
 #define co_generator generator& gen
-#define co_begin_context struct co_context_tag { int __coNext
-#define co_end_context(__ctx__) } * const __ctx__ = (struct co_context_tag*)gen._ctx;\
-struct co_context_tag*& __ctx = (struct co_context_tag*&)gen._ctx;
+#define co_begin_context struct co_context_tag: public co_context_base {
+#define co_end_context(__ctx__) }& __ctx__ = *(struct co_context_tag*)gen._ctx;\
+struct co_context_base* __ctx = gen._ctx;
 
-#define co_begin if (!__ctx) { __ctx = new co_context_tag(); __ctx->__coNext = 0; return; }\
+#define co_begin if (!__ctx) { gen._ctx = __ctx = new co_context_tag(); __ctx->__coNext = 0; return; }\
 	if (__ctx) switch(__ctx->__coNext) { case 0:;
 
-#define co_begin_space(__space__) if (!__ctx) { __ctx = new(__space__)co_context_tag(); __ctx->__coNext = 0; return; }\
-	if (__ctx) switch(__ctx->__coNext) { case 0:;
+#define co_end } __ctx->__done = true; return;
 
-#define co_begin_alloc(__allocator__) if (!__ctx) {\
-	__ctx = new((__allocator__).allocate(sizeof(co_context_tag)))co_context_tag(); __ctx->__coNext = 0; return; }\
-	if (__ctx) switch(__ctx->__coNext) { case 0:;
-
-#define co_yield \
+#define co_yield_ \
+assert(__ctx->__inside);\
 do {\
-	__ctx->__coNext = __LINE__; \
-	return; case __LINE__:; \
+	__ctx->__coNext = __LINE__;\
+	DEBUG_OPERATION(__ctx->__inside = false); \
+	return; case __LINE__:;\
 } while (0)
 
-#define co_end } delete __ctx; __ctx = NULL; return;
-#define co_end_alloc(__allocator__) } __ctx->~co_context_tag(); (__allocator__).deallocate(__ctx); __ctx = NULL; return;
+#define co_yield \
+	assert(__ctx->__inside);\
+	for (__ctx->__yieldSign = false;;__ctx->__yieldSign = true)\
+	if (__ctx->__yieldSign) {co_yield_; break;}\
+	else
 
-#define co_sleep(__timer__, __ms__) (__timer__)->timeout(__ms__, std::bind([](generator& gen){gen.next();}, std::move(gen)));co_yield
+#define co_async \
+	__co_async_wrap(__ctx, std::bind([&gen](generator& host){\
+	struct co_context_base* __ctx = host._ctx;\
+	if (__ctx->__asyncSign) { __ctx->__asyncSign = false; host.next(); }\
+	else { __ctx->__asyncSign = true; gen = std::move(host); };\
+	}, std::move(gen)))
+
+#define co_safe_async(__strand__) (__strand__)->wrap(co_async)
+
+#define co_tick(__strand__){ \
+	assert(__ctx->__inside);\
+	assert((__strand__)->running_in_this_thread());\
+	(__strand__)->next_tick(std::bind([](generator& host){host.next(); }, std::move(gen)));}
+
+#define co_await_ \
+	assert(__ctx->__inside); if (!__ctx->__asyncSign) { __ctx->__asyncSign = true; co_yield_; }
+
+#define co_await \
+	assert(__ctx->__inside);\
+	for (__ctx->__yieldSign = false;;__ctx->__yieldSign = true)\
+	if (__ctx->__yieldSign) {co_await_; break;}\
+	else
+
+#define co_next(__strand__, __host__) \
+	assert(!__ctx->__inside);\
+	(__strand__)->distribute(std::bind([](generator& host){\
+	assert(!host._ctx->__asyncSign);\
+	host.next(); }, std::move(__host__)));
+
+#define co_tick_next(__strand__, __host__) \
+	(__strand__)->next_tick(std::bind([](generator& host){\
+	assert(!host._ctx->__asyncSign);\
+	host.next(); }, std::move(__host__)));
+
+#define co_async_next(__strand__, __host__) \
+	(__strand__)->distribute(std::bind([&gen](generator& host){\
+	struct co_context_base* __ctx = host._ctx;\
+	if (__ctx->__asyncSign) { __ctx->__asyncSign = false; host.next(); }\
+	else { __ctx->__asyncSign = true; gen = std::move(host); }; \
+	}, std::move(__host__)));
+
+#define co_invoke_(__handler__) assert(__ctx->__inside); { generator(__handler__, co_async).next(); } co_await_
+#define co_invoke(...) co_invoke_(std::bind(__VA_ARGS__))
+
+#define co_sleep(__timer__, __ms__) \
+	assert(__ctx->__inside);\
+	(__timer__)->timeout(__ms__, std::bind([](generator& gen){gen.next();}, std::move(gen)));co_yield_
+
+#define co_run(__strand__, __gen__) (__strand__)->try_tick(std::bind([](generator& host){host.next(); }, std::move(__gen__)));
+
+#define co_go(__strand__) CoGo_<shared_strand>(__strand__)-
+
+struct co_context_base
+{
+	co_context_base()
+	:__refCount(1), __coNext(0), __done(false), __asyncSign(false), __yieldSign(false) {DEBUG_OPERATION(__inside = false); }
+	virtual ~co_context_base(){}
+	std::atomic<int> __refCount;
+	int __coNext;
+	bool __done;
+	bool __asyncSign;
+	bool __yieldSign;
+#if (_DEBUG || DEBUG)
+	bool __inside;
+#endif
+};
+
+template <typename Handler>
+Handler&& __co_async_wrap(struct co_context_base* __ctx, Handler&& handler)
+{
+	assert(__ctx->__inside);
+	return (Handler&&)handler;
+}
 
 struct generator
 {
-	generator(generator&& s);
+	generator();
+	~generator();
+	generator(generator&&);
+	generator(const generator&);
+	void operator=(generator&&);
+	void operator=(const generator&);
 	generator(std::function<void(generator&)>&& handler);
 	generator(const std::function<void(generator&)>& handler);
+
+	template <typename Handler, typename Notify>
+	generator(Handler&& handler, Notify&& notify)
+		:_ctx(NULL), _handler(std::forward<Handler>(handler)), _notify(std::forward<Notify>(notify))
+	{
+		CHECK_EXCEPTION(_handler, *this);
+	}
+
 	bool next();
 	bool operator()();
 	bool done();
-	void* _ctx;
 	std::function<void(generator&)> _handler;
-private:
-	generator(const generator&) = delete;
-	void operator=(const generator&) = delete;
+	std::function<void()> _notify;
+	co_context_base* _ctx;
+};
+
+template <typename SharedStrand>
+struct CoGo_
+{
+	template <typename Strand>
+	CoGo_(Strand&& strand)
+	:_strand(strand) {static_assert(!std::is_rvalue_reference<Strand&&>::value, ""); }
+
+	template <typename Handler>
+	void operator-(Handler&& handler)
+	{
+		_strand->try_tick(std::bind([](generator& host){host.next(); }, generator(std::forward<Handler>(handler))));
+	}
+
+	const SharedStrand& _strand;
 };
 
 #endif

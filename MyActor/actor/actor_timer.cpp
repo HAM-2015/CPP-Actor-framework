@@ -35,7 +35,7 @@ ActorTimer_::~ActorTimer_()
 	delete (timer_type*)_timer;
 }
 
-ActorTimer_::timer_handle ActorTimer_::timeout(long long us, actor_handle&& host, bool deadline)
+ActorTimer_::timer_handle ActorTimer_::timeout(long long us, actor_face_handle&& host, bool deadline)
 {
 	if (!_lockStrand)
 	{

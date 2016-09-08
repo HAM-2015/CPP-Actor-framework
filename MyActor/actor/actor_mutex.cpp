@@ -218,7 +218,7 @@ void actor_mutex::lock(my_actor* host, wrap_local_handler_face<void()>&& lockNtf
 		else
 		{
 			ntf = ath.make_notifer();
-			_waitQueue.push_front({ ntf, host->self_id() });
+			_waitQueue.push_front(wait_node{ ntf, host->self_id() });
 			complete = false;
 		}
 	});
@@ -248,7 +248,7 @@ void actor_mutex::quited_lock(my_actor* host)
 	{
 		MutexTrigHandle_ ath(host);
 		MutexTrigNotifer_ ntf = ath.make_notifer();
-		_waitQueue.push_back({ ntf, host->self_id() });
+		_waitQueue.push_back(wait_node{ ntf, host->self_id() });
 		ath.wait();
 	}
 }
@@ -301,7 +301,7 @@ bool actor_mutex::timed_lock(int tm, my_actor* host, wrap_local_handler_face<voi
 		else
 		{
 			ntf = ath.make_notifer();
-			_waitQueue.push_front({ ntf, host->self_id() });
+			_waitQueue.push_front(wait_node{ ntf, host->self_id() });
 			nit = _waitQueue.begin();
 			complete = false;
 		}
@@ -441,7 +441,7 @@ void actor_condition_variable::wait(my_actor* host, actor_lock_guard& mutex)
 	host->send(_strand, [&]
 	{
 		ntf = ath.make_notifer();
-		_waitQueue.push_back({ ntf });
+		_waitQueue.push_back(wait_node{ ntf });
 	});
 	mutex.unlock();
 	ath.wait();
@@ -461,7 +461,7 @@ bool actor_condition_variable::timed_wait(int tm, my_actor* host, actor_lock_gua
 	host->send(_strand, [&]
 	{
 		ntf = ath.make_notifer();
-		_waitQueue.push_front({ ntf });
+		_waitQueue.push_front(wait_node{ ntf });
 		nit = _waitQueue.begin();
 	});
 	mutex.unlock();
@@ -581,7 +581,7 @@ void actor_shared_mutex::lock(my_actor* host, wrap_local_handler_face<void()>&& 
 		{
 			complete = false;
 			ntf = ath.make_notifer();
-			_waitQueue.push_back({ ntf, host->self_id(), st_unique });
+			_waitQueue.push_back(wait_node{ ntf, host->self_id(), st_unique });
 		}
 	});
 	if (!complete)
@@ -644,7 +644,7 @@ bool actor_shared_mutex::timed_lock(int tm, my_actor* host, wrap_local_handler_f
 		else
 		{
 			ntf = ath.make_notifer();
-			_waitQueue.push_back({ ntf, host->self_id(), st_unique });
+			_waitQueue.push_back(wait_node{ ntf, host->self_id(), st_unique });
 			nit = --_waitQueue.end();
 		}
 	});
@@ -701,7 +701,7 @@ void actor_shared_mutex::lock_shared(my_actor* host, wrap_local_handler_face<voi
 		else
 		{
 			ntf = ath.make_notifer();
-			_waitQueue.push_back({ ntf, host->self_id(), st_shared });
+			_waitQueue.push_back(wait_node{ ntf, host->self_id(), st_shared });
 		}
 	});
 	if (!complete)
@@ -762,7 +762,7 @@ bool actor_shared_mutex::timed_lock_shared(int tm, my_actor* host, wrap_local_ha
 		else
 		{
 			ntf = ath.make_notifer();
-			_waitQueue.push_back({ ntf, host->self_id(), st_shared });
+			_waitQueue.push_back(wait_node{ ntf, host->self_id(), st_shared });
 			nit = --_waitQueue.end();
 		}
 	});

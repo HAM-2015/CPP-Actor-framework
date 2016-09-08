@@ -391,22 +391,22 @@ unsigned long long cpu_tick()
 #ifdef WIN32
 tls_space::tls_space()
 {
-	_index = TlsAlloc();
+	_index = (size_t)TlsAlloc();
 }
 
 tls_space::~tls_space()
 {
-	TlsFree(_index);
+	TlsFree((DWORD)_index);
 }
 
 void tls_space::set_space(void** val)
 {
-	TlsSetValue(_index, (LPVOID)val);
+	TlsSetValue((DWORD)_index, (LPVOID)val);
 }
 
 void** tls_space::get_space()
 {
-	return (void**)TlsGetValue(_index);
+	return (void**)TlsGetValue((DWORD)_index);
 }
 #elif __linux__
 tls_space::tls_space()
@@ -430,26 +430,68 @@ void** tls_space::get_space()
 }
 #endif
 
-generator::generator(generator&& s)
-:_ctx(s._ctx), _handler(std::move(s._handler)) {}
-
 generator::generator(const std::function<void(generator&)>& handler)
-: _ctx(NULL), _handler(handler)
+:_ctx(NULL), _handler(handler)
 {
-	_handler(*this);
+	CHECK_EXCEPTION(_handler, *this);
 }
 
 generator::generator(std::function<void(generator&)>&& handler)
-: _ctx(NULL), _handler(std::move(handler))
+:_ctx(NULL), _handler(std::move(handler))
 {
-	_handler(*this);
+	CHECK_EXCEPTION(_handler, *this);
+}
+
+generator::generator()
+: _ctx(NULL) {}
+
+generator::~generator()
+{
+	if (_ctx && 0 == --_ctx->__refCount)
+	{
+		delete _ctx;
+	}
+}
+
+generator::generator(generator&& s)
+:_ctx(s._ctx), _handler(std::move(s._handler)), _notify(std::move(s._notify))
+{
+	s._ctx = NULL;
+}
+
+generator::generator(const generator& s)
+: _ctx(s._ctx), _handler(s._handler), _notify(s._notify)
+{
+	_ctx->__refCount++;
+}
+
+void generator::operator =(generator&& s)
+{
+	_ctx = s._ctx;
+	s._ctx = NULL;
+	_handler = std::move(s._handler);
+	_notify = std::move(s._notify);
+}
+
+void generator::operator =(const generator& s)
+{
+	_ctx = s._ctx;
+	_ctx->__refCount++;
+	_handler = s._handler;
+	_notify = s._notify;
 }
 
 bool generator::next()
 {
 	assert(!done());
-	_handler(*this);
-	return !_ctx;
+	assert(!_ctx->__inside);
+	DEBUG_OPERATION(_ctx->__inside = true);
+	CHECK_EXCEPTION(_handler, *this);
+	if (done() && _notify)
+	{
+		CHECK_EXCEPTION(_notify);
+	}
+	return done();
 }
 
 bool generator::operator()()
@@ -459,5 +501,5 @@ bool generator::operator()()
 
 bool generator::done()
 {
-	return !_ctx;
+	return !_ctx || _ctx->__done;
 }

@@ -10,6 +10,7 @@ class boost_strand;
 class qt_strand;
 class uv_strand;
 class my_actor;
+class my_actor_less;
 
 /*!
 @brief Actor 内部使用的定时器
@@ -19,13 +20,18 @@ class ActorTimer_
 	: public TimerBoostCompletedEventFace_
 #endif
 {
-	typedef std::shared_ptr<my_actor> actor_handle;
-	typedef msg_multimap<long long, actor_handle> handler_queue;
+#ifdef ENABLE_LESS_ACTOR
+	typedef std::shared_ptr<ActorFace_> actor_face_handle;
+#else
+	typedef std::shared_ptr<my_actor> actor_face_handle;
+#endif
+	typedef msg_multimap<long long, actor_face_handle> handler_queue;
 
 	friend boost_strand;
 	friend qt_strand;
 	friend uv_strand;
 	friend my_actor;
+	friend my_actor_less;
 
 	class timer_handle 
 	{
@@ -52,7 +58,7 @@ private:
 	@param deadline 是否为绝对时间
 	@return 计时句柄，用于cancel
 	*/
-	timer_handle timeout(long long us, actor_handle&& host, bool deadline = false);
+	timer_handle timeout(long long us, actor_face_handle&& host, bool deadline = false);
 
 	/*!
 	@brief 取消计时

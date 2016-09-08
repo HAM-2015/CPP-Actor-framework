@@ -19,6 +19,7 @@ class ActorTimer_;
 class TimerBoost_;
 class AsyncTimer_;
 class my_actor;
+class my_actor_less;
 
 class boost_strand;
 typedef std::shared_ptr<boost_strand> shared_strand;
@@ -245,6 +246,7 @@ class boost_strand
 	};
 
 	friend my_actor;
+	friend my_actor_less;
 	friend io_engine;
 	friend ActorTimer_;
 	friend TimerBoost_;

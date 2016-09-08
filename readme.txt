@@ -1,4 +1,4 @@
-并发逻辑控制框架(Actor Model)，适用于复杂业务逻辑，有问题或BUG反馈至591170887@qq.com;
+﻿并发逻辑控制框架(Actor Model)，适用于复杂业务逻辑，有问题或BUG反馈至591170887@qq.com;
 依赖于boost 1.5x;
 暂无开发文档，等作者认为可以定型后开放文档;
 目前仅在 VS2013,VS2015,MINGW49_x86_x64,GCC4.9-linux_x86_x64,arm-linux-eabi(hf)-gcc49 中测试;
@@ -19,6 +19,9 @@ http://www.oschina.net/code/snippet_2274073_45577
 
 ftp url:
 ftp://ham2015.6655.la/files/MyActor/
+
+2016-09-08
+添加基于stackless的generator，支持co_yield，co_invoke，co_async/co_await语义.
 
 2016-08-18
 添加Node.Js与C++扩展模块之间Actor交互(测试Node.Js版本6.2.2).

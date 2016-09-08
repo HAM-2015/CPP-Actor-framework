@@ -4422,6 +4422,9 @@ struct AutoStackAgent_
 @brief Actor∂‘œÛ
 */
 class my_actor
+#ifdef ENABLE_LESS_ACTOR
+	: public ActorFace_
+#endif
 {
 	struct suspend_resume_option
 	{

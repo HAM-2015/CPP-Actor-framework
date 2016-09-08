@@ -595,7 +595,7 @@ private:
 						}
 						else
 						{
-							_pushWait.push_front({ notified });
+							_pushWait.push_front(push_pck{ notified });
 							_pushWait.front().ntf = host->make_trig_notifer_to_self(ath);
 						}
 						if (break_)
@@ -708,7 +708,7 @@ private:
 						}
 						else
 						{
-							_pushWait.push_front({ notified });
+							_pushWait.push_front(push_pck{ notified });
 							_pushWait.front().ntf = host->make_trig_notifer_to_self(ath);
 							mit = _pushWait.begin();
 						}
@@ -829,7 +829,7 @@ private:
 						}
 						else
 						{
-							_popWait.push_front({ notified });
+							_popWait.push_front(pop_pck{ notified });
 							_popWait.front().ntf = host->make_trig_notifer_to_self(ath);
 						}
 						if (_buffer.size() <= _halfLength)
@@ -948,7 +948,7 @@ private:
 						}
 						else
 						{
-							_popWait.push_front({ notified });
+							_popWait.push_front(pop_pck{ notified });
 							_popWait.front().ntf = host->make_trig_notifer_to_self(ath);
 							mit = _popWait.begin();
 						}
