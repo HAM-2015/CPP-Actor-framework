@@ -4,6 +4,7 @@
 #include "./actor/actor_socket.h"
 #include "./actor/async_timer.h"
 #include "./actor/msg_queue.h"
+#include "./actor/generator.h"
 #include "./actor/sync_msg.h"
 #include "./actor/trace.h"
 
@@ -600,6 +601,104 @@ void trig_test()
 	trace_line("end trig_test");
 }
 
+void co_socket_test()
+{
+	trace_line("begin co_socket_test");
+	io_engine ios;
+	ios.run();
+	shared_strand strand = boost_strand::create(ios);
+	co_go(strand)[](co_generator)
+	{
+		co_begin_context;
+		bool overtime;
+		async_timer timer;
+		boost::asio::ip::tcp::socket socket;
+		stack_obj<boost::asio::ip::tcp::acceptor> acceptor;
+		boost::system::error_code ec;
+		size_t s;
+		char buf[128];
+		co_end_context_init(ctx, (gen), socket(gen.curr_strand()->get_io_service()), overtime(false), s(0));
+
+		co_begin;
+		try
+		{
+			ctx.acceptor.create(gen.curr_strand()->get_io_service(), boost::asio::ip::tcp::endpoint(boost::asio::ip::address_v4(), 1235), false);
+		}
+		catch (...) { return; }
+		co_await ctx.acceptor->async_accept(ctx.socket, co_async_result(ctx.ec));
+		if (!ctx.ec)
+		{
+			ctx.acceptor->close(ctx.ec);
+			ctx.timer = gen.curr_strand()->make_timer();
+			while (true)
+			{
+				ctx.overtime = false;
+				ctx.timer->timeout(1500, [&]()
+				{
+					ctx.overtime = true;
+					ctx.socket.close(ctx.ec);
+				});
+				co_await ctx.socket.async_read_some(boost::asio::buffer(ctx.buf, sizeof(ctx.buf)), co_async_result(ctx.ec, ctx.s));
+				ctx.timer->cancel();
+				if (ctx.overtime)
+				{
+					trace_comma("co_socket", "receive overtime");
+					break;
+				}
+				else if (ctx.ec)
+				{
+					trace_comma("co_socket", "receive disconnect");
+					break;
+				}
+				ctx.buf[ctx.s] = 0;
+				trace_comma("co_socket", "received", ctx.buf);
+			}
+			ctx.socket.close(ctx.ec);
+		}
+		else
+		{
+			ctx.acceptor->close(ctx.ec);
+			return;
+		}
+		co_end;
+	};
+	co_go(strand)[](co_generator)
+	{
+		co_begin_context;
+		async_timer timer;
+		boost::asio::ip::tcp::socket socket;
+		boost::system::error_code ec;
+		size_t s;
+		char buf[128];
+		int i;
+		co_end_context_init(ctx, (gen), socket(gen.curr_strand()->get_io_service()), s(0), i(0));
+
+		co_begin;
+		ctx.timer = gen.curr_strand()->make_timer();
+		co_await ctx.socket.async_connect(boost::asio::ip::tcp::endpoint(
+			boost::asio::ip::address::from_string("127.0.0.1"), 1235), co_async_result(ctx.ec));
+		if (!ctx.ec)
+		{
+			for (ctx.i = 0; ctx.i < 10; ctx.i++)
+			{
+				co_await {
+					int l = snPrintf(ctx.buf, sizeof(ctx.buf), "msg %d", ctx.i);
+					boost::asio::async_write(ctx.socket, boost::asio::buffer(ctx.buf, l), co_async_result(ctx.ec, ctx.s));
+				}
+				co_sleep(ctx.timer, 1000);
+			}
+			co_sleep(ctx.timer, 2000);
+		}
+		else
+		{
+			return;
+		}
+		co_end;
+	};
+	ios.stop();
+	trace_line("end co_socket_test");
+}
+
 void socket_test()
 {
 	trace_line("begin socket_test");
@@ -940,17 +1039,15 @@ void co_test()
 		co_end;
 	};
 	{
-		shared_strand strand = boost_strand::create(ios);
-		co_go(strand) std::bind([&asleep](co_generator, shared_strand& strand, int& p)
+		co_go(boost_strand::create(ios)) std::bind([&asleep](co_generator, int& p)
 		{
 			co_begin_context;
 			int i;
 			int j;
 			async_timer timer;
-			co_end_context(ctx);
+			co_end_context_init(ctx, (gen), i(0), j(0), timer(gen.curr_strand()->make_timer()));
 
 			co_begin;
-			ctx.timer = strand->make_timer();
 			for (ctx.i = 0; ctx.i < 3; ++ctx.i)
 			{
 				info_trace_space("co_test", ctx.i, p++);
@@ -959,10 +1056,10 @@ void co_test()
 				{
 					co_await ctx.timer->timeout(50, co_async);
 				}
-				co_yield co_tick(strand);
+				co_tick;
 			}
 			co_end;
-		}, __1, strand, p);
+		}, __1, p);
 	}
 	ios.stop();
 }
@@ -1021,6 +1118,8 @@ int main(int argc, char *argv[])
 	async_buffer_test();
 	trace("\n");
 	socket_test();
+	trace("\n");
+	co_socket_test();
 	trace("\n");
 	udp_test();
 	trace("\n");

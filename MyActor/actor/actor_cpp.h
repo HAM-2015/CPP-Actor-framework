@@ -27,6 +27,7 @@ ENABLE_TLS_CHECK_SELF 启用TLS技术检测当前代码运行在哪个Actor下
 #include "bind_qt_run.cpp"
 #include "context_pool.cpp"
 #include "context_yield.cpp"
+#include "generator.cpp"
 #include "io_engine.cpp"
 #include "my_actor.cpp"
 #include "qt_strand.cpp"
