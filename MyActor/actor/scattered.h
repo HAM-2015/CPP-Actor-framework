@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <functional>
 #include <memory>
-#include <atomic>
 #include <list>
 #include "try_move.h"
 
@@ -586,27 +585,35 @@ struct ValTryRefMove_<const T&>
 
 //////////////////////////////////////////////////////////////////////////
 #define co_generator generator& gen
-#define co_begin_context struct co_context_tag: public co_context_base {
-#define co_end_context(__ctx__) }& __ctx__ = *(struct co_context_tag*)gen._ctx;\
-struct co_context_base* __ctx = gen._ctx;
 
-#define co_begin if (!__ctx) { gen._ctx = __ctx = new co_context_tag(); __ctx->__coNext = 0; return; }\
-	if (__ctx) switch(__ctx->__coNext) { case 0:;
+#define co_begin_context static_assert(__COUNTER__+1 == __COUNTER__, ""); struct co_context_tag: public co_context_base {
 
-#define co_end } __ctx->__done = true; return;
+#define co_end_context(__ctx__) };\
+	if (!gen._ctx){\
+	gen._ctx = new co_context_tag();\
+	DEBUG_OPERATION(gen._ctx->__inside = true);}\
+	struct co_context_base* __ctx = gen._ctx;\
+	struct co_context_tag& __ctx__ = *(struct co_context_tag*)gen._ctx;\
+	bool __yieldSign = false;{
+
+#define co_begin }\
+	if (!__ctx->__coNext) {__ctx->__coNext = (__COUNTER__+1)/2;}\
+	switch(__ctx->__coNext) { case __COUNTER__/2:;
+
+#define co_end } delete gen._ctx; gen._ctx = NULL; return;
 
 #define co_yield_ \
 assert(__ctx->__inside);\
 do {\
-	__ctx->__coNext = __LINE__;\
 	DEBUG_OPERATION(__ctx->__inside = false); \
-	return; case __LINE__:;\
+	__ctx->__coNext = (__COUNTER__+1)/2;\
+	return; case __COUNTER__/2:__ctx->__coNext=0; \
 } while (0)
 
 #define co_yield \
 	assert(__ctx->__inside);\
-	for (__ctx->__yieldSign = false;;__ctx->__yieldSign = true)\
-	if (__ctx->__yieldSign) {co_yield_; break;}\
+	for (__yieldSign = false;;__yieldSign = true)\
+	if (__yieldSign) {co_yield_; break;}\
 	else
 
 #define co_async \
@@ -628,8 +635,8 @@ do {\
 
 #define co_await \
 	assert(__ctx->__inside);\
-	for (__ctx->__yieldSign = false;;__ctx->__yieldSign = true)\
-	if (__ctx->__yieldSign) {co_await_; break;}\
+	for (__yieldSign = false;;__yieldSign = true)\
+	if (__yieldSign) {co_await_; break;}\
 	else
 
 #define co_next(__strand__, __host__) \
@@ -663,16 +670,11 @@ do {\
 
 struct co_context_base
 {
-	co_context_base()
-	:__refCount(1), __coNext(0), __done(false), __asyncSign(false), __yieldSign(false) {DEBUG_OPERATION(__inside = false); }
 	virtual ~co_context_base(){}
-	std::atomic<int> __refCount;
-	int __coNext;
-	bool __done;
-	bool __asyncSign;
-	bool __yieldSign;
+	int __coNext = 0;
+	bool __asyncSign = false;
 #if (_DEBUG || DEBUG)
-	bool __inside;
+	bool __inside = false;
 #endif
 };
 
@@ -686,7 +688,6 @@ Handler&& __co_async_wrap(struct co_context_base* __ctx, Handler&& handler)
 struct generator
 {
 	generator();
-	~generator();
 	generator(generator&&);
 	generator(const generator&);
 	void operator=(generator&&);
@@ -698,12 +699,11 @@ struct generator
 	generator(Handler&& handler, Notify&& notify)
 		:_ctx(NULL), _handler(std::forward<Handler>(handler)), _notify(std::forward<Notify>(notify))
 	{
-		CHECK_EXCEPTION(_handler, *this);
+		assert(_handler);
 	}
 
 	bool next();
 	bool operator()();
-	bool done();
 	std::function<void(generator&)> _handler;
 	std::function<void()> _notify;
 	co_context_base* _ctx;

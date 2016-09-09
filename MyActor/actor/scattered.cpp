@@ -433,42 +433,27 @@ void** tls_space::get_space()
 generator::generator(const std::function<void(generator&)>& handler)
 :_ctx(NULL), _handler(handler)
 {
-	CHECK_EXCEPTION(_handler, *this);
+	assert(_handler);
 }
 
 generator::generator(std::function<void(generator&)>&& handler)
 :_ctx(NULL), _handler(std::move(handler))
 {
-	CHECK_EXCEPTION(_handler, *this);
+	assert(_handler);
 }
 
 generator::generator()
 : _ctx(NULL) {}
 
-generator::~generator()
-{
-	if (_ctx && 0 == --_ctx->__refCount)
-	{
-		delete _ctx;
-	}
-}
-
 generator::generator(generator&& s)
-:_ctx(s._ctx), _handler(std::move(s._handler)), _notify(std::move(s._notify))
-{
-	s._ctx = NULL;
-}
+:_ctx(s._ctx), _handler(std::move(s._handler)), _notify(std::move(s._notify)) {}
 
 generator::generator(const generator& s)
-: _ctx(s._ctx), _handler(s._handler), _notify(s._notify)
-{
-	_ctx->__refCount++;
-}
+: _ctx(s._ctx), _handler(s._handler), _notify(s._notify) {}
 
 void generator::operator =(generator&& s)
 {
 	_ctx = s._ctx;
-	s._ctx = NULL;
 	_handler = std::move(s._handler);
 	_notify = std::move(s._notify);
 }
@@ -476,30 +461,29 @@ void generator::operator =(generator&& s)
 void generator::operator =(const generator& s)
 {
 	_ctx = s._ctx;
-	_ctx->__refCount++;
 	_handler = s._handler;
 	_notify = s._notify;
 }
 
 bool generator::next()
 {
-	assert(!done());
-	assert(!_ctx->__inside);
-	DEBUG_OPERATION(_ctx->__inside = true);
+	assert(_handler);
+	assert(!_ctx || !_ctx->__inside);
+	DEBUG_OPERATION(if (_ctx) _ctx->__inside = true);
 	CHECK_EXCEPTION(_handler, *this);
-	if (done() && _notify)
+	if (_ctx && !_ctx->__coNext)
+	{
+		delete _ctx;
+		_ctx = NULL;
+	}
+	if (!_ctx && _notify)
 	{
 		CHECK_EXCEPTION(_notify);
 	}
-	return done();
+	return !_ctx;
 }
 
 bool generator::operator()()
 {
 	return next();
-}
-
-bool generator::done()
-{
-	return !_ctx || _ctx->__done;
 }
