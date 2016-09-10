@@ -14,20 +14,62 @@ generator::generator()
 
 bool generator::next()
 {
+	assert(_strand->running_in_this_thread());
 	assert(_handler);
 	assert(!_ctx || !_ctx->__inside);
 	DEBUG_OPERATION(if (_ctx) _ctx->__inside = true);
 	CHECK_EXCEPTION(_handler, *this);
-	if (_ctx && !_ctx->__coNext)
+	assert(!_ctx || _ctx->__coNext);
+	if (!_ctx)
 	{
-		delete _ctx;
-		_ctx = NULL;
-	}
-	if (!_ctx && _notify)
-	{
-		CHECK_EXCEPTION(_notify);
+		clear_function(_handler);
+		if (_notify)
+		{
+			CHECK_EXCEPTION(_notify);
+			clear_function(_notify);
+		}
 	}
 	return !_ctx;
+}
+
+void generator::stop()
+{
+	if (_strand->running_in_this_thread())
+	{
+		if (_ctx)
+		{
+			if (!_ctx->__inside)
+			{
+				_ctx->__coNext = -1;
+				next();
+			}
+			else
+			{
+				throw stop_exception();
+			}
+		}
+		else
+		{
+			clear_function(_handler);
+			clear_function(_notify);
+		}
+	} 
+	else
+	{
+		_strand->post(std::bind([](generator_handle& gen)
+		{
+			if (gen->_ctx)
+			{
+				gen->_ctx->__coNext = -1;
+				gen->next();
+			}
+			else
+			{
+				clear_function(gen->_handler);
+				clear_function(gen->_notify);
+			}
+		}, shared_from_this()));
+	}
 }
 
 generator_handle generator::shared_from_this()
@@ -38,4 +80,9 @@ generator_handle generator::shared_from_this()
 const shared_strand& generator::curr_strand()
 {
 	return _strand;
+}
+
+generator_handle generator::begin_fork()
+{
+	return generator::create(_strand, _handler);
 }

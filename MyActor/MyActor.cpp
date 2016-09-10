@@ -1029,22 +1029,23 @@ void co_test()
 	int p = 123;
 	io_engine ios;
 	ios.run();
-	auto asleep = [](co_generator, async_timer& timer)
 	{
-		co_begin_context;
-		co_end_context(ctx);
-
-		co_begin;
-		co_sleep(timer, 500);
-		co_end;
-	};
-	{
-		co_go(boost_strand::create(ios)) std::bind([&asleep](co_generator, int& p)
+		co_go(boost_strand::create(ios)) std::bind([](co_generator, int& p)
 		{
+			static auto asleep = [](co_generator, async_timer& timer)
+			{
+				co_begin_context;
+				co_end_context(ctx);
+
+				co_begin;
+				co_sleep(timer, 500);
+				co_end;
+			};
 			co_begin_context;
 			int i;
 			int j;
 			async_timer timer;
+			co_fork_context :i(curr.i), j(curr.j), timer(curr.timer->self_strand()->make_timer()) {}
 			co_end_context_init(ctx, (gen), i(0), j(0), timer(gen.curr_strand()->make_timer()));
 
 			co_begin;
@@ -1057,6 +1058,7 @@ void co_test()
 					co_await ctx.timer->timeout(50, co_async);
 				}
 				co_tick;
+				co_fork;
 			}
 			co_end;
 		}, __1, p);
