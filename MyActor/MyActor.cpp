@@ -610,26 +610,26 @@ void co_socket_test()
 	co_go(strand)[](co_generator)
 	{
 		co_begin_context;
-		bool overtime;
-		async_timer timer;
-		boost::asio::ip::tcp::socket socket;
-		stack_obj<boost::asio::ip::tcp::acceptor> acceptor;
-		boost::system::error_code ec;
 		size_t s;
 		char buf[128];
-		co_end_context_init(ctx, (gen), socket(gen.curr_strand()->get_io_service()), overtime(false), s(0));
+		bool overtime;
+		async_timer timer;
+		boost::system::error_code ec;
+		boost::asio::ip::tcp::socket socket;
+		stack_obj<boost::asio::ip::tcp::acceptor> acceptor;
+		co_end_context_init(ctx, (gen), socket(gen.gen_strand()->get_io_service()), overtime(false), s(0));
 
 		co_begin;
 		try
 		{
-			ctx.acceptor.create(gen.curr_strand()->get_io_service(), boost::asio::ip::tcp::endpoint(boost::asio::ip::address_v4(), 1235), false);
+			ctx.acceptor.create(gen.gen_strand()->get_io_service(), boost::asio::ip::tcp::endpoint(boost::asio::ip::address_v4(), 1235), false);
 		}
-		catch (...) { return; }
+		catch (...) { co_stop; }
 		co_await ctx.acceptor->async_accept(ctx.socket, co_async_result(ctx.ec));
 		if (!ctx.ec)
 		{
 			ctx.acceptor->close(ctx.ec);
-			ctx.timer = gen.curr_strand()->make_timer();
+			ctx.timer = gen.gen_strand()->make_timer();
 			while (true)
 			{
 				ctx.overtime = false;
@@ -658,23 +658,22 @@ void co_socket_test()
 		else
 		{
 			ctx.acceptor->close(ctx.ec);
-			return;
 		}
 		co_end;
 	};
 	co_go(strand)[](co_generator)
 	{
 		co_begin_context;
-		async_timer timer;
-		boost::asio::ip::tcp::socket socket;
-		boost::system::error_code ec;
+		int i;
 		size_t s;
 		char buf[128];
-		int i;
-		co_end_context_init(ctx, (gen), socket(gen.curr_strand()->get_io_service()), s(0), i(0));
+		async_timer timer;
+		boost::system::error_code ec;
+		boost::asio::ip::tcp::socket socket;
+		co_end_context_init(ctx, (gen), socket(gen.gen_strand()->get_io_service()), s(0), i(0));
 
 		co_begin;
-		ctx.timer = gen.curr_strand()->make_timer();
+		ctx.timer = gen.gen_strand()->make_timer();
 		co_await ctx.socket.async_connect(boost::asio::ip::tcp::endpoint(
 			boost::asio::ip::address::from_string("127.0.0.1"), 1235), co_async_result(ctx.ec));
 		if (!ctx.ec)
@@ -688,10 +687,6 @@ void co_socket_test()
 				co_sleep(ctx.timer, 1000);
 			}
 			co_sleep(ctx.timer, 2000);
-		}
-		else
-		{
-			return;
 		}
 		co_end;
 	};
@@ -1026,7 +1021,6 @@ void auto_stack_test()
 
 void co_test()
 {
-	int p = 123;
 	io_engine ios;
 	ios.run();
 	{
@@ -1034,8 +1028,7 @@ void co_test()
 		{
 			static auto asleep = [](co_generator, async_timer& timer)
 			{
-				co_begin_context;
-				co_end_context(ctx);
+				co_no_context;
 
 				co_begin;
 				co_sleep(timer, 500);
@@ -1046,7 +1039,7 @@ void co_test()
 			int j;
 			async_timer timer;
 			co_fork_context :i(curr.i), j(curr.j), timer(curr.timer->self_strand()->make_timer()) {}
-			co_end_context_init(ctx, (gen), i(0), j(0), timer(gen.curr_strand()->make_timer()));
+			co_end_context_init(ctx, (gen), i(0), j(0), timer(gen.gen_strand()->make_timer()));
 
 			co_begin;
 			for (ctx.i = 0; ctx.i < 3; ++ctx.i)
@@ -1061,7 +1054,7 @@ void co_test()
 				co_fork;
 			}
 			co_end;
-		}, __1, p);
+		}, __1, 0);
 	}
 	ios.stop();
 }

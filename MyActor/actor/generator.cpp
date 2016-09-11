@@ -12,7 +12,7 @@ const shared_bool& __make_co_shared_sign(struct co_context_base* __ctx)
 generator::generator()
 : _ctx(NULL) {}
 
-bool generator::next()
+bool generator::_next()
 {
 	assert(_strand->running_in_this_thread());
 	assert(_handler);
@@ -38,14 +38,19 @@ void generator::stop()
 	{
 		if (_ctx)
 		{
-			if (!_ctx->__inside)
+			if (!_ctx->__lockStop)
 			{
+				bool inside = 0 == _ctx->__coNext;
+				assert(inside == _ctx->__inside);
 				_ctx->__coNext = -1;
-				next();
+				if (!inside)
+				{
+					_next();
+				}
 			}
 			else
 			{
-				throw stop_exception();
+				_ctx->__readyQuit = true;
 			}
 		}
 		else
@@ -61,7 +66,7 @@ void generator::stop()
 			if (gen->_ctx)
 			{
 				gen->_ctx->__coNext = -1;
-				gen->next();
+				gen->_next();
 			}
 			else
 			{
@@ -77,12 +82,12 @@ generator_handle generator::shared_from_this()
 	return _weakThis.lock();
 }
 
-const shared_strand& generator::curr_strand()
+const shared_strand& generator::gen_strand()
 {
 	return _strand;
 }
 
-generator_handle generator::begin_fork()
+generator_handle generator::_begin_fork()
 {
 	return generator::create(_strand, _handler);
 }

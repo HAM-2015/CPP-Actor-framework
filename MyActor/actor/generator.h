@@ -14,6 +14,7 @@
 	DEBUG_OPERATION(gen._ctx->__inside = true);}\
 	struct co_context_tag* __ctx = static_cast<co_context_tag*>(gen._ctx);\
 	struct co_context_tag& __ctx__ = *__ctx;\
+	int __coNext = 0;\
 	bool __yieldSwitch = false; {
 
 #define co_end_context(__ctx__) };\
@@ -35,7 +36,7 @@
 #define _co_capture(...) _BOND_LR__(_co_capture, _PP_NARG(__pl__, __VA_ARGS__))(__VA_ARGS__)
 
 #define co_end_context_init(__ctx__, __capture__, ...) _co_capture __capture__:__VA_ARGS__{}};\
-	if (!gen._ctx){	gen._ctx = new co_context_tag __capture__; \
+	if (!gen._ctx){	gen._ctx = new co_context_tag __capture__;\
 	_co_end_context(__ctx__)
 
 #define co_fork_context co_context_tag(co_context_tag& curr)
@@ -47,56 +48,57 @@
 #define co_context_space_size sizeof(co_context_tag)
 
 #define co_end_context_alloc(__alloc__, __ctx__) };\
-	if (!gen._ctx){	gen._ctx = new(__alloc__)co_context_tag(); \
+	if (!gen._ctx){	gen._ctx = new(__alloc__)co_context_tag();\
 	_co_end_context(__ctx__)
 
 #define co_end_context_alloc_init(__alloc__, __ctx__, __capture__, ...) _co_capture __capture__:__VA_ARGS__{}};\
-	if (!gen._ctx){	gen._ctx = new(__alloc__)co_context_tag __capture__; \
+	if (!gen._ctx){	gen._ctx = new(__alloc__)co_context_tag __capture__;\
 	_co_end_context(__ctx__)
 
 #define co_begin }\
+	if (!__ctx->_sharedSign.empty()){__ctx->_sharedSign=true; __ctx->_sharedSign.reset();}\
 	if (!__ctx->__coNext) {__ctx->__coNext = (__COUNTER__+1)/2;}else if (-1==__ctx->__coNext) co_stop;\
-	try {switch(__ctx->__coNext) { case __COUNTER__/2:;
+	__coNext=__ctx->__coNext; __ctx->__coNext=0;\
+	switch(__coNext) { case __COUNTER__/2:;
 
 #define co_end }\
-	}catch(generator::stop_exception&){}\
 	if (false) {__stop: goto __break2; goto __stop; __break2:;}\
 	delete __ctx; gen._ctx = __ctx = NULL; return;
 
 #define co_end_dealloc(__dealloc__) }\
-	}catch(generator::stop_exception&){}\
 	if (false) {__stop: goto __break2; goto __stop; __break2:;}\
 	__ctx->~co_context_tag(); __dealloc__(__ctx); gen._ctx = __ctx = NULL; return;
 
 #define _co_yield do{\
+	if(-1==__ctx->__coNext) co_stop;\
 	assert(__ctx->__inside);\
 	assert(!__ctx->__awaitSign && !__ctx->__sharedAwaitSign);\
 	DEBUG_OPERATION(__ctx->__inside = false);\
 	__ctx->__coNext = (__COUNTER__+1)/2;\
-	return; case __COUNTER__/2:__ctx->__coNext=0;\
-	if(!__ctx->_sharedSign.empty()){__ctx->_sharedSign=true;__ctx->_sharedSign.reset();}\
+	return; case __COUNTER__/2:;\
 	}while (0)
 
 #define co_yield \
+	if(-1==__ctx->__coNext) co_stop;\
 	assert(__ctx->__inside);\
 	for (__yieldSwitch = false;;__yieldSwitch = true)\
 	if (__yieldSwitch) {_co_yield; break;}\
 	else
 
 #define co_async \
-	gen.curr_strand()->wrap(__co_async_wrap(__ctx, std::bind([](generator_handle& host){\
+	gen.gen_strand()->wrap(__co_async_wrap(__ctx, std::bind([](generator_handle& host){\
 	struct co_context_base* __ctx = host->_ctx;\
 	if (!__ctx) return;\
-	if (__ctx->__asyncSign) { __ctx->__asyncSign = false; host->next(); }\
+	if (__ctx->__asyncSign) { __ctx->__asyncSign = false; host->_next(); }\
 	else { __ctx->__asyncSign = true; };\
 	}, gen.shared_from_this())))
 
 #define co_shared_async \
-	gen.curr_strand()->wrap(__co_shared_async_wrap(__ctx, std::bind([](generator_handle& host, shared_bool& sign){\
+	gen.gen_strand()->wrap(__co_shared_async_wrap(__ctx, std::bind([](generator_handle& host, shared_bool& sign){\
 	if (sign) return;\
 	struct co_context_base* __ctx = host->_ctx;\
 	if (!__ctx) return;\
-	if (__ctx->__asyncSign) { __ctx->__asyncSign = false; host->next(); }\
+	if (__ctx->__asyncSign) { __ctx->__asyncSign = false; host->_next(); }\
 	else { __ctx->__asyncSign = true; };\
 	}, gen.shared_from_this(), __make_co_shared_sign(__ctx))))
 
@@ -104,16 +106,19 @@
 #define co_shared_async_result(...) _co_shared_async_result(gen.shared_from_this(), __make_co_shared_sign(__ctx), __VA_ARGS__)
 
 #define co_tick do{\
+	if(-1==__ctx->__coNext) co_stop;\
 	assert(__ctx->__inside);\
-	gen.curr_strand()->next_tick(std::bind([](generator_handle& host){host->next(); }, gen.shared_from_this())); _co_yield;}while(0)
+	gen.gen_strand()->next_tick(std::bind([](generator_handle& host){host->_next(); }, gen.shared_from_this())); _co_yield;}while(0)
 
 #define _co_await do{\
+	if(-1==__ctx->__coNext) co_stop;\
 	assert(__ctx->__inside);\
 	assert(__ctx->__awaitSign || __ctx->__sharedAwaitSign);\
-	DEBUG_OPERATION(__ctx->__awaitSign = __ctx->__sharedAwaitSign = false); \
+	DEBUG_OPERATION(__ctx->__awaitSign = __ctx->__sharedAwaitSign = false);\
 	if (!__ctx->__asyncSign) { __ctx->__asyncSign = true; _co_yield; }}while (0)
 
 #define co_await \
+	if(-1==__ctx->__coNext) co_stop;\
 	assert(__ctx->__inside);\
 	for (__yieldSwitch = false;;__yieldSwitch = true)\
 	if (__yieldSwitch) {_co_await; break;}\
@@ -121,99 +126,122 @@
 
 #define co_next(__host__) do{\
 	generator_handle& __host = __host__;\
-	generator* __gen = __host.get(); \
-	__gen->curr_strand()->distribute(std::bind([](generator_handle& host){\
-	if (!host->__ctx) return;\
+	generator* __gen = __host.get();\
+	__gen->gen_strand()->distribute(std::bind([](generator_handle& host){\
+	if (!host->_ctx) return;\
 	assert(!host->_ctx->__asyncSign);\
-	host->next(); }, std::move(__host))); }while(0)
+	host->_next(); }, std::move(__host))); }while(0)
 
 #define co_tick_next(__host__) do{\
 	generator_handle& __host = __host__;\
-	generator* __gen = __host.get(); \
-	__gen->curr_strand()->next_tick(std::bind([](generator_handle& host){\
-	if (!host->__ctx) return;\
+	generator* __gen = __host.get();\
+	__gen->gen_strand()->next_tick(std::bind([](generator_handle& host){\
+	if (!host->_ctx) return;\
 	assert(!host->_ctx->__asyncSign);\
-	host->next(); }, std::move(__host))); }while (0)
+	host->_next(); }, std::move(__host))); }while (0)
 
 #define co_async_next(__host__) do{\
 	generator_handle& __host = __host__;\
-	generator* __gen = __host.get(); \
-	__gen->curr_strand()->distribute(std::bind([](generator_handle& host){\
+	generator* __gen = __host.get();\
+	__gen->gen_strand()->distribute(std::bind([](generator_handle& host){\
 	struct co_context_base* __ctx = host->_ctx;\
 	if (!__ctx) return;\
-	if (__ctx->__asyncSign) { __ctx->__asyncSign = false; host->next(); }\
+	if (__ctx->__asyncSign) { __ctx->__asyncSign = false; host->_next(); }\
 	else { __ctx->__asyncSign = true; };\
 	}, std::move(__host))); }while (0)
 
 #define co_shared_async_next(__host__, __sign__) do{\
 	generator_handle& __host = __host__;\
-	generator* __gen = __host.get(); \
-	__gen->curr_strand()->distribute(std::bind([](generator_handle& host, shared_bool& sign){\
+	generator* __gen = __host.get();\
+	__gen->gen_strand()->distribute(std::bind([](generator_handle& host, shared_bool& sign){\
 	if (sign) return;\
 	struct co_context_base* __ctx = host->_ctx;\
 	if (!__ctx) return;\
-	if (__ctx->__asyncSign) { __ctx->__asyncSign = false; host->next(); }\
-	else { __ctx->__asyncSign = true; }; \
+	if (__ctx->__asyncSign) { __ctx->__asyncSign = false; host->_next(); }\
+	else { __ctx->__asyncSign = true; };\
 	}, std::move(__host), std::move(__sign__))); }while (0)
 
 #define co_invoke_(__handler__) do{\
+	if(-1==__ctx->__coNext) co_stop;\
 	assert(__ctx->__inside);\
-	gen.curr_strand()->try_tick(std::bind([](generator_handle& gen){gen->next(); }, generator::create(gen.curr_strand(), __handler__, co_async))); _co_await; }while (0)
+	gen.gen_strand()->try_tick(std::bind([](generator_handle& gen){gen->_next(); }, generator::create(gen.gen_strand(), __handler__, co_async))); _co_await; }while (0)
 
 #define co_invoke(...) co_invoke_(std::bind(__VA_ARGS__))
 
 #define co_sleep(__timer__, __ms__) do{\
-	assert(__ctx->__inside); \
-	(__timer__)->timeout(__ms__, std::bind([](generator_handle& host){host->next(); }, gen.shared_from_this())); _co_yield; } while (0)
+	if(-1==__ctx->__coNext) co_stop;\
+	assert(__ctx->__inside);\
+	(__timer__)->timeout(__ms__, std::bind([](generator_handle& host){if(!host->_ctx)return; host->_next(); }, gen.shared_from_this())); _co_yield; } while (0)
 
 #define co_run(__gen__) do{\
 	generator_handle __gen = std::move(__gen__);\
-	boost_strand* __strand = __gen->curr_strand().get();\
-	__strand->try_tick(std::bind([](generator_handle& host){host->next(); }, std::move(__gen)));}while(0)
+	boost_strand* __strand = __gen->gen_strand().get();\
+	__strand->try_tick(std::bind([](generator_handle& host){host->_next(); }, std::move(__gen)));}while(0)
 
 #define co_go(__strand__) CoGo_(__strand__)-
 
 #define co_fork do{{\
+	if(-1==__ctx->__coNext) co_stop;\
 	assert(__ctx->__inside);\
 	assert(!__ctx->__awaitSign && !__ctx->__sharedAwaitSign);\
-	generator_handle newGen = gen.begin_fork();\
-	newGen->_ctx = new co_context_tag(*__ctx); \
+	generator_handle newGen = gen._begin_fork();\
+	newGen->_ctx = new co_context_tag(*__ctx);\
 	newGen->_ctx->clear();\
+	newGen->_ctx->__lockStop = __ctx->__lockStop;\
 	newGen->_ctx->__coNext = (__COUNTER__+1)/2;\
 	co_run(newGen);\
 	}if (false) case __COUNTER__/2:break;\
 	}while (0)
 
 #define co_fork_alloc(__alloc__) do{{\
+	if(-1==__ctx->__coNext) co_stop;\
 	assert(__ctx->__inside);\
 	assert(!__ctx->__awaitSign && !__ctx->__sharedAwaitSign);\
-	generator_handle newGen = gen.begin_fork();\
-	newGen->_ctx = new(__alloc__)co_context_tag(*__ctx); \
+	generator_handle newGen = gen._begin_fork();\
+	newGen->_ctx = new(__alloc__)co_context_tag(*__ctx);\
 	newGen->_ctx->clear();\
+	newGen->_ctx->__lockStop = __ctx->__lockStop;\
 	newGen->_ctx->__coNext = (__COUNTER__+1)/2;\
 	co_run(newGen);\
 	}if (false) case __COUNTER__/2:break;\
 	}while (0)
 
 #define co_clone do{\
-	co_run(gen.begin_fork());\
+	if(-1==__ctx->__coNext) co_stop;\
+	co_run(gen._begin_fork());\
 	}while (0)
 
 #define co_restart do{\
-	delete gen._ctx; gen._ctx = NULL; goto __restart; \
+	if(-1==__ctx->__coNext) co_stop;\
+	delete gen._ctx; gen._ctx = NULL; goto __restart;\
 	}while (0)
 
 #define co_stop do{goto __stop;} while(0)
 
+#define co_lock_stop do{\
+	assert(__ctx->__inside);\
+	if(-1==__ctx->__coNext) co_stop;\
+	assert(__ctx->__lockStop<255);\
+	__ctx->__lockStop++;\
+	}while (0)
+
+#define co_unlock_stop do{\
+	assert(__ctx->__inside);\
+	assert(__ctx->__lockStop);\
+	assert(-1!=__ctx->__coNext);\
+	if (0==--__ctx->__lockStop && __ctx->__readyQuit) co_stop;\
+	}while (0)
+
 struct co_context_base
 {
 #ifdef _MSC_VER
-	virtual ~co_context_base(){}//FIXME VC下不加这个会有编译错误
+	virtual ~co_context_base(){}//FIXME VC下启用co_destroy_context时，不加这个会有编译错误
 #endif
 	void clear()
 	{
 		_sharedSign.reset();
 		__coNext = 0;
+		__readyQuit = false;
 		__asyncSign = false;
 #if (_DEBUG || DEBUG)
 		__inside = false;
@@ -224,6 +252,8 @@ struct co_context_base
 	}
 	shared_bool _sharedSign;
 	int __coNext = 0;
+	unsigned char __lockStop = 0;
+	bool __readyQuit = false;
 	bool __asyncSign = false;
 #if (_DEBUG || DEBUG)
 	bool __inside = false;
@@ -259,8 +289,6 @@ typedef std::shared_ptr<generator> generator_handle;
 class generator
 {
 	FRIEND_SHARED_PTR(generator);
-public:
-	struct stop_exception{};
 private:
 	generator();
 	~generator(){}
@@ -286,12 +314,12 @@ public:
 		return res;
 	}
 
-	bool next();
 	void stop();
 	generator_handle shared_from_this();
-	const shared_strand& curr_strand();
-	generator_handle begin_fork();
+	const shared_strand& gen_strand();
 
+	bool _next();
+	generator_handle _begin_fork();
 	co_context_base* _ctx;
 private:
 	std::weak_ptr<generator> _weakThis;
@@ -311,7 +339,7 @@ struct CoGo_
 	generator_handle operator-(Handler&& handler)
 	{
 		generator_handle res = generator::create(std::move(_strand), std::forward<Handler>(handler));
-		res->curr_strand()->try_tick(std::bind([](generator_handle& gen){gen->next(); }, res));
+		res->gen_strand()->try_tick(std::bind([](generator_handle& gen){gen->_next(); }, res));
 		return res;
 	}
 
