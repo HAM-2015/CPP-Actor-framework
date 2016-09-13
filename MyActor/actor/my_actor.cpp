@@ -2,6 +2,7 @@
 #include "async_buffer.h"
 #include "sync_msg.h"
 #include "bind_qt_run.h"
+#include "generator.h"
 #if (_MSC_VER >= 1900 || (__GNUG__*10 + __GNUC_MINOR__) >= 61)
 #include <shared_mutex>
 typedef std::shared_mutex _shared_mutex;
@@ -81,6 +82,7 @@ void my_actor::install()
 		s_shared_initer._traceMutex = TraceMutex_::_mutex;
 		DEBUG_OPERATION(s_installID = run_thread::this_thread_id());
 		io_engine::install();
+		generator::install();
 		install_check_stack();
 		s_isSelfInitFiber = context_yield::convert_thread_to_fiber();
 		ContextPool_::install();
@@ -116,6 +118,7 @@ void my_actor::install(const shared_initer* initer)
 		s_shared_initer._traceMutex = initer->_traceMutex;
 		DEBUG_OPERATION(s_installID = run_thread::this_thread_id());
 		io_engine::install();
+		generator::install();
 		install_check_stack();
 		s_isSelfInitFiber = context_yield::convert_thread_to_fiber();
 		ContextPool_::install();
@@ -180,6 +183,7 @@ void my_actor::uninstall()
 		if (s_isSelfInitFiber)
 			context_yield::convert_fiber_to_thread();
 		uninstall_check_stack();
+		generator::uninstall();
 		io_engine::uninstall();
 		if (!s_isSharedIniter)
 			delete TraceMutex_::_mutex;

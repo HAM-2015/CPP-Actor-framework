@@ -617,19 +617,19 @@ void co_socket_test()
 		boost::system::error_code ec;
 		boost::asio::ip::tcp::socket socket;
 		stack_obj<boost::asio::ip::tcp::acceptor> acceptor;
-		co_end_context_init(ctx, (gen), socket(gen.gen_strand()->get_io_service()), overtime(false), s(0));
+		co_end_context_init(ctx, (co_self), socket(co_strand->get_io_service()), overtime(false), s(0));
 
 		co_begin;
 		try
 		{
-			ctx.acceptor.create(gen.gen_strand()->get_io_service(), boost::asio::ip::tcp::endpoint(boost::asio::ip::address_v4(), 1235), false);
+			ctx.acceptor.create(co_strand->get_io_service(), boost::asio::ip::tcp::endpoint(boost::asio::ip::address_v4(), 1235), false);
 		}
 		catch (...) { co_stop; }
 		co_await ctx.acceptor->async_accept(ctx.socket, co_async_result(ctx.ec));
 		if (!ctx.ec)
 		{
 			ctx.acceptor->close(ctx.ec);
-			ctx.timer = gen.gen_strand()->make_timer();
+			ctx.timer = co_strand->make_timer();
 			while (true)
 			{
 				ctx.overtime = false;
@@ -670,14 +670,14 @@ void co_socket_test()
 		async_timer timer;
 		boost::system::error_code ec;
 		boost::asio::ip::tcp::socket socket;
-		co_end_context_init(ctx, (gen), socket(gen.gen_strand()->get_io_service()), s(0), i(0));
+		co_end_context_init(ctx, (co_self), socket(co_strand->get_io_service()), s(0), i(0));
 
 		co_begin;
-		ctx.timer = gen.gen_strand()->make_timer();
 		co_await ctx.socket.async_connect(boost::asio::ip::tcp::endpoint(
 			boost::asio::ip::address::from_string("127.0.0.1"), 1235), co_async_result(ctx.ec));
 		if (!ctx.ec)
 		{
+			ctx.timer = co_strand->make_timer();
 			for (ctx.i = 0; ctx.i < 10; ctx.i++)
 			{
 				co_await {
@@ -820,7 +820,7 @@ void perfor_test()
 {
 	trace_line("begin perfor_test");
 	io_engine ios;
-	ios.run(8);
+	ios.run(run_thread::cpu_thread_number());
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [&](my_actor* self)
 	{
 		self->check_stack();
@@ -1019,8 +1019,55 @@ void auto_stack_test()
 	trace_line("end auto_stack_test");
 }
 
+void co_perfor_test()
+{
+	trace_line("begin co_perfor_test");
+	io_engine ios;
+	ios.run(run_thread::cpu_thread_number());
+	std::vector<size_t> count(ios.threadNumber());
+	std::vector<shared_strand> strands = boost_strand::create_multi(ios.threadNumber(), ios);
+	std::list<generator_handle> gens;
+	size_t num = 1000;
+	for (size_t i = 0; i < ios.threadNumber(); i++)
+	{
+		for (size_t j = 0; j < num; j++)
+		{
+			generator_handle gen = co_go(strands[i])[&count, i](co_generator)
+			{
+				co_no_context;
+
+				co_begin;
+				while (true)
+				{
+					++count[i];
+					co_tick;
+				}
+				co_end;
+			};
+			gens.push_back(gen);
+		}
+	}
+	long long tk = get_tick_us();
+	run_thread::sleep(3000);
+	size_t ct = 0;
+	for (size_t i = 0; i < count.size(); i++)
+	{
+		ct += count[i];
+	}
+	double f = (double)ct * 1000000 / (get_tick_us() - tk);
+	while (!gens.empty())
+	{
+		gens.front()->stop();
+		gens.pop_front();
+	}
+	trace_line("generator number=", ios.threadNumber()*num, ", ", "switching frequency=", (int)f);
+	ios.stop();
+	trace_line("end co_perfor_test");
+}
+
 void co_test()
 {
+	trace_line("begin co_test");
 	io_engine ios;
 	ios.run();
 	{
@@ -1038,8 +1085,8 @@ void co_test()
 			int i;
 			int j;
 			async_timer timer;
-			co_fork_context :i(curr.i), j(curr.j), timer(curr.timer->self_strand()->make_timer()) {}
-			co_end_context_init(ctx, (gen), i(0), j(0), timer(gen.gen_strand()->make_timer()));
+			co_fork_context :i(host.i), j(host.j), timer(host.timer->self_strand()->make_timer()) {}
+			co_end_context_init(ctx, (co_self), i(0), j(0), timer(co_strand->make_timer()));
 
 			co_begin;
 			for (ctx.i = 0; ctx.i < 3; ++ctx.i)
@@ -1057,6 +1104,7 @@ void co_test()
 		}, __1, 0);
 	}
 	ios.stop();
+	trace_line("end co_test");
 }
 
 void go_test()
@@ -1085,6 +1133,8 @@ int main(int argc, char *argv[])
 	go_test();
 	trace("\n");
 	co_test();
+	trace("\n");
+	co_perfor_test();
 	trace("\n");
 	auto_stack_test();
 	trace("\n");
