@@ -14,7 +14,7 @@ struct __co_context_no_capture{};
 //开始定义generator函数体上下文，类似于局部变量
 #define co_begin_context \
 	static_assert(__COUNTER__+1 == __COUNTER__, ""); __co_context_no_capture const co_context_no_capture = __co_context_no_capture();\
-	if (false) {__restart: goto __break1; goto __restart; __break1:;}\
+	goto __restart; __restart:;\
 	struct co_context_tag: public co_context_base {
 
 #define _co_end_context(__ctx__) \
@@ -24,9 +24,8 @@ struct __co_context_no_capture{};
 	struct co_context_tag& __ctx__ = *__ctx;\
 	int __coNext = 0;\
 	size_t __coSwitchTempVal = 0;\
-	bool __coSwitchFirstCir = false;\
+	bool __coSwitchFirstLoopSign = false;\
 	bool __coSwitchDefaultSign = false;\
-	bool __coSwitchIsHeadSign = false;\
 	bool __coSwitchPreSign = false;\
 	bool __yieldSwitch = false; {
 
@@ -36,18 +35,18 @@ struct __co_context_no_capture{};
 	_co_end_context(__ctx__)
 
 #define _cop(__p__) decltype(__p__)& __p__
-#define _co_capture1() co_context_tag()
-#define _co_capture2(p1) co_context_tag(_cop(p1))
-#define _co_capture3(p1,p2) co_context_tag(_cop(p1),_cop(p2))
-#define _co_capture4(p1,p2,p3) co_context_tag(_cop(p1),_cop(p2),_cop(p3))
-#define _co_capture5(p1,p2,p3,p4) co_context_tag(_cop(p1),_cop(p2),_cop(p3),_cop(p4))
-#define _co_capture6(p1,p2,p3,p4,p5) co_context_tag(_cop(p1),_cop(p2),_cop(p3),_cop(p4),_cop(p5))
-#define _co_capture7(p1,p2,p3,p4,p5,p6) co_context_tag(_cop(p1),_cop(p2),_cop(p3),_cop(p4),_cop(p5),_cop(p6))
-#define _co_capture8(p1,p2,p3,p4,p5,p6,p7) co_context_tag(_cop(p1),_cop(p2),_cop(p3),_cop(p4),_cop(p5),_cop(p6),_cop(p7))
-#define _co_capture9(p1,p2,p3,p4,p5,p6,p7,p8) co_context_tag(_cop(p1),_cop(p2),_cop(p3),_cop(p4),_cop(p5),_cop(p6),_cop(p7),_cop(p8))
-#define _co_capture10(p1,p2,p3,p4,p5,p6,p7,p8,p9) co_context_tag(_cop(p1),_cop(p2),_cop(p3),_cop(p4),_cop(p5),_cop(p6),_cop(p7),_cop(p8),_cop(p9))
-#define _co_capture11(p1,p2,p3,p4,p5,p6,p7,p8,p9,p10) co_context_tag(_cop(p1),_cop(p2),_cop(p3),_cop(p4),_cop(p5),_cop(p6),_cop(p7),_cop(p8),_cop(p9),_cop(p10))
-#define _co_capture(...) _BOND_LR__(_co_capture, _PP_NARG(__pl__, __VA_ARGS__))(__VA_ARGS__)
+#define _co_capture0() co_context_tag()
+#define _co_capture1(p1) co_context_tag(_cop(p1))
+#define _co_capture2(p1,p2) co_context_tag(_cop(p1),_cop(p2))
+#define _co_capture3(p1,p2,p3) co_context_tag(_cop(p1),_cop(p2),_cop(p3))
+#define _co_capture4(p1,p2,p3,p4) co_context_tag(_cop(p1),_cop(p2),_cop(p3),_cop(p4))
+#define _co_capture5(p1,p2,p3,p4,p5) co_context_tag(_cop(p1),_cop(p2),_cop(p3),_cop(p4),_cop(p5))
+#define _co_capture6(p1,p2,p3,p4,p5,p6) co_context_tag(_cop(p1),_cop(p2),_cop(p3),_cop(p4),_cop(p5),_cop(p6))
+#define _co_capture7(p1,p2,p3,p4,p5,p6,p7) co_context_tag(_cop(p1),_cop(p2),_cop(p3),_cop(p4),_cop(p5),_cop(p6),_cop(p7))
+#define _co_capture8(p1,p2,p3,p4,p5,p6,p7,p8) co_context_tag(_cop(p1),_cop(p2),_cop(p3),_cop(p4),_cop(p5),_cop(p6),_cop(p7),_cop(p8))
+#define _co_capture9(p1,p2,p3,p4,p5,p6,p7,p8,p9) co_context_tag(_cop(p1),_cop(p2),_cop(p3),_cop(p4),_cop(p5),_cop(p6),_cop(p7),_cop(p8),_cop(p9))
+#define _co_capture10(p1,p2,p3,p4,p5,p6,p7,p8,p9,p10) co_context_tag(_cop(p1),_cop(p2),_cop(p3),_cop(p4),_cop(p5),_cop(p6),_cop(p7),_cop(p8),_cop(p9),_cop(p10))
+#define _co_capture(...) _BOND_LR__(_co_capture, MPL_ARGS_SIZE(__VA_ARGS__))(__VA_ARGS__)
 
 //结束generator函数体上下文定义，带内部变量初始化
 #define co_end_context_init(__ctx__, __capture__, ...) _co_capture __capture__:__VA_ARGS__{}};\
@@ -81,11 +80,11 @@ struct __co_context_no_capture{};
 
 //结束generator的代码区域
 #define co_end break;default:assert(false);}\
-	if (false) {__stop: goto __break2; goto __stop; __break2:;}\
+	goto __stop; __stop:;\
 	delete __ctx; co_self._ctx = __ctx = NULL; return;
 
 #define co_end_dealloc(__dealloc__) break;default:assert(false);}\
-	if (false) {__stop: goto __break2; goto __stop; __break2:;}\
+	goto __stop; __stop:;\
 	__ctx->~co_context_tag(); __dealloc__(__ctx); co_self._ctx = __ctx = NULL; return;
 
 #define _co_yield do{\
@@ -125,8 +124,14 @@ struct __co_context_no_capture{};
 	else { __ctx->__asyncSign = true; };\
 	}, co_self.shared_this(), co_self.shared_async_sign()))
 
+#define co_anext \
+	co_self.gen_strand()->wrap(std::bind([](generator_handle& host){\
+	host->_revert_this(host)->_next();\
+	}, std::move(co_self.shared_this())))
+
 //带返回值的generator异步回调接口
 #define co_async_result(...) _co_async_result(std::move(co_self.async_this()), __VA_ARGS__)
+#define co_anext_result(...) _co_anext_result(std::move(co_self.shared_this()), __VA_ARGS__)
 //带返回值的generator可共享异步回调接口
 #define co_shared_async_result(...) _co_shared_async_result(co_self.shared_this(), co_self.shared_async_sign(), __VA_ARGS__)
 
@@ -152,29 +157,36 @@ struct __co_context_no_capture{};
 	if (__yieldSwitch) {_co_await; break;}\
 	else
 
-#define co_next(__host__) do{\
-	__host__->_revert_this(__host__)->_co_next();}while (0)
-
 #define co_next_(__host__) do{\
+	__host__->_revert_this(__host__)->_co_next();\
+	}while (0)
+
+#define co_next(__host__) do{\
 	generator_handle __host = __host__;\
 	__host->_revert_this(__host)->_co_next();\
 	}while (0)
 
-#define co_tick_next(__host__) do{__host__->_revert_this(__host__)->_co_tick_next();}while (0)
-
 #define co_tick_next_(__host__) do{\
+	__host__->_revert_this(__host__)->_co_tick_next();\
+	}while (0)
+
+#define co_tick_next(__host__) do{\
 	generator_handle __host = __host__;\
 	__host->_revert_this(__host)->_co_tick_next();\
 	}while (0)
 
-#define co_async_next(__host__) do{__host__->_revert_this(__host__)->_co_async_next();}while (0)
-
 #define co_async_next_(__host__) do{\
+	__host__->_revert_this(__host__)->_co_async_next();\
+	}while (0)
+
+#define co_async_next(__host__) do{\
 	generator_handle __host = __host__;\
 	__host->_revert_this(__host)->_co_async_next();\
 	}while (0)
 
-#define co_shared_async_next(__host__, __sign__) do{__host__->_co_shared_async_next(__sign__);}while (0)
+#define co_shared_async_next(__host__, __sign__) do{\
+	__host__->_co_shared_async_next(__sign__);\
+	}while (0)
 
 #define co_invoke_(__handler__) do{\
 	if(-1==__ctx->__coNext) co_stop;\
@@ -205,7 +217,7 @@ struct __co_context_no_capture{};
 	newGen->_ctx->__lockStop = __ctx->__lockStop;\
 	newGen->_ctx->__coNext = (__COUNTER__+1)/2;\
 	newGen->run();\
-	}if (false) case __COUNTER__/2:break;\
+	}if (0) case __COUNTER__/2:break;\
 	}while (0)
 
 #define co_fork_(__new__, ...) do{{\
@@ -219,7 +231,7 @@ struct __co_context_no_capture{};
 	__new__->_ctx->__lockStop = __ctx->__lockStop;\
 	__new__->_ctx->__coNext = (__COUNTER__+1)/2;\
 	__new__->run();\
-	}if (false) case __COUNTER__/2:break;\
+	}if (0) case __COUNTER__/2:break;\
 	}while (0)
 
 #define co_fork_alloc(__alloc__) do{{\
@@ -233,7 +245,7 @@ struct __co_context_no_capture{};
 	newGen->_ctx->__lockStop = __ctx->__lockStop;\
 	newGen->_ctx->__coNext = (__COUNTER__+1)/2;\
 	newGen->run();\
-	}if (false) case __COUNTER__/2:break;\
+	}if (0) case __COUNTER__/2:break;\
 	}while (0)
 
 #define co_fork_alloc_(__alloc__, __new__, ...) do{{\
@@ -247,7 +259,7 @@ struct __co_context_no_capture{};
 	__new__->_ctx->__lockStop = __ctx->__lockStop;\
 	__new__->_ctx->__coNext = (__COUNTER__+1)/2;\
 	__new__->run();\
-	}if (false) case __COUNTER__/2:break;\
+	}if (0) case __COUNTER__/2:break;\
 	}while (0)
 //拷贝出一个和当前一样的generator
 #define co_clone do{\
@@ -290,33 +302,30 @@ struct __co_context_no_capture{};
 
 #define _case(id, p) case p:goto __co_case_##id##_##p;
 #define _case_default(id) default:goto __co_case_##id##_default;
-#define _switch_case2(id,p1) _case(id,p1)_case_default(id)
-#define _switch_case3(id,p1,p2) _case(id,p1)_case(id,p2)_case_default(id)
-#define _switch_case4(id,p1,p2,p3) _case(id,p1)_case(id,p2)_case(id,p3)_case_default(id)
-#define _switch_case5(id,p1,p2,p3,p4) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case_default(id)
-#define _switch_case6(id,p1,p2,p3,p4,p5) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case(id,p5)_case_default(id)
-#define _switch_case7(id,p1,p2,p3,p4,p5,p6) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case(id,p5)_case(id,p6)_case_default(id)
-#define _switch_case8(id,p1,p2,p3,p4,p5,p6,p7) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case(id,p5)_case(id,p6)_case(id,p7)_case_default(id)
-#define _switch_case9(id,p1,p2,p3,p4,p5,p6,p7,p8) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case(id,p5)_case(id,p6)_case(id,p7)_case(id,p8)_case_default(id)
-#define _switch_case10(id,p1,p2,p3,p4,p5,p6,p7,p8,p9) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case(id,p5)_case(id,p6)_case(id,p7)_case(id,p8)_case(id,p9)_case_default(id)
-#define _switch_case11(id,p1,p2,p3,p4,p5,p6,p7,p8,p9,p10) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case(id,p5)_case(id,p6)_case(id,p7)_case(id,p8)_case(id,p9)_case(id,p10)_case_default(id)
-#define _switch_case(id, ...) _BOND_LR__(_switch_case, _PP_NARG(__pl__, __VA_ARGS__))(id, __VA_ARGS__)
+#define _switch_case1(id,p1) _case(id,p1)_case_default(id)
+#define _switch_case2(id,p1,p2) _case(id,p1)_case(id,p2)_case_default(id)
+#define _switch_case3(id,p1,p2,p3) _case(id,p1)_case(id,p2)_case(id,p3)_case_default(id)
+#define _switch_case4(id,p1,p2,p3,p4) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case_default(id)
+#define _switch_case5(id,p1,p2,p3,p4,p5) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case(id,p5)_case_default(id)
+#define _switch_case6(id,p1,p2,p3,p4,p5,p6) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case(id,p5)_case(id,p6)_case_default(id)
+#define _switch_case7(id,p1,p2,p3,p4,p5,p6,p7) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case(id,p5)_case(id,p6)_case(id,p7)_case_default(id)
+#define _switch_case8(id,p1,p2,p3,p4,p5,p6,p7,p8) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case(id,p5)_case(id,p6)_case(id,p7)_case(id,p8)_case_default(id)
+#define _switch_case9(id,p1,p2,p3,p4,p5,p6,p7,p8,p9) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case(id,p5)_case(id,p6)_case(id,p7)_case(id,p8)_case(id,p9)_case_default(id)
+#define _switch_case10(id,p1,p2,p3,p4,p5,p6,p7,p8,p9,p10) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case(id,p5)_case(id,p6)_case(id,p7)_case(id,p8)_case(id,p9)_case(id,p10)_case_default(id)
+#define _switch_case(id, ...) _BOND_LR__(_switch_case, MPL_ARGS_SIZE(__VA_ARGS__))(id, __VA_ARGS__)
 #define co_define_int_name(__name__, __val__) enum{__name__=__val__};
 //因为generator内部无法在switch-case里面co_yield，提供该宏间接实现switch效果
 #define co_begin_switch_ex(id, __val__, ...) do{switch(__val__) {_switch_case(id, __VA_ARGS__)}
 #define co_switch_case_ex(id, p) __co_case_##id##_##p:
-#define co_switch_default_ex(id) co_switch_case(id, default)
+#define co_switch_default_ex(id) co_switch_case_ex(id, default)
 #define co_end_switch_ex }while (0)
 
 //因为generator内部无法在switch-case里面co_yield，提供该宏间接实现switch效果（不支持嵌套）
-#define co_begin_switch(__val__) for(__coSwitchPreSign=false,__coSwitchIsHeadSign=true,__coSwitchDefaultSign=false,__coSwitchFirstCir=true,__coSwitchTempVal=(size_t)__val__;\
-	__coSwitchFirstCir || (!__coSwitchPreSign && __coSwitchDefaultSign);__coSwitchIsHeadSign=true,__coSwitchFirstCir=false){{
-#define co_switch_case_(__val__) if(!__coSwitchIsHeadSign)__coSwitchPreSign=true;}__coSwitchIsHeadSign=false;\
-	if (__coSwitchPreSign || __coSwitchTempVal==(size_t)(__val__)){
-#define co_switch_case(__val__) if(!__coSwitchIsHeadSign)__coSwitchPreSign=true;}__coSwitchIsHeadSign=false;\
-	if (__coSwitchPreSign || (__coSwitchFirstCir&&__coSwitchTempVal==(size_t)(__val__))){
-#define co_switch_default if(!__coSwitchIsHeadSign)__coSwitchPreSign=true;}__coSwitchIsHeadSign=false;\
-	if(!__coSwitchDefaultSign && !__coSwitchPreSign){__coSwitchDefaultSign=true;}else{
+#define co_begin_switch(__val__) for(__coSwitchPreSign=false,__coSwitchDefaultSign=false,__coSwitchFirstLoopSign=true,__coSwitchTempVal=(size_t)__val__;\
+	__coSwitchFirstLoopSign || (!__coSwitchPreSign && __coSwitchDefaultSign);__coSwitchFirstLoopSign=false){if(0){
+#define co_switch_case_(__val__) __coSwitchPreSign=true;}if (__coSwitchPreSign || __coSwitchTempVal==(size_t)(__val__)){
+#define co_switch_case(__val__) __coSwitchPreSign=true;}if (__coSwitchPreSign || (__coSwitchFirstLoopSign&&__coSwitchTempVal==(size_t)(__val__))){
+#define co_switch_default __coSwitchPreSign=true;}if(!__coSwitchDefaultSign && !__coSwitchPreSign){__coSwitchDefaultSign=true;}else{
 #define co_end_switch __coSwitchPreSign=true;}}
 
 struct co_context_base
@@ -443,8 +452,8 @@ struct CoGo_
 template <typename... _Types>
 struct CoAsyncResult_
 {
-	CoAsyncResult_(generator_handle&& co_self, _Types&... result)
-	:_gen(std::move(co_self)), _result(result...) {}
+	CoAsyncResult_(generator_handle&& gen, _Types&... result)
+	:_gen(std::move(gen)), _result(result...) {}
 
 	template <typename... Args>
 	void operator()(Args&&... args)
@@ -463,8 +472,8 @@ struct CoAsyncResult_
 template <typename... _Types>
 struct CoShardAsyncResult_
 {
-	CoShardAsyncResult_(generator_handle& co_self, const shared_bool& sign, _Types&... result)
-	:_gen(co_self), _sign(sign), _result(result...) {}
+	CoShardAsyncResult_(generator_handle& gen, const shared_bool& sign, _Types&... result)
+	:_gen(gen), _sign(sign), _result(result...) {}
 
 	template <typename... Args>
 	void operator()(Args&&... args)
@@ -481,16 +490,42 @@ struct CoShardAsyncResult_
 	LVALUE_CONSTRUCT3(CoShardAsyncResult_, _gen, _sign, _result);
 };
 
-template <typename... Args>
-CoAsyncResult_<Args...> _co_async_result(generator_handle&& co_self, Args&... result)
+template <typename... _Types>
+struct CoAnextResult_
 {
-	return CoAsyncResult_<Args...>(std::move(co_self), result...);
+	CoAnextResult_(generator_handle&& gen, _Types&... result)
+	:_gen(std::move(gen)), _result(result...) {}
+
+	template <typename... Args>
+	void operator()(Args&&... args)
+	{
+		_result = std::tuple<Args&&...>(std::forward<Args>(args)...);
+		_gen->_revert_this(_gen)->_next();
+	}
+
+	generator_handle _gen;
+	std::tuple<_Types&...> _result;
+	void operator=(const CoAnextResult_&) = delete;
+	RVALUE_CONSTRUCT2(CoAnextResult_, _gen, _result);
+	LVALUE_CONSTRUCT2(CoAnextResult_, _gen, _result);
+};
+
+template <typename... Args>
+CoAsyncResult_<Args...> _co_async_result(generator_handle&& gen, Args&... result)
+{
+	return CoAsyncResult_<Args...>(std::move(gen), result...);
 }
 
 template <typename... Args>
-CoShardAsyncResult_<Args...> _co_shared_async_result(generator_handle& co_self, const shared_bool& sign, Args&... result)
+CoShardAsyncResult_<Args...> _co_shared_async_result(generator_handle& gen, const shared_bool& sign, Args&... result)
 {
-	return CoShardAsyncResult_<Args...>(co_self, sign, result...);
+	return CoShardAsyncResult_<Args...>(gen, sign, result...);
+}
+
+template <typename... Args>
+CoAnextResult_<Args...> _co_anext_result(generator_handle&& gen, Args&... result)
+{
+	return CoAnextResult_<Args...>(std::move(gen), result...);
 }
 
 #endif
