@@ -2241,13 +2241,15 @@ void my_actor::children_suspend(std::list<child_handle::ptr>& actorHandles)
 	lock_quit();
 	msg_handle<> amh;
 	msg_notifer<> h = make_msg_notifer_to_self(amh);
+	size_t actorNum = 0;
 	for (auto& actorHandle : actorHandles)
 	{
 		assert(actorHandle->get_actor());
 		assert((*actorHandle)->parent_actor()->self_id() == self_id());
 		(*actorHandle)->suspend(wrap_ref_handler(h));
+		actorNum++;
 	}
-	for (size_t i = actorHandles.size(); i > 0; i--)
+	while (actorNum--)
 	{
 		wait_msg(amh);
 	}
@@ -2261,13 +2263,15 @@ void my_actor::children_suspend(std::list<child_handle>& actorHandles)
 	lock_quit();
 	msg_handle<> amh;
 	msg_notifer<> h = make_msg_notifer_to_self(amh);
+	size_t actorNum = 0;
 	for (auto& actorHandle : actorHandles)
 	{
 		assert(actorHandle.get_actor());
 		assert(actorHandle->parent_actor()->self_id() == self_id());
 		actorHandle->suspend(wrap_ref_handler(h));
+		actorNum++;
 	}
-	for (size_t i = actorHandles.size(); i > 0; i--)
+	while (actorNum--)
 	{
 		wait_msg(amh);
 	}
@@ -2291,13 +2295,15 @@ void my_actor::children_resume(std::list<child_handle::ptr>& actorHandles)
 	lock_quit();
 	msg_handle<> amh;
 	msg_notifer<> h = make_msg_notifer_to_self(amh);
+	size_t actorNum = 0;
 	for (auto& actorHandle : actorHandles)
 	{
 		assert(actorHandle->get_actor());
 		assert((*actorHandle)->parent_actor()->self_id() == self_id());
 		(*actorHandle)->resume(wrap_ref_handler(h));
+		actorNum++;
 	}
-	for (size_t i = actorHandles.size(); i > 0; i--)
+	while (actorNum--)
 	{
 		wait_msg(amh);
 	}
@@ -2311,13 +2317,15 @@ void my_actor::children_resume(std::list<child_handle>& actorHandles)
 	lock_quit();
 	msg_handle<> amh;
 	msg_notifer<> h = make_msg_notifer_to_self(amh);
+	size_t actorNum = 0;
 	for (auto& actorHandle : actorHandles)
 	{
 		assert(actorHandle.get_actor());
 		assert(actorHandle->parent_actor()->self_id() == self_id());
 		actorHandle->resume(wrap_ref_handler(h));
+		actorNum++;
 	}
-	for (size_t i = actorHandles.size(); i > 0; i--)
+	while (actorNum--)
 	{
 		wait_msg(amh);
 	}
@@ -2613,12 +2621,13 @@ void my_actor::force_quit(std::function<void()>&& h)
 				self->cancel_timer();
 				if (!self->_childActorList.empty())
 				{
-					self->_childOverCount = self->_childActorList.size();
+					assert(!self->_childOverCount);
 					while (!self->_childActorList.empty())
 					{
+						self->_childOverCount++;
 						actor_handle childActor = std::move(self->_childActorList.front());
 						self->_childActorList.pop_front();
-						childActor->force_quit(std::bind([](actor_handle& shared_this)
+						childActor->force_quit(self->_strand->wrap(std::bind([](actor_handle& shared_this)
 						{
 							my_actor* const self = shared_this.get();
 							self->_childOverCount--;
@@ -2626,7 +2635,7 @@ void my_actor::force_quit(std::function<void()>&& h)
 							{
 								self->pull_yield();
 							}
-						}, std::move(shared_this)));
+						}, std::move(shared_this))));
 					}
 				}
 				else
@@ -2772,10 +2781,11 @@ void my_actor::suspend(std::function<void()>&& h)
 		my_actor* const self = shared_this.get();
 		if (!self->_quited)
 		{
+			bool queueEmpty = self->_suspendResumeQueue.empty();
 			self->_suspendResumeQueue.push_back(suspend_resume_option(true, std::move(h)));
 			if (!self->_lockSuspend)
 			{
-				if (1 == self->_suspendResumeQueue.size())
+				if (queueEmpty)
 				{
 					self->begin_suspend();
 				}
@@ -2799,10 +2809,10 @@ void my_actor::begin_suspend()
 	if (!_childActorList.empty())
 	{
 		assert(0 == _childSuspendResumeCount);
-		_childSuspendResumeCount = _childActorList.size();
 		for (actor_handle& childActor : _childActorList)
 		{
-			childActor->suspend(std::bind([](actor_handle& shared_this)
+			_childSuspendResumeCount++;
+			childActor->suspend(_strand->wrap(std::bind([](actor_handle& shared_this)
 			{
 				my_actor* const self = shared_this.get();
 				self->_childSuspendResumeCount--;
@@ -2810,7 +2820,7 @@ void my_actor::begin_suspend()
 				{
 					self->child_suspend_then();
 				}
-			}, shared_from_this()));
+			}, shared_from_this())));
 		}
 	}
 	else
@@ -2821,6 +2831,7 @@ void my_actor::begin_suspend()
 
 void my_actor::child_suspend_then()
 {
+	assert(_strand->running_in_this_thread());
 	suspend_resume_option opt = std::move(_suspendResumeQueue.front());
 	_suspendResumeQueue.pop_front();
 	if (opt._h)
@@ -2857,10 +2868,11 @@ void my_actor::resume(std::function<void()>&& h)
 		my_actor* const self = shared_this.get();
 		if (!self->_quited)
 		{
+			bool queueEmpty = self->_suspendResumeQueue.empty();
 			self->_suspendResumeQueue.push_back(suspend_resume_option(false, std::move(h)));
 			if (!self->_lockSuspend)
 			{
-				if (1 == self->_suspendResumeQueue.size())
+				if (queueEmpty)
 				{
 					self->begin_resume();
 				}
@@ -2882,10 +2894,10 @@ void my_actor::begin_resume()
 	if (!_childActorList.empty())
 	{
 		assert(0 == _childSuspendResumeCount);
-		_childSuspendResumeCount = _childActorList.size();
 		for (actor_handle& childActor : _childActorList)
 		{
-			childActor->resume(std::bind([](actor_handle& shared_this)
+			_childSuspendResumeCount++;
+			childActor->resume(_strand->wrap(std::bind([](actor_handle& shared_this)
 			{
 				my_actor* const self = shared_this.get();
 				self->_childSuspendResumeCount--;
@@ -2893,7 +2905,7 @@ void my_actor::begin_resume()
 				{
 					self->child_resume_then();
 				}
-			}, shared_from_this()));
+			}, shared_from_this())));
 		}
 	}
 	else
@@ -2904,6 +2916,7 @@ void my_actor::begin_resume()
 
 void my_actor::child_resume_then()
 {
+	assert(_strand->running_in_this_thread());
 	suspend_resume_option opt = std::move(_suspendResumeQueue.front());
 	_suspendResumeQueue.pop_front();
 	if (opt._h)
@@ -3149,11 +3162,13 @@ void my_actor::actors_force_quit(const std::list<actor_handle>& anotherActors)
 	lock_quit();
 	msg_handle<> amh;
 	msg_notifer<> h = make_msg_notifer_to_self(amh);
+	size_t actorNum = 0;
 	for (auto& actorHandle : anotherActors)
 	{
 		actorHandle->force_quit(wrap_ref_handler(h));
+		actorNum++;
 	}
-	for (size_t i = anotherActors.size(); i > 0; i--)
+	while (actorNum--)
 	{
 		wait_msg(amh);
 	}
@@ -3199,11 +3214,13 @@ void my_actor::actors_suspend(const std::list<actor_handle>& anotherActors)
 	lock_quit();
 	msg_handle<> amh;
 	msg_notifer<> h = make_msg_notifer_to_self(amh);
+	size_t actorNum = 0;
 	for (auto& actorHandle : anotherActors)
 	{
 		actorHandle->suspend(wrap_ref_handler(h));
+		actorNum++;
 	}
-	for (size_t i = anotherActors.size(); i > 0; i--)
+	while (actorNum--)
 	{
 		wait_msg(amh);
 	}
@@ -3224,11 +3241,13 @@ void my_actor::actors_resume(const std::list<actor_handle>& anotherActors)
 	lock_quit();
 	msg_handle<> amh;
 	msg_notifer<> h = make_msg_notifer_to_self(amh);
+	size_t actorNum = 0;
 	for (auto& actorHandle : anotherActors)
 	{
 		actorHandle->resume(wrap_ref_handler(h));
+		actorNum++;
 	}
-	for (size_t i = anotherActors.size(); i > 0; i--)
+	while (actorNum--)
 	{
 		wait_msg(amh);
 	}
@@ -3250,11 +3269,13 @@ bool my_actor::actors_switch(const std::list<actor_handle>& anotherActors)
 	bool isPause = true;
 	msg_handle<bool> amh;
 	msg_notifer<bool> h = make_msg_notifer_to_self(amh);
+	size_t actorNum = 0;
 	for (auto& actorHandle : anotherActors)
 	{
 		actorHandle->switch_pause_play(wrap_ref_handler(h));
+		actorNum++;
 	}
-	for (size_t i = anotherActors.size(); i > 0; i--)
+	while (actorNum--)
 	{
 		isPause &= wait_msg(amh);
 	}
