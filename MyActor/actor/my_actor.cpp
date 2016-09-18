@@ -2622,21 +2622,19 @@ void my_actor::force_quit(std::function<void()>&& h)
 				if (!self->_childActorList.empty())
 				{
 					assert(!self->_childOverCount);
-					while (!self->_childActorList.empty())
+					do
 					{
 						self->_childOverCount++;
-						actor_handle childActor = std::move(self->_childActorList.front());
-						self->_childActorList.pop_front();
-						childActor->force_quit(self->_strand->wrap(std::bind([](actor_handle& shared_this)
+						self->_childActorList.front()->force_quit(self->_strand->wrap(std::bind([](actor_handle& shared_this)
 						{
 							my_actor* const self = shared_this.get();
-							self->_childOverCount--;
-							if (0 == self->_childOverCount)
+							if (0 == --self->_childOverCount)
 							{
 								self->pull_yield();
 							}
-						}, std::move(shared_this))));
-					}
+						}, shared_this)));
+						self->_childActorList.pop_front();
+					} while (!self->_childActorList.empty());
 				}
 				else
 				{
@@ -2815,8 +2813,7 @@ void my_actor::begin_suspend()
 			childActor->suspend(_strand->wrap(std::bind([](actor_handle& shared_this)
 			{
 				my_actor* const self = shared_this.get();
-				self->_childSuspendResumeCount--;
-				if (0 == self->_childSuspendResumeCount)
+				if (0 == --self->_childSuspendResumeCount)
 				{
 					self->child_suspend_then();
 				}
@@ -2900,8 +2897,7 @@ void my_actor::begin_resume()
 			childActor->resume(_strand->wrap(std::bind([](actor_handle& shared_this)
 			{
 				my_actor* const self = shared_this.get();
-				self->_childSuspendResumeCount--;
-				if (0 == self->_childSuspendResumeCount)
+				if (0 == --self->_childSuspendResumeCount)
 				{
 					self->child_resume_then();
 				}

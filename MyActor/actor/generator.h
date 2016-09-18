@@ -107,6 +107,7 @@ struct __co_context_no_capture{};
 //generator异步回调接口
 #define co_async \
 	co_self.gen_strand()->wrap(std::bind([](generator_handle& host){\
+	assert(host);\
 	struct co_context_base* __ctx = host->_ctx;\
 	if (!__ctx) return;\
 	generator* host_ = host->_revert_this(host);\
@@ -126,6 +127,7 @@ struct __co_context_no_capture{};
 
 #define co_anext \
 	co_self.gen_strand()->wrap(std::bind([](generator_handle& host){\
+	assert(host);\
 	host->_revert_this(host)->_next();\
 	}, std::move(co_self.shared_this())))
 
@@ -300,6 +302,13 @@ struct __co_context_no_capture{};
 //当前generator调度器
 #define co_strand co_self.gen_strand()
 
+//发送一个任务到另一个strand中执行，执行完成后接着下一行
+#define co_begin_send(__strand__) {if (co_self._co_send(__strand__, [&]{
+#define co_end_send }))_co_yield;}
+//发送一个任务到另一个strand中执行，执行完成后接着下一行
+#define co_begin_async_send(__strand__) {co_self._co_async_send(__strand__, [&]{
+#define co_end_async_send });_co_yield;}
+
 #define _case(id, p) case p:goto __co_case_##id##_##p;
 #define _case_default(id) default:goto __co_case_##id##_default;
 #define _switch_case1(id,p1) _case(id,p1)_case_default(id)
@@ -407,7 +416,7 @@ public:
 	generator_handle& shared_this();
 	generator_handle& async_this();
 	const shared_bool& shared_async_sign();
-
+public:
 	bool _next();
 	void _lockThis();
 	generator* _revert_this(generator_handle&);
@@ -416,6 +425,41 @@ public:
 	void _co_tick_next();
 	void _co_async_next();
 	void _co_shared_async_next(shared_bool& sign);
+
+	template <typename Handler>
+	bool _co_send(const shared_strand& strand, Handler&& handler)
+	{
+		if (gen_strand() != strand)
+		{
+			strand->post(std::bind([](generator_handle& gen, Handler& handler)
+			{
+				CHECK_EXCEPTION(handler);
+				generator* const self = gen.get();
+				self->gen_strand()->post(std::bind([](generator_handle& gen)
+				{
+					gen->_revert_this(gen)->_next();
+				}, std::move(gen)));
+			}, std::move(shared_this()), std::forward<Handler>(handler)));
+			return true;
+		}
+		CHECK_EXCEPTION(handler);
+		return false;
+	}
+
+	template <typename Handler>
+	void _co_async_send(const shared_strand& strand, Handler&& handler)
+	{
+		strand->try_tick(std::bind([](generator_handle& gen, Handler& handler)
+		{
+			CHECK_EXCEPTION(handler);
+			generator* const self = gen.get();
+			self->gen_strand()->distribute(std::bind([](generator_handle& gen)
+			{
+				gen->_revert_this(gen)->_next();
+			}, std::move(gen)));
+		}, std::move(shared_this()), std::forward<Handler>(handler)));
+	}
+
 	co_context_base* _ctx;
 private:
 	static void install();
@@ -458,6 +502,7 @@ struct CoAsyncResult_
 	template <typename... Args>
 	void operator()(Args&&... args)
 	{
+		assert(_gen);
 		_result = std::tuple<Args&&...>(std::forward<Args>(args)...);
 		_gen->_revert_this(_gen)->_co_async_next();
 	}
@@ -499,6 +544,7 @@ struct CoAnextResult_
 	template <typename... Args>
 	void operator()(Args&&... args)
 	{
+		assert(_gen);
 		_result = std::tuple<Args&&...>(std::forward<Args>(args)...);
 		_gen->_revert_this(_gen)->_next();
 	}
