@@ -128,20 +128,6 @@ struct ApplyArg_
 	{
 		return ApplyArg_<R, N - 1>::append(h, TRY_MOVE(tup), tuple_move<N - 1, Tuple&&>::get(TRY_MOVE(tup)), TRY_MOVE(args)...);
 	}
-
-	template <typename Tuple, typename First, typename... Args>
-	static inline void to_args(Tuple&& tup, First& fst, Args&... dsts)
-	{
-		fst = tuple_move<std::tuple_size<RM_REF(Tuple)>::value - N, Tuple&&>::get(TRY_MOVE(tup));
-		ApplyArg_<R, N - 1>::to_args(TRY_MOVE(tup), dsts...);
-	}
-
-	template <typename Tuple, typename First, typename... Args>
-	static inline void to_tuple(Tuple&& dst, First&& fst, Args&&... args)
-	{
-		std::get<std::tuple_size<RM_REF(Tuple)>::value - N>(dst) = TRY_MOVE(fst);
-		ApplyArg_<R, N - 1>::to_tuple(TRY_MOVE(dst), TRY_MOVE(args)...);
-	}
 };
 
 template <typename R>
@@ -151,18 +137,6 @@ struct ApplyArg_<R, 0>
 	static inline R append(Handler& h, Tuple&&, Args&&... args)
 	{
 		return h(TRY_MOVE(args)...);
-	}
-
-	template <typename Tuple>
-	static inline void to_args(Tuple&&)
-	{
-
-	}
-
-	template <typename Tuple>
-	static inline void to_tuple(Tuple&&)
-	{
-
 	}
 };
 
@@ -385,6 +359,51 @@ template <typename... Type>
 std::tuple<Type&&...> wrap_tuple(Type&&... args)
 {
 	return std::tuple<Type&&...>(std::forward<Type>(args)...);
+}
+
+template <size_t N, size_t I>
+struct SameCopyToTuple_
+{
+	template <typename Head, typename... Dst, typename... Src>
+	static void same_copy_to_tuple(std::tuple<Dst...>& dst, Head&& head, Src&&... src)
+	{
+		std::get<N-I>(dst) = std::forward<Head>(head);
+		SameCopyToTuple_<N, I - 1>::same_copy_to_tuple(dst, std::forward<Src>(src)...);
+	}
+};
+
+template <size_t N>
+struct SameCopyToTuple_<N, 0>
+{
+	template <typename... Dst, typename... Src>
+	static void same_copy_to_tuple(std::tuple<Dst...>& dst, Src&&... src) {}
+};
+
+template <size_t A, size_t B, bool lt>
+struct SameCopyToTuple__
+{
+	template <typename... Dst, typename... Src>
+	static void same_copy_to_tuple(std::tuple<Dst...>& dst, Src&&... src)
+	{
+		SameCopyToTuple_<A, A>::same_copy_to_tuple(dst, std::forward<Src>(src)...);
+	}
+};
+
+template <size_t A, size_t B>
+struct SameCopyToTuple__<A, B, false>
+{
+	template <typename... Dst, typename... Src>
+	static void same_copy_to_tuple(std::tuple<Dst...>& dst, Src&&... src)
+	{
+		SameCopyToTuple_<B, B>::same_copy_to_tuple(dst, std::forward<Src>(src)...);
+	}
+};
+
+template <typename... Dst, typename... Src>
+void same_copy_to_tuple(std::tuple<Dst...>& dst, Src&&... src)
+{
+	bool const lt = sizeof...(Dst) < sizeof...(Src);
+	SameCopyToTuple__<sizeof...(Dst), sizeof...(Src), lt>::same_copy_to_tuple(dst, std::forward<Src>(src)...);
 }
 
 #endif

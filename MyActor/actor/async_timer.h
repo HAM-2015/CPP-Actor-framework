@@ -163,6 +163,11 @@ public:
 	@brief 
 	*/
 	shared_strand self_strand();
+
+	/*!
+	@brief 创建一个依赖同一个shared_strand的定时器
+	*/
+	async_timer clone();
 private:
 	void timeout_handler();
 private:

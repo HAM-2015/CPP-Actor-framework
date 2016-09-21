@@ -143,6 +143,96 @@ private:
 	allocator _alloc;
 };
 
+template <typename TAlloc>
+class msg_queue<void, TAlloc>
+{
+public:
+	msg_queue(size_t poolSize = sizeof(void*))
+		:_poolSize(poolSize), _size(0) {}
+
+	~msg_queue()
+	{
+		clear();
+	}
+
+	template <typename... Args>
+	void push_back(Args&&... args)
+	{
+		_size++;
+	}
+
+	template <typename... Args>
+	void push_front(Args&&... args)
+	{
+		_size++;
+	}
+
+	void_type front()
+	{
+		assert(_size);
+		return void_type();
+	}
+
+	void_type back()
+	{
+		assert(_size);
+		return void_type();
+	}
+
+	void pop_front()
+	{
+		assert(_size);
+		_size--;
+	}
+
+	size_t size()
+	{
+		return _size;
+	}
+
+	bool empty()
+	{
+		return !_size;
+	}
+
+	void clear()
+	{
+		_size = 0;
+	}
+
+	void expand_fixed(size_t fixedSize)
+	{
+		if (fixedSize > _poolSize)
+		{
+			_poolSize = fixedSize;
+		}
+	}
+
+	size_t fixed_size()
+	{
+		return _poolSize;
+	}
+private:
+	size_t _size;
+	size_t _poolSize;
+};
+
+template <typename TAlloc>
+class msg_queue<void_type, TAlloc>: public msg_queue<void, TAlloc>
+{
+public:
+	msg_queue(size_t poolSize = sizeof(void*))
+		:msg_queue<void, TAlloc>(poolSize) {}
+};
+
+template <typename TAlloc>
+class msg_queue<std::tuple<void_type>, TAlloc>: public msg_queue<void, TAlloc>
+{
+public:
+	msg_queue(size_t poolSize = sizeof(void*))
+		:msg_queue<void, TAlloc>(poolSize) {}
+};
+
 template <typename T>
 class node_queue
 {

@@ -323,6 +323,7 @@ struct move_test
 	move_test(move_test&& s);
 	void operator=(const move_test& s);
 	void operator=(move_test&& s);
+	void reset();
 	friend std::ostream& operator <<(std::ostream& out, const move_test& s);
 	friend std::wostream& operator <<(std::wostream& out, const move_test& s);
 	std::shared_ptr<count> _count;
@@ -454,6 +455,10 @@ struct none_functor
 {
 	template <typename... Args>
 	void operator()(Args&&...){}
+};
+
+struct void_type
+{
 };
 
 template <typename T>

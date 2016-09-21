@@ -110,6 +110,86 @@ private:
 	node* _buffer;
 };
 
+template <>
+class fixed_buffer<void>
+{
+public:
+	fixed_buffer(size_t maxSize)
+	{
+		assert(0 != maxSize);
+		_size = 0;
+		_maxSize = maxSize;
+	}
+
+	~fixed_buffer()
+	{
+		clear();
+	}
+public:
+	size_t size() const
+	{
+		return _size;
+	}
+
+	size_t max_size() const
+	{
+		return _maxSize;
+	}
+
+	bool empty() const
+	{
+		return 0 == _size;
+	}
+
+	bool full() const
+	{
+		return _maxSize == _size;
+	}
+
+	void clear()
+	{
+		_size = 0;
+	}
+
+	void_type front()
+	{
+		assert(!empty());
+		return void_type();
+	}
+
+	void pop_front()
+	{
+		assert(!empty());
+		_size--;
+	}
+
+	template <typename Arg>
+	void push_back(Arg&& arg)
+	{
+		assert(!full());
+		_size++;
+	}
+private:
+	size_t _maxSize;
+	size_t _size;
+};
+
+template <>
+class fixed_buffer<void_type>: public fixed_buffer<void>
+{
+public:
+	fixed_buffer(size_t maxSize)
+	:fixed_buffer<void>(maxSize){}
+};
+
+template <>
+class fixed_buffer<std::tuple<void_type>>: public fixed_buffer<void>
+{
+public:
+	fixed_buffer(size_t maxSize)
+	:fixed_buffer<void>(maxSize){}
+};
+
 /*!
 @brief 异步缓冲队列，多写/多读，角色可转换
 */
@@ -727,7 +807,7 @@ private:
 					return pushCount;
 				}
 				long long bt = get_tick_us();
-				if (!host->timed_wait_trig(utm / 1000, ath, closed))
+				if (!host->timed_wait_trig((int)((utm + 999) / 1000), ath, closed))
 				{
 					host->send(_strand, [&]
 					{
@@ -980,7 +1060,7 @@ private:
 					return popCount;
 				}
 				long long bt = get_tick_us();
-				if (!host->timed_wait_trig(utm / 1000, ath, closed))
+				if (!host->timed_wait_trig((int)((utm + 999) / 1000), ath, closed))
 				{
 					host->send(_strand, [&]
 					{

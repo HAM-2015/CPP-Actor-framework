@@ -234,3 +234,13 @@ void generator::_co_shared_async_next(shared_bool& sign)
 		}
 	}, _weakThis.lock(), std::move(sign)));
 }
+//////////////////////////////////////////////////////////////////////////
+
+void CoNotifyHandlerFace_::notify_state(reusable_mem& alloc, CoNotifyHandlerFace_* ntf, co_async_state state /*= co_async_ok*/)
+{
+	__space_align char space[sizeof(void*)* 256];
+	assert(sizeof(space) >= ntf->size());
+	CoNotifyHandlerFace_* ntf_ = ntf->move_out(space);
+	alloc.deallocate(ntf);
+	ntf_->notify(state);
+}

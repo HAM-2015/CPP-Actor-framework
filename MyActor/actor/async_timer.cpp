@@ -204,6 +204,11 @@ shared_strand AsyncTimer_::self_strand()
 	return _timerBoost._weakStrand.lock();
 }
 
+async_timer AsyncTimer_::clone()
+{
+	return self_strand()->make_timer();
+}
+
 void AsyncTimer_::timeout_handler()
 {
 	_timerHandle.reset();

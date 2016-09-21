@@ -20,8 +20,12 @@ http://www.oschina.net/code/snippet_2274073_45577
 ftp url:
 ftp://ham2015.6655.la/files/MyActor/
 
+2016-09-20
+添加generator下的channel通信机制（无缓存/有限缓存/无限缓存），支持select-case方式读取多个channel;
+添加generator下的逻辑mutex互斥.
+
 2016-09-08
-添加基于stackless的generator，支持co_yield，co_invoke，co_async/co_await语义.
+添加基于stackless的generator，支持co_yield、co_invoke、co_fork、co_clone、co_restart、co_async/co_await语义.
 
 2016-08-18
 添加Node.Js与C++扩展模块之间Actor交互(测试Node.Js版本6.2.2).

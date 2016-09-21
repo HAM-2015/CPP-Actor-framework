@@ -1065,6 +1065,230 @@ void co_perfor_test()
 	trace_line("end co_perfor_test");
 }
 
+void co_mutex_test()
+{
+	trace_line("begin co_mutex_test");
+	io_engine ios;
+	ios.run();
+	co_mutex mutex(boost_strand::create(ios));
+	co_go(boost_strand::create(ios))[&](co_generator)
+	{
+		co_begin_context;
+		int i;
+		async_timer timer;
+		co_async_state state;
+		co_end_context(ctx);
+
+		co_begin;
+		ctx.timer = co_strand->make_timer();
+		for (ctx.i = 0; ctx.i < 10; ctx.i++)
+		{
+			co_await mutex.lock(co_async);
+			trace_space("a", ctx.i);
+			co_sleep(ctx.timer, 100);
+			trace_space("a", ctx.i);
+			co_sleep(ctx.timer, 100);
+			trace_space("a", ctx.i);
+			co_sleep(ctx.timer, 100);
+			co_await mutex.unlock(co_async);
+		}
+		co_end;
+	};
+	co_go(boost_strand::create(ios))[&](co_generator)
+	{
+		co_begin_context;
+		int i;
+		move_test mt;
+		async_timer timer;
+		co_async_state state;
+		co_end_context(ctx);
+
+		co_begin;
+		ctx.timer = co_strand->make_timer();
+		for (ctx.i = 0; ctx.i < 10; ctx.i++)
+		{
+			co_await mutex.lock(co_async);
+			trace_space("b", ctx.i);
+			co_sleep(ctx.timer, 100);
+			trace_space("b", ctx.i);
+			co_sleep(ctx.timer, 100);
+			trace_space("b", ctx.i);
+			co_sleep(ctx.timer, 100);
+			co_await mutex.unlock(co_async);
+		}
+		co_end;
+	};
+	ios.stop();
+	trace_line("end co_mutex_test");
+}
+
+void co_select_msg_test()
+{
+	trace_line("begin co_select_msg_test");
+	io_engine ios;
+	ios.run();
+	co_msg_buffer<move_test> msgBuff(boost_strand::create(ios));
+	co_channel<move_test> msgChan(boost_strand::create(ios), 1);
+	co_nil_channel<void> doneMsg(boost_strand::create(ios));
+	co_go(boost_strand::create(ios))[&](co_generator)
+	{
+		co_begin_context;
+		int id;
+		move_test mt;
+		async_timer timer;
+		co_select_msg;
+		co_context_fork:id(host.id+1), timer(host.timer->clone()), co_select_msg_fork{}
+		co_end_context_init(ctx, (co_self), id(0), co_select_init);
+
+		co_begin;
+		ctx.timer = co_strand->make_timer();
+		co_begin_select(s1);
+		co_select_case(msgBuff, ctx.mt);
+		{
+			assert(co_select_state_is_ok);
+			info_trace_line(ctx.id, " buff_1: ", ctx.mt);
+			if (0 == ctx.id && 0 == ctx.mt._count->_id)
+			{
+				co_fork;
+			}
+			co_sleep(ctx.timer, 10);
+		}
+		co_select_case(msgChan, ctx.mt);
+		{
+			assert(co_select_state_is_ok);
+			info_trace_line(ctx.id, " chan_2: ", ctx.mt);
+			co_sleep(ctx.timer, 10);
+		}
+		co_select_case_void(doneMsg);
+		{
+			assert(co_select_state_is_ok);
+			info_trace_line(ctx.id, " select msg done");
+			co_select_done(s1);
+		}
+		co_end_select;
+		co_end;
+	};
+	co_go(boost_strand::create(ios))[&](co_generator)
+	{
+		co_begin_context;
+		int i;
+		move_test mt;
+		async_timer timer;
+		co_async_state state;
+		co_end_context(ctx);
+
+		co_begin;
+		ctx.timer = co_strand->make_timer();
+		for (ctx.i = 0; ctx.i < 5; ctx.i++)
+		{
+			co_chan_push(msgBuff, ctx.state, move_test(ctx.i));
+			co_sleep(ctx.timer, 100);
+			co_chan_push(msgChan, ctx.state, move_test(ctx.i));
+			co_sleep(ctx.timer, 100);
+		}
+		co_chan_push_void(doneMsg, ctx.state);
+		co_chan_push_void(doneMsg, ctx.state);
+		co_close_chan(msgBuff);
+		co_close_chan(msgChan);
+		co_close_chan(doneMsg);
+		co_end;
+	};
+	ios.stop();
+	trace_line("end co_select_msg_test");
+}
+
+void co_msg_test()
+{
+	trace_line("begin co_msg_test");
+	io_engine ios;
+	ios.run();
+	co_msg_buffer<move_test> msgBuff(boost_strand::create(ios));
+	co_go(boost_strand::create(ios))[&](co_generator)
+	{
+		co_begin_context;
+		int i;
+		async_timer timer;
+		co_async_state state;
+		co_end_context(ctx);
+
+		co_begin;
+		ctx.timer = co_strand->make_timer();
+		for (ctx.i = 0; ctx.i < 10; ctx.i++)
+		{
+			co_chan_push(msgBuff, ctx.state, move_test(ctx.i));
+			co_sleep(ctx.timer, 100);
+		}
+		co_end;
+	};
+	co_go(boost_strand::create(ios))[&](co_generator)
+	{
+		co_begin_context;
+		int i;
+		move_test mt;
+		async_timer timer;
+		co_async_state state;
+		co_end_context(ctx);
+
+		co_begin;
+		ctx.timer = co_strand->make_timer();
+		for (ctx.i = 0; ctx.i < 10; ctx.i++)
+		{
+			co_chan_pop(msgBuff, ctx.state, ctx.mt);
+			trace_line(ctx.mt);
+			co_sleep(ctx.timer, 300);
+		}
+		co_end;
+	};
+	ios.stop();
+	trace_line("end co_msg_test");
+}
+
+void co_channel_test()
+{
+	trace_line("begin co_channel_test");
+	io_engine ios;
+	ios.run();
+	co_channel<move_test> channel(boost_strand::create(ios), 3);
+	co_go(boost_strand::create(ios))[&](co_generator)
+	{
+		co_begin_context;
+		int i;
+		async_timer timer;
+		co_async_state state;
+		co_end_context(ctx);
+
+		co_begin;
+		ctx.timer = co_strand->make_timer();
+		for (ctx.i = 0; ctx.i < 10; ctx.i++)
+		{
+			co_chan_push(channel, ctx.state, move_test(ctx.i));
+			co_sleep(ctx.timer, 100);
+		}
+		co_end;
+	};
+	co_go(boost_strand::create(ios))[&](co_generator)
+	{
+		co_begin_context;
+		int i;
+		move_test mt;
+		async_timer timer;
+		co_async_state state;
+		co_end_context(ctx);
+
+		co_begin;
+		ctx.timer = co_strand->make_timer();
+		for (ctx.i = 0; ctx.i < 10; ctx.i++)
+		{
+			co_chan_pop(channel, ctx.state, ctx.mt);
+			trace_line(ctx.mt);
+			co_sleep(ctx.timer, 300);
+		}
+		co_end;
+	};
+	ios.stop();
+	trace_line("end co_channel_test");
+}
+
 void co_test()
 {
 	trace_line("begin co_test");
@@ -1085,7 +1309,7 @@ void co_test()
 			int i;
 			int j;
 			async_timer timer;
-			co_fork_context :i(host.i), j(host.j), timer(host.timer->self_strand()->make_timer()) {}
+			co_context_fork :i(host.i), j(host.j), timer(host.timer->clone()) {}
 			co_end_context_init(ctx, (co_self), i(0), j(0), timer(co_strand->make_timer()));
 
 			co_begin;
@@ -1133,6 +1357,14 @@ int main(int argc, char *argv[])
 	go_test();
 	trace("\n");
 	co_test();
+	trace("\n");
+	co_channel_test();
+	trace("\n");
+	co_msg_test();
+	trace("\n");
+	co_select_msg_test();
+	trace("\n");
+	co_mutex_test();
 	trace("\n");
 	co_perfor_test();
 	trace("\n");

@@ -101,6 +101,11 @@ std::wostream& operator <<(std::wostream& out, const move_test& s)
 	return out;
 }
 
+void move_test::reset()
+{
+	_count.reset();
+}
+
 move_test::move_test(move_test&& s)
 {
 	*this = std::move(s);
