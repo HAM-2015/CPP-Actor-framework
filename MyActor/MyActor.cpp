@@ -667,7 +667,6 @@ void co_socket_test()
 		int i;
 		size_t s;
 		char buf[128];
-		async_timer timer;
 		boost::system::error_code ec;
 		boost::asio::ip::tcp::socket socket;
 		co_end_context_init(ctx, (co_self), socket(co_strand->get_io_service()), s(0), i(0));
@@ -677,16 +676,15 @@ void co_socket_test()
 			boost::asio::ip::address::from_string("127.0.0.1"), 1235), co_async_result(ctx.ec));
 		if (!ctx.ec)
 		{
-			ctx.timer = co_strand->make_timer();
 			for (ctx.i = 0; ctx.i < 10; ctx.i++)
 			{
 				co_await {
 					int l = snPrintf(ctx.buf, sizeof(ctx.buf), "msg %d", ctx.i);
 					boost::asio::async_write(ctx.socket, boost::asio::buffer(ctx.buf, l), co_async_result(ctx.ec, ctx.s));
 				}
-				co_sleep(ctx.timer, 1000);
+				co_sleep(1000);
 			}
-			co_sleep(ctx.timer, 2000);
+			co_sleep(2000);
 		}
 		co_end;
 	};
@@ -1075,21 +1073,19 @@ void co_mutex_test()
 	{
 		co_begin_context;
 		int i;
-		async_timer timer;
 		co_async_state state;
 		co_end_context(ctx);
 
 		co_begin;
-		ctx.timer = co_strand->make_timer();
 		for (ctx.i = 0; ctx.i < 10; ctx.i++)
 		{
 			co_await mutex.lock(co_async);
-			trace_space("a", ctx.i);
-			co_sleep(ctx.timer, 100);
-			trace_space("a", ctx.i);
-			co_sleep(ctx.timer, 100);
-			trace_space("a", ctx.i);
-			co_sleep(ctx.timer, 100);
+			info_trace_space("a", ctx.i);
+			co_sleep(100);
+			info_trace_space("a", ctx.i);
+			co_sleep(100);
+			info_trace_space("a", ctx.i);
+			co_sleep(100);
 			co_await mutex.unlock(co_async);
 		}
 		co_end;
@@ -1099,21 +1095,19 @@ void co_mutex_test()
 		co_begin_context;
 		int i;
 		move_test mt;
-		async_timer timer;
 		co_async_state state;
 		co_end_context(ctx);
 
 		co_begin;
-		ctx.timer = co_strand->make_timer();
 		for (ctx.i = 0; ctx.i < 10; ctx.i++)
 		{
 			co_await mutex.lock(co_async);
-			trace_space("b", ctx.i);
-			co_sleep(ctx.timer, 100);
-			trace_space("b", ctx.i);
-			co_sleep(ctx.timer, 100);
-			trace_space("b", ctx.i);
-			co_sleep(ctx.timer, 100);
+			info_trace_space("b", ctx.i);
+			co_sleep(100);
+			info_trace_space("b", ctx.i);
+			co_sleep(100);
+			info_trace_space("b", ctx.i);
+			co_sleep(100);
 			co_await mutex.unlock(co_async);
 		}
 		co_end;
@@ -1135,35 +1129,30 @@ void co_select_msg_test()
 		co_begin_context;
 		int id;
 		move_test mt;
-		async_timer timer;
 		co_select_msg;
-		co_context_fork:id(host.id+1), timer(host.timer->clone()), co_select_msg_fork{}
+		co_context_fork:id(host.id+1), co_select_msg_fork{}
 		co_end_context_init(ctx, (co_self), id(0), co_select_init);
 
 		co_begin;
-		ctx.timer = co_strand->make_timer();
-		co_begin_select(s1);
-		co_select_case(msgBuff, ctx.mt);
+		co_fork;
+		co_begin_select(0);
+		co_select_case_to(msgBuff) >> ctx.mt;
 		{
 			assert(co_select_state_is_ok);
 			info_trace_line(ctx.id, " buff_1: ", ctx.mt);
-			if (0 == ctx.id && 0 == ctx.mt._count->_id)
-			{
-				co_fork;
-			}
-			co_sleep(ctx.timer, 10);
+			co_sleep(10);
 		}
-		co_select_case(msgChan, ctx.mt);
+		co_select_case_to(msgChan) >> ctx.mt;
 		{
 			assert(co_select_state_is_ok);
 			info_trace_line(ctx.id, " chan_2: ", ctx.mt);
-			co_sleep(ctx.timer, 10);
+			co_sleep(10);
 		}
 		co_select_case_void(doneMsg);
 		{
 			assert(co_select_state_is_ok);
 			info_trace_line(ctx.id, " select msg done");
-			co_select_done(s1);
+			co_select_done(0);
 		}
 		co_end_select;
 		co_end;
@@ -1173,21 +1162,19 @@ void co_select_msg_test()
 		co_begin_context;
 		int i;
 		move_test mt;
-		async_timer timer;
-		co_async_state state;
+		co_channel_state;
 		co_end_context(ctx);
 
 		co_begin;
-		ctx.timer = co_strand->make_timer();
 		for (ctx.i = 0; ctx.i < 5; ctx.i++)
 		{
-			co_chan_push(msgBuff, ctx.state, move_test(ctx.i));
-			co_sleep(ctx.timer, 100);
-			co_chan_push(msgChan, ctx.state, move_test(ctx.i));
-			co_sleep(ctx.timer, 100);
+			co_chan_io(msgBuff) << move_test(ctx.i);
+			co_sleep(100);
+			co_chan_io(msgChan) << move_test(ctx.i);
+			co_sleep(100);
 		}
-		co_chan_push_void(doneMsg, ctx.state);
-		co_chan_push_void(doneMsg, ctx.state);
+		co_chan_io(doneMsg) << void_type();
+		co_chan_io(doneMsg) << void_type();
 		co_close_chan(msgBuff);
 		co_close_chan(msgChan);
 		co_close_chan(doneMsg);
@@ -1202,21 +1189,19 @@ void co_msg_test()
 	trace_line("begin co_msg_test");
 	io_engine ios;
 	ios.run();
-	co_msg_buffer<move_test> msgBuff(boost_strand::create(ios));
+	co_msg_buffer<int, move_test> msgBuff(boost_strand::create(ios));
 	co_go(boost_strand::create(ios))[&](co_generator)
 	{
 		co_begin_context;
 		int i;
-		async_timer timer;
-		co_async_state state;
+		co_channel_state;
 		co_end_context(ctx);
 
 		co_begin;
-		ctx.timer = co_strand->make_timer();
 		for (ctx.i = 0; ctx.i < 10; ctx.i++)
 		{
-			co_chan_push(msgBuff, ctx.state, move_test(ctx.i));
-			co_sleep(ctx.timer, 100);
+			co_chan_io(msgBuff) << co_chan_wrap(ctx.i, move_test(ctx.i));
+			co_sleep(100);
 		}
 		co_end;
 	};
@@ -1224,18 +1209,17 @@ void co_msg_test()
 	{
 		co_begin_context;
 		int i;
+		int id;
 		move_test mt;
-		async_timer timer;
-		co_async_state state;
+		co_channel_state;
 		co_end_context(ctx);
 
 		co_begin;
-		ctx.timer = co_strand->make_timer();
 		for (ctx.i = 0; ctx.i < 10; ctx.i++)
 		{
-			co_chan_pop(msgBuff, ctx.state, ctx.mt);
-			trace_line(ctx.mt);
-			co_sleep(ctx.timer, 300);
+			co_chan_io(msgBuff) >> co_chan_wrap(ctx.id, ctx.mt);
+			info_trace_comma(ctx.id, ctx.mt);
+			co_sleep(300);
 		}
 		co_end;
 	};
@@ -1248,21 +1232,19 @@ void co_channel_test()
 	trace_line("begin co_channel_test");
 	io_engine ios;
 	ios.run();
-	co_channel<move_test> channel(boost_strand::create(ios), 3);
+	co_channel<int> channel(boost_strand::create(ios), 3);
 	co_go(boost_strand::create(ios))[&](co_generator)
 	{
 		co_begin_context;
 		int i;
-		async_timer timer;
-		co_async_state state;
+		co_channel_state;
 		co_end_context(ctx);
 
 		co_begin;
-		ctx.timer = co_strand->make_timer();
 		for (ctx.i = 0; ctx.i < 10; ctx.i++)
 		{
-			co_chan_push(channel, ctx.state, move_test(ctx.i));
-			co_sleep(ctx.timer, 100);
+			co_chan_io(channel) << ctx.i;
+			co_sleep(100);
 		}
 		co_end;
 	};
@@ -1270,18 +1252,16 @@ void co_channel_test()
 	{
 		co_begin_context;
 		int i;
-		move_test mt;
-		async_timer timer;
-		co_async_state state;
+		int id;
+		co_channel_state;
 		co_end_context(ctx);
 
 		co_begin;
-		ctx.timer = co_strand->make_timer();
 		for (ctx.i = 0; ctx.i < 10; ctx.i++)
 		{
-			co_chan_pop(channel, ctx.state, ctx.mt);
-			trace_line(ctx.mt);
-			co_sleep(ctx.timer, 300);
+			co_chan_io(channel) >> ctx.id;
+			info_trace_line(ctx.id);
+			co_sleep(300);
 		}
 		co_end;
 	};
@@ -1302,7 +1282,7 @@ void co_test()
 				co_no_context;
 
 				co_begin;
-				co_sleep(timer, 500);
+				co_sleep_(timer, 500);
 				co_end;
 			};
 			co_begin_context;

@@ -190,7 +190,7 @@ struct MakeBreakOfScope2_
 #define SELF_DELAY_EXEC(__self__, __tm__, ...) SELF_DELAY_TRACE(__self__, __tm__, { option_pck(__VA_ARGS__) });
 
 class ActorTimer_;
-class ActorFace_
+class ActorTimerFace_
 {
 	friend ActorTimer_;
 	virtual void timeout_handler() = 0;

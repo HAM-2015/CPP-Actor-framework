@@ -19,7 +19,7 @@ void generator::uninstall()
 }
 
 generator::generator()
-: _ctx(NULL)
+: _ctx(NULL), _timer(NULL)
 {
 	DEBUG_OPERATION(_isRun = false);
 }
@@ -39,6 +39,7 @@ bool generator::_next()
 	assert(!_ctx || _ctx->__coNext);
 	if (!_ctx)
 	{
+		_timer->cancel(_timerHandle);
 		clear_function(_handler);
 		if (_notify)
 		{
@@ -202,7 +203,8 @@ void generator::_co_async_next()
 			generator* host_ = host->_revert_this(host);
 			if (__ctx->__asyncSign)
 			{
-				__ctx->__asyncSign = false; host_->_next();
+				__ctx->__asyncSign = false;
+				host_->_next();
 			}
 			else
 			{
@@ -233,6 +235,20 @@ void generator::_co_shared_async_next(shared_bool& sign)
 			}
 		}
 	}, _weakThis.lock(), std::move(sign)));
+}
+
+void generator::_co_sleep(int ms)
+{
+	assert(ms > 0);
+	assert(_timerHandle.is_null());
+	_timerHandle = _timer->timeout(ms * 1000, _weakThis.lock());
+}
+
+void generator::timeout_handler()
+{
+	assert(_ctx);
+	_timerHandle.reset();
+	_next();
 }
 //////////////////////////////////////////////////////////////////////////
 

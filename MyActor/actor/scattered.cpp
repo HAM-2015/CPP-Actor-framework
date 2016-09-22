@@ -52,26 +52,30 @@ struct pc_cycle
 
 void move_test::operator=(move_test&& s)
 {
-	assert(s._count);
-	_generation = s._generation + 1;
-	_count = s._count;
-	_count->_moveCount++;
-	s._count.reset();
-	if (_count->_cb)
+	if (s._count)
 	{
-		_count->_cb(_count);
+		_generation = s._generation + 1;
+		_count = s._count;
+		_count->_moveCount++;
+		s._count.reset();
+		if (_count->_cb)
+		{
+			_count->_cb(_count);
+		}
 	}
 }
 
 void move_test::operator=(const move_test& s)
 {
-	assert(s._count);
-	_generation = s._generation + 1;
-	_count = s._count;
-	_count->_copyCount++;
-	if (_count->_cb)
+	if (s._count)
 	{
-		_count->_cb(_count);
+		_generation = s._generation + 1;
+		_count = s._count;
+		_count->_copyCount++;
+		if (_count->_cb)
+		{
+			_count->_cb(_count);
+		}
 	}
 }
 

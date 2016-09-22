@@ -10,7 +10,7 @@ class boost_strand;
 class qt_strand;
 class uv_strand;
 class my_actor;
-class my_actor_less;
+class generator;
 
 /*!
 @brief Actor 内部使用的定时器
@@ -20,23 +20,24 @@ class ActorTimer_
 	: public TimerBoostCompletedEventFace_
 #endif
 {
-#ifdef ENABLE_LESS_ACTOR
-	typedef std::shared_ptr<ActorFace_> actor_face_handle;
-#else
-	typedef std::shared_ptr<my_actor> actor_face_handle;
-#endif
+	typedef std::shared_ptr<ActorTimerFace_> actor_face_handle;
 	typedef msg_multimap<long long, actor_face_handle> handler_queue;
 
 	friend boost_strand;
 	friend qt_strand;
 	friend uv_strand;
 	friend my_actor;
-	friend my_actor_less;
+	friend generator;
 
 	class timer_handle 
 	{
 		friend ActorTimer_;
 	public:
+		bool is_null() const
+		{
+			return _null;
+		}
+
 		void reset()
 		{
 			_null = true;

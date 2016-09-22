@@ -62,7 +62,7 @@ struct __co_context_no_capture{};
 #define co_context_fork co_context_tag(co_context_tag& host)
 
 //在generator结束时，做最后状态清理，可以不用
-#define co_destroy_context ~co_context_tag()
+#define co_context_destroy ~co_context_tag()
 
 #define co_no_context co_begin_context; co_end_context(__noctx)
 
@@ -207,12 +207,16 @@ struct __co_context_no_capture{};
 
 //递归调用另一个generator，直到执行完毕后接着下一行
 #define co_invoke(...) co_invoke_(std::bind(__VA_ARGS__))
+
 //sleep，毫秒
-#define co_sleep(__timer__, __ms__) do{\
+#define co_sleep_(__timer__, __ms__) do{\
 	if(-1==__ctx->__coNext) co_stop;\
 	assert(__ctx->__inside);\
 	(__timer__)->timeout(__ms__, std::bind([](generator_handle& host){\
 	if(!host->_ctx)return; host->_revert_this(host)->_next(); }, std::move(co_self.shared_this()))); _co_yield; }while (0)
+
+//sleep，毫秒
+#define co_sleep(__ms__) do{co_self._co_sleep(__ms__); _co_yield;}while (0)
 
 //开始运行一个generator
 #define co_go(__strand__) CoGo_(__strand__)-
@@ -349,11 +353,31 @@ struct __co_context_no_capture{};
 //push数据到channel/msg_buffer
 #define co_chan_push(__chan__, __st__, ...) do{(__chan__).push(co_async_result(__st__), __VA_ARGS__); _co_await;}while (0)
 #define co_chan_push_void(__chan__, __st__) do{(__chan__).push(co_async_result(__st__)); _co_await;}while (0)
+#define co_chan_try_push(__chan__, __st__, ...) do{(__chan__).try_push(co_async_result(__st__), __VA_ARGS__); _co_await;}while (0)
+#define co_chan_try_push_void(__chan__, __st__) do{(__chan__).try_push(co_async_result(__st__)); _co_await;}while (0)
 //从channel/msg_buffer中读取数据
 #define co_chan_pop(__chan__, __st__, ...) do{(__chan__).pop(co_async_result_(__st__, __VA_ARGS__)); _co_await;}while (0)
 #define co_chan_pop_void(__chan__, __st__) do{(__chan__).pop(co_async_result_(__st__)); _co_await;}while (0)
+#define co_chan_try_pop(__chan__, __st__, ...) do{(__chan__).try_pop(co_async_result_(__st__, __VA_ARGS__)); _co_await;}while (0)
+#define co_chan_try_pop_void(__chan__, __st__) do{(__chan__).try_pop(co_async_result_(__st__)); _co_await;}while (0)
 //关闭channel/msg_buffer
 #define co_close_chan(__chan__) do{(__chan__).close(co_async); _co_await;}while (0)
+
+#define co_channel_state co_async_state __chanState
+//上一次co_chan_io的状态
+#define co_chan_last_state (__refCtx.__chanState)
+//push/pop数据到channel/msg_buffer
+#define co_chan_io(__chan__) co_await CoChanIo_<decltype(__chan__)>(__chan__, co_chan_last_state, co_self)
+#define co_chan_try_io(__chan__) co_await CoChanTryIo_<decltype(__chan__)>(__chan__, co_chan_last_state, co_self)
+
+#define co_chan_io_last_is_ok (co_async_state::co_async_ok == co_chan_last_state)
+#define co_chan_io_last_is_fail (co_async_state::co_async_fail == co_chan_last_state)
+#define co_chan_io_last_is_cancel (co_async_state::co_async_cancel == co_chan_last_state)
+#define co_chan_io_last_is_closed (co_async_state::co_async_closed == co_chan_last_state)
+#define co_chan_io_last_is_overtime (co_async_state::co_async_overtime == co_chan_last_state)
+
+//co_chan_io/co_chan_try_io多参数读写时打包
+#define co_chan_wrap(...) wrap_tuple(__VA_ARGS__)
 
 #define co_select (__refCtx.__selectSign)
 #define co_select_init __selectSign(co_self)
@@ -366,7 +390,7 @@ struct __co_context_no_capture{};
 #define co_select_state_is_closed (co_async_state::co_async_closed == co_select_state)
 #define co_select_state_is_overtime (co_async_state::co_async_overtime == co_select_state)
 
-//开始从多个channel/msg_buffer中以select方式读取数据(只能与co_end_select配合)
+//开始从多个channel/msg_buffer中以select方式轮流读取数据(只能与co_end_select配合)
 #define co_begin_select(__label__) {\
 	co_lock_stop; co_select._ntfPump.reset(); co_select._ntfSign.clear(); \
 	for (__selectStep=0,co_select._selectId=-1;;){\
@@ -399,18 +423,25 @@ struct __co_context_no_capture{};
 		else if (2==__selectStep) {(__chan__).remove_pop_notify(co_async_result_(co_select._ntfState), co_select._ntfSign[__LINE__]); _co_await;__selectCaseStep=1;__selectStep=2;}}\
 	else if (1==__selectStep && (__check__)) {
 
-//从多个channel/msg_buffer中以select方式读取数据
-#define co_select_case(__chan__, ...) _co_select_case(1, __chan__) (__chan__).try_pop(co_async_result_(co_select._ntfState, __VA_ARGS__)); _co_await;
+//从channel/msg_buffer中检测是否有数据
+#define co_select_case_once_(__chan__) _co_select_case_once(1, __chan__) co_select._ntfState = co_async_state::co_async_undefined
+#define co_select_case_(__chan__) co_select_case_once_(1, __chan__)
+//从channel/msg_buffer中读取数据
 #define co_select_check_case(__check__, __chan__, ...) _co_select_case(__check__, __chan__) (__chan__).try_pop(co_async_result_(co_select._ntfState, __VA_ARGS__)); _co_await;
-//从多个channel/msg_buffer中以select方式读取空数据
-#define co_select_case_void(__chan__) _co_select_case(1, __chan__) (__chan__).try_pop(co_async_result_(co_select._ntfState)); _co_await;
+#define co_select_case(__chan__, ...) co_select_check_case(1, __chan__, __VA_ARGS__)
+#define co_select_check_case_to(__check__, __chan__) _co_select_case(__check__, __chan__) co_await CoChanTryIo_<decltype(__chan__)>(__chan__, co_select_state, co_self)
+#define co_select_case_to(__chan__) co_select_check_case_to(1, __chan__)
+//从channel/msg_buffer中读取空数据
 #define co_select_check_case_void(__check__, __chan__) _co_select_case(__check__, __chan__) (__chan__).try_pop(co_async_result_(co_select._ntfState)); _co_await;
-//从多个channel/msg_buffer中以select方式读取一次数据
-#define co_select_case_once(__chan__, ...) _co_select_case_once(1, __chan__) (__chan__).try_pop(co_async_result_(co_select._ntfState, __VA_ARGS__)); _co_await;
+#define co_select_case_void(__chan__) co_select_check_case_void(1, __chan__)
+//从channel/msg_buffer中读取一次数据
 #define co_select_check_case_once(__check__, __chan__, ...) _co_select_case_once(__check__, __chan__) (__chan__).try_pop(co_async_result_(co_select._ntfState, __VA_ARGS__)); _co_await;
-//从多个channel/msg_buffer中以select方式读取一次空数据
-#define co_select_case_void_once(__chan__) _co_select_case_once(1, __chan__) (__chan__).try_pop(co_async_result_(co_select._ntfState)); _co_await;
+#define co_select_case_once(__chan__, ...) co_select_check_case_once(1, __chan__, __VA_ARGS__)
+#define co_select_check_case_once_to(__check__, __chan__) _co_select_case_once(__check__, __chan__) co_await CoChanTryIo_<decltype(__chan__)>(__chan__, co_select_state, co_self)
+#define co_select_case_once_to(__chan__) co_select_check_case_once_to(1, __chan__)
+//从channel/msg_buffer中读取一次空数据
 #define co_select_check_case_void_once(__check__, __chan__) _co_select_case_once(__check__, __chan__) (__chan__).try_pop(co_async_result_(co_select._ntfState)); _co_await;
+#define co_select_case_void_once(__chan__) co_select_check_case_void_once(1, __chan__)
 
 //结束从多个channel/msg_buffer中以select方式读取数据(只能与co_begin_select配合)
 #define co_end_select __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;if(co_select._ntfSign.empty()) break;}\
@@ -431,7 +462,7 @@ struct __co_context_no_capture{};
 struct co_context_base
 {
 #ifdef _MSC_VER
-	virtual ~co_context_base(){}//FIXME VC下启用co_destroy_context时，不加这个会有编译错误
+	virtual ~co_context_base(){}//FIXME VC下启用co_context_destroy时，不加这个会有编译错误
 #endif
 	void clear()
 	{
@@ -465,7 +496,7 @@ typedef std::shared_ptr<generator> generator_handle;
 /*!
 @brief stackless coroutine
 */
-class generator
+class generator : public ActorTimerFace_
 {
 	friend my_actor;
 	FRIEND_SHARED_PTR(generator);
@@ -485,6 +516,7 @@ public:
 		res->_weakThis = res;
 		res->_strand = std::forward<SharedStrand>(strand);
 		res->_handler = std::forward<Handler>(handler);
+		res->_timer = res->_strand->actor_timer();
 		return res;
 	}
 
@@ -501,6 +533,7 @@ public:
 		res->_strand = std::forward<SharedStrand>(strand);
 		res->_handler = std::forward<Handler>(handler);
 		res->_notify = std::forward<Notify>(notify);
+		res->_timer = res->_strand->actor_timer();
 		return res;
 	}
 
@@ -555,6 +588,10 @@ public:
 	}
 
 	co_context_base* _ctx;
+
+	void _co_sleep(int ms);
+private:
+	void timeout_handler();
 private:
 	static void install();
 	static void uninstall();
@@ -564,6 +601,8 @@ private:
 	std::function<void(generator&)> _handler;
 	std::function<void()> _notify;
 	shared_strand _strand;
+	ActorTimer_* _timer;
+	ActorTimer_::timer_handle _timerHandle;
 	DEBUG_OPERATION(bool _isRun);
 	NONE_COPY(generator);
 	static mem_alloc_mt<generator>* _genObjAlloc;
@@ -804,6 +843,126 @@ struct CoNotifyHandler_ : public CoNotifyHandlerFace_
 	RVALUE_CONSTRUCT1(CoNotifyHandler_, _handler);
 };
 
+template <typename Chan>
+struct CoChanIo_
+{
+	CoChanIo_(Chan& chan, co_async_state& state, generator& host)
+	:_chan(chan), _state(state), _host(host) {}
+
+	template <typename Arg>
+	void operator<<(Arg&& arg)
+	{
+		push(this, std::forward<Arg>(arg));
+	}
+
+	template <typename Arg>
+	void operator>>(Arg&& arg)
+	{
+		static_assert(!std::is_rvalue_reference<Arg&&>::value, "");
+		pop(this, std::forward<Arg>(arg));
+	}
+
+	template <typename... Args>
+	void operator<<(std::tuple<Args...>&& args)
+	{
+		tuple_invoke(&CoChanIo_::push<Args...>, std::make_tuple(this), std::move(args));
+	}
+
+	template <typename... Args>
+	void operator>>(std::tuple<Args...>&& args)
+	{
+		tuple_invoke(&CoChanIo_::pop<Args...>, std::make_tuple(this), std::move(args));
+	}
+
+	void operator<<(void_type&&)
+	{
+		push(this);
+	}
+
+	void operator>>(void_type&&)
+	{
+		pop(this);
+	}
+private:
+	template <typename... Args>
+	static void push(CoChanIo_* this_, Args&&... args)
+	{
+		co_generator = this_->_host;
+		this_->_chan.push(co_async_result(this_->_state), std::forward<Args>(args)...);
+	}
+
+	template <typename... Args>
+	static void pop(CoChanIo_* this_, Args&&... args)
+	{
+		co_generator = this_->_host;
+		this_->_chan.pop(co_async_result_(this_->_state, args...));
+	}
+private:
+	Chan& _chan;
+	co_async_state& _state;
+	generator& _host;
+};
+
+template <typename Chan>
+struct CoChanTryIo_
+{
+	CoChanTryIo_(Chan& chan, co_async_state& state, generator& host)
+	:_chan(chan), _state(state), _host(host) {}
+
+	template <typename Arg>
+	void operator<<(Arg&& arg)
+	{
+		push(this, std::forward<Arg>(arg));
+	}
+
+	template <typename Arg>
+	void operator>>(Arg&& arg)
+	{
+		static_assert(!std::is_rvalue_reference<Arg&&>::value, "");
+		pop(this, std::forward<Arg>(arg));
+	}
+
+	template <typename... Args>
+	void operator<<(std::tuple<Args...>&& args)
+	{
+		tuple_invoke(&CoChanTryIo_::push<Args...>, std::make_tuple(this), std::move(args));
+	}
+
+	template <typename... Args>
+	void operator>>(std::tuple<Args...>&& args)
+	{
+		tuple_invoke(&CoChanTryIo_::pop<Args...>, std::make_tuple(this), std::move(args));
+	}
+
+	void operator<<(void_type&&)
+	{
+		push(this);
+	}
+
+	void operator>>(void_type&&)
+	{
+		pop(this);
+	}
+private:
+	template <typename... Args>
+	static void push(CoChanTryIo_* this_, Args&&... args)
+	{
+		co_generator = this_->_host;
+		this_->_chan.try_push(co_async_result(this_->_state), std::forward<Args>(args)...);
+	}
+
+	template <typename... Args>
+	static void pop(CoChanTryIo_* this_, Args&&... args)
+	{
+		co_generator = this_->_host;
+		this_->_chan.try_pop(co_async_result_(this_->_state, args...));
+	}
+private:
+	Chan& _chan;
+	co_async_state& _state;
+	generator& _host;
+};
+
 template <typename... Types>
 class co_msg_buffer;
 template <typename... Types>
@@ -816,6 +975,7 @@ typedef msg_list<CoNotifyHandlerFace_*>::iterator co_notify_node;
 struct co_notify_sign
 {
 	co_notify_sign() :_ntfSign(true){}
+	~co_notify_sign() { assert(_ntfSign); }
 	co_notify_node _ntfNode;
 	bool _ntfSign;
 	NONE_COPY(co_notify_sign);
@@ -1197,6 +1357,12 @@ private:
 		}
 		else
 		{
+			if (!_msgBuff.empty() && !_waitQueue.empty())
+			{
+				CoNotifyHandlerFace_* wtNtf = _waitQueue.front();
+				_waitQueue.pop_front();
+				CoNotifyHandlerFace_::notify_state(_alloc, wtNtf);
+			}
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
 		}
 	}
@@ -1865,6 +2031,12 @@ private:
 		}
 		else
 		{
+			if (!_buffer.empty() && !_popWait.empty())
+			{
+				CoNotifyHandlerFace_* popNtf = _popWait.front();
+				_popWait.pop_front();
+				CoNotifyHandlerFace_::notify_state(_alloc, popNtf);
+			}
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
 		}
 	}
@@ -2565,6 +2737,12 @@ private:
 		}
 		else
 		{
+			if (_tempBuffer.has() && !_popWait.empty())
+			{
+				CoNotifyHandlerFace_* popNtf = _popWait.front();
+				_popWait.pop_front();
+				CoNotifyHandlerFace_::notify_state(_alloc, popNtf);
+			}
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
 		}
 	}
