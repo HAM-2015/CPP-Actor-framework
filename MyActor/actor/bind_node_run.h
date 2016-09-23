@@ -12,6 +12,7 @@
 #include "node_object_wrap.h"
 #include "my_actor.h"
 #include "run_strand.h"
+#include "generator.h"
 
 #ifdef _MSC_VER
 #pragma comment(lib, "node.lib")
@@ -846,7 +847,7 @@ public:
 	//////////////////////////////////////////////////////////////////////////
 
 	template <typename Handler, typename... Args>
-	void async(my_actor* host, Handler&& resultHandler, Args&&... args) const
+	void async_wait(my_actor* host, Handler&& resultHandler, Args&&... args) const
 	{
 		assert(!empty());
 		typedef std::tuple<Args&...> tuple_type;
@@ -871,8 +872,8 @@ public:
 		});
 	}
 
-	template <size_t N, typename ResultHandler, typename CastHandler>
-	void async_cast(my_actor* host, ResultHandler&& resultHandler, CastHandler&& castHandler) const
+	template <typename ResultHandler, typename CastHandler>
+	void async_wait_cast(my_actor* host, ResultHandler&& resultHandler, CastHandler&& castHandler) const
 	{
 		assert(!empty());
 		my_actor::quit_guard qg(host);
@@ -901,11 +902,11 @@ public:
 	}
 
 	template <typename R = void, typename... Args>
-	R async_result(my_actor* host, Args&&... args) const
+	R async_wait_result(my_actor* host, Args&&... args) const
 	{
 		stack_obj<R> result;
 		bool isUndefined = false;
-		async(host, [&](const v8::FunctionCallbackInfo<v8::Value>& args)
+		async_wait(host, [&](const v8::FunctionCallbackInfo<v8::Value>& args)
 		{
 			assert(args.Length());
 			v8::Local<v8::Value> res = args[0];
@@ -923,11 +924,11 @@ public:
 	}
 
 	template <typename R = void, typename CastHandler>
-	R async_result_cast(my_actor* host, CastHandler&& castHandler) const
+	R async_wait_result_cast(my_actor* host, CastHandler&& castHandler) const
 	{
 		stack_obj<R> result;
 		bool isUndefined = false;
-		async_cast(host, [&](const v8::FunctionCallbackInfo<v8::Value>& args)
+		async_wait_cast(host, [&](const v8::FunctionCallbackInfo<v8::Value>& args)
 		{
 			assert(args.Length());
 			v8::Local<v8::Value> res = args[0];
@@ -942,6 +943,200 @@ public:
 			throw result_undefined();
 		}
 		return stack_obj_move::move(result);
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+
+	template <typename Handler, typename... Args>
+	void co_invoke(co_generator, Handler&& resultHandler, Args&&... args) const
+	{
+		typedef std::tuple<RM_CREF(Args)...> tuple_type;
+		_uvStrand->try_tick(std::bind([this](generator_handle& host, Handler& resultHandler, tuple_type& tupleArgs)
+		{
+			v8::Isolate* isolate = v8::Isolate::GetCurrent();
+			v8::HandleScope scope(isolate);
+			v8::Local<v8::Value> params[sizeof...(Args) ? sizeof...(Args) : 1];
+			args_to_v8_local<sizeof...(Args)>::make(isolate, params, tupleArgs);
+			v8::Local<v8::Value> recv = _recv.Get(isolate);
+			resultHandler(isolate, _callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), sizeof...(Args), params));
+			host->_revert_this(host)->_co_async_next();
+		}, std::move(co_self.async_this()), std::forward<Handler>(resultHandler), tuple_type(std::forward<Args>(args)...)));
+	}
+
+	template <typename ResultHandler, typename CastHandler>
+	void co_invoke_cast(co_generator, ResultHandler&& resultHandler, CastHandler&& castHandler) const
+	{
+		_uvStrand->try_tick(std::bind([this](generator_handle& host, Handler& resultHandler, CastHandler& castHandler)
+		{
+			v8::Isolate* isolate = v8::Isolate::GetCurrent();
+			v8::HandleScope scope(isolate);
+			v8::Local<v8::Value> params[16];
+			castHandler(isolate, params);
+			size_t paramNum = 0;
+			while (!params[paramNum].IsEmpty() && paramNum < sizeof(params) / sizeof(v8::Local<v8::Value>))
+			{
+				paramNum++;
+			}
+			v8::Local<v8::Value> recv = _recv.Get(isolate);
+			resultHandler(isolate, _callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), paramNum, params));
+			host->_revert_this(host)->_co_async_next();
+		}, std::move(co_self.async_this()), std::forward<Handler>(resultHandler), std::forward<CastHandler>(resultHandler)));
+	}
+
+	template <typename R = void, typename ResultHandler, typename... Args>
+	void co_invoke_result(ResultHandler&& resultHandler, Args&&... args) const
+	{
+		typedef std::tuple<RM_CREF(Args)...> tuple_type;
+		_uvStrand->try_tick(std::bind([this](ResultHandler& resultHandler, tuple_type& tupleArgs)
+		{
+			v8::Isolate* isolate = v8::Isolate::GetCurrent();
+			v8::HandleScope scope(isolate);
+			v8::Local<v8::Value> params[sizeof...(Args) ? sizeof...(Args) : 1];
+			args_to_v8_local<sizeof...(Args)>::make(isolate, params, tupleArgs);
+			v8::Local<v8::Value> recv = _recv.Get(isolate);
+			v8::Local<v8::Value> res = _callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), sizeof...(Args), params);
+			if (!res->IsUndefined())
+			{
+				resultHandler(co_async_state::co_async_ok, v8_local_to_std<R>::cast(res));
+			}
+			else
+			{
+				resultHandler(co_async_state::co_async_undefined);
+			}
+		}, std::forward<ResultHandler>(resultHandler), tuple_type(std::forward<Args>(args)...)));
+	}
+
+	template <typename R = void, typename ResultHandler, typename CastHandler>
+	void co_invoke_result_cast(ResultHandler&& resultHandler, CastHandler&& castHandler) const
+	{
+		_uvStrand->try_tick(std::bind([this](ResultHandler& resultHandler, CastHandler& castHandler)
+		{
+			v8::Isolate* isolate = v8::Isolate::GetCurrent();
+			v8::HandleScope scope(isolate);
+			v8::Local<v8::Value> params[16];
+			castHandler(isolate, params);
+			size_t paramNum = 0;
+			while (!params[paramNum].IsEmpty() && paramNum < sizeof(params) / sizeof(v8::Local<v8::Value>))
+			{
+				paramNum++;
+			}
+			v8::Local<v8::Value> recv = _recv.Get(isolate);
+			v8::Local<v8::Value> res = _callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), paramNum, params);
+			if (!res->IsUndefined())
+			{
+				resultHandler(co_async_state::co_async_ok, v8_local_to_std<R>::cast(res));
+			}
+			else
+			{
+				resultHandler(co_async_state::co_async_undefined);
+			}
+		}, std::forward<ResultHandler>(resultHandler), std::forward<CastHandler>(castHandler)));
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+
+	template <typename Handler, typename... Args>
+	void co_async_wait(co_generator, Handler&& resultHandler, Args&&... args) const
+	{
+		typedef std::tuple<RM_CREF(Args)...> tuple_type;
+		_uvStrand->try_tick(std::bind([this](generator_handle& host, Handler& resultHandler, tuple_type& tupleArgs)
+		{
+			v8::Isolate* isolate = v8::Isolate::GetCurrent();
+			v8::HandleScope scope(isolate);
+			v8::Local<v8::Value> params[sizeof...(Args)+1];
+			args_to_v8_local<sizeof...(Args)>::make(isolate, params, tupleArgs);
+			params[sizeof...(Args)] = make_js_call_cpp_once(isolate, std::bind([&](generator_handle& host, Handler& resultHandler, const v8::FunctionCallbackInfo<v8::Value>& args)
+			{
+				resultHandler(args);
+				host->_revert_this(host)->_co_async_next();
+			}, std::move(host), std::forward<Handler>(resultHandler), __1));
+			v8::Local<v8::Value> recv = _recv.Get(isolate);
+			_callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), sizeof...(Args)+1, params);
+		}, std::move(co_self.async_this()), std::forward<Handler>(resultHandler), tuple_type(std::forward<Args>(args)...)));
+	}
+
+	template <typename ResultHandler, typename CastHandler>
+	void co_async_wait_cast(co_generator, ResultHandler&& resultHandler, CastHandler&& castHandler) const
+	{
+		_uvStrand->try_tick(std::bind([this](generator_handle& host, ResultHandler& resultHandler, CastHandler& castHandler)
+		{
+			v8::Isolate* isolate = v8::Isolate::GetCurrent();
+			v8::HandleScope scope(isolate);
+			v8::Local<v8::Value> params[16];
+			castHandler(isolate, params);
+			size_t paramNum = 0;
+			while (!params[paramNum].IsEmpty() && paramNum < sizeof(params) / sizeof(v8::Local<v8::Value>))
+			{
+				paramNum++;
+			}
+			params[paramNum] = make_js_call_cpp_once(isolate, std::bind([&](generator_handle& host, ResultHandler& resultHandler, const v8::FunctionCallbackInfo<v8::Value>& args)
+			{
+				resultHandler(args);
+				host->_revert_this(host)->_co_async_next();
+			}, std::move(host), std::forward<ResultHandler>(resultHandler), __1));
+			v8::Local<v8::Value> recv = _recv.Get(isolate);
+			_callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), paramNum + 1, params);
+		}, std::move(co_self.async_this()), std::forward<ResultHandler>(resultHandler), std::forward<CastHandler>(castHandler)));
+	}
+
+	template <typename R = void, typename ResultHandler, typename... Args>
+	void co_async_wait_result(ResultHandler&& resultHandler, Args&&... args) const
+	{
+		typedef std::tuple<RM_CREF(Args)...> tuple_type;
+		_uvStrand->try_tick(std::bind([this](ResultHandler& resultHandler, tuple_type& tupleArgs)
+		{
+			v8::Isolate* isolate = v8::Isolate::GetCurrent();
+			v8::HandleScope scope(isolate);
+			v8::Local<v8::Value> params[sizeof...(Args)+1];
+			args_to_v8_local<sizeof...(Args)>::make(isolate, params, tupleArgs);
+			params[sizeof...(Args)] = make_js_call_cpp_once(isolate, std::bind([&](ResultHandler& resultHandler, const v8::FunctionCallbackInfo<v8::Value>& args)
+			{
+				assert(args.Length());
+				v8::Local<v8::Value> res = args[0];
+				if (!res->IsUndefined())
+				{
+					resultHandler(co_async_state::co_async_ok, v8_local_to_std<R>::cast(res));
+				}
+				else
+				{
+					resultHandler(co_async_state::co_async_undefined);
+				}
+			}, std::forward<ResultHandler>(resultHandler), __1));
+			v8::Local<v8::Value> recv = _recv.Get(isolate);
+			_callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), sizeof...(Args)+1, params);
+		}, std::forward<ResultHandler>(resultHandler), tuple_type(std::forward<Args>(args)...)));
+	}
+
+	template <typename R = void, typename ResultHandler, typename CastHandler>
+	void co_async_wait_result_cast(ResultHandler&& resultHandler, CastHandler&& castHandler) const
+	{
+		_uvStrand->try_tick(std::bind([this](ResultHandler& resultHandler, CastHandler& castHandler)
+		{
+			v8::Isolate* isolate = v8::Isolate::GetCurrent();
+			v8::HandleScope scope(isolate);
+			v8::Local<v8::Value> params[16];
+			castHandler(isolate, params);
+			size_t paramNum = 0;
+			while (!params[paramNum].IsEmpty() && paramNum < sizeof(params) / sizeof(v8::Local<v8::Value>))
+			{
+				paramNum++;
+			}
+			params[paramNum] = make_js_call_cpp_once(isolate, std::bind([&](ResultHandler& resultHandler, const v8::FunctionCallbackInfo<v8::Value>& args)
+			{
+				assert(args.Length());
+				v8::Local<v8::Value> res = args[0];
+				if (!res->IsUndefined())
+				{
+					resultHandler(co_async_state::co_async_ok, v8_local_to_std<R>::cast(res));
+				}
+				else
+				{
+					resultHandler(co_async_state::co_async_undefined);
+				}
+			}, std::forward<ResultHandler>(resultHandler), __1));
+			v8::Local<v8::Value> recv = _recv.Get(isolate);
+			_callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), paramNum + 1, params);
+		}, std::forward<ResultHandler>(resultHandler), std::forward<CastHandler>(castHandler)));
 	}
 private:
 	shared_uv_strand _uvStrand;

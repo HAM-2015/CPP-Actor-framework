@@ -3772,13 +3772,13 @@ public:
 	}
 public:
 	template <typename... Args>
-	void operator()(Args&&... args) const
+	void operator()(Args&&... args)
 	{
 		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
 		Parent::_trig_handler2(_closed, _sign, _dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
 	}
 
-	void operator()() const
+	void operator()()
 	{
 		static_assert(sizeof...(ARGS) == 0, "");
 		Parent::tick_handler(_closed, _sign);
@@ -3927,15 +3927,6 @@ public:
 	}
 public:
 	template <typename... Args>
-	R operator()(Args&&... args) const
-	{
-		stack_obj<R> result;
-		stack_agent_result::invoke(result, _handler, std::forward<Args>(args)...);
-		Parent::tick_handler(_closed, _sign);
-		return stack_obj_move::move(result);
-	}
-
-	template <typename... Args>
 	R operator()(Args&&... args)
 	{
 		stack_obj<R> result;
@@ -4052,7 +4043,7 @@ public:
 		:TrigOnceBase_(std::move(s)), _selfEarly(NULL), _result(s._result), _dstRef(s._dstRef) {}
 public:
 	template <typename... Args>
-	R operator()(Args&&... args) const
+	R operator()(Args&&... args)
 	{
 		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
 		assert(!ActorFunc_::self_strand(Parent::_hostActor.get())->in_this_ios());
@@ -4070,7 +4061,7 @@ public:
 		return stack_obj_move::move(res);
 	}
 
-	R operator()() const
+	R operator()()
 	{
 		static_assert(sizeof...(ARGS) == 0, "");
 		assert(!ActorFunc_::self_strand(Parent::_hostActor.get())->in_this_ios());
@@ -4161,25 +4152,6 @@ public:
 		DEBUG_OPERATION(_pIsTrig->exchange(false));
 		return stack_obj_move::move(res);
 	}
-
-	template <typename... Args>
-	R operator()(Args&&... args) const
-	{
-		stack_obj<R> res;
-		_result->_res = &res;
-		assert(!_pIsTrig->exchange(true));
-		{
-			std::mutex mutex;
-			std::condition_variable con;
-			_result->_mutex = &mutex;
-			_result->_con = &con;
-			std::unique_lock<std::mutex> ul(mutex);
-			_handler(TRY_MOVE(args)...);
-			con.wait(ul);
-		}
-		DEBUG_OPERATION(_pIsTrig->exchange(false));
-		return stack_obj_move::move(res);
-	}
 private:
 	Handler _handler;
 	sync_result<R>* _result;
@@ -4234,23 +4206,6 @@ public:
 
 	template <typename... Args>
 	R operator()(Args&&... args)
-	{
-		stack_obj<R> res;
-		_result->_res = &res;
-		assert(!_pIsTrig->exchange(true));
-		{
-			_result->_mutex = &_syncSt->mutex;
-			_result->_con = &_syncSt->con;
-			std::unique_lock<std::mutex> ul(_syncSt->mutex);
-			_handler(TRY_MOVE(args)...);
-			_syncSt->con.wait(ul);
-		}
-		DEBUG_OPERATION(_pIsTrig->exchange(false));
-		return stack_obj_move::move(res);
-	}
-
-	template <typename... Args>
-	R operator()(Args&&... args) const
 	{
 		stack_obj<R> res;
 		_result->_res = &res;

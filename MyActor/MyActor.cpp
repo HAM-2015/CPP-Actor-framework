@@ -1079,14 +1079,14 @@ void co_mutex_test()
 		co_begin;
 		for (ctx.i = 0; ctx.i < 10; ctx.i++)
 		{
-			co_await mutex.lock(co_async);
+			co_mutex_lock(mutex);
 			info_trace_space("a", ctx.i);
 			co_sleep(100);
 			info_trace_space("a", ctx.i);
 			co_sleep(100);
 			info_trace_space("a", ctx.i);
 			co_sleep(100);
-			co_await mutex.unlock(co_async);
+			co_mutex_unlock(mutex);
 		}
 		co_end;
 	};
@@ -1101,14 +1101,14 @@ void co_mutex_test()
 		co_begin;
 		for (ctx.i = 0; ctx.i < 10; ctx.i++)
 		{
-			co_await mutex.lock(co_async);
+			co_mutex_lock(mutex);
 			info_trace_space("b", ctx.i);
 			co_sleep(100);
 			info_trace_space("b", ctx.i);
 			co_sleep(100);
 			info_trace_space("b", ctx.i);
 			co_sleep(100);
-			co_await mutex.unlock(co_async);
+			co_mutex_unlock(mutex);
 		}
 		co_end;
 	};
@@ -1162,7 +1162,7 @@ void co_select_msg_test()
 		co_begin_context;
 		int i;
 		move_test mt;
-		co_channel_state;
+		co_chan_use_state;
 		co_end_context(ctx);
 
 		co_begin;
@@ -1175,9 +1175,9 @@ void co_select_msg_test()
 		}
 		co_chan_io(doneMsg) << void_type();
 		co_chan_io(doneMsg) << void_type();
-		co_close_chan(msgBuff);
-		co_close_chan(msgChan);
-		co_close_chan(doneMsg);
+		co_chan_close(msgBuff);
+		co_chan_close(msgChan);
+		co_chan_close(doneMsg);
 		co_end;
 	};
 	ios.stop();
@@ -1194,13 +1194,13 @@ void co_msg_test()
 	{
 		co_begin_context;
 		int i;
-		co_channel_state;
+		co_chan_use_state;
 		co_end_context(ctx);
 
 		co_begin;
 		for (ctx.i = 0; ctx.i < 10; ctx.i++)
 		{
-			co_chan_io(msgBuff) << co_chan_wrap(ctx.i, move_test(ctx.i));
+			co_chan_io(msgBuff) << co_chan_multi(ctx.i, move_test(ctx.i));
 			co_sleep(100);
 		}
 		co_end;
@@ -1211,13 +1211,13 @@ void co_msg_test()
 		int i;
 		int id;
 		move_test mt;
-		co_channel_state;
+		co_chan_use_state;
 		co_end_context(ctx);
 
 		co_begin;
 		for (ctx.i = 0; ctx.i < 10; ctx.i++)
 		{
-			co_chan_io(msgBuff) >> co_chan_wrap(ctx.id, ctx.mt);
+			co_chan_io(msgBuff) >> co_chan_multi(ctx.id, ctx.mt);
 			info_trace_comma(ctx.id, ctx.mt);
 			co_sleep(300);
 		}
@@ -1237,7 +1237,7 @@ void co_channel_test()
 	{
 		co_begin_context;
 		int i;
-		co_channel_state;
+		co_chan_use_state;
 		co_end_context(ctx);
 
 		co_begin;
@@ -1253,7 +1253,7 @@ void co_channel_test()
 		co_begin_context;
 		int i;
 		int id;
-		co_channel_state;
+		co_chan_use_state;
 		co_end_context(ctx);
 
 		co_begin;
@@ -1296,7 +1296,7 @@ void co_test()
 			for (ctx.i = 0; ctx.i < 3; ++ctx.i)
 			{
 				info_trace_space("co_test", ctx.i, p++);
-				co_invoke(asleep, __1, std::ref(ctx.timer));
+				co_call(asleep, __1, std::ref(ctx.timer));
 				for (ctx.j = 0; ctx.j < 10; ++ctx.j)
 				{
 					co_await ctx.timer->timeout(50, co_async);

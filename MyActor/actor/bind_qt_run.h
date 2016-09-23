@@ -12,6 +12,7 @@
 #include "msg_queue.h"
 #include "run_strand.h"
 #include "run_thread.h"
+#include "generator.h"
 
 #define QT_POST_TASK	(QEvent::MaxUser-1)
 #define	QT_UI_ACTOR_STACK_SIZE	(128 kB - STACK_RESERVED_SPACE_SIZE)
@@ -319,6 +320,19 @@ public:
 	}
 
 	/*!
+	@brief generaotr下发送一个执行函数到UI消息队列中执行
+	*/
+	template <typename Handler>
+	void co_send(co_generator, Handler&& handler)
+	{
+		post(std::bind([this](generator_handle& host, Handler& handler)
+		{
+			CHECK_EXCEPTION(handler);
+			host->_revert_this(host)->_co_async_next();
+		}, std::move(co_self.async_this()), std::forward<Handler>(handler)));
+	}
+
+	/*!
 	@brief 发送一个超时执行函数到UI消息队列中执行，完成后返回
 	*/
 	template <typename Handler>
@@ -488,6 +502,12 @@ public:
 	void send(my_actor* host, Handler&& handler)
 	{
 		bind_qt_run_base::send(host, TRY_MOVE(handler));
+	}
+
+	template <typename Handler>
+	void co_send(co_generator, Handler&& handler)
+	{
+		bind_qt_run_base::co_send(co_self, TRY_MOVE(handler));
 	}
 
 	template <typename Handler>

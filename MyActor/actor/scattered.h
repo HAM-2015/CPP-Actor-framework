@@ -331,6 +331,15 @@ struct move_test
 };
 
 /*!
+@brief 接受任何回调参数，但不处理
+*/
+struct any_handler
+{
+	template <typename... Args>
+	void operator()(Args&&...){}
+};
+
+/*!
 @brief 启用高精度时钟
 */
 void enable_high_resolution();
