@@ -773,8 +773,8 @@ public:
 			v8::HandleScope scope(isolate);
 			v8::Local<v8::Value> params[sizeof...(Args) ? sizeof...(Args) : 1];
 			args_to_v8_local<sizeof...(Args)>::make(isolate, params, tupleArgs);
-			v8::Local<v8::Value> recv = _recv.Get(isolate);
-			resultHandler(isolate, _callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), sizeof...(Args), params));
+			v8::Local<v8::Value> recv = v8::Local<v8::Value>::New(isolate, _recv);
+			resultHandler(isolate, v8::Local<v8::Function>::New(isolate, _callback)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), sizeof...(Args), params));
 		});
 	}
 
@@ -793,8 +793,8 @@ public:
 			{
 				paramNum++;
 			}
-			v8::Local<v8::Value> recv = _recv.Get(isolate);
-			resultHandler(isolate, _callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), paramNum, params));
+			v8::Local<v8::Value> recv = v8::Local<v8::Value>::New(isolate, _recv);
+			resultHandler(isolate, v8::Local<v8::Function>::New(isolate, _callback)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), paramNum, params));
 		});
 	}
 
@@ -866,8 +866,8 @@ public:
 					resultHandler(args);
 					ntf();
 				}, __1, std::move(ntf)));
-				v8::Local<v8::Value> recv = _recv.Get(isolate);
-				_callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), sizeof...(Args)+1, params);
+				v8::Local<v8::Value> recv = v8::Local<v8::Value>::New(isolate, _recv);
+				v8::Local<v8::Function>::New(isolate, _callback)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), sizeof...(Args)+1, params);
 			}, std::move(ntf)));
 		});
 	}
@@ -895,8 +895,8 @@ public:
 					resultHandler(args);
 					ntf();
 				}, __1, std::move(ntf)));
-				v8::Local<v8::Value> recv = _recv.Get(isolate);
-				_callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), paramNum + 1, params);
+				v8::Local<v8::Value> recv = v8::Local<v8::Value>::New(isolate, _recv);
+				v8::Local<v8::Function>::New(isolate, _callback)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), paramNum + 1, params);
 			}, std::move(ntf)));
 		});
 	}
@@ -957,8 +957,8 @@ public:
 			v8::HandleScope scope(isolate);
 			v8::Local<v8::Value> params[sizeof...(Args) ? sizeof...(Args) : 1];
 			args_to_v8_local<sizeof...(Args)>::make(isolate, params, tupleArgs);
-			v8::Local<v8::Value> recv = _recv.Get(isolate);
-			resultHandler(isolate, _callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), sizeof...(Args), params));
+			v8::Local<v8::Value> recv = v8::Local<v8::Value>::New(isolate, _recv);
+			resultHandler(isolate, v8::Local<v8::Function>::New(isolate, _callback)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), sizeof...(Args), params));
 			host->_revert_this(host)->_co_async_next();
 		}, std::move(co_self.async_this()), std::forward<Handler>(resultHandler), tuple_type(std::forward<Args>(args)...)));
 	}
@@ -977,8 +977,8 @@ public:
 			{
 				paramNum++;
 			}
-			v8::Local<v8::Value> recv = _recv.Get(isolate);
-			resultHandler(isolate, _callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), paramNum, params));
+			v8::Local<v8::Value> recv = v8::Local<v8::Value>::New(isolate, _recv);
+			resultHandler(isolate, v8::Local<v8::Function>::New(isolate, _callback)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), paramNum, params));
 			host->_revert_this(host)->_co_async_next();
 		}, std::move(co_self.async_this()), std::forward<Handler>(resultHandler), std::forward<CastHandler>(resultHandler)));
 	}
@@ -993,8 +993,8 @@ public:
 			v8::HandleScope scope(isolate);
 			v8::Local<v8::Value> params[sizeof...(Args) ? sizeof...(Args) : 1];
 			args_to_v8_local<sizeof...(Args)>::make(isolate, params, tupleArgs);
-			v8::Local<v8::Value> recv = _recv.Get(isolate);
-			v8::Local<v8::Value> res = _callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), sizeof...(Args), params);
+			v8::Local<v8::Value> recv = v8::Local<v8::Value>::New(isolate, _recv);
+			v8::Local<v8::Value> res = v8::Local<v8::Function>::New(isolate, _callback)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), sizeof...(Args), params);
 			if (!res->IsUndefined())
 			{
 				resultHandler(co_async_state::co_async_ok, v8_local_to_std<R>::cast(res));
@@ -1020,8 +1020,8 @@ public:
 			{
 				paramNum++;
 			}
-			v8::Local<v8::Value> recv = _recv.Get(isolate);
-			v8::Local<v8::Value> res = _callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), paramNum, params);
+			v8::Local<v8::Value> recv = v8::Local<v8::Value>::New(isolate, _recv);
+			v8::Local<v8::Value> res = v8::Local<v8::Function>::New(isolate, _callback)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), paramNum, params);
 			if (!res->IsUndefined())
 			{
 				resultHandler(co_async_state::co_async_ok, v8_local_to_std<R>::cast(res));
@@ -1050,8 +1050,8 @@ public:
 				resultHandler(args);
 				host->_revert_this(host)->_co_async_next();
 			}, std::move(host), std::forward<Handler>(resultHandler), __1));
-			v8::Local<v8::Value> recv = _recv.Get(isolate);
-			_callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), sizeof...(Args)+1, params);
+			v8::Local<v8::Value> recv = v8::Local<v8::Value>::New(isolate, _recv);
+			v8::Local<v8::Function>::New(isolate, _callback)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), sizeof...(Args)+1, params);
 		}, std::move(co_self.async_this()), std::forward<Handler>(resultHandler), tuple_type(std::forward<Args>(args)...)));
 	}
 
@@ -1065,7 +1065,7 @@ public:
 			v8::Local<v8::Value> params[16];
 			castHandler(isolate, params);
 			size_t paramNum = 0;
-			while (!params[paramNum].IsEmpty() && paramNum < sizeof(params) / sizeof(v8::Local<v8::Value>))
+			while (!params[paramNum].IsEmpty() && paramNum < sizeof(params) / sizeof(v8::Local<v8::Value>) - 1)
 			{
 				paramNum++;
 			}
@@ -1074,8 +1074,8 @@ public:
 				resultHandler(args);
 				host->_revert_this(host)->_co_async_next();
 			}, std::move(host), std::forward<ResultHandler>(resultHandler), __1));
-			v8::Local<v8::Value> recv = _recv.Get(isolate);
-			_callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), paramNum + 1, params);
+			v8::Local<v8::Value> recv = v8::Local<v8::Value>::New(isolate, _recv);
+			v8::Local<v8::Function>::New(isolate, _callback)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), paramNum + 1, params);
 		}, std::move(co_self.async_this()), std::forward<ResultHandler>(resultHandler), std::forward<CastHandler>(castHandler)));
 	}
 
@@ -1102,8 +1102,8 @@ public:
 					resultHandler(co_async_state::co_async_undefined);
 				}
 			}, std::forward<ResultHandler>(resultHandler), __1));
-			v8::Local<v8::Value> recv = _recv.Get(isolate);
-			_callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), sizeof...(Args)+1, params);
+			v8::Local<v8::Value> recv = v8::Local<v8::Value>::New(isolate, _recv);
+			v8::Local<v8::Function>::New(isolate, _callback)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), sizeof...(Args)+1, params);
 		}, std::forward<ResultHandler>(resultHandler), tuple_type(std::forward<Args>(args)...)));
 	}
 
@@ -1117,7 +1117,7 @@ public:
 			v8::Local<v8::Value> params[16];
 			castHandler(isolate, params);
 			size_t paramNum = 0;
-			while (!params[paramNum].IsEmpty() && paramNum < sizeof(params) / sizeof(v8::Local<v8::Value>))
+			while (!params[paramNum].IsEmpty() && paramNum < sizeof(params) / sizeof(v8::Local<v8::Value>) - 1)
 			{
 				paramNum++;
 			}
@@ -1134,8 +1134,8 @@ public:
 					resultHandler(co_async_state::co_async_undefined);
 				}
 			}, std::forward<ResultHandler>(resultHandler), __1));
-			v8::Local<v8::Value> recv = _recv.Get(isolate);
-			_callback.Get(isolate)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), paramNum + 1, params);
+			v8::Local<v8::Value> recv = v8::Local<v8::Value>::New(isolate, _recv);
+			v8::Local<v8::Function>::New(isolate, _callback)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), paramNum + 1, params);
 		}, std::forward<ResultHandler>(resultHandler), std::forward<CastHandler>(castHandler)));
 	}
 private:

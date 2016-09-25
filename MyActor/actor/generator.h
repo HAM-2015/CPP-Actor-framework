@@ -219,7 +219,7 @@ struct __co_context_no_capture{};
 #define co_sleep(__ms__) do{co_self._co_sleep(__ms__); _co_yield;}while (0)
 
 //开始运行一个generator
-#define co_go(__strand__) CoGo_(__strand__)-
+#define co_go(...) CoGo_(__VA_ARGS__)-
 //fork出一个generator，新的generator将在该语句下一行开始执行
 #define co_fork do{{\
 	if(-1==__ctx->__coNext) co_stop;\
@@ -342,7 +342,7 @@ struct __co_context_no_capture{};
 #define co_switch_default_ex(id) co_switch_case_ex(id, default)
 #define co_end_switch_ex }while (0)
 
-//因为generator内部无法在switch-case里面co_yield，提供该宏间接实现switch效果（不支持嵌套）
+//因为generator内部无法在switch-case里面co_yield，提供该宏间接实现switch效果
 #define co_begin_switch(__val__) for(__coSwitchPreSign=false,__coSwitchDefaultSign=false,__coSwitchFirstLoopSign=true,__coSwitchTempVal=(size_t)__val__;\
 	__coSwitchFirstLoopSign || (!__coSwitchPreSign && __coSwitchDefaultSign);__coSwitchFirstLoopSign=false){if(0){
 #define co_switch_case_(__val__) __coSwitchPreSign=true;}if (__coSwitchPreSign || __coSwitchTempVal==(size_t)(__val__)){
@@ -396,6 +396,7 @@ struct __co_context_no_capture{};
 
 //开始从多个channel/msg_buffer中以select方式轮流读取数据(只能与co_end_select配合)
 #define co_begin_select(__label__) {\
+	DEBUG_OPERATION(co_select._labelId=__label__);\
 	co_lock_stop; co_select._ntfPump.reset(); co_select._ntfSign.clear(); \
 	for (__selectStep=0,co_select._selectId=-1;;){\
 	if (1==__selectStep) {co_select._ntfPump.pop(co_async_result_(co_select._ntfState, co_select._selectId)); _co_await; __selectStep=1;}\
@@ -403,6 +404,10 @@ struct __co_context_no_capture{};
 	if (0) {goto __select_ ## __label__; __select_ ## __label__: __selectStep=2; co_select._selectId=-1;}\
 	co_begin_switch(co_select._selectId);\
 	co_switch_default; if(0){
+
+#define co_begin_select0 co_begin_select(0)
+#define co_begin_select1 co_begin_select(1)
+#define co_begin_select2 co_begin_select(2)
 
 //开始从多个channel/msg_buffer中以select方式读取一次数据(只能与co_end_select_once配合)
 #define co_begin_select_once {{\
@@ -457,7 +462,11 @@ struct __co_context_no_capture{};
 	co_end_switch; if (0==__selectStep) {assert(!co_select._ntfSign.empty());}}co_unlock_stop;}}
 
 //结束select读取(只能在co_begin_select(__label__)/co_end_select中使用)
-#define co_select_done(__label__) do{__selectCaseStep=3;__selectStep=1;__selectCaseDoSign=false;goto __select_ ## __label__;}while(0)
+#define co_select_done(__label__) do{assert(__label__==co_select._labelId);__selectCaseStep=3;__selectStep=1;__selectCaseDoSign=false;goto __select_ ## __label__;}while(0)
+
+#define co_select_done0 co_select_done(0)
+#define co_select_done1 co_select_done(1)
+#define co_select_done2 co_select_done(2)
 
 //锁定generator调度器
 #define co_hold_work boost::asio::io_service::work __holdWork
@@ -508,39 +517,7 @@ private:
 	generator();
 	~generator();
 public:
-	template <typename SharedStrand, typename Handler>
-	static generator_handle create(SharedStrand&& strand, Handler&& handler)
-	{
-		mem_alloc_base* genObjRefCountAlloc_ = _genObjRefCountAlloc;
-		generator_handle res(new(_genObjAlloc->allocate())generator(), [genObjRefCountAlloc_](generator* p)
-		{
-			p->~generator();
-			genObjRefCountAlloc_->deallocate(p);
-		});
-		res->_weakThis = res;
-		res->_strand = std::forward<SharedStrand>(strand);
-		res->_handler = std::forward<Handler>(handler);
-		res->_timer = res->_strand->actor_timer();
-		return res;
-	}
-
-	template <typename SharedStrand, typename Handler, typename Notify>
-	static generator_handle create(SharedStrand&& strand, Handler&& handler, Notify&& notify)
-	{
-		mem_alloc_base* genObjRefCountAlloc_ = _genObjRefCountAlloc;
-		generator_handle res(new(_genObjAlloc->allocate())generator(), [genObjRefCountAlloc_](generator* p)
-		{
-			p->~generator();
-			genObjRefCountAlloc_->deallocate(p);
-		});
-		res->_weakThis = res;
-		res->_strand = std::forward<SharedStrand>(strand);
-		res->_handler = std::forward<Handler>(handler);
-		res->_notify = std::forward<Notify>(notify);
-		res->_timer = res->_strand->actor_timer();
-		return res;
-	}
-
+	static generator_handle create(shared_strand strand, std::function<void(generator&)> handler, std::function<void()> notify = std::function<void()>());
 	void run();
 	void stop();
 	const shared_strand& gen_strand();
@@ -615,21 +592,22 @@ private:
 
 struct CoGo_
 {
-	CoGo_(shared_strand strand)
-	:_strand(std::move(strand)) {}
+	CoGo_(shared_strand strand, std::function<void()> ntf = std::function<void()>())
+		:_strand(std::move(strand)), _ntf(std::move(ntf)) {}
 
-	CoGo_(io_engine& ios)
-	:_strand(boost_strand::create(ios)) {}
+	CoGo_(io_engine& ios, std::function<void()> ntf = std::function<void()>())
+		:_strand(boost_strand::create(ios)), _ntf(std::move(ntf)) {}
 
 	template <typename Handler>
 	generator_handle operator-(Handler&& handler)
 	{
-		generator_handle res = generator::create(std::move(_strand), std::forward<Handler>(handler));
+		generator_handle res = generator::create(std::move(_strand), std::forward<Handler>(handler), std::move(_ntf));
 		res->run();
 		return res;
 	}
 
 	shared_strand _strand;
+	std::function<void()> _ntf;
 };
 
 template <typename... _Types>
@@ -994,10 +972,11 @@ typedef msg_list<CoNotifyHandlerFace_*>::iterator co_notify_node;
 
 struct co_notify_sign
 {
-	co_notify_sign() :_ntfSign(true){}
+	co_notify_sign() :_ntfSign(true), _effect(false) {}
 	~co_notify_sign() { assert(_ntfSign); }
 	co_notify_node _ntfNode;
 	bool _ntfSign;
+	bool _effect;
 	NONE_COPY(co_notify_sign);
 };
 
@@ -1087,6 +1066,7 @@ public:
 	{
 		assert(ntfSign._ntfSign);
 		ntfSign._ntfSign = false;
+		ntfSign._effect = true;
 		if (_strand->running_in_this_thread())
 		{
 			_append_pop_notify(std::forward<Notify>(ntf), ntfSign);
@@ -1315,6 +1295,7 @@ private:
 		if (!_msgBuff.empty())
 		{
 			ntfSign._ntfSign = true;
+			ntfSign._effect = false;
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
 		}
 		else
@@ -1338,6 +1319,8 @@ private:
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
+		bool effect = ntfSign._effect;
+		ntfSign._effect = false;
 		if (!ntfSign._ntfSign)
 		{
 			ntfSign._ntfSign = true;
@@ -1349,7 +1332,7 @@ private:
 		}
 		else
 		{
-			if (!_msgBuff.empty() && !_waitQueue.empty())
+			if (effect && !_msgBuff.empty() && !_waitQueue.empty())
 			{
 				CoNotifyHandlerFace_* wtNtf = _waitQueue.front();
 				_waitQueue.pop_front();
@@ -1529,6 +1512,7 @@ public:
 	{
 		assert(ntfSign._ntfSign);
 		ntfSign._ntfSign = false;
+		ntfSign._effect = true;
 		if (_strand->running_in_this_thread())
 		{
 			_append_pop_notify(std::forward<Notify>(ntf), ntfSign);
@@ -1932,6 +1916,7 @@ private:
 		if (!_buffer.empty())
 		{
 			ntfSign._ntfSign = true;
+			ntfSign._effect = false;
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
 		}
 		else
@@ -1956,6 +1941,8 @@ private:
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
+		bool effect = ntfSign._effect;
+		ntfSign._effect = false;
 		if (!ntfSign._ntfSign)
 		{
 			ntfSign._ntfSign = true;
@@ -1967,7 +1954,7 @@ private:
 		}
 		else
 		{
-			if (!_buffer.empty() && !_popWait.empty())
+			if (effect && !_buffer.empty() && !_popWait.empty())
 			{
 				CoNotifyHandlerFace_* popNtf = _popWait.front();
 				_popWait.pop_front();
@@ -2173,6 +2160,7 @@ public:
 	{
 		assert(ntfSign._ntfSign);
 		ntfSign._ntfSign = false;
+		ntfSign._effect = true;
 		if (_strand->running_in_this_thread())
 		{
 			_append_pop_notify(std::forward<Notify>(ntf), ntfSign);
@@ -2593,6 +2581,7 @@ private:
 		if (_tempBuffer.has())
 		{
 			ntfSign._ntfSign = true;
+			ntfSign._effect = false;
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
 		}
 		else
@@ -2617,6 +2606,8 @@ private:
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
+		bool effect = ntfSign._effect;
+		ntfSign._effect = false;
 		if (!ntfSign._ntfSign)
 		{
 			ntfSign._ntfSign = true;
@@ -2628,7 +2619,7 @@ private:
 		}
 		else
 		{
-			if (_tempBuffer.has() && !_popWait.empty())
+			if (effect && _tempBuffer.has() && !_popWait.empty())
 			{
 				CoNotifyHandlerFace_* popNtf = _popWait.front();
 				_popWait.pop_front();
@@ -2717,7 +2708,7 @@ public:
 struct CoSelectSign_
 {
 	CoSelectSign_(co_generator)
-	:_ntfPump(co_strand), _ntfSign(16), _ntfState(co_async_state::co_async_undefined), _selectId(-1) {}
+	:_ntfPump(co_strand, 16), _ntfSign(16), _ntfState(co_async_state::co_async_undefined), _selectId(-1) {}
 	CoSelectSign_(const CoSelectSign_& s)
 		:_ntfPump(s._ntfPump.self_strand()), _ntfSign(16), _ntfState(s._ntfState), _selectId(s._selectId) {}
 
@@ -2725,6 +2716,7 @@ struct CoSelectSign_
 	msg_map<size_t, co_notify_sign> _ntfSign;
 	co_async_state _ntfState;
 	int _selectId;
+	DEBUG_OPERATION(int _labelId = -1);
 };
 
 /*!

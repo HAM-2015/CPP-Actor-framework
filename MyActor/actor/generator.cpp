@@ -52,6 +52,22 @@ bool generator::_next()
 	return false;
 }
 
+generator_handle generator::create(shared_strand strand, std::function<void(generator&)> handler, std::function<void()> notify)
+{
+	mem_alloc_base* genObjRefCountAlloc_ = _genObjRefCountAlloc;
+	generator_handle res(new(_genObjAlloc->allocate())generator(), [genObjRefCountAlloc_](generator* p)
+	{
+		p->~generator();
+		genObjRefCountAlloc_->deallocate(p);
+	});
+	res->_weakThis = res;
+	res->_timer = strand->actor_timer();
+	res->_strand = std::move(strand);
+	res->_handler = std::move(handler);
+	res->_notify = std::move(notify);
+	return res;
+}
+
 void generator::run()
 {
 	if (_strand->running_in_this_thread())

@@ -1135,16 +1135,16 @@ void co_select_msg_test()
 
 		co_begin;
 		co_fork;
-		co_begin_select(0);
+		co_begin_select0;
 		co_select_case_to(msgBuff) >> ctx.mt;
+		if (co_select_state_is_ok)
 		{
-			assert(co_select_state_is_ok);
 			info_trace_line(ctx.id, " buff_1: ", ctx.mt);
 			co_sleep(10);
 		}
 		co_select_case_to(msgChan) >> ctx.mt;
+		if (co_select_state_is_ok)
 		{
-			assert(co_select_state_is_ok);
 			info_trace_line(ctx.id, " chan_2: ", ctx.mt);
 			co_sleep(10);
 		}
@@ -1152,7 +1152,7 @@ void co_select_msg_test()
 		{
 			assert(co_select_state_is_ok);
 			info_trace_line(ctx.id, " select msg done");
-			co_select_done(0);
+			co_select_done0;
 		}
 		co_end_select;
 		co_end;

@@ -1361,32 +1361,17 @@ void my_actor::suspend_guard::unlock()
 }
 //////////////////////////////////////////////////////////////////////////
 
-ActorReadyGo_::ActorReadyGo_(const shared_strand& strand, size_t stackSize)
-: _strand(strand), _stackSize(stackSize) {}
-
-ActorReadyGo_::ActorReadyGo_(shared_strand&& strand, size_t stackSize)
+ActorReadyGo_::ActorReadyGo_(shared_strand strand, size_t stackSize)
 : _strand(std::move(strand)), _stackSize(stackSize) {}
 
 ActorReadyGo_::ActorReadyGo_(io_engine& ios, size_t stackSize)
 : _strand(boost_strand::create(ios)), _stackSize(stackSize) {}
 
-ActorReadyGo_::ActorReadyGo_(const shared_strand& strand, std::function<void()>&& notify, size_t stackSize)
-: _strand(strand), _notify(std::move(notify)), _stackSize(stackSize) {}
-
-ActorReadyGo_::ActorReadyGo_(shared_strand&& strand, std::function<void()>&& notify, size_t stackSize)
+ActorReadyGo_::ActorReadyGo_(shared_strand strand, std::function<void()> notify, size_t stackSize)
 : _strand(std::move(strand)), _notify(std::move(notify)), _stackSize(stackSize) {}
 
-ActorReadyGo_::ActorReadyGo_(const shared_strand& strand, const std::function<void()>& notify, size_t stackSize)
-: _strand(strand), _notify(notify), _stackSize(stackSize) {}
-
-ActorReadyGo_::ActorReadyGo_(shared_strand&& strand, const std::function<void()>& notify, size_t stackSize)
-: _strand(std::move(strand)), _notify(notify), _stackSize(stackSize) {}
-
-ActorReadyGo_::ActorReadyGo_(io_engine& ios, std::function<void()>&& notify, size_t stackSize)
+ActorReadyGo_::ActorReadyGo_(io_engine& ios, std::function<void()> notify, size_t stackSize)
 : _strand(boost_strand::create(ios)), _notify(std::move(notify)), _stackSize(stackSize) {}
-
-ActorReadyGo_::ActorReadyGo_(io_engine& ios, const std::function<void()>& notify, size_t stackSize)
-: _strand(boost_strand::create(ios)), _notify(notify), _stackSize(stackSize) {}
 //////////////////////////////////////////////////////////////////////////
 
 class my_actor::actor_run
@@ -1935,12 +1920,7 @@ my_actor& my_actor::operator =(const my_actor&)
 	return *this;
 }
 
-actor_handle my_actor::create(shared_strand&& actorStrand, const main_func& mainFunc, size_t stackSize)
-{
-	return my_actor::create(std::move(actorStrand), main_func(mainFunc), stackSize);
-}
-
-actor_handle my_actor::create(shared_strand&& actorStrand, main_func&& mainFunc, size_t stackSize)
+actor_handle my_actor::create(shared_strand actorStrand, main_func mainFunc, size_t stackSize)
 {
 	actor_pull_type* pull = ContextPool_::getContext(stackSize);
 	if (!pull)
@@ -1968,7 +1948,7 @@ actor_handle my_actor::create(shared_strand&& actorStrand, main_func&& mainFunc,
 	return newActor;
 }
 
-actor_handle my_actor::create(shared_strand&& actorStrand, AutoStackActorFace_&& wrapActor)
+actor_handle my_actor::create(shared_strand actorStrand, AutoStackActorFace_&& wrapActor)
 {
 	actor_pull_type* pull = NULL;
 	const size_t nsize = wrapActor.stack_size();
@@ -2021,30 +2001,7 @@ actor_handle my_actor::create(shared_strand&& actorStrand, AutoStackActorFace_&&
 	return newActor;
 }
 
-actor_handle my_actor::create(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize)
-{
-	return create(shared_strand(actorStrand), main_func(mainFunc), stackSize);
-}
-
-actor_handle my_actor::create(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize)
-{
-	return create(shared_strand(actorStrand), std::move(mainFunc), stackSize);
-}
-
-actor_handle my_actor::create(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor)
-{
-	return create(shared_strand(actorStrand), std::move(wrapActor));
-}
-
-child_handle my_actor::create_child(shared_strand&& actorStrand, const main_func& mainFunc, size_t stackSize)
-{
-	assert_enter();
-	actor_handle childActor = my_actor::create(std::move(actorStrand), mainFunc, stackSize);
-	childActor->_parentActor = shared_from_this();
-	return child_handle(std::move(childActor));
-}
-
-child_handle my_actor::create_child(shared_strand&& actorStrand, main_func&& mainFunc, size_t stackSize)
+child_handle my_actor::create_child(shared_strand actorStrand, main_func mainFunc, size_t stackSize)
 {
 	assert_enter();
 	actor_handle childActor = my_actor::create(std::move(actorStrand), std::move(mainFunc), stackSize);
@@ -2052,37 +2009,17 @@ child_handle my_actor::create_child(shared_strand&& actorStrand, main_func&& mai
 	return child_handle(std::move(childActor));
 }
 
-child_handle my_actor::create_child(const main_func& mainFunc, size_t stackSize)
-{
-	return create_child(_strand, mainFunc, stackSize);
-}
-
-child_handle my_actor::create_child(main_func&& mainFunc, size_t stackSize)
+child_handle my_actor::create_child(main_func mainFunc, size_t stackSize)
 {
 	return create_child(_strand, std::move(mainFunc), stackSize);
 }
 
-child_handle my_actor::create_child(shared_strand&& actorStrand, AutoStackActorFace_&& wrapActor)
+child_handle my_actor::create_child(shared_strand actorStrand, AutoStackActorFace_&& wrapActor)
 {
 	assert_enter();
 	actor_handle childActor = my_actor::create(std::move(actorStrand), std::move(wrapActor));
 	childActor->_parentActor = shared_from_this();
 	return child_handle(std::move(childActor));
-}
-
-child_handle my_actor::create_child(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize)
-{
-	return create_child(shared_strand(actorStrand), mainFunc, stackSize);
-}
-
-child_handle my_actor::create_child(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize)
-{
-	return create_child(shared_strand(actorStrand), std::move(mainFunc), stackSize);
-}
-
-child_handle my_actor::create_child(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor)
-{
-	return create_child(shared_strand(actorStrand), std::move(wrapActor));
 }
 
 child_handle my_actor::create_child(AutoStackActorFace_&& wrapActor)
@@ -2333,7 +2270,7 @@ void my_actor::children_resume(std::list<child_handle>& actorHandles)
 	unlock_quit();
 }
 
-void my_actor::run_child_complete(shared_strand&& actorStrand, const main_func& h, size_t stackSize)
+void my_actor::run_child_complete(shared_strand actorStrand, const main_func& h, size_t stackSize)
 {
 	assert_enter();
 	child_handle actorHandle = create_child(std::move(actorStrand), wrap_ref_handler(h), stackSize);
@@ -2344,11 +2281,6 @@ void my_actor::run_child_complete(shared_strand&& actorStrand, const main_func& 
 void my_actor::run_child_complete(const main_func& h, size_t stackSize)
 {
 	run_child_complete(self_strand(), h, stackSize);
-}
-
-void my_actor::run_child_complete(const shared_strand& actorStrand, const main_func& h, size_t stackSize)
-{
-	run_child_complete(shared_strand(actorStrand), h, stackSize);
 }
 
 void my_actor::sleep(int ms)
@@ -2424,12 +2356,7 @@ const msg_list_shared_alloc<actor_handle>& my_actor::children()
 	return _childActorList;
 }
 
-my_actor::quit_iterator my_actor::regist_quit_executor(const std::function<void()>& quitHandler)
-{
-	return regist_quit_executor(std::function<void()>(quitHandler));
-}
-
-my_actor::quit_iterator my_actor::regist_quit_executor(std::function<void()>&& quitHandler)
+my_actor::quit_iterator my_actor::regist_quit_executor(std::function<void()> quitHandler)
 {
 	assert_enter();
 	_beginQuitExec.push_front(std::move(quitHandler));//后注册的先执行
@@ -2589,17 +2516,7 @@ void my_actor::assert_enter()
 #endif
 }
 
-void my_actor::force_quit()
-{
-	force_quit(std::function<void()>());
-}
-
-void my_actor::force_quit(const std::function<void()>& h)
-{
-	force_quit(std::function<void()>(h));
-}
-
-void my_actor::force_quit(std::function<void()>&& h)
+void my_actor::force_quit(std::function<void()> h)
 {
 	_strand->try_tick(std::bind([](actor_handle& shared_this, std::function<void()>& h)
 	{
@@ -2762,17 +2679,7 @@ void my_actor::after_exit_clean_stack()
 	_afterExitCleanStack = true;
 }
 
-void my_actor::suspend()
-{
-	suspend(std::function<void()>());
-}
-
-void my_actor::suspend(const std::function<void()>& h)
-{
-	suspend(std::function<void()>(h));
-}
-
-void my_actor::suspend(std::function<void()>&& h)
+void my_actor::suspend(std::function<void()> h)
 {
 	_strand->try_tick(std::bind([](actor_handle& shared_this, std::function<void()>& h)
 	{
@@ -2848,17 +2755,7 @@ void my_actor::child_suspend_then()
 	}
 }
 
-void my_actor::resume()
-{
-	resume(std::function<void()>());
-}
-
-void my_actor::resume(const std::function<void()>& h)
-{
-	resume(std::function<void()>(h));
-}
-
-void my_actor::resume(std::function<void()>&& h)
+void my_actor::resume(std::function<void()> h)
 {
 	_strand->try_tick(std::bind([](const actor_handle& shared_this, std::function<void()>& h)
 	{
@@ -2942,17 +2839,7 @@ void my_actor::child_resume_then()
 	}
 }
 
-void my_actor::switch_pause_play()
-{
-	switch_pause_play(std::function<void(bool isPaused)>());
-}
-
-void my_actor::switch_pause_play(const std::function<void(bool)>& h)
-{
-	switch_pause_play(std::function<void(bool)>(h));
-}
-
-void my_actor::switch_pause_play(std::function<void(bool)>&& h)
+void my_actor::switch_pause_play(std::function<void(bool)> h)
 {
 	_strand->try_tick(std::bind([](const actor_handle& shared_this, std::function<void(bool)>& h)
 	{
@@ -3066,12 +2953,7 @@ void my_actor::outside_wait_quit()
 	conVar.wait(ul);
 }
 
-void my_actor::append_quit_notify(const std::function<void()>& h)
-{
-	append_quit_notify(std::function<void()>(h));
-}
-
-void my_actor::append_quit_notify(std::function<void()>&& h)
+void my_actor::append_quit_notify(std::function<void()> h)
 {
 	if (_strand->running_in_this_thread())
 	{
@@ -3101,12 +2983,7 @@ void my_actor::append_quit_notify(std::function<void()>&& h)
 	}
 }
 
-void my_actor::append_quit_executor(const std::function<void()>& h)
-{
-	append_quit_executor(std::function<void()>(h));
-}
-
-void my_actor::append_quit_executor(std::function<void()>&& h)
+void my_actor::append_quit_executor(std::function<void()> h)
 {
 	if (_strand->running_in_this_thread())
 	{

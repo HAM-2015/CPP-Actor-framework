@@ -4948,12 +4948,8 @@ public:
 	@param mainFunc Actor执行入口
 	@param stackSize Actor栈大小，默认64k字节，必须是4k的整数倍，最小4k，最大1M
 	*/
-	static actor_handle create(shared_strand&& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	static actor_handle create(shared_strand&& actorStrand, main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	static actor_handle create(shared_strand&& actorStrand, AutoStackActorFace_&& wrapActor);
-	static actor_handle create(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	static actor_handle create(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	static actor_handle create(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor);
+	static actor_handle create(shared_strand actorStrand, main_func mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	static actor_handle create(shared_strand actorStrand, AutoStackActorFace_&& wrapActor);
 
 	template <typename SharedStrand, typename MainFunc, typename NotifyFunc>
 	static actor_handle create_and_notify(SharedStrand&& actorStrand, MainFunc&& mainFunc, NotifyFunc&& notifyFunc, size_t stackSize = DEFAULT_STACKSIZE)
@@ -4978,15 +4974,10 @@ public:
 	@param stackSize Actor栈大小，4k的整数倍（最大1MB）
 	@return 子Actor句柄
 	*/
-	child_handle create_child(shared_strand&& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	child_handle create_child(shared_strand&& actorStrand, main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	child_handle create_child(const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	child_handle create_child(main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	child_handle create_child(shared_strand&& actorStrand, AutoStackActorFace_&& wrapActor);
+	child_handle create_child(shared_strand actorStrand, main_func mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_handle create_child(main_func mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
+	child_handle create_child(shared_strand actorStrand, AutoStackActorFace_&& wrapActor);
 	child_handle create_child(AutoStackActorFace_&& wrapActor);
-	child_handle create_child(const shared_strand& actorStrand, const main_func& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	child_handle create_child(const shared_strand& actorStrand, main_func&& mainFunc, size_t stackSize = DEFAULT_STACKSIZE);
-	child_handle create_child(const shared_strand& actorStrand, AutoStackActorFace_&& wrapActor);
 
 	/*!
 	@brief 开始运行子Actor，只能调用一次
@@ -5266,9 +5257,8 @@ public:
 	/*!
 	@brief 创建另一个Actor，Actor执行完成后返回
 	*/
-	__yield_interrupt void run_child_complete(shared_strand&& actorStrand, const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
+	__yield_interrupt void run_child_complete(shared_strand actorStrand, const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
 	__yield_interrupt void run_child_complete(const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
-	__yield_interrupt void run_child_complete(const shared_strand& actorStrand, const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
 
 	/*!
 	@brief 延时等待，Actor内部禁止使用操作系统API Sleep()
@@ -5312,8 +5302,7 @@ public:
 	/*!
 	@brief 注册一个资源释放函数，在强制准备退出Actor时执行
 	*/
-	quit_iterator regist_quit_executor(const std::function<void()>& quitHandler);
-	quit_iterator regist_quit_executor(std::function<void()>&& quitHandler);
+	quit_iterator regist_quit_executor(std::function<void()> quitHandler);
 
 	/*!
 	@brief 注销资源释放函数
@@ -8104,15 +8093,9 @@ public:
 	void run();
 
 	/*!
-	@brief 强制退出该Actor，不可滥用，有可能会造成资源泄漏
+	@brief 强制退出该Actor，不可滥用，有可能会造成资源泄漏，完成后回调
 	*/
-	void force_quit();
-
-	/*!
-	@brief 强制退出该Actor，完成后回调
-	*/
-	void force_quit(const std::function<void()>& h);
-	void force_quit(std::function<void()>&& h);
+	void force_quit(std::function<void()> h = std::function<void()>());
 
 	/*!
 	@brief Actor是否已经开始运行
@@ -8182,16 +8165,12 @@ public:
 	/*!
 	@brief 暂停Actor
 	*/
-	void suspend();
-	void suspend(const std::function<void()>& h);
-	void suspend(std::function<void()>&& h);
+	void suspend(std::function<void()> h = std::function<void()>());
 
 	/*!
 	@brief 恢复已暂停Actor
 	*/
-	void resume();
-	void resume(const std::function<void()>& h);
-	void resume(std::function<void()>&& h);
+	void resume(std::function<void()> h = std::function<void()>());
 
 	/*!
 	@brief 触发通知，0 <= id < 32,64
@@ -8206,9 +8185,7 @@ public:
 	/*!
 	@brief 切换挂起/非挂起状态
 	*/
-	void switch_pause_play();
-	void switch_pause_play(const std::function<void(bool)>& h);
-	void switch_pause_play(std::function<void(bool)>&& h);
+	void switch_pause_play(std::function<void(bool)> h = std::function<void(bool)>());
 
 	/*!
 	@brief 等待Actor退出，在Actor所依赖的ios无关线程中使用
@@ -8218,14 +8195,12 @@ public:
 	/*!
 	@brief 添加一个Actor结束通知
 	*/
-	void append_quit_notify(const std::function<void()>& h);
-	void append_quit_notify(std::function<void()>&& h);
+	void append_quit_notify(std::function<void()> h = std::function<void()>());
 
 	/*!
 	@brief 添加一个Actor结束时在strand中执行的函数，后添加的先执行
 	*/
-	void append_quit_executor(const std::function<void()>& h);
-	void append_quit_executor(std::function<void()>&& h);
+	void append_quit_executor(std::function<void()> h = std::function<void()>());
 
 	/*!
 	@brief 启动一堆Actor
@@ -8504,15 +8479,10 @@ private:
 
 struct ActorReadyGo_
 {
-	ActorReadyGo_(const shared_strand& strand, size_t stackSize = MAX_STACKSIZE);
-	ActorReadyGo_(shared_strand&& strand, size_t stackSize = MAX_STACKSIZE);
+	ActorReadyGo_(shared_strand strand, size_t stackSize = MAX_STACKSIZE);
 	ActorReadyGo_(io_engine& ios, size_t stackSize = MAX_STACKSIZE);
-	ActorReadyGo_(const shared_strand& strand, std::function<void()>&& notify, size_t stackSize = MAX_STACKSIZE);
-	ActorReadyGo_(const shared_strand& strand, const std::function<void()>& notify, size_t stackSize = MAX_STACKSIZE);
-	ActorReadyGo_(shared_strand&& strand, std::function<void()>&& notify, size_t stackSize = MAX_STACKSIZE);
-	ActorReadyGo_(shared_strand&& strand, const std::function<void()>& notify, size_t stackSize = MAX_STACKSIZE);
-	ActorReadyGo_(io_engine& ios, std::function<void()>&& notify, size_t stackSize = MAX_STACKSIZE);
-	ActorReadyGo_(io_engine& ios, const std::function<void()>& notify, size_t stackSize = MAX_STACKSIZE);
+	ActorReadyGo_(shared_strand strand, std::function<void()> notify, size_t stackSize = MAX_STACKSIZE);
+	ActorReadyGo_(io_engine& ios, std::function<void()> notify, size_t stackSize = MAX_STACKSIZE);
 
 	template <typename Handler>
 	actor_handle operator -(AutoStackActor_<Handler>&& wrapActor)
