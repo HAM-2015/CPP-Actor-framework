@@ -117,7 +117,7 @@ shared_uv_strand uv_strand::create(io_engine& ioEngine, uv_loop_t* uvLoop)
 	res->_uvLoop = uvLoop;
 	res->_threadID = run_thread::this_thread_id();
 	res->_actorTimer = new ActorTimer_(res);
-	res->_timerBoost = new TimerBoost_(res);
+	res->_overTimer = new overlap_timer(res);
 	res->_weakThis = res;
 	return res;
 }

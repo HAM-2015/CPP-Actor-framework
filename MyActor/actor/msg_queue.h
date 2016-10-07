@@ -350,6 +350,191 @@ private:
 };
 //////////////////////////////////////////////////////////////////////////
 
+template <typename T>
+class fixed_buffer
+{
+	struct node
+	{
+		void destroy()
+		{
+			((T*)space)->~T();
+#if (_DEBUG || DEBUG)
+			memset(space, 0xcf, sizeof(space));
+#endif
+		}
+
+		template <typename Arg>
+		void set(Arg&& arg)
+		{
+			new(space)T(TRY_MOVE(arg));
+		}
+
+		T& get()
+		{
+			return *(T*)space;
+		}
+
+		__space_align char space[sizeof(T)];
+	};
+public:
+	fixed_buffer(size_t maxSize)
+	{
+		assert(0 != maxSize);
+		_size = 0;
+		_index = 0;
+		_maxSize = maxSize;
+		_buffer = (node*)malloc(sizeof(node)*maxSize);
+	}
+
+	~fixed_buffer()
+	{
+		clear();
+		free(_buffer);
+	}
+public:
+	size_t size() const
+	{
+		return _size;
+	}
+
+	size_t max_size() const
+	{
+		return _maxSize;
+	}
+
+	bool empty() const
+	{
+		return 0 == _size;
+	}
+
+	bool full() const
+	{
+		return _maxSize == _size;
+	}
+
+	void clear()
+	{
+		for (size_t i = 0; i < _size; i++)
+		{
+			const size_t t = _index + i;
+			_buffer[(t < _maxSize) ? t : (t - _maxSize)].destroy();
+		}
+		_index = 0;
+		_size = 0;
+	}
+
+	T& front()
+	{
+		assert(!empty());
+		const size_t i = _index + _size - 1;
+		return _buffer[(i < _maxSize) ? i : (i - _maxSize)].get();
+	}
+
+	void pop_front()
+	{
+		assert(!empty());
+		_size--;
+		const size_t i = _index + _size;
+		_buffer[(i < _maxSize) ? i : (i - _maxSize)].destroy();
+	}
+
+	template <typename Arg>
+	void push_back(Arg&& arg)
+	{
+		assert(!full());
+		const size_t i = (0 != _index) ? (_index - 1) : (_maxSize - 1);
+		_buffer[i].set(TRY_MOVE(arg));
+		_index = i;
+		_size++;
+	}
+private:
+	size_t _maxSize;
+	size_t _size;
+	size_t _index;
+	node* _buffer;
+};
+
+template <>
+class fixed_buffer<void>
+{
+public:
+	fixed_buffer(size_t maxSize)
+	{
+		assert(0 != maxSize);
+		_size = 0;
+		_maxSize = maxSize;
+	}
+
+	~fixed_buffer()
+	{
+		clear();
+	}
+public:
+	size_t size() const
+	{
+		return _size;
+	}
+
+	size_t max_size() const
+	{
+		return _maxSize;
+	}
+
+	bool empty() const
+	{
+		return 0 == _size;
+	}
+
+	bool full() const
+	{
+		return _maxSize == _size;
+	}
+
+	void clear()
+	{
+		_size = 0;
+	}
+
+	void_type front()
+	{
+		assert(!empty());
+		return void_type();
+	}
+
+	void pop_front()
+	{
+		assert(!empty());
+		_size--;
+	}
+
+	template <typename Arg>
+	void push_back(Arg&& arg)
+	{
+		assert(!full());
+		_size++;
+	}
+private:
+	size_t _maxSize;
+	size_t _size;
+};
+
+template <>
+class fixed_buffer<void_type>: public fixed_buffer<void>
+{
+public:
+	fixed_buffer(size_t maxSize)
+		:fixed_buffer<void>(maxSize){}
+};
+
+template <>
+class fixed_buffer<std::tuple<void_type>>: public fixed_buffer<void>
+{
+public:
+	fixed_buffer(size_t maxSize)
+		:fixed_buffer<void>(maxSize){}
+};
+//////////////////////////////////////////////////////////////////////////
+
 template <typename T, typename _All = pool_alloc<> >
 class msg_list : public std::list<T, typename _All::template try_rebind<T>::other>
 {

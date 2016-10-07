@@ -37,6 +37,7 @@ ActorTimer_::~ActorTimer_()
 
 ActorTimer_::timer_handle ActorTimer_::timeout(long long us, actor_face_handle&& host, bool deadline)
 {
+	assert(_weakStrand.lock()->running_in_this_thread());
 	if (!_lockStrand)
 	{
 		_lockStrand = _weakStrand.lock();
@@ -52,11 +53,11 @@ ActorTimer_::timer_handle ActorTimer_::timeout(long long us, actor_face_handle&&
 	if (et >= _extMaxTick)
 	{
 		_extMaxTick = et;
-		timerHandle._queueNode = _handlerQueue.insert(_handlerQueue.end(), make_pair(et, std::move(host)));
+		timerHandle._queueNode = _handlerQueue.insert(_handlerQueue.end(), std::make_pair(et, std::move(host)));
 	}
 	else
 	{
-		timerHandle._queueNode = _handlerQueue.insert(make_pair(et, std::move(host)));
+		timerHandle._queueNode = _handlerQueue.insert(std::make_pair(et, std::move(host)));
 	}
 	
 	if (!_looping)
@@ -79,9 +80,10 @@ ActorTimer_::timer_handle ActorTimer_::timeout(long long us, actor_face_handle&&
 
 void ActorTimer_::cancel(timer_handle& th)
 {
+	assert(_weakStrand.lock()->running_in_this_thread());
 	if (!th._null)
 	{//删除当前定时器节点
-		assert(_lockStrand && _lockStrand->running_in_this_thread());
+		assert(_lockStrand);
 		th._null = true;
 		handler_queue::iterator itNode = th._queueNode;
 		if (_handlerQueue.size() == 1)

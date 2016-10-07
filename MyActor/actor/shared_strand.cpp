@@ -28,7 +28,7 @@ void boost_strand::capture_base::end_run()
 #endif
 
 boost_strand::boost_strand()
-:_ioEngine(NULL), _strand(NULL), _actorTimer(NULL), _timerBoost(NULL)
+:_ioEngine(NULL), _strand(NULL), _actorTimer(NULL)
 #ifdef ENABLE_NEXT_TICK
 ,_thisRoundCount(0)
 ,_reuMemAlloc(NULL)
@@ -59,7 +59,7 @@ boost_strand::~boost_strand()
 	delete _backTickQueue;
 #endif //ENABLE_NEXT_TICK
 	delete _actorTimer;
-	delete _timerBoost;
+	delete _overTimer;
 	delete _strand;
 }
 
@@ -80,7 +80,7 @@ shared_strand boost_strand::create(io_engine& ioEngine)
 		res->_backTickQueue = new msg_queue<wrap_next_tick_face*, mem_alloc2<>>(MEM_POOL_LENGTH);
 #endif
 		res->_actorTimer = new ActorTimer_(res);
-		res->_timerBoost = new TimerBoost_(res);
+		res->_overTimer = new overlap_timer(res);
 	}
 	return res;
 }
@@ -189,9 +189,14 @@ ActorTimer_* boost_strand::actor_timer()
 	return _actorTimer;
 }
 
+overlap_timer* boost_strand::over_timer()
+{
+	return _overTimer;
+}
+
 std::shared_ptr<AsyncTimer_> boost_strand::make_timer()
 {
-	std::shared_ptr<AsyncTimer_> res(new AsyncTimer_(*_timerBoost));
+	std::shared_ptr<AsyncTimer_> res(new AsyncTimer_(_actorTimer));
 	res->_weakThis = res;
 	return res;
 }

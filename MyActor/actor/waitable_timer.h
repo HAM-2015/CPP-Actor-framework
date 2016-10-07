@@ -8,8 +8,8 @@
 #include "run_thread.h"
 
 class ActorTimer_;
-class TimerBoost_;
 class WaitableTimerEvent_;
+class overlap_timer;
 
 class WaitableTimer_
 {
@@ -53,8 +53,8 @@ private:
 class WaitableTimerEvent_
 {
 	friend ActorTimer_;
-	friend TimerBoost_;
 	friend WaitableTimer_;
+	friend overlap_timer;
 private:
 	WaitableTimerEvent_(io_engine& ios, TimerBoostCompletedEventFace_* timerBoost);
 	~WaitableTimerEvent_();

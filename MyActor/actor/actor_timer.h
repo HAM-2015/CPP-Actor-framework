@@ -11,6 +11,7 @@ class qt_strand;
 class uv_strand;
 class my_actor;
 class generator;
+class AsyncTimer_;
 
 /*!
 @brief Actor 内部使用的定时器
@@ -28,6 +29,7 @@ class ActorTimer_
 	friend uv_strand;
 	friend my_actor;
 	friend generator;
+	friend AsyncTimer_;
 
 	class timer_handle 
 	{

@@ -50,7 +50,7 @@ class uv_strand : public boost_strand
 	{
 		template <typename H>
 		wrap_handler(H&& h)
-			:_handler(TRY_MOVE(h)) {}
+			:_handler(std::forward<H>(h)) {}
 
 		void invoke()
 		{
@@ -65,7 +65,7 @@ class uv_strand : public boost_strand
 	wrap_handler_face* make_wrap_handler(reusable_mem_mt<>& reuMem, Handler&& handler)
 	{
 		typedef wrap_handler<RM_CREF(Handler)> handler_type;
-		return new(reuMem.allocate(sizeof(handler_type)))handler_type(TRY_MOVE(handler));
+		return new(reuMem.allocate(sizeof(handler_type)))handler_type(std::forward<Handler>(handler));
 	}
 private:
 	uv_strand();
@@ -86,13 +86,13 @@ private:
 	template <typename Handler>
 	void _dispatch_uv(Handler&& handler)
 	{
-		_post_uv(TRY_MOVE(handler));
+		_post_uv(std::forward<Handler>(handler));
 	}
 
 	template <typename Handler>
 	void _post_uv(Handler&& handler)
 	{
-		append_task(make_wrap_handler(_reuMem, TRY_MOVE(handler)));
+		append_task(make_wrap_handler(_reuMem, std::forward<Handler>(handler)));
 	}
 
 	void post_task_event();
@@ -107,9 +107,9 @@ public:
 		_waitCount++;
 		return FUNCTION_ALLOCATOR(std::function<void()>, wrap(std::bind([this](Handler& handler)
 		{
-			handler();
+			CHECK_EXCEPTION(handler);
 			check_close();
-		}, TRY_MOVE(handler))), (reusable_alloc<void, reusable_mem_mt<>>(_reuMem)));
+		}, std::forward<Handler>(handler))), (reusable_alloc<void, reusable_mem_mt<>>(_reuMem)));
 	}
 
 	std::function<void()> wrap_check_close();
@@ -121,16 +121,15 @@ public:
 		if (_waitCount)
 		{
 			_waitClose = true;
-			typedef RM_CREF(Handler) Handler_;
-			setImmediate(std::bind([this](Handler_& handler)
+			setImmediate(std::bind([this](Handler& handler)
 			{
-				async_check_close(std::move(handler));
-			}, TRY_MOVE(handler)));
+				async_check_close(std::forward<Handler>(handler));
+			}, std::forward<Handler>(handler)));
 		}
 		else
 		{
 			enter_wait_close();
-			handler();
+			CHECK_EXCEPTION(handler);
 		}
 	}
 public:
@@ -140,10 +139,10 @@ public:
 		assert(in_this_ios());
 		if (!released() && running_in_this_thread())
 		{
-			uv_strand::setImmediate(TRY_MOVE(handler), _uvLoop);
+			uv_strand::setImmediate(std::forward<Handler>(handler), _uvLoop);
 			return false;
 		}
-		handler();
+		CHECK_EXCEPTION(handler);
 		return true;
 	}
 
@@ -152,7 +151,7 @@ public:
 	{
 		typedef wrap_handler<RM_CREF(Handler)> handler_type;
 		uv_work_t* uvReq = new uv_work_t;
-		uvReq->data = new(malloc(sizeof(handler_type)))handler_type(TRY_MOVE(handler));
+		uvReq->data = new(malloc(sizeof(handler_type)))handler_type(std::forward<Handler>(handler));
 		uv_queue_work(uvLoop, uvReq, [](uv_work_t*){}, [](uv_work_t* uv_op, int status)
 		{
 			((handler_type*)uv_op->data)->invoke();

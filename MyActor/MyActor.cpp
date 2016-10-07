@@ -1,11 +1,10 @@
 #include <iostream>
 #include "./actor/my_actor.h"
-#include "./actor/async_buffer.h"
 #include "./actor/actor_socket.h"
 #include "./actor/async_timer.h"
 #include "./actor/msg_queue.h"
 #include "./actor/generator.h"
-#include "./actor/sync_msg.h"
+#include "./actor/channel.h"
 #include "./actor/trace.h"
 
 void wait_multi_msg()
@@ -15,34 +14,10 @@ void wait_multi_msg()
 	ios.run();
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
 	{
-		csp_invoke<void(move_test)> csp(self->self_strand());
-		async_buffer<move_test> buf(self->self_strand(), 1);
 		actor_handle act1 = my_actor::create(self->self_strand(), [&](my_actor* self)
 		{
 			my_actor::quit_guard qg(self);
-			trig_handle<> cspAth;
-			trig_handle<> bufAth;
-			csp.regist_take_ntf(self, self->make_trig_notifer_to_self(cspAth));
-			buf.regist_pop_ntf(self, self->make_trig_notifer_to_self(bufAth));
-			self->run_mutex_blocks_safe(mutex_block_trig<>(cspAth, [&]()
-			{
-				trace_comma(self->self_id(), "begin wait csp");
-				csp.wait_invoke(self, [&](const move_test& mt)
-				{
-					trace_comma(self->self_id(), "csp msg ", mt);
-				});
-				trace_comma(self->self_id(), "end wait csp");
-				csp.regist_take_ntf(self, self->make_trig_notifer_to_self(cspAth));
-				return false;
-			}), mutex_block_trig<>(bufAth, [&]()
-			{
-				trace_comma(self->self_id(), "begin wait buf");
-				move_test mt = buf.pop(self);
-				trace_comma(self->self_id(), "buf msg ", mt);
-				trace_comma(self->self_id(), "end wait buf");
-				buf.regist_pop_ntf(self, self->make_trig_notifer_to_self(bufAth));
-				return false;
-			}), mutex_block_pump_check_state<int>(self, [&](int msg)
+			self->run_mutex_blocks_safe(mutex_block_pump_check_state<int>(self, [&](int msg)
 			{
 				trace_comma(self->self_id(), "begin msg int");
 				self->sleep(500);
@@ -95,11 +70,6 @@ void wait_multi_msg()
 		});
 		child_handle ch2 = self->create_child([&](my_actor* self)
 		{
-			for (int i = 0; i < 3; i++)
-			{
-				buf.push(self, move_test(i));
-				self->sleep(300);
-			}
 			auto ntf = self->connect_msg_notifer_to<int>(act1, true);
 			if (ntf)
 			{
@@ -113,11 +83,6 @@ void wait_multi_msg()
 		});
 		child_handle ch3 = self->create_child([&](my_actor* self)
 		{
-			for (int i = 0; i < 3; i++)
-			{
-				csp.invoke(self, move_test(i));
-				self->sleep(1000);
-			}
 			auto ntf = self->connect_msg_notifer_to<move_test>(act1, true);
 			if (ntf)
 			{
@@ -140,40 +105,6 @@ void wait_multi_msg()
 	trace_line("end wait_multi_msg");
 }
 
-void async_buffer_test()
-{
-	trace_line("begin async_buffer_test");
-	io_engine ios;
-	ios.run();
-	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
-	{
-		async_buffer<move_test> asyncMsg(self->self_strand(), 1);
-		child_handle ch1 = self->create_child([&](my_actor* self)
-		{
-			for (int i = 0; i < 3; i++)
-			{
-				self->sleep(1000);
-				trace_comma(self->self_id(), asyncMsg.pop(self));
-			}
-		});
-		child_handle ch2 = self->create_child([&](my_actor* self)
-		{
-			for (int i = 0; i < 3; i++)
-			{
-				trace_comma(self->self_id(), "begin push", i);
-				asyncMsg.push(self, move_test(i));
-				trace_comma(self->self_id(), "push ok", i);
-			}
-		});
-		self->child_run(ch1, ch2);
-		self->child_wait_quit(ch1, ch2);
-	});
-	ah->run();
-	ah->outside_wait_quit();
-	ios.stop();
-	trace_line("end async_buffer_test");
-}
-
 void sync_msg_test()
 {
 	trace_line("begin sync_msg_test");
@@ -181,13 +112,15 @@ void sync_msg_test()
 	ios.run();
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
 	{
-		sync_msg<move_test> syncMsg(self->self_strand());
+		nil_channel<move_test> syncMsg(self->self_strand());
 		child_handle ch1 = self->create_child([&](my_actor* self)
 		{
+			move_test mt;
 			for (int i = 0; i < 3; i++)
 			{
 				self->sleep(1000);
-				trace_comma(self->self_id(), syncMsg.take(self));
+				syncMsg.take(self, mt);
+				trace_comma(self->self_id(), mt);
 			}
 		});
 		child_handle ch2 = self->create_child([&](my_actor* self)
@@ -215,30 +148,43 @@ void csp_test()
 	ios.run();
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
 	{
-		csp_invoke<int(move_test&, bool)> csp(self->self_strand());
+		csp_channel<int(move_test, bool)> csp(self->self_strand());
 		child_handle ch1 = self->create_child([&](my_actor* self)
 		{
 			for (int i = 0; i < 6; i++)
 			{
-				self->sleep(1000);
-				csp.wait_invoke(self, [&](move_test& msg, bool rval)->int
+				csp.wait(self, [&](move_test& msg, bool rval)->int
 				{
-					trace_comma(self->self_id(), "csp msg", msg, "rval", rval);
+					self->sleep(1000);
+					trace_comma(self->self_id(), "csp msg", msg, "generator", rval);
 					return -i;
 				});
 			}
 		});
+		co_go(self->self_strand())[&](co_generator)
+		{
+			co_begin_context;
+			int i;
+			int res;
+			move_test mt;
+			bool bl;
+			co_chan_use_state;
+			co_end_context(ctx);
+			
+			co_begin;
+			for (ctx.i = 0; ctx.i < 3; ctx.i++)
+			{
+				co_sleep(100);
+				co_csp_send(csp, ctx.res) co_chan_multi(move_test(ctx.i), true);
+				trace_comma("csp return ", ctx.res);
+			}
+			co_end;
+		};
 		child_handle ch2 = self->create_child([&](my_actor* self)
 		{
 			for (int i = 0; i < 3; i++)
 			{
-				int r = csp.invoke_rval(self, move_test(i));
-				trace_comma(self->self_id(), "csp return ", r);
-			}
-			for (int i = 0; i < 3; i++)
-			{
-				move_test t(i);
-				int r = csp.invoke_rval(self, t);
+				int r = csp.send(self, move_test(i), false);
 				trace_comma(self->self_id(), "csp return ", r);
 			}
 		});
@@ -1371,8 +1317,6 @@ int main(int argc, char *argv[])
 	csp_test();
 	trace("\n");
 	sync_msg_test();
-	trace("\n");
-	async_buffer_test();
 	trace("\n");
 	socket_test();
 	trace("\n");

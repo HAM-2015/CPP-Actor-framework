@@ -16,10 +16,10 @@
 #include "scattered.h"
 
 class ActorTimer_;
-class TimerBoost_;
 class AsyncTimer_;
 class my_actor;
 class generator;
+class overlap_timer;
 
 class boost_strand;
 typedef std::shared_ptr<boost_strand> shared_strand;
@@ -247,9 +247,10 @@ class boost_strand
 
 	friend my_actor;
 	friend generator;
+	friend overlap_timer;
 	friend io_engine;
 	friend ActorTimer_;
-	friend TimerBoost_;
+	friend AsyncTimer_;
 protected:
 	enum strand_choose
 	{
@@ -607,6 +608,11 @@ public:
 	@brief 创建一个定时器
 	*/
 	std::shared_ptr<AsyncTimer_> make_timer();
+
+	/*!
+	@brief 获取重叠定时器
+	*/
+	overlap_timer* over_timer();
 private:
 	/*!
 	@brief 获取Actor定时器
@@ -684,7 +690,7 @@ protected:
 #endif
 protected:
 	ActorTimer_* _actorTimer;
-	TimerBoost_* _timerBoost;
+	overlap_timer* _overTimer;
 	io_engine* _ioEngine;
 	strand_type* _strand;
 	std::weak_ptr<boost_strand> _weakThis;

@@ -243,7 +243,7 @@ size_t run_thread::cpu_thread_number()
 
 void run_thread::sleep(int ms)
 {
-	usleep(ms * 1000);
+	usleep((__useconds_t)ms * 1000);
 }
 
 #endif

@@ -44,6 +44,11 @@ public:
 		create(TRY_MOVE(arg));
 	}
 
+	operator Type&()
+	{
+		return *(type*)_space;
+	}
+
 	bool has() const
 	{
 		return !_null;
@@ -129,6 +134,11 @@ public:
 	void operator =(Arg&& arg)
 	{
 		create(TRY_MOVE(arg));
+	}
+
+	operator Type&()
+	{
+		return *(type*)_space;
 	}
 
 	/*!

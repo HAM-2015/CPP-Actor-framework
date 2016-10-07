@@ -140,12 +140,6 @@
     <ClInclude Include="actor\actor_mutex.h">
       <Filter>头文件\actor</Filter>
     </ClInclude>
-    <ClInclude Include="actor\async_buffer.h">
-      <Filter>头文件\actor</Filter>
-    </ClInclude>
-    <ClInclude Include="actor\sync_msg.h">
-      <Filter>头文件\actor</Filter>
-    </ClInclude>
     <ClInclude Include="actor\lambda_ref.h">
       <Filter>头文件\actor</Filter>
     </ClInclude>
@@ -189,6 +183,9 @@
       <Filter>头文件\actor</Filter>
     </ClInclude>
     <ClInclude Include="actor\generator.h">
+      <Filter>头文件\actor</Filter>
+    </ClInclude>
+    <ClInclude Include="actor\channel.h">
       <Filter>头文件\actor</Filter>
     </ClInclude>
   </ItemGroup>

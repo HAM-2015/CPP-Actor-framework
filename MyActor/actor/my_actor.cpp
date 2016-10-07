@@ -1,6 +1,5 @@
 #include "my_actor.h"
-#include "async_buffer.h"
-#include "sync_msg.h"
+#include "channel.h"
 #include "bind_qt_run.h"
 #include "generator.h"
 #if (_MSC_VER >= 1900 || (__GNUG__*10 + __GNUC_MINOR__) >= 61)
@@ -1105,14 +1104,6 @@ void TrigOnceBase_::tick_handler(shared_bool& closed, bool* sign) const
 	reset();
 }
 
-void TrigOnceBase_::dispatch_handler(bool* sign) const
-{
-	assert(!_pIsTrig->exchange(true));
-	assert(_hostActor);
-	_hostActor->dispatch_handler(sign);
-	reset();
-}
-
 void TrigOnceBase_::copy(const TrigOnceBase_& s)
 {
 	_hostActor = s._hostActor;
@@ -1421,15 +1412,9 @@ public:
 			assert(false);
 			exit(12);
 		}
-		catch (async_buffer_close_exception&)
+		catch (channel_io_exception&)
 		{
-			trace_line("\nerror: ", "async_buffer_close_exception");
-			assert(false);
-			exit(13);
-		}
-		catch (sync_csp_exception&)
-		{
-			trace_line("\nerror: ", "sync_csp_exception");
+			trace_line("\nerror: ", "channel_io_exception");
 			assert(false);
 			exit(14);
 		}
@@ -2286,6 +2271,8 @@ void my_actor::run_child_complete(const main_func& h, size_t stackSize)
 void my_actor::sleep(int ms)
 {
 	assert_enter();
+	assert(_timerStateCompleted);
+	assert(!_timerStateCb);
 	if (ms < 0)
 	{
 		actor_handle lockActor = shared_from_this();
@@ -2293,7 +2280,9 @@ void my_actor::sleep(int ms)
 	}
 	else
 	{
-		timeout(ms, [this]{run_one(); });
+		_timerStateCompleted = false;
+		_timerStateTime = (long long)ms * 1000;
+		_timerStateHandle = _timer->timeout(_timerStateTime, shared_from_this());
 		push_yield();
 	}
 }
@@ -2373,11 +2362,6 @@ void my_actor::cancel_delay_trig()
 {
 	assert_enter();
 	cancel_timer();
-}
-
-void my_actor::dispatch_handler(bool* sign)
-{
-	_strand->dispatch(wrap_trig_run_one(shared_from_this(), sign));
 }
 
 void my_actor::tick_handler(bool* sign)
@@ -3235,13 +3219,19 @@ void my_actor::push_yield_after_quited()
 
 void my_actor::timeout_handler()
 {
-	assert(_timerStateCb);
 	_timerStateCompleted = true;
 	_timerStateHandle.reset();
-	wrap_timer_handler_face* h = _timerStateCb;
-	_timerStateCb = NULL;
-	h->invoke();
-	_reuMem.deallocate(h);
+	if (_timerStateCb)
+	{
+		wrap_timer_handler_face* h = _timerStateCb;
+		_timerStateCb = NULL;
+		h->invoke();
+		_reuMem.deallocate(h);
+	}
+	else
+	{
+		run_one();
+	}
 }
 
 void my_actor::cancel_timer()
@@ -3252,9 +3242,12 @@ void my_actor::cancel_timer()
 		_timerStateCompleted = true;
 		_timerStateCount++;
 		_timer->cancel(_timerStateHandle);
-		_timerStateCb->destroy();
-		_reuMem.deallocate(_timerStateCb);
-		_timerStateCb = NULL;
+		if (_timerStateCb)
+		{
+			_timerStateCb->destroy();
+			_reuMem.deallocate(_timerStateCb);
+			_timerStateCb = NULL;
+		}
 	}
 }
 

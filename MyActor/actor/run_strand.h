@@ -10,13 +10,13 @@
 template <typename Handler>
 void boost_strand::post_ui(Handler&& handler)
 {
-	static_cast<qt_strand*>(this)->_post_ui(TRY_MOVE(handler));
+	static_cast<qt_strand*>(this)->_post_ui(std::forward<Handler>(handler));
 }
 
 template <typename Handler>
 void boost_strand::dispatch_ui(Handler&& handler)
 {
-	static_cast<qt_strand*>(this)->_dispatch_ui(TRY_MOVE(handler));
+	static_cast<qt_strand*>(this)->_dispatch_ui(std::forward<Handler>(handler));
 }
 
 #endif
@@ -27,13 +27,13 @@ void boost_strand::dispatch_ui(Handler&& handler)
 template <typename Handler>
 void boost_strand::post_uv(Handler&& handler)
 {
-	static_cast<uv_strand*>(this)->_post_uv(TRY_MOVE(handler));
+	static_cast<uv_strand*>(this)->_post_uv(std::forward<Handler>(handler));
 }
 
 template <typename Handler>
 void boost_strand::dispatch_uv(Handler&& handler)
 {
-	static_cast<uv_strand*>(this)->_dispatch_uv(TRY_MOVE(handler));
+	static_cast<uv_strand*>(this)->_dispatch_uv(std::forward<Handler>(handler));
 }
 
 #endif

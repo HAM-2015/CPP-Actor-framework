@@ -339,6 +339,8 @@ struct any_handler
 	void operator()(Args&&...){}
 };
 
+#define breakpoint_mark {int __mark=0;}
+
 /*!
 @brief 启用高精度时钟
 */
@@ -466,9 +468,9 @@ struct none_functor
 	void operator()(Args&&...){}
 };
 
-struct void_type
-{
-};
+struct void_type {};
+struct void_type1 {};
+struct void_type2 {};
 
 template <typename T>
 struct ValTryRefMove_

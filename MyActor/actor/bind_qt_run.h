@@ -52,19 +52,14 @@
 #define __CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __delete__) do {\
 	my_actor::quit_guard qg(__host__);\
 	assert(!(__this_ui__)->run_in_ui_thread());\
+	begin_RUN_IN_QT_UI_AT(__this_ui__, __host__);\
+	if (!(__frame__)->is_wait_close())\
+		(__frame__)->close();\
+	end_RUN_IN_QT_UI();\
 	bool __inside_loop = true;\
-	do\
-	{\
+	do{\
 		begin_RUN_IN_QT_UI_AT(__this_ui__, __host__);\
-		if (!(__frame__)->is_wait_close())\
-		{\
-			(__frame__)->close();\
-			__inside_loop = false;\
-		}\
-		else\
-		{\
-			__inside_loop = (__frame__)->inside_wait_close_loop();\
-		}\
+		__inside_loop = (__frame__)->is_wait_close();\
 		if (!__inside_loop) { __delete__(__frame__); }\
 		end_RUN_IN_QT_UI();\
 	} while (__inside_loop);\
@@ -83,24 +78,10 @@
 	my_actor::quit_guard qg(__host__);\
 	assert((__this_ui__)->run_in_ui_thread());\
 	assert(!(__frame__)->running_in_this_thread());\
-	bool __check_loop = true;\
 	if (!(__frame__)->is_wait_close())\
-	{\
-		begin_RUN_IN_THREAD_STACK(__host__);\
-		if (!(__frame__)->is_wait_close())\
-		{\
-			__check_loop = false;\
-			(__frame__)->close();\
-		}\
-		end_RUN_IN_THREAD_STACK();\
-	}\
-	if (__check_loop)\
-	{\
-		while ((__frame__)->inside_wait_close_loop())\
-		{\
-			(__host__)->yield();\
-		}\
-	}\
+		(__frame__)->close();\
+	while ((__frame__)->is_wait_close())\
+		(__host__)->yield();\
 	__delete__(__frame__);\
 } while (false)
 
@@ -115,12 +96,19 @@
 
 //////////////////////////////////////////////////////////////////////////
 
+//closeEvent函数中准备关闭入口ui
+#define BEGIN_CLOSE_QT_MAIN_UI if (!is_wait_close() && !in_close_scope()) { set_in_close_scope_sign(true);
+//closeEvent函数中等待关闭入口ui
+#define WAIT_CLOSE_QT_MAIN_UI enter_wait_close();
+//closeEvent函数中结束关闭入口ui
+#define END_CLOSE_QT_MAIN_UI set_in_close_scope_sign(false);}
+
 //closeEvent函数中准备关闭ui
-#define BEGIN_CLOSE_QT_UI() if (!is_wait_close() && !in_close_scope()) { set_in_close_scope_sign(true);
+#define BEGIN_CLOSE_QT_UI if (!is_wait_close() && !in_close_scope()) { set_in_close_scope_sign(true);
 //closeEvent函数中等待关闭ui
-#define WAIT_CLOSE_QT_UI() enter_wait_close();
+#define WAIT_CLOSE_QT_UI async_enter_wait_close([&]{
 //closeEvent函数中结束关闭ui
-#define END_CLOSE_QT_UI() set_in_close_scope_sign(false);}
+#define END_CLOSE_QT_UI set_in_close_scope_sign(false);});}
 
 class bind_qt_run_base
 {
@@ -154,7 +142,7 @@ protected:
 	{
 		template <typename H>
 		wrap_handler(H&& h)
-			:_handler(TRY_MOVE(h)) {}
+			:_handler(std::forward<H>(h)) {}
 
 		void invoke()
 		{
@@ -170,7 +158,7 @@ protected:
 	{
 		template <typename H>
 		wrap_timed_handler(std::mutex& mutex, const shared_bool& deadSign, bool& running, H&& h)
-			:_mutex(mutex), _deadSign(deadSign), _running(running), _handler(TRY_MOVE(h)) {}
+			:_mutex(mutex), _deadSign(deadSign), _running(running), _handler(std::forward<H>(h)) {}
 
 		void invoke()
 		{
@@ -200,14 +188,14 @@ protected:
 	wrap_handler_face* make_wrap_handler(reusable_mem_mt<>& reuMem, Handler&& handler)
 	{
 		typedef wrap_handler<RM_CREF(Handler)> handler_type;
-		return new(reuMem.allocate(sizeof(handler_type)))handler_type(TRY_MOVE(handler));
+		return new(reuMem.allocate(sizeof(handler_type)))handler_type(std::forward<Handler>(handler));
 	}
 
 	template <typename Handler>
 	wrap_handler_face* make_wrap_timed_handler(reusable_mem_mt<>& reuMem, std::mutex& mutex, const shared_bool& deadSign, bool& running, Handler&& handler)
 	{
 		typedef wrap_timed_handler<RM_CREF(Handler)> handler_type;
-		return new(reuMem.allocate(sizeof(handler_type)))handler_type(mutex, deadSign, running, TRY_MOVE(handler));
+		return new(reuMem.allocate(sizeof(handler_type)))handler_type(mutex, deadSign, running, std::forward<Handler>(handler));
 	}
 
 	template <typename Handler, typename R>
@@ -215,14 +203,14 @@ protected:
 	{
 		template <typename H>
 		wrap_run_in_ui_handler(bind_qt_run_base* ui, H&& h)
-			:_this(ui), _handler(TRY_MOVE(h)) {}
+			:_this(ui), _handler(std::forward<H>(h)) {}
 
 		template <typename... Args>
 		R operator()(my_actor* host, Args&&... args)
 		{
 			if (_this->run_in_ui_thread())
 			{
-				return agent_result<R>::invoke(_handler, TRY_MOVE(args)...);
+				return agent_result<R>::invoke(_handler, std::forward<Args>(args)...);
 			}
 			else
 			{
@@ -241,7 +229,7 @@ protected:
 	{
 		template <typename... Args>
 		task_event(Args&&... args)
-			:QEvent(TRY_MOVE(args)...) {}
+			:QEvent(std::forward<Args>(args)...) {}
 		void* operator new(size_t s);
 		void operator delete(void* p);
 		static mem_alloc_mt2<task_event>* _taskAlloc;
@@ -300,7 +288,7 @@ public:
 	template <typename Handler>
 	void post(Handler&& handler)
 	{
-		append_task(make_wrap_handler(_reuMem, TRY_MOVE(handler)));
+		append_task(make_wrap_handler(_reuMem, std::forward<Handler>(handler)));
 	}
 
 	/*!
@@ -313,8 +301,8 @@ public:
 		{
 			append_task(make_wrap_handler(_reuMem, std::bind([&handler](const trig_once_notifer<>& cb)
 			{
-				handler();
-				cb();
+				CHECK_EXCEPTION(handler);
+				CHECK_EXCEPTION(cb);
 			}, std::move(cb))));
 		});
 	}
@@ -344,8 +332,8 @@ public:
 		trig_notifer<> ntf = host->make_trig_notifer_to_self(ath);
 		append_task(make_wrap_timed_handler(_reuMem, _checkTimedMutex, ath.dead_sign(), running, [&handler, &ntf]
 		{
-			handler();
-			ntf();
+			CHECK_EXCEPTION(handler);
+			CHECK_EXCEPTION(ntf);
 		}));
 
 		if (!host->timed_wait_trig(tm, ath))
@@ -376,7 +364,7 @@ public:
 	template <typename Handler>
 	wrapped_post_handler<bind_qt_run_base, RM_CREF(Handler)> wrap(Handler&& handler)
 	{
-		return wrapped_post_handler<bind_qt_run_base, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_post_handler<bind_qt_run_base, RM_CREF(Handler)>(this, std::forward<Handler>(handler));
 	}
 
 	template <typename Handler>
@@ -386,9 +374,9 @@ public:
 		_waitCount++;
 		return FUNCTION_ALLOCATOR(std::function<void()>, wrap(std::bind([this](Handler& handler)
 		{
-			handler();
+			CHECK_EXCEPTION(handler);
 			check_close();
-		}, TRY_MOVE(handler))), (reusable_alloc<void, reusable_mem_mt<>>(_reuMem)));
+		}, std::forward<Handler>(handler))), (reusable_alloc<void, reusable_mem_mt<>>(_reuMem)));
 	}
 
 	std::function<void()> wrap_check_close();
@@ -399,13 +387,13 @@ public:
 	template <typename R, typename Handler>
 	wrap_run_in_ui_handler<RM_CREF(Handler), R> wrap_run_in_ui(Handler&& handler)
 	{
-		return wrap_run_in_ui_handler<RM_CREF(Handler), R>(this, TRY_MOVE(handler));
+		return wrap_run_in_ui_handler<RM_CREF(Handler), R>(this, std::forward<Handler>(handler));
 	}
 #ifdef ENABLE_QT_ACTOR
 	/*!
 	@brief 开启shared_qt_strand
 	*/
-	void start_qt_strand(io_engine& ios);
+	const shared_qt_strand& start_qt_strand(io_engine& ios);
 
 	/*!
 	@brief 获取shared_qt_strand
@@ -433,11 +421,28 @@ protected:
 	void run_one_task();
 	void check_close();
 	void enter_wait_close();
+
+	template <typename Handler>
+	void async_enter_wait_close(Handler&& handler)
+	{
+		assert(!_checkCloseHandler);
+		_waitClose = true;
+		if (_waitCount)
+		{
+			_checkCloseHandler = make_wrap_handler(_reuMem, std::forward<Handler>(handler));
+		}
+		else
+		{
+			CHECK_EXCEPTION(handler);
+			_waitClose = false;
+		}
+	}
 private:
 	run_thread::thread_id _threadID;
 	reusable_mem_mt<> _reuMem;
 	std::mutex _checkTimedMutex;
 	std::mutex _queueMutex;
+	wrap_handler_face* _checkCloseHandler;
 	msg_queue<wrap_handler_face*>* _waitQueue;
 	msg_queue<wrap_handler_face*>* _readyQueue;
 #ifdef ENABLE_QT_ACTOR
@@ -457,13 +462,13 @@ private:
 template <typename Handler>
 void qt_strand::_dispatch_ui(Handler&& handler)
 {
-	_ui->post(TRY_MOVE(handler));
+	_ui->post(std::forward<Handler>(handler));
 }
 
 template <typename Handler>
 void qt_strand::_post_ui(Handler&& handler)
 {
-	_ui->post(TRY_MOVE(handler));
+	_ui->post(std::forward<Handler>(handler));
 }
 #endif
 
@@ -473,7 +478,7 @@ class bind_qt_run : public FRAME, private bind_qt_run_base
 protected:
 	template <typename... Args>
 	bind_qt_run(Args&&... args)
-		: FRAME(TRY_MOVE(args)...) {}
+		: FRAME(std::forward<Args>(args)...) {}
 
 	~bind_qt_run() {}
 public:
@@ -495,37 +500,37 @@ public:
 	template <typename Handler>
 	void post(Handler&& handler)
 	{
-		bind_qt_run_base::post(TRY_MOVE(handler));
+		bind_qt_run_base::post(std::forward<Handler>(handler));
 	}
 
 	template <typename Handler>
 	void send(my_actor* host, Handler&& handler)
 	{
-		bind_qt_run_base::send(host, TRY_MOVE(handler));
+		bind_qt_run_base::send(host, std::forward<Handler>(handler));
 	}
 
 	template <typename Handler>
 	void co_send(co_generator, Handler&& handler)
 	{
-		bind_qt_run_base::co_send(co_self, TRY_MOVE(handler));
+		bind_qt_run_base::co_send(co_self, std::forward<Handler>(handler));
 	}
 
 	template <typename Handler>
 	bool timed_send(int tm, my_actor* host, Handler&& handler)
 	{
-		return bind_qt_run_base::timed_send(tm, host, TRY_MOVE(handler));
+		return bind_qt_run_base::timed_send(tm, host, std::forward<Handler>(handler));
 	}
 
 	template <typename Handler>
 	wrapped_post_handler<bind_qt_run_base, Handler> wrap(Handler&& handler)
 	{
-		return bind_qt_run_base::wrap(TRY_MOVE(handler));
+		return bind_qt_run_base::wrap(std::forward<Handler>(handler));
 	}
 
 	template <typename Handler>
 	std::function<void()> wrap_check_close(Handler&& handler)
 	{
-		return bind_qt_run_base::wrap_check_close(TRY_MOVE(handler));
+		return bind_qt_run_base::wrap_check_close(std::forward<Handler>(handler));
 	}
 
 	std::function<void()> wrap_check_close()
@@ -536,12 +541,18 @@ public:
 	template <typename R = void, typename Handler>
 	wrap_run_in_ui_handler<RM_CREF(Handler), R> wrap_run_in_ui(Handler&& handler)
 	{
-		return bind_qt_run_base::wrap_run_in_ui<R>(TRY_MOVE(handler));
+		return bind_qt_run_base::wrap_run_in_ui<R>(std::forward<Handler>(handler));
 	}
 
 	void enter_wait_close()
 	{
 		bind_qt_run_base::enter_wait_close();
+	}
+
+	template <typename Handler>
+	void async_enter_wait_close(Handler&& handler)
+	{
+		bind_qt_run_base::async_enter_wait_close(std::forward<Handler>(handler));
 	}
 
 	bool is_wait_close()
@@ -574,9 +585,9 @@ public:
 		bind_qt_run_base::ui_yield(host);
 	}
 #ifdef ENABLE_QT_ACTOR
-	void start_qt_strand(io_engine& ios)
+	const shared_qt_strand& start_qt_strand(io_engine& ios)
 	{
-		bind_qt_run_base::start_qt_strand(ios);
+		return bind_qt_run_base::start_qt_strand(ios);
 	}
 
 	const shared_qt_strand& ui_strand()
@@ -669,7 +680,7 @@ struct qt_ui_sync_result
 	{
 		assert(_runBase->running_in_this_thread());
 		assert(!has());
-		_res.create(TRY_MOVE(args)...);
+		_res.create(std::forward<Args>(args)...);
 		_eventLoop.exit();
 	}
 
@@ -721,7 +732,7 @@ struct qt_ui_sync_notifer<R(ARGS...)>
 #else
 		qt_ui_sync_result<R> res(eventLoop);
 #endif
-		_handler(&res, TRY_MOVE(args)...);
+		_handler(&res, std::forward<Args>(args)...);
 		eventLoop.exec();
 		DEBUG_OPERATION(_notifyCount--);
 		if (!res.has())
@@ -736,7 +747,7 @@ struct qt_ui_sync_notifer<R(ARGS...)>
 	{
 		assert(_runBase->run_in_ui_thread());
 		assert(0 == _notifyCount);
-		_handler = TRY_MOVE(h);
+		_handler = std::forward<H>(h);
 	}
 
 	void reset()
@@ -775,7 +786,7 @@ struct _check_lost_qt_ui_sync_result
 	{
 		assert(_runBase->running_in_this_thread());
 		assert(!has());
-		_res.create(TRY_MOVE(args)...);
+		_res.create(std::forward<Args>(args)...);
 		_eventLoop.exit();
 	}
 
@@ -841,7 +852,7 @@ struct check_lost_qt_ui_sync_result
 	void return_(Args&&... args)
 	{
 		assert(_res);
-		_res->return_(TRY_MOVE(args)...);
+		_res->return_(std::forward<Args>(args)...);
 		_res = NULL;
 	}
 private:
@@ -883,7 +894,7 @@ struct qt_ui_sync_check_lost_notifer<R(ARGS...)>
 		QEventLoop eventLoop(_parent);
 		shared_bool sign = shared_bool::new_(false);
 		_check_lost_qt_ui_sync_result<R> res(_runBase, eventLoop);
-		_handler(check_lost_qt_ui_sync_result<R>(&res, sign, _mutex), TRY_MOVE(args)...);
+		_handler(check_lost_qt_ui_sync_result<R>(&res, sign, _mutex), std::forward<Args>(args)...);
 		int rcd = eventLoop.exec();
 		_mutex->lock();
 		sign = true;
@@ -906,7 +917,7 @@ struct qt_ui_sync_check_lost_notifer<R(ARGS...)>
 	{
 		assert(_runBase->run_in_ui_thread());
 		assert(0 == _notifyCount);
-		_handler = TRY_MOVE(h);
+		_handler = std::forward<H>(h);
 	}
 
 	void reset()

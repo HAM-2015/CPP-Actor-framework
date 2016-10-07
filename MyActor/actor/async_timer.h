@@ -7,92 +7,17 @@
 #include "mem_pool.h"
 #include "stack_object.h"
 
-class AsyncTimer_;
+class ActorTimer_;
 class qt_strand;
 class uv_strand;
 class boost_strand;
 typedef std::shared_ptr<AsyncTimer_> async_timer;
 
 /*!
-@brief 定时器性能加速器
+@brief 异步定时器，一个定时循环一个AsyncTimer_
 */
-class TimerBoost_
-#ifdef DISABLE_BOOST_TIMER
-	: public TimerBoostCompletedEventFace_
-#endif
+class AsyncTimer_ : public ActorTimerFace_
 {
-	typedef msg_multimap<long long, async_timer> handler_queue;
-
-	friend AsyncTimer_;
-	friend qt_strand;
-	friend uv_strand;
-	friend boost_strand;
-
-	class timer_handle
-	{
-		friend TimerBoost_;
-	public:
-		void reset()
-		{
-			_null = true;
-			_beginStamp = 0;
-		}
-		long long _beginStamp = 0;
-	private:
-		handler_queue::iterator _queueNode;
-		bool _null = true;
-	};
-private:
-	TimerBoost_(const shared_strand& strand);
-	~TimerBoost_(); 
-private:
-	/*!
-	@brief 开始计时
-	@param us 微秒
-	@param host 准备计时的AsyncTimer_
-	@param deadline 是否为绝对时间
-	@return 计时句柄，用于cancel
-	*/
-	timer_handle timeout(long long us, async_timer&& host, bool deadline);
-
-	/*!
-	@brief 取消计时
-	*/
-	void cancel(timer_handle& th);
-
-	/*!
-	@brief timer循环
-	*/
-	void timer_loop(long long abs, long long rel);
-
-	/*!
-	@brief timer事件
-	*/
-	void event_handler(int tc);
-#ifdef DISABLE_BOOST_TIMER
-	void post_event(int tc);
-#endif
-private:
-	void* _timer;
-	std::weak_ptr<boost_strand>& _weakStrand;
-	shared_strand _lockStrand;
-	handler_queue _handlerQueue;
-	long long _extMaxTick;
-	long long _extFinishTime;
-#ifdef DISABLE_BOOST_TIMER
-	stack_obj<boost::asio::io_service::work, false> _lockIos;
-#endif
-	int _timerCount;
-	bool _looping;
-	NONE_COPY(TimerBoost_);
-};
-
-/*!
-@brief 异步定时器，依赖于TimerBoost_，一个定时循环一个AsyncTimer_
-*/
-class AsyncTimer_
-{
-	friend TimerBoost_;
 	friend boost_strand;
 	FRIEND_SHARED_PTR(AsyncTimer_);
 
@@ -107,11 +32,11 @@ class AsyncTimer_
 	{
 		template <typename H>
 		wrap_handler(H&& h)
-			:_h(TRY_MOVE(h)) {}
+			:_h(std::forward<H>(h)) {}
 
 		void invoke()
 		{
-			_h();
+			CHECK_EXCEPTION(_h);
 			destroy();
 		}
 
@@ -123,7 +48,7 @@ class AsyncTimer_
 		Handler _h;
 	};
 private:
-	AsyncTimer_(TimerBoost_& timerBoost);
+	AsyncTimer_(ActorTimer_* actorTimer);
 	~AsyncTimer_();
 public:
 	/*!
@@ -135,8 +60,8 @@ public:
 		assert(self_strand()->running_in_this_thread());
 		assert(!_handler);
 		typedef wrap_handler<RM_CREF(Handler)> wrap_type;
-		_handler = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
-		_timerHandle = _timerBoost.timeout(tm * 1000, _weakThis.lock(), false);
+		_handler = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(std::forward<Handler>(handler));
+		_timerHandle = _actorTimer->timeout((long long)tm * 1000, _weakThis.lock(), false);
 		return _timerHandle._beginStamp;
 	}
 
@@ -149,8 +74,8 @@ public:
 		assert(self_strand()->running_in_this_thread());
 		assert(!_handler);
 		typedef wrap_handler<RM_CREF(Handler)> wrap_type;
-		_handler = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
-		_timerHandle = _timerBoost.timeout(us, _weakThis.lock(), true);
+		_handler = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(std::forward<Handler>(handler));
+		_timerHandle = _actorTimer->timeout(us, _weakThis.lock(), true);
 		return _timerHandle._beginStamp;
 	}
 
@@ -173,10 +98,144 @@ private:
 private:
 	wrap_base* _handler;
 	reusable_mem _reuMem;
-	TimerBoost_& _timerBoost;
+	ActorTimer_* _actorTimer;
 	std::weak_ptr<AsyncTimer_> _weakThis;
-	TimerBoost_::timer_handle _timerHandle;
+	ActorTimer_::timer_handle _timerHandle;
 	NONE_COPY(AsyncTimer_);
+};
+
+/*!
+@brief 可重叠使用的定时器
+*/
+class overlap_timer
+#ifdef DISABLE_BOOST_TIMER
+	: public TimerBoostCompletedEventFace_
+#endif
+{
+	struct wrap_base
+	{
+		virtual void invoke() = 0;
+		virtual void destroy() = 0;
+	};
+
+	template <typename Handler>
+	struct wrap_handler : public wrap_base
+	{
+		template <typename H>
+		wrap_handler(H&& h)
+			:_h(std::forward<H>(h)) {}
+
+		void invoke()
+		{
+			CHECK_EXCEPTION(_h);
+			destroy();
+		}
+
+		void destroy()
+		{
+			this->~wrap_handler();
+		}
+
+		Handler _h;
+	};
+
+	typedef msg_multimap<long long, wrap_base*> handler_queue;
+
+	friend boost_strand;
+	friend qt_strand;
+	friend uv_strand;
+public:
+	class timer_handle
+	{
+		friend overlap_timer;
+	public:
+		long long stamp()
+		{
+			return _beginStamp;
+		}
+	private:
+		bool is_null() const
+		{
+			return _null;
+		}
+
+		void reset()
+		{
+			_null = true;
+			_beginStamp = 0;
+		}
+	private:
+		long long _beginStamp = 0;
+		handler_queue::iterator _queueNode;
+		bool _null = true;
+	};
+private:
+	overlap_timer(const shared_strand& strand);
+	~overlap_timer();
+public:
+	/*!
+	@brief 开启一个定时，在依赖的strand线程中调用
+	*/
+	template <typename Handler>
+	void timeout(int ms, timer_handle& timerHandle, Handler&& handler)
+	{
+		assert(_weakStrand.lock()->running_in_this_thread());
+		assert(timerHandle.is_null());
+		_timeout((long long)ms * 1000, timerHandle, wrap_timer_handler(std::bind([&timerHandle](Handler& handler)
+		{
+			timerHandle.reset();
+			CHECK_EXCEPTION(handler);
+		}, std::forward<Handler>(handler))));
+	}
+
+	/*!
+	@brief 开启一个绝对定时，在依赖的strand线程中调用
+	*/
+	template <typename Handler>
+	void deadline(long long us, timer_handle& timerHandle, Handler&& handler)
+	{
+		assert(_weakStrand.lock()->running_in_this_thread());
+		assert(timerHandle.is_null());
+		_timeout(us, timerHandle, wrap_timer_handler(std::bind([&timerHandle](Handler& handler)
+		{
+			timerHandle.reset();
+			CHECK_EXCEPTION(handler);
+		}, std::forward<Handler>(handler))), true);
+	}
+
+	/*!
+	@brief 取消一次计时，在依赖的strand线程中调用
+	*/
+	void cancel(timer_handle& th);
+private:
+	void timer_loop(long long abs, long long rel);
+	void event_handler(int tc);
+#ifdef DISABLE_BOOST_TIMER
+	void post_event(int tc);
+#endif
+private:
+	void _timeout(long long us, timer_handle& timerHandle, wrap_base* handler, bool deadline = false);
+
+	template <typename Handler>
+	wrap_base* wrap_timer_handler(Handler&& handler)
+	{
+		typedef wrap_handler<RM_CREF(Handler)> wrap_type;
+		return new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(std::forward<Handler>(handler));
+	}
+private:
+	void* _timer;
+	std::weak_ptr<boost_strand>& _weakStrand;
+	shared_strand _lockStrand;
+	handler_queue _handlerQueue;
+	reusable_mem _reuMem;
+	long long _extMaxTick;
+	long long _extFinishTime;
+#ifdef DISABLE_BOOST_TIMER
+	stack_obj<boost::asio::io_service::work, false> _lockIos;
+#endif
+	int _timerCount;
+	bool _looping;
+	NONE_COPY(overlap_timer);
 };
 
 #endif

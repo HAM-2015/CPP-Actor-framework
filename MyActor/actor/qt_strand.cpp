@@ -22,7 +22,7 @@ shared_qt_strand qt_strand::create(io_engine& ioEngine, bind_qt_run_base* ui)
 	res->_ioEngine = &ioEngine;
 	res->_ui = ui;
 	res->_actorTimer = new ActorTimer_(res);
-	res->_timerBoost = new TimerBoost_(res);
+	res->_overTimer = new overlap_timer(res);
 	res->_weakThis = res;
 	return res;
 }

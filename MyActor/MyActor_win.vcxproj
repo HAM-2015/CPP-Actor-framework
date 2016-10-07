@@ -275,7 +275,6 @@
     <ClInclude Include="actor\actor_mutex.h" />
     <ClInclude Include="actor\actor_socket.h" />
     <ClInclude Include="actor\actor_timer.h" />
-    <ClInclude Include="actor\async_buffer.h" />
     <ClInclude Include="actor\async_timer.h" />
     <ClInclude Include="actor\bind_node_run.h" />
     <ClInclude Include="actor\bind_qt_run.h" />
@@ -295,7 +294,7 @@
     <ClInclude Include="actor\shared_strand.h" />
     <ClInclude Include="actor\stack_object.h" />
     <ClInclude Include="actor\strand_ex.h" />
-    <ClInclude Include="actor\sync_msg.h" />
+    <ClInclude Include="actor\channel.h" />
     <ClInclude Include="actor\trace.h" />
     <ClInclude Include="actor\try_move.h" />
     <ClInclude Include="actor\tuple_option.h" />

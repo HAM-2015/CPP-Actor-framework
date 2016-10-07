@@ -230,6 +230,21 @@ void generator::_co_async_next()
 	}, std::move(shared_this())));
 }
 
+void generator::_co_async_next2()
+{
+	assert(_strand->running_in_this_thread());
+	assert(_ctx);
+	if (_ctx->__asyncSign)
+	{
+		_ctx->__asyncSign = false;
+		_next();
+	}
+	else
+	{
+		_ctx->__asyncSign = true;
+	}
+}
+
 void generator::_co_shared_async_next(shared_bool& sign)
 {
 	_strand->distribute(std::bind([](generator_handle& host, shared_bool& sign)
@@ -243,7 +258,8 @@ void generator::_co_shared_async_next(shared_bool& sign)
 		{
 			if (__ctx->__asyncSign)
 			{
-				__ctx->__asyncSign = false; host->_next();
+				__ctx->__asyncSign = false;
+				host->_next();
 			}
 			else
 			{
@@ -253,11 +269,18 @@ void generator::_co_shared_async_next(shared_bool& sign)
 	}, _weakThis.lock(), std::move(sign)));
 }
 
+bool generator::_done()
+{
+	assert(_strand->running_in_this_thread());
+	return !_ctx;
+}
+
 void generator::_co_sleep(int ms)
 {
 	assert(ms > 0);
+	assert(_strand->running_in_this_thread());
 	assert(_timerHandle.is_null());
-	_timerHandle = _timer->timeout(ms * 1000, _weakThis.lock());
+	_timerHandle = _timer->timeout((long long)ms * 1000, _weakThis.lock());
 }
 
 void generator::timeout_handler()
@@ -268,11 +291,60 @@ void generator::timeout_handler()
 }
 //////////////////////////////////////////////////////////////////////////
 
-void CoNotifyHandlerFace_::notify_state(reusable_mem& alloc, CoNotifyHandlerFace_* ntf, co_async_state state /*= co_async_ok*/)
+CoSelectSign_::CoSelectSign_(co_generator)
+:_ntfPump(co_strand, 16), _ntfSign(16), _ntfState(co_async_state::co_async_undefined), _selectId(-1), _forkInit(false)
 {
-	__space_align char space[sizeof(void*)* 256];
-	assert(sizeof(space) >= ntf->size());
-	CoNotifyHandlerFace_* ntf_ = ntf->move_out(space);
-	alloc.deallocate(ntf);
-	ntf_->notify(state);
+	DEBUG_OPERATION(_checkRepeat = true);
+	DEBUG_OPERATION(_labelId = -1);
+}
+
+CoSelectSign_::CoSelectSign_(CoSelectSign_& s)
+:_ntfPump(s._ntfPump.self_strand(), 16), _ntfSign(16), _ntfState(s._ntfState), _selectId(s._selectId), _forkInit(true)
+{
+	for (auto it = s._ntfSign.begin(); s._ntfSign.end() != it; ++it)
+	{
+		co_notify_sign& srcSign = it->second;
+		if (-1 != srcSign._id)
+		{
+			co_notify_sign& dstSign = _ntfSign[srcSign._id];
+			dstSign._disableAppend = srcSign._disableAppend;
+			dstSign._id = srcSign._id;
+		}
+		else
+		{//FIXME(select-case fork缺陷，fork后新的generator执行了co_select_cancel_case/co_select_resume_case后又fork，需要绕开)
+			assert(false);
+		}
+	}
+	DEBUG_OPERATION(_checkRepeat = false);
+	DEBUG_OPERATION(_labelId = s._labelId);
+}
+
+co_notify_sign& CoSelectSign_::find_sign(size_t objAddr, int line)
+{
+	if (!_forkInit)
+	{
+		co_notify_sign& sign = _ntfSign[objAddr];
+		sign._id = line;
+		return sign;
+	}
+	auto findLine = _ntfSign.find(line);
+	assert(_ntfSign.end() != findLine);
+	assert(findLine->second._id == line);
+	if (objAddr != (size_t)line)
+	{
+		bool disableAppend = findLine->second._disableAppend;
+		_ntfSign.erase(findLine);
+		auto findAddr = _ntfSign.find(objAddr);
+		if (_ntfSign.end() == findAddr)
+		{
+			co_notify_sign& sign = _ntfSign[objAddr];
+			sign._disableAppend = disableAppend;
+			sign._id = line;
+			return sign;
+		}
+		co_notify_sign& sign = findAddr->second;
+		sign._id = line;
+		return sign;
+	}
+	return findLine->second;
 }

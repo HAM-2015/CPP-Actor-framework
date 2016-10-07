@@ -129,7 +129,7 @@ void bind_qt_run_base::uninstall()
 }
 
 bind_qt_run_base::bind_qt_run_base()
-:_eventLoop(NULL), _waitCount(0), _waitClose(false), _inCloseScope(false), _locked(false)
+:_eventLoop(NULL), _checkCloseHandler(NULL), _waitCount(0), _waitClose(false), _inCloseScope(false), _locked(false)
 {
 	DEBUG_OPERATION(_taskCount = 0);
 	_threadID = run_thread::this_thread_id();
@@ -148,6 +148,7 @@ bind_qt_run_base::~bind_qt_run_base()
 	assert(0 == _taskCount);
 	assert(!_waitClose);
 	assert(!_eventLoop);
+	assert(!_checkCloseHandler);
 	assert(!_locked);
 	assert(_readyQueue->empty());
 	assert(_waitQueue->empty());
@@ -242,25 +243,33 @@ void bind_qt_run_base::run_one_task()
 #ifdef ENABLE_QT_ACTOR
 	ui_tls* uiTls = ui_tls::push_stack(this);
 #endif
-	while (!_readyQueue->empty())
+	do
 	{
-		wrap_handler_face* h = _readyQueue->front();
-		_readyQueue->pop_front();
-		h->invoke();
-		_reuMem.deallocate(h);
-	}
-	_queueMutex.lock();
-	if (!_waitQueue->empty())
-	{
-		std::swap(_readyQueue, _waitQueue);
-		_queueMutex.unlock();
-		post_task_event();
-	}
-	else
-	{
-		_locked = false;
-		_queueMutex.unlock();
-	}
+		while (!_readyQueue->empty())
+		{
+			wrap_handler_face* h = _readyQueue->front();
+			_readyQueue->pop_front();
+			h->invoke();
+			_reuMem.deallocate(h);
+		}
+		_queueMutex.lock();
+		if (!_waitQueue->empty())
+		{
+			std::swap(_readyQueue, _waitQueue);
+			_queueMutex.unlock();
+			if (is_wait_close())
+			{
+				continue;
+			}
+			post_task_event();
+		}
+		else
+		{
+			_locked = false;
+			_queueMutex.unlock();
+		}
+		break;
+	} while (true);
 #ifdef ENABLE_QT_ACTOR
 	bind_qt_run_base* r = ui_tls::pop_stack(uiTls);
 	assert(this == r);
@@ -285,7 +294,18 @@ void bind_qt_run_base::check_close()
 	_waitCount--;
 	if (_waitClose && 0 == _waitCount)
 	{
-		close_now();
+		if (_checkCloseHandler)
+		{
+			wrap_handler_face* h = _checkCloseHandler;
+			_checkCloseHandler = NULL;
+			h->invoke();
+			_reuMem.deallocate(h);
+			_waitClose = false;
+		}
+		else
+		{
+			close_now();
+		}
 	}
 }
 
@@ -295,7 +315,7 @@ void bind_qt_run_base::ui_yield(my_actor* host)
 	{
 		append_task(make_wrap_handler(_reuMem, std::bind([](const trig_once_notifer<>& cb)
 		{
-			cb();
+			CHECK_EXCEPTION(cb);
 		}, std::move(cb))));
 	});
 }
@@ -325,10 +345,14 @@ child_handle bind_qt_run_base::create_ui_child_actor(my_actor* host, my_actor::m
 	return host->create_child(_qtStrand, std::move(mainFunc), stackSize);
 }
 
-void bind_qt_run_base::start_qt_strand(io_engine& ios)
+const shared_qt_strand& bind_qt_run_base::start_qt_strand(io_engine& ios)
 {
 	assert(run_in_ui_thread());
-	_qtStrand = qt_strand::create(ios, this);
+	if (!_qtStrand || &_qtStrand->get_io_engine() != &ios)
+	{
+		_qtStrand = qt_strand::create(ios, this);
+	}
+	return _qtStrand;
 }
 
 const shared_qt_strand& bind_qt_run_base::ui_strand()

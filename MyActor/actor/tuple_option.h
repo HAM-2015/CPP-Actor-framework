@@ -9,6 +9,24 @@ struct types_pck
 {
 	enum { number = sizeof...(TYPES) };
 };
+
+template <typename... TYPES>
+struct merge_types;
+
+template <typename... LTypes, typename... RTypes>
+struct merge_types<types_pck<LTypes...>, types_pck<RTypes...>>
+{
+	typedef types_pck<LTypes..., RTypes...> types;
+};
+
+template <typename... TYPES>
+struct types_to_tuple;
+
+template <typename... TYPES>
+struct types_to_tuple<types_pck<TYPES...>>
+{
+	typedef std::tuple<TYPES...> tuple_type;
+};
 //////////////////////////////////////////////////////////////////////////
 
 template <size_t I, typename FIRST, typename... TYPES>
@@ -35,6 +53,36 @@ struct single_element<I, types_pck<TYPES...>>: public single_element<I, TYPES...
  template <size_t I, typename... TYPES>
  struct single_element<I, const std::tuple<TYPES...>>: public single_element<I, TYPES...>{};
 //////////////////////////////////////////////////////////////////////////
+ 
+ template <typename... Types>
+ struct eliminate_first;
+
+ template <typename First, typename... Types>
+ struct eliminate_first<First, Types...>
+ {
+	 typedef types_pck<Types...> types;
+ };
+
+ template <typename... Types>
+ struct eliminate_first<types_pck<Types...>>: public eliminate_first<Types...>{};
+
+ template <size_t N, typename... Types>
+ struct prefix_types
+ {
+	 typedef typename single_element<0, Types...>::type _frist;
+	 typedef typename eliminate_first<Types...>::types _eliminate_first;
+	 typedef typename merge_types<types_pck<_frist>, typename prefix_types<N - 1, _eliminate_first>::types>::types types;
+ };
+
+ template <typename... Types>
+ struct prefix_types<0, types_pck<Types...>>
+ {
+	 typedef types_pck<> types;
+ };
+
+ template <size_t N, typename... Types>
+ struct prefix_types<N, types_pck<Types...>>: public prefix_types<N, Types...>{};
+ //////////////////////////////////////////////////////////////////////////
 
 template <typename T>
 struct CheckRef0_
@@ -365,7 +413,7 @@ template <size_t N, size_t I>
 struct SameCopyToTuple_
 {
 	template <typename Head, typename... Dst, typename... Src>
-	static void same_copy_to_tuple(std::tuple<Dst...>& dst, Head&& head, Src&&... src)
+	static void same_copy_to_tuple(const std::tuple<Dst&...>& dst, Head&& head, Src&&... src)
 	{
 		std::get<N-I>(dst) = std::forward<Head>(head);
 		SameCopyToTuple_<N, I - 1>::same_copy_to_tuple(dst, std::forward<Src>(src)...);
@@ -376,14 +424,32 @@ template <size_t N>
 struct SameCopyToTuple_<N, 0>
 {
 	template <typename... Dst, typename... Src>
-	static void same_copy_to_tuple(std::tuple<Dst...>& dst, Src&&... src) {}
+	static void same_copy_to_tuple(const std::tuple<Dst&...>& dst, Src&&... src) {}
+};
+
+template <size_t N, size_t I>
+struct SameCopyTupleToTuple_
+{
+	template <typename... Dst, typename... Src>
+	static void same_copy_tuple_to_tuple(const std::tuple<Dst&...>& dst, const std::tuple<Src...>& src)
+	{
+		std::get<N - I>(dst) = (typename std::tuple_element<N - I, std::tuple<Src...>>::type)std::get<N - I>(src);
+		SameCopyTupleToTuple_<N, I - 1>::same_copy_tuple_to_tuple(dst, src);
+	}
+};
+
+template <size_t N>
+struct SameCopyTupleToTuple_<N, 0>
+{
+	template <typename... Dst, typename... Src>
+	static void same_copy_tuple_to_tuple(const std::tuple<Dst&...>& dst, const std::tuple<Src...>& src) {}
 };
 
 template <size_t A, size_t B, bool lt>
 struct SameCopyToTuple__
 {
 	template <typename... Dst, typename... Src>
-	static void same_copy_to_tuple(std::tuple<Dst...>& dst, Src&&... src)
+	static void same_copy_to_tuple(const std::tuple<Dst&...>& dst, Src&&... src)
 	{
 		SameCopyToTuple_<A, A>::same_copy_to_tuple(dst, std::forward<Src>(src)...);
 	}
@@ -393,17 +459,44 @@ template <size_t A, size_t B>
 struct SameCopyToTuple__<A, B, false>
 {
 	template <typename... Dst, typename... Src>
-	static void same_copy_to_tuple(std::tuple<Dst...>& dst, Src&&... src)
+	static void same_copy_to_tuple(const std::tuple<Dst&...>& dst, Src&&... src)
 	{
 		SameCopyToTuple_<B, B>::same_copy_to_tuple(dst, std::forward<Src>(src)...);
 	}
 };
 
+template <size_t A, size_t B, bool lt>
+struct SameCopyTupleToTuple__
+{
+	template <typename... Dst, typename... Src>
+	static void same_copy_tuple_to_tuple(const std::tuple<Dst&...>& dst, const std::tuple<Src...>& src)
+	{
+		SameCopyTupleToTuple_<A, A>::same_copy_tuple_to_tuple(dst, src);
+	}
+};
+
+template <size_t A, size_t B>
+struct SameCopyTupleToTuple__<A, B, false>
+{
+	template <typename... Dst, typename... Src>
+	static void same_copy_tuple_to_tuple(const std::tuple<Dst&...>& dst, const std::tuple<Src...>& src)
+	{
+		SameCopyTupleToTuple_<B, B>::same_copy_tuple_to_tuple(dst, src);
+	}
+};
+
 template <typename... Dst, typename... Src>
-void same_copy_to_tuple(std::tuple<Dst...>& dst, Src&&... src)
+void same_copy_to_tuple(const std::tuple<Dst&...>& dst, Src&&... src)
 {
 	bool const lt = sizeof...(Dst) < sizeof...(Src);
 	SameCopyToTuple__<sizeof...(Dst), sizeof...(Src), lt>::same_copy_to_tuple(dst, std::forward<Src>(src)...);
+}
+
+template <typename... Dst, typename... Src>
+void same_copy_tuple_to_tuple(const std::tuple<Dst&...>& dst, const std::tuple<Src...>& src)
+{
+	bool const lt = sizeof...(Dst) < sizeof...(Src);
+	SameCopyTupleToTuple__<sizeof...(Dst), sizeof...(Src), lt>::same_copy_tuple_to_tuple(dst, src);
 }
 
 #endif

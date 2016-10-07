@@ -1,6 +1,7 @@
 #include "async_timer.h"
 #include "scattered.h"
 #include "io_engine.h"
+#include "actor_timer.h"
 #ifndef DISABLE_BOOST_TIMER
 #ifdef DISABLE_HIGH_TIMER
 #include <boost/asio/deadline_timer.hpp>
@@ -18,7 +19,47 @@ typedef WaitableTimerEvent_ timer_type;
 typedef long long micseconds;
 #endif
 
-TimerBoost_::TimerBoost_(const shared_strand& strand)
+AsyncTimer_::AsyncTimer_(ActorTimer_* actorTimer)
+:_actorTimer(actorTimer), _handler(NULL) {}
+
+AsyncTimer_::~AsyncTimer_()
+{
+	assert(!_handler);
+}
+
+void AsyncTimer_::cancel()
+{
+	assert(self_strand()->running_in_this_thread());
+	if (_handler)
+	{
+		_handler->destroy();
+		_reuMem.deallocate(_handler);
+		_handler = NULL;
+		_actorTimer->cancel(_timerHandle);
+	}
+}
+
+shared_strand AsyncTimer_::self_strand()
+{
+	return _actorTimer->_weakStrand.lock();
+}
+
+async_timer AsyncTimer_::clone()
+{
+	return self_strand()->make_timer();
+}
+
+void AsyncTimer_::timeout_handler()
+{
+	_timerHandle.reset();
+	wrap_base* cb = _handler;
+	_handler = NULL;
+	cb->invoke();
+	_reuMem.deallocate(cb);
+}
+//////////////////////////////////////////////////////////////////////////
+
+overlap_timer::overlap_timer(const shared_strand& strand)
 :_weakStrand(strand->_weakThis), _looping(false), _timerCount(0),
 _extMaxTick(0), _extFinishTime(-1), _handlerQueue(MEM_POOL_LENGTH)
 {
@@ -29,13 +70,13 @@ _extMaxTick(0), _extFinishTime(-1), _handlerQueue(MEM_POOL_LENGTH)
 #endif
 }
 
-TimerBoost_::~TimerBoost_()
+overlap_timer::~overlap_timer()
 {
 	assert(_handlerQueue.empty());
 	delete (timer_type*)_timer;
 }
 
-TimerBoost_::timer_handle TimerBoost_::timeout(long long us, async_timer&& host, bool deadline)
+void overlap_timer::_timeout(long long us, timer_handle& timerHandle, wrap_base* handler, bool deadline)
 {
 	if (!_lockStrand)
 	{
@@ -45,18 +86,18 @@ TimerBoost_::timer_handle TimerBoost_::timeout(long long us, async_timer&& host,
 #endif
 	}
 	assert(_lockStrand->running_in_this_thread());
-	timer_handle timerHandle;
+	assert(timerHandle.is_null());
 	timerHandle._null = false;
 	timerHandle._beginStamp = get_tick_us();
 	long long et = deadline ? us : (timerHandle._beginStamp + us) & -256;
 	if (et >= _extMaxTick)
 	{
 		_extMaxTick = et;
-		timerHandle._queueNode = _handlerQueue.insert(_handlerQueue.end(), make_pair(et, std::move(host)));
+		timerHandle._queueNode = _handlerQueue.insert(_handlerQueue.end(), std::make_pair(et, std::move(handler)));
 	}
 	else
 	{
-		timerHandle._queueNode = _handlerQueue.insert(make_pair(et, std::move(host)));
+		timerHandle._queueNode = _handlerQueue.insert(std::make_pair(et, std::move(handler)));
 	}
 
 	if (!_looping)
@@ -74,16 +115,18 @@ TimerBoost_::timer_handle TimerBoost_::timeout(long long us, async_timer&& host,
 		_extFinishTime = et;
 		timer_loop(et, et - timerHandle._beginStamp);
 	}
-	return timerHandle;
 }
 
-void TimerBoost_::cancel(timer_handle& th)
+void overlap_timer::cancel(timer_handle& th)
 {
+	assert(_weakStrand.lock()->running_in_this_thread());
 	if (!th._null)
 	{//删除当前定时器节点
-		assert(_lockStrand && _lockStrand->running_in_this_thread());
+		assert(_lockStrand);
 		th._null = true;
 		handler_queue::iterator itNode = th._queueNode;
+		itNode->second->destroy();
+		_reuMem.deallocate(itNode->second);
 		if (_handlerQueue.size() == 1)
 		{
 			_extMaxTick = 0;
@@ -110,7 +153,7 @@ void TimerBoost_::cancel(timer_handle& th)
 	}
 }
 
-void TimerBoost_::timer_loop(long long abs, long long rel)
+void overlap_timer::timer_loop(long long abs, long long rel)
 {
 	int tc = ++_timerCount;
 #ifdef DISABLE_BOOST_TIMER
@@ -130,7 +173,7 @@ void TimerBoost_::timer_loop(long long abs, long long rel)
 }
 
 #ifdef DISABLE_BOOST_TIMER
-void TimerBoost_::post_event(int tc)
+void overlap_timer::post_event(int tc)
 {
 	assert(_lockStrand);
 #ifdef ENABLE_POST_FRONT
@@ -148,7 +191,7 @@ void TimerBoost_::post_event(int tc)
 }
 #endif
 
-void TimerBoost_::event_handler(int tc)
+void overlap_timer::event_handler(int tc)
 {
 	assert(_lockStrand->running_in_this_thread());
 	if (tc == _timerCount)
@@ -166,7 +209,8 @@ void TimerBoost_::event_handler(int tc)
 			}
 			else
 			{
-				iter->second->timeout_handler();
+				iter->second->invoke();
+				_reuMem.deallocate(iter->second);
 				_handlerQueue.erase(iter);
 			}
 		}
@@ -177,43 +221,4 @@ void TimerBoost_::event_handler(int tc)
 	{
 		_lockStrand.reset();
 	}
-}
-//////////////////////////////////////////////////////////////////////////
-
-AsyncTimer_::AsyncTimer_(TimerBoost_& timerBoost)
-:_timerBoost(timerBoost), _handler(NULL) {}
-
-AsyncTimer_::~AsyncTimer_()
-{
-	assert(!_handler);
-}
-
-void AsyncTimer_::cancel()
-{
-	if (_handler)
-	{
-		_handler->destroy();
-		_reuMem.deallocate(_handler);
-		_handler = NULL;
-		_timerBoost.cancel(_timerHandle);
-	}
-}
-
-shared_strand AsyncTimer_::self_strand()
-{
-	return _timerBoost._weakStrand.lock();
-}
-
-async_timer AsyncTimer_::clone()
-{
-	return self_strand()->make_timer();
-}
-
-void AsyncTimer_::timeout_handler()
-{
-	_timerHandle.reset();
-	wrap_base* cb = _handler;
-	_handler = NULL;
-	cb->invoke();
-	_reuMem.deallocate(cb);
 }

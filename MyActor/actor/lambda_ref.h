@@ -555,6 +555,42 @@ struct agent_result<void>
 	}
 };
 
+template <typename Handler>
+struct WrapBind_
+{
+	template <typename H>
+	WrapBind_(bool, H&& h)
+		:_handler(std::forward<H>(h)) {}
+
+	template <typename... Args>
+	void operator()(Args&&... args)
+	{
+		_handler(std::forward<Args>(args)...);
+	}
+
+	template <typename... Args>
+	void operator()(Args&&... args) const
+	{
+		_handler(std::forward<Args>(args)...);
+	}
+
+	Handler _handler;
+	RVALUE_COPY_CONSTRUCTION1(WrapBind_, _handler);
+};
+
+template <typename Handler>
+WrapBind_<Handler> wrap_bind_(Handler&& handler)
+{
+	static_assert(std::is_rvalue_reference<Handler&&>::value, "");
+	return WrapBind_<Handler>(bool(), std::forward<Handler>(handler));
+}
+
+template <typename... Args>
+auto wrap_bind(Args&&... args)->WrapBind_<decltype(std::bind(std::forward<Args>(args)...))>
+{
+	return wrap_bind_(std::bind(std::forward<Args>(args)...));
+}
+
 template <typename Handler, typename R>
 struct OnceHandler_
 {
