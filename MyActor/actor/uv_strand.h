@@ -14,9 +14,9 @@ typedef std::shared_ptr<uv_strand> shared_uv_strand;
 if (__uv_strand__ && !(__uv_strand__)->released() && !(__uv_strand__)->is_wait_close()) { \
 uv_strand* const ___uv_strand = (__uv_strand__).get(); {
 
-#define WAIT_CLOSE_UV() };___uv_strand->async_check_close([&]{
+#define WAIT_CLOSE_UV };___uv_strand->async_check_close([&]{
 
-#define END_CLOSE_UV() });}
+#define END_CLOSE_UV });}
 
 class uv_strand : public boost_strand
 {

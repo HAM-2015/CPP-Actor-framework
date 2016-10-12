@@ -17,6 +17,7 @@
 #include "trace.h"
 #include "lambda_ref.h"
 #include "trace_stack.h"
+#include "generator.h"
 
 class my_actor;
 typedef std::shared_ptr<my_actor> actor_handle;//Actor句柄
@@ -64,26 +65,6 @@ class CheckLost_;
 class CheckPumpLost_;
 class msg_handle_base;
 class MsgPoolBase_;
-
-struct shared_bool
-{
-	friend my_actor;
-	shared_bool();
-	shared_bool(const shared_bool& s);
-	shared_bool(shared_bool&& s);
-	explicit shared_bool(const std::shared_ptr<bool>& pb);
-	explicit shared_bool(std::shared_ptr<bool>&& pb);
-	void operator=(const shared_bool& s);
-	void operator=(shared_bool&& s);
-	void operator=(bool b);
-	operator bool() const;
-	bool empty() const;
-	void reset();
-	static shared_bool new_(bool b = false);
-private:
-	std::shared_ptr<bool> _ptr;
-	static shared_obj_pool<bool>* _sharedBoolPool;
-};
 
 struct ActorFunc_
 {
@@ -5218,6 +5199,27 @@ public:
 	__yield_interrupt void run_child_complete(const main_func& h, size_t stackSize = DEFAULT_STACKSIZE);
 
 	/*!
+	@brief 运行一个generator函数体，完成后返回
+	*/
+	template <typename Handler>
+	__yield_interrupt void run_generator(shared_strand actorStrand, Handler&& h)
+	{
+		assert_enter();
+		lock_quit();
+		trig([&](trig_once_notifer<>&& cb)
+		{
+			generator::create(std::move(actorStrand), wrap_ref_handler(h), std::move(cb))->run();
+		});
+		unlock_quit();
+	}
+
+	template <typename Handler>
+	__yield_interrupt void run_generator(Handler&& h)
+	{
+		run_generator(_strand, TRY_MOVE(h));
+	}
+
+	/*!
 	@brief 延时等待，Actor内部禁止使用操作系统API Sleep()
 	@param ms 等待毫秒数，等于0时暂时放弃Actor执行，直到下次被调度器触发
 	*/
@@ -5419,6 +5421,17 @@ public:
 	}
 
 	/*!
+	@brief 切换到一个大空间栈内运行一个任务，里面不能进行切换操作
+	*/
+	template <typename H>
+	void run_in_safe_stack(H&& h)
+	{
+		assert_enter();
+		auto wh = wrap_local_handler(h);
+		self_io_engine().switch_invoke(&wh);
+	}
+
+	/*!
 	@brief 强制将一个函数发送到一个shared_strand中执行（比如某个API会进行很多层次的堆栈调用，而当前Actor堆栈不够，可以用此切换到线程堆栈中直接执行），
 	配合quit_guard使用防止引用失效，完成后返回
 	*/
@@ -5533,14 +5546,10 @@ private:
 	}
 
 	template <typename H>
-	__yield_interrupt void run_in_thread_stack_after_quited(H&& h)
+	__yield_interrupt void run_in_safe_stack_after_quited(H&& h)
 	{
-		_strand->next_tick(std::bind([&h](actor_handle& shared_this)
-		{
-			CHECK_EXCEPTION(h);
-			shared_this->pull_yield_after_quited();
-		}, shared_from_this()));
-		push_yield_after_quited();
+		auto wh = wrap_local_handler(h);
+		self_io_engine().switch_invoke(&wh);
 	}
 public:
 	/*!

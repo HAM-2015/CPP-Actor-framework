@@ -12,6 +12,7 @@
 #include "strand_ex.h"
 #include "mem_pool.h"
 #include "run_thread.h"
+#include "lambda_ref.h"
 
 class my_actor;
 class boost_strand;
@@ -134,6 +135,11 @@ public:
 	@brief 调度器对象引用
 	*/
 	operator boost::asio::io_service& () const;
+
+	/*!
+	@brief 切换到一个安全栈内执行
+	*/
+	void switch_invoke(wrap_local_handler_face<void()>* handler);
 
 	/*!
 	@brief 在非ios线程中初始化一个tls空间

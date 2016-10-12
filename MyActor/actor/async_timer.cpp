@@ -87,7 +87,6 @@ void overlap_timer::_timeout(long long us, timer_handle& timerHandle, wrap_base*
 	}
 	assert(_lockStrand->running_in_this_thread());
 	assert(timerHandle.is_null());
-	timerHandle._null = false;
 	timerHandle._beginStamp = get_tick_us();
 	long long et = deadline ? us : (timerHandle._beginStamp + us) & -256;
 	if (et >= _extMaxTick)
@@ -120,10 +119,10 @@ void overlap_timer::_timeout(long long us, timer_handle& timerHandle, wrap_base*
 void overlap_timer::cancel(timer_handle& th)
 {
 	assert(_weakStrand.lock()->running_in_this_thread());
-	if (!th._null)
+	if (!th.is_null())
 	{//删除当前定时器节点
 		assert(_lockStrand);
-		th._null = true;
+		th.reset();
 		handler_queue::iterator itNode = th._queueNode;
 		itNode->second->destroy();
 		_reuMem.deallocate(itNode->second);
@@ -197,10 +196,10 @@ void overlap_timer::event_handler(int tc)
 	if (tc == _timerCount)
 	{
 		_extFinishTime = 0;
-		long long ct = get_tick_us();
 		while (!_handlerQueue.empty())
 		{
 			handler_queue::iterator iter = _handlerQueue.begin();
+			long long ct = get_tick_us();
 			if (iter->first > ct + 500)
 			{
 				_extFinishTime = iter->first;

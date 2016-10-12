@@ -37,18 +37,16 @@ class ActorTimer_
 	public:
 		bool is_null() const
 		{
-			return _null;
+			return 0 == _beginStamp;
 		}
 
 		void reset()
 		{
-			_null = true;
 			_beginStamp = 0;
 		}
 		long long _beginStamp = 0;
 	private:
 		handler_queue::iterator _queueNode;
-		bool _null = true;
 	};
 private:
 	ActorTimer_(const shared_strand& strand);

@@ -18,29 +18,33 @@
 #define	QT_UI_ACTOR_STACK_SIZE	(128 kB - STACK_RESERVED_SPACE_SIZE)
 
 //开始在Actor中，嵌入一段在qt-ui线程中执行的连续逻辑
-#define begin_RUN_IN_QT_UI_AT(__this_ui__, __host__) do {(__this_ui__)->send(__host__, [&]() {
-#define begin_RUN_IN_QT_UI() begin_RUN_IN_QT_UI_AT(this, self)
+#define BEGIN_RUN_IN_QT_UI_AT(__this_ui__, __host__) do {(__this_ui__)->send(__host__, [&]() {
+#define BEGIN_RUN_IN_QT_UI BEGIN_RUN_IN_QT_UI_AT(this, self)
+#define CO_BEGIN_RUN_IN_QT_UI_AT(__this_ui__) do {(__this_ui__)->co_send(co_self, [&]() {
+#define CO_BEGIN_RUN_IN_QT_UI CO_BEGIN_RUN_IN_QT_UI_AT(this)
 //结束在qt-ui线程中执行的一段连续逻辑，只有当这段逻辑执行完毕后才会执行END后续代码
-#define end_RUN_IN_QT_UI() });} while (false)
+#define END_RUN_IN_QT_UI });} while (false)
+#define CO_END_RUN_IN_QT_UI });} while (false)
 //////////////////////////////////////////////////////////////////////////
 //在Actor中，嵌入一段在qt-ui线程中执行的语句
-#define RUN_IN_QT_UI_AT(__this_ui__, __host__, ...)  do {(__this_ui__)->send(__host__, [&]{ option_pck(__VA_ARGS__) });} while (false)
+#define run_in_qt_ui_at(__this_ui__, __host__, ...)  do {(__this_ui__)->send(__host__, [&]{ option_pck(__VA_ARGS__) });} while (false)
+#define co_run_in_qt_ui_at(__this_ui__, ...)  do {(__this_ui__)->co_send(co_self, [&]{ option_pck(__VA_ARGS__) });} while (false)
 
 //在Actor中，嵌入一段在qt-ui线程中执行的语句
-#define RUN_IN_QT_UI(...) RUN_IN_QT_UI_AT(this, self, __VA_ARGS__)
+#define run_in_qt_ui(...) run_in_qt_ui_at(this, self, __VA_ARGS__)
+#define co_run_in_qt_ui(...) co_run_in_qt_ui_at(this, __VA_ARGS__)
 //////////////////////////////////////////////////////////////////////////
-//在Actor中，嵌入一段在qt-ui线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用begin_RUN_IN_QT_UI_AT）
-#define begin_ACTOR_RUN_IN_QT_UI_AT(__this_ui__, __host__, __ios__) do {\
+//在Actor中，嵌入一段在qt-ui线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用BEGIN_RUN_IN_QT_UI_AT）
+#define BEGIN_ACTOR_RUN_IN_QT_UI_AT(__this_ui__, __host__, __ios__) do {\
 	auto ___host = __host__; \
 	my_actor::quit_guard ___qg(__host__); \
 	auto ___tactor = (__this_ui__)->create_ui_actor(__ios__, [&](my_actor* __host__) {
 
-//在Actor中，嵌入一段在qt-ui线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用begin_RUN_IN_QT_UI）
-#define begin_ACTOR_RUN_IN_QT_UI(__ios__) begin_ACTOR_RUN_IN_QT_UI_AT(this, self, __ios__)
+//在Actor中，嵌入一段在qt-ui线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用BEGIN_RUN_IN_QT_UI）
+#define BEGIN_ACTOR_RUN_IN_QT_UI(__ios__) BEGIN_ACTOR_RUN_IN_QT_UI_AT(this, self, __ios__)
 
 //结束在qt-ui线程中执行的Actor，只有当Actor内逻辑执行完毕后才会执行END后续代码
-#define end_ACTOR_RUN_IN_QT_UI()\
-	}); \
+#define END_ACTOR_RUN_IN_QT_UI }); \
 	___tactor->run(); \
 	___host->actor_wait_quit(___tactor); \
 } while (false)
@@ -52,17 +56,41 @@
 #define __CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __delete__) do {\
 	my_actor::quit_guard qg(__host__);\
 	assert(!(__this_ui__)->run_in_ui_thread());\
-	begin_RUN_IN_QT_UI_AT(__this_ui__, __host__);\
+	BEGIN_RUN_IN_QT_UI_AT(__this_ui__, __host__);\
 	if (!(__frame__)->is_wait_close())\
 		(__frame__)->close();\
-	end_RUN_IN_QT_UI();\
+	END_RUN_IN_QT_UI;\
 	bool __inside_loop = true;\
 	do{\
-		begin_RUN_IN_QT_UI_AT(__this_ui__, __host__);\
+		BEGIN_RUN_IN_QT_UI_AT(__this_ui__, __host__);\
 		__inside_loop = (__frame__)->is_wait_close();\
 		if (!__inside_loop) { __delete__(__frame__); }\
-		end_RUN_IN_QT_UI();\
+		END_RUN_IN_QT_UI;\
 	} while (__inside_loop);\
+} while (false)
+
+#define __CO_CLOSE_QT_UI_AT(__this_ui__, __frame__, __delete__) do {\
+	co_lock_stop;\
+	assert(!(__this_ui__)->run_in_ui_thread());\
+	co_call_([&](co_generator){\
+		co_begin_context;\
+		bool __inside_loop;\
+		co_end_context(_ctx);\
+		co_begin;\
+		CO_BEGIN_RUN_IN_QT_UI_AT(__this_ui__);\
+		if (!(__frame__)->is_wait_close())\
+			(__frame__)->close();\
+		CO_END_RUN_IN_QT_UI;\
+		_ctx.__inside_loop = true;\
+		do{\
+			CO_BEGIN_RUN_IN_QT_UI_AT(__this_ui__);\
+			_ctx.__inside_loop = (__frame__)->is_wait_close();\
+			if (!_ctx.__inside_loop) { __delete__(__frame__); }\
+			CO_END_RUN_IN_QT_UI;\
+		} while (_ctx.__inside_loop);\
+		co_end;\
+	});\
+	co_unlock_stop;\
 } while (false)
 
 //在非UI线程Actor中，关闭一个qt-ui对象
@@ -72,6 +100,13 @@
 #define close_qt_ui_delete(__frame__) close_qt_ui_delete_at(this, self, __frame__)
 #define close_qt_ui_destroy_at(__this_ui__, __host__, __frame__) __CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __DESTROY_FRAME)
 #define close_qt_ui_destroy(__frame__) close_qt_ui_destroy_at(this, self, __frame__)
+
+#define co_close_qt_ui_at(__this_ui__, __frame__) __CO_CLOSE_QT_UI_AT(__this_ui__, __frame__, __NO_DELETE_FRAME)
+#define co_close_qt_ui(__frame__) co_close_qt_ui_at(this, __frame__)
+#define co_close_qt_ui_delete_at(__this_ui__, __frame__) __CO_CLOSE_QT_UI_AT(__this_ui__, __frame__, __DELETE_FRAME)
+#define co_close_qt_ui_delete(__frame__) co_close_qt_ui_delete_at(this, __frame__)
+#define co_close_qt_ui_destroy_at(__this_ui__, __frame__) __CO_CLOSE_QT_UI_AT(__this_ui__, __frame__, __DESTROY_FRAME)
+#define co_close_qt_ui_destroy(__frame__) co_close_qt_ui_destroy_at(this, __frame__)
 
 #ifdef ENABLE_QT_ACTOR
 #define __IN_CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __delete__) do {\
@@ -85,6 +120,17 @@
 	__delete__(__frame__);\
 } while (false)
 
+#define __CO_IN_CLOSE_QT_UI_AT(__this_ui__, __frame__, __delete__) do {\
+	co_lock_stop;\
+	assert((__this_ui__)->run_in_ui_thread());\
+	assert(!(__frame__)->running_in_this_thread());\
+	if (!(__frame__)->is_wait_close())\
+		(__frame__)->close();\
+	while ((__frame__)->is_wait_close())\
+		co_tick;\
+	co_unlock_stop;\
+} while (false)
+
 //在UI线程Actor中，关闭一个qt-ui对象
 #define in_close_qt_ui_at(__this_ui__, __host__, __frame__) __IN_CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __NO_DELETE_FRAME)
 #define in_close_qt_ui(__frame__) in_close_qt_ui_at(this, self, __frame__)
@@ -92,6 +138,13 @@
 #define in_close_qt_ui_delete(__frame__) in_close_qt_ui_delete_at(this, self, __frame__)
 #define in_close_qt_ui_destroy_at(__this_ui__, __host__, __frame__) __IN_CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __DESTROY_FRAME)
 #define in_close_qt_ui_destroy(__frame__) in_close_qt_ui_destroy_at(this, self, __frame__)
+
+#define co_in_close_qt_ui_at(__this_ui__, __frame__) __CO_IN_CLOSE_QT_UI_AT(__this_ui__, __frame__, __NO_DELETE_FRAME)
+#define co_in_close_qt_ui(__frame__) co_in_close_qt_ui_at(this, __frame__)
+#define co_in_close_qt_ui_delete_at(__this_ui__, __frame__) __CO_IN_CLOSE_QT_UI_AT(__this_ui__, __frame__, __DELETE_FRAME)
+#define co_in_close_qt_ui_delete(__frame__) co_in_close_qt_ui_delete_at(this, __frame__)
+#define co_in_close_qt_ui_destroy_at(__this_ui__, __frame__) __CO_IN_CLOSE_QT_UI_AT(__this_ui__, __frame__, __DESTROY_FRAME)
+#define co_in_close_qt_ui_destroy(__frame__) co_in_close_qt_ui_destroy_at(this, __frame__)
 #endif
 
 //////////////////////////////////////////////////////////////////////////

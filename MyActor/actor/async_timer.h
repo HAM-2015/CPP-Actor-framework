@@ -149,6 +149,14 @@ public:
 	{
 		friend overlap_timer;
 	public:
+		timer_handle()
+			:_beginStamp(0) {}
+
+		~timer_handle()
+		{
+			assert(0 == _beginStamp);
+		}
+
 		long long stamp()
 		{
 			return _beginStamp;
@@ -156,18 +164,17 @@ public:
 	private:
 		bool is_null() const
 		{
-			return _null;
+			return 0 == _beginStamp;
 		}
 
 		void reset()
 		{
-			_null = true;
 			_beginStamp = 0;
 		}
 	private:
-		long long _beginStamp = 0;
+		long long _beginStamp;
 		handler_queue::iterator _queueNode;
-		bool _null = true;
+		NONE_COPY(timer_handle);
 	};
 private:
 	overlap_timer(const shared_strand& strand);

@@ -569,7 +569,7 @@ struct v8_local_to_std<std::map<std::string, T>>
 
 #define node_class_method(__method_name__) NODE_SET_PROTOTYPE_METHOD(___funcTemp, #__method_name__, __method_name__);
 
-#define END_NODE_CLASS_INIT() ___exports->Set(v8::String::NewFromUtf8(isolate, ___className), ___funcTemp->GetFunction());}
+#define END_NODE_CLASS_INIT ___exports->Set(v8::String::NewFromUtf8(isolate, ___className), ___funcTemp->GetFunction());}
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -580,7 +580,7 @@ struct v8_local_to_std<std::map<std::string, T>>
 	v8::HandleScope ___scope(isolate); \
 	auto ___funcHandler = [&]()->__class_name__*{
 
-#define END_NODE_CLASS_NEW() }; \
+#define END_NODE_CLASS_NEW }; \
 	auto* const ___obj = ___funcHandler(); \
 	assert(___obj); \
 	___obj->Wrap(args.This()); \
@@ -616,7 +616,7 @@ struct CheckClassFuncResult<void>
 	v8::HandleScope ___scope(isolate); \
 	auto ___funcHandler = [&]{
 
-#define END_NODE_CLASS_METHOD() };\
+#define END_NODE_CLASS_METHOD };\
 	CheckClassFuncResult<decltype(___funcHandler())>::invoke(args, ___funcHandler);}
 
 //////////////////////////////////////////////////////////////////////////
@@ -738,7 +738,7 @@ static v8::Local<v8::Function> make_js_call_cpp_once(v8::Isolate* isolate, CastH
 /*!
 @brief nodejs初始化的时候注册，让cpp可以以全局方式调用js
 */
-#define NODE_SET_GLOBAL()\
+#define NODE_SET_GLOBAL \
 	NODE_SET_METHOD(exports, "set_global", [](const v8::FunctionCallbackInfo<v8::Value>& args){\
 	js_global::_global = v8::Persistent<v8::Function, v8::CopyablePersistentTraits<v8::Function>>(args.GetIsolate(), v8::Local<v8::Function>::Cast(args[0])); });
 

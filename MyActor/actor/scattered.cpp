@@ -11,21 +11,9 @@
 
 #ifdef WIN32
 #ifdef _MSC_VER
-#pragma comment( lib, "Winmm.lib" )
+#pragma comment(lib, "Winmm.lib")
 #endif
-typedef LONG(__stdcall * NT_SET_TIMER_RESOLUTION)
-(
-IN ULONG DesiredTime,
-IN BOOLEAN SetResolution,
-OUT PULONG ActualTime
-);
 
-typedef LONG(__stdcall * NT_QUERY_TIMER_RESOLUTION)
-(
-OUT PULONG MaximumTime,
-OUT PULONG MinimumTime,
-OUT PULONG CurrentTime
-);
 struct pc_cycle
 {
 	pc_cycle()
@@ -292,20 +280,22 @@ void print_time_s(std::wostream& out)
 
 void enable_high_resolution()
 {
+	typedef LONG(__stdcall * nt_set_timer_resolution)(IN ULONG DesiredTime, IN BOOLEAN SetResolution, OUT PULONG ActualTime);
+	typedef LONG(__stdcall * nt_query_timer_resolution)(OUT PULONG MaximumTime, OUT PULONG MinimumTime, OUT PULONG CurrentTime);
 	HMODULE hNtDll = LoadLibrary(TEXT("NtDll.dll"));
 	if (hNtDll)
 	{
-		NT_QUERY_TIMER_RESOLUTION _NtQueryTimerResolution = (NT_QUERY_TIMER_RESOLUTION)GetProcAddress(hNtDll, "NtQueryTimerResolution");
-		NT_SET_TIMER_RESOLUTION _NtSetTimerResolution = (NT_SET_TIMER_RESOLUTION)GetProcAddress(hNtDll, "NtSetTimerResolution");
-		if (_NtQueryTimerResolution && _NtSetTimerResolution)
+		nt_query_timer_resolution NtQueryTimerResolution = (nt_query_timer_resolution)GetProcAddress(hNtDll, "NtQueryTimerResolution");
+		nt_set_timer_resolution NtSetTimerResolution = (nt_set_timer_resolution)GetProcAddress(hNtDll, "NtSetTimerResolution");
+		if (NtQueryTimerResolution && NtSetTimerResolution)
 		{
 			ULONG MaximumTime = 0;
 			ULONG MinimumTime = 0;
 			ULONG CurrentTime = 0;
-			if (!_NtQueryTimerResolution(&MaximumTime, &MinimumTime, &CurrentTime))
+			if (!NtQueryTimerResolution(&MaximumTime, &MinimumTime, &CurrentTime))
 			{
 				ULONG ActualTime = 0;
-				if (!_NtSetTimerResolution(MinimumTime, TRUE, &ActualTime))
+				if (!NtSetTimerResolution(MinimumTime, TRUE, &ActualTime))
 				{
 					FreeLibrary(hNtDll);
 					return;

@@ -1,8 +1,9 @@
 #ifndef __GENERATOR_H
 #define __GENERATOR_H
 
-#include "my_actor.h"
 #include "msg_queue.h"
+#include "actor_timer.h"
+#include "async_timer.h"
 
 //在generator函数体内，获取当前generator对象
 #define co_self __co_self
@@ -550,6 +551,7 @@ struct co_context_base
 #endif
 };
 
+class my_actor;
 class generator;
 typedef std::shared_ptr<generator> generator_handle;
 

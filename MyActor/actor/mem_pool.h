@@ -1757,4 +1757,24 @@ private:
 	mem_alloc_base* _refCountAlloc;
 };
 
+class my_actor;
+struct shared_bool
+{
+	friend my_actor;
+	shared_bool();
+	shared_bool(const shared_bool& s);
+	shared_bool(shared_bool&& s);
+	explicit shared_bool(const std::shared_ptr<bool>& pb);
+	explicit shared_bool(std::shared_ptr<bool>&& pb);
+	void operator=(const shared_bool& s);
+	void operator=(shared_bool&& s);
+	void operator=(bool b);
+	operator bool() const;
+	bool empty() const;
+	void reset();
+	static shared_bool new_(bool b = false);
+private:
+	std::shared_ptr<bool> _ptr;
+	static shared_obj_pool<bool>* _sharedBoolPool;
+};
 #endif

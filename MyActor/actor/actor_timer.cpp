@@ -47,7 +47,6 @@ ActorTimer_::timer_handle ActorTimer_::timeout(long long us, actor_face_handle&&
 	}
 	assert(_lockStrand->running_in_this_thread());
 	timer_handle timerHandle;
-	timerHandle._null = false;
 	timerHandle._beginStamp = get_tick_us();
 	long long et = deadline ? us : (timerHandle._beginStamp + us) & -256;
 	if (et >= _extMaxTick)
@@ -81,10 +80,10 @@ ActorTimer_::timer_handle ActorTimer_::timeout(long long us, actor_face_handle&&
 void ActorTimer_::cancel(timer_handle& th)
 {
 	assert(_weakStrand.lock()->running_in_this_thread());
-	if (!th._null)
+	if (!th.is_null())
 	{//删除当前定时器节点
 		assert(_lockStrand);
-		th._null = true;
+		th.reset();
 		handler_queue::iterator itNode = th._queueNode;
 		if (_handlerQueue.size() == 1)
 		{
@@ -156,10 +155,10 @@ void ActorTimer_::event_handler(int tc)
 	if (tc == _timerCount)
 	{
 		_extFinishTime = 0;
-		long long ct = get_tick_us();
 		while (!_handlerQueue.empty())
 		{
 			handler_queue::iterator iter = _handlerQueue.begin();
+			long long ct = get_tick_us();
 			if (iter->first > ct + 500)
 			{
 				_extFinishTime = iter->first;

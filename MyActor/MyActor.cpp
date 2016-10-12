@@ -1015,7 +1015,7 @@ void co_mutex_test()
 	io_engine ios;
 	ios.run();
 	co_mutex mutex(boost_strand::create(ios));
-	co_go(boost_strand::create(ios))[&](co_generator)
+	co_go(ios)[&](co_generator)
 	{
 		co_begin_context;
 		int i;
@@ -1036,7 +1036,7 @@ void co_mutex_test()
 		}
 		co_end;
 	};
-	co_go(boost_strand::create(ios))[&](co_generator)
+	co_go(ios)[&](co_generator)
 	{
 		co_begin_context;
 		int i;
@@ -1070,40 +1070,37 @@ void co_select_msg_test()
 	co_msg_buffer<move_test> msgBuff(boost_strand::create(ios));
 	co_channel<move_test> msgChan(boost_strand::create(ios), 1);
 	co_nil_channel<void> doneMsg(boost_strand::create(ios));
-	co_go(boost_strand::create(ios))[&](co_generator)
+	co_go(ios)[&](co_generator)
 	{
 		co_begin_context;
-		int id;
 		move_test mt;
 		co_select_msg;
-		co_context_fork:id(host.id+1), co_select_msg_fork{}
-		co_end_context_init(ctx, (co_self), id(0), co_select_init);
+		co_end_context_init(ctx, (co_self), co_select_init);
 
 		co_begin;
-		co_fork;
 		co_begin_select0;
 		co_select_case_to(msgBuff) >> ctx.mt;
 		if (co_select_state_is_ok)
 		{
-			info_trace_line(ctx.id, " buff_1: ", ctx.mt);
+			info_trace_line("buff_1: ", ctx.mt);
 			co_sleep(10);
 		}
 		co_select_case_to(msgChan) >> ctx.mt;
 		if (co_select_state_is_ok)
 		{
-			info_trace_line(ctx.id, " chan_2: ", ctx.mt);
+			info_trace_line("chan_2: ", ctx.mt);
 			co_sleep(10);
 		}
 		co_select_case_void(doneMsg);
 		{
 			assert(co_select_state_is_ok);
-			info_trace_line(ctx.id, " select msg done");
+			info_trace_line("select msg done");
 			co_select_done0;
 		}
 		co_end_select;
 		co_end;
 	};
-	co_go(boost_strand::create(ios))[&](co_generator)
+	co_go(ios)[&](co_generator)
 	{
 		co_begin_context;
 		int i;
@@ -1120,7 +1117,6 @@ void co_select_msg_test()
 			co_sleep(100);
 		}
 		co_chan_io(doneMsg) << void_type();
-		co_chan_io(doneMsg) << void_type();
 		co_chan_close(msgBuff);
 		co_chan_close(msgChan);
 		co_chan_close(doneMsg);
@@ -1136,7 +1132,7 @@ void co_msg_test()
 	io_engine ios;
 	ios.run();
 	co_msg_buffer<int, move_test> msgBuff(boost_strand::create(ios));
-	co_go(boost_strand::create(ios))[&](co_generator)
+	co_go(ios)[&](co_generator)
 	{
 		co_begin_context;
 		int i;
@@ -1151,7 +1147,7 @@ void co_msg_test()
 		}
 		co_end;
 	};
-	co_go(boost_strand::create(ios))[&](co_generator)
+	co_go(ios)[&](co_generator)
 	{
 		co_begin_context;
 		int i;
@@ -1179,7 +1175,7 @@ void co_channel_test()
 	io_engine ios;
 	ios.run();
 	co_channel<int> channel(boost_strand::create(ios), 3);
-	co_go(boost_strand::create(ios))[&](co_generator)
+	co_go(ios)[&](co_generator)
 	{
 		co_begin_context;
 		int i;
@@ -1194,7 +1190,7 @@ void co_channel_test()
 		}
 		co_end;
 	};
-	co_go(boost_strand::create(ios))[&](co_generator)
+	co_go(ios)[&](co_generator)
 	{
 		co_begin_context;
 		int i;
@@ -1215,48 +1211,6 @@ void co_channel_test()
 	trace_line("end co_channel_test");
 }
 
-void co_test()
-{
-	trace_line("begin co_test");
-	io_engine ios;
-	ios.run();
-	{
-		co_go(boost_strand::create(ios)) std::bind([](co_generator, int& p)
-		{
-			static auto asleep = [](co_generator, async_timer& timer)
-			{
-				co_no_context;
-
-				co_begin;
-				co_sleep_(timer, 500);
-				co_end;
-			};
-			co_begin_context;
-			int i;
-			int j;
-			async_timer timer;
-			co_context_fork :i(host.i), j(host.j), timer(host.timer->clone()) {}
-			co_end_context_init(ctx, (co_self), i(0), j(0), timer(co_strand->make_timer()));
-
-			co_begin;
-			for (ctx.i = 0; ctx.i < 3; ++ctx.i)
-			{
-				info_trace_space("co_test", ctx.i, p++);
-				co_call(asleep, __1, std::ref(ctx.timer));
-				for (ctx.j = 0; ctx.j < 10; ++ctx.j)
-				{
-					co_await ctx.timer->timeout(50, co_async);
-				}
-				co_tick;
-				co_fork;
-			}
-			co_end;
-		}, __1, 0);
-	}
-	ios.stop();
-	trace_line("end co_test");
-}
-
 void go_test()
 {
 	io_engine ios;
@@ -1272,7 +1226,20 @@ void go_test()
 		self->sleep(500);
 		trace_line("go...");
 	};
-
+	co_go(ios) [](co_generator)
+	{
+		co_no_context;		
+		co_begin;
+		co_sleep(250);
+		trace_line("co go");
+		co_sleep(500);
+		trace_line("co go.");
+		co_sleep(500);
+		trace_line("co go..");
+		co_sleep(500);
+		trace_line("co go...");
+		co_end;
+	};
 	ios.stop();
 }
 
@@ -1281,8 +1248,6 @@ int main(int argc, char *argv[])
 	init_my_actor();
 	enable_high_resolution();
 	go_test();
-	trace("\n");
-	co_test();
 	trace("\n");
 	co_channel_test();
 	trace("\n");

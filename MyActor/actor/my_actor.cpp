@@ -1513,7 +1513,7 @@ public:
 			actor_handler(actorPush);
 			if (_actor._checkStack)
 			{//从实际栈底查看有多少个PAGE的PAGE_GUARD标记消失和用了多少栈预留空间
-				_actor.run_in_thread_stack_after_quited([this]
+				_actor.run_in_safe_stack_after_quited([this]
 				{
 					check_stack();
 					exit_notify();
@@ -1541,7 +1541,7 @@ public:
 			actor_handler(actorPush);
 			if (_actor._checkStack)
 			{//从实际栈底查看有多少个PAGE的PAGE_GUARD标记消失和用了多少栈预留空间
-				_actor.run_in_thread_stack_after_quited([this]
+				_actor.run_in_safe_stack_after_quited([this]
 				{
 					check_stack();
 					exit_notify();
@@ -1621,41 +1621,28 @@ public:
 // 				}
 			}
 		}
-		struct local_ref 
-		{
-			size_t ts;
-			void* sb;
-			void* fault_address;
-		} ref = { ts, sb, fault_address };
 		TraceMutex_ mt;
-		ContextPool_::coro_pull_interface* pull = ContextPool_::getContext(DEFAULT_STACKSIZE);
-		pull->_param = &ref;
 		if (STATUS_STACK_OVERFLOW == ecd)
 		{
-			pull->_currentHandler = [](ContextPool_::coro_push_interface& push, void* p)
+			_actor.run_in_safe_stack([&]()
 			{
-				local_ref* ref = (local_ref*)p;
 				std::cout << "actor stack overflow";
-				std::cout << ", stack base 0x" << (void*)ref->sb;
-				std::cout << ", stack length " << ref->ts;
-				std::cout << ", access address 0x" << ref->fault_address;
+				std::cout << ", stack base 0x" << (void*)sb;
+				std::cout << ", stack length " << ts;
+				std::cout << ", access address 0x" << fault_address;
 				std::cout << std::endl;
-			};
+			});
 		}
 		else
 		{
-			pull->_currentHandler = [](ContextPool_::coro_push_interface& push, void* p)
+			_actor.run_in_safe_stack([&]()
 			{
-				local_ref* ref = (local_ref*)p;
-				std::cout << "actor segmentation fault address 0x" << ref->fault_address << std::endl;
-			};
+				std::cout << "actor segmentation fault address 0x" << fault_address << std::endl;
+			});
 		}
-		pull->yield();
 #ifdef ENABLE_DUMP_STACK
-		pull->_param = eInfo;
-		pull->_currentHandler = [](ContextPool_::coro_push_interface& push, void* p)
+		_actor.run_in_safe_stack([&]()
 		{
-			_EXCEPTION_POINTERS* eInfo = (_EXCEPTION_POINTERS*)p;
 #ifdef _WIN64
 			std::list<stack_line_info> stackList = get_stack_list((void*)eInfo->ContextRecord->Rbp, (void*)eInfo->ContextRecord->Rsp, (void*)eInfo->ContextRecord->Rip, 32, 0, true, true);
 #else
@@ -1666,10 +1653,8 @@ public:
 				std::wcout << ele << std::endl;
 			}
 			std::wcout << "exit" << std::endl << std::flush;
-		};
-		pull->yield();
+		});
 #endif
-		ContextPool_::recovery(pull);
 		exit(102);
 		return EXCEPTION_CONTINUE_EXECUTION;
 	}
@@ -1712,7 +1697,7 @@ public:
 		actor_handler(actorPush);
 		if (_actor._checkStack)
 		{
-			_actor.run_in_thread_stack_after_quited([this]
+			_actor.run_in_safe_stack_after_quited([this]
 			{
 				check_stack();
 				exit_notify();
@@ -2495,7 +2480,8 @@ void my_actor::assert_enter()
 	assert(!_quited);
 	assert(_inActor);
 	context_yield::context_info* const info = _actorPull->_coroInfo;
-	assert((size_t)get_sp() >= (size_t)info->stackTop - info->stackSize - info->reserveSize + 1024);
+	void* const sp = get_sp();
+	assert((size_t)info->stackTop - info->stackSize - info->reserveSize + 1024 <= (size_t)sp && (size_t)sp < (size_t)info->stackTop);
 	check_self();
 #endif
 }

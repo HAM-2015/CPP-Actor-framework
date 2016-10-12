@@ -4,6 +4,7 @@
 #include "try_move.h"
 #include "lambda_ref.h"
 #include "generator.h"
+#include "my_actor.h"
 
 struct channel_io_exception
 {
