@@ -173,6 +173,14 @@ struct __co_context_no_capture{};
 	(__timer__)->timeout(__tm__, [&]__handler__); _co_await; (__timer__)->cancel();\
 	}while (0)
 
+#define _co_timed_await2(__timer__, __tm__) do{\
+	if(-1==__ctx->__coNext) co_stop;\
+	assert(__ctx->__inside);\
+	(__timer__)->timeout(__tm__, std::bind([&](generator_handle& gen, shared_bool& sign){\
+	co_shared_async_next(gen, sign);}, co_self.shared_this(), co_self.shared_async_sign()));\
+	_co_await; (__timer__)->cancel();\
+	}while (0)
+
 //generator await原语，与co_async之类使用
 #define co_await \
 	if(-1==__ctx->__coNext) co_stop;\
@@ -186,6 +194,13 @@ struct __co_context_no_capture{};
 	assert(__ctx->__inside);\
 	for (__yieldSwitch = false;;__yieldSwitch = true)\
 	if (__yieldSwitch) {_co_timed_await(__timer__, __tm__, __handler__); break;}\
+	else
+
+#define co_timed_await2(__timer__, __tm__) \
+	if(-1==__ctx->__coNext) co_stop;\
+	assert(__ctx->__inside);\
+	for (__yieldSwitch = false;;__yieldSwitch = true)\
+	if (__yieldSwitch) {_co_timed_await2(__timer__, __tm__); break;}\
 	else
 
 #define co_next_(__host__) do{\
@@ -1403,11 +1418,6 @@ public:
 	template <typename Notify>
 	void append_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
-		assert(ntfSign._ntfSign);
-		assert(0 == ntfSign._key || -1 == ntfSign._key);
-		DEBUG_OPERATION(ntfSign._key = 0);
-		ntfSign._ntfSign = false;
-		ntfSign._effect = true;
 		if (_strand->running_in_this_thread())
 		{
 			_append_pop_notify(std::forward<Notify>(ntf), ntfSign);
@@ -1424,8 +1434,6 @@ public:
 	template <typename Notify>
 	void remove_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
-		assert(0 == ntfSign._key || -1 == ntfSign._key);
-		DEBUG_OPERATION(ntfSign._key = 0);
 		if (_strand->running_in_this_thread())
 		{
 			_remove_pop_notify(std::forward<Notify>(ntf), ntfSign);
@@ -1435,6 +1443,39 @@ public:
 			_strand->post(std::bind([this, &ntfSign](Notify& ntf)
 			{
 				_remove_pop_notify(std::forward<Notify>(ntf), ntfSign);
+			}, std::forward<Notify>(ntf)));
+		}
+	}
+
+
+	template <typename Notify>
+	void append_push_notify(Notify&& ntf, co_notify_sign& ntfSign)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_append_push_notify(std::forward<Notify>(ntf), ntfSign);
+		}
+		else
+		{
+			_strand->post(std::bind([this, &ntfSign](Notify& ntf)
+			{
+				_append_push_notify(std::forward<Notify>(ntf), ntfSign);
+			}, std::forward<Notify>(ntf)));
+		}
+	}
+
+	template <typename Notify>
+	void remove_push_notify(Notify&& ntf, co_notify_sign& ntfSign)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_remove_push_notify(std::forward<Notify>(ntf), ntfSign);
+		}
+		else
+		{
+			_strand->post(std::bind([this, &ntfSign](Notify& ntf)
+			{
+				_remove_push_notify(std::forward<Notify>(ntf), ntfSign);
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -1617,6 +1658,11 @@ private:
 	void _append_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
 		assert(_strand->running_in_this_thread());
+		assert(ntfSign._ntfSign);
+		assert(0 == ntfSign._key || -1 == ntfSign._key);
+		DEBUG_OPERATION(ntfSign._key = 0);
+		ntfSign._ntfSign = false;
+		ntfSign._effect = true;
 		if (_closed)
 		{
 			ntfSign._ntfSign = true;
@@ -1653,6 +1699,8 @@ private:
 	void _remove_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
 		assert(_strand->running_in_this_thread());
+		assert(0 == ntfSign._key || -1 == ntfSign._key);
+		DEBUG_OPERATION(ntfSign._key = 0);
 		if (_closed)
 		{
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
@@ -1678,6 +1726,59 @@ private:
 				_waitQueue.pop_front();
 				wtNtf->invoke(_alloc);
 			}
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
+		}
+	}
+
+	template <typename Notify>
+	void _append_push_notify(Notify&& ntf, co_notify_sign& ntfSign)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(ntfSign._ntfSign);
+		assert(1 == ntfSign._key || -1 == ntfSign._key);
+		DEBUG_OPERATION(ntfSign._key = 1);
+		ntfSign._ntfSign = false;
+		ntfSign._effect = true;
+		if (_closed)
+		{
+			ntfSign._ntfSign = true;
+			ntfSign._effect = false;
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
+			return;
+		}
+		if (ntfSign._disableAppend)
+		{
+			ntfSign._ntfSign = true;
+			ntfSign._effect = false;
+			CHECK_EXCEPTION(ntf, co_async_fail);
+			return;
+		}
+		ntfSign._ntfSign = true;
+		ntfSign._effect = false;
+		CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
+	}
+
+	template <typename Notify>
+	void _remove_push_notify(Notify&& ntf, co_notify_sign& ntfSign)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(1 == ntfSign._key || -1 == ntfSign._key);
+		DEBUG_OPERATION(ntfSign._key = 1);
+		if (_closed)
+		{
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
+			return;
+		}
+		bool effect = ntfSign._effect;
+		ntfSign._effect = false;
+		DEBUG_OPERATION(ntfSign._key = -1);
+		if (!ntfSign._ntfSign)
+		{
+			ntfSign._ntfSign = true;
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
+		}
+		else
+		{
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
 		}
 	}
@@ -1726,7 +1827,7 @@ public:
 		:co_msg_buffer<void_type>(strand) {}
 public:
 	void post() { push(any_handler()); }
-	template <typename Notify> void push(Notify&& ntf){ co_msg_buffer<void_type>::push(std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void push(Notify&& ntf, void_type p = void_type()){ co_msg_buffer<void_type>::push(std::forward<Notify>(ntf), void_type()); }
 };
 
 template <>
@@ -1859,11 +1960,6 @@ public:
 	template <typename Notify>
 	void append_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
-		assert(ntfSign._ntfSign);
-		assert(1 == ntfSign._key || -1 == ntfSign._key);
-		DEBUG_OPERATION(ntfSign._key = 1);
-		ntfSign._ntfSign = false;
-		ntfSign._effect = true;
 		if (_strand->running_in_this_thread())
 		{
 			_append_pop_notify(std::forward<Notify>(ntf), ntfSign);
@@ -1880,8 +1976,6 @@ public:
 	template <typename Notify>
 	void remove_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
-		assert(1 == ntfSign._key || -1 == ntfSign._key);
-		DEBUG_OPERATION(ntfSign._key = 1);
 		if (_strand->running_in_this_thread())
 		{
 			_remove_pop_notify(std::forward<Notify>(ntf), ntfSign);
@@ -1898,11 +1992,6 @@ public:
 	template <typename Notify>
 	void append_push_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
-		assert(ntfSign._ntfSign);
-		assert(2 == ntfSign._key || -1 == ntfSign._key);
-		DEBUG_OPERATION(ntfSign._key = 2);
-		ntfSign._ntfSign = false;
-		ntfSign._effect = true;
 		if (_strand->running_in_this_thread())
 		{
 			_append_push_notify(std::forward<Notify>(ntf), ntfSign);
@@ -1919,8 +2008,6 @@ public:
 	template <typename Notify>
 	void remove_push_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
-		assert(2 == ntfSign._key || -1 == ntfSign._key);
-		DEBUG_OPERATION(ntfSign._key = 2);
 		if (_strand->running_in_this_thread())
 		{
 			_remove_push_notify(std::forward<Notify>(ntf), ntfSign);
@@ -2267,6 +2354,11 @@ private:
 	void _append_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
 		assert(_strand->running_in_this_thread());
+		assert(ntfSign._ntfSign);
+		assert(2 == ntfSign._key || -1 == ntfSign._key);
+		DEBUG_OPERATION(ntfSign._key = 2);
+		ntfSign._ntfSign = false;
+		ntfSign._effect = true;
 		if (_closed)
 		{
 			ntfSign._ntfSign = true;
@@ -2303,6 +2395,8 @@ private:
 	void _remove_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
 		assert(_strand->running_in_this_thread());
+		assert(2 == ntfSign._key || -1 == ntfSign._key);
+		DEBUG_OPERATION(ntfSign._key = 2);
 		if (_closed)
 		{
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
@@ -2336,6 +2430,11 @@ private:
 	void _append_push_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
 		assert(_strand->running_in_this_thread());
+		assert(ntfSign._ntfSign);
+		assert(3 == ntfSign._key || -1 == ntfSign._key);
+		DEBUG_OPERATION(ntfSign._key = 3);
+		ntfSign._ntfSign = false;
+		ntfSign._effect = true;
 		if (_closed)
 		{
 			ntfSign._ntfSign = true;
@@ -2372,6 +2471,8 @@ private:
 	void _remove_push_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
 		assert(_strand->running_in_this_thread());
+		assert(3 == ntfSign._key || -1 == ntfSign._key);
+		DEBUG_OPERATION(ntfSign._key = 3);
 		if (_closed)
 		{
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
@@ -2473,9 +2574,9 @@ public:
 		:co_channel<void_type>(strand, buffLength) {}
 public:
 	void post() { push(any_handler()); }
-	template <typename Notify> void push(Notify&& ntf){ co_channel<void_type>::push(std::forward<Notify>(ntf), void_type()); }
-	template <typename Notify> void try_push(Notify&& ntf){ co_channel<void_type>::try_push(std::forward<Notify>(ntf), void_type()); }
-	template <typename Notify> void timed_push(int tm, Notify&& ntf){ co_channel<void_type>::timed_push(tm, std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void push(Notify&& ntf, void_type p = void_type()){ co_channel<void_type>::push(std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void try_push(Notify&& ntf, void_type p = void_type()){ co_channel<void_type>::try_push(std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void timed_push(int tm, Notify&& ntf, void_type p = void_type()){ co_channel<void_type>::timed_push(tm, std::forward<Notify>(ntf), void_type()); }
 };
 
 template <>
@@ -2608,11 +2709,6 @@ public:
 	template <typename Notify>
 	void append_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
-		assert(ntfSign._ntfSign);
-		assert(3 == ntfSign._key || -1 == ntfSign._key);
-		DEBUG_OPERATION(ntfSign._key = 3);
-		ntfSign._ntfSign = false;
-		ntfSign._effect = true;
 		if (_strand->running_in_this_thread())
 		{
 			_append_pop_notify(std::forward<Notify>(ntf), ntfSign);
@@ -2629,8 +2725,6 @@ public:
 	template <typename Notify>
 	void remove_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
-		assert(3 == ntfSign._key || -1 == ntfSign._key);
-		DEBUG_OPERATION(ntfSign._key = 3);
 		if (_strand->running_in_this_thread())
 		{
 			_remove_pop_notify(std::forward<Notify>(ntf), ntfSign);
@@ -2647,11 +2741,6 @@ public:
 	template <typename Notify>
 	void append_push_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
-		assert(ntfSign._ntfSign);
-		assert(4 == ntfSign._key || -1 == ntfSign._key);
-		DEBUG_OPERATION(ntfSign._key = 4);
-		ntfSign._ntfSign = false;
-		ntfSign._effect = true;
 		if (_strand->running_in_this_thread())
 		{
 			_append_push_notify(std::forward<Notify>(ntf), ntfSign);
@@ -2668,8 +2757,6 @@ public:
 	template <typename Notify>
 	void remove_push_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
-		assert(4 == ntfSign._key || -1 == ntfSign._key);
-		DEBUG_OPERATION(ntfSign._key = 4);
 		if (_strand->running_in_this_thread())
 		{
 			_remove_push_notify(std::forward<Notify>(ntf), ntfSign);
@@ -3040,6 +3127,11 @@ private:
 	void _append_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
 		assert(_strand->running_in_this_thread());
+		assert(ntfSign._ntfSign);
+		assert(4 == ntfSign._key || -1 == ntfSign._key);
+		DEBUG_OPERATION(ntfSign._key = 4);
+		ntfSign._ntfSign = false;
+		ntfSign._effect = true;
 		if (_closed)
 		{
 			ntfSign._ntfSign = true;
@@ -3077,6 +3169,8 @@ private:
 	void _remove_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
 		assert(_strand->running_in_this_thread());
+		assert(4 == ntfSign._key || -1 == ntfSign._key);
+		DEBUG_OPERATION(ntfSign._key = 4);
 		if (_closed)
 		{
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
@@ -3110,6 +3204,11 @@ private:
 	void _append_push_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
 		assert(_strand->running_in_this_thread());
+		assert(ntfSign._ntfSign);
+		assert(5 == ntfSign._key || -1 == ntfSign._key);
+		DEBUG_OPERATION(ntfSign._key = 5);
+		ntfSign._ntfSign = false;
+		ntfSign._effect = true;
 		if (_closed)
 		{
 			ntfSign._ntfSign = true;
@@ -3146,6 +3245,8 @@ private:
 	void _remove_push_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
 		assert(_strand->running_in_this_thread());
+		assert(5 == ntfSign._key || -1 == ntfSign._key);
+		DEBUG_OPERATION(ntfSign._key = 5);
 		if (_closed)
 		{
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
@@ -3247,9 +3348,9 @@ public:
 		:co_nil_channel<void_type>(strand) {}
 public:
 	void post() { push(any_handler()); }
-	template <typename Notify> void push(Notify&& ntf){ co_nil_channel<void_type>::push(std::forward<Notify>(ntf), void_type()); }
-	template <typename Notify> void try_push(Notify&& ntf){ co_nil_channel<void_type>::try_push(std::forward<Notify>(ntf), void_type()); }
-	template <typename Notify> void timed_push(int tm, Notify&& ntf){ co_nil_channel<void_type>::timed_push(tm, std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void push(Notify&& ntf, void_type p = void_type()){ co_nil_channel<void_type>::push(std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void try_push(Notify&& ntf, void_type p = void_type()){ co_nil_channel<void_type>::try_push(std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void timed_push(int tm, Notify&& ntf, void_type p = void_type()){ co_nil_channel<void_type>::timed_push(tm, std::forward<Notify>(ntf), void_type()); }
 };
 
 template <>
@@ -3496,11 +3597,6 @@ public:
 	template <typename Notify>
 	void append_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
-		assert(ntfSign._ntfSign);
-		assert(4 == ntfSign._key || -1 == ntfSign._key);
-		DEBUG_OPERATION(ntfSign._key = 4);
-		ntfSign._ntfSign = false;
-		ntfSign._effect = true;
 		if (_strand->running_in_this_thread())
 		{
 			_append_pop_notify(std::forward<Notify>(ntf), ntfSign);
@@ -3517,8 +3613,6 @@ public:
 	template <typename Notify>
 	void remove_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
-		assert(4 == ntfSign._key || -1 == ntfSign._key);
-		DEBUG_OPERATION(ntfSign._key = 4);
 		if (_strand->running_in_this_thread())
 		{
 			_remove_pop_notify(std::forward<Notify>(ntf), ntfSign);
@@ -3817,6 +3911,11 @@ private:
 	void _append_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
 		assert(_strand->running_in_this_thread());
+		assert(ntfSign._ntfSign);
+		assert(6 == ntfSign._key || -1 == ntfSign._key);
+		DEBUG_OPERATION(ntfSign._key = 6);
+		ntfSign._ntfSign = false;
+		ntfSign._effect = true;
 		if (_closed)
 		{
 			ntfSign._ntfSign = true;
@@ -3853,6 +3952,8 @@ private:
 	void _remove_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
 		assert(_strand->running_in_this_thread());
+		assert(6 == ntfSign._key || -1 == ntfSign._key);
+		DEBUG_OPERATION(ntfSign._key = 6);
 		if (_closed)
 		{
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);

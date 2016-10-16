@@ -579,13 +579,7 @@ void co_socket_test()
 			while (true)
 			{
 				ctx.overtime = false;
-				ctx.timer->timeout(1500, [&]()
-				{
-					ctx.overtime = true;
-					ctx.socket.close(ctx.ec);
-				});
-				co_await ctx.socket.async_read_some(boost::asio::buffer(ctx.buf, sizeof(ctx.buf)), co_async_result(ctx.ec, ctx.s));
-				ctx.timer->cancel();
+				co_timed_await(ctx.timer, 1500, { ctx.overtime = true; ctx.socket.close(ctx.ec); }) ctx.socket.async_read_some(boost::asio::buffer(ctx.buf, sizeof(ctx.buf)), co_async_result(ctx.ec, ctx.s));
 				if (ctx.overtime)
 				{
 					trace_comma("co_socket", "receive overtime");

@@ -348,4 +348,80 @@ public:
 		return parent::timed_send(tm, host, temp, std::forward<Args>(msg)...);
 	}
 };
+
+/*!
+@brief channelÁ¬½ÓÆ÷
+*/
+template <typename Chan1, typename Chan2>
+class chan_connector
+{
+	struct connector_handler
+	{
+		template <typename... Args>
+		void operator()(co_async_state st, Args&&... args)
+		{
+			assert(co_async_state::co_async_ok == st);
+			if (!_connector._connSign2._disableAppend)
+			{
+				_connector._chan2.append_push_notify(wrap_bind([](co_async_state st, chan_connector<Chan1, Chan2>& _connector, Args&... args)
+				{
+					if (co_async_state::co_async_ok == st)
+					{
+						_connector._chan2.push(wrap_bind([](co_async_state st, chan_connector<Chan1, Chan2>& _connector)
+						{
+							assert(co_async_state::co_async_ok == st);
+							if (!_connector._connSign1._disableAppend)
+							{
+								_connector.connector();
+							}
+						}, __1, std::ref(_connector)), std::forward<Args>(args)...);
+					}
+				}, __1, std::ref(_connector), std::forward<Args>(args)...), _connector._connSign2);
+			}
+		}
+
+		void operator()(co_async_state){}
+		chan_connector<Chan1, Chan2>& _connector;
+	};
+
+	friend connector_handler;
+public:
+	chan_connector(Chan1& chan1, Chan2& chan2)
+		:_chan1(chan1), _chan2(chan2)
+	{
+		connector();
+	}
+public:
+	template <typename Notify>
+	void disconnect(Notify&& ntf)
+	{
+		_chan1.remove_pop_notify(_chan2.self_strand()->wrap(std::bind([this](co_async_state, Notify& ntf)
+		{
+			_connSign1._disableAppend = true;
+			_chan2.remove_push_notify(_chan1.self_strand()->wrap(std::bind([this](co_async_state, Notify& ntf)
+			{
+				_connSign2._disableAppend = true;
+				CHECK_EXCEPTION(ntf);
+			}, __1, std::forward<Notify>(ntf))), _connSign2);
+		}, __1, std::forward<Notify>(ntf))), _connSign1);
+	}
+private:
+	void connector()
+	{
+		_chan1.append_pop_notify([&](co_async_state st)
+		{
+			if (co_async_state::co_async_ok == st)
+			{
+				_chan1.pop(connector_handler{*this});
+			}
+		}, _connSign1);
+	}
+private:
+	Chan1& _chan1;
+	Chan2& _chan2;
+	co_notify_sign _connSign1;
+	co_notify_sign _connSign2;
+	NONE_COPY(chan_connector);
+};
+
 #endif
