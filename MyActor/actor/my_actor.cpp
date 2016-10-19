@@ -2255,10 +2255,20 @@ void my_actor::run_child_complete(const main_func& h, size_t stackSize)
 
 void my_actor::sleep(int ms)
 {
+	usleep((long long)ms * 1000);
+}
+
+void my_actor::sleep_guard(int ms)
+{
+	usleep_guard((long long)ms * 1000);
+}
+
+void my_actor::usleep(long long us)
+{
 	assert_enter();
 	assert(_timerStateCompleted);
 	assert(!_timerStateCb);
-	if (ms < 0)
+	if (us < 0)
 	{
 		actor_handle lockActor = shared_from_this();
 		push_yield();
@@ -2266,17 +2276,35 @@ void my_actor::sleep(int ms)
 	else
 	{
 		_timerStateCompleted = false;
-		_timerStateTime = (long long)ms * 1000;
+		_timerStateTime = us;
 		_timerStateHandle = _timer->timeout(_timerStateTime, shared_from_this());
 		push_yield();
 	}
 }
 
-void my_actor::sleep_guard(int ms)
+void my_actor::usleep_guard(long long us)
 {
 	assert_enter();
 	lock_quit();
-	sleep(ms);
+	usleep(us);
+	unlock_quit();
+}
+
+void my_actor::dead_sleep(long long us)
+{
+	assert_enter();
+	deadline(us, [this]()
+	{
+		pull_yield();
+	});
+	push_yield();
+}
+
+void my_actor::dead_sleep_guard(long long us)
+{
+	assert_enter();
+	lock_quit();
+	dead_sleep(us);
 	unlock_quit();
 }
 

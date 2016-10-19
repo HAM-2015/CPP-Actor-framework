@@ -1038,18 +1038,19 @@ public:
 	template <typename Handler, typename... Args>
 	void co_async_wait(co_generator, Handler&& resultHandler, Args&&... args) const
 	{
+		typedef RM_CREF(Handler) Handler_;
 		typedef std::tuple<RM_CREF(Args)...> tuple_type;
-		_uvStrand->try_tick(std::bind([this](generator_handle& host, Handler& resultHandler, tuple_type& tupleArgs)
+		_uvStrand->try_tick(std::bind([this](generator_handle& host, Handler_& resultHandler, tuple_type& tupleArgs)
 		{
 			v8::Isolate* isolate = v8::Isolate::GetCurrent();
 			v8::HandleScope scope(isolate);
 			v8::Local<v8::Value> params[sizeof...(Args)+1];
 			args_to_v8_local<sizeof...(Args)>::make(isolate, params, tupleArgs);
-			params[sizeof...(Args)] = make_js_call_cpp_once(isolate, std::bind([&](generator_handle& host, Handler& resultHandler, const v8::FunctionCallbackInfo<v8::Value>& args)
+			params[sizeof...(Args)] = make_js_call_cpp_once(isolate, std::bind([&](generator_handle& host, Handler_& resultHandler, const v8::FunctionCallbackInfo<v8::Value>& args)
 			{
 				resultHandler(args);
 				host->_revert_this(host)->_co_async_next();
-			}, std::move(host), std::forward<Handler>(resultHandler), __1));
+			}, std::move(host), std::move(resultHandler), __1));
 			v8::Local<v8::Value> recv = v8::Local<v8::Value>::New(isolate, _recv);
 			v8::Local<v8::Function>::New(isolate, _callback)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), sizeof...(Args)+1, params);
 		}, std::move(co_self.async_this()), std::forward<Handler>(resultHandler), tuple_type(std::forward<Args>(args)...)));
@@ -1058,7 +1059,8 @@ public:
 	template <typename ResultHandler, typename CastHandler>
 	void co_async_wait_cast(co_generator, ResultHandler&& resultHandler, CastHandler&& castHandler) const
 	{
-		_uvStrand->try_tick(std::bind([this](generator_handle& host, ResultHandler& resultHandler, CastHandler& castHandler)
+		typedef RM_CREF(ResultHandler) ResultHandler_;
+		_uvStrand->try_tick(std::bind([this](generator_handle& host, ResultHandler_& resultHandler, CastHandler& castHandler)
 		{
 			v8::Isolate* isolate = v8::Isolate::GetCurrent();
 			v8::HandleScope scope(isolate);
@@ -1069,11 +1071,11 @@ public:
 			{
 				paramNum++;
 			}
-			params[paramNum] = make_js_call_cpp_once(isolate, std::bind([&](generator_handle& host, ResultHandler& resultHandler, const v8::FunctionCallbackInfo<v8::Value>& args)
+			params[paramNum] = make_js_call_cpp_once(isolate, std::bind([&](generator_handle& host, ResultHandler_& resultHandler, const v8::FunctionCallbackInfo<v8::Value>& args)
 			{
 				resultHandler(args);
 				host->_revert_this(host)->_co_async_next();
-			}, std::move(host), std::forward<ResultHandler>(resultHandler), __1));
+			}, std::move(host), std::move(resultHandler), __1));
 			v8::Local<v8::Value> recv = v8::Local<v8::Value>::New(isolate, _recv);
 			v8::Local<v8::Function>::New(isolate, _callback)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), paramNum + 1, params);
 		}, std::move(co_self.async_this()), std::forward<ResultHandler>(resultHandler), std::forward<CastHandler>(castHandler)));
@@ -1082,14 +1084,15 @@ public:
 	template <typename R = void, typename ResultHandler, typename... Args>
 	void co_async_wait_result(ResultHandler&& resultHandler, Args&&... args) const
 	{
+		typedef RM_CREF(ResultHandler) ResultHandler_;
 		typedef std::tuple<RM_CREF(Args)...> tuple_type;
-		_uvStrand->try_tick(std::bind([this](ResultHandler& resultHandler, tuple_type& tupleArgs)
+		_uvStrand->try_tick(std::bind([this](ResultHandler_& resultHandler, tuple_type& tupleArgs)
 		{
 			v8::Isolate* isolate = v8::Isolate::GetCurrent();
 			v8::HandleScope scope(isolate);
 			v8::Local<v8::Value> params[sizeof...(Args)+1];
 			args_to_v8_local<sizeof...(Args)>::make(isolate, params, tupleArgs);
-			params[sizeof...(Args)] = make_js_call_cpp_once(isolate, std::bind([&](ResultHandler& resultHandler, const v8::FunctionCallbackInfo<v8::Value>& args)
+			params[sizeof...(Args)] = make_js_call_cpp_once(isolate, std::bind([&](ResultHandler_& resultHandler, const v8::FunctionCallbackInfo<v8::Value>& args)
 			{
 				assert(args.Length());
 				v8::Local<v8::Value> res = args[0];
@@ -1101,7 +1104,7 @@ public:
 				{
 					resultHandler(co_async_state::co_async_undefined);
 				}
-			}, std::forward<ResultHandler>(resultHandler), __1));
+			}, std::move(resultHandler), __1));
 			v8::Local<v8::Value> recv = v8::Local<v8::Value>::New(isolate, _recv);
 			v8::Local<v8::Function>::New(isolate, _callback)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), sizeof...(Args)+1, params);
 		}, std::forward<ResultHandler>(resultHandler), tuple_type(std::forward<Args>(args)...)));
@@ -1110,7 +1113,8 @@ public:
 	template <typename R = void, typename ResultHandler, typename CastHandler>
 	void co_async_wait_result_cast(ResultHandler&& resultHandler, CastHandler&& castHandler) const
 	{
-		_uvStrand->try_tick(std::bind([this](ResultHandler& resultHandler, CastHandler& castHandler)
+		typedef RM_CREF(ResultHandler) ResultHandler_;
+		_uvStrand->try_tick(std::bind([this](ResultHandler_& resultHandler, CastHandler& castHandler)
 		{
 			v8::Isolate* isolate = v8::Isolate::GetCurrent();
 			v8::HandleScope scope(isolate);
@@ -1121,7 +1125,7 @@ public:
 			{
 				paramNum++;
 			}
-			params[paramNum] = make_js_call_cpp_once(isolate, std::bind([&](ResultHandler& resultHandler, const v8::FunctionCallbackInfo<v8::Value>& args)
+			params[paramNum] = make_js_call_cpp_once(isolate, std::bind([&](ResultHandler_& resultHandler, const v8::FunctionCallbackInfo<v8::Value>& args)
 			{
 				assert(args.Length());
 				v8::Local<v8::Value> res = args[0];
@@ -1133,7 +1137,7 @@ public:
 				{
 					resultHandler(co_async_state::co_async_undefined);
 				}
-			}, std::forward<ResultHandler>(resultHandler), __1));
+			}, std::move(resultHandler), __1));
 			v8::Local<v8::Value> recv = v8::Local<v8::Value>::New(isolate, _recv);
 			v8::Local<v8::Function>::New(isolate, _callback)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), paramNum + 1, params);
 		}, std::forward<ResultHandler>(resultHandler), std::forward<CastHandler>(castHandler)));

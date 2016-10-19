@@ -436,6 +436,13 @@ struct SameCopyTupleToTuple_
 		std::get<N - I>(dst) = (typename std::tuple_element<N - I, std::tuple<Src...>>::type)std::get<N - I>(src);
 		SameCopyTupleToTuple_<N, I - 1>::same_copy_tuple_to_tuple(dst, src);
 	}
+
+	template <typename... Dst, typename... Src>
+	static void same_copy_tuple_to_tuple(const std::tuple<Dst&...>& dst, std::tuple<Src...>&& src)
+	{
+		std::get<N - I>(dst) = (typename std::tuple_element<N - I, std::tuple<Src...>>::type&&)std::get<N - I>(src);
+		SameCopyTupleToTuple_<N, I - 1>::same_copy_tuple_to_tuple(dst, std::move(src));
+	}
 };
 
 template <size_t N>
@@ -473,6 +480,12 @@ struct SameCopyTupleToTuple__
 	{
 		SameCopyTupleToTuple_<A, A>::same_copy_tuple_to_tuple(dst, src);
 	}
+
+	template <typename... Dst, typename... Src>
+	static void same_copy_tuple_to_tuple(const std::tuple<Dst&...>& dst, std::tuple<Src...>&& src)
+	{
+		SameCopyTupleToTuple_<A, A>::same_copy_tuple_to_tuple(dst, std::move(src));
+	}
 };
 
 template <size_t A, size_t B>
@@ -482,6 +495,12 @@ struct SameCopyTupleToTuple__<A, B, false>
 	static void same_copy_tuple_to_tuple(const std::tuple<Dst&...>& dst, const std::tuple<Src...>& src)
 	{
 		SameCopyTupleToTuple_<B, B>::same_copy_tuple_to_tuple(dst, src);
+	}
+
+	template <typename... Dst, typename... Src>
+	static void same_copy_tuple_to_tuple(const std::tuple<Dst&...>& dst, std::tuple<Src...>&& src)
+	{
+		SameCopyTupleToTuple_<B, B>::same_copy_tuple_to_tuple(dst, std::move(src));
 	}
 };
 
@@ -497,6 +516,13 @@ void same_copy_tuple_to_tuple(const std::tuple<Dst&...>& dst, const std::tuple<S
 {
 	bool const lt = sizeof...(Dst) < sizeof...(Src);
 	SameCopyTupleToTuple__<sizeof...(Dst), sizeof...(Src), lt>::same_copy_tuple_to_tuple(dst, src);
+}
+
+template <typename... Dst, typename... Src>
+void same_copy_tuple_to_tuple(const std::tuple<Dst&...>& dst, std::tuple<Src...>&& src)
+{
+	bool const lt = sizeof...(Dst) < sizeof...(Src);
+	SameCopyTupleToTuple__<sizeof...(Dst), sizeof...(Src), lt>::same_copy_tuple_to_tuple(dst, std::move(src));
 }
 
 #endif

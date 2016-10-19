@@ -277,10 +277,22 @@ bool generator::_done()
 
 void generator::_co_sleep(int ms)
 {
-	assert(ms > 0);
+	_co_usleep((long long)ms * 1000);
+}
+
+void generator::_co_usleep(long long us)
+{
+	assert(us > 0);
 	assert(_strand->running_in_this_thread());
 	assert(_timerHandle.is_null());
-	_timerHandle = _timer->timeout((long long)ms * 1000, _weakThis.lock());
+	_timerHandle = _timer->timeout(us, _weakThis.lock());
+}
+
+void generator::_co_dead_sleep(long long us)
+{
+	assert(_strand->running_in_this_thread());
+	assert(_timerHandle.is_null());
+	_timerHandle = _timer->timeout(us, _weakThis.lock(), true);
 }
 
 void generator::timeout_handler()

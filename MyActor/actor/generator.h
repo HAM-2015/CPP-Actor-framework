@@ -250,8 +250,10 @@ struct __co_context_no_capture{};
 	(__timer__)->timeout(__ms__, std::bind([](generator_handle& host){\
 	if(!host->_ctx)return; host->_revert_this(host)->_next(); }, std::move(co_self.shared_this()))); _co_yield; }while (0)
 
-//sleep，毫秒
+//延时
 #define co_sleep(__ms__) do{co_self._co_sleep(__ms__); _co_yield;}while (0)
+#define co_usleep(__us__) do{co_self._co_usleep(__us__); _co_yield;}while (0)
+#define co_dead_sleep(__us__) do{co_self._co_dead_sleep(__us__); _co_yield;}while (0)
 
 //开始运行一个generator
 #define co_go(...) CoGo_(__VA_ARGS__)-
@@ -637,6 +639,8 @@ public:
 	co_context_base* _ctx;
 
 	void _co_sleep(int ms);
+	void _co_usleep(long long us);
+	void _co_dead_sleep(long long us);
 private:
 	void timeout_handler();
 private:
@@ -784,7 +788,7 @@ struct CoAsyncSameSafeResult_
 			{
 				if (!_gen->_done())
 				{
-					same_copy_tuple_to_tuple(_result, args);
+					same_copy_tuple_to_tuple(_result, std::move(args));
 					_gen->_revert_this(_gen)->_co_async_next2();
 				}
 			}, std::move(_gen), _result, tuple_type(std::forward<Args>(args)...)));
@@ -905,7 +909,7 @@ struct CoShardAsyncSameSafeResult_
 			{
 				if (!_gen->_done() && !_sign)
 				{
-					same_copy_tuple_to_tuple(_result, args);
+					same_copy_tuple_to_tuple(_result, std::move(args));
 					_gen->_co_async_next2();
 				}
 			}, std::move(_gen), std::move(_sign), _result, tuple_type(std::forward<Args>(args)...)));
@@ -1028,7 +1032,7 @@ struct CoAnextSameSafeResult_
 			{
 				if (!_gen->_done())
 				{
-					same_copy_tuple_to_tuple(_result, args);
+					same_copy_tuple_to_tuple(_result, std::move(args));
 					_gen->_revert_this(_gen)->_next();
 				}
 			}, std::move(_gen), _result, tuple_type(std::forward<Args>(args)...)));
@@ -1360,9 +1364,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this](msg_type& msg, Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this](msg_type& msg, Notify_& ntf)
 			{
-				_push(std::move(msg), std::forward<Notify>(ntf));
+				_push(std::move(msg), std::move(ntf));
 			}, msg_type(std::forward<Args>(msg)...), std::forward<Notify>(ntf)));
 		}
 	}
@@ -1376,9 +1381,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this](Notify_& ntf)
 			{
-				_pop(std::forward<Notify>(ntf));
+				_pop(std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -1392,9 +1398,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this](Notify_& ntf)
 			{
-				_try_pop(std::forward<Notify>(ntf));
+				_try_pop(std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -1408,9 +1415,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, tm](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, tm](Notify_& ntf)
 			{
-				_timed_pop(std::forward<Notify>(ntf), tm);
+				_timed_pop(std::move(ntf), tm);
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -1424,9 +1432,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, &ntfSign](Notify_& ntf)
 			{
-				_append_pop_notify(std::forward<Notify>(ntf), ntfSign);
+				_append_pop_notify(std::move(ntf), ntfSign);
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -1440,9 +1449,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, &ntfSign](Notify_& ntf)
 			{
-				_remove_pop_notify(std::forward<Notify>(ntf), ntfSign);
+				_remove_pop_notify(std::move(ntf), ntfSign);
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -1457,9 +1467,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, &ntfSign](Notify_& ntf)
 			{
-				_append_push_notify(std::forward<Notify>(ntf), ntfSign);
+				_append_push_notify(std::move(ntf), ntfSign);
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -1473,9 +1484,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, &ntfSign](Notify_& ntf)
 			{
-				_remove_push_notify(std::forward<Notify>(ntf), ntfSign);
+				_remove_push_notify(std::move(ntf), ntfSign);
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -1572,12 +1584,13 @@ private:
 		}
 		else
 		{
-			_waitQueue.push_back(wrap_notify(std::bind([this](Notify& ntf, co_async_state state)
+			typedef RM_CREF(Notify) Notify_;
+			_waitQueue.push_back(wrap_notify(std::bind([this](Notify_& ntf, co_async_state state)
 			{
 				if (co_async_state::co_async_ok == state)
 				{
 					assert(!_msgBuff.empty());
-					_pop(std::forward<Notify>(ntf));
+					_pop(std::move(ntf));
 				}
 				else
 				{
@@ -1625,8 +1638,9 @@ private:
 		}
 		else if (tm > 0)
 		{
+			typedef RM_CREF(Notify) Notify_;
 			overlap_timer::timer_handle* timer = new(_alloc.allocate(sizeof(overlap_timer::timer_handle)))overlap_timer::timer_handle;
-			_waitQueue.push_back(wrap_notify(std::bind([this, timer](Notify& ntf, co_async_state state)
+			_waitQueue.push_back(wrap_notify(std::bind([this, timer](Notify_& ntf, co_async_state state)
 			{
 				_strand->over_timer()->cancel(*timer);
 				timer->~timer_handle();
@@ -1634,7 +1648,7 @@ private:
 				if (co_async_state::co_async_ok == state)
 				{
 					assert(!_msgBuff.empty());
-					_pop(std::forward<Notify>(ntf));
+					_pop(std::move(ntf));
 				}
 				else
 				{
@@ -1870,9 +1884,10 @@ public:
 		} 
 		else
 		{
-			_strand->post(std::bind([this](msg_type& msg, Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this](msg_type& msg, Notify_& ntf)
 			{
-				_push(std::move(msg), std::forward<Notify>(ntf));
+				_push(std::move(msg), std::move(ntf));
 			}, msg_type(std::forward<Args>(msg)...), std::forward<Notify>(ntf)));
 		}
 	}
@@ -1886,9 +1901,10 @@ public:
 		} 
 		else
 		{
-			_strand->post(std::bind([this](msg_type& msg, Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this](msg_type& msg, Notify_& ntf)
 			{
-				_try_push(std::move(msg), std::forward<Notify>(ntf));
+				_try_push(std::move(msg), std::move(ntf));
 			}, msg_type(std::forward<Args>(msg)...), std::forward<Notify>(ntf)));
 		}
 	}
@@ -1902,9 +1918,10 @@ public:
 		} 
 		else
 		{
-			_strand->post(std::bind([this, tm](msg_type& msg, Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, tm](msg_type& msg, Notify_& ntf)
 			{
-				_timed_push(std::move(msg), std::forward<Notify>(ntf), tm);
+				_timed_push(std::move(msg), std::move(ntf), tm);
 			}, msg_type(std::forward<Args>(msg)...), std::forward<Notify>(ntf)));
 		}
 	}
@@ -1918,9 +1935,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this](Notify_& ntf)
 			{
-				_pop(std::forward<Notify>(ntf));
+				_pop(std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -1934,9 +1952,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this](Notify_& ntf)
 			{
-				_try_pop(std::forward<Notify>(ntf));
+				_try_pop(std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -1950,9 +1969,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, tm](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, tm](Notify_& ntf)
 			{
-				_timed_pop(std::forward<Notify>(ntf), tm);
+				_timed_pop(std::move(ntf), tm);
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -1966,9 +1986,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, &ntfSign](Notify_& ntf)
 			{
-				_append_pop_notify(std::forward<Notify>(ntf), ntfSign);
+				_append_pop_notify(std::move(ntf), ntfSign);
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -1982,9 +2003,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, &ntfSign](Notify_& ntf)
 			{
-				_remove_pop_notify(std::forward<Notify>(ntf), ntfSign);
+				_remove_pop_notify(std::move(ntf), ntfSign);
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -1998,9 +2020,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, &ntfSign](Notify_& ntf)
 			{
-				_append_push_notify(std::forward<Notify>(ntf), ntfSign);
+				_append_push_notify(std::move(ntf), ntfSign);
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -2014,9 +2037,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, &ntfSign](Notify_& ntf)
 			{
-				_remove_push_notify(std::forward<Notify>(ntf), ntfSign);
+				_remove_push_notify(std::move(ntf), ntfSign);
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -2124,12 +2148,13 @@ private:
 		}
 		if (_buffer.full())
 		{
-			_pushWait.push_back(wrap_notify(std::bind([this](msg_type& msg, Notify& ntf, co_async_state state)
+			typedef RM_CREF(Notify) Notify_;
+			_pushWait.push_back(wrap_notify(std::bind([this](msg_type& msg, Notify_& ntf, co_async_state state)
 			{
 				if (co_async_state::co_async_ok == state)
 				{
 					assert(!_buffer.full());
-					_push(std::move(msg), std::forward<Notify>(ntf));
+					_push(std::move(msg), std::move(ntf));
 				}
 				else
 				{
@@ -2191,8 +2216,9 @@ private:
 		{
 			if (tm > 0)
 			{
+				typedef RM_CREF(Notify) Notify_;
 				overlap_timer::timer_handle* timer = new(_alloc.allocate(sizeof(overlap_timer::timer_handle)))overlap_timer::timer_handle;
-				_pushWait.push_back(wrap_notify(std::bind([this, timer](msg_type& msg, Notify& ntf, co_async_state state)
+				_pushWait.push_back(wrap_notify(std::bind([this, timer](msg_type& msg, Notify_& ntf, co_async_state state)
 				{
 					_strand->over_timer()->cancel(*timer);
 					timer->~timer_handle();
@@ -2200,7 +2226,7 @@ private:
 					if (co_async_state::co_async_ok == state)
 					{
 						assert(!_buffer.full());
-						_push(std::move(msg), std::forward<Notify>(ntf));
+						_push(std::move(msg), std::move(ntf));
 					}
 					else
 					{
@@ -2256,12 +2282,13 @@ private:
 		}
 		else
 		{
-			_popWait.push_back(wrap_notify(std::bind([this](Notify& ntf, co_async_state state)
+			typedef RM_CREF(Notify) Notify_;
+			_popWait.push_back(wrap_notify(std::bind([this](Notify_& ntf, co_async_state state)
 			{
 				if (co_async_state::co_async_ok == state)
 				{
 					assert(!_buffer.empty());
-					_pop(std::forward<Notify>(ntf));
+					_pop(std::move(ntf));
 				}
 				else
 				{
@@ -2321,8 +2348,9 @@ private:
 		}
 		else if (tm > 0)
 		{
+			typedef RM_CREF(Notify) Notify_;
 			overlap_timer::timer_handle* timer = new(_alloc.allocate(sizeof(overlap_timer::timer_handle)))overlap_timer::timer_handle;
-			_popWait.push_back(wrap_notify(std::bind([this, timer](Notify& ntf, co_async_state state)
+			_popWait.push_back(wrap_notify(std::bind([this, timer](Notify_& ntf, co_async_state state)
 			{
 				_strand->over_timer()->cancel(*timer);
 				timer->~timer_handle();
@@ -2330,7 +2358,7 @@ private:
 				if (co_async_state::co_async_ok == state)
 				{
 					assert(!_buffer.empty());
-					_pop(std::forward<Notify>(ntf));
+					_pop(std::move(ntf));
 				}
 				else
 				{
@@ -2619,9 +2647,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this](msg_type& msg, Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this](msg_type& msg, Notify_& ntf)
 			{
-				_push(std::move(msg), std::forward<Notify>(ntf));
+				_push(std::move(msg), std::move(ntf));
 			}, msg_type(std::forward<Args>(msg)...), std::forward<Notify>(ntf)));
 		}
 	}
@@ -2635,9 +2664,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this](msg_type& msg, Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this](msg_type& msg, Notify_& ntf)
 			{
-				_try_push(std::move(msg), std::forward<Notify>(ntf));
+				_try_push(std::move(msg), std::move(ntf));
 			}, msg_type(std::forward<Args>(msg)...), std::forward<Notify>(ntf)));
 		}
 	}
@@ -2651,9 +2681,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, tm](msg_type& msg, Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, tm](msg_type& msg, Notify_& ntf)
 			{
-				_timed_push(std::move(msg), std::forward<Notify>(ntf), tm);
+				_timed_push(std::move(msg), std::move(ntf), tm);
 			}, msg_type(std::forward<Args>(msg)...), std::forward<Notify>(ntf)));
 		}
 	}
@@ -2667,9 +2698,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this](Notify_& ntf)
 			{
-				_pop(std::forward<Notify>(ntf));
+				_pop(std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -2683,9 +2715,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this](Notify_& ntf)
 			{
-				_try_pop(std::forward<Notify>(ntf));
+				_try_pop(std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -2699,9 +2732,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, tm](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, tm](Notify_& ntf)
 			{
-				_timed_pop(std::forward<Notify>(ntf), tm);
+				_timed_pop(std::move(ntf), tm);
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -2715,9 +2749,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, &ntfSign](Notify_& ntf)
 			{
-				_append_pop_notify(std::forward<Notify>(ntf), ntfSign);
+				_append_pop_notify(std::move(ntf), ntfSign);
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -2731,9 +2766,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, &ntfSign](Notify_& ntf)
 			{
-				_remove_pop_notify(std::forward<Notify>(ntf), ntfSign);
+				_remove_pop_notify(std::move(ntf), ntfSign);
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -2747,9 +2783,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, &ntfSign](Notify_& ntf)
 			{
-				_append_push_notify(std::forward<Notify>(ntf), ntfSign);
+				_append_push_notify(std::move(ntf), ntfSign);
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -2763,9 +2800,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, &ntfSign](Notify_& ntf)
 			{
-				_remove_push_notify(std::forward<Notify>(ntf), ntfSign);
+				_remove_push_notify(std::move(ntf), ntfSign);
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -2873,12 +2911,13 @@ private:
 		}
 		if (_tempBuffer.has())
 		{
-			_pushWait.push_back(wrap_notify(std::bind([this](msg_type& msg, Notify& ntf, co_async_state state)
+			typedef RM_CREF(Notify) Notify_;
+			_pushWait.push_back(wrap_notify(std::bind([this](msg_type& msg, Notify_& ntf, co_async_state state)
 			{
 				if (co_async_state::co_async_ok == state)
 				{
 					assert(!_tempBuffer.has());
-					_push(std::move(msg), std::forward<Notify>(ntf));
+					_push(std::move(msg), std::move(ntf));
 				}
 				else
 				{
@@ -2958,8 +2997,9 @@ private:
 		{
 			if (tm > 0)
 			{
+				typedef RM_CREF(Notify) Notify_;
 				overlap_timer::timer_handle* timer = new(_alloc.allocate(sizeof(overlap_timer::timer_handle)))overlap_timer::timer_handle;
-				_pushWait.push_back(wrap_notify(std::bind([this, timer](msg_type& msg, Notify& ntf, co_async_state state)
+				_pushWait.push_back(wrap_notify(std::bind([this, timer](msg_type& msg, Notify_& ntf, co_async_state state)
 				{
 					_strand->over_timer()->cancel(*timer);
 					timer->~timer_handle();
@@ -2967,7 +3007,7 @@ private:
 					if (co_async_state::co_async_ok == state)
 					{
 						assert(!_tempBuffer.has());
-						_push(std::move(msg), std::forward<Notify>(ntf));
+						_push(std::move(msg), std::move(ntf));
 					}
 					else
 					{
@@ -3030,12 +3070,13 @@ private:
 		}
 		else
 		{
+			typedef RM_CREF(Notify) Notify_;
 			assert(_pushWait.empty());
-			_popWait.push_back(wrap_notify(std::bind([this](Notify& ntf, co_async_state state)
+			_popWait.push_back(wrap_notify(std::bind([this](Notify_& ntf, co_async_state state)
 			{
 				if (co_async_state::co_async_ok == state)
 				{
-					_pop(std::forward<Notify>(ntf));
+					_pop(std::move(ntf));
 				}
 				else
 				{
@@ -3092,9 +3133,10 @@ private:
 		}
 		else if (tm > 0)
 		{
+			typedef RM_CREF(Notify) Notify_;
 			assert(_pushWait.empty());
 			overlap_timer::timer_handle* timer = new(_alloc.allocate(sizeof(overlap_timer::timer_handle)))overlap_timer::timer_handle;
-			_popWait.push_back(wrap_notify(std::bind([this, timer](Notify& ntf, co_async_state state)
+			_popWait.push_back(wrap_notify(std::bind([this, timer](Notify_& ntf, co_async_state state)
 			{
 				_strand->over_timer()->cancel(*timer);
 				timer->~timer_handle();
@@ -3102,7 +3144,7 @@ private:
 				if (co_async_state::co_async_ok == state)
 				{
 					assert(_tempBuffer.has());
-					_pop(std::forward<Notify>(ntf));
+					_pop(std::move(ntf));
 				}
 				else
 				{
@@ -3507,9 +3549,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this](msg_type& msg, Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this](msg_type& msg, Notify_& ntf)
 			{
-				_push(std::move(msg), std::forward<Notify>(ntf));
+				_push(std::move(msg), std::move(ntf));
 			}, msg_type(std::forward<Args>(msg)...), std::forward<Notify>(ntf)));
 		}
 	}
@@ -3523,9 +3566,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this](msg_type& msg, Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this](msg_type& msg, Notify_& ntf)
 			{
-				_try_push(std::move(msg), std::forward<Notify>(ntf));
+				_try_push(std::move(msg), std::move(ntf));
 			}, msg_type(std::forward<Args>(msg)...), std::forward<Notify>(ntf)));
 		}
 	}
@@ -3539,9 +3583,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, tm](msg_type& msg, Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, tm](msg_type& msg, Notify_& ntf)
 			{
-				_timed_push(std::move(msg), std::forward<Notify>(ntf), tm);
+				_timed_push(std::move(msg), std::move(ntf), tm);
 			}, msg_type(std::forward<Args>(msg)...), std::forward<Notify>(ntf)));
 		}
 	}
@@ -3555,9 +3600,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this](Notify_& ntf)
 			{
-				_pop(std::forward<Notify>(ntf));
+				_pop(std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -3571,9 +3617,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this](Notify_& ntf)
 			{
-				_try_pop(std::forward<Notify>(ntf));
+				_try_pop(std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -3587,9 +3634,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, tm](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, tm](Notify_& ntf)
 			{
-				_timed_pop(std::forward<Notify>(ntf), tm);
+				_timed_pop(std::move(ntf), tm);
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -3603,9 +3651,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, &ntfSign](Notify_& ntf)
 			{
-				_append_pop_notify(std::forward<Notify>(ntf), ntfSign);
+				_append_pop_notify(std::move(ntf), ntfSign);
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -3619,9 +3668,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, &ntfSign](Notify_& ntf)
 			{
-				_remove_pop_notify(std::forward<Notify>(ntf), ntfSign);
+				_remove_pop_notify(std::move(ntf), ntfSign);
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -3813,12 +3863,13 @@ private:
 		}
 		if (_sendQueue.empty())
 		{
-			_waitQueue.push_back(wrap_notify(std::bind([this](co_async_state state, Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_waitQueue.push_back(wrap_notify(std::bind([this](co_async_state state, Notify_& ntf)
 			{
 				if (co_async_state::co_async_ok == state)
 				{
 					assert(!_sendQueue.empty());
-					_pop(std::forward<Notify>(ntf));
+					_pop(std::move(ntf));
 				}
 				else
 				{
@@ -3870,8 +3921,9 @@ private:
 		{
 			if (tm > 0)
 			{
+				typedef RM_CREF(Notify) Notify_;
 				overlap_timer::timer_handle* timer = new(_alloc.allocate(sizeof(overlap_timer::timer_handle)))overlap_timer::timer_handle;
-				_waitQueue.push_back(wrap_notify(std::bind([this, timer](co_async_state state, Notify& ntf)
+				_waitQueue.push_back(wrap_notify(std::bind([this, timer](co_async_state state, Notify_& ntf)
 				{
 					_strand->over_timer()->cancel(*timer);
 					timer->~timer_handle();
@@ -3879,7 +3931,7 @@ private:
 					if (co_async_state::co_async_ok == state)
 					{
 						assert(!_sendQueue.empty());
-						_pop(std::forward<Notify>(ntf));
+						_pop(std::move(ntf));
 					}
 					else
 					{
@@ -4115,9 +4167,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this](Notify_& ntf)
 			{
-				_lock(std::forward<Notify>(ntf));
+				_lock(std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -4131,9 +4184,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this](Notify_& ntf)
 			{
-				_try_lock(std::forward<Notify>(ntf));
+				_try_lock(std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -4147,9 +4201,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this, tm](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, tm](Notify_& ntf)
 			{
-				_timed_lock(tm, std::forward<Notify>(ntf));
+				_timed_lock(tm, std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -4163,9 +4218,10 @@ public:
 		}
 		else
 		{
-			_strand->post(std::bind([this](Notify& ntf)
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this](Notify_& ntf)
 			{
-				_unlock(std::forward<Notify>(ntf));
+				_unlock(std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}

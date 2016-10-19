@@ -80,6 +80,15 @@ public:
 	}
 
 	/*!
+	@brief 循环定时调用一个handler，在依赖的strand线程中调用
+	*/
+	template <typename Handler>
+	void interval(int tm, Handler&& handler)
+	{
+		_interval(tm, get_tick_us(), std::forward<Handler>(handler));
+	}
+
+	/*!
 	@brief 取消本次计时，在依赖的strand线程中调用
 	*/
 	void cancel();
@@ -95,6 +104,18 @@ public:
 	async_timer clone();
 private:
 	void timeout_handler();
+
+	template <typename Handler>
+	void _interval(int tm, long long deadtime, Handler&& handler)
+	{
+		typedef RM_CREF(Handler) Handler_;
+		deadtime += (long long)tm * 1000;
+		deadline(deadtime, std::bind([this, tm, deadtime](Handler_& handler)
+		{
+			CHECK_EXCEPTION(handler);
+			_interval(tm, deadtime, std::move(handler));
+		}, std::forward<Handler>(handler)));
+	}
 private:
 	wrap_base* _handler;
 	reusable_mem _reuMem;
@@ -211,6 +232,15 @@ public:
 	}
 
 	/*!
+	@brief 循环定时调用一个handler，在依赖的strand线程中调用
+	*/
+	template <typename Handler>
+	void interval(int tm, timer_handle& timerHandle, Handler&& handler)
+	{
+		_interval(tm, get_tick_us(), timerHandle, std::forward<Handler>(handler));
+	}
+
+	/*!
 	@brief 取消一次计时，在依赖的strand线程中调用
 	*/
 	void cancel(timer_handle& th);
@@ -228,6 +258,18 @@ private:
 	{
 		typedef wrap_handler<RM_CREF(Handler)> wrap_type;
 		return new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(std::forward<Handler>(handler));
+	}
+
+	template <typename Handler>
+	void _interval(int tm, long long deadtime, timer_handle& timerHandle, Handler&& handler)
+	{
+		typedef RM_CREF(Handler) Handler_;
+		deadtime += (long long)tm * 1000;
+		deadline(deadtime, timerHandle, wrap_bind([this, &timerHandle, tm, deadtime](Handler_& handler)
+		{
+			CHECK_EXCEPTION(handler);
+			_interval(tm, deadtime, timerHandle, std::move(handler));
+		}, std::forward<Handler>(handler)));
 	}
 private:
 	void* _timer;

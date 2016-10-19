@@ -374,7 +374,7 @@ class chan_connector
 							{
 								_connector.connector();
 							}
-						}, __1, std::ref(_connector)), std::forward<Args>(args)...);
+						}, __1, std::ref(_connector)), std::move(args)...);
 					}
 				}, __1, std::ref(_connector), std::forward<Args>(args)...), _connector._connSign2);
 			}
@@ -395,14 +395,15 @@ public:
 	template <typename Notify>
 	void disconnect(Notify&& ntf)
 	{
-		_chan1.remove_pop_notify(_chan2.self_strand()->wrap(std::bind([this](co_async_state, Notify& ntf)
+		typedef RM_CREF(Notify) Notify_;
+		_chan1.remove_pop_notify(_chan2.self_strand()->wrap(std::bind([this](co_async_state, Notify_& ntf)
 		{
 			_connSign1._disableAppend = true;
-			_chan2.remove_push_notify(_chan1.self_strand()->wrap(std::bind([this](co_async_state, Notify& ntf)
+			_chan2.remove_push_notify(_chan1.self_strand()->wrap(std::bind([this](co_async_state, Notify_& ntf)
 			{
 				_connSign2._disableAppend = true;
 				CHECK_EXCEPTION(ntf);
-			}, __1, std::forward<Notify>(ntf))), _connSign2);
+			}, __1, std::move(ntf))), _connSign2);
 		}, __1, std::forward<Notify>(ntf))), _connSign1);
 	}
 private:

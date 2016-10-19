@@ -5220,11 +5220,19 @@ public:
 	}
 
 	/*!
-	@brief 延时等待，Actor内部禁止使用操作系统API Sleep()
-	@param ms 等待毫秒数，等于0时暂时放弃Actor执行，直到下次被调度器触发
+	@brief 延时等待
+	@param ms/us 等待时间，等于0时暂时放弃Actor执行，直到下次被调度器触发
 	*/
 	__yield_interrupt void sleep(int ms);
 	__yield_interrupt void sleep_guard(int ms);
+	__yield_interrupt void usleep(long long us);
+	__yield_interrupt void usleep_guard(long long us);
+
+	/*!
+	@brief 以绝对时间sleep
+	*/
+	__yield_interrupt void dead_sleep(long long us);
+	__yield_interrupt void dead_sleep_guard(long long us);
 
 	/*!
 	@brief 中断当前时间片，等到下次被调度(因为Actor是非抢占式调度，当有占用时间片较长的逻辑时，适当使用yield分割时间片)
@@ -5299,7 +5307,7 @@ public:
 		assert_enter();
 		if (ms > 0 && cycle)
 		{
-			_interval_trig(ms, TRY_MOVE(handler), cycle);
+			_interval_trig(ms, TRY_MOVE(handler), cycle, get_tick_us());
 		}
 		else
 		{
@@ -5325,15 +5333,16 @@ public:
 	void cancel_delay_trig();
 private:
 	template <typename Handler>
-	void _interval_trig(int ms, Handler&& handler, size_t cycle)
+	void _interval_trig(int ms, Handler&& handler, size_t cycle, long long deadtime)
 	{
 		typedef RM_CREF(Handler) Handler_;
-		timeout(ms, std::bind([this, ms, cycle](Handler_& handler)
+		deadtime += (long long)ms * 1000;
+		deadline(deadtime, std::bind([this, ms, cycle, deadtime](Handler_& handler)
 		{
 			BEGIN_CHECK_EXCEPTION;
 			if (!handler() && cycle-1)
 			{
-				_interval_trig(ms, std::move(handler), cycle - 1);
+				_interval_trig(ms, std::move(handler), cycle - 1, deadtime);
 			}
 			END_CHECK_EXCEPTION;
 		}, TRY_MOVE(handler)));
@@ -5676,7 +5685,7 @@ private:
 			{
 				if (!shared_this->_quited && !closed)
 				{
-					same_copy_tuple_to_tuple(dstRec, std::forward<SRC>(args));
+					same_copy_tuple_to_tuple(dstRec, std::move(args));
 					wrap_check_trig_run_one::run_one(shared_this.get(), closed, sign);
 				}
 			}, shared_from_this(), closed, dstRec, std::forward<SRC>(args)));
