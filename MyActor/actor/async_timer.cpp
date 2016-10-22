@@ -20,7 +20,7 @@ typedef long long micseconds;
 #endif
 
 AsyncTimer_::AsyncTimer_(ActorTimer_* actorTimer)
-:_actorTimer(actorTimer), _handler(NULL) {}
+:_actorTimer(actorTimer), _handler(NULL), _intervalCount(0), _isInterval(false) {}
 
 AsyncTimer_::~AsyncTimer_()
 {
@@ -52,10 +52,18 @@ async_timer AsyncTimer_::clone()
 void AsyncTimer_::timeout_handler()
 {
 	_timerHandle.reset();
-	wrap_base* cb = _handler;
-	_handler = NULL;
-	cb->invoke();
-	_reuMem.deallocate(cb);
+	if (!_isInterval)
+	{
+		wrap_base* cb = _handler;
+		_handler = NULL;
+		cb->invoke();
+		cb->destroy();
+		_reuMem.deallocate(cb);
+	}
+	else
+	{
+		_handler->invoke();
+	}
 }
 //////////////////////////////////////////////////////////////////////////
 
@@ -76,7 +84,7 @@ overlap_timer::~overlap_timer()
 	delete (timer_type*)_timer;
 }
 
-void overlap_timer::_timeout(long long us, timer_handle& timerHandle, wrap_base* handler, bool deadline)
+void overlap_timer::_timeout(long long us, timer_handle& timerHandle, bool deadline)
 {
 	if (!_lockStrand)
 	{
@@ -86,17 +94,16 @@ void overlap_timer::_timeout(long long us, timer_handle& timerHandle, wrap_base*
 #endif
 	}
 	assert(_lockStrand->running_in_this_thread());
-	assert(timerHandle.is_null());
-	timerHandle._beginStamp = get_tick_us();
-	long long et = deadline ? us : (timerHandle._beginStamp + us) & -256;
+	timerHandle._timestamp = get_tick_us();
+	long long et = deadline ? us : (timerHandle._timestamp + us) & -256;
 	if (et >= _extMaxTick)
 	{
 		_extMaxTick = et;
-		timerHandle._queueNode = _handlerQueue.insert(_handlerQueue.end(), std::make_pair(et, std::move(handler)));
+		timerHandle._queueNode = _handlerQueue.insert(_handlerQueue.end(), std::make_pair(et, &timerHandle));
 	}
 	else
 	{
-		timerHandle._queueNode = _handlerQueue.insert(std::make_pair(et, std::move(handler)));
+		timerHandle._queueNode = _handlerQueue.insert(std::make_pair(et, &timerHandle));
 	}
 
 	if (!_looping)
@@ -104,7 +111,7 @@ void overlap_timer::_timeout(long long us, timer_handle& timerHandle, wrap_base*
 		_looping = true;
 		assert(_handlerQueue.size() == 1);
 		_extFinishTime = et;
-		timer_loop(et, et - timerHandle._beginStamp);
+		timer_loop(et, et - timerHandle._timestamp);
 	}
 	else if ((unsigned long long)et < (unsigned long long)_extFinishTime)
 	{//定时期限前于当前定时器期限，取消后重新计时
@@ -112,7 +119,7 @@ void overlap_timer::_timeout(long long us, timer_handle& timerHandle, wrap_base*
 		((timer_type*)_timer)->cancel(ec);
 		_timerCount++;
 		_extFinishTime = et;
-		timer_loop(et, et - timerHandle._beginStamp);
+		timer_loop(et, et - timerHandle._timestamp);
 	}
 }
 
@@ -122,10 +129,10 @@ void overlap_timer::cancel(timer_handle& th)
 	if (!th.is_null())
 	{//删除当前定时器节点
 		assert(_lockStrand);
+		th._handler->destroy();
+		_reuMem.deallocate(th._handler);
 		th.reset();
 		handler_queue::iterator itNode = th._queueNode;
-		itNode->second->destroy();
-		_reuMem.deallocate(itNode->second);
 		if (_handlerQueue.size() == 1)
 		{
 			_extMaxTick = 0;
@@ -150,6 +157,11 @@ void overlap_timer::cancel(timer_handle& th)
 			_handlerQueue.erase(itNode);
 		}
 	}
+}
+
+shared_strand overlap_timer::self_strand()
+{
+	return _weakStrand.lock();
 }
 
 void overlap_timer::timer_loop(long long abs, long long rel)
@@ -208,9 +220,20 @@ void overlap_timer::event_handler(int tc)
 			}
 			else
 			{
-				iter->second->invoke();
-				_reuMem.deallocate(iter->second);
+				timer_handle* const timerHandle = iter->second;
 				_handlerQueue.erase(iter);
+				if (!timerHandle->_isInterval)
+				{
+					wrap_base* cb = timerHandle->_handler;
+					timerHandle->_handler = NULL;
+					cb->invoke();
+					cb->destroy();
+					_reuMem.deallocate(cb);
+				}
+				else
+				{
+					timerHandle->_handler->invoke();
+				}
 			}
 		}
 		_looping = false;

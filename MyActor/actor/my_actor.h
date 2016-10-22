@@ -5231,8 +5231,10 @@ public:
 	/*!
 	@brief 以绝对时间sleep
 	*/
-	__yield_interrupt void dead_sleep(long long us);
-	__yield_interrupt void dead_sleep_guard(long long us);
+	__yield_interrupt void dead_sleep(long long ms);
+	__yield_interrupt void dead_sleep_guard(long long ms);
+	__yield_interrupt void dead_usleep(long long us);
+	__yield_interrupt void dead_usleep_guard(long long us);
 
 	/*!
 	@brief 中断当前时间片，等到下次被调度(因为Actor是非抢占式调度，当有占用时间片较长的逻辑时，适当使用yield分割时间片)

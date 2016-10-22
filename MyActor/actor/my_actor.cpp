@@ -2290,7 +2290,17 @@ void my_actor::usleep_guard(long long us)
 	unlock_quit();
 }
 
-void my_actor::dead_sleep(long long us)
+void my_actor::dead_sleep(long long ms)
+{
+	dead_usleep(ms * 1000);
+}
+
+void my_actor::dead_sleep_guard(long long ms)
+{
+	dead_usleep_guard(ms * 1000);
+}
+
+void my_actor::dead_usleep(long long us)
 {
 	assert_enter();
 	deadline(us, [this]()
@@ -2300,7 +2310,7 @@ void my_actor::dead_sleep(long long us)
 	push_yield();
 }
 
-void my_actor::dead_sleep_guard(long long us)
+void my_actor::dead_usleep_guard(long long us)
 {
 	assert_enter();
 	lock_quit();

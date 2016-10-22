@@ -288,7 +288,12 @@ void generator::_co_usleep(long long us)
 	_timerHandle = _timer->timeout(us, _weakThis.lock());
 }
 
-void generator::_co_dead_sleep(long long us)
+void generator::_co_dead_sleep(long long ms)
+{
+	_co_dead_usleep(ms * 1000);
+}
+
+void generator::_co_dead_usleep(long long us)
 {
 	assert(_strand->running_in_this_thread());
 	assert(_timerHandle.is_null());

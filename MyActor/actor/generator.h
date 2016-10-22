@@ -253,7 +253,8 @@ struct __co_context_no_capture{};
 //延时
 #define co_sleep(__ms__) do{co_self._co_sleep(__ms__); _co_yield;}while (0)
 #define co_usleep(__us__) do{co_self._co_usleep(__us__); _co_yield;}while (0)
-#define co_dead_sleep(__us__) do{co_self._co_dead_sleep(__us__); _co_yield;}while (0)
+#define co_dead_sleep(__ms__) do{co_self._co_dead_sleep(__ms__); _co_yield;}while (0)
+#define co_dead_usleep(__us__) do{co_self._co_dead_usleep(__us__); _co_yield;}while (0)
 
 //开始运行一个generator
 #define co_go(...) CoGo_(__VA_ARGS__)-
@@ -640,7 +641,8 @@ public:
 
 	void _co_sleep(int ms);
 	void _co_usleep(long long us);
-	void _co_dead_sleep(long long us);
+	void _co_dead_sleep(long long ms);
+	void _co_dead_usleep(long long us);
 private:
 	void timeout_handler();
 private:

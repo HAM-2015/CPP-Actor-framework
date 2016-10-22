@@ -309,10 +309,10 @@ template <typename... Args> void debug_trace_line(Args&&... args) { _Tracestream
 template <typename... Args> void debug_trace_space(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " DEBUG:   "); _trace_space(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
 template <typename... Args> void debug_trace_comma(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " DEBUG:   "); _trace_comma(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::endl; } }
 #else
-template <typename... Args> void debug_trace(Args&&... args) {}
-template <typename... Args> void debug_trace_line(Args&&... args) {}
-template <typename... Args> void debug_trace_space(Args&&... args) {}
-template <typename... Args> void debug_trace_comma(Args&&... args) {}
+#define debug_trace(...)
+#define debug_trace_line(...)
+#define debug_trace_space(...)
+#define debug_trace_comma(...)
 #endif
 
 template <typename... Args> void info_trace(Args&&... args) { _Tracestream oss; print_time_ms(oss); _trace(oss, " INFO:    "); _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; std::wcout << oss.str() << std::flush; } }
@@ -343,10 +343,10 @@ template <typename... Args> void debug_trace_line(Args&&... args) { _Tracestream
 template <typename... Args> void debug_trace_space(Args&&... args) { _Tracestream oss; _trace_space(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_DEBUG, "DEBUG", "%s", oss.str().c_str()); } }
 template <typename... Args> void debug_trace_comma(Args&&... args) { _Tracestream oss; _trace_comma(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_DEBUG, "DEBUG", "%s", oss.str().c_str()); } }
 #else
-template <typename... Args> void debug_trace(Args&&... args) {}
-template <typename... Args> void debug_trace_line(Args&&... args) {}
-template <typename... Args> void debug_trace_space(Args&&... args) {}
-template <typename... Args> void debug_trace_comma(Args&&... args) {}
+#define debug_trace(...)
+#define debug_trace_line(...)
+#define debug_trace_space(...)
+#define debug_trace_comma(...)
 #endif
 
 template <typename... Args> void info_trace(Args&&... args) { _Tracestream oss; _trace(oss, TRY_MOVE(args)...); { TraceMutex_ mt; __android_log_print(ANDROID_LOG_INFO, "ERROR", "%s", oss.str().c_str()); } }
