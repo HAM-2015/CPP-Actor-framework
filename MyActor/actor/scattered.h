@@ -158,14 +158,9 @@ struct MakeBreakOfScope2_
 
 //在Actor作用域内定时触发某个操作
 #define HEARTBEAT_TRACE_NAME(__name__, __self__, __tm__, __handler__)\
-	async_timer __name__ = __self__->self_strand()->make_timer(); \
-	LOCAL_RECURSIVE(BOND_NAME(__heartbeatHandler_, __name__), void(), [&]() \
-	{ \
-		__name__->timeout(__tm__, wrap_ref_handler(BOND_NAME(__heartbeatHandler_, __name__))); \
-		([&]__handler__)(); \
-	}); \
-	__name__->timeout(__tm__, wrap_ref_handler(BOND_NAME(__heartbeatHandler_, __name__))); \
-	BREAK_OF_SCOPE_NAME(BOND_NAME(__heartbeatHandler_, __name__), { __name__->cancel(); });
+	overlap_timer::timer_handle __name__; \
+	__self__->self_strand()->over_timer()->interval(__tm__, __name__, [&]__handler__); \
+	BREAK_OF_SCOPE_NAME(BOND_NAME(__heartbeatHandler_, __name__), { __self__->self_strand()->over_timer()->cancel(__name__); });
 
 //在Actor作用域内定时触发某个操作
 #define HEARTBEAT_TRACE(__self__, __tm__, __handler__) HEARTBEAT_TRACE_NAME(BOND_COUNT(__heartbeatTimer), __self__, __tm__, __handler__)

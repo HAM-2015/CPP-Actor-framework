@@ -8,6 +8,7 @@
 #include "stack_object.h"
 
 class ActorTimer_;
+class overlap_timer;
 class qt_strand;
 class uv_strand;
 class boost_strand;
@@ -19,12 +20,15 @@ typedef std::shared_ptr<AsyncTimer_> async_timer;
 class AsyncTimer_ : public ActorTimerFace_
 {
 	friend boost_strand;
+	friend overlap_timer;
 	FRIEND_SHARED_PTR(AsyncTimer_);
 
 	struct wrap_base
 	{
 		virtual void invoke() = 0;
-		virtual void destroy() = 0;
+		virtual void destroy(reusable_mem& reuMem) = 0;
+		virtual void set_sign(bool* sign) = 0;
+		virtual wrap_base* interval_handler() = 0;
 	};
 
 	template <typename Handler>
@@ -39,10 +43,14 @@ class AsyncTimer_ : public ActorTimerFace_
 			CHECK_EXCEPTION(_h);
 		}
 
-		void destroy()
+		void destroy(reusable_mem& reuMem)
 		{
 			this->~wrap_handler();
+			reuMem.deallocate(this);
 		}
+
+		void set_sign(bool* sign) {}
+		wrap_base* interval_handler() { return NULL; }
 
 		Handler _h;
 	};
@@ -51,19 +59,40 @@ class AsyncTimer_ : public ActorTimerFace_
 	struct wrap_interval_handler : public wrap_base
 	{
 		template <typename H>
-		wrap_interval_handler(H&& h)
-			:_h(std::forward<H>(h)) {}
+		wrap_interval_handler(H&& h, wrap_base* intervalHandler)
+			:_h(std::forward<H>(h)), _sign(NULL), _intervalHandler(intervalHandler) {}
 
 		void invoke()
 		{
 			CHECK_EXCEPTION(_h, this);
 		}
 
-		void destroy()
+		void destroy(reusable_mem& reuMem)
 		{
+			if (!_sign)
+			{
+				_intervalHandler->destroy(reuMem);
+			}
+			else
+			{
+				*_sign = true;
+			}
 			this->~wrap_interval_handler();
+			reuMem.deallocate(this);
 		}
 
+		void set_sign(bool* sign)
+		{
+			_sign = sign;
+		}
+
+		wrap_base* interval_handler()
+		{
+			return _intervalHandler;
+		}
+
+		bool* _sign;
+		wrap_base* _intervalHandler;
 		Handler _h;
 	};
 private:
@@ -79,7 +108,7 @@ public:
 		assert(self_strand()->running_in_this_thread());
 		assert(!_handler);
 		_isInterval = false;
-		_handler = wrap_timer_handler(std::forward<Handler>(handler));
+		_handler = wrap_timer_handler(_reuMem, std::forward<Handler>(handler));
 		_timerHandle = _actorTimer->timeout((long long)tm * 1000, _weakThis.lock(), false);
 		return _timerHandle._beginStamp;
 	}
@@ -93,7 +122,7 @@ public:
 		assert(self_strand()->running_in_this_thread());
 		assert(!_handler);
 		_isInterval = false;
-		_handler = wrap_timer_handler(std::forward<Handler>(handler));
+		_handler = wrap_timer_handler(_reuMem, std::forward<Handler>(handler));
 		_timerHandle = _actorTimer->timeout(us, _weakThis.lock(), true);
 		return _timerHandle._beginStamp;
 	}
@@ -107,25 +136,26 @@ public:
 		assert(self_strand()->running_in_this_thread());
 		assert(!_handler);
 		_isInterval = true;
-		int intId = ++_intervalCount;
 		long long deadtime = get_tick_us() + (long long)tm * 1000;
-		_handler = wrap_timer_handler(std::bind([](wrap_base* const intervalHandler)
+		wrap_base* const intervalHandler = wrap_timer_handler(std::forward<Handler>(handler));
+		_handler = wrap_interval_timer_handler(_reuMem, std::bind([this, tm](wrap_base* const thisHandler, long long& deadtime)
 		{
+			bool sign = false;
+			AsyncTimer_* const this_ = this;
+			wrap_base* const intervalHandler = thisHandler->interval_handler();
+			thisHandler->set_sign(&sign);
 			intervalHandler->invoke();
-		}, wrap_interval_timer_handler(std::bind([this, tm, intId](wrap_base* intervalHandler, Handler& handler, long long& deadtime)
-		{
-			CHECK_EXCEPTION(handler);
-			if (_handler && _isInterval && _intervalCount == intId)
+			if (!sign)
 			{
+				thisHandler->set_sign(NULL);
 				deadtime += (long long)tm * 1000;
 				_timerHandle = _actorTimer->timeout(deadtime, _weakThis.lock(), true);
 			}
 			else
 			{
-				intervalHandler->destroy();
-				_reuMem.deallocate(intervalHandler);
+				intervalHandler->destroy(this_->_reuMem);
 			}
-		}, __1, std::forward<Handler>(handler), deadtime))));
+		}, __1, deadtime), wrap_timer_handler(_reuMem, std::forward<Handler>(handler)));
 		_timerHandle = _actorTimer->timeout(deadtime, _weakThis.lock(), true);
 	}
 
@@ -147,17 +177,17 @@ private:
 	void timeout_handler();
 
 	template <typename Handler>
-	wrap_base* wrap_timer_handler(Handler&& handler)
+	static wrap_base* wrap_timer_handler(reusable_mem& reuMem, Handler&& handler)
 	{
 		typedef wrap_handler<RM_CREF(Handler)> wrap_type;
-		return new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(std::forward<Handler>(handler));
+		return new(reuMem.allocate(sizeof(wrap_type)))wrap_type(std::forward<Handler>(handler));
 	}
 
 	template <typename Handler>
-	wrap_base* wrap_interval_timer_handler(Handler&& handler)
+	static wrap_base* wrap_interval_timer_handler(reusable_mem& reuMem, Handler&& handler, wrap_base* intervalHandler)
 	{
 		typedef wrap_interval_handler<RM_CREF(Handler)> wrap_type;
-		return new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(std::forward<Handler>(handler));
+		return new(reuMem.allocate(sizeof(wrap_type)))wrap_type(std::forward<Handler>(handler), intervalHandler);
 	}
 private:
 	wrap_base* _handler;
@@ -165,7 +195,6 @@ private:
 	ActorTimer_* _actorTimer;
 	std::weak_ptr<AsyncTimer_> _weakThis;
 	ActorTimer_::timer_handle _timerHandle;
-	int _intervalCount;
 	bool _isInterval;
 	NONE_COPY(AsyncTimer_);
 };
@@ -181,52 +210,6 @@ class overlap_timer
 public:
 	class timer_handle;
 private:
-	struct wrap_base
-	{
-		virtual void invoke() = 0;
-		virtual void destroy() = 0;
-	};
-
-	template <typename Handler>
-	struct wrap_handler : public wrap_base
-	{
-		template <typename H>
-		wrap_handler(H&& h)
-			:_h(std::forward<H>(h)) {}
-
-		void invoke()
-		{
-			CHECK_EXCEPTION(_h);
-		}
-
-		void destroy()
-		{
-			this->~wrap_handler();
-		}
-
-		Handler _h;
-	};
-
-	template <typename Handler>
-	struct wrap_interval_handler : public wrap_base
-	{
-		template <typename H>
-		wrap_interval_handler(H&& h)
-			:_h(std::forward<H>(h)) {}
-
-		void invoke()
-		{
-			CHECK_EXCEPTION(_h, this);
-		}
-
-		void destroy()
-		{
-			this->~wrap_interval_handler();
-		}
-
-		Handler _h;
-	};
-
 	typedef msg_multimap<long long, timer_handle*> handler_queue;
 
 	friend boost_strand;
@@ -238,7 +221,7 @@ public:
 		friend overlap_timer;
 	public:
 		timer_handle()
-			:_timestamp(0), _handler(NULL), _intervalCount(0), _isInterval(false) {}
+			:_timestamp(0), _handler(NULL), _isInterval(false) {}
 
 		~timer_handle()
 		{
@@ -263,8 +246,7 @@ public:
 	private:
 		long long _timestamp;
 		handler_queue::iterator _queueNode;
-		wrap_base* _handler;
-		int _intervalCount;
+		AsyncTimer_::wrap_base* _handler;
 		bool _isInterval;
 		NONE_COPY(timer_handle);
 	};
@@ -281,7 +263,7 @@ public:
 		assert(_weakStrand.lock()->running_in_this_thread());
 		assert(timerHandle.is_null());
 		timerHandle._isInterval = false;
-		timerHandle._handler = wrap_timer_handler(std::bind([&timerHandle](Handler& handler)
+		timerHandle._handler = AsyncTimer_::wrap_timer_handler(_reuMem, std::bind([&timerHandle](Handler& handler)
 		{
 			timerHandle.reset();
 			CHECK_EXCEPTION(handler);
@@ -298,7 +280,7 @@ public:
 		assert(_weakStrand.lock()->running_in_this_thread());
 		assert(timerHandle.is_null());
 		timerHandle._isInterval = false;
-		timerHandle._handler = wrap_timer_handler(std::bind([&timerHandle](Handler& handler)
+		timerHandle._handler = AsyncTimer_::wrap_timer_handler(_reuMem, std::bind([&timerHandle](Handler& handler)
 		{
 			timerHandle.reset();
 			CHECK_EXCEPTION(handler);
@@ -315,25 +297,25 @@ public:
 		assert(self_strand()->running_in_this_thread());
 		assert(timerHandle.is_null());
 		timerHandle._isInterval = true;
-		int intId = ++timerHandle._intervalCount;
 		long long deadtime = get_tick_us() + (long long)tm * 1000;
-		timerHandle._handler = wrap_timer_handler(std::bind([](wrap_base* const intervalHandler)
+		timerHandle._handler = AsyncTimer_::wrap_interval_timer_handler(_reuMem, std::bind([this, &timerHandle, tm](AsyncTimer_::wrap_base* const thisHandler, long long& deadtime)
 		{
+			bool sign = false;
+			overlap_timer* const this_ = this;
+			AsyncTimer_::wrap_base* const intervalHandler = thisHandler->interval_handler();
+			thisHandler->set_sign(&sign);
 			intervalHandler->invoke();
-		}, wrap_interval_timer_handler(std::bind([this, &timerHandle, tm, intId](wrap_base* intervalHandler, Handler& handler, long long& deadtime)
-		{
-			CHECK_EXCEPTION(handler);
-			if (timerHandle._handler && timerHandle._isInterval && timerHandle._intervalCount == intId)
+			if (!sign)
 			{
+				thisHandler->set_sign(NULL);
 				deadtime += (long long)tm * 1000;
 				_timeout(deadtime, timerHandle, true);
 			}
 			else
 			{
-				intervalHandler->destroy();
-				_reuMem.deallocate(intervalHandler);
+				intervalHandler->destroy(this_->_reuMem);
 			}
-		}, __1, std::forward<Handler>(handler), deadtime))));
+		}, __1, deadtime), AsyncTimer_::wrap_timer_handler(_reuMem, std::forward<Handler>(handler)));
 		_timeout(deadtime, timerHandle, true);
 	}
 
@@ -354,20 +336,6 @@ private:
 #endif
 private:
 	void _timeout(long long us, timer_handle& timerHandle, bool deadline = false);
-
-	template <typename Handler>
-	wrap_base* wrap_timer_handler(Handler&& handler)
-	{
-		typedef wrap_handler<RM_CREF(Handler)> wrap_type;
-		return new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(std::forward<Handler>(handler));
-	}
-
-	template <typename Handler>
-	wrap_base* wrap_interval_timer_handler(Handler&& handler)
-	{
-		typedef wrap_interval_handler<RM_CREF(Handler)> wrap_type;
-		return new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(std::forward<Handler>(handler));
-	}
 private:
 	void* _timer;
 	std::weak_ptr<boost_strand>& _weakStrand;

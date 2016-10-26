@@ -20,7 +20,7 @@ typedef long long micseconds;
 #endif
 
 AsyncTimer_::AsyncTimer_(ActorTimer_* actorTimer)
-:_actorTimer(actorTimer), _handler(NULL), _intervalCount(0), _isInterval(false) {}
+:_actorTimer(actorTimer), _handler(NULL), _isInterval(false) {}
 
 AsyncTimer_::~AsyncTimer_()
 {
@@ -32,8 +32,7 @@ void AsyncTimer_::cancel()
 	assert(self_strand()->running_in_this_thread());
 	if (_handler)
 	{
-		_handler->destroy();
-		_reuMem.deallocate(_handler);
+		_handler->destroy(_reuMem);
 		_handler = NULL;
 		_actorTimer->cancel(_timerHandle);
 	}
@@ -57,8 +56,7 @@ void AsyncTimer_::timeout_handler()
 		wrap_base* cb = _handler;
 		_handler = NULL;
 		cb->invoke();
-		cb->destroy();
-		_reuMem.deallocate(cb);
+		cb->destroy(_reuMem);
 	}
 	else
 	{
@@ -129,8 +127,7 @@ void overlap_timer::cancel(timer_handle& th)
 	if (!th.is_null())
 	{//删除当前定时器节点
 		assert(_lockStrand);
-		th._handler->destroy();
-		_reuMem.deallocate(th._handler);
+		th._handler->destroy(_reuMem);
 		th.reset();
 		handler_queue::iterator itNode = th._queueNode;
 		if (_handlerQueue.size() == 1)
@@ -224,11 +221,10 @@ void overlap_timer::event_handler(int tc)
 				_handlerQueue.erase(iter);
 				if (!timerHandle->_isInterval)
 				{
-					wrap_base* cb = timerHandle->_handler;
+					AsyncTimer_::wrap_base* cb = timerHandle->_handler;
 					timerHandle->_handler = NULL;
 					cb->invoke();
-					cb->destroy();
-					_reuMem.deallocate(cb);
+					cb->destroy(_reuMem);
 				}
 				else
 				{
