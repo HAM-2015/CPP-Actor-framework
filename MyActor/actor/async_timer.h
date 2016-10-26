@@ -137,7 +137,6 @@ public:
 		assert(!_handler);
 		_isInterval = true;
 		long long deadtime = get_tick_us() + (long long)tm * 1000;
-		wrap_base* const intervalHandler = wrap_timer_handler(std::forward<Handler>(handler));
 		_handler = wrap_interval_timer_handler(_reuMem, std::bind([this, tm](wrap_base* const thisHandler, long long& deadtime)
 		{
 			bool sign = false;
