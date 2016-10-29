@@ -64,10 +64,10 @@ public:
 	}
 
 	template <typename... Args>
-	bool timed_take(int tm, my_actor* host, Args&... args)
+	bool timed_take(int ms, my_actor* host, Args&... args)
 	{
 		co_async_state state = co_async_state::co_async_undefined;
-		parent::timed_pop(tm, host->make_same_context(state, args...));
+		parent::timed_pop(ms, host->make_same_context(state, args...));
 		if (co_async_state::co_async_ok == state)
 		{
 			return true;
@@ -108,10 +108,10 @@ public:
 	}
 
 	template <typename... Args>
-	bool timed_send(int tm, my_actor* host, Args&&... msg)
+	bool timed_send(int ms, my_actor* host, Args&&... msg)
 	{
 		co_async_state state = co_async_state::co_async_undefined;
-		parent::timed_push(tm, host->make_context(state), std::forward<Args>(msg)...);
+		parent::timed_push(ms, host->make_context(state), std::forward<Args>(msg)...);
 		if (co_async_state::co_async_ok == state)
 		{
 			return true;
@@ -220,11 +220,11 @@ public:
 	}
 
 	template <typename TR, typename... Args>
-	bool timed_send(int tm, my_actor* host, TR& res, Args&&... msg)
+	bool timed_send(int ms, my_actor* host, TR& res, Args&&... msg)
 	{
 		my_actor::quit_guard qg(host);
 		co_async_state state = co_async_state::co_async_undefined;
-		parent::timed_push(tm, host->make_asio_same_context(state, res), std::forward<Args>(msg)...);
+		parent::timed_push(ms, host->make_asio_same_context(state, res), std::forward<Args>(msg)...);
 		if (co_async_state::co_async_ok == state)
 		{
 			return true;
@@ -278,7 +278,7 @@ public:
 	}
 
 	template <typename Handler>
-	bool timed_wait(int tm, my_actor* host, Handler&& handler)
+	bool timed_wait(int ms, my_actor* host, Handler&& handler)
 	{
 		my_actor::quit_guard qg(host);
 		co_async_state state = co_async_state::co_async_undefined;
@@ -286,7 +286,7 @@ public:
 		std::tuple<stack_obj<Types>...> params;
 		host->trig([&](trig_once_notifer<>&& ntf)
 		{
-			parent::timed_pop(tm, wait_handler(std::move(ntf), state, result, params));
+			parent::timed_pop(ms, wait_handler(std::move(ntf), state, result, params));
 		});
 		if (co_async_state::co_async_ok == state)
 		{
@@ -342,10 +342,10 @@ public:
 	}
 
 	template <typename... Args>
-	bool timed_send(int tm, my_actor* host, Args&&... msg)
+	bool timed_send(int ms, my_actor* host, Args&&... msg)
 	{
 		void_type1 temp;
-		return parent::timed_send(tm, host, temp, std::forward<Args>(msg)...);
+		return parent::timed_send(ms, host, temp, std::forward<Args>(msg)...);
 	}
 };
 

@@ -377,7 +377,7 @@ public:
 	@brief 发送一个超时执行函数到UI消息队列中执行，完成后返回
 	*/
 	template <typename Handler>
-	bool timed_send(int tm, my_actor* host, Handler&& handler)
+	bool timed_send(int ms, my_actor* host, Handler&& handler)
 	{
 		host->lock_quit();
 		bool running = false;
@@ -389,7 +389,7 @@ public:
 			CHECK_EXCEPTION(ntf);
 		}));
 
-		if (!host->timed_wait_trig(tm, ath))
+		if (!host->timed_wait_trig(ms, ath))
 		{
 			_checkTimedMutex.lock();
 			if (!running)
@@ -569,9 +569,9 @@ public:
 	}
 
 	template <typename Handler>
-	bool timed_send(int tm, my_actor* host, Handler&& handler)
+	bool timed_send(int ms, my_actor* host, Handler&& handler)
 	{
-		return bind_qt_run_base::timed_send(tm, host, std::forward<Handler>(handler));
+		return bind_qt_run_base::timed_send(ms, host, std::forward<Handler>(handler));
 	}
 
 	template <typename Handler>

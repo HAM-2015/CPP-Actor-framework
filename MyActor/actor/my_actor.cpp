@@ -2116,14 +2116,14 @@ void my_actor::children_wait_quit(std::list<child_handle>& actorHandles)
 	}
 }
 
-bool my_actor::timed_child_wait_quit(int tm, child_handle& actorHandle)
+bool my_actor::timed_child_wait_quit(int ms, child_handle& actorHandle)
 {
 	assert_enter();
 	if (!actorHandle._quited)
 	{
 		assert(actorHandle.get_actor());
 		assert(actorHandle->parent_actor()->self_id() == self_id());
-		if (!timed_wait_trig(tm, actorHandle._quiteAth))
+		if (!timed_wait_trig(ms, actorHandle._quiteAth))
 		{
 			return false;
 		}
@@ -3064,13 +3064,13 @@ void my_actor::actor_wait_quit(const actor_handle& anotherActor)
 	trig([anotherActor](trig_once_notifer<>&& h){anotherActor->append_quit_notify(std::move(h)); });
 }
 
-bool my_actor::timed_actor_wait_quit(int tm, const actor_handle& anotherActor)
+bool my_actor::timed_actor_wait_quit(int ms, const actor_handle& anotherActor)
 {
 	assert_enter();
 	assert(anotherActor);
 	trig_handle<> ath;
 	anotherActor->append_quit_notify(make_trig_notifer_to_self(ath));
-	return timed_wait_trig(tm, ath);
+	return timed_wait_trig(ms, ath);
 }
 
 void my_actor::actors_wait_quit(const std::list<actor_handle>& anotherActors)
@@ -3360,9 +3360,9 @@ void my_actor::close_msg_notifer(msg_handle_base& amh)
 	amh.close();
 }
 
-bool my_actor::timed_wait_msg(int tm, msg_handle<>& amh)
+bool my_actor::timed_wait_msg(int ms, msg_handle<>& amh)
 {
-	return timed_wait_msg(tm, [this]
+	return timed_wait_msg(ms, [this]
 	{
 		pull_yield();
 	}, amh);
@@ -3373,14 +3373,14 @@ bool my_actor::try_wait_msg(msg_handle<>& amh)
 	return timed_wait_msg(0, amh);
 }
 
-bool my_actor::timed_pump_msg(int tm, const msg_pump_handle<>& pump)
+bool my_actor::timed_pump_msg(int ms, const msg_pump_handle<>& pump)
 {
-	return timed_pump_msg(tm, false, pump);
+	return timed_pump_msg(ms, false, pump);
 }
 
-bool my_actor::timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<>& pump)
+bool my_actor::timed_pump_msg(int ms, bool checkDis, const msg_pump_handle<>& pump)
 {
-	return timed_pump_msg(tm, [this]
+	return timed_pump_msg(ms, [this]
 	{
 		pull_yield();
 	}, checkDis, pump);
@@ -3420,9 +3420,9 @@ void my_actor::close_trig_notifer(msg_handle_base& ath)
 	ath.close();
 }
 
-bool my_actor::timed_wait_trig(int tm, trig_handle<>& ath)
+bool my_actor::timed_wait_trig(int ms, trig_handle<>& ath)
 {
-	return timed_wait_trig(tm, [this]
+	return timed_wait_trig(ms, [this]
 	{
 		pull_yield();
 	}, ath);
@@ -3453,9 +3453,9 @@ void my_actor::pump_msg(const msg_pump_handle<>& pump)
 	return pump_msg(false, pump);
 }
 
-bool my_actor::timed_wait_trig_sign(int tm, int id)
+bool my_actor::timed_wait_trig_sign(int ms, int id)
 {
-	return timed_wait_trig_sign(tm, id, [this]
+	return timed_wait_trig_sign(ms, id, [this]
 	{
 		pull_yield();
 	});

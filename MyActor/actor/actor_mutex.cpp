@@ -30,7 +30,7 @@ public:
 	void push_msg();
 	bool read_msg();
 	void wait();
-	bool timed_wait(int tm);
+	bool timed_wait(int ms);
 public:
 	shared_strand _strand;
 	my_actor* _hostActor;
@@ -84,15 +84,15 @@ void MutexTrigHandle_::wait()
 	}
 }
 
-bool MutexTrigHandle_::timed_wait(int tm)
+bool MutexTrigHandle_::timed_wait(int ms)
 {
 	assert(!_outActor);
 	if (!read_msg())
 	{
 		bool overtime = false;
-		if (tm >= 0)
+		if (ms >= 0)
 		{
-			_hostActor->delay_trig(tm, [&]
+			_hostActor->delay_trig(ms, [&]
 			{
 				overtime = true;
 				ActorFunc_::pull_yield(_hostActor);
@@ -101,7 +101,7 @@ bool MutexTrigHandle_::timed_wait(int tm)
 		ActorFunc_::push_yield(_hostActor);
 		if (!overtime)
 		{
-			if (tm >= 0)
+			if (ms >= 0)
 			{
 				_hostActor->cancel_delay_trig();
 			}
@@ -276,12 +276,12 @@ bool actor_mutex::try_lock(my_actor* host)
 	return complete;
 }
 
-bool actor_mutex::timed_lock(int tm, my_actor* host)
+bool actor_mutex::timed_lock(int ms, my_actor* host)
 {
-	return timed_lock(tm, host, []{});
+	return timed_lock(ms, host, []{});
 }
 
-bool actor_mutex::timed_lock(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf)
+bool actor_mutex::timed_lock(int ms, my_actor* host, wrap_local_handler_face<void()>&& lockNtf)
 {
 	host->assert_enter();
 	host->lock_quit();
@@ -310,7 +310,7 @@ bool actor_mutex::timed_lock(int tm, my_actor* host, wrap_local_handler_face<voi
 	if (!complete)
 	{
 		lockNtf();
-		if (!ath.timed_wait(tm))
+		if (!ath.timed_wait(ms))
 		{
 			host->send(_strand, [&]
 			{
@@ -449,7 +449,7 @@ void actor_condition_variable::wait(my_actor* host, actor_lock_guard& mutex)
 	host->unlock_quit();
 }
 
-bool actor_condition_variable::timed_wait(int tm, my_actor* host, actor_lock_guard& mutex)
+bool actor_condition_variable::timed_wait(int ms, my_actor* host, actor_lock_guard& mutex)
 {
 	host->assert_enter();
 	assert(mutex._host == host);
@@ -465,7 +465,7 @@ bool actor_condition_variable::timed_wait(int tm, my_actor* host, actor_lock_gua
 		nit = _waitQueue.begin();
 	});
 	mutex.unlock();
-	if (!ath.timed_wait(tm))
+	if (!ath.timed_wait(ms))
 	{
 		host->send(_strand, [&]
 		{
@@ -616,12 +616,12 @@ bool actor_shared_mutex::try_lock(my_actor* host)
 	return complete;
 }
 
-bool actor_shared_mutex::timed_lock(int tm, my_actor* host)
+bool actor_shared_mutex::timed_lock(int ms, my_actor* host)
 {
-	return timed_lock(tm, host, []{});
+	return timed_lock(ms, host, []{});
 }
 
-bool actor_shared_mutex::timed_lock(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf)
+bool actor_shared_mutex::timed_lock(int ms, my_actor* host, wrap_local_handler_face<void()>&& lockNtf)
 {
 	host->assert_enter();
 	host->lock_quit();
@@ -651,7 +651,7 @@ bool actor_shared_mutex::timed_lock(int tm, my_actor* host, wrap_local_handler_f
 	if (!complete)
 	{
 		lockNtf();
-		if (!ath.timed_wait(tm))
+		if (!ath.timed_wait(ms))
 		{
 			host->send(_strand, [&]
 			{
@@ -735,12 +735,12 @@ bool actor_shared_mutex::try_lock_shared(my_actor* host)
 	return complete;
 }
 
-bool actor_shared_mutex::timed_lock_shared(int tm, my_actor* host)
+bool actor_shared_mutex::timed_lock_shared(int ms, my_actor* host)
 {
-	return timed_lock_shared(tm, host, []{});
+	return timed_lock_shared(ms, host, []{});
 }
 
-bool actor_shared_mutex::timed_lock_shared(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf)
+bool actor_shared_mutex::timed_lock_shared(int ms, my_actor* host, wrap_local_handler_face<void()>&& lockNtf)
 {
 	host->assert_enter();
 	host->lock_quit();
@@ -769,7 +769,7 @@ bool actor_shared_mutex::timed_lock_shared(int tm, my_actor* host, wrap_local_ha
 	if (!complete)
 	{
 		lockNtf();
-		if (!ath.timed_wait(tm))
+		if (!ath.timed_wait(ms))
 		{
 			host->send(_strand, [&]
 			{

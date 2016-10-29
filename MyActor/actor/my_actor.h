@@ -5035,7 +5035,7 @@ public:
 		child_wait_quit(handles...);
 	}
 
-	__yield_interrupt bool timed_child_wait_quit(int tm, child_handle& actorHandle);
+	__yield_interrupt bool timed_child_wait_quit(int ms, child_handle& actorHandle);
 
 	/*!
 	@brief 等待一组子Actor完成后返回
@@ -5298,26 +5298,6 @@ public:
 	}
 
 	/*!
-	@brief 使用内部定时器延时循环触发某个函数，在触发完成之前不能多次调用
-	@param ms 间隔延时(毫秒)
-	@param handler 触发函数
-	@param cycle 循环次数
-	*/
-	template <typename Handler>
-	void interval_trig(int ms, Handler&& handler, size_t cycle = -1)
-	{
-		assert_enter();
-		if (ms > 0 && cycle)
-		{
-			_interval_trig(ms, TRY_MOVE(handler), cycle, get_tick_us());
-		}
-		else
-		{
-			assert(false);
-		}
-	}
-
-	/*!
 	@brief 使用内部定时器在绝对时间触发某个函数，在触发完成之前不能多次调用
 	@param us 触发时间(微秒)
 	@param handler 触发函数
@@ -5333,22 +5313,6 @@ public:
 	@brief 取消内部定时器触发
 	*/
 	void cancel_delay_trig();
-private:
-	template <typename Handler>
-	void _interval_trig(int ms, Handler&& handler, size_t cycle, long long deadtime)
-	{
-		typedef RM_CREF(Handler) Handler_;
-		deadtime += (long long)ms * 1000;
-		deadline(deadtime, std::bind([this, ms, cycle, deadtime](Handler_& handler)
-		{
-			BEGIN_CHECK_EXCEPTION;
-			if (!handler() && cycle-1)
-			{
-				_interval_trig(ms, std::move(handler), cycle - 1, deadtime);
-			}
-			END_CHECK_EXCEPTION;
-		}, TRY_MOVE(handler)));
-	}
 public:
 	/*!
 	@brief 发送一个异步函数到shared_strand中执行（如果是和当前一样的shared_strand直接执行），配合quit_guard使用防止引用失效，完成后返回
@@ -5487,7 +5451,7 @@ public:
 	}
 
 	template <typename H>
-	__yield_interrupt bool timed_send(int tm, const shared_strand& exeStrand, H&& h)
+	__yield_interrupt bool timed_send(int ms, const shared_strand& exeStrand, H&& h)
 	{
 		assert_enter();
 		quit_guard qg(this);
@@ -5513,7 +5477,7 @@ public:
 					ntf();
 				}
 			}, mutex, ath.dead_sign()));
-			if (!timed_wait_trig(tm, ath))
+			if (!timed_wait_trig(ms, ath))
 			{
 				mutex->lock();
 				if (!running)
@@ -5695,7 +5659,7 @@ private:
 	}
 private:
 	template <typename TimedHandler, typename DST, typename... Args>
-	bool _timed_wait_msg(ActorMsgHandlePush_<Args...>& amh, TimedHandler&& th, DST& dstRec, const int tm)
+	bool _timed_wait_msg(ActorMsgHandlePush_<Args...>& amh, TimedHandler&& th, DST& dstRec, const int ms)
 	{
 		assert(amh._hostActor && amh._hostActor->self_id() == self_id());
 		if (!amh.read_msg(dstRec))
@@ -5707,10 +5671,10 @@ private:
 				amh.throw_lost_exception();
 			}
 #endif
-			if (tm > 0)
+			if (ms > 0)
 			{
 				bool overtime = false;
-				delay_trig(tm, [&overtime, &th]
+				delay_trig(ms, [&overtime, &th]
 				{
 					overtime = true;
 					th();
@@ -5722,7 +5686,7 @@ private:
 				}
 				cancel_delay_trig();
 			}
-			else if (tm < 0)
+			else if (ms < 0)
 			{
 				push_yield();
 			}
@@ -5741,12 +5705,12 @@ private:
 	}
 
 	template <typename DST, typename... Args>
-	bool _timed_wait_msg(ActorMsgHandlePush_<Args...>& amh, DST& dstRec, const int tm)
+	bool _timed_wait_msg(ActorMsgHandlePush_<Args...>& amh, DST& dstRec, const int ms)
 	{
 		return _timed_wait_msg(amh, [this]
 		{
 			pull_yield();
-		}, dstRec, tm);
+		}, dstRec, ms);
 	}
 
 	template <typename DST, typename... Args>
@@ -5795,29 +5759,29 @@ public:
 
 	/*!
 	@brief 从消息句柄中提取消息
-	@param tm 超时时间
+	@param ms 超时时间
 	@return 超时完成返回false，成功提取消息返回true
 	*/
 	template <typename... Args, typename... Outs>
-	__yield_interrupt bool timed_wait_msg(int tm, msg_handle<Args...>& amh, Outs&... res)
+	__yield_interrupt bool timed_wait_msg(int ms, msg_handle<Args...>& amh, Outs&... res)
 	{
 		assert_enter();
 		DstReceiverRef_<types_pck<Args...>, types_pck<Outs...>> dstRec(res...);
-		return _timed_wait_msg(amh, dstRec, tm);
+		return _timed_wait_msg(amh, dstRec, ms);
 	}
 
 	template <typename TimedHandler, typename... Args, typename... Outs>
-	__yield_interrupt bool timed_wait_msg(int tm, TimedHandler&& th, msg_handle<Args...>& amh, Outs&... res)
+	__yield_interrupt bool timed_wait_msg(int ms, TimedHandler&& th, msg_handle<Args...>& amh, Outs&... res)
 	{
 		assert_enter();
 		DstReceiverRef_<types_pck<Args...>, types_pck<Outs...>> dstRec(res...);
-		return _timed_wait_msg(amh, th, dstRec, tm);
+		return _timed_wait_msg(amh, th, dstRec, ms);
 	}
 
-	__yield_interrupt bool timed_wait_msg(int tm, msg_handle<>& amh);
+	__yield_interrupt bool timed_wait_msg(int ms, msg_handle<>& amh);
 
 	template <typename TimedHandler>
-	__yield_interrupt bool timed_wait_msg(int tm, TimedHandler&& th, msg_handle<>& amh)
+	__yield_interrupt bool timed_wait_msg(int ms, TimedHandler&& th, msg_handle<>& amh)
 	{
 		assert_enter();
 		assert(amh._hostActor && amh._hostActor->self_id() == self_id());
@@ -5830,10 +5794,10 @@ public:
 				amh.throw_lost_exception();
 			}
 #endif
-			if (tm > 0)
+			if (ms > 0)
 			{
 				bool overtime = false;
-				delay_trig(tm, [&overtime, &th]
+				delay_trig(ms, [&overtime, &th]
 				{
 					overtime = true;
 					th();
@@ -5845,7 +5809,7 @@ public:
 				}
 				cancel_delay_trig();
 			}
-			else if (tm < 0)
+			else if (ms < 0)
 			{
 				push_yield();
 			}
@@ -5864,11 +5828,11 @@ public:
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt bool timed_wait_msg_invoke(int tm, msg_handle<Args...>& amh, Handler&& h)
+	__yield_interrupt bool timed_wait_msg_invoke(int ms, msg_handle<Args...>& amh, Handler&& h)
 	{
 		assert_enter();
 		DstReceiverBuff_<Args...> dstRec;
-		if (_timed_wait_msg(amh, dstRec, tm))
+		if (_timed_wait_msg(amh, dstRec, ms))
 		{
 			tuple_invoke(h, std::move(dstRec._dstBuff.get()));
 			return true;
@@ -5877,11 +5841,11 @@ public:
 	}
 
 	template <typename... Args, typename TimedHandler, typename Handler>
-	__yield_interrupt bool timed_wait_msg_invoke(int tm, msg_handle<Args...>& amh, TimedHandler&& th, Handler&& h)
+	__yield_interrupt bool timed_wait_msg_invoke(int ms, msg_handle<Args...>& amh, TimedHandler&& th, Handler&& h)
 	{
 		assert_enter();
 		DstReceiverBuff_<Args...> dstRec;
-		if (_timed_wait_msg(amh, th, dstRec, tm))
+		if (_timed_wait_msg(amh, th, dstRec, ms))
 		{
 			tuple_invoke(h, std::move(dstRec._dstBuff.get()));
 			return true;
@@ -5951,16 +5915,16 @@ public:
 	@brief 在一定时间内尝试弹出并忽略掉一个消息
 	*/
 	template <typename... Args>
-	__yield_interrupt bool timed_wait_ignore_msg(int tm, msg_handle<Args...>& amh)
+	__yield_interrupt bool timed_wait_ignore_msg(int ms, msg_handle<Args...>& amh)
 	{
 		std::tuple<ignore_msg<Args>...> ignoreMsg;
-		return tuple_invoke<bool>(&my_actor::_timed_wait_ignore_msg<Args...>, std::tuple<my_actor*, int&, msg_handle<Args...>&>(this, tm, amh), ignoreMsg);
+		return tuple_invoke<bool>(&my_actor::_timed_wait_ignore_msg<Args...>, std::tuple<my_actor*, int&, msg_handle<Args...>&>(this, ms, amh), ignoreMsg);
 	}
 private:
 	template <typename... Args>
-	__yield_interrupt static bool _timed_wait_ignore_msg(my_actor* const host, int tm, msg_handle<Args...>& amh, ignore_msg<Args>&... outs)
+	__yield_interrupt static bool _timed_wait_ignore_msg(my_actor* const host, int ms, msg_handle<Args...>& amh, ignore_msg<Args>&... outs)
 	{
-		return host->timed_wait_msg(tm, amh, outs...);
+		return host->timed_wait_msg(ms, amh, outs...);
 	}
 public:
 	/*!
@@ -5988,11 +5952,11 @@ public:
 	@brief 创建带超时的上下文回调函数(可以多次触发，但只有第一次有效)，直接作为回调函数使用，async_func(..., Handler self->make_timed_context(...))
 	*/
 	template <typename... Outs>
-	callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_context(int tm, bool& overtime, Outs&... outs)
+	callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_context(int ms, bool& overtime, Outs&... outs)
 	{
 		assert_enter();
 		overtime = false;
-		delay_trig(tm, [this, &overtime]
+		delay_trig(ms, [this, &overtime]
 		{
 			overtime = true;
 			pull_yield();
@@ -6004,10 +5968,10 @@ public:
 	@brief 创建带超时的上下文回调函数(可以多次触发，但只有第一次有效)，直接作为回调函数使用，async_func(..., Handler self->make_timed_context(...))
 	*/
 	template <typename TimedHandler, typename... Outs>
-	callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_context(int tm, TimedHandler&& th, Outs&... outs)
+	callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_context(int ms, TimedHandler&& th, Outs&... outs)
 	{
 		assert_enter();
-		delay_trig(tm, TRY_MOVE(th));
+		delay_trig(ms, TRY_MOVE(th));
 		return callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, true, outs...);
 	}
 
@@ -6036,11 +6000,11 @@ public:
 	@brief 创建带超时的上下文回调函数(可以少传参数，可以多次触发，但只有第一次有效)，直接作为回调函数使用，async_func(..., Handler self->make_timed_context(...))
 	*/
 	template <typename... Outs>
-	same_callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_same_context(int tm, bool& overtime, Outs&... outs)
+	same_callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_same_context(int ms, bool& overtime, Outs&... outs)
 	{
 		assert_enter();
 		overtime = false;
-		delay_trig(tm, [this, &overtime]
+		delay_trig(ms, [this, &overtime]
 		{
 			overtime = true;
 			pull_yield();
@@ -6052,10 +6016,10 @@ public:
 	@brief 创建带超时的上下文回调函数(可以少传参数，可以多次触发，但只有第一次有效)，直接作为回调函数使用，async_func(..., Handler self->make_timed_context(...))
 	*/
 	template <typename TimedHandler, typename... Outs>
-	same_callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_same_context(int tm, TimedHandler&& th, Outs&... outs)
+	same_callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_same_context(int ms, TimedHandler&& th, Outs&... outs)
 	{
 		assert_enter();
-		delay_trig(tm, TRY_MOVE(th));
+		delay_trig(ms, TRY_MOVE(th));
 		return same_callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, true, outs...);
 	}
 
@@ -6084,10 +6048,10 @@ public:
 	@brief 创建带超时的ASIO库上下文回调函数(只能触发一次)，直接作为回调函数使用，async_func(..., Handler self->make_asio_timed_context(...))
 	*/
 	template <typename TimedHandler, typename... Outs>
-	asio_callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_asio_timed_context(int tm, TimedHandler&& th, Outs&... outs)
+	asio_callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_asio_timed_context(int ms, TimedHandler&& th, Outs&... outs)
 	{
 		assert_enter();
-		delay_trig(tm, TRY_MOVE(th));
+		delay_trig(ms, TRY_MOVE(th));
 		return asio_callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, true, outs...);
 	}
 
@@ -6116,10 +6080,10 @@ public:
 	@brief 创建带超时的ASIO库上下文回调函数(可以少传参数，只能触发一次)，直接作为回调函数使用，async_func(..., Handler self->make_asio_timed_context(...))
 	*/
 	template <typename TimedHandler, typename... Outs>
-	asio_same_callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_asio_timed_same_context(int tm, TimedHandler&& th, Outs&... outs)
+	asio_same_callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_asio_timed_same_context(int ms, TimedHandler&& th, Outs&... outs)
 	{
 		assert_enter();
-		delay_trig(tm, TRY_MOVE(th));
+		delay_trig(ms, TRY_MOVE(th));
 		return asio_same_callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, true, outs...);
 	}
 
@@ -6191,30 +6155,30 @@ public:
 
 	/*!
 	@brief 从触发句柄中提取消息
-	@param tm 超时时间
+	@param ms 超时时间
 	@return 超时完成返回false，成功提取消息返回true
 	*/
 	template <typename... Args, typename... Outs>
-	__yield_interrupt bool timed_wait_trig(int tm, trig_handle<Args...>& ath, Outs&... res)
+	__yield_interrupt bool timed_wait_trig(int ms, trig_handle<Args...>& ath, Outs&... res)
 	{
 		assert_enter();
 		DstReceiverRef_<types_pck<Args...>, types_pck<Outs...>> dstRec(res...);
-		return _timed_wait_msg(ath, dstRec, tm);
+		return _timed_wait_msg(ath, dstRec, ms);
 	}
 
 	template <typename TimedHandler, typename... Args, typename... Outs>
-	__yield_interrupt bool timed_wait_trig(int tm, TimedHandler&& th, trig_handle<Args...>& ath, Outs&... res)
+	__yield_interrupt bool timed_wait_trig(int ms, TimedHandler&& th, trig_handle<Args...>& ath, Outs&... res)
 	{
 		assert_enter();
 		DstReceiverRef_<types_pck<Args...>, types_pck<Outs...>> dstRec(res...);
-		return _timed_wait_msg(ath, th, dstRec, tm);
+		return _timed_wait_msg(ath, th, dstRec, ms);
 	}
 
-	__yield_interrupt bool timed_wait_trig(int tm, trig_handle<>& ath);
+	__yield_interrupt bool timed_wait_trig(int ms, trig_handle<>& ath);
 
 
 	template <typename TimedHandler>
-	__yield_interrupt bool timed_wait_trig(int tm, TimedHandler&& th, trig_handle<>& ath)
+	__yield_interrupt bool timed_wait_trig(int ms, TimedHandler&& th, trig_handle<>& ath)
 	{
 		assert_enter();
 		assert(ath._hostActor && ath._hostActor->self_id() == self_id());
@@ -6227,10 +6191,10 @@ public:
 				ath.throw_lost_exception();
 			}
 #endif
-			if (tm > 0)
+			if (ms > 0)
 			{
 				bool overtime = false;
-				delay_trig(tm, [&overtime, &th]
+				delay_trig(ms, [&overtime, &th]
 				{
 					overtime = true;
 					th();
@@ -6242,7 +6206,7 @@ public:
 				}
 				cancel_delay_trig();
 			}
-			else if (tm < 0)
+			else if (ms < 0)
 			{
 				push_yield();
 			}
@@ -6261,11 +6225,11 @@ public:
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt bool timed_wait_trig_invoke(int tm, trig_handle<Args...>& ath, Handler&& h)
+	__yield_interrupt bool timed_wait_trig_invoke(int ms, trig_handle<Args...>& ath, Handler&& h)
 	{
 		assert_enter();
 		DstReceiverBuff_<Args...> dstRec;
-		if (_timed_wait_msg(ath, dstRec, tm))
+		if (_timed_wait_msg(ath, dstRec, ms))
 		{
 			tuple_invoke(h, std::move(dstRec._dstBuff.get()));
 			return true;
@@ -6274,11 +6238,11 @@ public:
 	}
 
 	template <typename... Args, typename TimedHandler, typename Handler>
-	__yield_interrupt bool timed_wait_trig_invoke(int tm, trig_handle<Args...>& ath, TimedHandler&& th, Handler&& h)
+	__yield_interrupt bool timed_wait_trig_invoke(int ms, trig_handle<Args...>& ath, TimedHandler&& th, Handler&& h)
 	{
 		assert_enter();
 		DstReceiverBuff_<Args...> dstRec;
-		if (_timed_wait_msg(ath, th, dstRec, tm))
+		if (_timed_wait_msg(ath, th, dstRec, ms))
 		{
 			tuple_invoke(h, std::move(dstRec._dstBuff.get()));
 			return true;
@@ -6348,10 +6312,10 @@ public:
 	@brief 在一定时间内尝试弹出并忽略掉一个消息
 	*/
 	template <typename... Args>
-	__yield_interrupt bool timed_wait_ignore_trig(int tm, trig_handle<Args...>& ath)
+	__yield_interrupt bool timed_wait_ignore_trig(int ms, trig_handle<Args...>& ath)
 	{
 		std::tuple<ignore_msg<Args>...> ignoreMsg;
-		return tuple_invoke<bool>(&my_actor::_timed_wait_ignore_trig<Args...>, std::tuple<my_actor*, int&, trig_handle<Args...>&>(this, tm, ath), ignoreMsg);
+		return tuple_invoke<bool>(&my_actor::_timed_wait_ignore_trig<Args...>, std::tuple<my_actor*, int&, trig_handle<Args...>&>(this, ms, ath), ignoreMsg);
 	}
 
 	/*!
@@ -6362,10 +6326,10 @@ public:
 	/*!
 	@brief 超时等待触发消息
 	*/
-	__yield_interrupt bool timed_wait_trig_sign(int tm, int id);
+	__yield_interrupt bool timed_wait_trig_sign(int ms, int id);
 
 	template <typename TimedHandler>
-	__yield_interrupt bool timed_wait_trig_sign(int tm, int id, TimedHandler&& th)
+	__yield_interrupt bool timed_wait_trig_sign(int ms, int id, TimedHandler&& th)
 	{
 		assert_enter();
 		assert(id >= 0 && id < 8 * sizeof(void*));
@@ -6374,10 +6338,10 @@ public:
 		{
 			BREAK_OF_SCOPE_EXEC(_waitingTrigMask &= (-1 ^ mask));
 			_waitingTrigMask |= mask;
-			if (tm > 0)
+			if (ms > 0)
 			{
 				bool overtime = false;
-				delay_trig(tm, [&overtime, &th]
+				delay_trig(ms, [&overtime, &th]
 				{
 					overtime = true;
 					th();
@@ -6389,7 +6353,7 @@ public:
 				}
 				cancel_delay_trig();
 			}
-			else if (tm < 0)
+			else if (ms < 0)
 			{
 				push_yield();
 			}
@@ -6407,9 +6371,9 @@ public:
 	bool try_wait_trig_sign(int id);
 private:
 	template <typename... Args>
-	__yield_interrupt static bool _timed_wait_ignore_trig(my_actor* const host, int tm, trig_handle<Args...>& ath, ignore_msg<Args>&... outs)
+	__yield_interrupt static bool _timed_wait_ignore_trig(my_actor* const host, int ms, trig_handle<Args...>& ath, ignore_msg<Args>&... outs)
 	{
-		return host->timed_wait_trig(tm, ath, outs...);
+		return host->timed_wait_trig(ms, ath, outs...);
 	}
 private:
 	/*!
@@ -7169,7 +7133,7 @@ private:
 	}
 private:
 	template <typename TimedHandler, typename DST, typename... Args>
-	bool _timed_pump_msg(const msg_pump_handle<Args...>& pump, TimedHandler&& th, DST& dstRec, int tm, bool checkDis)
+	bool _timed_pump_msg(const msg_pump_handle<Args...>& pump, TimedHandler&& th, DST& dstRec, int ms, bool checkDis)
 	{
 		assert(!pump.check_closed());
 		assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
@@ -7187,10 +7151,10 @@ private:
 			}
 #endif
 			pump.get()->_checkDis = checkDis;
-			if (tm >= 0)
+			if (ms >= 0)
 			{
 				bool overtime = false;
-				delay_trig(tm, [&overtime, &th]
+				delay_trig(ms, [&overtime, &th]
 				{
 					overtime = true;
 					th();
@@ -7222,12 +7186,12 @@ private:
 	}
 
 	template <typename DST, typename... Args>
-	bool _timed_pump_msg(const msg_pump_handle<Args...>& pump, DST& dstRec, int tm, bool checkDis)
+	bool _timed_pump_msg(const msg_pump_handle<Args...>& pump, DST& dstRec, int ms, bool checkDis)
 	{
 		return _timed_pump_msg(pump, [this]
 		{
 			pull_yield();
-		}, dstRec, tm, checkDis);
+		}, dstRec, ms, checkDis);
 	}
 
 	template <typename DST, typename... Args>
@@ -7260,22 +7224,22 @@ private:
 	}
 
 	template <typename... Args>
-	bool _timed_wait_connect(const msg_pump_handle<Args...>& pump, int tm)
+	bool _timed_wait_connect(const msg_pump_handle<Args...>& pump, int ms)
 	{
 		assert(!pump.check_closed());
 		assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
 		if (!pump.is_connected())
 		{
-			if (0 == tm)
+			if (0 == ms)
 			{
 				return false;
 			}
 			BREAK_OF_SCOPE_EXEC(pump.get()->stop_waiting());
 			pump.get()->_waitConnect = true;
-			if (tm >= 0)
+			if (ms >= 0)
 			{
 				bool overtime = false;
-				delay_trig(tm, [this, &overtime]
+				delay_trig(ms, [this, &overtime]
 				{
 					overtime = true;
 					pull_yield();
@@ -7298,42 +7262,42 @@ public:
 
 	/*!
 	@brief 从消息泵中提取消息
-	@param tm 超时时间
+	@param ms 超时时间
 	@param checkDis 检测是否被断开连接，是就抛出 pump_disconnected_exception 异常
 	@return 超时完成返回false，成功取到消息返回true
 	*/
 	template <typename... Args, typename... Outs>
-	__yield_interrupt bool timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<Args...>& pump, Outs&... res)
+	__yield_interrupt bool timed_pump_msg(int ms, bool checkDis, const msg_pump_handle<Args...>& pump, Outs&... res)
 	{
 		assert_enter();
 		DstReceiverRef_<types_pck<Args...>, types_pck<Outs...>> dstRec(res...);
-		return _timed_pump_msg(pump, dstRec, tm, checkDis);
+		return _timed_pump_msg(pump, dstRec, ms, checkDis);
 	}
 
 	template <typename TimedHandler, typename... Args, typename... Outs>
-	__yield_interrupt bool timed_pump_msg(int tm, TimedHandler&& th, bool checkDis, const msg_pump_handle<Args...>& pump, Outs&... res)
+	__yield_interrupt bool timed_pump_msg(int ms, TimedHandler&& th, bool checkDis, const msg_pump_handle<Args...>& pump, Outs&... res)
 	{
 		assert_enter();
 		DstReceiverRef_<types_pck<Args...>, types_pck<Outs...>> dstRec(res...);
-		return _timed_pump_msg(pump, th, dstRec, tm, checkDis);
+		return _timed_pump_msg(pump, th, dstRec, ms, checkDis);
 	}
 
 	template <typename... Args, typename... Outs>
-	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<Args...>& pump, Outs&... res)
+	__yield_interrupt bool timed_pump_msg(int ms, const msg_pump_handle<Args...>& pump, Outs&... res)
 	{
-		return timed_pump_msg(tm, false, pump, res...);
+		return timed_pump_msg(ms, false, pump, res...);
 	}
 
 	template <typename TimedHandler, typename... Args, typename... Outs>
-	__yield_interrupt bool timed_pump_msg(int tm, TimedHandler&& th, const msg_pump_handle<Args...>& pump, Outs&... res)
+	__yield_interrupt bool timed_pump_msg(int ms, TimedHandler&& th, const msg_pump_handle<Args...>& pump, Outs&... res)
 	{
-		return timed_pump_msg(tm, th, false, pump, res...);
+		return timed_pump_msg(ms, th, false, pump, res...);
 	}
 
-	__yield_interrupt bool timed_pump_msg(int tm, bool checkDis, const msg_pump_handle<>& pump);
+	__yield_interrupt bool timed_pump_msg(int ms, bool checkDis, const msg_pump_handle<>& pump);
 
 	template <typename TimedHandler>
-	__yield_interrupt bool timed_pump_msg(int tm, TimedHandler&& th, bool checkDis, const msg_pump_handle<>& pump)
+	__yield_interrupt bool timed_pump_msg(int ms, TimedHandler&& th, bool checkDis, const msg_pump_handle<>& pump)
 	{
 		assert_enter();
 		assert(!pump.check_closed());
@@ -7352,10 +7316,10 @@ public:
 			}
 #endif
 			pump.get()->_checkDis = checkDis;
-			if (tm >= 0)
+			if (ms >= 0)
 			{
 				bool overtime = false;
-				delay_trig(tm, [&overtime, &th]
+				delay_trig(ms, [&overtime, &th]
 				{
 					overtime = true;
 					th();
@@ -7386,20 +7350,20 @@ public:
 		return true;
 	}
 
-	__yield_interrupt bool timed_pump_msg(int tm, const msg_pump_handle<>& pump);
+	__yield_interrupt bool timed_pump_msg(int ms, const msg_pump_handle<>& pump);
 
 	template <typename TimedHandler>
-	__yield_interrupt bool timed_pump_msg(int tm, TimedHandler&& th, const msg_pump_handle<>& pump)
+	__yield_interrupt bool timed_pump_msg(int ms, TimedHandler&& th, const msg_pump_handle<>& pump)
 	{
-		return timed_pump_msg(tm, th, false, pump);
+		return timed_pump_msg(ms, th, false, pump);
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt bool timed_pump_msg_invoke(int tm, bool checkDis, const msg_pump_handle<Args...>& pump, Handler&& h)
+	__yield_interrupt bool timed_pump_msg_invoke(int ms, bool checkDis, const msg_pump_handle<Args...>& pump, Handler&& h)
 	{
 		assert_enter();
 		DstReceiverBuff_<Args...> dstRec;
-		if (_timed_pump_msg(pump, dstRec, tm, checkDis))
+		if (_timed_pump_msg(pump, dstRec, ms, checkDis))
 		{
 			tuple_invoke(h, std::move(dstRec._dstBuff.get()));
 			return true;
@@ -7408,11 +7372,11 @@ public:
 	}
 
 	template <typename... Args, typename TimedHandler, typename Handler>
-	__yield_interrupt bool timed_pump_msg_invoke(int tm, bool checkDis, const msg_pump_handle<Args...>& pump, TimedHandler&& th, Handler&& h)
+	__yield_interrupt bool timed_pump_msg_invoke(int ms, bool checkDis, const msg_pump_handle<Args...>& pump, TimedHandler&& th, Handler&& h)
 	{
 		assert_enter();
 		DstReceiverBuff_<Args...> dstRec;
-		if (_timed_pump_msg(pump, th, dstRec, tm, checkDis))
+		if (_timed_pump_msg(pump, th, dstRec, ms, checkDis))
 		{
 			tuple_invoke(h, std::move(dstRec._dstBuff.get()));
 			return true;
@@ -7421,15 +7385,15 @@ public:
 	}
 
 	template <typename... Args, typename Handler>
-	__yield_interrupt bool timed_pump_msg_invoke(int tm, const msg_pump_handle<Args...>& pump, Handler&& h)
+	__yield_interrupt bool timed_pump_msg_invoke(int ms, const msg_pump_handle<Args...>& pump, Handler&& h)
 	{
-		return timed_pump_msg_invoke(tm, false, pump, h);
+		return timed_pump_msg_invoke(ms, false, pump, h);
 	}
 
 	template <typename... Args, typename TimedHandler, typename Handler>
-	__yield_interrupt bool timed_pump_msg_invoke(int tm, const msg_pump_handle<Args...>& pump, TimedHandler&& th, Handler&& h)
+	__yield_interrupt bool timed_pump_msg_invoke(int ms, const msg_pump_handle<Args...>& pump, TimedHandler&& th, Handler&& h)
 	{
-		return timed_pump_msg_invoke(tm, false, pump, th, h);
+		return timed_pump_msg_invoke(ms, false, pump, th, h);
 	}
 
 	/*!
@@ -7542,9 +7506,9 @@ public:
 	@brief 超时等待通知句柄连接
 	*/
 	template <typename... Args>
-	__yield_interrupt bool timed_wait_connect(int tm, msg_pump_handle<Args...>& pump)
+	__yield_interrupt bool timed_wait_connect(int ms, msg_pump_handle<Args...>& pump)
 	{
-		return _timed_wait_connect(pump, tm);
+		return _timed_wait_connect(pump, ms);
 	}
 
 	/*!
@@ -7560,16 +7524,16 @@ public:
 	@brief 在一定时间内尝试弹出并忽略掉一个消息
 	*/
 	template <typename... Args>
-	__yield_interrupt bool timed_pump_ignore_msg(int tm, bool checkDis, const msg_pump_handle<Args...>& pump)
+	__yield_interrupt bool timed_pump_ignore_msg(int ms, bool checkDis, const msg_pump_handle<Args...>& pump)
 	{
 		std::tuple<ignore_msg<Args>...> ignoreMsg;
-		return tuple_invoke<bool>(&my_actor::_timed_pump_ignore_msg<Args...>, std::tuple<my_actor*, int&, bool&, const msg_pump_handle<Args...>&>(this, tm, checkDis, pump), ignoreMsg);
+		return tuple_invoke<bool>(&my_actor::_timed_pump_ignore_msg<Args...>, std::tuple<my_actor*, int&, bool&, const msg_pump_handle<Args...>&>(this, ms, checkDis, pump), ignoreMsg);
 	}
 
 	template <typename... Args>
-	__yield_interrupt bool timed_pump_ignore_msg(int tm, const msg_pump_handle<Args...>& pump)
+	__yield_interrupt bool timed_pump_ignore_msg(int ms, const msg_pump_handle<Args...>& pump)
 	{
-		return timed_pump_ignore_msg(tm, false, pump);
+		return timed_pump_ignore_msg(ms, false, pump);
 	}
 
 	/*!
@@ -7604,9 +7568,9 @@ public:
 	}
 private:
 	template <typename... Args>
-	__yield_interrupt static bool _timed_pump_ignore_msg(my_actor* const host, int tm, bool checkDis, const msg_pump_handle<Args...>& pump, ignore_msg<Args>&... res)
+	__yield_interrupt static bool _timed_pump_ignore_msg(my_actor* const host, int ms, bool checkDis, const msg_pump_handle<Args...>& pump, ignore_msg<Args>&... res)
 	{
-		return host->timed_pump_msg(tm, checkDis, pump, res...);
+		return host->timed_pump_msg(ms, checkDis, pump, res...);
 	}
 
 	template <typename... Args>
@@ -7832,7 +7796,7 @@ private:
 	}
 
 	template <typename Ready>
-	__yield_interrupt size_t _timed_run_mutex_blocks(const int tm, Ready&& mutexReady, MutexBlock_** const mbList, const size_t N)
+	__yield_interrupt size_t _timed_run_mutex_blocks(const int ms, Ready&& mutexReady, MutexBlock_** const mbList, const size_t N)
 	{
 		lock_quit();
 		size_t runCount = 0;
@@ -7847,10 +7811,10 @@ private:
 				assert(yield_count() == nt);
 				unlock_quit();
 				_mutex_check_lost(mbList, N);
-				if (tm >= 0)
+				if (ms >= 0)
 				{
 					bool overtime = false;
-					delay_trig(tm, [this, &overtime]
+					delay_trig(ms, [this, &overtime]
 					{
 						overtime = true;
 						pull_yield();
@@ -7949,12 +7913,12 @@ public:
 	@brief 超时等待运行互斥消息执行块（阻塞），每次有几个取几个
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt size_t timed_run_mutex_blocks_many(const int tm, MutexBlocks&&... mbs)
+	__yield_interrupt size_t timed_run_mutex_blocks_many(const int ms, MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");
 		MutexBlock_* mbList[N] = { &mbs... };
-		return _timed_run_mutex_blocks(tm, [&]()->bool
+		return _timed_run_mutex_blocks(ms, [&]()->bool
 		{
 			return _mutex_ready(mbList, N);
 		}, mbList, N);
@@ -7964,12 +7928,12 @@ public:
 	@brief 超时等待运行互斥消息执行块（阻塞），每次从头开始优先只取一条消息
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt size_t timed_run_mutex_blocks_safe(const int tm, MutexBlocks&&... mbs)
+	__yield_interrupt size_t timed_run_mutex_blocks_safe(const int ms, MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");
 		MutexBlock_* mbList[N] = { &mbs... };
-		return _timed_run_mutex_blocks(tm, [&]()->bool
+		return _timed_run_mutex_blocks(ms, [&]()->bool
 		{
 			return _mutex_ready2(0, mbList, N);
 		}, mbList, N);
@@ -7979,13 +7943,13 @@ public:
 	@brief 超时等待运行互斥消息执行块（阻塞），每次依次往后开始优先只取一条消息
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt size_t timed_run_mutex_blocks_rotation(const int tm, MutexBlocks&&... mbs)
+	__yield_interrupt size_t timed_run_mutex_blocks_rotation(const int ms, MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");
 		MutexBlock_* mbList[N] = { &mbs... };
 		size_t i = -1;
-		return _timed_run_mutex_blocks(tm, [&]()->bool
+		return _timed_run_mutex_blocks(ms, [&]()->bool
 		{
 			i = N - 1 != i ? i + 1 : 0;
 			return _mutex_ready2(i, mbList, N);
@@ -7996,7 +7960,7 @@ public:
 	@brief 超时等待运行互斥消息执行块（阻塞，带优先级），每次只取一条消息
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt size_t timed_run_mutex_blocks_priority(const int tm, MutexBlocks&&... mbs)
+	__yield_interrupt size_t timed_run_mutex_blocks_priority(const int ms, MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");
@@ -8004,7 +7968,7 @@ public:
 		const size_t m = 2 * N + 1;
 		const size_t cmax = N* (N + 1) / 2;
 		size_t ct = 0;
-		return _timed_run_mutex_blocks(tm, [&]()->bool
+		return _timed_run_mutex_blocks(ms, [&]()->bool
 		{
 			ct = cmax != ct ? ct + 1 : 1;
 			const size_t i = (m + 1 - (size_t)std::sqrt(m * m - 8 * ct)) / 2 - 1;
@@ -8294,7 +8258,7 @@ public:
 		}
 	}
 
-	__yield_interrupt bool timed_actor_wait_quit(int tm, const actor_handle& anotherActor);
+	__yield_interrupt bool timed_actor_wait_quit(int ms, const actor_handle& anotherActor);
 
 	/*!
 	@brief 挂起另一个Actor，等待其所有子Actor都调用后才返回

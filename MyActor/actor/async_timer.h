@@ -103,13 +103,13 @@ public:
 	@brief 开启一个定时，在依赖的strand线程中调用
 	*/
 	template <typename Handler>
-	long long timeout(int tm, Handler&& handler)
+	long long timeout(int ms, Handler&& handler)
 	{
 		assert(self_strand()->running_in_this_thread());
 		assert(!_handler);
 		_isInterval = false;
 		_handler = wrap_timer_handler(_reuMem, std::forward<Handler>(handler));
-		_timerHandle = _actorTimer->timeout((long long)tm * 1000, _weakThis.lock(), false);
+		_timerHandle = _actorTimer->timeout((long long)ms * 1000, _weakThis.lock(), false);
 		return _timerHandle._beginStamp;
 	}
 
@@ -131,13 +131,14 @@ public:
 	@brief 循环定时调用一个handler，在依赖的strand线程中调用
 	*/
 	template <typename Handler>
-	void interval(int tm, Handler&& handler)
+	void interval(int ms, Handler&& handler)
 	{
 		assert(self_strand()->running_in_this_thread());
 		assert(!_handler);
 		_isInterval = true;
-		long long deadtime = get_tick_us() + (long long)tm * 1000;
-		_handler = wrap_interval_timer_handler(_reuMem, std::bind([this, tm](wrap_base* const thisHandler, long long& deadtime)
+		long long const intervalus = (long long)ms * 1000;
+		long long const deadtime = get_tick_us() + intervalus;
+		_handler = wrap_interval_timer_handler(_reuMem, std::bind([this, intervalus](wrap_base* const thisHandler, long long& deadtime)
 		{
 			bool sign = false;
 			AsyncTimer_* const this_ = this;
@@ -147,7 +148,7 @@ public:
 			if (!sign)
 			{
 				thisHandler->set_sign(NULL);
-				deadtime += (long long)tm * 1000;
+				deadtime += intervalus;
 				_timerHandle = _actorTimer->timeout(deadtime, _weakThis.lock(), true);
 			}
 			else
@@ -291,13 +292,14 @@ public:
 	@brief 循环定时调用一个handler，在依赖的strand线程中调用
 	*/
 	template <typename Handler>
-	void interval(int tm, timer_handle& timerHandle, Handler&& handler)
+	void interval(int ms, timer_handle& timerHandle, Handler&& handler)
 	{
 		assert(self_strand()->running_in_this_thread());
 		assert(timerHandle.is_null());
 		timerHandle._isInterval = true;
-		long long deadtime = get_tick_us() + (long long)tm * 1000;
-		timerHandle._handler = AsyncTimer_::wrap_interval_timer_handler(_reuMem, std::bind([this, &timerHandle, tm](AsyncTimer_::wrap_base* const thisHandler, long long& deadtime)
+		long long const intervalus = (long long)ms * 1000;
+		long long const deadtime = get_tick_us() + intervalus;
+		timerHandle._handler = AsyncTimer_::wrap_interval_timer_handler(_reuMem, std::bind([this, &timerHandle, intervalus](AsyncTimer_::wrap_base* const thisHandler, long long& deadtime)
 		{
 			bool sign = false;
 			overlap_timer* const this_ = this;
@@ -307,7 +309,7 @@ public:
 			if (!sign)
 			{
 				thisHandler->set_sign(NULL);
-				deadtime += (long long)tm * 1000;
+				deadtime += intervalus;
 				_timeout(deadtime, timerHandle, true);
 			}
 			else

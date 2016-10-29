@@ -157,32 +157,32 @@ struct MakeBreakOfScope2_
 #define break_of_scope_call auto BOND_COUNT(__raiiCall) = MakeBreakOfScope2_()-
 
 //在Actor作用域内定时触发某个操作
-#define HEARTBEAT_TRACE_NAME(__name__, __self__, __tm__, __handler__)\
+#define HEARTBEAT_TRACE_NAME(__name__, __self__, __ms__, __handler__)\
 	overlap_timer::timer_handle __name__; \
-	__self__->self_strand()->over_timer()->interval(__tm__, __name__, [&]__handler__); \
+	__self__->self_strand()->over_timer()->interval(__ms__, __name__, [&]__handler__); \
 	BREAK_OF_SCOPE_NAME(BOND_NAME(__heartbeatHandler_, __name__), { __self__->self_strand()->over_timer()->cancel(__name__); });
 
 //在Actor作用域内定时触发某个操作
-#define HEARTBEAT_TRACE(__self__, __tm__, __handler__) HEARTBEAT_TRACE_NAME(BOND_COUNT(__heartbeatTimer), __self__, __tm__, __handler__)
-#define HEARTBEAT_EXEC(__self__, __tm__, ...) HEARTBEAT_TRACE(__self__, __tm__, { option_pck(__VA_ARGS__) });
+#define HEARTBEAT_TRACE(__self__, __ms__, __handler__) HEARTBEAT_TRACE_NAME(BOND_COUNT(__heartbeatTimer), __self__, __ms__, __handler__)
+#define HEARTBEAT_EXEC(__self__, __ms__, ...) HEARTBEAT_TRACE(__self__, __ms__, { option_pck(__VA_ARGS__) });
 
 //在Actor作用域内延时触发某个操作
-#define DELAY_TRACE_NAME(__name__, __self__, __tm__, __handler__)\
+#define DELAY_TRACE_NAME(__name__, __self__, __ms__, __handler__)\
 	async_timer __name__ = __self__->self_strand()->make_timer(); \
 	auto BOND_NAME(__delayHandler_, __name__) = [&]__handler__; \
-	__name__->timeout(__tm__, wrap_ref_handler(BOND_NAME(__delayHandler_, __name__))); \
+	__name__->timeout(__ms__, wrap_ref_handler(BOND_NAME(__delayHandler_, __name__))); \
 	BREAK_OF_SCOPE_NAME(BOND_NAME(__delayHandler_, __name__), { __name__->cancel(); });
 
 //在Actor作用域内延时触发某个操作
-#define DELAY_TRACE(__self__, __tm__, __handler__) DELAY_TRACE_NAME(BOND_COUNT(__delayTimer), __self__, __tm__, __handler__)
-#define DELAY_EXEC(__self__, __tm__, ...)  DELAY_TRACE(__self__, __tm__, { option_pck(__VA_ARGS__) });
+#define DELAY_TRACE(__self__, __ms__, __handler__) DELAY_TRACE_NAME(BOND_COUNT(__delayTimer), __self__, __ms__, __handler__)
+#define DELAY_EXEC(__self__, __ms__, ...)  DELAY_TRACE(__self__, __ms__, { option_pck(__VA_ARGS__) });
 
 //在Actor作用域内延时触发某个操作
-#define SELF_DELAY_TRACE(__self__, __tm__, __handler__)\
+#define SELF_DELAY_TRACE(__self__, __ms__, __handler__)\
 	auto BOND_LINE(__selfDelayHandler_) = [&]__handler__; \
-	__self__->delay_trig(__tm__, wrap_ref_handler(BOND_LINE(__selfDelayHandler_))); \
+	__self__->delay_trig(__ms__, wrap_ref_handler(BOND_LINE(__selfDelayHandler_))); \
 	BREAK_OF_SCOPE_NAME(BOND_LINE(__selfDelayHandler_), { __self__->cancel_delay_trig(); });
-#define SELF_DELAY_EXEC(__self__, __tm__, ...) SELF_DELAY_TRACE(__self__, __tm__, { option_pck(__VA_ARGS__) });
+#define SELF_DELAY_EXEC(__self__, __ms__, ...) SELF_DELAY_TRACE(__self__, __ms__, { option_pck(__VA_ARGS__) });
 
 class ActorTimer_;
 class ActorTimerFace_

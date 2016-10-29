@@ -51,15 +51,15 @@ public:
 	@brief 在一段时间内尝试锁定资源
 	@return 成功返回true，超时失败返回false
 	*/
-	bool timed_lock(int tm, my_actor* host);
+	bool timed_lock(int ms, my_actor* host);
 
 	/*!
 	@brief 在一段时间内尝试锁定资源，如果已经被锁定调用lockNtf
 	*/
 	template <typename Ntf>
-	bool timed_lock(int tm, my_actor* host, Ntf&& lockNtf)
+	bool timed_lock(int ms, my_actor* host, Ntf&& lockNtf)
 	{
-		return timed_lock(tm, host, (wrap_local_handler_face<void()>&&)wrap_local_handler(lockNtf));
+		return timed_lock(ms, host, (wrap_local_handler_face<void()>&&)wrap_local_handler(lockNtf));
 	}
 
 	/*!
@@ -75,7 +75,7 @@ private:
 	void quited_lock(my_actor* host);
 	void quited_unlock(my_actor* host);
 	void lock(my_actor*, wrap_local_handler_face<void()>&& lockNtf);
-	bool timed_lock(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
+	bool timed_lock(int ms, my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
 	bool check_self_err_call(my_actor* host);
 private:
 	shared_strand _strand;
@@ -127,7 +127,7 @@ public:
 	/*!
 	@brief 超时等待要给通知
 	*/
-	bool timed_wait(int tm, my_actor* host, actor_lock_guard& mutex);
+	bool timed_wait(int ms, my_actor* host, actor_lock_guard& mutex);
 
 	/*!
 	@brief 通知一个等待
@@ -177,7 +177,7 @@ public:
 	*/
 	void lock(my_actor* host);
 	bool try_lock(my_actor* host);
-	bool timed_lock(int tm, my_actor* host);
+	bool timed_lock(int ms, my_actor* host);
 
 	template <typename Ntf>
 	void lock(my_actor* host, Ntf&& lockNtf)
@@ -186,9 +186,9 @@ public:
 	}
 
 	template <typename Ntf>
-	bool timed_lock(int tm, my_actor* host, Ntf&& lockNtf)
+	bool timed_lock(int ms, my_actor* host, Ntf&& lockNtf)
 	{
-		return timed_lock(tm, host, (wrap_local_handler_face<void()>&&)wrap_local_handler(lockNtf));
+		return timed_lock(ms, host, (wrap_local_handler_face<void()>&&)wrap_local_handler(lockNtf));
 	}
 
 	/*!
@@ -196,7 +196,7 @@ public:
 	*/
 	void lock_shared(my_actor* host);
 	bool try_lock_shared(my_actor* host);
-	bool timed_lock_shared(int tm, my_actor* host);
+	bool timed_lock_shared(int ms, my_actor* host);
 
 	template <typename Ntf>
 	void lock_shared(my_actor* host, Ntf&& lockNtf)
@@ -205,9 +205,9 @@ public:
 	}
 
 	template <typename Ntf>
-	bool timed_lock_shared(int tm, my_actor* host, Ntf&& lockNtf)
+	bool timed_lock_shared(int ms, my_actor* host, Ntf&& lockNtf)
 	{
-		return timed_lock_shared(tm, host, (wrap_local_handler_face<void()>&&)wrap_local_handler(lockNtf));
+		return timed_lock_shared(ms, host, (wrap_local_handler_face<void()>&&)wrap_local_handler(lockNtf));
 	}
 
 	/*!
@@ -242,9 +242,9 @@ public:
 	const shared_strand& self_strand();
 private:
 	void lock(my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
-	bool timed_lock(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
+	bool timed_lock(int ms, my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
 	void lock_shared(my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
-	bool timed_lock_shared(int tm, my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
+	bool timed_lock_shared(int ms, my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
 	void lock_upgrade(my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
 	bool check_self_err_call(my_actor* host);
 private:
