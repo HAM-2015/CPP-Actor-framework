@@ -619,7 +619,7 @@ void co_socket_test()
 			for (ctx.i = 0; ctx.i < 10; ctx.i++)
 			{
 				co_await {
-					int l = snPrintf(ctx.buf, sizeof(ctx.buf), "msg %d", ctx.i);
+					int l = snprintf(ctx.buf, sizeof(ctx.buf), "msg %d", ctx.i);
 					boost::asio::async_write(ctx.socket, boost::asio::buffer(ctx.buf, l), co_async_result(ctx.ec, ctx.s));
 				}
 				co_sleep(1000);
@@ -685,7 +685,7 @@ void socket_test()
 				char buf[128];
 				for (int i = 0; i < 10; i++)
 				{
-					int l = snPrintf(buf, sizeof(buf), "msg %d", i);
+					int l = snprintf(buf, sizeof(buf), "msg %d", i);
 					if (!sck.write(self, buf, l).ok)
 					{
 						break;
@@ -722,7 +722,7 @@ void udp_test()
 			char buf[128];
 			for (int i = 0; i < 3; i++)
 			{
-				int l = snPrintf(buf, sizeof(buf), "udp msg %d", i);
+				int l = snprintf(buf, sizeof(buf), "udp msg %d", i);
 				udp.send(self, buf, l);
 				self->sleep(1000);
 			}

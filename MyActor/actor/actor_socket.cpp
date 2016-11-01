@@ -355,6 +355,13 @@ bool udp_socket::connect(my_actor* host, const char* remoteIp, unsigned short re
 	});
 }
 
+bool udp_socket::sync_connect(const char* remoteIp, unsigned short remotePort)
+{
+	boost::system::error_code ec;
+	_socket.connect(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), ec);
+	return !ec;
+}
+
 udp_socket::result udp_socket::send_to(my_actor* host, const remote_sender_endpoint& remoteEndpoint, const void* buff, size_t length, int flags)
 {
 	my_actor::quit_guard qg(host);

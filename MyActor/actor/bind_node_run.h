@@ -966,7 +966,7 @@ public:
 	template <typename ResultHandler, typename CastHandler>
 	void co_invoke_cast(co_generator, ResultHandler&& resultHandler, CastHandler&& castHandler) const
 	{
-		_uvStrand->try_tick(std::bind([this](generator_handle& host, Handler& resultHandler, CastHandler& castHandler)
+		_uvStrand->try_tick(std::bind([this](generator_handle& host, ResultHandler& resultHandler, CastHandler& castHandler)
 		{
 			v8::Isolate* isolate = v8::Isolate::GetCurrent();
 			v8::HandleScope scope(isolate);
@@ -980,7 +980,7 @@ public:
 			v8::Local<v8::Value> recv = v8::Local<v8::Value>::New(isolate, _recv);
 			resultHandler(isolate, v8::Local<v8::Function>::New(isolate, _callback)->Call(!recv.IsEmpty() ? recv : (v8::Local<v8::Value>)isolate->GetCurrentContext()->Global(), paramNum, params));
 			host->_revert_this(host)->_co_async_next();
-		}, std::move(co_self.async_this()), std::forward<Handler>(resultHandler), std::forward<CastHandler>(resultHandler)));
+		}, std::move(co_self.async_this()), std::forward<ResultHandler>(resultHandler), std::forward<CastHandler>(resultHandler)));
 	}
 
 	template <typename R = void, typename ResultHandler, typename... Args>

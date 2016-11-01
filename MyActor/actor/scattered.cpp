@@ -145,7 +145,7 @@ std::string get_time_string_us()
 	auto date = tm.date();
 	auto time = tm.time_of_day();
 	char buff[32];
-	snPrintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u.%06u", (int)date.year(), (int)date.month(), (int)date.day(), \
+	snprintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u.%06u", (int)date.year(), (int)date.month(), (int)date.day(), \
 		(int)time.hours(), (int)time.minutes(), (int)time.seconds(), (int)time.fractional_seconds());
 	return buff;
 }
@@ -156,7 +156,7 @@ std::string get_time_string_ms()
 	auto date = tm.date();
 	auto time = tm.time_of_day();
 	char buff[32];
-	snPrintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u.%03u", (int)date.year(), (int)date.month(), (int)date.day(), \
+	snprintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u.%03u", (int)date.year(), (int)date.month(), (int)date.day(), \
 		(int)time.hours(), (int)time.minutes(), (int)time.seconds(), (int)time.fractional_seconds() / 1000);
 	return buff;
 }
@@ -167,7 +167,7 @@ std::string get_time_string_s()
 	auto date = tm.date();
 	auto time = tm.time_of_day();
 	char buff[32];
-	snPrintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u", (int)date.year(), (int)date.month(), (int)date.day(), \
+	snprintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u", (int)date.year(), (int)date.month(), (int)date.day(), \
 		(int)time.hours(), (int)time.minutes(), (int)time.seconds());
 	return buff;
 }
@@ -178,7 +178,7 @@ std::string get_time_string_file_s()
 	auto date = tm.date();
 	auto time = tm.time_of_day();
 	char buff[32];
-	snPrintf(buff, sizeof(buff), "%u-%02u-%02u %02u.%02u.%02u", (int)date.year(), (int)date.month(), (int)date.day(), \
+	snprintf(buff, sizeof(buff), "%u-%02u-%02u %02u.%02u.%02u", (int)date.year(), (int)date.month(), (int)date.day(), \
 		(int)time.hours(), (int)time.minutes(), (int)time.seconds());
 	return buff;
 }
@@ -216,7 +216,7 @@ void print_time_us(std::ostream& out)
 	auto date = tm.date();
 	auto time = tm.time_of_day();
 	char buff[32];
-	snPrintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u.%06u", (int)date.year(), (int)date.month(), (int)date.day(), \
+	snprintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u.%06u", (int)date.year(), (int)date.month(), (int)date.day(), \
 		(int)time.hours(), (int)time.minutes(), (int)time.seconds(), (int)time.fractional_seconds());
 	out << buff;
 }
@@ -227,7 +227,7 @@ void print_time_ms(std::ostream& out)
 	auto date = tm.date();
 	auto time = tm.time_of_day();
 	char buff[32];
-	snPrintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u.%03u", (int)date.year(), (int)date.month(), (int)date.day(), \
+	snprintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u.%03u", (int)date.year(), (int)date.month(), (int)date.day(), \
 		(int)time.hours(), (int)time.minutes(), (int)time.seconds(), (int)time.fractional_seconds() / 1000);
 	out << buff;
 }
@@ -238,7 +238,7 @@ void print_time_s(std::ostream& out)
 	auto date = tm.date();
 	auto time = tm.time_of_day();
 	char buff[32];
-	snPrintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u", (int)date.year(), (int)date.month(), (int)date.day(), \
+	snprintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u", (int)date.year(), (int)date.month(), (int)date.day(), \
 		(int)time.hours(), (int)time.minutes(), (int)time.seconds());
 	out << buff;
 }
@@ -249,7 +249,7 @@ void print_time_us(std::wostream& out)
 	auto date = tm.date();
 	auto time = tm.time_of_day();
 	char buff[32];
-	snPrintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u.%06u", (int)date.year(), (int)date.month(), (int)date.day(), \
+	snprintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u.%06u", (int)date.year(), (int)date.month(), (int)date.day(), \
 		(int)time.hours(), (int)time.minutes(), (int)time.seconds(), (int)time.fractional_seconds());
 	out << buff;
 }
@@ -260,7 +260,7 @@ void print_time_ms(std::wostream& out)
 	auto date = tm.date();
 	auto time = tm.time_of_day();
 	char buff[32];
-	snPrintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u.%03u", (int)date.year(), (int)date.month(), (int)date.day(), \
+	snprintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u.%03u", (int)date.year(), (int)date.month(), (int)date.day(), \
 		(int)time.hours(), (int)time.minutes(), (int)time.seconds(), (int)time.fractional_seconds() / 1000);
 	out << buff;
 }
@@ -271,7 +271,7 @@ void print_time_s(std::wostream& out)
 	auto date = tm.date();
 	auto time = tm.time_of_day();
 	char buff[32];
-	snPrintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u", (int)date.year(), (int)date.month(), (int)date.day(), \
+	snprintf(buff, sizeof(buff), "%u-%02u-%02u %02u:%02u:%02u", (int)date.year(), (int)date.month(), (int)date.day(), \
 		(int)time.hours(), (int)time.minutes(), (int)time.seconds());
 	out << buff;
 }

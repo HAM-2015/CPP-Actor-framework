@@ -240,6 +240,8 @@ class ActorTimerFace_
 
 #endif
 
+#define opt_space __space_align unsigned char
+
 //////////////////////////////////////////////////////////////////////////
 
 #define BEGIN_TRY_ do {\
@@ -413,9 +415,9 @@ inline void clear_function(std::function<R(Args...)>& f)
 }
 
 #ifdef _MSC_VER
-#define snPrintf sprintf_s
-#elif __GNUG__
-#define snPrintf snprintf
+#ifndef snprintf
+#define snprintf sprintf_s
+#endif
 #endif
 
 #ifdef WIN32

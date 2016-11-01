@@ -66,8 +66,10 @@ struct __co_context_no_capture{};
 #define co_context_destroy ~co_context_tag()
 
 #define co_no_context co_begin_context; co_end_context(__noctx)
+#define co_no_context_alloc(__space__) co_begin_context; co_end_context_alloc(__space__, __noctx)
 
 #define co_context_space_size sizeof(co_context_tag)
+#define co_context_space_min_size sizeof(co_context_base)
 
 #define co_end_context_alloc(__alloc__, __ctx__) };\
 	if (!co_self._ctx){	co_self._ctx = new(__alloc__)co_context_tag();\
@@ -234,14 +236,11 @@ struct __co_context_no_capture{};
 	__host__->_co_shared_async_next(__sign__);\
 	}while (0)
 
-#define co_call_(__handler__) do{\
-	if(-1==__ctx->__coNext) co_stop;\
-	assert(__ctx->__inside);\
-	generator::create(co_self.gen_strand(), __handler__, co_async)->run(); _co_await;\
-	}while (0)
-
 //递归调用另一个generator，直到执行完毕后接着下一行
-#define co_call(...) co_call_(std::bind(__VA_ARGS__))
+#define co_call(...) co_st_call(co_strand, __VA_ARGS__)
+#define co_st_call(__strand__, ...) do{\
+	_co_call(__strand__, co_async, __VA_ARGS__); _co_await;\
+	}while (0)
 
 //sleep，毫秒
 #define co_sleep_(__timer__, __ms__) do{\
@@ -637,15 +636,13 @@ public:
 		}, std::move(shared_this()), std::forward<Handler>(handler)));
 	}
 
-	co_context_base* _ctx;
-
 	void _co_sleep(int ms);
 	void _co_usleep(long long us);
 	void _co_dead_sleep(long long ms);
 	void _co_dead_usleep(long long us);
+	co_context_base* _ctx;
 private:
 	void timeout_handler();
-private:
 	static void install();
 	static void uninstall();
 private:
@@ -1118,6 +1115,46 @@ template <typename... Args>
 CoAnextSameSafeResult_<Args...> _co_anext_same_safe_result(generator_handle&& gen, Args&... result)
 {
 	return CoAnextSameSafeResult_<Args...>(std::move(gen), result...);
+}
+
+template <bool>
+struct CoCall_
+{
+	template <typename SharedStrand, typename Ntf, typename Handler, typename... Args>
+	static generator_handle call(SharedStrand&& strand, Ntf&& ntf, Handler&& handler, Args&&... args)
+	{
+		generator_handle res = generator::create(std::forward<SharedStrand>(strand),
+			std::bind(std::forward<Handler>(handler), __1, std::forward<Args>(args)...), std::forward<Ntf>(ntf));
+		res->run();
+		return res;
+	}
+};
+
+template <>
+struct CoCall_<true>
+{
+	template <typename SharedStrand, typename Ntf, typename Func, typename Obj, typename... Args>
+	static generator_handle call(SharedStrand&& strand, Ntf&& ntf, Func func, Obj&& obj, Args&&... args)
+	{
+		generator_handle res = generator::create(std::forward<SharedStrand>(strand),
+			std::bind(func, std::forward<Obj>(obj), __1, std::forward<Args>(args)...), std::forward<Ntf>(ntf));
+		res->run();
+		return res;
+	}
+};
+
+template <typename SharedStrand, typename Ntf, typename Handler, typename Unknown, typename... Args>
+static generator_handle _co_call(SharedStrand&& strand, Ntf&& ntf, Handler&& handler, Unknown&& unkown, Args&&... args)
+{
+	return CoCall_<CheckClassFunc_<RM_REF(Handler)>::value>::call(std::forward<SharedStrand>(strand), std::forward<Ntf>(ntf),
+		std::forward<Handler>(handler), std::forward<Unknown>(unkown), std::forward<Args>(args)...);
+}
+
+template <typename SharedStrand, typename Ntf, typename Handler>
+static generator_handle _co_call(SharedStrand&& strand, Ntf&& ntf, Handler&& handler)
+{
+	static_assert(!CheckClassFunc_<RM_REF(Handler)>::value, "");
+	return CoCall_<false>::call(std::forward<SharedStrand>(strand), std::forward<Ntf>(ntf), std::forward<Handler>(handler));
 }
 //////////////////////////////////////////////////////////////////////////
 

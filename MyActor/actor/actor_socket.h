@@ -293,6 +293,7 @@ public:
 	@brief 设定一个远程端口作为默认发送接收目标
 	*/
 	bool connect(my_actor* host, const char* remoteIp, unsigned short remotePort);
+	bool sync_connect(const char* remoteIp, unsigned short remotePort);
 
 	/*!
 	@brief 发送buff缓冲区数据到指定目标
