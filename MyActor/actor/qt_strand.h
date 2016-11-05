@@ -3,9 +3,7 @@
 
 #include "shared_strand.h"
 
-#ifdef ENABLE_QT_UI
 #ifdef ENABLE_QT_ACTOR
-
 class bind_qt_run_base;
 class qt_strand;
 typedef std::shared_ptr<qt_strand> shared_qt_strand;
@@ -35,8 +33,6 @@ private:
 private:
 	bind_qt_run_base* _ui;
 };
-
-#endif
 #endif
 
 #endif

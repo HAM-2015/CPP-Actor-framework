@@ -1,9 +1,6 @@
 #include "bind_qt_run.h"
 
-#ifdef ENABLE_QT_UI
-
 #ifdef ENABLE_QT_ACTOR
-
 bind_qt_run_base::ui_tls::ui_tls()
 :_uiStack(64)
 {
@@ -95,9 +92,6 @@ bool bind_qt_run_base::ui_tls::running_in_this_thread(bind_qt_run_base* s)
 	}
 	return false;
 }
-
-#endif
-
 //////////////////////////////////////////////////////////////////////////
 
 mem_alloc_mt2<bind_qt_run_base::task_event>* bind_qt_run_base::task_event::_taskAlloc = NULL;
@@ -135,9 +129,7 @@ bind_qt_run_base::bind_qt_run_base()
 	_threadID = run_thread::this_thread_id();
 	_readyQueue = new msg_queue<wrap_handler_face*>(32);
 	_waitQueue = new msg_queue<wrap_handler_face*>(32);
-#ifdef ENABLE_QT_ACTOR
 	ui_tls::init();
-#endif
 }
 
 bind_qt_run_base::~bind_qt_run_base()
@@ -154,13 +146,11 @@ bind_qt_run_base::~bind_qt_run_base()
 	assert(_waitQueue->empty());
 	delete _readyQueue;
 	delete _waitQueue;
-#ifdef ENABLE_QT_ACTOR
 	if (_qtStrand)
 	{
 		_qtStrand->release();
 	}
 	ui_tls::reset();
-#endif
 }
 
 run_thread::thread_id bind_qt_run_base::thread_id()
@@ -176,11 +166,7 @@ bool bind_qt_run_base::run_in_ui_thread()
 
 bool bind_qt_run_base::running_in_this_thread()
 {
-#ifdef ENABLE_QT_ACTOR
 	return ui_tls::running_in_this_thread(this);
-#else
-	return run_in_ui_thread();
-#endif
 }
 
 bool bind_qt_run_base::is_wait_close()
@@ -240,9 +226,7 @@ void bind_qt_run_base::append_task(wrap_handler_face* h)
 
 void bind_qt_run_base::run_one_task()
 {
-#ifdef ENABLE_QT_ACTOR
 	ui_tls* uiTls = ui_tls::push_stack(this);
-#endif
 	do
 	{
 		while (!_readyQueue->empty())
@@ -270,10 +254,8 @@ void bind_qt_run_base::run_one_task()
 		}
 		break;
 	} while (true);
-#ifdef ENABLE_QT_ACTOR
 	bind_qt_run_base* r = ui_tls::pop_stack(uiTls);
 	assert(this == r);
-#endif
 }
 
 void bind_qt_run_base::enter_wait_close()
@@ -320,7 +302,6 @@ void bind_qt_run_base::ui_yield(my_actor* host)
 	});
 }
 
-#ifdef ENABLE_QT_ACTOR
 actor_handle bind_qt_run_base::create_ui_actor(const my_actor::main_func& mainFunc, size_t stackSize /*= QT_UI_ACTOR_STACK_SIZE*/)
 {
 	assert(!!_qtStrand);
@@ -360,6 +341,4 @@ const shared_qt_strand& bind_qt_run_base::ui_strand()
 	assert(!!_qtStrand);
 	return _qtStrand;
 }
-
-#endif
 #endif

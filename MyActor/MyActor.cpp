@@ -1222,15 +1222,22 @@ void go_test()
 	};
 	co_go(ios) [](co_generator)
 	{
-		co_no_context;		
+		static auto recursionSleep = [](co_generator, const int& ms)
+		{
+			co_no_context;
+			co_begin;
+			co_sleep(ms);
+			co_end;
+		};
+		co_no_context;
 		co_begin;
-		co_sleep(250);
+		co_call(recursionSleep, 250);
 		trace_line("co go");
-		co_sleep(500);
+		co_call(recursionSleep, 500);
 		trace_line("co go.");
-		co_sleep(500);
+		co_call(recursionSleep, 500);
 		trace_line("co go..");
-		co_sleep(500);
+		co_call(recursionSleep, 500);
 		trace_line("co go...");
 		co_end;
 	};

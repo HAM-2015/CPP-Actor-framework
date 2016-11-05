@@ -85,7 +85,7 @@ void my_actor::install()
 		install_check_stack();
 		s_isSelfInitFiber = context_yield::convert_thread_to_fiber();
 		ContextPool_::install();
-#ifdef ENABLE_QT_UI
+#ifdef ENABLE_QT_ACTOR
 		bind_qt_run_base::install();
 #endif
 #ifdef ENABLE_CHECK_LOST
@@ -121,7 +121,7 @@ void my_actor::install(const shared_initer* initer)
 		install_check_stack();
 		s_isSelfInitFiber = context_yield::convert_thread_to_fiber();
 		ContextPool_::install();
-#ifdef ENABLE_QT_UI
+#ifdef ENABLE_QT_ACTOR
 		bind_qt_run_base::install();
 #endif
 #ifdef ENABLE_CHECK_LOST
@@ -175,7 +175,7 @@ void my_actor::uninstall()
 		delete s_checkPumpLostObjAlloc;
 		s_checkPumpLostObjAlloc = NULL;
 #endif
-#ifdef ENABLE_QT_UI
+#ifdef ENABLE_QT_ACTOR
 		bind_qt_run_base::uninstall();
 #endif
 		ContextPool_::uninstall();

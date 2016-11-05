@@ -1,7 +1,7 @@
 #ifndef __BIND_QT_RUN_H
 #define __BIND_QT_RUN_H
 
-#ifdef ENABLE_QT_UI
+#ifdef ENABLE_QT_ACTOR
 #include <functional>
 #include <mutex>
 #include <QtGui/qevent.h>
@@ -108,7 +108,6 @@
 #define co_close_qt_ui_destroy_at(__this_ui__, __frame__) __CO_CLOSE_QT_UI_AT(__this_ui__, __frame__, __DESTROY_FRAME)
 #define co_close_qt_ui_destroy(__frame__) co_close_qt_ui_destroy_at(this, __frame__)
 
-#ifdef ENABLE_QT_ACTOR
 #define __IN_CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __delete__) do {\
 	my_actor::quit_guard qg(__host__);\
 	assert((__this_ui__)->run_in_ui_thread());\
@@ -145,7 +144,6 @@
 #define co_in_close_qt_ui_delete(__frame__) co_in_close_qt_ui_delete_at(this, __frame__)
 #define co_in_close_qt_ui_destroy_at(__this_ui__, __frame__) __CO_IN_CLOSE_QT_UI_AT(__this_ui__, __frame__, __DESTROY_FRAME)
 #define co_in_close_qt_ui_destroy(__frame__) co_in_close_qt_ui_destroy_at(this, __frame__)
-#endif
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -166,7 +164,6 @@
 class bind_qt_run_base
 {
 protected:
-#ifdef ENABLE_QT_ACTOR
 	struct ui_tls
 	{
 		ui_tls();
@@ -183,7 +180,6 @@ protected:
 		void* _tlsBuff[64];
 		int _count;
 	};
-#endif
 
 	struct wrap_handler_face
 	{
@@ -442,7 +438,7 @@ public:
 	{
 		return wrap_run_in_ui_handler<RM_CREF(Handler), R>(this, std::forward<Handler>(handler));
 	}
-#ifdef ENABLE_QT_ACTOR
+
 	/*!
 	@brief ¿ªÆôshared_qt_strand
 	*/
@@ -464,7 +460,6 @@ public:
 	*/
 	child_handle create_ui_child_actor(my_actor* host, const my_actor::main_func& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE);
 	child_handle create_ui_child_actor(my_actor* host, my_actor::main_func&& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE);
-#endif
 private:
 	void append_task(wrap_handler_face*);
 protected:
@@ -498,9 +493,7 @@ private:
 	wrap_handler_face* _checkCloseHandler;
 	msg_queue<wrap_handler_face*>* _waitQueue;
 	msg_queue<wrap_handler_face*>* _readyQueue;
-#ifdef ENABLE_QT_ACTOR
 	shared_qt_strand _qtStrand;
-#endif
 protected:
 	DEBUG_OPERATION(std::atomic<size_t> _taskCount);
 	QEventLoop* _eventLoop;
@@ -511,7 +504,6 @@ private:
 	bool _locked;
 };
 
-#ifdef ENABLE_QT_ACTOR
 template <typename Handler>
 void qt_strand::_dispatch_ui(Handler&& handler)
 {
@@ -523,7 +515,6 @@ void qt_strand::_post_ui(Handler&& handler)
 {
 	_ui->post(std::forward<Handler>(handler));
 }
-#endif
 
 template <typename FRAME>
 class bind_qt_run : public FRAME, private bind_qt_run_base
@@ -637,7 +628,7 @@ public:
 	{
 		bind_qt_run_base::ui_yield(host);
 	}
-#ifdef ENABLE_QT_ACTOR
+
 	const shared_qt_strand& start_qt_strand(io_engine& ios)
 	{
 		return bind_qt_run_base::start_qt_strand(ios);
@@ -667,7 +658,6 @@ public:
 	{
 		return bind_qt_run_base::create_ui_child_actor(host, std::move(mainFunc), stackSize);
 	}
-#endif
 private:
 	void post_task_event() override final
 	{
@@ -992,6 +982,6 @@ private:
 	std::shared_ptr<std::mutex> _mutex;
 	std::function<void(check_lost_qt_ui_sync_result<R>, ARGS...)> _handler;
 };
-#endif
 
+#endif
 #endif

@@ -25,7 +25,7 @@ ftp://ham2015.6655.la/files/MyActor/
 添加generator下的逻辑mutex互斥.
 
 2016-09-08
-添加基于stackless的generator，支持co_yield、co_invoke、co_fork、co_clone、co_restart、co_async/co_await语义.
+添加基于stackless的generator，支持co_yield、co_async、co_await、co_call语义.
 
 2016-08-18
 添加Node.Js与C++扩展模块之间Actor交互(测试Node.Js版本6.2.2).

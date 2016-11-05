@@ -4,8 +4,7 @@
 /*
 
 CHECK_SELF 启用检测当前代码运行在哪个Actor下
-ENABLE_QT_UI 启用QT-UI
-ENABLE_QT_ACTOR 启用在QT-UI线程中运行Actor(在ENABLE_QT_UI下使用)
+ENABLE_QT_ACTOR 启用QT，在QT-UI线程中运行Actor
 ENABLE_UV_ACTOR 启用在Node.js uv线程中运行Actor
 ENABLE_NEXT_TICK 启用next_tick加速
 ENABLE_CHECK_LOST 启用通知句柄丢失检测

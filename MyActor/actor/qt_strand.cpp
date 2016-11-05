@@ -1,7 +1,6 @@
 #include "qt_strand.h"
 #include "bind_qt_run.h"
 
-#ifdef ENABLE_QT_UI
 #ifdef ENABLE_QT_ACTOR
 qt_strand::qt_strand()
 {
@@ -66,6 +65,4 @@ bool qt_strand::is_running()
 {
 	return true;
 }
-
-#endif
 #endif

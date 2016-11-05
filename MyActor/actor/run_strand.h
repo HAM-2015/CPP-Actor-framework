@@ -4,7 +4,6 @@
 #include "qt_strand.h"
 #include "uv_strand.h"
 
-#ifdef ENABLE_QT_UI
 #ifdef ENABLE_QT_ACTOR
 
 template <typename Handler>
@@ -19,7 +18,6 @@ void boost_strand::dispatch_ui(Handler&& handler)
 	static_cast<qt_strand*>(this)->_dispatch_ui(std::forward<Handler>(handler));
 }
 
-#endif
 #endif
 
 #ifdef ENABLE_UV_ACTOR

@@ -16,15 +16,13 @@ struct __co_context_no_capture{};
 //开始定义generator函数体上下文，类似于局部变量
 #define co_begin_context \
 	static_assert(__COUNTER__+1 == __COUNTER__, ""); __co_context_no_capture const co_context_no_capture = __co_context_no_capture();\
-	goto __restart; __restart:;\
-	struct co_context_tag: public co_context_base {
+	struct co_context_tag {
 
 #define _co_end_context(__ctx__) \
 	co_self._lockThis();\
-	DEBUG_OPERATION(co_self._ctx->__inside = true);}\
-	struct co_context_tag* __ctx = static_cast<co_context_tag*>(co_self._ctx);\
-	struct co_context_tag& __refCtx = *__ctx;\
-	struct co_context_tag& __ctx__ = *__ctx;\
+	DEBUG_OPERATION(co_self.__inside = true);}\
+	struct co_context_tag* const __coContext = static_cast<struct co_context_tag*>(co_self.__ctx);\
+	struct co_context_tag& __ctx__ = *__coContext;\
 	int __coNext = 0;\
 	size_t __coSwitchTempVal = 0;\
 	bool __coSwitchFirstLoopSign = false;\
@@ -37,7 +35,7 @@ struct __co_context_no_capture{};
 
 //结束generator函数体上下文定义
 #define co_end_context(__ctx__) };\
-	if (!co_self._ctx){	co_self._ctx = new co_context_tag();\
+	if (!co_self.__ctx){co_self.__ctx = new co_context_tag();\
 	_co_end_context(__ctx__)
 
 #define _cop(__p__) decltype(__p__)& __p__
@@ -56,58 +54,56 @@ struct __co_context_no_capture{};
 
 //结束generator函数体上下文定义，带内部变量初始化
 #define co_end_context_init(__ctx__, __capture__, ...) _co_capture __capture__:__VA_ARGS__{}};\
-	if (!co_self._ctx){	co_self._ctx = new co_context_tag __capture__;\
+	if (!co_self.__ctx){co_self.__ctx = new co_context_tag __capture__;\
 	_co_end_context(__ctx__)
-
-//在启用co_fork时，初始化fork出来的generator状态，默认可以不用，将直接拷贝
-#define co_context_fork co_context_tag(co_context_tag& host)
 
 //在generator结束时，做最后状态清理，可以不用
 #define co_context_destroy ~co_context_tag()
-
-#define co_no_context co_begin_context; co_end_context(__noctx)
-#define co_no_context_alloc(__space__) co_begin_context; co_end_context_alloc(__space__, __noctx)
-
+//没有上下文状态信息
+#define co_no_context co_begin_context};\
+	if (!co_self.__ctx){co_self.__ctx = (void*)-1;\
+	_co_end_context(__noctx)
+//
 #define co_context_space_size sizeof(co_context_tag)
-#define co_context_space_min_size sizeof(co_context_base)
-
+//
 #define co_end_context_alloc(__alloc__, __ctx__) };\
-	if (!co_self._ctx){	co_self._ctx = new(__alloc__)co_context_tag();\
+	if (!co_self.__ctx){co_self.__ctx = new(__alloc__)co_context_tag();\
 	_co_end_context(__ctx__)
 
 #define co_end_context_alloc_init(__alloc__, __ctx__, __capture__, ...) _co_capture __capture__:__VA_ARGS__{}};\
-	if (!co_self._ctx){	co_self._ctx = new(__alloc__)co_context_tag __capture__;\
+	if (!co_self.__ctx){co_self.__ctx = new(__alloc__)co_context_tag __capture__;\
 	_co_end_context(__ctx__)
 
 //开始generator的代码区域
 #define co_begin }\
-	if (!__ctx->_sharedSign.empty()){__ctx->_sharedSign=true; __ctx->_sharedSign.reset();}\
-	if (!__ctx->__coNext) {__ctx->__coNext = (__COUNTER__+1)/2;}else if (-1==__ctx->__coNext) co_stop;\
-	__coNext=__ctx->__coNext; __ctx->__coNext=0;\
+	if (!co_self.__sharedSign.empty()){co_self.__sharedSign=true; co_self.__sharedSign.reset();}\
+	if (!co_self.__coNext) {co_self.__coNext = (__COUNTER__+1)/2;}else if (-1==co_self.__coNext) co_stop;\
+	__coNext=co_self.__coNext; co_self.__coNext=0;\
 	switch(__coNext) { case __COUNTER__/2:;
 
 //结束generator的代码区域
 #define co_end break;default:assert(false);}\
-	goto __stop; __stop:;\
-	delete __ctx; co_self._ctx = __ctx = NULL; return;
+	goto __stop; __stop:DEBUG_OPERATION(co_self.__inside = false);\
+	if((void*)-1!=(void*)__coContext){delete __coContext;}\
+	co_self.__ctx = NULL; return;
 
 #define co_end_dealloc(__dealloc__) break;default:assert(false);}\
-	goto __stop; __stop:;\
-	__ctx->~co_context_tag(); __dealloc__(__ctx); co_self._ctx = __ctx = NULL; return;
+	goto __stop; __stop:DEBUG_OPERATION(co_self.__inside = false);\
+	__coContext->~co_context_tag(); __dealloc__(__coContext); co_self.__ctx = NULL; return;
 
 #define _co_yield do{\
-	if(-1==__ctx->__coNext) co_stop;\
-	assert(__ctx->__inside);\
-	assert(!__ctx->__awaitSign && !__ctx->__sharedAwaitSign);\
-	DEBUG_OPERATION(__ctx->__inside = false);\
-	__ctx->__coNext = (__COUNTER__+1)/2;\
+	if(-1==co_self.__coNext) co_stop;\
+	assert(co_self.__inside);\
+	assert(!co_self.__awaitSign && !co_self.__sharedAwaitSign);\
+	DEBUG_OPERATION(co_self.__inside = false);\
+	co_self.__coNext = (__COUNTER__+1)/2;\
 	return; case __COUNTER__/2:;\
 	}while (0)
 
 //generator的yield原语
 #define co_yield \
-	if(-1==__ctx->__coNext) co_stop;\
-	assert(__ctx->__inside);\
+	if(-1==co_self.__coNext) co_stop;\
+	assert(co_self.__inside);\
 	for (__yieldSwitch = false;;__yieldSwitch = true)\
 	if (__yieldSwitch) {_co_yield; break;}\
 	else
@@ -116,21 +112,18 @@ struct __co_context_no_capture{};
 #define co_async \
 	co_self.gen_strand()->wrap(std::bind([](generator_handle& host){\
 	assert(host);\
-	struct co_context_base* __ctx = host->_ctx;\
-	if (!__ctx) return;\
+	if (!host->__ctx) return;\
 	generator* host_ = host->_revert_this(host);\
-	if (__ctx->__asyncSign) { __ctx->__asyncSign = false; host_->_next(); }\
-	else { __ctx->__asyncSign = true; };\
+	if (host_->__asyncSign) { host_->__asyncSign = false; host_->_next(); }\
+	else { host_->__asyncSign = true; };\
 	}, std::move(co_self.async_this())))
 
 //generator可共享异步回调接口
 #define co_shared_async \
 	co_self.gen_strand()->wrap(std::bind([](generator_handle& host, shared_bool& sign){\
-	if (sign) return;\
-	struct co_context_base* __ctx = host->_ctx;\
-	if (!__ctx) return;\
-	if (__ctx->__asyncSign) { __ctx->__asyncSign = false; host->_next(); }\
-	else { __ctx->__asyncSign = true; };\
+	if (sign || !host->__ctx) return;\
+	if (host_->__asyncSign) { host_->__asyncSign = false; host->_next(); }\
+	else { host_->__asyncSign = true; };\
 	}, co_self.shared_this(), co_self.shared_async_sign()))
 
 #define co_anext \
@@ -156,28 +149,28 @@ struct __co_context_no_capture{};
 
 //挂起generator，等待调度器下次触发
 #define co_tick do{\
-	if(-1==__ctx->__coNext) co_stop;\
-	assert(__ctx->__inside);\
+	if(-1==co_self.__coNext) co_stop;\
+	assert(co_self.__inside);\
 	co_self.gen_strand()->next_tick(std::bind([](generator_handle& host){\
-	if(!host->_ctx)return; host->_revert_this(host)->_next(); }, std::move(co_self.shared_this()))); _co_yield;}while (0)
+	if(!host->__ctx)return; host->_revert_this(host)->_next(); }, std::move(co_self.shared_this()))); _co_yield;}while (0)
 
 #define _co_await do{\
-	if(-1==__ctx->__coNext) co_stop;\
-	assert(__ctx->__inside);\
-	assert(__ctx->__awaitSign || __ctx->__sharedAwaitSign);\
-	DEBUG_OPERATION(__ctx->__awaitSign = __ctx->__sharedAwaitSign = false);\
-	if (__ctx->__asyncSign) __ctx->__asyncSign = false;\
-	else { __ctx->__asyncSign = true; _co_yield; }}while (0)
+	if(-1==co_self.__coNext) co_stop;\
+	assert(co_self.__inside);\
+	assert(co_self.__awaitSign || co_self.__sharedAwaitSign);\
+	DEBUG_OPERATION(co_self.__awaitSign = co_self.__sharedAwaitSign = false);\
+	if (co_self.__asyncSign) co_self.__asyncSign = false;\
+	else { co_self.__asyncSign = true; _co_yield; }}while (0)
 
 #define _co_timed_await(__timer__, __ms__, __handler__) do{\
-	if(-1==__ctx->__coNext) co_stop;\
-	assert(__ctx->__inside);\
+	if(-1==co_self.__coNext) co_stop;\
+	assert(co_self.__inside);\
 	(__timer__)->timeout(__ms__, [&]__handler__); _co_await; (__timer__)->cancel();\
 	}while (0)
 
 #define _co_timed_await2(__timer__, __ms__) do{\
-	if(-1==__ctx->__coNext) co_stop;\
-	assert(__ctx->__inside);\
+	if(-1==co_self.__coNext) co_stop;\
+	assert(co_self.__inside);\
 	(__timer__)->timeout(__ms__, std::bind([&](generator_handle& gen, shared_bool& sign){\
 	co_shared_async_next(gen, sign);}, co_self.shared_this(), co_self.shared_async_sign()));\
 	_co_await; (__timer__)->cancel();\
@@ -185,22 +178,22 @@ struct __co_context_no_capture{};
 
 //generator await原语，与co_async之类使用
 #define co_await \
-	if(-1==__ctx->__coNext) co_stop;\
-	assert(__ctx->__inside);\
+	if(-1==co_self.__coNext) co_stop;\
+	assert(co_self.__inside);\
 	for (__yieldSwitch = false;;__yieldSwitch = true)\
 	if (__yieldSwitch) {_co_await; break;}\
 	else
 
 #define co_timed_await(__timer__, __ms__, __handler__) \
-	if(-1==__ctx->__coNext) co_stop;\
-	assert(__ctx->__inside);\
+	if(-1==co_self.__coNext) co_stop;\
+	assert(co_self.__inside);\
 	for (__yieldSwitch = false;;__yieldSwitch = true)\
 	if (__yieldSwitch) {_co_timed_await(__timer__, __ms__, __handler__); break;}\
 	else
 
 #define co_timed_await2(__timer__, __ms__) \
-	if(-1==__ctx->__coNext) co_stop;\
-	assert(__ctx->__inside);\
+	if(-1==co_self.__coNext) co_stop;\
+	assert(co_self.__inside);\
 	for (__yieldSwitch = false;;__yieldSwitch = true)\
 	if (__yieldSwitch) {_co_timed_await2(__timer__, __ms__); break;}\
 	else
@@ -237,17 +230,27 @@ struct __co_context_no_capture{};
 	}while (0)
 
 //递归调用另一个generator，直到执行完毕后接着下一行
-#define co_call(...) co_st_call(co_strand, __VA_ARGS__)
+#define co_call(...) do{\
+	if (-1==co_self.__coNext) co_stop;\
+	assert(co_self.__inside);\
+	assert(!co_self.__awaitSign && !co_self.__sharedAwaitSign);\
+	DEBUG_OPERATION(co_self.__inside = false);\
+	co_self.__coNext = -1;\
+	co_self._co_push_stack((__COUNTER__+1)/2, _co_call(__VA_ARGS__));\
+	return; case __COUNTER__/2:;\
+	}while (0)
+
+//在指定strand中，递归调用另一个generator，直到执行完毕后接着下一行
 #define co_st_call(__strand__, ...) do{\
-	_co_call(__strand__, co_async, __VA_ARGS__); _co_await;\
+	_co_st_call(__strand__, co_async, __VA_ARGS__); _co_await;\
 	}while (0)
 
 //sleep，毫秒
 #define co_sleep_(__timer__, __ms__) do{\
-	if(-1==__ctx->__coNext) co_stop;\
-	assert(__ctx->__inside);\
+	if(-1==co_self.__coNext) co_stop;\
+	assert(co_self.__inside);\
 	(__timer__)->timeout(__ms__, std::bind([](generator_handle& host){\
-	if(!host->_ctx)return; host->_revert_this(host)->_next(); }, std::move(co_self.shared_this()))); _co_yield; }while (0)
+	if(!host->__ctx)return; host->_revert_this(host)->_next(); }, std::move(co_self.shared_this()))); _co_yield; }while (0)
 
 //延时
 #define co_sleep(__ms__) do{co_self._co_sleep(__ms__); _co_yield;}while (0)
@@ -257,97 +260,21 @@ struct __co_context_no_capture{};
 
 //开始运行一个generator
 #define co_go(...) CoGo_(__VA_ARGS__)-
-//fork出一个generator，新的generator将在该语句下一行开始执行
-#define co_fork do{{\
-	if(-1==__ctx->__coNext) co_stop;\
-	assert(__ctx->__inside);\
-	assert(!__ctx->__awaitSign && !__ctx->__sharedAwaitSign);\
-	generator_handle newGen = co_self._begin_fork();\
-	newGen->_ctx = new co_context_tag(__refCtx); \
-	newGen->_lockThis();\
-	newGen->_ctx->clear();\
-	newGen->_ctx->__lockStop = __ctx->__lockStop;\
-	newGen->_ctx->__coNext = (__COUNTER__+1)/2;\
-	newGen->run();\
-	}if (0) case __COUNTER__/2:break;\
-	}while (0)
-
-#define co_fork_(__new__, ...) do{{\
-	if(-1==__ctx->__coNext) co_stop;\
-	assert(__ctx->__inside);\
-	assert(!__ctx->__awaitSign && !__ctx->__sharedAwaitSign);\
-	__new__ = co_self._begin_fork(__VA_ARGS__);\
-	__new__->_lockThis();\
-	__new__->_ctx = new co_context_tag(__refCtx); \
-	__new__->_ctx->clear();\
-	__new__->_ctx->__lockStop = __ctx->__lockStop;\
-	__new__->_ctx->__coNext = (__COUNTER__+1)/2;\
-	__new__->run();\
-	}if (0) case __COUNTER__/2:break;\
-	}while (0)
-
-#define co_fork_alloc(__alloc__) do{{\
-	if(-1==__ctx->__coNext) co_stop;\
-	assert(__ctx->__inside);\
-	assert(!__ctx->__awaitSign && !__ctx->__sharedAwaitSign);\
-	generator_handle newGen = co_self._begin_fork();\
-	newGen->_lockThis();\
-	newGen->_ctx = new(__alloc__)co_context_tag(__refCtx); \
-	newGen->_ctx->clear();\
-	newGen->_ctx->__lockStop = __ctx->__lockStop;\
-	newGen->_ctx->__coNext = (__COUNTER__+1)/2;\
-	newGen->run();\
-	}if (0) case __COUNTER__/2:break;\
-	}while (0)
-
-#define co_fork_alloc_(__alloc__, __new__, ...) do{{\
-	if(-1==__ctx->__coNext) co_stop;\
-	assert(__ctx->__inside);\
-	assert(!__ctx->__awaitSign && !__ctx->__sharedAwaitSign);\
-	__new__ = co_self._begin_fork(__VA_ARGS__);\
-	__new__->_lockThis();\
-	__new__->_ctx = new(__alloc__)co_context_tag(__refCtx); \
-	__new__->_ctx->clear();\
-	__new__->_ctx->__lockStop = __ctx->__lockStop;\
-	__new__->_ctx->__coNext = (__COUNTER__+1)/2;\
-	__new__->run();\
-	}if (0) case __COUNTER__/2:break;\
-	}while (0)
-//拷贝出一个和当前一样的generator
-#define co_clone do{\
-	if(-1==__ctx->__coNext) co_stop;\
-	co_self._begin_fork()->run();\
-	}while (0)
-
-#define co_clone_(__new__, ...) do{\
-	if(-1==__ctx->__coNext) co_stop;\
-	__new__=co_self._begin_fork(__VA_ARGS__); __new__->run();\
-	}while (0)
-//重启当前generator，从头开始
-#define co_restart do{\
-	if(-1==__ctx->__coNext) co_stop;\
-	delete __ctx; co_self._ctx = __ctx = NULL; goto __restart;\
-	}while (0)
-
-#define co_restart_dealloc(__dealloc__) do{\
-	if(-1==__ctx->__coNext) co_stop;\
-	__ctx->~co_context_tag(); __dealloc__(__ctx); co_self._ctx = __ctx = NULL; goto __restart;\
-	}while (0)
 //结束当前generator的运行
 #define co_stop do{goto __stop;} while(0)
 //锁定外部generator的stop操作
 #define co_lock_stop do{\
-	assert(__ctx->__inside);\
-	if(-1==__ctx->__coNext) co_stop;\
-	assert(__ctx->__lockStop<255);\
-	__ctx->__lockStop++;\
+	assert(co_self.__inside);\
+	if(-1==co_self.__coNext) co_stop;\
+	assert(co_self.__lockStop<255);\
+	co_self.__lockStop++;\
 	}while (0)
 //解锁外部generator的stop操作
 #define co_unlock_stop do{\
-	assert(__ctx->__inside);\
-	assert(__ctx->__lockStop);\
-	assert(-1!=__ctx->__coNext);\
-	if (0==--__ctx->__lockStop && __ctx->__readyQuit) co_stop;\
+	assert(co_self.__inside);\
+	assert(co_self.__lockStop);\
+	assert(-1!=co_self.__coNext);\
+	if (0==--co_self.__lockStop && co_self.__readyQuit) co_stop;\
 	}while (0)
 //当前generator调度器
 #define co_strand co_self.gen_strand()
@@ -359,8 +286,8 @@ struct __co_context_no_capture{};
 #define co_begin_async_send(__strand__) {co_self._co_async_send(__strand__, [&]{
 #define co_end_async_send });_co_yield;}
 
-#define _case(id, p) case p:goto __co_case_##id##_##p;
-#define _case_default(id) default:goto __co_case_##id##_default;
+#define _case(id, p) case p:goto __co_case_ ## id ## _ ## p;
+#define _case_default(id) default:goto __co_case_ ## id ## _default;
 #define _switch_case1(id,p1) _case(id,p1)_case_default(id)
 #define _switch_case2(id,p1,p2) _case(id,p1)_case(id,p2)_case_default(id)
 #define _switch_case3(id,p1,p2,p3) _case(id,p1)_case(id,p2)_case(id,p3)_case_default(id)
@@ -375,7 +302,7 @@ struct __co_context_no_capture{};
 #define co_define_int_name(__name__, __val__) enum{__name__=__val__};
 //因为generator内部无法在switch-case里面co_yield，提供该宏间接实现switch效果
 #define co_begin_switch_ex(id, __val__, ...) do{switch(__val__) {_switch_case(id, __VA_ARGS__)}
-#define co_switch_case_ex(id, p) __co_case_##id##_##p:
+#define co_switch_case_ex(id, p) __co_case_ ## id ##_ ## p:
 #define co_switch_default_ex(id) co_switch_case_ex(id, default)
 #define co_end_switch_ex }while (0)
 
@@ -402,7 +329,7 @@ struct __co_context_no_capture{};
 
 #define co_chan_use_state co_async_state __chanState
 //上一次co_chan_io的状态
-#define co_chan_last_state (__refCtx.__chanState)
+#define co_chan_last_state (__coContext->__chanState)
 //push/pop数据到channel/msg_buffer
 #define co_chan_io(__chan__) co_await CoChanIo_<decltype(__chan__)>(__chan__, co_chan_last_state, co_self)
 #define co_chan_try_io(__chan__) co_await CoChanTryIo_<decltype(__chan__)>(__chan__, co_chan_last_state, co_self)
@@ -433,10 +360,9 @@ struct __co_context_no_capture{};
 //co_mutex解锁
 #define co_mutex_unlock(__mutex__) do{(__mutex__).unlock(co_async); _co_await;}while (0)
 
-#define co_select (__refCtx.__selectSign)
+#define co_select (__coContext->__selectSign)
 #define co_select_init __selectSign(co_self)
 #define co_select_msg CoSelectSign_ __selectSign
-#define co_select_msg_fork __selectSign(host.__selectSign)
 #define co_select_state (co_select._ntfState)
 #define co_select_state_is_ok (co_async_state::co_async_ok == co_select_state)
 #define co_select_state_is_fail (co_async_state::co_async_fail == co_select_state)
@@ -448,7 +374,7 @@ struct __co_context_no_capture{};
 #define co_begin_select(__label__) {\
 	DEBUG_OPERATION(co_select._labelId=__label__); DEBUG_OPERATION(co_select._checkRepeat=true);\
 	co_lock_stop; co_select._ntfPump.reset(); co_select._ntfSign.clear(); \
-	for (__selectStep=0,co_select._selectId=-1,co_select._forkInit=false;;){\
+	for (__selectStep=0,co_select._selectId=-1;;){\
 	if (1==__selectStep) {co_select._ntfPump.pop(co_async_result_(co_select._ntfState, co_select._selectId)); _co_await; __selectStep=1;}\
 	else if (2==__selectStep) {co_select._ntfPump.close(co_async); _co_await; break;};\
 	if (0) {goto __select_ ## __label__; __select_ ## __label__: __selectStep=2; co_select._selectId=-1;}\
@@ -462,25 +388,25 @@ struct __co_context_no_capture{};
 //开始从多个channel/msg_buffer中以select方式读取一次数据(只能与co_end_select_once配合)
 #define co_begin_select_once {{\
 	co_lock_stop; co_select._ntfPump.reset(); co_select._ntfSign.clear(); DEBUG_OPERATION(co_select._checkRepeat=true);\
-	for (__selectStep=0,co_select._selectId=-1,co_select._forkInit=false;__selectStep<=2;__selectStep++){\
+	for (__selectStep=0,co_select._selectId=-1;__selectStep<=2;__selectStep++){\
 	if (1==__selectStep) {co_select._ntfPump.pop(co_async_result_(co_select._ntfState, co_select._selectId)); _co_await; __selectStep=1;}\
 	else if (2==__selectStep) {co_select._ntfPump.close(co_async); _co_await; __selectStep=2; co_select._selectId=-1;};\
 	co_begin_switch(co_select._selectId);\
 	co_switch_default; if(0){
 
-#define _co_select_case(__check__, __chan__) __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;if(co_select._forkInit)break;}if(1==__selectStep) break;\
+#define _co_select_case(__check__, __chan__) __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;}if(1==__selectStep) break;\
 	co_switch_case(((size_t)&(__chan__)));\
 	for(__selectCaseStep=0, __selectCaseDoSign=false; __selectCaseStep<2; __selectCaseStep++)\
 	if (1==__selectCaseStep) {if (0==__selectStep || __selectCaseDoSign) {assert(!co_select._checkRepeat || __selectStep || co_select._ntfSign.end()==co_select._ntfSign.find(((size_t)&(__chan__))));\
-	(__chan__).append_pop_notify([&](co_async_state st){if(co_async_state::co_async_fail!=st){co_select._ntfPump.push([](co_async_state){}, ((size_t)&(__chan__)));}}, co_select.find_sign((size_t)&(__chan__), __LINE__));}\
+	(__chan__).append_pop_notify([&, __coContext](co_async_state st){if(co_async_state::co_async_fail!=st){co_select._ntfPump.push([](co_async_state){}, ((size_t)&(__chan__)));}}, co_select._ntfSign[(size_t)&(__chan__)]);}\
 		else if (2==__selectStep) {(__chan__).remove_pop_notify(co_async_result_(co_select._ntfState), co_select._ntfSign[((size_t)&(__chan__))]); _co_await;__selectCaseStep=1;__selectStep=2;}}\
 	else if (1==__selectStep && (__check__)) {
 
-#define _co_select_case_once(__check__, __chan__) __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;if(co_select._forkInit)break;}if(1==__selectStep) break;\
+#define _co_select_case_once(__check__, __chan__) __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;}if(1==__selectStep) break;\
 	co_switch_case(((size_t)&(__chan__)));\
 	for(__selectCaseStep=0; __selectCaseStep<2; __selectCaseStep++)\
 	if (1==__selectCaseStep) {if (0==__selectStep) {assert(!co_select._checkRepeat || co_select._ntfSign.end()==co_select._ntfSign.find(((size_t)&(__chan__))));\
-	(__chan__).append_pop_notify([&](co_async_state st){if(co_async_state::co_async_fail!=st){co_select._ntfPump.push([](co_async_state){}, ((size_t)&(__chan__)));}}, co_select.find_sign((size_t)&(__chan__), __LINE__));}\
+	(__chan__).append_pop_notify([&, __coContext](co_async_state st){if(co_async_state::co_async_fail!=st){co_select._ntfPump.push([](co_async_state){}, ((size_t)&(__chan__)));}}, co_select._ntfSign[(size_t)&(__chan__)]);}\
 		else if (2==__selectStep) {(__chan__).remove_pop_notify(co_async_result_(co_select._ntfState), co_select._ntfSign[((size_t)&(__chan__))]); _co_await;__selectCaseStep=1;__selectStep=2;}}\
 	else if (1==__selectStep && (__check__)) {
 
@@ -505,13 +431,12 @@ struct __co_context_no_capture{};
 #define co_select_case_void_once(__chan__) co_select_check_case_void_once(1, __chan__)
 
 //结束从多个channel/msg_buffer中以select方式读取数据(只能与co_begin_select配合)
-#define co_end_select __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;if(co_select._forkInit)break;}\
-	co_end_switch; if (0==__selectStep) {assert(!co_select._ntfSign.empty()); __selectStep=1; co_select._forkInit=false;}\
-	else if (1==__selectStep && co_select._forkInit){__selectStep=0;co_select._selectId=-1;}}co_unlock_stop;}
+#define co_end_select __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;}\
+	co_end_switch; if (0==__selectStep) {assert(!co_select._ntfSign.empty()); __selectStep=1;}}co_unlock_stop;}
 
 //结束从多个channel/msg_buffer中以select方式读取数据(只能与co_begin_select_once配合)
 #define co_end_select_once __selectCaseStep=0;__selectStep=1;}\
-	co_end_switch; if (0==__selectStep) {assert(!co_select._ntfSign.empty()); co_select._forkInit=false;}}co_unlock_stop;}}
+	co_end_switch; if (0==__selectStep) {assert(!co_select._ntfSign.empty());}}co_unlock_stop;}}
 
 //结束select读取(只能在co_begin_select(__label__)/co_end_select中使用)
 #define co_select_done(__label__) do{assert(__label__==co_select._labelId);__selectCaseStep=3;__selectStep=1;__selectCaseDoSign=false;goto __select_ ## __label__;}while(0)
@@ -520,15 +445,15 @@ struct __co_context_no_capture{};
 #define co_select_done2 co_select_done(2)
 
 //取消一个channel的case
-#define co_select_cancel_case(__chan__) do{{assert(co_select._forkInit || co_select._ntfSign.end()!=co_select._ntfSign.find(((size_t)&(__chan__))));\
+#define co_select_cancel_case(__chan__) do{{assert(co_select._ntfSign.end()!=co_select._ntfSign.find(((size_t)&(__chan__))));\
 	co_notify_sign& sign=co_select._ntfSign[((size_t)&(__chan__))];sign._disableAppend=true;\
 	(__chan__).remove_pop_notify(co_async_result_(co_select._ntfState), sign);} _co_await;}while (0)
 //取消当前channel case
 #define co_select_cancel_curr_case do{co_select._ntfSign[co_select._selectId]._disableAppend=true;}while (0)
 //恢复一个channel的case
-#define co_select_resume_case(__chan__) do{assert(co_select._forkInit || co_select._ntfSign.end()!=co_select._ntfSign.find(((size_t)&(__chan__))));\
+#define co_select_resume_case(__chan__) do{assert(co_select._ntfSign.end()!=co_select._ntfSign.find(((size_t)&(__chan__))));\
 	co_notify_sign& sign=co_select._ntfSign[((size_t)&(__chan__))];sign._disableAppend=false;\
-	if(((size_t)&(__chan__))!=co_select._selectId && !co_select._forkInit){(__chan__).append_pop_notify([&](co_async_state st){if(co_async_state::co_async_fail!=st){\
+	if(((size_t)&(__chan__))!=co_select._selectId){(__chan__).append_pop_notify([&](co_async_state st){if(co_async_state::co_async_fail!=st){\
 	co_select._ntfPump.push([](co_async_state){}, ((size_t)&(__chan__)));}}, sign);}}while (0)
 //当前select-case id
 #define co_select_curr_id (co_select._selectId)
@@ -536,37 +461,6 @@ struct __co_context_no_capture{};
 //锁定generator调度器
 #define co_hold_work boost::asio::io_service::work __holdWork
 #define co_hold_work_init __holdWork(co_strand->get_io_service())
-
-struct co_context_base
-{
-#ifdef _MSC_VER
-	virtual ~co_context_base(){}//FIXME VC下启用co_context_destroy时，不加这个会有编译错误
-#endif
-	void clear()
-	{
-		_sharedSign.reset();
-		__coNext = 0;
-		__readyQuit = false;
-		__asyncSign = false;
-#if (_DEBUG || DEBUG)
-		__inside = false;
-		__awaitSign = false;
-		__sharedAwaitSign = false;
-		__yieldSign = false;
-#endif
-	}
-	shared_bool _sharedSign;
-	int __coNext = 0;
-	unsigned char __lockStop = 0;
-	bool __readyQuit = false;
-	bool __asyncSign = false;
-#if (_DEBUG || DEBUG)
-	bool __inside = false;
-	bool __awaitSign = false;
-	bool __sharedAwaitSign = false;
-	bool __yieldSign = false;
-#endif
-};
 
 class my_actor;
 class generator;
@@ -579,6 +473,15 @@ class generator : public ActorTimerFace_
 {
 	friend my_actor;
 	FRIEND_SHARED_PTR(generator);
+	struct call_stack_pck
+	{
+		call_stack_pck(int coNext, void* ctx, std::function<void(generator&)>&& handler)
+		:_coNext(coNext), _ctx(ctx), _handler(std::move(handler)) {}
+		std::function<void(generator&)> _handler;
+		void* _ctx;
+		int _coNext;
+		RVALUE_CONSTRUCT3(call_stack_pck, _coNext, _ctx, _handler);
+	};
 private:
 	generator();
 	~generator();
@@ -594,7 +497,6 @@ public:
 	bool _next();
 	void _lockThis();
 	generator* _revert_this(generator_handle&);
-	generator_handle _begin_fork(std::function<void()> notify = std::function<void()>());
 	void _co_next();
 	void _co_tick_next();
 	void _co_async_next();
@@ -640,7 +542,7 @@ public:
 	void _co_usleep(long long us);
 	void _co_dead_sleep(long long ms);
 	void _co_dead_usleep(long long us);
-	co_context_base* _ctx;
+	void _co_push_stack(int coNext, std::function<void(generator&)>&& handler);
 private:
 	void timeout_handler();
 	static void install();
@@ -650,13 +552,27 @@ private:
 	std::shared_ptr<generator> _sharedThis;
 	std::function<void(generator&)> _handler;
 	std::function<void()> _notify;
+	msg_queue<call_stack_pck> _callStack;
 	shared_strand _strand;
 	ActorTimer_* _timer;
 	ActorTimer_::timer_handle _timerHandle;
 	DEBUG_OPERATION(bool _isRun);
-	NONE_COPY(generator);
 	static mem_alloc_mt<generator>* _genObjAlloc;
 	static mem_alloc_base* _genObjRefCountAlloc;
+public:
+	void* __ctx;
+	shared_bool __sharedSign;
+	int __coNext;
+	unsigned char __lockStop;
+	bool __readyQuit;
+	bool __asyncSign;
+#if (_DEBUG || DEBUG)
+	bool __inside;
+	bool __awaitSign;
+	bool __sharedAwaitSign;
+	bool __yieldSign;
+#endif
+	NONE_COPY(generator);
 };
 
 struct CoGo_
@@ -1118,43 +1034,84 @@ CoAnextSameSafeResult_<Args...> _co_anext_same_safe_result(generator_handle&& ge
 }
 
 template <bool>
-struct CoCall_
+struct CoStCall_
 {
 	template <typename SharedStrand, typename Ntf, typename Handler, typename... Args>
-	static generator_handle call(SharedStrand&& strand, Ntf&& ntf, Handler&& handler, Args&&... args)
+	static void call(SharedStrand&& strand, Ntf&& ntf, Handler&& handler, Args&&... args)
 	{
-		generator_handle res = generator::create(std::forward<SharedStrand>(strand),
-			std::bind(std::forward<Handler>(handler), __1, std::forward<Args>(args)...), std::forward<Ntf>(ntf));
-		res->run();
-		return res;
+		generator::create(std::forward<SharedStrand>(strand),
+			std::bind(std::forward<Handler>(handler), __1, std::forward<Args>(args)...), std::forward<Ntf>(ntf))->run();
+	}
+
+	template <typename SharedStrand, typename Ntf, typename Handler>
+	static void call(SharedStrand&& strand, Ntf&& ntf, Handler&& handler)
+	{
+		generator::create(std::forward<SharedStrand>(strand), std::forward<Handler>(handler), std::forward<Ntf>(ntf))->run();
+	}
+};
+
+template <>
+struct CoStCall_<true>
+{
+	template <typename SharedStrand, typename Ntf, typename Func, typename Obj, typename... Args>
+	static void call(SharedStrand&& strand, Ntf&& ntf, Func func, Obj&& obj, Args&&... args)
+	{
+		generator::create(std::forward<SharedStrand>(strand),
+			std::bind(func, std::forward<Obj>(obj), __1, std::forward<Args>(args)...), std::forward<Ntf>(ntf))->run();
+	}
+};
+
+template <typename SharedStrand, typename Ntf, typename Handler, typename Unknown, typename... Args>
+static void _co_st_call(SharedStrand&& strand, Ntf&& ntf, Handler&& handler, Unknown&& unkown, Args&&... args)
+{
+	CoStCall_<CheckClassFunc_<RM_REF(Handler)>::value>::call(std::forward<SharedStrand>(strand), std::forward<Ntf>(ntf),
+		std::forward<Handler>(handler), std::forward<Unknown>(unkown), std::forward<Args>(args)...);
+}
+
+template <typename SharedStrand, typename Ntf, typename Handler>
+static void _co_st_call(SharedStrand&& strand, Ntf&& ntf, Handler&& handler)
+{
+	static_assert(!CheckClassFunc_<RM_REF(Handler)>::value, "");
+	CoStCall_<false>::call(std::forward<SharedStrand>(strand), std::forward<Ntf>(ntf), std::forward<Handler>(handler));
+}
+
+template <bool>
+struct CoCall_
+{
+	template <typename Handler, typename... Args>
+	static std::function<void(generator&)> call(Handler&& handler, Args&&... args)
+	{
+		return std::bind(std::forward<Handler>(handler), __1, std::forward<Args>(args)...);
+	}
+
+	template <typename Handler>
+	static std::function<void(generator&)> call(Handler&& handler)
+	{
+		return std::forward<Handler>(handler);
 	}
 };
 
 template <>
 struct CoCall_<true>
 {
-	template <typename SharedStrand, typename Ntf, typename Func, typename Obj, typename... Args>
-	static generator_handle call(SharedStrand&& strand, Ntf&& ntf, Func func, Obj&& obj, Args&&... args)
+	template <typename Func, typename Obj, typename... Args>
+	static std::function<void(generator&)> call(Func func, Obj&& obj, Args&&... args)
 	{
-		generator_handle res = generator::create(std::forward<SharedStrand>(strand),
-			std::bind(func, std::forward<Obj>(obj), __1, std::forward<Args>(args)...), std::forward<Ntf>(ntf));
-		res->run();
-		return res;
+		return std::bind(func, std::forward<Obj>(obj), __1, std::forward<Args>(args)...);
 	}
 };
 
-template <typename SharedStrand, typename Ntf, typename Handler, typename Unknown, typename... Args>
-static generator_handle _co_call(SharedStrand&& strand, Ntf&& ntf, Handler&& handler, Unknown&& unkown, Args&&... args)
+template <typename Handler, typename Unknown, typename... Args>
+static std::function<void(generator&)> _co_call(Handler&& handler, Unknown&& unkown, Args&&... args)
 {
-	return CoCall_<CheckClassFunc_<RM_REF(Handler)>::value>::call(std::forward<SharedStrand>(strand), std::forward<Ntf>(ntf),
-		std::forward<Handler>(handler), std::forward<Unknown>(unkown), std::forward<Args>(args)...);
+	return CoCall_<CheckClassFunc_<RM_REF(Handler)>::value>::call(std::forward<Handler>(handler), std::forward<Unknown>(unkown), std::forward<Args>(args)...);
 }
 
-template <typename SharedStrand, typename Ntf, typename Handler>
-static generator_handle _co_call(SharedStrand&& strand, Ntf&& ntf, Handler&& handler)
+template <typename Handler>
+static std::function<void(generator&)> _co_call(Handler&& handler)
 {
 	static_assert(!CheckClassFunc_<RM_REF(Handler)>::value, "");
-	return CoCall_<false>::call(std::forward<SharedStrand>(strand), std::forward<Ntf>(ntf), std::forward<Handler>(handler));
+	return CoCall_<false>::call(std::forward<Handler>(handler));
 }
 //////////////////////////////////////////////////////////////////////////
 
@@ -4171,17 +4128,20 @@ public:
 
 struct CoSelectSign_
 {
-	CoSelectSign_(co_generator);
-	CoSelectSign_(CoSelectSign_& s);
-	co_notify_sign& find_sign(size_t objAddr, int line);
+	CoSelectSign_(co_generator)
+	:_ntfPump(co_strand, 16), _ntfSign(16), _ntfState(co_async_state::co_async_undefined), _selectId(-1)
+	{
+		DEBUG_OPERATION(_checkRepeat = true);
+		DEBUG_OPERATION(_labelId = -1);
+	}
 
 	co_msg_buffer<size_t> _ntfPump;
 	msg_map<size_t, co_notify_sign> _ntfSign;
 	size_t _selectId;
 	co_async_state _ntfState;
-	bool _forkInit;
 	DEBUG_OPERATION(int _labelId);
 	DEBUG_OPERATION(bool _checkRepeat);
+	NONE_COPY(CoSelectSign_);
 };
 
 /*!

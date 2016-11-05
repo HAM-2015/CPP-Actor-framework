@@ -19,35 +19,53 @@ void generator::uninstall()
 }
 
 generator::generator()
-: _ctx(NULL), _timer(NULL)
+: __ctx(NULL), _timer(NULL), __coNext(0), __lockStop(0), __readyQuit(false), __asyncSign(false)
+#if (_DEBUG || DEBUG)
+, _isRun(false), __inside(false), __awaitSign(false), __sharedAwaitSign(false), __yieldSign(false)
+#endif
 {
-	DEBUG_OPERATION(_isRun = false);
 }
 
 generator::~generator()
 {
-	assert(!_ctx);
+	assert(!__ctx);
+	assert(_callStack.empty());
 }
 
 bool generator::_next()
 {
 	assert(_strand->running_in_this_thread());
 	assert(_handler);
-	assert(!_ctx || !_ctx->__inside);
-	DEBUG_OPERATION(if (_ctx) _ctx->__inside = true);
+	assert(!__ctx || !__inside);
+	DEBUG_OPERATION(if (__ctx) __inside = true);
 	CHECK_EXCEPTION(_handler, *this);
-	assert(!_ctx || _ctx->__coNext);
-	if (!_ctx)
+	assert(!__ctx || __coNext);
+	if (!__ctx)
 	{
-		_timer->cancel(_timerHandle);
-		clear_function(_handler);
-		if (_notify)
+		if (_callStack.empty())
 		{
-			CHECK_EXCEPTION(_notify);
-			clear_function(_notify);
+			_timer->cancel(_timerHandle);
+			clear_function(_handler);
+			if (_notify)
+			{
+				CHECK_EXCEPTION(_notify);
+				clear_function(_notify);
+			}
+			_sharedThis.reset();
+			return true;
 		}
-		_sharedThis.reset();
-		return true;
+		call_stack_pck& topStack = _callStack.front();
+		__ctx = topStack._ctx;
+		__coNext = -1 == __coNext ? __coNext : topStack._coNext;
+		_handler = std::move(topStack._handler);
+		_callStack.pop_front();
+		return _next();
+	}
+	else if (-1 == __coNext)
+	{
+		__ctx = NULL;
+		__coNext = 0;
+		return _next();
 	}
 	return false;
 }
@@ -91,13 +109,13 @@ void generator::stop()
 {
 	if (_strand->running_in_this_thread())
 	{
-		if (_ctx)
+		if (__ctx)
 		{
-			if (!_ctx->__lockStop)
+			if (!__lockStop)
 			{
-				bool inside = 0 == _ctx->__coNext;
-				assert(inside == _ctx->__inside);
-				_ctx->__coNext = -1;
+				bool inside = 0 == __coNext;
+				assert(inside == __inside);
+				__coNext = -1;
 				if (!inside)
 				{
 					_next();
@@ -105,7 +123,7 @@ void generator::stop()
 			}
 			else
 			{
-				_ctx->__readyQuit = true;
+				__readyQuit = true;
 			}
 		}
 		else
@@ -118,9 +136,9 @@ void generator::stop()
 	{
 		_strand->post(std::bind([](generator_handle& host)
 		{
-			if (host->_ctx)
+			if (host->__ctx)
 			{
-				host->_ctx->__coNext = -1;
+				host->__coNext = -1;
 				host->_next();
 			}
 			else
@@ -156,23 +174,23 @@ generator_handle& generator::shared_this()
 generator_handle& generator::async_this()
 {
 	assert(_sharedThis);
-	assert(_ctx->__inside);
-	assert(!_ctx->__awaitSign && !_ctx->__sharedAwaitSign);
-	DEBUG_OPERATION(_ctx->__awaitSign = true);
+	assert(__inside);
+	assert(!__awaitSign && !__sharedAwaitSign);
+	DEBUG_OPERATION(__awaitSign = true);
 	return _sharedThis;
 }
 
 const shared_bool& generator::shared_async_sign()
 {
-	assert(_ctx);
-	assert(_ctx->__inside);
-	assert(!_ctx->__awaitSign);
-	DEBUG_OPERATION(_ctx->__sharedAwaitSign = true);
-	if (_ctx->_sharedSign.empty())
+	assert(__ctx);
+	assert(__inside);
+	assert(!__awaitSign);
+	DEBUG_OPERATION(__sharedAwaitSign = true);
+	if (__sharedSign.empty())
 	{
-		_ctx->_sharedSign = shared_bool::new_(false);
+		__sharedSign = shared_bool::new_(false);
 	}
-	return _ctx->_sharedSign;
+	return __sharedSign;
 }
 
 const shared_strand& generator::gen_strand()
@@ -180,18 +198,13 @@ const shared_strand& generator::gen_strand()
 	return _strand;
 }
 
-generator_handle generator::_begin_fork(std::function<void()> notify)
-{
-	return generator::create(_strand, _handler, std::move(notify));
-}
-
 void generator::_co_next()
 {
 	_strand->distribute(std::bind([](generator_handle& host)
 	{
-		if (host->_ctx)
+		if (host->__ctx)
 		{
-			assert(!host->_ctx->__asyncSign);
+			assert(!host->__asyncSign);
 			host->_revert_this(host)->_next();
 		}
 	}, std::move(shared_this())));
@@ -201,9 +214,9 @@ void generator::_co_tick_next()
 {
 	_strand->next_tick(std::bind([](generator_handle& host)
 	{
-		if (host->_ctx)
+		if (host->__ctx)
 		{
-			assert(!host->_ctx->__asyncSign);
+			assert(!host->__asyncSign);
 			host->_revert_this(host)->_next();
 		}
 	}, std::move(shared_this())));
@@ -213,18 +226,17 @@ void generator::_co_async_next()
 {
 	_strand->distribute(std::bind([](generator_handle& host)
 	{
-		struct co_context_base* __ctx = host->_ctx;
-		if (__ctx)
+		if (host->__ctx)
 		{
 			generator* host_ = host->_revert_this(host);
-			if (__ctx->__asyncSign)
+			if (host_->__asyncSign)
 			{
-				__ctx->__asyncSign = false;
+				host_->__asyncSign = false;
 				host_->_next();
 			}
 			else
 			{
-				__ctx->__asyncSign = true;
+				host_->__asyncSign = true;
 			}
 		}
 	}, std::move(shared_this())));
@@ -233,15 +245,15 @@ void generator::_co_async_next()
 void generator::_co_async_next2()
 {
 	assert(_strand->running_in_this_thread());
-	assert(_ctx);
-	if (_ctx->__asyncSign)
+	assert(__ctx);
+	if (__asyncSign)
 	{
-		_ctx->__asyncSign = false;
+		__asyncSign = false;
 		_next();
 	}
 	else
 	{
-		_ctx->__asyncSign = true;
+		__asyncSign = true;
 	}
 }
 
@@ -253,26 +265,31 @@ void generator::_co_shared_async_next(shared_bool& sign)
 		{
 			return;
 		}
-		struct co_context_base* __ctx = host->_ctx;
-		if (__ctx)
+		if (host->__ctx)
 		{
-			if (__ctx->__asyncSign)
+			if (host->__asyncSign)
 			{
-				__ctx->__asyncSign = false;
+				host->__asyncSign = false;
 				host->_next();
 			}
 			else
 			{
-				__ctx->__asyncSign = true;
+				host->__asyncSign = true;
 			}
 		}
 	}, _weakThis.lock(), std::move(sign)));
 }
 
+void generator::_co_push_stack(int coNext, std::function<void(generator&)>&& handler)
+{
+	_callStack.push_front(call_stack_pck(coNext, __ctx, std::move(_handler)));
+	_handler = std::move(handler);
+}
+
 bool generator::_done()
 {
 	assert(_strand->running_in_this_thread());
-	return !_ctx;
+	return !__ctx;
 }
 
 void generator::_co_sleep(int ms)
@@ -302,66 +319,7 @@ void generator::_co_dead_usleep(long long us)
 
 void generator::timeout_handler()
 {
-	assert(_ctx);
+	assert(__ctx);
 	_timerHandle.reset();
 	_next();
-}
-//////////////////////////////////////////////////////////////////////////
-
-CoSelectSign_::CoSelectSign_(co_generator)
-:_ntfPump(co_strand, 16), _ntfSign(16), _ntfState(co_async_state::co_async_undefined), _selectId(-1), _forkInit(false)
-{
-	DEBUG_OPERATION(_checkRepeat = true);
-	DEBUG_OPERATION(_labelId = -1);
-}
-
-CoSelectSign_::CoSelectSign_(CoSelectSign_& s)
-:_ntfPump(s._ntfPump.self_strand(), 16), _ntfSign(16), _ntfState(s._ntfState), _selectId(s._selectId), _forkInit(true)
-{
-	for (auto it = s._ntfSign.begin(); s._ntfSign.end() != it; ++it)
-	{
-		co_notify_sign& srcSign = it->second;
-		if (-1 != srcSign._id)
-		{
-			co_notify_sign& dstSign = _ntfSign[srcSign._id];
-			dstSign._disableAppend = srcSign._disableAppend;
-			dstSign._id = srcSign._id;
-		}
-		else
-		{//FIXME(select-case fork缺陷，fork后新的generator执行了co_select_cancel_case/co_select_resume_case后又fork，需要绕开)
-			assert(false);
-		}
-	}
-	DEBUG_OPERATION(_checkRepeat = false);
-	DEBUG_OPERATION(_labelId = s._labelId);
-}
-
-co_notify_sign& CoSelectSign_::find_sign(size_t objAddr, int line)
-{
-	if (!_forkInit)
-	{
-		co_notify_sign& sign = _ntfSign[objAddr];
-		sign._id = line;
-		return sign;
-	}
-	auto findLine = _ntfSign.find(line);
-	assert(_ntfSign.end() != findLine);
-	assert(findLine->second._id == line);
-	if (objAddr != (size_t)line)
-	{
-		bool disableAppend = findLine->second._disableAppend;
-		_ntfSign.erase(findLine);
-		auto findAddr = _ntfSign.find(objAddr);
-		if (_ntfSign.end() == findAddr)
-		{
-			co_notify_sign& sign = _ntfSign[objAddr];
-			sign._disableAppend = disableAppend;
-			sign._id = line;
-			return sign;
-		}
-		co_notify_sign& sign = findAddr->second;
-		sign._id = line;
-		return sign;
-	}
-	return findLine->second;
 }
