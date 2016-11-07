@@ -26,10 +26,8 @@ DEBUG_OPERATION(static run_thread::thread_id s_installID);
 static bool s_inited = false;
 static bool s_isSelfInitFiber = false;
 #ifdef ENABLE_CHECK_LOST
-static mem_alloc_mt<CheckLost_>* s_checkLostObjAlloc = NULL;
-static mem_alloc_mt<CheckPumpLost_>* s_checkPumpLostObjAlloc = NULL;
-static mem_alloc_base* s_checkLostRefCountAlloc = NULL;
-static mem_alloc_base* s_checkPumpLostRefCountAlloc = NULL;
+static mem_alloc_base* s_checkLostObjAlloc = NULL;
+static mem_alloc_base* s_checkPumpLostObjAlloc = NULL;
 #endif
 
 struct autoActorStackMng
@@ -63,7 +61,7 @@ struct shared_initer
 static shared_initer s_shared_initer;
 static bool s_isSharedIniter = false;
 static autoActorStackMng* s_autoActorStackMng = NULL;
-shared_obj_pool<bool>* shared_bool::_sharedBoolPool = NULL;
+mem_alloc_base* shared_bool::_sharedBoolAlloc = NULL;
 std::recursive_mutex* TraceMutex_::_mutex = NULL;
 std::atomic<my_actor::id>* my_actor::_actorIDCount = NULL;
 msg_list_shared_alloc<actor_handle>::shared_node_alloc* my_actor::_childActorListAll = NULL;
@@ -89,15 +87,11 @@ void my_actor::install()
 		bind_qt_run_base::install();
 #endif
 #ifdef ENABLE_CHECK_LOST
-		auto& s_checkLostObjAlloc_ = s_checkLostObjAlloc;
-		auto& s_checkPumpLostObjAlloc_ = s_checkPumpLostObjAlloc;
-		s_checkLostObjAlloc_ = new mem_alloc_mt<CheckLost_>(MEM_POOL_LENGTH);
-		s_checkPumpLostObjAlloc_ = new mem_alloc_mt<CheckPumpLost_>(MEM_POOL_LENGTH);
-		s_checkLostRefCountAlloc = make_ref_count_alloc<CheckLost_, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [s_checkLostObjAlloc_](CheckLost_*){});
-		s_checkPumpLostRefCountAlloc = make_ref_count_alloc<CheckPumpLost_, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [s_checkPumpLostObjAlloc_](CheckPumpLost_*){});
+		s_checkLostObjAlloc = make_shared_space_alloc<CheckLost_, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [](CheckLost_*){});
+		s_checkPumpLostObjAlloc = make_shared_space_alloc<CheckPumpLost_, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [](CheckPumpLost_*){});
 #endif
 		s_autoActorStackMng = new autoActorStackMng;
-		shared_bool::_sharedBoolPool = create_shared_pool_mt<bool, std::mutex>(MEM_POOL_LENGTH);
+		shared_bool::_sharedBoolAlloc = make_shared_space_alloc<bool, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [](bool*){});
 		my_actor::_actorIDCount = new std::atomic<my_actor::id>(0);
 		s_shared_initer._actorIDCount = my_actor::_actorIDCount;
 		my_actor::_childActorListAll = new msg_list_shared_alloc<actor_handle>::shared_node_alloc(MEM_POOL_LENGTH);
@@ -125,15 +119,11 @@ void my_actor::install(const shared_initer* initer)
 		bind_qt_run_base::install();
 #endif
 #ifdef ENABLE_CHECK_LOST
-		auto& s_checkLostObjAlloc_ = s_checkLostObjAlloc;
-		auto& s_checkPumpLostObjAlloc_ = s_checkPumpLostObjAlloc;
-		s_checkLostObjAlloc_ = new mem_alloc_mt<CheckLost_>(MEM_POOL_LENGTH);
-		s_checkPumpLostObjAlloc_ = new mem_alloc_mt<CheckPumpLost_>(MEM_POOL_LENGTH);
-		s_checkLostRefCountAlloc = make_ref_count_alloc<CheckLost_, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [s_checkLostObjAlloc_](CheckLost_*){});
-		s_checkPumpLostRefCountAlloc = make_ref_count_alloc<CheckPumpLost_, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [s_checkPumpLostObjAlloc_](CheckPumpLost_*){});
+		s_checkLostObjAlloc = make_shared_space_alloc<CheckLost_, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [](CheckLost_*){});
+		s_checkPumpLostObjAlloc = make_shared_space_alloc<CheckPumpLost_, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [](CheckPumpLost_*){});
 #endif
 		s_autoActorStackMng = new autoActorStackMng;
-		shared_bool::_sharedBoolPool = create_shared_pool_mt<bool, std::mutex>(MEM_POOL_LENGTH);
+		shared_bool::_sharedBoolAlloc = make_shared_space_alloc<bool, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [](bool*){});
 		my_actor::_actorIDCount = initer->_actorIDCount;
 		s_shared_initer._actorIDCount = initer->_actorIDCount;
 		my_actor::_childActorListAll = new msg_list_shared_alloc<actor_handle>::shared_node_alloc(MEM_POOL_LENGTH);
@@ -149,8 +139,8 @@ void my_actor::uninstall()
 	{
 		s_inited = false;
 		assert(run_thread::this_thread_id() == s_installID);
-		delete shared_bool::_sharedBoolPool;
-		shared_bool::_sharedBoolPool = NULL;
+		delete shared_bool::_sharedBoolAlloc;
+		shared_bool::_sharedBoolAlloc = NULL;
 		if (!s_isSharedIniter)
 			delete my_actor::_actorIDCount;
 		s_shared_initer._actorIDCount = NULL;
@@ -166,10 +156,6 @@ void my_actor::uninstall()
 		delete s_autoActorStackMng;
 		s_autoActorStackMng = NULL;
 #ifdef ENABLE_CHECK_LOST
-		delete s_checkLostRefCountAlloc;
-		s_checkLostRefCountAlloc = NULL;
-		delete s_checkPumpLostRefCountAlloc;
-		s_checkPumpLostRefCountAlloc = NULL;
 		delete s_checkLostObjAlloc;
 		s_checkLostObjAlloc = NULL;
 		delete s_checkPumpLostObjAlloc;
@@ -247,10 +233,8 @@ shared_bool::shared_bool(shared_bool&& s)
 
 shared_bool shared_bool::new_(bool b)
 {
-	assert(_sharedBoolPool);
-	shared_bool r(_sharedBoolPool->pick());
-	r = b;
-	return r;
+	assert(shared_bool::_sharedBoolAlloc);
+	return shared_bool(make_shared_space_obj<bool>(shared_bool::_sharedBoolAlloc, b));
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -3550,31 +3534,28 @@ void ActorFunc_::cancel_timer(my_actor* host)
 #ifdef ENABLE_CHECK_LOST
 std::shared_ptr<CheckLost_> ActorFunc_::new_check_lost(const shared_strand& strand, msg_handle_base* msgHandle)
 {
-	auto& s_checkLostObjAlloc_ = s_checkLostObjAlloc;
-	return std::shared_ptr<CheckLost_>(new(s_checkLostObjAlloc->allocate())CheckLost_(strand, msgHandle), [s_checkLostObjAlloc_](CheckLost_* p)
+	void* space = s_checkLostObjAlloc->allocate();
+	return std::shared_ptr<CheckLost_>(new(space)CheckLost_(strand, msgHandle), [](CheckLost_* p)
 	{
 		p->~CheckLost_();
-		s_checkLostObjAlloc_->deallocate(p);
-	}, ref_count_alloc<void>(s_checkLostRefCountAlloc));
+	}, ref_count_alloc2<CheckLost_>(space, s_checkLostObjAlloc));
 }
 
 std::shared_ptr<CheckPumpLost_> ActorFunc_::new_check_pump_lost(const actor_handle& hostActor, MsgPoolBase_* pool)
 {
-	auto& s_checkPumpLostObjAlloc_ = s_checkPumpLostObjAlloc;
-	return std::shared_ptr<CheckPumpLost_>(new(s_checkPumpLostObjAlloc->allocate())CheckPumpLost_(hostActor, pool), [s_checkPumpLostObjAlloc_](CheckPumpLost_* p)
+	void* space = s_checkPumpLostObjAlloc->allocate();
+	return std::shared_ptr<CheckPumpLost_>(new(space)CheckPumpLost_(hostActor, pool), [](CheckPumpLost_* p)
 	{
 		p->~CheckPumpLost_();
-		s_checkPumpLostObjAlloc_->deallocate(p);
-	}, ref_count_alloc<void>(s_checkPumpLostRefCountAlloc));
+	}, ref_count_alloc2<CheckPumpLost_>(space, s_checkPumpLostObjAlloc));
 }
 
 std::shared_ptr<CheckPumpLost_> ActorFunc_::new_check_pump_lost(actor_handle&& hostActor, MsgPoolBase_* pool)
 {
-	auto& s_checkPumpLostObjAlloc_ = s_checkPumpLostObjAlloc;
-	return std::shared_ptr<CheckPumpLost_>(new(s_checkPumpLostObjAlloc->allocate())CheckPumpLost_(std::move(hostActor), pool), [s_checkPumpLostObjAlloc_](CheckPumpLost_* p)
+	void* space = s_checkPumpLostObjAlloc->allocate();
+	return std::shared_ptr<CheckPumpLost_>(new(space)CheckPumpLost_(std::move(hostActor), pool), [](CheckPumpLost_* p)
 	{
 		p->~CheckPumpLost_();
-		s_checkPumpLostObjAlloc_->deallocate(p);
-	}, ref_count_alloc<void>(s_checkPumpLostRefCountAlloc));
+	}, ref_count_alloc2<CheckPumpLost_>(space, s_checkPumpLostObjAlloc));
 }
 #endif

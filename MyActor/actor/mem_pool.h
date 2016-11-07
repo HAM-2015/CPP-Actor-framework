@@ -1599,6 +1599,100 @@ public:
 	RefAlloc_* _refAll;
 };
 
+template <typename _Tp, typename _Ty, typename ALLOC>
+class CreateSharedSpaceAlloc_;
+
+template <typename _Ty, typename ALLOC>
+class CreateSharedSpaceAlloc_<void, _Ty, ALLOC>
+{
+public:
+	typedef size_t      size_type;
+	typedef void*       pointer;
+	typedef const void* const_pointer;
+	typedef void        value_type;
+
+	template <typename _Tp1>
+	struct rebind
+	{
+		typedef CreateSharedSpaceAlloc_<_Tp1, _Ty, ALLOC> other;
+	};
+
+	CreateSharedSpaceAlloc_(RefAlloc_* refAll)
+		:_refAll(refAll) {}
+
+	void* const _pl = NULL;
+	RefAlloc_* _refAll;
+};
+
+template <typename _Tp, typename _Ty, typename ALLOC>
+class CreateSharedSpaceAlloc_
+{
+	struct obj_space
+	{
+		__space_align char _ty[sizeof(_Ty)];
+		__space_align char _tp[sizeof(_Tp)];
+	};
+	typedef typename ALLOC::template rebind<obj_space>::other alloc_type;
+public:
+	typedef size_t     size_type;
+	typedef _Tp*       pointer;
+	typedef const _Tp* const_pointer;
+	typedef _Tp&       reference;
+	typedef const _Tp& const_reference;
+	typedef _Tp        value_type;
+
+	template <typename _Tp1>
+	struct rebind
+	{
+		typedef CreateSharedSpaceAlloc_<_Tp1, _Ty, ALLOC> other;
+	};
+
+	CreateSharedSpaceAlloc_(RefAlloc_* refAll)
+		:_refAll(refAll) {}
+
+	CreateSharedSpaceAlloc_(const CreateSharedSpaceAlloc_& s)
+		:_refAll(s._refAll) {}
+
+	template <typename _Tp1>
+	CreateSharedSpaceAlloc_(const CreateSharedSpaceAlloc_<_Tp1, _Ty, ALLOC>& s)
+		: _refAll(s._refAll) {}
+
+	~CreateSharedSpaceAlloc_()
+	{}
+
+	pointer allocate(size_type n, const void* = 0)
+	{
+		assert(1 == n);
+		_refAll->_refCountAlloc = new alloc_type(_refAll->_nodeCount);
+		throw bool();
+		return NULL;
+	}
+
+	void deallocate(pointer p, size_type n)
+	{
+		assert(false);
+	}
+
+	size_type max_size() const
+	{
+		return size_t(-1) / sizeof(_Tp);
+	}
+
+	template <typename... Args>
+	void construct(void* p, Args&&... args)
+	{
+		new(p)_Tp(TRY_MOVE(args)...);
+	}
+
+	void destroy(_Tp* p)
+	{
+		p->~_Tp();
+	}
+
+	void* const _pl = NULL;
+	RefAlloc_* _refAll;
+};
+
 template <typename _Tp>
 class ref_count_alloc;
 
@@ -1692,6 +1786,102 @@ public:
 	mem_alloc_base* _refCountAlloc;
 };
 
+template <typename _Ty, typename _Tp = void>
+class ref_count_alloc2;
+
+template <typename _Ty>
+class ref_count_alloc2<_Ty, void>
+{
+public:
+	typedef size_t      size_type;
+	typedef void*       pointer;
+	typedef const void* const_pointer;
+	typedef void        value_type;
+
+	template <typename _Tp1>
+	struct rebind
+	{
+		typedef ref_count_alloc2<_Ty, _Tp1> other;
+	};
+
+	ref_count_alloc2(void* space, mem_alloc_base* refCountAlloc)
+		:_space(space), _refCountAlloc(refCountAlloc)
+	{
+		static_assert(sizeof(ref_count_alloc2<_Ty, void>) == sizeof(CreateSharedSpaceAlloc_<void, _Ty, mem_alloc<void>>), "");
+	}
+
+	void* _space;
+	mem_alloc_base* _refCountAlloc;
+};
+
+template <typename _Ty, typename _Tp>
+class ref_count_alloc2
+{
+public:
+	typedef size_t     size_type;
+	typedef _Tp*       pointer;
+	typedef const _Tp* const_pointer;
+	typedef _Tp&       reference;
+	typedef const _Tp& const_reference;
+	typedef _Tp        value_type;
+
+	template <typename _Tp1>
+	struct rebind
+	{
+		typedef ref_count_alloc2<_Ty, _Tp1> other;
+	};
+
+	ref_count_alloc2(void* space, mem_alloc_base* refCountAlloc)
+		:_space(space), _refCountAlloc(refCountAlloc) {}
+
+	ref_count_alloc2(const ref_count_alloc2& s)
+		:_space(s._space), _refCountAlloc(s._refCountAlloc) {}
+
+	template <typename _Tp1>
+	ref_count_alloc2(const ref_count_alloc2<_Ty, _Tp1>& s)
+		: _space(s._space), _refCountAlloc(s._refCountAlloc)
+	{
+		assert(_refCountAlloc->alloc_size() >= sizeof(_Tp));
+	}
+
+	~ref_count_alloc2()
+	{
+		static_assert(sizeof(ref_count_alloc2<_Ty, _Tp>) == sizeof(CreateSharedSpaceAlloc_<_Tp, _Ty, mem_alloc<void>>), "");
+	}
+
+	pointer allocate(size_type n, const void* = 0)
+	{
+		assert(1 == n);
+		return (pointer)((char*)_space + MEM_ALIGN(sizeof(_Ty), sizeof(void*)));
+	}
+
+	void deallocate(pointer p, size_type n)
+	{
+		assert(1 == n);
+		assert((pointer)((char*)_space + MEM_ALIGN(sizeof(_Ty), sizeof(void*))) == p);
+		_refCountAlloc->deallocate(_space);
+	}
+
+	size_type max_size() const
+	{
+		return size_t(-1) / sizeof(_Tp);
+	}
+
+	template <typename... Args>
+	void construct(void* p, Args&&... args)
+	{
+		new(p)_Tp(TRY_MOVE(args)...);
+	}
+
+	void destroy(_Tp* p)
+	{
+		p->~_Tp();
+	}
+
+	void* _space;
+	mem_alloc_base* _refCountAlloc;
+};
+
 template <typename T, typename ALLOC, typename DESTROYER>
 mem_alloc_base* make_ref_count_alloc(size_t poolSize, DESTROYER&& destroyer)
 {
@@ -1703,6 +1893,29 @@ mem_alloc_base* make_ref_count_alloc(size_t poolSize, DESTROYER&& destroyer)
 	}
 	catch (...) {}
 	return refCountAlloc;
+}
+
+template <typename T, typename ALLOC, typename DESTROYER>
+mem_alloc_base* make_shared_space_alloc(size_t poolSize, DESTROYER&& destroyer)
+{
+	mem_alloc_base* refCountAlloc = NULL;
+	try
+	{
+		RefAlloc_ refAll = { refCountAlloc, poolSize };
+		std::shared_ptr<T>(NULL, TRY_MOVE(destroyer), CreateSharedSpaceAlloc_<void, T, ALLOC>(&refAll));
+	}
+	catch (...) {}
+	return refCountAlloc;
+}
+
+template <typename Class, typename... Args>
+std::shared_ptr<Class> make_shared_space_obj(mem_alloc_base* alloc, Args&&... args)
+{
+	void* space = alloc->allocate();
+	return std::shared_ptr<Class>(new(space)Class(std::forward<Args>(args)...), [](Class* p)
+	{
+		p->~Class();
+	}, ref_count_alloc2<Class>(space, alloc));
 }
 
 template <typename T, typename CREATER, typename DESTROYER, typename MUTEX>
@@ -1775,6 +1988,6 @@ struct shared_bool
 	static shared_bool new_(bool b = false);
 private:
 	std::shared_ptr<bool> _ptr;
-	static shared_obj_pool<bool>* _sharedBoolPool;
+	static mem_alloc_base* _sharedBoolAlloc;
 };
 #endif

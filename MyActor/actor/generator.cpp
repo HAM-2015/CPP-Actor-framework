@@ -1,19 +1,14 @@
 #include "generator.h"
 
-mem_alloc_mt<generator>* generator::_genObjAlloc = NULL;
-mem_alloc_base* generator::_genObjRefCountAlloc = NULL;
+mem_alloc_base* generator::_genObjAlloc = NULL;
 
 void generator::install()
 {
-	_genObjAlloc = new mem_alloc_mt<generator>(MEM_POOL_LENGTH);
-	mem_alloc_mt<generator>* genObjAlloc_ = _genObjAlloc;
-	_genObjRefCountAlloc = make_ref_count_alloc<generator, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [genObjAlloc_](generator*){});
+	_genObjAlloc = make_shared_space_alloc<generator, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [](generator*){});
 }
 
 void generator::uninstall()
 {
-	delete _genObjRefCountAlloc;
-	_genObjRefCountAlloc = NULL;
 	delete _genObjAlloc;
 	_genObjAlloc = NULL;
 }
@@ -72,12 +67,11 @@ bool generator::_next()
 
 generator_handle generator::create(shared_strand strand, std::function<void(generator&)> handler, std::function<void()> notify)
 {
-	mem_alloc_base* genObjRefCountAlloc_ = _genObjRefCountAlloc;
-	generator_handle res(new(_genObjAlloc->allocate())generator(), [genObjRefCountAlloc_](generator* p)
+	void* space = _genObjAlloc->allocate();
+	generator_handle res(new(space)generator(), [](generator* p)
 	{
 		p->~generator();
-		genObjRefCountAlloc_->deallocate(p);
-	});
+	}, ref_count_alloc2<generator>(space, _genObjAlloc));
 	res->_weakThis = res;
 	res->_timer = strand->actor_timer();
 	res->_strand = std::move(strand);

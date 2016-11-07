@@ -557,8 +557,7 @@ private:
 	ActorTimer_* _timer;
 	ActorTimer_::timer_handle _timerHandle;
 	DEBUG_OPERATION(bool _isRun);
-	static mem_alloc_mt<generator>* _genObjAlloc;
-	static mem_alloc_base* _genObjRefCountAlloc;
+	static mem_alloc_base* _genObjAlloc;
 public:
 	void* __ctx;
 	shared_bool __sharedSign;
