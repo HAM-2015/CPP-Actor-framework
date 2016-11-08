@@ -251,6 +251,15 @@ void generator::_co_async_next2()
 	}
 }
 
+void generator::_co_reset_shared_sign()
+{
+	if (!__sharedSign.empty())
+	{
+		__sharedSign = true;
+		__sharedSign.reset();
+	}
+}
+
 void generator::_co_shared_async_next(shared_bool& sign)
 {
 	_strand->distribute(std::bind([](generator_handle& host, shared_bool& sign)

@@ -165,7 +165,7 @@ struct mem_alloc_mt : protected MUTEX, public mem_alloc_base
 		_pool = NULL;
 	}
 
-	virtual ~mem_alloc_mt()
+	~mem_alloc_mt()
 	{
 		std::lock_guard<MUTEX> lg(*this);
 		node_space* pIt = _pool;
@@ -450,7 +450,7 @@ struct dymem_alloc_mt : protected MUTEX, public mem_alloc_base
 		_freeNumber = 0;
 	}
 
-	virtual ~dymem_alloc_mt()
+	~dymem_alloc_mt()
 	{
 		std::lock_guard<MUTEX> lg(*this);
 		void* pIt = _pool;
@@ -618,7 +618,7 @@ public:
 #endif
 	}
 
-	virtual ~reusable_mem_mt()
+	~reusable_mem_mt()
 	{
 		std::lock_guard<MUTEX> lg(*this);
 		while (_top)

@@ -76,7 +76,6 @@ struct __co_context_no_capture{};
 
 //开始generator的代码区域
 #define co_begin }\
-	if (!co_self.__sharedSign.empty()){co_self.__sharedSign=true; co_self.__sharedSign.reset();}\
 	if (!co_self.__coNext) {co_self.__coNext = (__COUNTER__+1)/2;}else if (-1==co_self.__coNext) co_stop;\
 	__coNext=co_self.__coNext; co_self.__coNext=0;\
 	switch(__coNext) { case __COUNTER__/2:;
@@ -84,6 +83,7 @@ struct __co_context_no_capture{};
 //结束generator的代码区域
 #define co_end break;default:assert(false);}\
 	goto __stop; __stop:DEBUG_OPERATION(co_self.__inside = false);\
+	co_self._co_reset_shared_sign();\
 	if((void*)-1!=(void*)__coContext){delete __coContext;}\
 	co_self.__ctx = NULL; return;
 
@@ -114,16 +114,17 @@ struct __co_context_no_capture{};
 	assert(host);\
 	if (!host->__ctx) return;\
 	generator* host_ = host->_revert_this(host);\
-	if (host_->__asyncSign) { host_->__asyncSign = false; host_->_next(); }\
-	else { host_->__asyncSign = true; };\
+	if (host_->__asyncSign) {host_->__asyncSign = false; host_->_next();}\
+	else {host_->__asyncSign = true;};\
 	}, std::move(co_self.async_this())))
 
 //generator可共享异步回调接口
 #define co_shared_async \
 	co_self.gen_strand()->wrap(std::bind([](generator_handle& host, shared_bool& sign){\
-	if (sign || !host->__ctx) return;\
-	if (host_->__asyncSign) { host_->__asyncSign = false; host->_next(); }\
-	else { host_->__asyncSign = true; };\
+	generator* host_ = host.get();\
+	if (sign || !host_->__ctx) return;\
+	if (host_->__asyncSign) {host_->__asyncSign = false; host->_next();}\
+	else {host_->__asyncSign = true;};\
 	}, co_self.shared_this(), co_self.shared_async_sign()))
 
 #define co_anext \
@@ -159,8 +160,10 @@ struct __co_context_no_capture{};
 	assert(co_self.__inside);\
 	assert(co_self.__awaitSign || co_self.__sharedAwaitSign);\
 	DEBUG_OPERATION(co_self.__awaitSign = co_self.__sharedAwaitSign = false);\
-	if (co_self.__asyncSign) co_self.__asyncSign = false;\
-	else { co_self.__asyncSign = true; _co_yield; }}while (0)
+	if (co_self.__asyncSign) {co_self.__asyncSign = false;}\
+	else {co_self.__asyncSign = true; _co_yield;}\
+	co_self._co_reset_shared_sign();\
+	}while (0)
 
 #define _co_timed_await(__timer__, __ms__, __handler__) do{\
 	if(-1==co_self.__coNext) co_stop;\
@@ -501,6 +504,7 @@ public:
 	void _co_tick_next();
 	void _co_async_next();
 	void _co_async_next2();
+	void _co_reset_shared_sign();
 	void _co_shared_async_next(shared_bool& sign);
 	bool _done();
 
