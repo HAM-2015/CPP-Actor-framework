@@ -121,9 +121,10 @@ struct __co_context_no_capture{};
 //generator可共享异步回调接口
 #define co_shared_async \
 	co_self.gen_strand()->wrap(std::bind([](generator_handle& host, shared_bool& sign){\
+	if (sign) return;\
 	generator* host_ = host.get();\
-	if (sign || !host_->__ctx) return;\
-	if (host_->__asyncSign) {host_->__asyncSign = false; host->_next();}\
+	if (!host_->__ctx) return;\
+	if (host_->__asyncSign) {host_->__asyncSign = false; host_->_next();}\
 	else {host_->__asyncSign = true;};\
 	}, co_self.shared_this(), co_self.shared_async_sign()))
 
@@ -318,31 +319,29 @@ struct __co_context_no_capture{};
 #define co_end_switch __coSwitchPreSign=true;}}
 
 //push数据到channel/msg_buffer
-#define co_chan_push(__chan__, __st__, ...) do{(__chan__).push(co_async_result(__st__), __VA_ARGS__); _co_await;}while (0)
-#define co_chan_push_void(__chan__, __st__) do{(__chan__).push(co_async_result(__st__)); _co_await;}while (0)
-#define co_chan_try_push(__chan__, __st__, ...) do{(__chan__).try_push(co_async_result(__st__), __VA_ARGS__); _co_await;}while (0)
-#define co_chan_try_push_void(__chan__, __st__) do{(__chan__).try_push(co_async_result(__st__)); _co_await;}while (0)
+#define co_chan_push(__chan__, ...) do{(__chan__).push(co_async_result(co_last_state), __VA_ARGS__); _co_await;}while (0)
+#define co_chan_push_void(__chan__) do{(__chan__).push(co_async_result(co_last_state)); _co_await;}while (0)
+#define co_chan_try_push(__chan__, ...) do{(__chan__).try_push(co_async_result(co_last_state), __VA_ARGS__); _co_await;}while (0)
+#define co_chan_try_push_void(__chan__) do{(__chan__).try_push(co_async_result(co_last_state)); _co_await;}while (0)
 //从channel/msg_buffer中读取数据
-#define co_chan_pop(__chan__, __st__, ...) do{(__chan__).pop(co_async_result_(__st__, __VA_ARGS__)); _co_await;}while (0)
-#define co_chan_pop_void(__chan__, __st__) do{(__chan__).pop(co_async_result_(__st__)); _co_await;}while (0)
-#define co_chan_try_pop(__chan__, __st__, ...) do{(__chan__).try_pop(co_async_result_(__st__, __VA_ARGS__)); _co_await;}while (0)
-#define co_chan_try_pop_void(__chan__, __st__) do{(__chan__).try_pop(co_async_result_(__st__)); _co_await;}while (0)
+#define co_chan_pop(__chan__, ...) do{(__chan__).pop(co_async_result_(co_last_state, __VA_ARGS__)); _co_await;}while (0)
+#define co_chan_pop_void(__chan__) do{(__chan__).pop(co_async_result_(co_last_state)); _co_await;}while (0)
+#define co_chan_try_pop(__chan__, ...) do{(__chan__).try_pop(co_async_result_(co_last_state, __VA_ARGS__)); _co_await;}while (0)
+#define co_chan_try_pop_void(__chan__) do{(__chan__).try_pop(co_async_result_(co_last_state)); _co_await;}while (0)
 //关闭channel/msg_buffer
 #define co_chan_close(__chan__) do{(__chan__).close(co_async); _co_await;}while (0)
-
-#define co_chan_use_state co_async_state __chanState
-//上一次co_chan_io的状态
-#define co_chan_last_state (__coContext->__chanState)
+//co_chan_io/co_chan_try_io多参数读写时打包
+#define co_chan_multi(...) _co_chan_multi(__VA_ARGS__)
 //push/pop数据到channel/msg_buffer
-#define co_chan_io(__chan__) co_await CoChanIo_<decltype(__chan__)>(__chan__, co_chan_last_state, co_self)
-#define co_chan_try_io(__chan__) co_await CoChanTryIo_<decltype(__chan__)>(__chan__, co_chan_last_state, co_self)
-#define co_chan_timed_io(__chan__, __ms__) co_await CoChanTimedIo_<decltype(__chan__)>(__ms__, __chan__, co_chan_last_state, co_self)
-#define co_chan_safe_io(__chan__) co_await CoChanSafeIo_<decltype(__chan__)>(__chan__, co_chan_last_state, co_self)
-#define co_chan_try_safe_io(__chan__) co_await CoChanTrySafeIo_<decltype(__chan__)>(__chan__, co_chan_last_state, co_self)
-#define co_chan_timed_safe_io(__chan__, __ms__) co_await CoChanTimedSafeIo_<decltype(__chan__)>(__ms__, __chan__, co_chan_last_state, co_self)
-#define co_csp_send(__chan__, __res__) co_await CoCspSend_<decltype(__res__), decltype(__chan__)>(__res__, __chan__, co_chan_last_state, co_self) <<
-#define co_csp_try_send(__chan__, __res__) co_await CoCspTrySend_<decltype(__res__), decltype(__chan__)>(__res__, __chan__, co_chan_last_state, co_self) <<
-#define co_csp_timed_send(__chan__, __ms__, __res__) co_await CoCspTimedSend_<decltype(__res__), decltype(__chan__)>(__ms__, __res__, __chan__, co_chan_last_state, co_self) <<
+#define co_chan_io(__chan__) co_await CoChanIo_<decltype(__chan__)>(__chan__, co_last_state, co_self)
+#define co_chan_try_io(__chan__) co_await CoChanTryIo_<decltype(__chan__)>(__chan__, co_last_state, co_self)
+#define co_chan_timed_io(__chan__, __ms__) co_await CoChanTimedIo_<decltype(__chan__)>(__ms__, __chan__, co_last_state, co_self)
+#define co_chan_safe_io(__chan__) co_await CoChanSafeIo_<decltype(__chan__)>(__chan__, co_last_state, co_self)
+#define co_chan_try_safe_io(__chan__) co_await CoChanTrySafeIo_<decltype(__chan__)>(__chan__, co_last_state, co_self)
+#define co_chan_timed_safe_io(__chan__, __ms__) co_await CoChanTimedSafeIo_<decltype(__chan__)>(__ms__, __chan__, co_last_state, co_self)
+#define co_csp_send(__chan__, __res__) co_await CoCspSend_<decltype(__res__), decltype(__chan__)>(__res__, __chan__, co_last_state, co_self) <<
+#define co_csp_try_send(__chan__, __res__) co_await CoCspTrySend_<decltype(__res__), decltype(__chan__)>(__res__, __chan__, co_last_state, co_self) <<
+#define co_csp_timed_send(__chan__, __ms__, __res__) co_await CoCspTimedSend_<decltype(__res__), decltype(__chan__)>(__ms__, __res__, __chan__, co_last_state, co_self) <<
 #define co_csp_void_send(__chan__) co_chan_io(__chan__) << void_type()
 #define co_csp_void_try_send(__chan__) co_chan_try_io(__chan__) << void_type()
 #define co_csp_void_timed_send(__chan__, __ms__) co_chan_timed_io(__chan__, __ms__) << void_type()
@@ -350,18 +349,28 @@ struct __co_context_no_capture{};
 #define co_csp_try_wait(__chan__) co_chan_try_io(__chan__) >>
 #define co_csp_timed_wait(__chan__, __ms__) co_chan_timed_io(__chan__, __ms__) >>
 
-#define co_chan_io_last_is_ok (co_async_state::co_async_ok == co_chan_last_state)
-#define co_chan_io_last_is_fail (co_async_state::co_async_fail == co_chan_last_state)
-#define co_chan_io_last_is_cancel (co_async_state::co_async_cancel == co_chan_last_state)
-#define co_chan_io_last_is_closed (co_async_state::co_async_closed == co_chan_last_state)
-#define co_chan_io_last_is_overtime (co_async_state::co_async_overtime == co_chan_last_state)
+#define co_use_state co_async_state __coState
+//上一次异步结果状态
+#define co_last_state (__coContext->__coState)
+#define co_last_state_is_ok (co_async_state::co_async_ok == co_last_state)
+#define co_last_state_is_fail (co_async_state::co_async_fail == co_last_state)
+#define co_last_state_is_cancel (co_async_state::co_async_cancel == co_last_state)
+#define co_last_state_is_closed (co_async_state::co_async_closed == co_last_state)
+#define co_last_state_is_overtime (co_async_state::co_async_overtime == co_last_state)
 
-//co_chan_io/co_chan_try_io多参数读写时打包
-#define co_chan_multi(...) _co_chan_multi(__VA_ARGS__)
-//co_mutex上锁
-#define co_mutex_lock(__mutex__) do{(__mutex__).lock(co_async); _co_await;}while (0)
-//co_mutex解锁
-#define co_mutex_unlock(__mutex__) do{(__mutex__).unlock(co_async); _co_await;}while (0)
+#define co_use_id gen_id __coId
+#define co_id (__coContext->__coId)
+
+#define co_mutex_lock(__mutex__) do{(__mutex__).lock(co_id, co_async); _co_await;}while (0)
+#define co_mutex_try_lock(__mutex__) do{(__mutex__).try_lock(co_id, co_async_result(co_last_state)); _co_await;}while (0)
+#define co_mutex_timed_lock(__mutex__, __ms__) do{(__mutex__).timed_lock(co_id, __ms__, co_async_result(co_last_state)); _co_await;}while (0)
+#define co_mutex_lock_shared(__mutex__) do{(__mutex__).lock_shared(co_id, co_async); _co_await;}while (0)
+#define co_mutex_try_lock_shared(__mutex__) do{(__mutex__).try_lock_shared(co_id, co_async_result(co_last_state)); _co_await;}while (0)
+#define co_mutex_timed_lock_shared(__mutex__, __ms__) do{(__mutex__).timed_lock_shared(co_id, __ms__, co_async_result(co_last_state)); _co_await;}while (0)
+#define co_mutex_lock_upgrade(__mutex__) do{(__mutex__).lock_upgrade(co_id, co_async); _co_await;}while (0)
+#define co_mutex_unlock(__mutex__) do{(__mutex__).unlock(co_id, co_async); _co_await;}while (0)
+#define co_mutex_unlock_shared(__mutex__) do{(__mutex__).unlock_shared(co_id, co_async); _co_await;}while (0)
+#define co_mutex_unlock_upgrade(__mutex__) do{(__mutex__).unlock_upgrade(co_id, co_async); _co_await;}while (0)
 
 #define co_select (__coContext->__selectSign)
 #define co_select_init __selectSign(co_self)
@@ -496,6 +505,7 @@ public:
 	generator_handle& shared_this();
 	generator_handle& async_this();
 	const shared_bool& shared_async_sign();
+	static long long alloc_id();
 public:
 	bool _next();
 	void _lockThis();
@@ -562,6 +572,7 @@ private:
 	ActorTimer_::timer_handle _timerHandle;
 	DEBUG_OPERATION(bool _isRun);
 	static mem_alloc_base* _genObjAlloc;
+	static std::atomic<long long>* _id;
 public:
 	void* __ctx;
 	shared_bool __sharedSign;
@@ -576,6 +587,17 @@ public:
 	bool __yieldSign;
 #endif
 	NONE_COPY(generator);
+};
+
+class gen_id
+{
+public:
+	gen_id() :_id(generator::alloc_id()) {}
+	gen_id(long long id) :_id(id) {}
+	operator long long() { return _id; }
+	void operator =(long long id) { _id = id; }
+private:
+	long long _id;
 };
 
 struct CoGo_
@@ -3937,7 +3959,7 @@ private:
 						CHECK_EXCEPTION(ntf, state);
 					}
 				}, __1, std::forward<Notify>(ntf))));
-				_strand->over_timer()->timeout(ms, std::bind([this](const co_notify_node& it)
+				_strand->over_timer()->timeout(ms, *timer, wrap_bind([this](const co_notify_node& it)
 				{
 					CoNotifyHandlerFace_* waitNtf = *it;
 					_waitQueue.erase(it);
@@ -4152,78 +4174,86 @@ struct CoSelectSign_
 */
 class co_mutex
 {
+	struct wait_node
+	{
+		CoNotifyHandlerFace_* _ntf;
+		long long _waitHostID;
+	};
 public:
 	co_mutex(const shared_strand& strand)
-		:_locked(false), _strand(strand){}
+		:_strand(strand), _waitQueue(4), _lockActorID(0), _recCount(0)
+	{
+	}
 
 	~co_mutex()
 	{
+		assert(_waitQueue.empty());
 	}
 public:
 	template <typename Notify>
-	void lock(Notify&& ntf)
+	void lock(long long id, Notify&& ntf)
 	{
 		if (_strand->running_in_this_thread())
 		{
-			_lock(std::forward<Notify>(ntf));
+			_lock(id, std::forward<Notify>(ntf));
 		}
 		else
 		{
 			typedef RM_CREF(Notify) Notify_;
-			_strand->post(std::bind([this](Notify_& ntf)
+			_strand->post(std::bind([this, id](Notify_& ntf)
 			{
-				_lock(std::move(ntf));
+				_lock(id, std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}
 
 	template <typename Notify>
-	void try_lock(Notify&& ntf)
+	void try_lock(long long id, Notify&& ntf)
 	{
 		if (_strand->running_in_this_thread())
 		{
-			_try_lock(std::forward<Notify>(ntf));
+			_try_lock(id, std::forward<Notify>(ntf));
 		}
 		else
 		{
 			typedef RM_CREF(Notify) Notify_;
-			_strand->post(std::bind([this](Notify_& ntf)
+			_strand->post(std::bind([this, id](Notify_& ntf)
 			{
-				_try_lock(std::move(ntf));
+				_try_lock(id, std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}
 
 	template <typename Notify>
-	void timed_lock(int ms, Notify&& ntf)
+	void timed_lock(long long id, int ms, Notify&& ntf)
 	{
 		if (_strand->running_in_this_thread())
 		{
-			_timed_lock(ms, std::forward<Notify>(ntf));
+			_timed_lock(id, ms, std::forward<Notify>(ntf));
 		}
 		else
 		{
 			typedef RM_CREF(Notify) Notify_;
-			_strand->post(std::bind([this, ms](Notify_& ntf)
+			_strand->post(std::bind([this, id, ms](Notify_& ntf)
 			{
-				_timed_lock(ms, std::move(ntf));
+				_timed_lock(id, ms, std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}
 
 	template <typename Notify>
-	void unlock(Notify&& ntf)
+	void unlock(long long id, Notify&& ntf)
 	{
 		if (_strand->running_in_this_thread())
 		{
-			_unlock(std::forward<Notify>(ntf));
+			_unlock(id, std::forward<Notify>(ntf));
 		}
 		else
 		{
 			typedef RM_CREF(Notify) Notify_;
-			_strand->post(std::bind([this](Notify_& ntf)
+			_strand->post(std::bind([this, id](Notify_& ntf)
 			{
-				_unlock(std::move(ntf));
+				_unlock(id, std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -4231,6 +4261,11 @@ public:
 	const shared_strand& self_strand() const
 	{
 		return _strand;
+	}
+
+	static long long alloc_id()
+	{
+		return generator::alloc_id();
 	}
 private:
 	template <typename Handler>
@@ -4241,87 +4276,743 @@ private:
 		return new(_alloc.allocate(sizeof(Handler_)))Handler_(std::forward<Handler>(handler));
 	}
 
+	bool check_self_err_call(const long long id)
+	{
+		for (wait_node& ele : _waitQueue)
+		{
+			if (id == ele._waitHostID)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
 	template <typename Notify>
-	void _lock(Notify&& ntf)
+	void _lock(long long id, Notify&& ntf)
 	{
 		assert(_strand->running_in_this_thread());
-		if (_locked)
+		assert(check_self_err_call(id));
+		if (!_lockActorID || id == _lockActorID)
 		{
-			_waitQueue.push_back(wrap_notify(std::forward<Notify>(ntf)));
+			_lockActorID = id;
+			_recCount++;
+			CHECK_EXCEPTION(ntf);
 		}
 		else
 		{
-			_locked = true;
-			CHECK_EXCEPTION(ntf);
+			_waitQueue.push_back(wait_node{ wrap_notify(std::forward<Notify>(ntf)), id });
 		}
 	}
 
 	template <typename Notify>
-	void _try_lock(Notify&& ntf)
+	void _try_lock(long long id, Notify&& ntf)
 	{
 		assert(_strand->running_in_this_thread());
-		if (_locked)
+		assert(check_self_err_call(id));
+		if (!_lockActorID || id == _lockActorID)
+		{
+			_lockActorID = id;
+			_recCount++;
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
+		}
+		else
 		{
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
 		}
-		else
-		{
-			_locked = true;
-			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
-		}
 	}
 
 	template <typename Notify>
-	void _timed_lock(int ms, Notify&& ntf)
+	void _timed_lock(long long id, int ms, Notify&& ntf)
 	{
 		assert(_strand->running_in_this_thread());
-		if (_locked)
+		assert(check_self_err_call(id));
+		if (!_lockActorID || id == _lockActorID)
+		{
+			_lockActorID = id;
+			_recCount++;
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
+		}
+		else
 		{
 			overlap_timer::timer_handle* timer = new(_alloc.allocate(sizeof(overlap_timer::timer_handle)))overlap_timer::timer_handle;
-			_waitQueue.push_back(wrap_notify(std::bind([this, timer](Notify& ntf, co_async_state state)
+			_waitQueue.push_back(wait_node{ wrap_notify(std::bind([this, timer](co_async_state state, Notify& ntf)
 			{
 				_strand->over_timer()->cancel(*timer);
 				timer->~timer_handle();
 				_alloc.deallocate(timer);
 				CHECK_EXCEPTION(ntf, state);
-			}, std::forward<Notify>(ntf), __1)));
-			_strand->over_timer()->timeout(ms, *timer, wrap_bind([this](const co_notify_node& it)
+			}, __1, std::forward<Notify>(ntf))), id });
+			_strand->over_timer()->timeout(ms, *timer, wrap_bind([this](const msg_list<wait_node>::iterator& it)
 			{
-				CoNotifyHandlerFace_* Ntf = *it;
+				CoNotifyHandlerFace_* waitNtf = it->_ntf;
 				_waitQueue.erase(it);
-				Ntf->invoke(_alloc, co_async_state::co_async_overtime);
+				waitNtf->invoke(_alloc, co_async_state::co_async_overtime);
 			}, --_waitQueue.end()));
 		}
-		else
+	}
+
+	void _unlock1(long long id)
+	{
+		if (0 == --_recCount)
 		{
-			_locked = true;
-			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
+			if (!_waitQueue.empty())
+			{
+				_recCount = 1;
+				wait_node queueFront = _waitQueue.front();
+				_waitQueue.pop_front();
+				_lockActorID = queueFront._waitHostID;
+				queueFront._ntf->invoke(_alloc);
+			}
+			else
+			{
+				_lockActorID = 0;
+			}
 		}
 	}
 
 	template <typename Notify>
-	void _unlock(Notify&& ntf)
+	void _unlock(long long id, Notify&& ntf)
 	{
 		assert(_strand->running_in_this_thread());
-		assert(_locked);
-		if (!_waitQueue.empty())
-		{
-			CoNotifyHandlerFace_* Ntf = _waitQueue.front();
-			_waitQueue.pop_front();
-			Ntf->invoke(_alloc);
-		}
-		else
-		{
-			_locked = false;
-		}
+		assert(check_self_err_call(id));
+		assert(id == _lockActorID);
+		_unlock1(id);
 		CHECK_EXCEPTION(ntf);
 	}
 private:
 	shared_strand _strand;
+	msg_list<wait_node> _waitQueue;
 	reusable_mem _alloc;
-	msg_list<CoNotifyHandlerFace_*> _waitQueue;
-	bool _locked;
+	long long _lockActorID;
+	size_t _recCount;
 	NONE_COPY(co_mutex);
+};
+
+/*!
+@brief generator中逻辑shared_mutex同步
+*/
+class co_shared_mutex
+{
+	enum lock_status
+	{
+		st_shared,
+		st_unique,
+		st_upgrade
+	};
+
+	struct wait_node
+	{
+		CoNotifyHandlerFace_* _ntf;
+		long long _waitHostID;
+		lock_status _status;
+	};
+public:
+	co_shared_mutex(const shared_strand& strand)
+		:_strand(strand), _waitQueue(4), _upgradeQueue(4), _status(st_shared), _insideCount(0)
+	{
+	}
+
+	~co_shared_mutex()
+	{
+		assert(_waitQueue.empty());
+		assert(_upgradeQueue.empty());
+	}
+public:
+	template <typename Notify>
+	void lock(long long id, Notify&& ntf)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_lock(id, std::forward<Notify>(ntf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, id](Notify_& ntf)
+			{
+				_lock(id, std::move(ntf));
+			}, std::forward<Notify>(ntf)));
+		}
+	}
+
+	template <typename Notify>
+	void try_lock(long long id, Notify&& ntf)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_try_lock(id, std::forward<Notify>(ntf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, id](Notify_& ntf)
+			{
+				_try_lock(id, std::move(ntf));
+			}, std::forward<Notify>(ntf)));
+		}
+	}
+
+	template <typename Notify>
+	void timed_lock(long long id, int ms, Notify&& ntf)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_timed_lock(id, ms, std::forward<Notify>(ntf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, id, ms](Notify_& ntf)
+			{
+				_timed_lock(id, ms, std::move(ntf));
+			}, std::forward<Notify>(ntf)));
+		}
+	}
+
+	template <typename Notify>
+	void lock_shared(long long id, Notify&& ntf)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_lock_shared(id, std::forward<Notify>(ntf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, id](Notify_& ntf)
+			{
+				_lock_shared(id, std::move(ntf));
+			}, std::forward<Notify>(ntf)));
+		}
+	}
+
+	template <typename Notify>
+	void try_lock_shared(long long id, Notify&& ntf)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_try_lock_shared(id, std::forward<Notify>(ntf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, id](Notify_& ntf)
+			{
+				_try_lock_shared(id, std::move(ntf));
+			}, std::forward<Notify>(ntf)));
+		}
+	}
+
+	template <typename Notify>
+	void timed_lock_shared(long long id, int ms, Notify&& ntf)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_timed_lock_shared(id, ms, std::forward<Notify>(ntf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, id, ms](Notify_& ntf)
+			{
+				_timed_lock_shared(id, ms, std::move(ntf));
+			}, std::forward<Notify>(ntf)));
+		}
+	}
+
+	template <typename Notify>
+	void lock_upgrade(long long id, Notify&& ntf)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_lock_upgrade(id, std::forward<Notify>(ntf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, id](Notify_& ntf)
+			{
+				_lock_upgrade(id, std::move(ntf));
+			}, std::forward<Notify>(ntf)));
+		}
+	}
+
+	template <typename Notify>
+	void unlock(long long id, Notify&& ntf)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_unlock(id, std::forward<Notify>(ntf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, id](Notify_& ntf)
+			{
+				_unlock(id, std::move(ntf));
+			}, std::forward<Notify>(ntf)));
+		}
+	}
+
+	template <typename Notify>
+	void unlock_shared(long long id, Notify&& ntf)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_unlock_shared(id, std::forward<Notify>(ntf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, id](Notify_& ntf)
+			{
+				_unlock_shared(id, std::move(ntf));
+			}, std::forward<Notify>(ntf)));
+		}
+	}
+
+	template <typename Notify>
+	void unlock_upgrade(long long id, Notify&& ntf)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_unlock_upgrade(id, std::forward<Notify>(ntf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			_strand->post(std::bind([this, id](Notify_& ntf)
+			{
+				_unlock_upgrade(id, std::move(ntf));
+			}, std::forward<Notify>(ntf)));
+		}
+	}
+
+	const shared_strand& self_strand() const
+	{
+		return _strand;
+	}
+
+	static long long alloc_id()
+	{
+		return generator::alloc_id();
+	}
+private:
+	template <typename Handler>
+	CoNotifyHandlerFace_* wrap_notify(Handler&& handler)
+	{
+		assert(_strand->running_in_this_thread());
+		typedef CoNotifyHandler_<RM_CREF(Handler)> Handler_;
+		return new(_alloc.allocate(sizeof(Handler_)))Handler_(std::forward<Handler>(handler));
+	}
+
+	bool check_self_err_call(const long long id)
+	{
+		for (wait_node& ele : _waitQueue)
+		{
+			if (id == ele._waitHostID)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	template <typename Notify>
+	void _lock(long long id, Notify&& ntf)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(check_self_err_call(id));
+		assert(_inSet.find(id) == _inSet.end());
+		assert(_inSet.size() == _insideCount);
+		if (0 == _insideCount)
+		{
+			_status = st_unique;
+			_insideCount++;
+			DEBUG_OPERATION(_inSet[id] = st_unique);
+			CHECK_EXCEPTION(ntf);
+		}
+		else
+		{
+			_waitQueue.push_back(wait_node{ wrap_notify(std::forward<Notify>(ntf)), id, st_unique });
+		}
+	}
+
+	template <typename Notify>
+	void _try_lock(long long id, Notify&& ntf)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(check_self_err_call(id));
+		assert(_inSet.find(id) == _inSet.end());
+		assert(_inSet.size() == _insideCount);
+		if (0 == _insideCount)
+		{
+			_status = st_unique;
+			_insideCount++;
+			DEBUG_OPERATION(_inSet[id] = st_unique);
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
+		}
+		else
+		{
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
+		}
+	}
+
+	template <typename Notify>
+	void _timed_lock(long long id, int ms, Notify&& ntf)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(check_self_err_call(id));
+		assert(_inSet.find(id) == _inSet.end());
+		assert(_inSet.size() == _insideCount);
+		if (0 == _insideCount)
+		{
+			_status = st_unique;
+			_insideCount++;
+			DEBUG_OPERATION(_inSet[id] = st_unique);
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
+		}
+		else
+		{
+			overlap_timer::timer_handle* timer = new(_alloc.allocate(sizeof(overlap_timer::timer_handle)))overlap_timer::timer_handle;
+			_waitQueue.push_back(wait_node{ wrap_notify(std::bind([this, timer](co_async_state state, Notify& ntf)
+			{
+				_strand->over_timer()->cancel(*timer);
+				timer->~timer_handle();
+				_alloc.deallocate(timer);
+				CHECK_EXCEPTION(ntf, state);
+			}, __1, std::forward<Notify>(ntf))), id, st_unique });
+			_strand->over_timer()->timeout(ms, *timer, wrap_bind([this](const msg_list<wait_node>::iterator& it)
+			{
+				CoNotifyHandlerFace_* waitNtf = it->_ntf;
+				_waitQueue.erase(it);
+				waitNtf->invoke(_alloc, co_async_state::co_async_overtime);
+			}, --_waitQueue.end()));
+		}
+	}
+
+	template <typename Notify>
+	void _lock_shared(long long id, Notify&& ntf)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(check_self_err_call(id));
+		assert(_inSet.find(id) == _inSet.end());
+		assert(_inSet.size() == _insideCount);
+		if (st_shared == _status)
+		{
+			_insideCount++;
+			DEBUG_OPERATION(_inSet[id] = st_shared);
+			CHECK_EXCEPTION(ntf);
+		}
+		else
+		{
+			_waitQueue.push_back(wait_node{ wrap_notify(std::forward<Notify>(ntf)), id, st_shared });
+		}
+	}
+
+	template <typename Notify>
+	void _try_lock_shared(long long id, Notify&& ntf)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(check_self_err_call(id));
+		assert(_inSet.find(id) == _inSet.end());
+		assert(_inSet.size() == _insideCount);
+		if (st_shared == _status)
+		{
+			_insideCount++;
+			DEBUG_OPERATION(_inSet[id] = st_shared);
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
+		}
+		else
+		{
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
+		}
+	}
+
+	template <typename Notify>
+	void _timed_lock_shared(long long id, int ms, Notify&& ntf)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(check_self_err_call(id));
+		assert(_inSet.find(id) == _inSet.end());
+		assert(_inSet.size() == _insideCount);
+		if (st_shared == _status)
+		{
+			_insideCount++;
+			DEBUG_OPERATION(_inSet[id] = st_shared);
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
+		}
+		else
+		{
+			overlap_timer::timer_handle* timer = new(_alloc.allocate(sizeof(overlap_timer::timer_handle)))overlap_timer::timer_handle;
+			_waitQueue.push_back(wait_node{ wrap_notify(std::bind([this, timer](co_async_state state, Notify& ntf)
+			{
+				_strand->over_timer()->cancel(*timer);
+				timer->~timer_handle();
+				_alloc.deallocate(timer);
+				CHECK_EXCEPTION(ntf, state);
+			}, __1, std::forward<Notify>(ntf))), id, st_shared });
+			_strand->over_timer()->timeout(ms, *timer, wrap_bind([this](const msg_list<wait_node>::iterator& it)
+			{
+				CoNotifyHandlerFace_* waitNtf = it->_ntf;
+				_waitQueue.erase(it);
+				waitNtf->invoke(_alloc, co_async_state::co_async_overtime);
+			}, --_waitQueue.end()));
+		}
+	}
+
+	template <typename Notify>
+	void _lock_upgrade(long long id, Notify&& ntf)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(check_self_err_call(id));
+		assert(_inSet.find(id) != _inSet.end());
+		assert(st_shared == _inSet.find(id)->second);
+		assert(_inSet.size() == _insideCount);
+		_status = st_upgrade;
+		if (1 == _insideCount)
+		{
+			DEBUG_OPERATION(_inSet[id] = st_upgrade);
+			CHECK_EXCEPTION(ntf);
+		}
+		else
+		{
+			_upgradeQueue.push_back(wait_node{ wrap_notify(std::forward<Notify>(ntf)), id, st_upgrade });
+			if (_upgradeQueue.size() == _insideCount)
+			{
+				wait_node queueFront = _upgradeQueue.front();
+				_upgradeQueue.pop_front();
+				DEBUG_OPERATION(_inSet[queueFront._waitHostID] = st_upgrade);
+				queueFront._ntf->invoke(_alloc);
+			}
+		}
+	}
+
+	void _unlock1(long long id)
+	{
+		_insideCount--;
+		DEBUG_OPERATION(_inSet.erase(id));
+		if (!_waitQueue.empty())
+		{
+			size_t ntfNum = 0;
+			CoNotifyHandlerFace_* ntfs[32];
+			std::list<CoNotifyHandlerFace_*> ntfsEx;
+			wait_node queueFront = _waitQueue.front();
+			_waitQueue.pop_front();
+			DEBUG_OPERATION(_inSet[queueFront._waitHostID] = queueFront._status);
+			_status = queueFront._status;
+			_insideCount++;
+			ntfs[ntfNum++] = queueFront._ntf;
+			if (st_shared == _status)
+			{
+				for (auto it = _waitQueue.begin(); it != _waitQueue.end();)
+				{
+					if (st_shared == it->_status)
+					{
+						assert(_inSet.find(it->_waitHostID) == _inSet.end());
+						DEBUG_OPERATION(_inSet[it->_waitHostID] = st_shared);
+						_insideCount++;
+						if (ntfNum < static_array_length(ntfs))
+						{
+							ntfs[ntfNum++] = it->_ntf;
+						}
+						else
+						{
+							ntfsEx.push_back(it->_ntf);
+						}
+						_waitQueue.erase(it++);
+					}
+					else
+					{
+						++it;
+					}
+				}
+			}
+			for (size_t i = 0; i < ntfNum; i++)
+			{
+				ntfs[i]->invoke(_alloc);
+			}
+			while (!ntfsEx.empty())
+			{
+				ntfsEx.front()->invoke(_alloc);
+				ntfsEx.pop_front();
+			}
+		}
+	}
+
+	template <typename Notify>
+	void _unlock(long long id, Notify&& ntf)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(check_self_err_call(id));
+		assert(st_unique == _status);
+		assert(1 == _inSet.size());
+		assert(_inSet.find(id) != _inSet.end());
+		assert(st_unique == _inSet.find(id)->second);
+		assert(_inSet.size() == _insideCount);
+		_unlock1(id);
+		CHECK_EXCEPTION(ntf);
+	}
+
+	void _unlock_shared1(long long id)
+	{
+		_insideCount--;
+		DEBUG_OPERATION(_inSet.erase(id));
+		if (st_upgrade == _status)
+		{
+			assert(0 != _insideCount);
+			if (_upgradeQueue.size() == _insideCount)
+			{
+				wait_node queueFront = _upgradeQueue.front();
+				_upgradeQueue.pop_front();
+				DEBUG_OPERATION(_inSet[queueFront._waitHostID] = st_upgrade);
+				queueFront._ntf->invoke(_alloc);
+			}
+		}
+		else
+		{
+			assert(st_shared == _status);
+			if (!_insideCount)
+			{
+				if (!_waitQueue.empty())
+				{
+					wait_node queueFront = _waitQueue.front();
+					_waitQueue.pop_front();
+					assert(st_unique == queueFront._status);
+					DEBUG_OPERATION(_inSet[queueFront._waitHostID] = queueFront._status);
+					_status = queueFront._status;
+					_insideCount++;
+					queueFront._ntf->invoke(_alloc);
+				}
+			}
+		}
+	}
+
+	template <typename Notify>
+	void _unlock_shared(long long id, Notify&& ntf)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(check_self_err_call(id));
+		assert(st_unique != _status);
+		assert(_inSet.find(id) != _inSet.end());
+		assert(st_shared == _inSet.find(id)->second);
+		assert(_inSet.size() == _insideCount);
+		_unlock_shared1(id);
+		CHECK_EXCEPTION(ntf);
+	}
+
+	bool _unlock_upgrade1(long long id, std::list<CoNotifyHandlerFace_*>& ntfsEx, size_t& ntfNum, CoNotifyHandlerFace_** ntfs, const size_t ntfsLength)
+	{
+		bool immNotify = true;
+		if (1 == _insideCount)
+		{
+			_status = st_shared;
+			DEBUG_OPERATION(_inSet[id] = st_shared);
+		}
+		else
+		{
+			assert(!_upgradeQueue.empty());
+			wait_node queueFront = _upgradeQueue.front();
+			_upgradeQueue.pop_front();
+			ntfs[ntfNum++] = queueFront._ntf;
+			if (st_upgrade == queueFront._status)
+			{
+				immNotify = false;
+				DEBUG_OPERATION(_inSet[queueFront._waitHostID] = st_upgrade);
+			}
+			else
+			{
+				DEBUG_OPERATION(_inSet[id] = st_shared);
+				DEBUG_OPERATION(_inSet[queueFront._waitHostID] = st_shared);
+				_status = st_shared;
+				while (!_upgradeQueue.empty())
+				{
+					wait_node queueFront = _upgradeQueue.front();
+					_upgradeQueue.pop_front();
+					assert(st_shared == queueFront._status);
+					DEBUG_OPERATION(_inSet[queueFront._waitHostID] = st_shared);
+					if (ntfNum < ntfsLength)
+					{
+						ntfs[ntfNum++] = queueFront._ntf;
+					}
+					else
+					{
+						ntfsEx.push_back(queueFront._ntf);
+					}
+				}
+			}
+		}
+		if (st_shared == _status)
+		{
+			for (auto it = _waitQueue.begin(); it != _waitQueue.end();)
+			{
+				if (st_shared == it->_status)
+				{
+					assert(_inSet.find(it->_waitHostID) == _inSet.end());
+					DEBUG_OPERATION(_inSet[it->_waitHostID] = st_shared);
+					_insideCount++;
+					if (ntfNum < ntfsLength)
+					{
+						ntfs[ntfNum++] = it->_ntf;
+					}
+					else
+					{
+						ntfsEx.push_back(it->_ntf);
+					}
+					_waitQueue.erase(it++);
+				}
+				else
+				{
+					++it;
+				}
+			}
+		}
+		return immNotify;
+	}
+
+	template <typename Notify>
+	void _unlock_upgrade(long long id, Notify&& ntf)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(check_self_err_call(id));
+		assert(st_upgrade == _status);
+		assert(_inSet.find(id) != _inSet.end());
+		assert(st_upgrade == _inSet.find(id)->second);
+		assert(_inSet.size() == _insideCount);
+		size_t ntfNum = 0;
+		CoNotifyHandlerFace_* ntfs[32];
+		std::list<CoNotifyHandlerFace_*> ntfsEx;
+		const bool immNotify = _unlock_upgrade1(id, ntfsEx, ntfNum, ntfs, static_array_length(ntfs));
+		if (!immNotify)
+		{
+			_upgradeQueue.push_back(wait_node{ wrap_notify(std::forward<Notify>(ntf)), id, st_shared });
+		}
+		for (size_t i = 0; i < ntfNum; i++)
+		{
+			ntfs[i]->invoke(_alloc);
+		}
+		while (!ntfsEx.empty())
+		{
+			ntfsEx.front()->invoke(_alloc);
+			ntfsEx.pop_front();
+		}
+		if (immNotify)
+		{
+			CHECK_EXCEPTION(ntf);
+		}
+	}
+private:
+	shared_strand _strand;
+	reusable_mem _alloc;
+	lock_status _status;
+	size_t _insideCount;
+	msg_list<wait_node> _waitQueue;
+	msg_queue<wait_node> _upgradeQueue;
+#if (_DEBUG || DEBUG)
+	msg_map<long long, lock_status> _inSet;
+#endif
+	NONE_COPY(co_shared_mutex);
 };
 
 #endif

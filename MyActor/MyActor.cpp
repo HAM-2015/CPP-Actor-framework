@@ -168,7 +168,7 @@ void csp_test()
 			int res;
 			move_test mt;
 			bool bl;
-			co_chan_use_state;
+			co_use_state;
 			co_end_context(ctx);
 			
 			co_begin;
@@ -1013,7 +1013,7 @@ void co_mutex_test()
 	{
 		co_begin_context;
 		int i;
-		co_async_state state;
+		co_use_id;
 		co_end_context(ctx);
 
 		co_begin;
@@ -1035,7 +1035,7 @@ void co_mutex_test()
 		co_begin_context;
 		int i;
 		move_test mt;
-		co_async_state state;
+		co_use_id;
 		co_end_context(ctx);
 
 		co_begin;
@@ -1099,7 +1099,7 @@ void co_select_msg_test()
 		co_begin_context;
 		int i;
 		move_test mt;
-		co_chan_use_state;
+		co_use_state;
 		co_end_context(ctx);
 
 		co_begin;
@@ -1130,7 +1130,7 @@ void co_msg_test()
 	{
 		co_begin_context;
 		int i;
-		co_chan_use_state;
+		co_use_state;
 		co_end_context(ctx);
 
 		co_begin;
@@ -1147,7 +1147,7 @@ void co_msg_test()
 		int i;
 		int id;
 		move_test mt;
-		co_chan_use_state;
+		co_use_state;
 		co_end_context(ctx);
 
 		co_begin;
@@ -1173,7 +1173,7 @@ void co_channel_test()
 	{
 		co_begin_context;
 		int i;
-		co_chan_use_state;
+		co_use_state;
 		co_end_context(ctx);
 
 		co_begin;
@@ -1189,7 +1189,7 @@ void co_channel_test()
 		co_begin_context;
 		int i;
 		int id;
-		co_chan_use_state;
+		co_use_state;
 		co_end_context(ctx);
 
 		co_begin;

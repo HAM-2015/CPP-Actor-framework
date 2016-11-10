@@ -406,6 +406,15 @@ struct type_hash<>
 };
 
 /*!
+@brief 静态数组元素个数
+*/
+template <typename T, size_t N>
+size_t static_array_length(T(&)[N])
+{
+	return N;
+}
+
+/*!
 @brief 清空std::function
 */
 template <typename R, typename... Args>

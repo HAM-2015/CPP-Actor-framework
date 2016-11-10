@@ -1,16 +1,20 @@
 #include "generator.h"
 
 mem_alloc_base* generator::_genObjAlloc = NULL;
+std::atomic<long long>* generator::_id = NULL;
 
 void generator::install()
 {
 	_genObjAlloc = make_shared_space_alloc<generator, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [](generator*){});
+	_id = new std::atomic<long long>(0);
 }
 
 void generator::uninstall()
 {
 	delete _genObjAlloc;
 	_genObjAlloc = NULL;
+	delete _id;
+	_id = NULL;
 }
 
 generator::generator()
@@ -78,6 +82,11 @@ generator_handle generator::create(shared_strand strand, std::function<void(gene
 	res->_handler = std::move(handler);
 	res->_notify = std::move(notify);
 	return res;
+}
+
+long long generator::alloc_id()
+{
+	return ++(*_id);
 }
 
 void generator::run()
