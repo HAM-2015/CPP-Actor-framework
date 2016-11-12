@@ -21,8 +21,9 @@ struct __co_context_no_capture{};
 #define _co_end_context(__ctx__) \
 	co_self._lockThis();\
 	DEBUG_OPERATION(co_self.__inside = true);}\
-	struct co_context_tag* const __coContext = static_cast<struct co_context_tag*>(co_self.__ctx);\
-	struct co_context_tag& __ctx__ = *__coContext;\
+	struct co_context_tag* const __pCoContext = static_cast<struct co_context_tag*>(co_self.__ctx);\
+	struct co_context_tag& __coContext = *__pCoContext;\
+	struct co_context_tag& __ctx__ = *__pCoContext;\
 	int __coNext = 0;\
 	size_t __coSwitchTempVal = 0;\
 	bool __coSwitchFirstLoopSign = false;\
@@ -84,12 +85,12 @@ struct __co_context_no_capture{};
 #define co_end break;default:assert(false);}\
 	goto __stop; __stop:DEBUG_OPERATION(co_self.__inside = false);\
 	co_self._co_reset_shared_sign();\
-	if((void*)-1!=(void*)__coContext){delete __coContext;}\
+	if((void*)-1!=(void*)__pCoContext){delete __pCoContext;}\
 	co_self.__ctx = NULL; return;
 
 #define co_end_dealloc(__dealloc__) break;default:assert(false);}\
 	goto __stop; __stop:DEBUG_OPERATION(co_self.__inside = false);\
-	__coContext->~co_context_tag(); __dealloc__(__coContext); co_self.__ctx = NULL; return;
+	__pCoContext->~co_context_tag(); __dealloc__(__pCoContext); co_self.__ctx = NULL; return;
 
 #define _co_yield do{\
 	if(-1==co_self.__coNext) co_stop;\
@@ -261,6 +262,10 @@ struct __co_context_no_capture{};
 #define co_usleep(__us__) do{co_self._co_usleep(__us__); _co_yield;}while (0)
 #define co_dead_sleep(__ms__) do{co_self._co_dead_sleep(__ms__); _co_yield;}while (0)
 #define co_dead_usleep(__us__) do{co_self._co_dead_usleep(__us__); _co_yield;}while (0)
+#define co_timeout(__ms__, __th__) CoTimeout_(__ms__, co_strand->over_timer(), __th__)-
+#define co_deadline(__us__, __th__) CoDeadline_(__us__, co_strand->over_timer(), __th__)-
+#define co_interval(__ms__, __th__) CoInterval_(__ms__, co_strand->over_timer(), __th__)-
+#define co_cancel_timer(__th__) co_strand->over_timer()->cancel(__th__)
 
 //开始运行一个generator
 #define co_go(...) CoGo_(__VA_ARGS__)-
@@ -351,7 +356,7 @@ struct __co_context_no_capture{};
 
 #define co_use_state co_async_state __coState
 //上一次异步结果状态
-#define co_last_state (__coContext->__coState)
+#define co_last_state (__coContext.__coState)
 #define co_last_state_is_ok (co_async_state::co_async_ok == co_last_state)
 #define co_last_state_is_fail (co_async_state::co_async_fail == co_last_state)
 #define co_last_state_is_cancel (co_async_state::co_async_cancel == co_last_state)
@@ -359,20 +364,52 @@ struct __co_context_no_capture{};
 #define co_last_state_is_overtime (co_async_state::co_async_overtime == co_last_state)
 
 #define co_use_id gen_id __coId
-#define co_id (__coContext->__coId)
+#define co_id (__coContext.__coId)
 
 #define co_mutex_lock(__mutex__) do{(__mutex__).lock(co_id, co_async); _co_await;}while (0)
 #define co_mutex_try_lock(__mutex__) do{(__mutex__).try_lock(co_id, co_async_result(co_last_state)); _co_await;}while (0)
 #define co_mutex_timed_lock(__mutex__, __ms__) do{(__mutex__).timed_lock(co_id, __ms__, co_async_result(co_last_state)); _co_await;}while (0)
 #define co_mutex_lock_shared(__mutex__) do{(__mutex__).lock_shared(co_id, co_async); _co_await;}while (0)
+#define co_mutex_lock_pess_shared(__mutex__) do{(__mutex__).lock_pess_shared(co_id, co_async); _co_await;}while (0)
 #define co_mutex_try_lock_shared(__mutex__) do{(__mutex__).try_lock_shared(co_id, co_async_result(co_last_state)); _co_await;}while (0)
 #define co_mutex_timed_lock_shared(__mutex__, __ms__) do{(__mutex__).timed_lock_shared(co_id, __ms__, co_async_result(co_last_state)); _co_await;}while (0)
 #define co_mutex_lock_upgrade(__mutex__) do{(__mutex__).lock_upgrade(co_id, co_async); _co_await;}while (0)
+#define co_mutex_try_lock_upgrade(__mutex__) do{(__mutex__).try_lock_upgrade(co_id, co_async_result(co_last_state)); _co_await;}while (0)
 #define co_mutex_unlock(__mutex__) do{(__mutex__).unlock(co_id, co_async); _co_await;}while (0)
 #define co_mutex_unlock_shared(__mutex__) do{(__mutex__).unlock_shared(co_id, co_async); _co_await;}while (0)
 #define co_mutex_unlock_upgrade(__mutex__) do{(__mutex__).unlock_upgrade(co_id, co_async); _co_await;}while (0)
 
-#define co_select (__coContext->__selectSign)
+#define _co_mutex_opt_guard(__mutex__, __lock_, __unlock__) \
+	co_lock_stop; __lock_(__mutex__);\
+	for (__yieldSwitch = false;;__yieldSwitch = true)\
+	if (__yieldSwitch) {__unlock__(__mutex__); co_unlock_stop; break;}\
+	else
+
+#define _co_mutex_try_opt_guard(__mutex__, __lock_, __unlock__) \
+	co_lock_stop; __lock_(__mutex__);\
+	if (!co_last_state_is_ok) co_unlock_stop;\
+	for (__yieldSwitch = false; co_last_state_is_ok; __yieldSwitch = true, co_last_state = co_async_state::co_async_ok)\
+	if (__yieldSwitch) {__unlock__(__mutex__); co_unlock_stop; break;}\
+	else
+
+#define _co_mutex_timed_opt_guard(__mutex__, __ms__, __lock_, __unlock__) \
+	co_lock_stop; __lock_(__mutex__, __ms__);\
+	if (!co_last_state_is_ok) co_unlock_stop;\
+	for (__yieldSwitch = false; co_last_state_is_ok; __yieldSwitch = true, co_last_state = co_async_state::co_async_ok)\
+	if (__yieldSwitch) {__unlock__(__mutex__); co_unlock_stop; break;}\
+	else
+
+#define co_mutex_lock_guard(__mutex__) _co_mutex_opt_guard(__mutex__, co_mutex_lock, co_mutex_unlock)
+#define co_mutex_lock_shared_guard(__mutex__) _co_mutex_opt_guard(__mutex__, co_mutex_lock_shared, co_mutex_unlock_shared)
+#define co_mutex_lock_pess_shared_guard(__mutex__) _co_mutex_opt_guard(__mutex__, co_mutex_lock_pess_shared, co_mutex_unlock_shared)
+#define co_mutex_lock_upgrade_guard(__mutex__) _co_mutex_opt_guard(__mutex__, co_mutex_lock_upgrade, co_mutex_unlock_upgrade)
+#define co_mutex_try_lock_guard(__mutex__) _co_mutex_try_opt_guard(__mutex__, co_mutex_try_lock, co_mutex_unlock)
+#define co_mutex_try_lock_shared_guard(__mutex__) _co_mutex_try_opt_guard(__mutex__, co_mutex_try_lock_shared, co_mutex_unlock_shared)
+#define co_mutex_try_lock_upgrade_guard(__mutex__) _co_mutex_try_opt_guard(__mutex__, co_mutex_try_lock_upgrade, co_mutex_unlock_upgrade)
+#define co_mutex_timed_lock_guard(__mutex__, __ms__) _co_mutex_timed_opt_guard(__mutex__, __ms__, co_mutex_timed_lock, co_mutex_unlock)
+#define co_mutex_timed_lock_shared_guard(__mutex__, __ms__) _co_mutex_timed_opt_guard(__mutex__, __ms__, co_mutex_timed_lock_shared, co_mutex_unlock_shared)
+
+#define co_select (__coContext.__selectSign)
 #define co_select_init __selectSign(co_self)
 #define co_select_msg CoSelectSign_ __selectSign
 #define co_select_state (co_select._ntfState)
@@ -410,7 +447,7 @@ struct __co_context_no_capture{};
 	co_switch_case(((size_t)&(__chan__)));\
 	for(__selectCaseStep=0, __selectCaseDoSign=false; __selectCaseStep<2; __selectCaseStep++)\
 	if (1==__selectCaseStep) {if (0==__selectStep || __selectCaseDoSign) {assert(!co_select._checkRepeat || __selectStep || co_select._ntfSign.end()==co_select._ntfSign.find(((size_t)&(__chan__))));\
-	(__chan__).append_pop_notify([&, __coContext](co_async_state st){if(co_async_state::co_async_fail!=st){co_select._ntfPump.push([](co_async_state){}, ((size_t)&(__chan__)));}}, co_select._ntfSign[(size_t)&(__chan__)]);}\
+	(__chan__).append_pop_notify([&](co_async_state st){if(co_async_state::co_async_fail!=st){co_select._ntfPump.push([](co_async_state){}, ((size_t)&(__chan__)));}}, co_select._ntfSign[(size_t)&(__chan__)]);}\
 		else if (2==__selectStep) {(__chan__).remove_pop_notify(co_async_result_(co_select._ntfState), co_select._ntfSign[((size_t)&(__chan__))]); _co_await;__selectCaseStep=1;__selectStep=2;}}\
 	else if (1==__selectStep && (__check__)) {
 
@@ -418,7 +455,7 @@ struct __co_context_no_capture{};
 	co_switch_case(((size_t)&(__chan__)));\
 	for(__selectCaseStep=0; __selectCaseStep<2; __selectCaseStep++)\
 	if (1==__selectCaseStep) {if (0==__selectStep) {assert(!co_select._checkRepeat || co_select._ntfSign.end()==co_select._ntfSign.find(((size_t)&(__chan__))));\
-	(__chan__).append_pop_notify([&, __coContext](co_async_state st){if(co_async_state::co_async_fail!=st){co_select._ntfPump.push([](co_async_state){}, ((size_t)&(__chan__)));}}, co_select._ntfSign[(size_t)&(__chan__)]);}\
+	(__chan__).append_pop_notify([&](co_async_state st){if(co_async_state::co_async_fail!=st){co_select._ntfPump.push([](co_async_state){}, ((size_t)&(__chan__)));}}, co_select._ntfSign[(size_t)&(__chan__)]);}\
 		else if (2==__selectStep) {(__chan__).remove_pop_notify(co_async_result_(co_select._ntfState), co_select._ntfSign[((size_t)&(__chan__))]); _co_await;__selectCaseStep=1;__selectStep=2;}}\
 	else if (1==__selectStep && (__check__)) {
 
@@ -559,7 +596,7 @@ public:
 	void _co_push_stack(int coNext, std::function<void(generator&)>&& handler);
 private:
 	void timeout_handler();
-	static void install();
+	static void install(std::atomic<long long>* id);
 	static void uninstall();
 private:
 	std::weak_ptr<generator> _weakThis;
@@ -618,6 +655,27 @@ struct CoGo_
 
 	shared_strand _strand;
 	std::function<void()> _ntf;
+};
+
+struct CoTimeout_
+{
+	CoTimeout_(int ms, overlap_timer* tm, overlap_timer::timer_handle& th) :_ms(ms), _tm(tm), _th(th){}
+	template <typename Handler> void operator-(Handler&& handler) { _tm->timeout(_ms, _th, std::forward<Handler>(handler)); }
+	int _ms; overlap_timer* _tm; overlap_timer::timer_handle& _th;
+};
+
+struct CoDeadline_
+{
+	CoDeadline_(long long us, overlap_timer* tm, overlap_timer::timer_handle& th) :_us(us), _tm(tm), _th(th){}
+	template <typename Handler> void operator-(Handler&& handler) { _tm->deadline(_us, _th, std::forward<Handler>(handler)); }
+	long long _us; overlap_timer* _tm; overlap_timer::timer_handle& _th;
+};
+
+struct CoInterval_
+{
+	CoInterval_(int ms, overlap_timer* tm, overlap_timer::timer_handle& th) :_ms(ms), _tm(tm), _th(th){}
+	template <typename Handler> void operator-(Handler&& handler) { _tm->interval(_ms, _th, std::forward<Handler>(handler)); }
+	int _ms; overlap_timer* _tm; overlap_timer::timer_handle& _th;
 };
 
 template <typename... _Types>
@@ -1179,6 +1237,32 @@ struct CoNotifyHandler_ : public CoNotifyHandlerFace_
 	Handler _handler;
 	NONE_COPY(CoNotifyHandler_);
 	RVALUE_CONSTRUCT1(CoNotifyHandler_, _handler);
+};
+
+template <typename Handler>
+struct CoNilStateNotifyHandler_ : public CoNotifyHandlerFace_
+{
+	template <typename H>
+	CoNilStateNotifyHandler_(H&& h)
+		:_handler(std::forward<H>(h)) {}
+
+	void invoke(reusable_mem& alloc, co_async_state state)
+	{
+		assert(co_async_state::co_async_ok == state);
+		Handler handler(std::move(_handler));
+		destroy();
+		alloc.deallocate(this);
+		CHECK_EXCEPTION(handler);
+	}
+
+	void destroy()
+	{
+		this->~CoNilStateNotifyHandler_();
+	}
+
+	Handler _handler;
+	NONE_COPY(CoNilStateNotifyHandler_);
+	RVALUE_CONSTRUCT1(CoNilStateNotifyHandler_, _handler);
 };
 
 template <typename... Types>
@@ -4169,6 +4253,7 @@ struct CoSelectSign_
 	NONE_COPY(CoSelectSign_);
 };
 
+class co_shared_mutex;
 /*!
 @brief generator中逻辑mutex同步
 */
@@ -4179,6 +4264,7 @@ class co_mutex
 		CoNotifyHandlerFace_* _ntf;
 		long long _waitHostID;
 	};
+	friend co_shared_mutex;
 public:
 	co_mutex(const shared_strand& strand)
 		:_strand(strand), _waitQueue(4), _lockActorID(0), _recCount(0)
@@ -4204,6 +4290,24 @@ public:
 			{
 				_lock(id, std::move(ntf));
 			}, std::forward<Notify>(ntf)));
+		}
+	}
+
+	template <typename Notify, typename LockedNtf>
+	void lock(long long id, Notify&& ntf, LockedNtf&& lockedNtf)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_lock(id, std::forward<Notify>(ntf), std::forward<LockedNtf>(lockedNtf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			typedef RM_CREF(LockedNtf) LockedNtf_;
+			_strand->post(std::bind([this, id](Notify_& ntf, LockedNtf_& lockedNtf)
+			{
+				_lock(id, std::move(ntf), std::move(lockedNtf));
+			}, std::forward<Notify>(ntf), std::forward<LockedNtf>(lockedNtf)));
 		}
 	}
 
@@ -4238,6 +4342,24 @@ public:
 			{
 				_timed_lock(id, ms, std::move(ntf));
 			}, std::forward<Notify>(ntf)));
+		}
+	}
+
+	template <typename Notify, typename LockedNtf>
+	void timed_lock(long long id, int ms, Notify&& ntf, LockedNtf&& lockedNtf)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_timed_lock(id, ms, std::forward<Notify>(ntf), std::forward<LockedNtf>(lockedNtf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			typedef RM_CREF(LockedNtf) LockedNtf_;
+			_strand->post(std::bind([this, id, ms](Notify_& ntf, LockedNtf_& lockedNtf)
+			{
+				_timed_lock(id, ms, std::move(ntf), std::move(lockedNtf));
+			}, std::forward<Notify>(ntf), std::forward<LockedNtf>(lockedNtf)));
 		}
 	}
 
@@ -4276,6 +4398,14 @@ private:
 		return new(_alloc.allocate(sizeof(Handler_)))Handler_(std::forward<Handler>(handler));
 	}
 
+	template <typename Handler>
+	CoNotifyHandlerFace_* wrap_nil_state_notify(Handler&& handler)
+	{
+		assert(_strand->running_in_this_thread());
+		typedef CoNilStateNotifyHandler_<RM_CREF(Handler)> Handler_;
+		return new(_alloc.allocate(sizeof(Handler_)))Handler_(std::forward<Handler>(handler));
+	}
+
 	bool check_self_err_call(const long long id)
 	{
 		for (wait_node& ele : _waitQueue)
@@ -4291,6 +4421,12 @@ private:
 	template <typename Notify>
 	void _lock(long long id, Notify&& ntf)
 	{
+		_lock(id, std::forward<Notify>(ntf), []{});
+	}
+
+	template <typename Notify, typename LockedNtf>
+	void _lock(long long id, Notify&& ntf, LockedNtf&& lockedNtf)
+	{
 		assert(_strand->running_in_this_thread());
 		assert(check_self_err_call(id));
 		if (!_lockActorID || id == _lockActorID)
@@ -4301,7 +4437,8 @@ private:
 		}
 		else
 		{
-			_waitQueue.push_back(wait_node{ wrap_notify(std::forward<Notify>(ntf)), id });
+			_waitQueue.push_back(wait_node{ wrap_nil_state_notify(std::forward<Notify>(ntf)), id });
+			CHECK_EXCEPTION(lockedNtf);
 		}
 	}
 
@@ -4324,6 +4461,12 @@ private:
 
 	template <typename Notify>
 	void _timed_lock(long long id, int ms, Notify&& ntf)
+	{
+		_timed_lock(id, ms, std::forward<Notify>(ntf), []{});
+	}
+
+	template <typename Notify, typename LockedNtf>
+	void _timed_lock(long long id, int ms, Notify&& ntf, LockedNtf&& lockedNtf)
 	{
 		assert(_strand->running_in_this_thread());
 		assert(check_self_err_call(id));
@@ -4349,10 +4492,11 @@ private:
 				_waitQueue.erase(it);
 				waitNtf->invoke(_alloc, co_async_state::co_async_overtime);
 			}, --_waitQueue.end()));
+			CHECK_EXCEPTION(lockedNtf);
 		}
 	}
 
-	void _unlock1(long long id)
+	bool _unlock1(long long id)
 	{
 		if (0 == --_recCount)
 		{
@@ -4368,7 +4512,9 @@ private:
 			{
 				_lockActorID = 0;
 			}
+			return true;
 		}
+		return false;
 	}
 
 	template <typename Notify>
@@ -4407,46 +4553,68 @@ class co_shared_mutex
 		long long _waitHostID;
 		lock_status _status;
 	};
+
+	struct shared_count
+	{
+		size_t _count = 0;
+	};
 public:
 	co_shared_mutex(const shared_strand& strand)
-		:_strand(strand), _waitQueue(4), _upgradeQueue(4), _status(st_shared), _insideCount(0)
+		:_upgradeMutex(strand), _waitQueue(4), _sharedMap(4)
 	{
 	}
 
 	~co_shared_mutex()
 	{
 		assert(_waitQueue.empty());
-		assert(_upgradeQueue.empty());
 	}
 public:
 	template <typename Notify>
 	void lock(long long id, Notify&& ntf)
 	{
-		if (_strand->running_in_this_thread())
+		if (self_strand()->running_in_this_thread())
 		{
 			_lock(id, std::forward<Notify>(ntf));
 		}
 		else
 		{
 			typedef RM_CREF(Notify) Notify_;
-			_strand->post(std::bind([this, id](Notify_& ntf)
+			self_strand()->post(std::bind([this, id](Notify_& ntf)
 			{
 				_lock(id, std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}
 
+	template <typename Notify, typename LockedNtf>
+	void lock(long long id, Notify&& ntf, LockedNtf&& lockedNtf)
+	{
+		if (self_strand()->running_in_this_thread())
+		{
+			_lock(id, std::forward<Notify>(ntf), std::forward<LockedNtf>(lockedNtf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			typedef RM_CREF(LockedNtf) LockedNtf_;
+			self_strand()->post(std::bind([this, id](Notify_& ntf, LockedNtf_& lockedNtf)
+			{
+				_lock(id, std::move(ntf), std::move(lockedNtf));
+			}, std::forward<Notify>(ntf), std::forward<LockedNtf>(lockedNtf)));
+		}
+	}
+
 	template <typename Notify>
 	void try_lock(long long id, Notify&& ntf)
 	{
-		if (_strand->running_in_this_thread())
+		if (self_strand()->running_in_this_thread())
 		{
 			_try_lock(id, std::forward<Notify>(ntf));
 		}
 		else
 		{
 			typedef RM_CREF(Notify) Notify_;
-			_strand->post(std::bind([this, id](Notify_& ntf)
+			self_strand()->post(std::bind([this, id](Notify_& ntf)
 			{
 				_try_lock(id, std::move(ntf));
 			}, std::forward<Notify>(ntf)));
@@ -4456,48 +4624,119 @@ public:
 	template <typename Notify>
 	void timed_lock(long long id, int ms, Notify&& ntf)
 	{
-		if (_strand->running_in_this_thread())
+		if (self_strand()->running_in_this_thread())
 		{
 			_timed_lock(id, ms, std::forward<Notify>(ntf));
 		}
 		else
 		{
 			typedef RM_CREF(Notify) Notify_;
-			_strand->post(std::bind([this, id, ms](Notify_& ntf)
+			self_strand()->post(std::bind([this, id, ms](Notify_& ntf)
 			{
 				_timed_lock(id, ms, std::move(ntf));
 			}, std::forward<Notify>(ntf)));
+		}
+	}
+	
+	template <typename Notify, typename LockedNtf>
+	void timed_lock(long long id, int ms, Notify&& ntf, LockedNtf&& lockedNtf)
+	{
+		if (self_strand()->running_in_this_thread())
+		{
+			_timed_lock(id, ms, std::forward<Notify>(ntf), std::forward<LockedNtf>(lockedNtf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			typedef RM_CREF(LockedNtf) LockedNtf_;
+			self_strand()->post(std::bind([this, id, ms](Notify_& ntf, LockedNtf_& lockedNtf)
+			{
+				_timed_lock(id, ms, std::move(ntf), std::move(lockedNtf));
+			}, std::forward<Notify>(ntf), std::forward<LockedNtf>(lockedNtf)));
 		}
 	}
 
 	template <typename Notify>
 	void lock_shared(long long id, Notify&& ntf)
 	{
-		if (_strand->running_in_this_thread())
+		if (self_strand()->running_in_this_thread())
 		{
 			_lock_shared(id, std::forward<Notify>(ntf));
 		}
 		else
 		{
 			typedef RM_CREF(Notify) Notify_;
-			_strand->post(std::bind([this, id](Notify_& ntf)
+			self_strand()->post(std::bind([this, id](Notify_& ntf)
 			{
 				_lock_shared(id, std::move(ntf));
 			}, std::forward<Notify>(ntf)));
+		}
+	}
+	
+	template <typename Notify, typename LockedNtf>
+	void lock_shared(long long id, Notify&& ntf, LockedNtf&& lockedNtf)
+	{
+		if (self_strand()->running_in_this_thread())
+		{
+			_lock_shared(id, std::forward<Notify>(ntf), std::forward<LockedNtf>(lockedNtf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			typedef RM_CREF(LockedNtf) LockedNtf_;
+			self_strand()->post(std::bind([this, id](Notify_& ntf, LockedNtf_& lockedNtf)
+			{
+				_lock_shared(id, std::move(ntf), std::move(lockedNtf));
+			}, std::forward<Notify>(ntf), std::forward<LockedNtf>(lockedNtf)));
+		}
+	}
+
+	template <typename Notify>
+	void lock_pess_shared(long long id, Notify&& ntf)
+	{
+		if (self_strand()->running_in_this_thread())
+		{
+			_lock_pess_shared(id, std::forward<Notify>(ntf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			self_strand()->post(std::bind([this, id](Notify_& ntf)
+			{
+				_lock_pess_shared(id, std::move(ntf));
+			}, std::forward<Notify>(ntf)));
+		}
+	}
+
+	template <typename Notify, typename LockedNtf>
+	void lock_pess_shared(long long id, Notify&& ntf, LockedNtf&& lockedNtf)
+	{
+		if (self_strand()->running_in_this_thread())
+		{
+			_lock_pess_shared(id, std::forward<Notify>(ntf), std::forward<LockedNtf>(lockedNtf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			typedef RM_CREF(LockedNtf) LockedNtf_;
+			self_strand()->post(std::bind([this, id](Notify_& ntf, LockedNtf_& lockedNtf)
+			{
+				_lock_pess_shared(id, std::move(ntf), std::move(lockedNtf));
+			}, std::forward<Notify>(ntf), std::forward<LockedNtf>(lockedNtf)));
 		}
 	}
 
 	template <typename Notify>
 	void try_lock_shared(long long id, Notify&& ntf)
 	{
-		if (_strand->running_in_this_thread())
+		if (self_strand()->running_in_this_thread())
 		{
 			_try_lock_shared(id, std::forward<Notify>(ntf));
 		}
 		else
 		{
 			typedef RM_CREF(Notify) Notify_;
-			_strand->post(std::bind([this, id](Notify_& ntf)
+			self_strand()->post(std::bind([this, id](Notify_& ntf)
 			{
 				_try_lock_shared(id, std::move(ntf));
 			}, std::forward<Notify>(ntf)));
@@ -4507,33 +4746,86 @@ public:
 	template <typename Notify>
 	void timed_lock_shared(long long id, int ms, Notify&& ntf)
 	{
-		if (_strand->running_in_this_thread())
+		if (self_strand()->running_in_this_thread())
 		{
 			_timed_lock_shared(id, ms, std::forward<Notify>(ntf));
 		}
 		else
 		{
 			typedef RM_CREF(Notify) Notify_;
-			_strand->post(std::bind([this, id, ms](Notify_& ntf)
+			self_strand()->post(std::bind([this, id, ms](Notify_& ntf)
 			{
 				_timed_lock_shared(id, ms, std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}
 
+	template <typename Notify, typename LockedNtf>
+	void timed_lock_shared(long long id, int ms, Notify&& ntf, LockedNtf&& lockedNtf)
+	{
+		if (self_strand()->running_in_this_thread())
+		{
+			_timed_lock_shared(id, ms, std::forward<Notify>(ntf), std::forward<LockedNtf>(lockedNtf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			typedef RM_CREF(LockedNtf) LockedNtf_;
+			self_strand()->post(std::bind([this, id, ms](Notify_& ntf, LockedNtf_& lockedNtf)
+			{
+				_timed_lock_shared(id, ms, std::move(ntf), std::move(lockedNtf));
+			}, std::forward<Notify>(ntf), std::forward<LockedNtf>(lockedNtf)));
+		}
+	}
+
 	template <typename Notify>
 	void lock_upgrade(long long id, Notify&& ntf)
 	{
-		if (_strand->running_in_this_thread())
+		if (self_strand()->running_in_this_thread())
 		{
 			_lock_upgrade(id, std::forward<Notify>(ntf));
 		}
 		else
 		{
 			typedef RM_CREF(Notify) Notify_;
-			_strand->post(std::bind([this, id](Notify_& ntf)
+			self_strand()->post(std::bind([this, id](Notify_& ntf)
 			{
 				_lock_upgrade(id, std::move(ntf));
+			}, std::forward<Notify>(ntf)));
+		}
+	}
+	
+	template <typename Notify, typename LockedNtf>
+	void lock_upgrade(long long id, Notify&& ntf, LockedNtf&& lockedNtf)
+	{
+		if (self_strand()->running_in_this_thread())
+		{
+			_lock_upgrade(id, std::forward<Notify>(ntf), std::forward<LockedNtf>(lockedNtf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			typedef RM_CREF(LockedNtf) LockedNtf_;
+			self_strand()->post(std::bind([this, id](Notify_& ntf, LockedNtf_& lockedNtf)
+			{
+				_lock_upgrade(id, std::move(ntf), std::move(lockedNtf));
+			}, std::forward<Notify>(ntf), std::forward<LockedNtf>(lockedNtf)));
+		}
+	}
+
+	template <typename Notify>
+	void try_lock_upgrade(long long id, Notify&& ntf)
+	{
+		if (self_strand()->running_in_this_thread())
+		{
+			_try_lock_upgrade(id, std::forward<Notify>(ntf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			self_strand()->post(std::bind([this, id](Notify_& ntf)
+			{
+				_try_lock_upgrade(id, std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}
@@ -4541,14 +4833,14 @@ public:
 	template <typename Notify>
 	void unlock(long long id, Notify&& ntf)
 	{
-		if (_strand->running_in_this_thread())
+		if (self_strand()->running_in_this_thread())
 		{
 			_unlock(id, std::forward<Notify>(ntf));
 		}
 		else
 		{
 			typedef RM_CREF(Notify) Notify_;
-			_strand->post(std::bind([this, id](Notify_& ntf)
+			self_strand()->post(std::bind([this, id](Notify_& ntf)
 			{
 				_unlock(id, std::move(ntf));
 			}, std::forward<Notify>(ntf)));
@@ -4558,14 +4850,14 @@ public:
 	template <typename Notify>
 	void unlock_shared(long long id, Notify&& ntf)
 	{
-		if (_strand->running_in_this_thread())
+		if (self_strand()->running_in_this_thread())
 		{
 			_unlock_shared(id, std::forward<Notify>(ntf));
 		}
 		else
 		{
 			typedef RM_CREF(Notify) Notify_;
-			_strand->post(std::bind([this, id](Notify_& ntf)
+			self_strand()->post(std::bind([this, id](Notify_& ntf)
 			{
 				_unlock_shared(id, std::move(ntf));
 			}, std::forward<Notify>(ntf)));
@@ -4575,23 +4867,91 @@ public:
 	template <typename Notify>
 	void unlock_upgrade(long long id, Notify&& ntf)
 	{
-		if (_strand->running_in_this_thread())
+		if (self_strand()->running_in_this_thread())
 		{
 			_unlock_upgrade(id, std::forward<Notify>(ntf));
 		}
 		else
 		{
 			typedef RM_CREF(Notify) Notify_;
-			_strand->post(std::bind([this, id](Notify_& ntf)
+			self_strand()->post(std::bind([this, id](Notify_& ntf)
 			{
 				_unlock_upgrade(id, std::move(ntf));
 			}, std::forward<Notify>(ntf)));
 		}
 	}
 
+	template <typename Notify>
+	void unlock_and_lock_shared(long long id, Notify&& ntf)
+	{
+		if (self_strand()->running_in_this_thread())
+		{
+			_unlock_and_lock_shared(id, std::forward<Notify>(ntf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			self_strand()->post(std::bind([this, id](Notify_& ntf)
+			{
+				_unlock_and_lock_shared(id, std::move(ntf));
+			}, std::forward<Notify>(ntf)));
+		}
+	}
+
+	template <typename Notify>
+	void unlock_and_lock_upgrade(long long id, Notify&& ntf)
+	{
+		if (self_strand()->running_in_this_thread())
+		{
+			_unlock_and_lock_upgrade(id, std::forward<Notify>(ntf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			self_strand()->post(std::bind([this, id](Notify_& ntf)
+			{
+				_unlock_and_lock_upgrade(id, std::move(ntf));
+			}, std::forward<Notify>(ntf)));
+		}
+	}
+
+	template <typename Notify>
+	void unlock_upgrade_and_lock(long long id, Notify&& ntf)
+	{
+		if (self_strand()->running_in_this_thread())
+		{
+			_unlock_upgrade_and_lock(id, std::forward<Notify>(ntf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			self_strand()->post(std::bind([this, id](Notify_& ntf)
+			{
+				_unlock_upgrade_and_lock(id, std::move(ntf));
+			}, std::forward<Notify>(ntf)));
+		}
+	}
+
+	template <typename Notify>
+	void unlock_shared_and_lock(long long id, Notify&& ntf)
+	{
+		if (self_strand()->running_in_this_thread())
+		{
+			_unlock_shared_and_lock(id, std::forward<Notify>(ntf));
+		}
+		else
+		{
+			typedef RM_CREF(Notify) Notify_;
+			self_strand()->post(std::bind([this, id](Notify_& ntf)
+			{
+				_unlock_shared_and_lock(id, std::move(ntf));
+			}, std::forward<Notify>(ntf)));
+		}
+	}
+
 	const shared_strand& self_strand() const
 	{
-		return _strand;
+		return _upgradeMutex.self_strand();
 	}
 
 	static long long alloc_id()
@@ -4599,14 +4959,6 @@ public:
 		return generator::alloc_id();
 	}
 private:
-	template <typename Handler>
-	CoNotifyHandlerFace_* wrap_notify(Handler&& handler)
-	{
-		assert(_strand->running_in_this_thread());
-		typedef CoNotifyHandler_<RM_CREF(Handler)> Handler_;
-		return new(_alloc.allocate(sizeof(Handler_)))Handler_(std::forward<Handler>(handler));
-	}
-
 	bool check_self_err_call(const long long id)
 	{
 		for (wait_node& ele : _waitQueue)
@@ -4622,34 +4974,39 @@ private:
 	template <typename Notify>
 	void _lock(long long id, Notify&& ntf)
 	{
-		assert(_strand->running_in_this_thread());
+		_lock(id, std::forward<Notify>(ntf), []{});
+	}
+
+	template <typename Notify, typename LockedNtf>
+	void _lock(long long id, Notify&& ntf, LockedNtf&& lockedNtf)
+	{
+		assert(self_strand()->running_in_this_thread());
 		assert(check_self_err_call(id));
-		assert(_inSet.find(id) == _inSet.end());
-		assert(_inSet.size() == _insideCount);
-		if (0 == _insideCount)
+		long long& lockActorID = _upgradeMutex._lockActorID;
+		if (_sharedMap.empty() && (!lockActorID || id == lockActorID))
 		{
-			_status = st_unique;
-			_insideCount++;
+			lockActorID = id;
+			_upgradeMutex._recCount++;
 			DEBUG_OPERATION(_inSet[id] = st_unique);
 			CHECK_EXCEPTION(ntf);
 		}
 		else
 		{
-			_waitQueue.push_back(wait_node{ wrap_notify(std::forward<Notify>(ntf)), id, st_unique });
+			_waitQueue.push_back(wait_node{ _upgradeMutex.wrap_nil_state_notify(std::forward<Notify>(ntf)), id, st_unique });
+			CHECK_EXCEPTION(lockedNtf);
 		}
 	}
 
 	template <typename Notify>
 	void _try_lock(long long id, Notify&& ntf)
 	{
-		assert(_strand->running_in_this_thread());
+		assert(self_strand()->running_in_this_thread());
 		assert(check_self_err_call(id));
-		assert(_inSet.find(id) == _inSet.end());
-		assert(_inSet.size() == _insideCount);
-		if (0 == _insideCount)
+		long long& lockActorID = _upgradeMutex._lockActorID;
+		if (_sharedMap.empty() && (!lockActorID || id == lockActorID))
 		{
-			_status = st_unique;
-			_insideCount++;
+			lockActorID = id;
+			_upgradeMutex._recCount++;
 			DEBUG_OPERATION(_inSet[id] = st_unique);
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
 		}
@@ -4662,65 +5019,98 @@ private:
 	template <typename Notify>
 	void _timed_lock(long long id, int ms, Notify&& ntf)
 	{
-		assert(_strand->running_in_this_thread());
+		_timed_lock(id, ms, std::forward<Notify>(ntf), []{});
+	}
+
+	template <typename Notify, typename LockedNtf>
+	void _timed_lock(long long id, int ms, Notify&& ntf, LockedNtf&& lockedNtf)
+	{
+		assert(self_strand()->running_in_this_thread());
 		assert(check_self_err_call(id));
-		assert(_inSet.find(id) == _inSet.end());
-		assert(_inSet.size() == _insideCount);
-		if (0 == _insideCount)
+		long long& lockActorID = _upgradeMutex._lockActorID;
+		if (_sharedMap.empty() && (!lockActorID || id == lockActorID))
 		{
-			_status = st_unique;
-			_insideCount++;
+			lockActorID = id;
+			_upgradeMutex._recCount++;
 			DEBUG_OPERATION(_inSet[id] = st_unique);
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
 		}
 		else
 		{
-			overlap_timer::timer_handle* timer = new(_alloc.allocate(sizeof(overlap_timer::timer_handle)))overlap_timer::timer_handle;
-			_waitQueue.push_back(wait_node{ wrap_notify(std::bind([this, timer](co_async_state state, Notify& ntf)
+			overlap_timer::timer_handle* timer = new(_upgradeMutex._alloc.allocate(sizeof(overlap_timer::timer_handle)))overlap_timer::timer_handle;
+			_waitQueue.push_back(wait_node{ _upgradeMutex.wrap_notify(std::bind([this, timer](co_async_state state, Notify& ntf)
 			{
-				_strand->over_timer()->cancel(*timer);
+				self_strand()->over_timer()->cancel(*timer);
 				timer->~timer_handle();
-				_alloc.deallocate(timer);
+				_upgradeMutex._alloc.deallocate(timer);
 				CHECK_EXCEPTION(ntf, state);
 			}, __1, std::forward<Notify>(ntf))), id, st_unique });
-			_strand->over_timer()->timeout(ms, *timer, wrap_bind([this](const msg_list<wait_node>::iterator& it)
+			self_strand()->over_timer()->timeout(ms, *timer, wrap_bind([this](const msg_list<wait_node>::iterator& it)
 			{
 				CoNotifyHandlerFace_* waitNtf = it->_ntf;
 				_waitQueue.erase(it);
-				waitNtf->invoke(_alloc, co_async_state::co_async_overtime);
+				waitNtf->invoke(_upgradeMutex._alloc, co_async_state::co_async_overtime);
 			}, --_waitQueue.end()));
+			CHECK_EXCEPTION(lockedNtf);
 		}
 	}
 
 	template <typename Notify>
 	void _lock_shared(long long id, Notify&& ntf)
 	{
-		assert(_strand->running_in_this_thread());
+		_lock_shared(id, std::forward<Notify>(ntf), []{});
+	}
+
+	template <typename Notify, typename LockedNtf>
+	void _lock_shared(long long id, Notify&& ntf, LockedNtf&& lockedNtf)
+	{
+		assert(self_strand()->running_in_this_thread());
 		assert(check_self_err_call(id));
-		assert(_inSet.find(id) == _inSet.end());
-		assert(_inSet.size() == _insideCount);
-		if (st_shared == _status)
+		if (!_sharedMap.empty() || !_upgradeMutex._lockActorID)
 		{
-			_insideCount++;
+			_sharedMap[id]._count++;
 			DEBUG_OPERATION(_inSet[id] = st_shared);
 			CHECK_EXCEPTION(ntf);
 		}
 		else
 		{
-			_waitQueue.push_back(wait_node{ wrap_notify(std::forward<Notify>(ntf)), id, st_shared });
+			_waitQueue.push_back(wait_node{ _upgradeMutex.wrap_nil_state_notify(std::forward<Notify>(ntf)), id, st_shared });
+			CHECK_EXCEPTION(lockedNtf);
+		}
+	}
+
+	template <typename Notify>
+	void _lock_pess_shared(long long id, Notify&& ntf)
+	{
+		_lock_pess_shared(id, std::forward<Notify>(ntf), []{});
+	}
+
+	template <typename Notify, typename LockedNtf>
+	void _lock_pess_shared(long long id, Notify&& ntf, LockedNtf&& lockedNtf)
+	{
+		assert(self_strand()->running_in_this_thread());
+		assert(check_self_err_call(id));
+		if (_waitQueue.empty() && (!_sharedMap.empty() || !_upgradeMutex._lockActorID))
+		{
+			_sharedMap[id]._count++;
+			DEBUG_OPERATION(_inSet[id] = st_shared);
+			CHECK_EXCEPTION(ntf);
+		}
+		else
+		{
+			_waitQueue.push_back(wait_node{ _upgradeMutex.wrap_nil_state_notify(std::forward<Notify>(ntf)), id, st_shared });
+			CHECK_EXCEPTION(lockedNtf);
 		}
 	}
 
 	template <typename Notify>
 	void _try_lock_shared(long long id, Notify&& ntf)
 	{
-		assert(_strand->running_in_this_thread());
+		assert(self_strand()->running_in_this_thread());
 		assert(check_self_err_call(id));
-		assert(_inSet.find(id) == _inSet.end());
-		assert(_inSet.size() == _insideCount);
-		if (st_shared == _status)
+		if (!_sharedMap.empty() || !_upgradeMutex._lockActorID)
 		{
-			_insideCount++;
+			_sharedMap[id]._count++;
 			DEBUG_OPERATION(_inSet[id] = st_shared);
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
 		}
@@ -4733,86 +5123,107 @@ private:
 	template <typename Notify>
 	void _timed_lock_shared(long long id, int ms, Notify&& ntf)
 	{
-		assert(_strand->running_in_this_thread());
+		_timed_lock_shared(id, ms, std::forward<Notify>(ntf), []{});
+	}
+
+	template <typename Notify, typename LockedNtf>
+	void _timed_lock_shared(long long id, int ms, Notify&& ntf, LockedNtf&& lockedNtf)
+	{
+		assert(self_strand()->running_in_this_thread());
 		assert(check_self_err_call(id));
-		assert(_inSet.find(id) == _inSet.end());
-		assert(_inSet.size() == _insideCount);
-		if (st_shared == _status)
+		if (!_sharedMap.empty() || !_upgradeMutex._lockActorID)
 		{
-			_insideCount++;
+			_sharedMap[id]._count++;
 			DEBUG_OPERATION(_inSet[id] = st_shared);
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
 		}
 		else
 		{
-			overlap_timer::timer_handle* timer = new(_alloc.allocate(sizeof(overlap_timer::timer_handle)))overlap_timer::timer_handle;
-			_waitQueue.push_back(wait_node{ wrap_notify(std::bind([this, timer](co_async_state state, Notify& ntf)
+			overlap_timer::timer_handle* timer = new(_upgradeMutex._alloc.allocate(sizeof(overlap_timer::timer_handle)))overlap_timer::timer_handle;
+			_waitQueue.push_back(wait_node{ _upgradeMutex.wrap_notify(std::bind([this, timer](co_async_state state, Notify& ntf)
 			{
-				_strand->over_timer()->cancel(*timer);
+				self_strand()->over_timer()->cancel(*timer);
 				timer->~timer_handle();
-				_alloc.deallocate(timer);
+				_upgradeMutex._alloc.deallocate(timer);
 				CHECK_EXCEPTION(ntf, state);
 			}, __1, std::forward<Notify>(ntf))), id, st_shared });
-			_strand->over_timer()->timeout(ms, *timer, wrap_bind([this](const msg_list<wait_node>::iterator& it)
+			self_strand()->over_timer()->timeout(ms, *timer, wrap_bind([this](const msg_list<wait_node>::iterator& it)
 			{
 				CoNotifyHandlerFace_* waitNtf = it->_ntf;
 				_waitQueue.erase(it);
-				waitNtf->invoke(_alloc, co_async_state::co_async_overtime);
+				waitNtf->invoke(_upgradeMutex._alloc, co_async_state::co_async_overtime);
 			}, --_waitQueue.end()));
+			CHECK_EXCEPTION(lockedNtf);
 		}
 	}
 
 	template <typename Notify>
 	void _lock_upgrade(long long id, Notify&& ntf)
 	{
-		assert(_strand->running_in_this_thread());
+		_lock_upgrade(id, std::forward<Notify>(ntf), []{});
+	}
+
+	template <typename Notify, typename LockedNtf>
+	void _lock_upgrade(long long id, Notify&& ntf, LockedNtf&& lockedNtf)
+	{
+		assert(self_strand()->running_in_this_thread());
 		assert(check_self_err_call(id));
 		assert(_inSet.find(id) != _inSet.end());
-		assert(st_shared == _inSet.find(id)->second);
-		assert(_inSet.size() == _insideCount);
-		_status = st_upgrade;
-		if (1 == _insideCount)
+		assert(st_unique != _inSet.find(id)->second);
+		assert(_sharedMap.find(id) != _sharedMap.end());
+#if (_DEBUG || DEBUG)
+		_upgradeMutex._lock(id, std::bind([this, id](Notify& ntf)
 		{
 			DEBUG_OPERATION(_inSet[id] = st_upgrade);
 			CHECK_EXCEPTION(ntf);
-		}
-		else
+		}, std::forward<Notify>(ntf)), std::forward<LockedNtf>(lockedNtf));
+#else
+		_upgradeMutex._lock(id, std::forward<Notify>(ntf), std::forward<LockedNtf>(lockedNtf));
+#endif
+	}
+	
+	template <typename Notify>
+	void _try_lock_upgrade(long long id, Notify&& ntf)
+	{
+		assert(self_strand()->running_in_this_thread());
+		assert(check_self_err_call(id));
+		assert(_inSet.find(id) != _inSet.end());
+		assert(st_unique != _inSet.find(id)->second);
+		assert(_sharedMap.find(id) != _sharedMap.end());
+#if (_DEBUG || DEBUG)
+		_upgradeMutex._try_lock(id, std::bind([this, id](co_async_state state, Notify& ntf)
 		{
-			_upgradeQueue.push_back(wait_node{ wrap_notify(std::forward<Notify>(ntf)), id, st_upgrade });
-			if (_upgradeQueue.size() == _insideCount)
-			{
-				wait_node queueFront = _upgradeQueue.front();
-				_upgradeQueue.pop_front();
-				DEBUG_OPERATION(_inSet[queueFront._waitHostID] = st_upgrade);
-				queueFront._ntf->invoke(_alloc);
-			}
-		}
+			DEBUG_OPERATION(if (co_async_state::co_async_ok == state) _inSet[id] = st_upgrade);
+			CHECK_EXCEPTION(ntf, state);
+		}, __1, std::forward<Notify>(ntf)));
+#else
+		_upgradeMutex._try_lock(id, std::forward<Notify>(ntf));
+#endif
 	}
 
 	void _unlock1(long long id)
 	{
-		_insideCount--;
-		DEBUG_OPERATION(_inSet.erase(id));
-		if (!_waitQueue.empty())
+		if (!--_upgradeMutex._recCount && !_waitQueue.empty())
 		{
 			size_t ntfNum = 0;
 			CoNotifyHandlerFace_* ntfs[32];
 			std::list<CoNotifyHandlerFace_*> ntfsEx;
 			wait_node queueFront = _waitQueue.front();
 			_waitQueue.pop_front();
-			DEBUG_OPERATION(_inSet[queueFront._waitHostID] = queueFront._status);
-			_status = queueFront._status;
-			_insideCount++;
 			ntfs[ntfNum++] = queueFront._ntf;
-			if (st_shared == _status)
+			DEBUG_OPERATION(_inSet.erase(id));
+			DEBUG_OPERATION(_inSet[queueFront._waitHostID] = queueFront._status);
+			if (st_shared == queueFront._status)
 			{
+				_upgradeMutex._lockActorID = 0;
+				_sharedMap[queueFront._waitHostID]._count++;
 				for (auto it = _waitQueue.begin(); it != _waitQueue.end();)
 				{
 					if (st_shared == it->_status)
 					{
 						assert(_inSet.find(it->_waitHostID) == _inSet.end());
 						DEBUG_OPERATION(_inSet[it->_waitHostID] = st_shared);
-						_insideCount++;
+						_sharedMap[it->_waitHostID]._count++;
 						if (ntfNum < static_array_length(ntfs))
 						{
 							ntfs[ntfNum++] = it->_ntf;
@@ -4829,13 +5240,18 @@ private:
 					}
 				}
 			}
+			else
+			{
+				_upgradeMutex._lockActorID = queueFront._waitHostID;
+				_upgradeMutex._recCount++;
+			}
 			for (size_t i = 0; i < ntfNum; i++)
 			{
-				ntfs[i]->invoke(_alloc);
+				ntfs[i]->invoke(_upgradeMutex._alloc);
 			}
 			while (!ntfsEx.empty())
 			{
-				ntfsEx.front()->invoke(_alloc);
+				ntfsEx.front()->invoke(_upgradeMutex._alloc);
 				ntfsEx.pop_front();
 			}
 		}
@@ -4844,46 +5260,74 @@ private:
 	template <typename Notify>
 	void _unlock(long long id, Notify&& ntf)
 	{
-		assert(_strand->running_in_this_thread());
+		assert(self_strand()->running_in_this_thread());
 		assert(check_self_err_call(id));
-		assert(st_unique == _status);
-		assert(1 == _inSet.size());
 		assert(_inSet.find(id) != _inSet.end());
 		assert(st_unique == _inSet.find(id)->second);
-		assert(_inSet.size() == _insideCount);
+		assert(_sharedMap.empty());
+		assert(id == _upgradeMutex._lockActorID && _upgradeMutex._recCount);
 		_unlock1(id);
 		CHECK_EXCEPTION(ntf);
 	}
 
 	void _unlock_shared1(long long id)
 	{
-		_insideCount--;
-		DEBUG_OPERATION(_inSet.erase(id));
-		if (st_upgrade == _status)
+		auto sit = _sharedMap.find(id);
+		if (!--sit->second._count)
 		{
-			assert(0 != _insideCount);
-			if (_upgradeQueue.size() == _insideCount)
+			assert(id != _upgradeMutex._lockActorID);
+			DEBUG_OPERATION(_inSet.erase(id));
+			_sharedMap.erase(sit);
+			if (_sharedMap.empty() && !_waitQueue.empty())
 			{
-				wait_node queueFront = _upgradeQueue.front();
-				_upgradeQueue.pop_front();
-				DEBUG_OPERATION(_inSet[queueFront._waitHostID] = st_upgrade);
-				queueFront._ntf->invoke(_alloc);
-			}
-		}
-		else
-		{
-			assert(st_shared == _status);
-			if (!_insideCount)
-			{
-				if (!_waitQueue.empty())
+				size_t ntfNum = 0;
+				CoNotifyHandlerFace_* ntfs[32];
+				std::list<CoNotifyHandlerFace_*> ntfsEx;
+				wait_node queueFront = _waitQueue.front();
+				_waitQueue.pop_front();
+				ntfs[ntfNum++] = queueFront._ntf;
+				DEBUG_OPERATION(_inSet[queueFront._waitHostID] = queueFront._status);
+				if (st_shared == queueFront._status)
 				{
-					wait_node queueFront = _waitQueue.front();
-					_waitQueue.pop_front();
-					assert(st_unique == queueFront._status);
-					DEBUG_OPERATION(_inSet[queueFront._waitHostID] = queueFront._status);
-					_status = queueFront._status;
-					_insideCount++;
-					queueFront._ntf->invoke(_alloc);
+					_upgradeMutex._lockActorID = 0;
+					_sharedMap[queueFront._waitHostID]._count++;
+					for (auto it = _waitQueue.begin(); it != _waitQueue.end();)
+					{
+						if (st_shared == it->_status)
+						{
+							assert(_inSet.find(it->_waitHostID) == _inSet.end());
+							DEBUG_OPERATION(_inSet[it->_waitHostID] = st_shared);
+							_sharedMap[it->_waitHostID]._count++;
+							if (ntfNum < static_array_length(ntfs))
+							{
+								ntfs[ntfNum++] = it->_ntf;
+							}
+							else
+							{
+								ntfsEx.push_back(it->_ntf);
+							}
+							_waitQueue.erase(it++);
+						}
+						else
+						{
+							++it;
+						}
+					}
+				}
+				else
+				{
+					assert(!_upgradeMutex._lockActorID);
+					_upgradeMutex._lockActorID = queueFront._waitHostID;
+					_upgradeMutex._recCount++;
+				}
+				for (size_t i = 0; i < ntfNum; i++)
+				{
+					ntfs[i]->invoke(_upgradeMutex._alloc);
+				}
+				while (!ntfsEx.empty())
+				{
+					ntfsEx.front()->invoke(_upgradeMutex._alloc);
+					ntfsEx.pop_front();
 				}
 			}
 		}
@@ -4892,123 +5336,80 @@ private:
 	template <typename Notify>
 	void _unlock_shared(long long id, Notify&& ntf)
 	{
-		assert(_strand->running_in_this_thread());
+		assert(self_strand()->running_in_this_thread());
 		assert(check_self_err_call(id));
-		assert(st_unique != _status);
 		assert(_inSet.find(id) != _inSet.end());
 		assert(st_shared == _inSet.find(id)->second);
-		assert(_inSet.size() == _insideCount);
+		assert(_sharedMap.find(id) != _sharedMap.end());
+		assert(_sharedMap[id]._count);
 		_unlock_shared1(id);
 		CHECK_EXCEPTION(ntf);
-	}
-
-	bool _unlock_upgrade1(long long id, std::list<CoNotifyHandlerFace_*>& ntfsEx, size_t& ntfNum, CoNotifyHandlerFace_** ntfs, const size_t ntfsLength)
-	{
-		bool immNotify = true;
-		if (1 == _insideCount)
-		{
-			_status = st_shared;
-			DEBUG_OPERATION(_inSet[id] = st_shared);
-		}
-		else
-		{
-			assert(!_upgradeQueue.empty());
-			wait_node queueFront = _upgradeQueue.front();
-			_upgradeQueue.pop_front();
-			ntfs[ntfNum++] = queueFront._ntf;
-			if (st_upgrade == queueFront._status)
-			{
-				immNotify = false;
-				DEBUG_OPERATION(_inSet[queueFront._waitHostID] = st_upgrade);
-			}
-			else
-			{
-				DEBUG_OPERATION(_inSet[id] = st_shared);
-				DEBUG_OPERATION(_inSet[queueFront._waitHostID] = st_shared);
-				_status = st_shared;
-				while (!_upgradeQueue.empty())
-				{
-					wait_node queueFront = _upgradeQueue.front();
-					_upgradeQueue.pop_front();
-					assert(st_shared == queueFront._status);
-					DEBUG_OPERATION(_inSet[queueFront._waitHostID] = st_shared);
-					if (ntfNum < ntfsLength)
-					{
-						ntfs[ntfNum++] = queueFront._ntf;
-					}
-					else
-					{
-						ntfsEx.push_back(queueFront._ntf);
-					}
-				}
-			}
-		}
-		if (st_shared == _status)
-		{
-			for (auto it = _waitQueue.begin(); it != _waitQueue.end();)
-			{
-				if (st_shared == it->_status)
-				{
-					assert(_inSet.find(it->_waitHostID) == _inSet.end());
-					DEBUG_OPERATION(_inSet[it->_waitHostID] = st_shared);
-					_insideCount++;
-					if (ntfNum < ntfsLength)
-					{
-						ntfs[ntfNum++] = it->_ntf;
-					}
-					else
-					{
-						ntfsEx.push_back(it->_ntf);
-					}
-					_waitQueue.erase(it++);
-				}
-				else
-				{
-					++it;
-				}
-			}
-		}
-		return immNotify;
 	}
 
 	template <typename Notify>
 	void _unlock_upgrade(long long id, Notify&& ntf)
 	{
-		assert(_strand->running_in_this_thread());
+		assert(self_strand()->running_in_this_thread());
 		assert(check_self_err_call(id));
-		assert(st_upgrade == _status);
 		assert(_inSet.find(id) != _inSet.end());
 		assert(st_upgrade == _inSet.find(id)->second);
-		assert(_inSet.size() == _insideCount);
-		size_t ntfNum = 0;
-		CoNotifyHandlerFace_* ntfs[32];
-		std::list<CoNotifyHandlerFace_*> ntfsEx;
-		const bool immNotify = _unlock_upgrade1(id, ntfsEx, ntfNum, ntfs, static_array_length(ntfs));
-		if (!immNotify)
+		assert(_sharedMap.find(id) != _sharedMap.end());
+		if (_upgradeMutex._unlock1(id))
 		{
-			_upgradeQueue.push_back(wait_node{ wrap_notify(std::forward<Notify>(ntf)), id, st_shared });
+			DEBUG_OPERATION(_inSet[id] = st_shared);
 		}
-		for (size_t i = 0; i < ntfNum; i++)
+		CHECK_EXCEPTION(ntf);
+	}
+
+	template <typename Notify>
+	void _unlock_and_lock_shared(long long id, Notify&& ntf)
+	{
+		typedef RM_CREF(Notify) Notify_;
+		_unlock(id, std::bind([this, id](Notify_& ntf)
 		{
-			ntfs[i]->invoke(_alloc);
-		}
-		while (!ntfsEx.empty())
+			_lock_shared(id, std::move(ntf));
+		}, std::forward<Notify>(ntf)));
+	}
+
+	template <typename Notify>
+	void _unlock_and_lock_upgrade(long long id, Notify&& ntf)
+	{
+		typedef RM_CREF(Notify) Notify_;
+		_unlock(id, std::bind([this, id](Notify_& ntf)
 		{
-			ntfsEx.front()->invoke(_alloc);
-			ntfsEx.pop_front();
-		}
-		if (immNotify)
+			_lock_shared(id, std::bind([this, id](Notify_& ntf)
+			{
+				_lock_upgrade(id, std::move(ntf));
+			}, std::move(ntf)));
+		}, std::forward<Notify>(ntf)));
+	}
+
+	template <typename Notify>
+	void _unlock_upgrade_and_lock(long long id, Notify&& ntf)
+	{
+		typedef RM_CREF(Notify) Notify_;
+		_unlock_upgrade(id, std::bind([this, id](Notify_& ntf)
 		{
-			CHECK_EXCEPTION(ntf);
-		}
+			_unlock_shared(id, std::bind([this, id](Notify_& ntf)
+			{
+				_lock(id, std::move(ntf));
+			}, std::move(ntf)));
+		}, std::forward<Notify>(ntf)));
+	}
+
+	template <typename Notify>
+	void _unlock_shared_and_lock(long long id, Notify&& ntf)
+	{
+		typedef RM_CREF(Notify) Notify_;
+		_unlock_shared(id, std::bind([this, id](Notify_& ntf)
+		{
+			_lock(id, std::move(ntf));
+		}, std::forward<Notify>(ntf)));
 	}
 private:
-	shared_strand _strand;
-	reusable_mem _alloc;
-	lock_status _status;
-	size_t _insideCount;
+	co_mutex _upgradeMutex;
 	msg_list<wait_node> _waitQueue;
-	msg_queue<wait_node> _upgradeQueue;
+	msg_map<long long, shared_count> _sharedMap;
 #if (_DEBUG || DEBUG)
 	msg_map<long long, lock_status> _inSet;
 #endif

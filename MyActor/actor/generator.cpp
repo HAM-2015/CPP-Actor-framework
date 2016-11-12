@@ -3,17 +3,16 @@
 mem_alloc_base* generator::_genObjAlloc = NULL;
 std::atomic<long long>* generator::_id = NULL;
 
-void generator::install()
+void generator::install(std::atomic<long long>* id)
 {
 	_genObjAlloc = make_shared_space_alloc<generator, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [](generator*){});
-	_id = new std::atomic<long long>(0);
+	_id = id;
 }
 
 void generator::uninstall()
 {
 	delete _genObjAlloc;
 	_genObjAlloc = NULL;
-	delete _id;
 	_id = NULL;
 }
 

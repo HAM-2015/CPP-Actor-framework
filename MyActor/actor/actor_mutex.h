@@ -5,10 +5,9 @@
 #include "msg_queue.h"
 #include "scattered.h"
 #include "lambda_ref.h"
+#include "generator.h"
 
 class my_actor;
-class MutexTrigNotifer_;
-class actor_condition_variable;
 
 /*!
 @brief Actor锁，可递归
@@ -16,12 +15,6 @@ class actor_condition_variable;
 class actor_mutex
 {
 	friend my_actor;
-
-	struct wait_node
-	{
-		MutexTrigNotifer_& ntf;
-		long long _waitHostID;
-	};
 public:
 	actor_mutex(const shared_strand& strand);
 	~actor_mutex();
@@ -71,17 +64,18 @@ public:
 	@brief 当前依赖的strand
 	*/
 	const shared_strand& self_strand();
+
+	/*!
+	@brief 
+	*/
+	co_mutex& comutex();
 private:
 	void quited_lock(my_actor* host);
 	void quited_unlock(my_actor* host);
 	void lock(my_actor*, wrap_local_handler_face<void()>&& lockNtf);
 	bool timed_lock(int ms, my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
-	bool check_self_err_call(my_actor* host);
 private:
-	shared_strand _strand;
-	msg_list<wait_node> _waitQueue;
-	long long _lockActorID;
-	size_t _recCount;
+	co_mutex _mutex;
 	NONE_COPY(actor_mutex)
 };
 //////////////////////////////////////////////////////////////////////////
@@ -91,7 +85,6 @@ private:
 */
 class actor_lock_guard
 {
-	friend actor_condition_variable;
 public:
 	actor_lock_guard(actor_mutex& amutex, my_actor* host);
 	~actor_lock_guard();
@@ -107,67 +100,10 @@ private:
 //////////////////////////////////////////////////////////////////////////
 
 /*!
-@brief 在Actor运行的条件变量，配合actor_lock_guard使用
-*/
-class actor_condition_variable
-{
-	struct wait_node
-	{
-		MutexTrigNotifer_& ntf;
-	};
-public:
-	actor_condition_variable(const shared_strand& strand);
-	~actor_condition_variable();
-public:
-	/*!
-	@brief 等待一个通知
-	*/
-	void wait(my_actor* host, actor_lock_guard& mutex);
-
-	/*!
-	@brief 超时等待要给通知
-	*/
-	bool timed_wait(int ms, my_actor* host, actor_lock_guard& mutex);
-
-	/*!
-	@brief 通知一个等待
-	*/
-	bool notify_one(my_actor* host);
-
-	/*!
-	@brief 通知所有等待
-	*/
-	size_t notify_all(my_actor* host);
-
-	/*!
-	@brief 当前依赖的strand
-	*/
-	const shared_strand& self_strand();
-private:
-	shared_strand _strand;
-	msg_list<wait_node> _waitQueue;
-	NONE_COPY(actor_condition_variable)
-};
-//////////////////////////////////////////////////////////////////////////
-
-/*!
 @brief 在Actor下运行的读写锁，不可递归
 */
 class actor_shared_mutex
 {
-	enum lock_status
-	{
-		st_shared,
-		st_unique,
-		st_upgrade
-	};
-
-	struct wait_node
-	{
-		MutexTrigNotifer_& ntf;
-		long long _waitHostID;
-		lock_status _status;
-	};
 public:
 	actor_shared_mutex(const shared_strand& strand);
 	~actor_shared_mutex();
@@ -197,6 +133,7 @@ public:
 	void lock_shared(my_actor* host);
 	bool try_lock_shared(my_actor* host);
 	bool timed_lock_shared(int ms, my_actor* host);
+	void lock_pess_shared(my_actor* host);
 
 	template <typename Ntf>
 	void lock_shared(my_actor* host, Ntf&& lockNtf)
@@ -210,10 +147,17 @@ public:
 		return timed_lock_shared(ms, host, (wrap_local_handler_face<void()>&&)wrap_local_handler(lockNtf));
 	}
 
+	template <typename Ntf>
+	void lock_pess_shared(my_actor* host, Ntf&& lockNtf)
+	{
+		lock_pess_shared(host, (wrap_local_handler_face<void()>&&)wrap_local_handler(lockNtf));
+	}
+
 	/*!
 	@brief 共享锁提升为独占锁
 	*/
 	void lock_upgrade(my_actor* host);
+	bool try_lock_upgrade(my_actor* host);
 
 	template <typename Ntf>
 	void lock_upgrade(my_actor* host, Ntf&& lockNtf)
@@ -240,22 +184,20 @@ public:
 	@brief 当前依赖的strand
 	*/
 	const shared_strand& self_strand();
+
+	/*!
+	@brief
+	*/
+	co_shared_mutex& comutex();
 private:
 	void lock(my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
 	bool timed_lock(int ms, my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
 	void lock_shared(my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
 	bool timed_lock_shared(int ms, my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
+	void lock_pess_shared(my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
 	void lock_upgrade(my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
-	bool check_self_err_call(my_actor* host);
 private:
-	lock_status _status;
-	size_t _insideCount;
-	shared_strand _strand;
-	msg_list<wait_node> _waitQueue;
-	msg_queue<wait_node> _upgradeQueue;
-#if (_DEBUG || DEBUG)
-	msg_map<long long, lock_status> _inSet;
-#endif
+	co_shared_mutex _mutex;
 	NONE_COPY(actor_shared_mutex)
 };
 //////////////////////////////////////////////////////////////////////////
@@ -265,7 +207,6 @@ private:
 */
 class actor_unique_lock
 {
-	friend actor_condition_variable;
 public:
 	actor_unique_lock(actor_shared_mutex& amutex, my_actor* host);
 	~actor_unique_lock();
@@ -284,7 +225,6 @@ private:
 */
 class actor_shared_lock
 {
-	friend actor_condition_variable;
 public:
 	actor_shared_lock(actor_shared_mutex& amutex, my_actor* host);
 	~actor_shared_lock();

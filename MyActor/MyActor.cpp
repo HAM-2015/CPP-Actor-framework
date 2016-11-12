@@ -1019,14 +1019,15 @@ void co_mutex_test()
 		co_begin;
 		for (ctx.i = 0; ctx.i < 10; ctx.i++)
 		{
-			co_mutex_lock(mutex);
-			info_trace_space("a", ctx.i);
-			co_sleep(100);
-			info_trace_space("a", ctx.i);
-			co_sleep(100);
-			info_trace_space("a", ctx.i);
-			co_sleep(100);
-			co_mutex_unlock(mutex);
+			co_mutex_lock_guard(mutex)
+			{
+				info_trace_space("a", ctx.i);
+				co_sleep(100);
+				info_trace_space("a", ctx.i);
+				co_sleep(100);
+				info_trace_space("a", ctx.i);
+				co_sleep(100);
+			}
 		}
 		co_end;
 	};
@@ -1041,14 +1042,15 @@ void co_mutex_test()
 		co_begin;
 		for (ctx.i = 0; ctx.i < 10; ctx.i++)
 		{
-			co_mutex_lock(mutex);
-			info_trace_space("b", ctx.i);
-			co_sleep(100);
-			info_trace_space("b", ctx.i);
-			co_sleep(100);
-			info_trace_space("b", ctx.i);
-			co_sleep(100);
-			co_mutex_unlock(mutex);
+			co_mutex_lock_guard(mutex)
+			{
+				info_trace_space("b", ctx.i);
+				co_sleep(100);
+				info_trace_space("b", ctx.i);
+				co_sleep(100);
+				info_trace_space("b", ctx.i);
+				co_sleep(100);
+			}
 		}
 		co_end;
 	};

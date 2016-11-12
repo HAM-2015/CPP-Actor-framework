@@ -92,7 +92,7 @@ ftp://ham2015.6655.la/files/MyActor/
 添加同步消息(sync_msg)和CSP模型消息(csp_channel).
 
 2015-06-09
-去掉“actor_mutex”、“actor_condition_variable”、“actor_shared_mutex”不必要的 close 功能.
+去掉“actor_mutex”、“actor_shared_mutex”不必要的 close 功能.
 
 2015-06-06
 添加直接产生上下文的回调函数，可以不用显示使用await操作等待回调完成.
@@ -104,10 +104,7 @@ ftp://ham2015.6655.la/files/MyActor/
 优化等待子Actor结束的性能，取消等待返回bool值.
 
 2015-05-29
-添加actor_shared_mutex，在Actor下运行的“互斥锁(可递归)”、“条件变量”、“读写锁”已备齐，用于业务逻辑之间的同步.
-
-2015-05-25
-添加能在Actor下运行的条件变量actor_condition_variable.
+添加actor_shared_mutex，用于业务逻辑之间的同步.
 
 2015-05-24
 添加在DEBUG下创建Actor时保存调用堆栈，方便某个Actor异常时调试跟踪.

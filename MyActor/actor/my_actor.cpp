@@ -79,7 +79,6 @@ void my_actor::install()
 		s_shared_initer._traceMutex = TraceMutex_::_mutex;
 		DEBUG_OPERATION(s_installID = run_thread::this_thread_id());
 		io_engine::install();
-		generator::install();
 		install_check_stack();
 		s_isSelfInitFiber = context_yield::convert_thread_to_fiber();
 		ContextPool_::install();
@@ -98,6 +97,7 @@ void my_actor::install()
 		my_actor::_quitExitCallbackAll = new msg_list_shared_alloc<std::function<void()> >::shared_node_alloc(MEM_POOL_LENGTH);
 		my_actor::_suspendResumeQueueAll = new msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc(MEM_POOL_LENGTH);
 		my_actor::msg_pool_status::_msgTypeMapAll = new msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc(MEM_POOL_LENGTH);
+		generator::install(my_actor::_actorIDCount);
 	}
 }
 
@@ -111,7 +111,6 @@ void my_actor::install(const shared_initer* initer)
 		s_shared_initer._traceMutex = initer->_traceMutex;
 		DEBUG_OPERATION(s_installID = run_thread::this_thread_id());
 		io_engine::install();
-		generator::install();
 		install_check_stack();
 		s_isSelfInitFiber = context_yield::convert_thread_to_fiber();
 		ContextPool_::install();
@@ -130,6 +129,7 @@ void my_actor::install(const shared_initer* initer)
 		my_actor::_quitExitCallbackAll = new msg_list_shared_alloc<std::function<void()> >::shared_node_alloc(MEM_POOL_LENGTH);
 		my_actor::_suspendResumeQueueAll = new msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc(MEM_POOL_LENGTH);
 		my_actor::msg_pool_status::_msgTypeMapAll = new msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc(MEM_POOL_LENGTH);
+		generator::install(my_actor::_actorIDCount);
 	}
 }
 
@@ -139,6 +139,7 @@ void my_actor::uninstall()
 	{
 		s_inited = false;
 		assert(run_thread::this_thread_id() == s_installID);
+		generator::uninstall();
 		delete shared_bool::_sharedBoolAlloc;
 		shared_bool::_sharedBoolAlloc = NULL;
 		if (!s_isSharedIniter)
@@ -168,7 +169,6 @@ void my_actor::uninstall()
 		if (s_isSelfInitFiber)
 			context_yield::convert_fiber_to_thread();
 		uninstall_check_stack();
-		generator::uninstall();
 		io_engine::uninstall();
 		if (!s_isSharedIniter)
 			delete TraceMutex_::_mutex;
