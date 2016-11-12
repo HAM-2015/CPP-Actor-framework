@@ -39,7 +39,7 @@ void actor_mutex::quited_lock(my_actor* host)
 	assert(ActorFunc_::is_quited(host));
 	host->check_stack();
 	bool sign = false;
-	_mutex.lock(host->self_id(), wrap_bind([&](actor_handle& host)
+	_mutex.lock(host->self_id(), host->self_strand()->wrap(std::bind([&](actor_handle& host)
 	{
 		if (sign)
 		{
@@ -49,7 +49,7 @@ void actor_mutex::quited_lock(my_actor* host)
 		{
 			sign = true;
 		}
-	}, host->shared_from_this()));
+	}, host->shared_from_this())));
 	if (!sign)
 	{
 		sign = true;
@@ -111,7 +111,7 @@ void actor_mutex::quited_unlock(my_actor* host)
 	assert(ActorFunc_::is_quited(host));
 	host->check_stack();
 	bool sign = false;
-	_mutex.unlock(host->self_id(), wrap_bind([&](actor_handle& host)
+	_mutex.unlock(host->self_id(), host->self_strand()->wrap(std::bind([&](actor_handle& host)
 	{
 		if (sign)
 		{
@@ -121,7 +121,7 @@ void actor_mutex::quited_unlock(my_actor* host)
 		{
 			sign = true;
 		}
-	}, host->shared_from_this()));
+	}, host->shared_from_this())));
 	if (!sign)
 	{
 		sign = true;
