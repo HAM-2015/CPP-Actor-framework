@@ -1210,7 +1210,7 @@ enum co_async_state: char
 
 struct CoNotifyHandlerFace_
 {
-	virtual void invoke(reusable_mem& alloc, co_async_state = co_async_ok) = 0;
+	virtual void invoke(reusable_mem& alloc, co_async_state state = co_async_state::co_async_ok) = 0;
 	virtual void destroy() = 0;
 };
 
@@ -1793,7 +1793,7 @@ private:
 		{
 			ntfSign._ntfSign = true;
 			ntfSign._effect = false;
-			CHECK_EXCEPTION(ntf, co_async_fail);
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
 			return;
 		}
 		if (!_msgBuff.empty())
@@ -1869,7 +1869,7 @@ private:
 		{
 			ntfSign._ntfSign = true;
 			ntfSign._effect = false;
-			CHECK_EXCEPTION(ntf, co_async_fail);
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
 			return;
 		}
 		ntfSign._ntfSign = true;
@@ -2503,7 +2503,7 @@ private:
 		{
 			ntfSign._ntfSign = true;
 			ntfSign._effect = false;
-			CHECK_EXCEPTION(ntf, co_async_fail);
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
 			return;
 		}
 		if (!_buffer.empty())
@@ -2579,7 +2579,7 @@ private:
 		{
 			ntfSign._ntfSign = true;
 			ntfSign._effect = false;
-			CHECK_EXCEPTION(ntf, co_async_fail);
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
 			return;
 		}
 		if (!_buffer.full())
@@ -3290,7 +3290,7 @@ private:
 		{
 			ntfSign._ntfSign = true;
 			ntfSign._effect = false;
-			CHECK_EXCEPTION(ntf, co_async_fail);
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
 			return;
 		}
 		if (_tempBuffer.has())
@@ -3367,7 +3367,7 @@ private:
 		{
 			ntfSign._ntfSign = true;
 			ntfSign._effect = false;
-			CHECK_EXCEPTION(ntf, co_async_fail);
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
 			return;
 		}
 		if (!_tempBuffer.has())
@@ -4084,7 +4084,7 @@ private:
 		{
 			ntfSign._ntfSign = true;
 			ntfSign._effect = false;
-			CHECK_EXCEPTION(ntf, co_async_fail);
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
 			return;
 		}
 		if (!_sendQueue.empty())
@@ -4476,7 +4476,7 @@ private:
 			_recCount++;
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
 		}
-		else
+		else if (ms > 0)
 		{
 			overlap_timer::timer_handle* timer = new(_alloc.allocate(sizeof(overlap_timer::timer_handle)))overlap_timer::timer_handle;
 			_waitQueue.push_back(wait_node{ wrap_notify(std::bind([this, timer](co_async_state state, Notify& ntf)
@@ -4493,6 +4493,10 @@ private:
 				waitNtf->invoke(_alloc, co_async_state::co_async_overtime);
 			}, --_waitQueue.end()));
 			CHECK_EXCEPTION(lockedNtf);
+		}
+		else
+		{
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_overtime);
 		}
 	}
 
@@ -5035,7 +5039,7 @@ private:
 			DEBUG_OPERATION(_inSet[id] = st_unique);
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
 		}
-		else
+		else if (ms > 0)
 		{
 			overlap_timer::timer_handle* timer = new(_upgradeMutex._alloc.allocate(sizeof(overlap_timer::timer_handle)))overlap_timer::timer_handle;
 			_waitQueue.push_back(wait_node{ _upgradeMutex.wrap_notify(std::bind([this, timer](co_async_state state, Notify& ntf)
@@ -5052,6 +5056,10 @@ private:
 				waitNtf->invoke(_upgradeMutex._alloc, co_async_state::co_async_overtime);
 			}, --_waitQueue.end()));
 			CHECK_EXCEPTION(lockedNtf);
+		}
+		else
+		{
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_overtime);
 		}
 	}
 
@@ -5137,7 +5145,7 @@ private:
 			DEBUG_OPERATION(_inSet[id] = st_shared);
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
 		}
-		else
+		else if (ms > 0)
 		{
 			overlap_timer::timer_handle* timer = new(_upgradeMutex._alloc.allocate(sizeof(overlap_timer::timer_handle)))overlap_timer::timer_handle;
 			_waitQueue.push_back(wait_node{ _upgradeMutex.wrap_notify(std::bind([this, timer](co_async_state state, Notify& ntf)
@@ -5154,6 +5162,10 @@ private:
 				waitNtf->invoke(_upgradeMutex._alloc, co_async_state::co_async_overtime);
 			}, --_waitQueue.end()));
 			CHECK_EXCEPTION(lockedNtf);
+		}
+		else
+		{
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_overtime);
 		}
 	}
 
