@@ -586,7 +586,7 @@ WrapBind_<Handler> wrap_bind_(Handler&& handler)
 }
 
 template <typename... Args>
-auto wrap_bind(Args&&... args)->WrapBind_<decltype(std::bind(std::forward<Args>(args)...))>
+auto wrap_bind(Args&&... args)->decltype(wrap_bind_(std::bind(std::forward<Args>(args)...)))
 {
 	return wrap_bind_(std::bind(std::forward<Args>(args)...));
 }

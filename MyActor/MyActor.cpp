@@ -559,10 +559,10 @@ void co_socket_test()
 		size_t s;
 		char buf[128];
 		bool overtime;
-		async_timer timer;
 		boost::system::error_code ec;
 		boost::asio::ip::tcp::socket socket;
 		stack_obj<boost::asio::ip::tcp::acceptor> acceptor;
+		co_use_timer;
 		co_end_context_init(ctx, (co_self), socket(co_strand->get_io_service()), overtime(false), s(0));
 
 		co_begin;
@@ -575,11 +575,10 @@ void co_socket_test()
 		if (!ctx.ec)
 		{
 			ctx.acceptor->close(ctx.ec);
-			ctx.timer = co_strand->make_timer();
 			while (true)
 			{
 				ctx.overtime = false;
-				co_timed_await(ctx.timer, 1500, { ctx.overtime = true; ctx.socket.close(ctx.ec); }) ctx.socket.async_read_some(boost::asio::buffer(ctx.buf, sizeof(ctx.buf)), co_async_result(ctx.ec, ctx.s));
+				co_timed_await(1500, { ctx.overtime = true; ctx.socket.close(ctx.ec); }) ctx.socket.async_read_some(boost::asio::buffer(ctx.buf, sizeof(ctx.buf)), co_async_result(ctx.ec, ctx.s));
 				if (ctx.overtime)
 				{
 					trace_comma("co_socket", "receive overtime");

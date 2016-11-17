@@ -67,7 +67,8 @@ public:
 	bool timed_take(int ms, my_actor* host, Args&... args)
 	{
 		co_async_state state = co_async_state::co_async_undefined;
-		parent::timed_pop(ms, host->make_same_context(state, args...));
+		overlap_timer::timer_handle timer;
+		parent::timed_pop(timer, ms, host->make_same_context(state, args...));
 		if (co_async_state::co_async_ok == state)
 		{
 			return true;
@@ -111,7 +112,8 @@ public:
 	bool timed_send(int ms, my_actor* host, Args&&... msg)
 	{
 		co_async_state state = co_async_state::co_async_undefined;
-		parent::timed_push(ms, host->make_context(state), std::forward<Args>(msg)...);
+		overlap_timer::timer_handle timer;
+		parent::timed_push(timer, ms, host->make_context(state), std::forward<Args>(msg)...);
 		if (co_async_state::co_async_ok == state)
 		{
 			return true;
@@ -224,7 +226,8 @@ public:
 	{
 		my_actor::quit_guard qg(host);
 		co_async_state state = co_async_state::co_async_undefined;
-		parent::timed_push(ms, host->make_asio_same_context(state, res), std::forward<Args>(msg)...);
+		overlap_timer::timer_handle timer;
+		parent::timed_push(timer, ms, host->make_asio_same_context(state, res), std::forward<Args>(msg)...);
 		if (co_async_state::co_async_ok == state)
 		{
 			return true;
@@ -282,11 +285,12 @@ public:
 	{
 		my_actor::quit_guard qg(host);
 		co_async_state state = co_async_state::co_async_undefined;
+		overlap_timer::timer_handle timer;
 		csp_result<R> result;
 		std::tuple<stack_obj<Types>...> params;
 		host->trig([&](trig_once_notifer<>&& ntf)
 		{
-			parent::timed_pop(ms, wait_handler(std::move(ntf), state, result, params));
+			parent::timed_pop(timer, ms, wait_handler(std::move(ntf), state, result, params));
 		});
 		if (co_async_state::co_async_ok == state)
 		{
@@ -363,20 +367,20 @@ class chan_connector
 			assert(co_async_state::co_async_ok == st);
 			if (!_connector._connSign2._disableAppend)
 			{
-				_connector._chan2.append_push_notify(wrap_bind([](co_async_state st, chan_connector<Chan1, Chan2>& _connector, Args&... args)
+				_connector._chan2.append_push_notify(wrap_bind_(std::bind([](co_async_state st, chan_connector<Chan1, Chan2>& _connector, Args&... args)
 				{
 					if (co_async_state::co_async_ok == st)
 					{
-						_connector._chan2.push(wrap_bind([](co_async_state st, chan_connector<Chan1, Chan2>& _connector)
+						_connector._chan2.push(wrap_bind_(std::bind([](co_async_state st, chan_connector<Chan1, Chan2>& _connector)
 						{
 							assert(co_async_state::co_async_ok == st);
 							if (!_connector._connSign1._disableAppend)
 							{
 								_connector.connector();
 							}
-						}, __1, std::ref(_connector)), std::move(args)...);
+						}, __1, std::ref(_connector))), std::move(args)...);
 					}
-				}, __1, std::ref(_connector), std::forward<Args>(args)...), _connector._connSign2);
+				}, __1, std::ref(_connector), std::forward<Args>(args)...)), _connector._connSign2);
 			}
 		}
 
