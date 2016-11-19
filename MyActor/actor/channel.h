@@ -354,7 +354,7 @@ public:
 };
 
 /*!
-@brief channel连接器
+@brief channel连接器，disconnect时有可能造成消息丢失
 */
 template <typename Chan1, typename Chan2>
 class chan_connector
@@ -362,12 +362,12 @@ class chan_connector
 	struct connector_handler
 	{
 		template <typename... Args>
-		void operator()(co_async_state st, Args&&... args)
+		void operator()(co_async_state state, Args&&... args)
 		{
-			assert(co_async_state::co_async_ok == st);
+			assert(co_async_state::co_async_ok == state);
 			if (!_connector._connSign2._disableAppend)
 			{
-				_connector._chan2.append_push_notify(wrap_bind_(std::bind([](co_async_state st, chan_connector<Chan1, Chan2>& _connector, Args&... args)
+				_connector._chan2.append_push_notify(wrap_bind_(std::bind([](co_async_state st, chan_connector<Chan1, Chan2>& _connector, RM_CREF(Args)&... args)
 				{
 					if (co_async_state::co_async_ok == st)
 					{
@@ -384,7 +384,11 @@ class chan_connector
 			}
 		}
 
-		void operator()(co_async_state){}
+		void operator()(co_async_state state)
+		{
+			assert(co_async_state::co_async_ok != state);
+		}
+
 		chan_connector<Chan1, Chan2>& _connector;
 	};
 

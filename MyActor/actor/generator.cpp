@@ -59,10 +59,19 @@ bool generator::_next()
 		_callStack.pop_front();
 		return _next();
 	}
-	else if (-1 == __coNext)
+	else if (0 > __coNext)
 	{
+		DEBUG_OPERATION(__inside = false);
 		__ctx = NULL;
-		__coNext = 0;
+		if (-2 == __coNext)
+		{
+			__coNext = 0;
+		}
+		else
+		{
+			assert(-1 == __coNext);
+			assert(!_callStack.empty());
+		}
 		return _next();
 	}
 	return false;
