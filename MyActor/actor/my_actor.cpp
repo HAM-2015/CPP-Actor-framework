@@ -1800,7 +1800,6 @@ _childActorList(*_childActorListAll)
 {
 	_actorPull = NULL;
 	_actorPush = NULL;
-	_timer = NULL;
 	_timerStateCb = NULL;
 	_alsVal = NULL;
 	_timerStateSuspend = false;
@@ -1885,7 +1884,6 @@ actor_handle my_actor::create(shared_strand actorStrand, main_func mainFunc, siz
 	}
 	actor_handle newActor(new(pull->_space)my_actor(), [](my_actor* p){p->~my_actor(); }, actor_ref_count_alloc<void>(pull));
 	newActor->_weakThis = newActor;
-	newActor->_timer = actorStrand->actor_timer();
 	newActor->_strand = std::move(actorStrand);
 	newActor->_mainFunc = std::move(mainFunc);
 	newActor->_actorPull = pull;
@@ -1935,7 +1933,6 @@ actor_handle my_actor::create(shared_strand actorStrand, AutoStackActorFace_&& w
 	}
 	actor_handle newActor(new(pull->_space)my_actor(), [](my_actor* p){p->~my_actor(); }, actor_ref_count_alloc<void>(pull));
 	newActor->_weakThis = newActor;
-	newActor->_timer = actorStrand->actor_timer();
 	newActor->_strand = std::move(actorStrand);
 	newActor->_checkStack = checkStack;
 	wrapActor.swap(newActor->_mainFunc);
@@ -2261,7 +2258,7 @@ void my_actor::usleep(long long us)
 	{
 		_timerStateCompleted = false;
 		_timerStateTime = us;
-		_timerStateHandle = _timer->timeout(_timerStateTime, shared_from_this());
+		_timerStateHandle = _strand->actor_timer()->timeout(_timerStateTime, shared_from_this());
 		push_yield();
 	}
 }
@@ -3246,10 +3243,9 @@ void my_actor::cancel_timer()
 {
 	if (!_timerStateCompleted)
 	{
-		assert(_timer);
 		_timerStateCompleted = true;
 		_timerStateCount++;
-		_timer->cancel(_timerStateHandle);
+		_strand->actor_timer()->cancel(_timerStateHandle);
 		if (_timerStateCb)
 		{
 			_timerStateCb->destroy();
@@ -3266,8 +3262,7 @@ void my_actor::suspend_timer()
 		_timerStateSuspend = true;
 		if (!_timerStateCompleted)
 		{
-			assert(_timer);
-			_timer->cancel(_timerStateHandle);
+			_strand->actor_timer()->cancel(_timerStateHandle);
 			_timerStateStampEnd = get_tick_us();
 			long long tt = _timerStateHandle._beginStamp + _timerStateTime;
 			if (_timerStateStampEnd > tt)
@@ -3285,10 +3280,9 @@ void my_actor::resume_timer()
 		_timerStateSuspend = false;
 		if (!_timerStateCompleted)
 		{
-			assert(_timer);
 			assert(_timerStateTime >= _timerStateStampEnd - _timerStateHandle._beginStamp);
 			_timerStateTime -= _timerStateStampEnd - _timerStateHandle._beginStamp;
-			_timerStateHandle = _timer->timeout(_timerStateTime, shared_from_this());
+			_timerStateHandle = _strand->actor_timer()->timeout(_timerStateTime, shared_from_this());
 		}
 	}
 }

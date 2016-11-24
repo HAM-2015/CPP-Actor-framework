@@ -17,7 +17,7 @@ void generator::uninstall()
 }
 
 generator::generator()
-: __ctx(NULL), _timer(NULL), __coNext(0), __lockStop(0), __readyQuit(false), __asyncSign(false)
+: __ctx(NULL), __coNext(0), __lockStop(0), __readyQuit(false), __asyncSign(false)
 #if (_DEBUG || DEBUG)
 , _isRun(false), __inside(false), __awaitSign(false), __sharedAwaitSign(false), __yieldSign(false)
 #endif
@@ -42,7 +42,7 @@ bool generator::_next()
 	{
 		if (_callStack.empty())
 		{
-			_timer->cancel(_timerHandle);
+			_strand->actor_timer()->cancel(_timerHandle);
 			clear_function(_handler);
 			if (_notify)
 			{
@@ -85,7 +85,6 @@ generator_handle generator::create(shared_strand strand, std::function<void(gene
 		p->~generator();
 	}, ref_count_alloc2<generator>(space, _genObjAlloc));
 	res->_weakThis = res;
-	res->_timer = strand->actor_timer();
 	res->_strand = std::move(strand);
 	res->_handler = std::move(handler);
 	res->_notify = std::move(notify);
@@ -322,7 +321,7 @@ void generator::_co_usleep(long long us)
 	assert(us > 0);
 	assert(_strand->running_in_this_thread());
 	assert(_timerHandle.is_null());
-	_timerHandle = _timer->timeout(us, _weakThis.lock());
+	_timerHandle = _strand->actor_timer()->timeout(us, _weakThis.lock());
 }
 
 void generator::_co_dead_sleep(long long ms)
@@ -334,7 +333,7 @@ void generator::_co_dead_usleep(long long us)
 {
 	assert(_strand->running_in_this_thread());
 	assert(_timerHandle.is_null());
-	_timerHandle = _timer->timeout(us, _weakThis.lock(), true);
+	_timerHandle = _strand->actor_timer()->timeout(us, _weakThis.lock(), true);
 }
 
 void generator::timeout_handler()

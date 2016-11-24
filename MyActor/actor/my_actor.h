@@ -8375,7 +8375,7 @@ private:
 		_timerStateCompleted = false;
 		_timerStateTime = (long long)ms * 1000;
 		_timerStateCb = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
-		_timerStateHandle = _timer->timeout(_timerStateTime, shared_from_this());
+		_timerStateHandle = _strand->actor_timer()->timeout(_timerStateTime, shared_from_this());
 	}
 
 	template <typename Handler>
@@ -8386,7 +8386,7 @@ private:
 		typedef wrap_timer_handler<RM_CREF(Handler)> wrap_type;
 		_timerStateCompleted = false;
 		_timerStateCb = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
-		_timerStateHandle = _timer->timeout(us, shared_from_this(), true);
+		_timerStateHandle = _strand->actor_timer()->timeout(us, shared_from_this(), true);
 		_timerStateTime = us > _timerStateHandle._beginStamp ? us - _timerStateHandle._beginStamp : 0;
 	}
 
@@ -8419,7 +8419,6 @@ private:
 	void* _alsVal;///<actor局部存储
 	actor_pull_type* _actorPull;///<Actor中断点恢复
 	actor_push_type* _actorPush;///<Actor中断点
-	ActorTimer_* _timer;///<定时器
 	wrap_timer_handler_face* _timerStateCb;///<定时器触发回调
 	size_t _actorKey;///<该Actor处理模块的全局唯一key
 	size_t _lockQuit;///<锁定当前Actor，如果当前接收到退出消息，暂时不退，等到解锁后退出

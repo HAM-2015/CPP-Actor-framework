@@ -19,25 +19,47 @@ struct __co_context_no_capture{};
 	struct co_context_tag {
 
 #define _co_end_context(__ctx__) \
-	co_self._lockThis();\
 	DEBUG_OPERATION(co_self.__inside = true);}\
 	struct co_context_tag* const __pCoContext = static_cast<struct co_context_tag*>(co_self.__ctx);\
 	struct co_context_tag& __coContext = *__pCoContext;\
 	struct co_context_tag& __ctx__ = *__pCoContext;\
-	int __coNext = 0;\
 	size_t __coSwitchTempVal = 0;\
 	bool __coSwitchFirstLoopSign = false;\
 	bool __coSwitchDefaultSign = false;\
 	bool __coSwitchPreSign = false;\
-	int __selectStep = 0;\
-	int __selectCaseStep = 0;\
 	bool __selectCaseDoSign = false;\
-	bool __yieldSwitch = false; {
+	bool __forYieldSwitch = false;\
+	int __selectCaseStep = 0;\
+	int __selectStep = 0;\
+	int __coNext = 0;
+
+#define _co_stop() \
+	auto __stop = [&co_self]{\
+	DEBUG_OPERATION(co_self.__inside = false);\
+	co_self._co_reset_shared_sign();\
+	struct co_context_tag* const pCtx = static_cast<struct co_context_tag*>(co_self.__ctx);\
+	if((void*)-1!=(void*)pCtx){delete pCtx;}\
+	co_self.__ctx = NULL;}
+
+#define _co_stop_dealloc(__dealloc__) \
+	auto __stop = [&co_self]{\
+	DEBUG_OPERATION(co_self.__inside = false);\
+	co_self._co_reset_shared_sign();\
+	struct co_context_tag* const pCtx = static_cast<struct co_context_tag*>(co_self.__ctx);\
+	if((void*)-1!=(void*)pCtx){pCtx->~co_context_tag(); __dealloc__(pCtx);}\
+	co_self.__ctx = NULL;}
+
+#define _co_stop_no_ctx() \
+	auto __stop = [&co_self]{\
+	DEBUG_OPERATION(co_self.__inside = false);\
+	co_self._co_reset_shared_sign();\
+	assert((void*)-1==(void*)co_self.__ctx);\
+	co_self.__ctx = NULL;}
 
 //结束generator函数体上下文定义
 #define co_end_context(__ctx__) };\
-	if (!co_self.__ctx){co_self.__ctx = -1==co_self.__coNext ? (void*)-1 : new co_context_tag();\
-	_co_end_context(__ctx__)
+	if (!co_self.__ctx){co_self._lockThis(); co_self.__ctx = -1==co_self.__coNext ? (void*)-1 : new co_context_tag();\
+	_co_end_context(__ctx__); _co_stop(); if(0){
 
 #define _cop(__p__) decltype(__p__)& __p__
 #define _co_capture0() co_context_tag()
@@ -55,25 +77,25 @@ struct __co_context_no_capture{};
 
 //结束generator函数体上下文定义，带内部变量初始化
 #define co_end_context_init(__ctx__, __capture__, ...) _co_capture __capture__:__VA_ARGS__{}};\
-	if (!co_self.__ctx){co_self.__ctx = -1==co_self.__coNext ? (void*)-1 : new co_context_tag __capture__;\
-	_co_end_context(__ctx__)
+	if (!co_self.__ctx){co_self._lockThis(); co_self.__ctx = -1==co_self.__coNext ? (void*)-1 : new co_context_tag __capture__;\
+	_co_end_context(__ctx__); _co_stop(); if(0){
 
 //在generator结束时，做最后状态清理，可以不用
 #define co_context_destroy ~co_context_tag()
 //没有上下文状态信息
 #define co_no_context co_begin_context};\
-	if (!co_self.__ctx){co_self.__ctx = (void*)-1;\
-	_co_end_context(__noctx)
+	if (!co_self.__ctx){co_self._lockThis(); co_self.__ctx = (void*)-1;\
+	_co_end_context(__noctx); _co_stop_no_ctx(); if(0){
 //
 #define co_context_space_size sizeof(co_context_tag)
 //
-#define co_end_context_alloc(__alloc__, __ctx__) };\
-	if (!co_self.__ctx){co_self.__ctx = -1==co_self.__coNext ? (void*)-1 : new(__alloc__)co_context_tag();\
-	_co_end_context(__ctx__)
+#define co_end_context_alloc(__alloc__, __dealloc__, __ctx__) };\
+	if (!co_self.__ctx){co_self._lockThis(); co_self.__ctx = -1==co_self.__coNext ? (void*)-1 : new(__alloc__)co_context_tag();\
+	_co_end_context(__ctx__); _co_stop_dealloc(__dealloc__); if(0){
 
-#define co_end_context_alloc_init(__alloc__, __ctx__, __capture__, ...) _co_capture __capture__:__VA_ARGS__{}};\
-	if (!co_self.__ctx){co_self.__ctx = -1==co_self.__coNext ? (void*)-1 : new(__alloc__)co_context_tag __capture__;\
-	_co_end_context(__ctx__)
+#define co_end_context_alloc_init(__alloc__, __dealloc__, __ctx__, __capture__, ...) _co_capture __capture__:__VA_ARGS__{}};\
+	if (!co_self.__ctx){co_self._lockThis(); co_self.__ctx = -1==co_self.__coNext ? (void*)-1 : new(__alloc__)co_context_tag __capture__;\
+	_co_end_context(__ctx__); _co_stop_dealloc(__dealloc__); if(0){
 
 #define co_check_stop do{if(-1==co_self.__coNext) co_stop;}while(0)
 
@@ -84,16 +106,7 @@ struct __co_context_no_capture{};
 	switch(__coNext) { case __COUNTER__/2:;
 
 //结束generator的代码区域
-#define co_end break;default:assert(false);}\
-	goto __stop; __stop:DEBUG_OPERATION(co_self.__inside = false);\
-	co_self._co_reset_shared_sign();\
-	if((void*)-1!=(void*)__pCoContext){delete __pCoContext;}\
-	co_self.__ctx = NULL; return;
-
-#define co_end_dealloc(__dealloc__) break;default:assert(false);}\
-	goto __stop; __stop:DEBUG_OPERATION(co_self.__inside = false);\
-	if((void*)-1!=(void*)__pCoContext){__pCoContext->~co_context_tag(); __dealloc__(__pCoContext);}\
-	co_self.__ctx = NULL; return;
+#define co_end break;default:assert(false);} co_stop;
 
 #define _co_yield do{\
 	assert(co_self.__inside);\
@@ -107,56 +120,56 @@ struct __co_context_no_capture{};
 //generator的yield原语
 #define co_yield \
 	assert(co_self.__inside);\
-	for (__yieldSwitch = false;;__yieldSwitch = true)\
-	if (__yieldSwitch) {_co_yield; break;}\
+	for (__forYieldSwitch = false;;__forYieldSwitch = true)\
+	if (__forYieldSwitch) {_co_yield; break;}\
 	else
 
 //generator异步回调接口
 #define co_async \
-	co_self.gen_strand()->wrap(std::bind([](generator_handle& host){\
+	co_strand->wrap(std::bind([](generator_handle& host){\
 	assert(host);\
 	if (!host->__ctx) return;\
 	generator* host_ = host->_revert_this(host);\
 	if (host_->__asyncSign) {host_->__asyncSign = false; host_->_next();}\
 	else {host_->__asyncSign = true;};\
-	}, std::move(co_self.async_this())))
+	}, std::move(co_async_this)))
 
 //generator可共享异步回调接口
 #define co_shared_async \
-	co_self.gen_strand()->wrap(std::bind([](generator_handle& host, shared_bool& sign){\
+	co_strand->wrap(std::bind([](generator_handle& host, shared_bool& sign){\
 	if (sign) return;\
 	generator* host_ = host.get();\
 	if (!host_->__ctx) return;\
 	if (host_->__asyncSign) {host_->__asyncSign = false; host_->_next();}\
 	else {host_->__asyncSign = true;};\
-	}, co_self.shared_this(), co_self.shared_async_sign()))
+	}, co_shared_this, co_async_sign))
 
 #define co_anext \
-	co_self.gen_strand()->wrap(std::bind([](generator_handle& host){\
+	co_strand->wrap(std::bind([](generator_handle& host){\
 	assert(host);\
 	host->_revert_this(host)->_next();\
-	}, std::move(co_self.shared_this())))
+	}, std::move(co_shared_this)))
 
 //带返回值的generator异步回调接口
-#define co_async_result(...) _co_async_result(std::move(co_self.async_this()), __VA_ARGS__)
-#define co_anext_result(...) _co_anext_result(std::move(co_self.shared_this()), __VA_ARGS__)
-#define co_async_result_(...) _co_async_same_result(std::move(co_self.async_this()), __VA_ARGS__)
-#define co_anext_result_(...) _co_anext_same_result(std::move(co_self.shared_this()), __VA_ARGS__)
-#define co_async_safe_result(...) _co_async_safe_result(std::move(co_self.async_this()), __VA_ARGS__)
-#define co_anext_safe_result(...) _co_anext_safe_result(std::move(co_self.shared_this()), __VA_ARGS__)
-#define co_async_safe_result_(...) _co_async_same_safe_result(std::move(co_self.async_this()), __VA_ARGS__)
-#define co_anext_safe_result_(...) _co_anext_same_safe_result(std::move(co_self.shared_this()), __VA_ARGS__)
+#define co_async_result(...) _co_async_result(std::move(co_async_this), __VA_ARGS__)
+#define co_anext_result(...) _co_anext_result(std::move(co_shared_this), __VA_ARGS__)
+#define co_async_result_(...) _co_async_same_result(std::move(co_async_this), __VA_ARGS__)
+#define co_anext_result_(...) _co_anext_same_result(std::move(co_shared_this), __VA_ARGS__)
+#define co_async_safe_result(...) _co_async_safe_result(std::move(co_async_this), __VA_ARGS__)
+#define co_anext_safe_result(...) _co_anext_safe_result(std::move(co_shared_this), __VA_ARGS__)
+#define co_async_safe_result_(...) _co_async_same_safe_result(std::move(co_async_this), __VA_ARGS__)
+#define co_anext_safe_result_(...) _co_anext_same_safe_result(std::move(co_shared_this), __VA_ARGS__)
 //带返回值的generator可共享异步回调接口
-#define co_shared_async_result(...) _co_shared_async_result(co_self.shared_this(), co_self.shared_async_sign(), __VA_ARGS__)
-#define co_shared_async_result_(...) _co_shared_async_same_result(co_self.shared_this(), co_self.shared_async_sign(), __VA_ARGS__)
-#define co_shared_async_safe_result(...) _co_shared_async_safe_result(co_self.shared_this(), co_self.shared_async_sign(), __VA_ARGS__)
-#define co_shared_async_safe_result_(...) _co_shared_async_same_safe_result(co_self.shared_this(), co_self.shared_async_sign(), __VA_ARGS__)
+#define co_shared_async_result(...) _co_shared_async_result(co_shared_this, co_async_sign, __VA_ARGS__)
+#define co_shared_async_result_(...) _co_shared_async_same_result(co_shared_this, co_async_sign, __VA_ARGS__)
+#define co_shared_async_safe_result(...) _co_shared_async_safe_result(co_shared_this, co_async_sign, __VA_ARGS__)
+#define co_shared_async_safe_result_(...) _co_shared_async_same_safe_result(co_shared_this, co_async_sign, __VA_ARGS__)
 
 //挂起generator，等待调度器下次触发
 #define co_tick do{\
 	assert(co_self.__inside);\
-	co_self.gen_strand()->next_tick(std::bind([](generator_handle& host){\
-	if(!host->__ctx)return; host->_revert_this(host)->_next(); }, std::move(co_self.shared_this()))); _co_yield;}while (0)
+	co_strand->next_tick(std::bind([](generator_handle& host){\
+	if(!host->__ctx)return; host->_revert_this(host)->_next(); }, std::move(co_shared_this))); _co_yield;}while (0)
 
 #define _co_await do{\
 	assert(co_self.__inside);\
@@ -177,28 +190,28 @@ struct __co_context_no_capture{};
 	assert(co_self.__inside);\
 	co_strand->over_timer()->timeout(__ms__, co_timer, wrap_bind_(std::bind([&](generator_handle& gen, shared_bool& sign){\
 	co_last_state = co_async_state::co_async_overtime;\
-	co_shared_async_next(gen, sign);}, co_self.shared_this(), co_self.shared_async_sign())));\
+	co_shared_async_next(gen, sign);}, co_shared_this, co_async_sign)));\
 	_co_await; co_strand->over_timer()->cancel(co_timer);\
 	}while (0)
 
 //generator await原语，与co_async之类使用
 #define co_await \
 	assert(co_self.__inside);\
-	for (__yieldSwitch = false;;__yieldSwitch = true)\
-	if (__yieldSwitch) {_co_await; break;}\
+	for (__forYieldSwitch = false;;__forYieldSwitch = true)\
+	if (__forYieldSwitch) {_co_await; break;}\
 	else
 
 #define co_timed_await(__ms__, __handler__) \
 	assert(co_self.__inside);\
-	for (__yieldSwitch = false;;__yieldSwitch = true)\
-	if (__yieldSwitch) {_co_timed_await(__ms__, __handler__); break;}\
+	for (__forYieldSwitch = false;;__forYieldSwitch = true)\
+	if (__forYieldSwitch) {_co_timed_await(__ms__, __handler__); break;}\
 	else
 
 #define co_timed_await2(__ms__) \
 	assert(co_self.__inside);\
 	co_last_state = co_async_state::co_async_ok;\
-	for (__yieldSwitch = false;;__yieldSwitch = true)\
-	if (__yieldSwitch) {_co_timed_await2(__ms__); break;}\
+	for (__forYieldSwitch = false;;__forYieldSwitch = true)\
+	if (__forYieldSwitch) {_co_timed_await2(__ms__); break;}\
 	else
 
 #define co_next_(__host__) do{\
@@ -236,8 +249,8 @@ struct __co_context_no_capture{};
 #define co_call_ \
 	assert(co_self.__inside);\
 	co_check_stop;\
-	for (__yieldSwitch = false;;__yieldSwitch = true)\
-	if (__yieldSwitch) {if (-1 != co_self.__coNext){co_self.__coNext = -2;}\
+	for (__forYieldSwitch = false;;__forYieldSwitch = true)\
+	if (__forYieldSwitch) {if (-1 != co_self.__coNext){co_self.__coNext = -2;}\
 	return; case (__COUNTER__+1)/2:; break;}\
 	else CoCall_(co_self, __COUNTER__/2)-
 
@@ -247,8 +260,8 @@ struct __co_context_no_capture{};
 #define co_st_call_(__strand__) \
 	assert(co_self.__inside);\
 	co_check_stop; co_lock_stop;\
-	for (__yieldSwitch = false;;__yieldSwitch = true)\
-	if (__yieldSwitch) {_co_await; co_unlock_stop; break;}\
+	for (__forYieldSwitch = false;;__forYieldSwitch = true)\
+	if (__forYieldSwitch) {_co_await; co_unlock_stop; break;}\
 	else CoStCall(__strand__, co_self)-
 
 #define co_st_call(__strand__, ...) co_st_call_(__strand__) _co_call_bind(__VA_ARGS__)
@@ -257,7 +270,7 @@ struct __co_context_no_capture{};
 #define co_sleep_(__th__, __ms__) do{\
 	assert(co_self.__inside);\
 	co_strand->over_timer()->timeout(__ms__, __th__, wrap_bind_(std::bind([](generator_handle& host){\
-	if(!host->__ctx)return; host->_revert_this(host)->_next(); }, std::move(co_self.shared_this())))); _co_yield; }while (0)
+	if(!host->__ctx)return; host->_revert_this(host)->_next(); }, std::move(co_shared_this)))); _co_yield; }while (0)
 
 //延时
 #define co_sleep(__ms__) do{co_self._co_sleep(__ms__); _co_yield;}while (0)
@@ -272,7 +285,7 @@ struct __co_context_no_capture{};
 //开始运行一个generator
 #define co_go(...) CoGo_(__VA_ARGS__)-
 //结束当前generator的运行
-#define co_stop do{goto __stop;} while(0)
+#define co_stop do{__stop(); return;} while(0)
 //锁定外部generator的stop操作
 #define co_lock_stop do{\
 	assert(co_self.__inside);\
@@ -289,6 +302,12 @@ struct __co_context_no_capture{};
 	}while (0)
 //当前generator调度器
 #define co_strand co_self.gen_strand()
+//单线回调时使用
+#define co_shared_this co_self.shared_this()
+//多线回调时使用
+#define co_async_this co_self.async_this()
+//多线回调时使用标记
+#define co_async_sign co_self.shared_async_sign()
 
 //发送一个任务到另一个strand中执行，执行完成后接着下一行
 #define co_begin_send(__strand__) {if (co_self._co_send(__strand__, [&]{
@@ -389,22 +408,22 @@ struct __co_context_no_capture{};
 
 #define _co_mutex_opt_guard(__mutex__, __lock_, __unlock__) \
 	co_lock_stop; __lock_(__mutex__);\
-	for (__yieldSwitch = false;;__yieldSwitch = true)\
-	if (__yieldSwitch) {__unlock__(__mutex__); co_unlock_stop; break;}\
+	for (__forYieldSwitch = false;;__forYieldSwitch = true)\
+	if (__forYieldSwitch) {__unlock__(__mutex__); co_unlock_stop; break;}\
 	else
 
 #define _co_mutex_try_opt_guard(__mutex__, __lock_, __unlock__) \
 	co_lock_stop; __lock_(__mutex__);\
 	if (!co_last_state_is_ok) co_unlock_stop;\
-	for (__yieldSwitch = false; co_last_state_is_ok; __yieldSwitch = true, co_last_state = co_async_state::co_async_ok)\
-	if (__yieldSwitch) {__unlock__(__mutex__); co_unlock_stop; break;}\
+	for (__forYieldSwitch = false; co_last_state_is_ok; __forYieldSwitch = true, co_last_state = co_async_state::co_async_ok)\
+	if (__forYieldSwitch) {__unlock__(__mutex__); co_unlock_stop; break;}\
 	else
 
 #define _co_mutex_timed_opt_guard(__mutex__, __ms__, __lock_, __unlock__) \
 	co_lock_stop; __lock_(__mutex__, __ms__);\
 	if (!co_last_state_is_ok) co_unlock_stop;\
-	for (__yieldSwitch = false; co_last_state_is_ok; __yieldSwitch = true, co_last_state = co_async_state::co_async_ok)\
-	if (__yieldSwitch) {__unlock__(__mutex__); co_unlock_stop; break;}\
+	for (__forYieldSwitch = false; co_last_state_is_ok; __forYieldSwitch = true, co_last_state = co_async_state::co_async_ok)\
+	if (__forYieldSwitch) {__unlock__(__mutex__); co_unlock_stop; break;}\
 	else
 
 #define co_mutex_lock_guard(__mutex__) _co_mutex_opt_guard(__mutex__, co_mutex_lock, co_mutex_unlock)
@@ -623,7 +642,6 @@ private:
 	std::function<void()> _notify;
 	msg_queue<call_stack_pck> _callStack;
 	shared_strand _strand;
-	ActorTimer_* _timer;
 	ActorTimer_::timer_handle _timerHandle;
 	DEBUG_OPERATION(bool _isRun);
 	static mem_alloc_base* _genObjAlloc;
@@ -1463,6 +1481,30 @@ struct CoOtherReceiver_
 	Chan& _chan;
 };
 
+template <typename Chan>
+struct CoWrapPost_
+{
+	template <typename... Args>
+	void operator()(Args&&... msg)
+	{
+		_chan.post(std::forward<Args>(msg)...);
+	}
+
+	Chan& _chan;
+};
+
+template <typename Chan>
+struct CoWrapTryPush_
+{
+	template <typename... Args>
+	void operator()(Args&&... msg)
+	{
+		_chan.try_push(any_handler(), std::forward<Args>(msg)...);
+	}
+
+	Chan& _chan;
+};
+
 /*!
 @brief 异步消息队列
 */
@@ -1689,6 +1731,11 @@ public:
 	CoOtherReceiver_<co_msg_buffer<Types...>> other_receiver()
 	{
 		return CoOtherReceiver_<co_msg_buffer<Types...>>{*this};
+	}
+
+	CoWrapPost_<co_msg_buffer<Types...>> wrap_post()
+	{
+		return CoWrapPost_<co_msg_buffer<Types...>>{*this};
 	}
 private:
 	template <typename Handler>
@@ -2036,8 +2083,8 @@ public:
 	co_msg_buffer(const shared_strand& strand)
 		:co_msg_buffer<void_type>(strand) {}
 public:
-	void post() { push(any_handler()); }
-	template <typename Notify> void push(Notify&& ntf, void_type p = void_type()){ co_msg_buffer<void_type>::push(std::forward<Notify>(ntf), void_type()); }
+	void post(void_type = void_type()) { push(any_handler()); }
+	template <typename Notify> void push(Notify&& ntf, void_type = void_type()){ co_msg_buffer<void_type>::push(std::forward<Notify>(ntf), void_type()); }
 };
 
 template <>
@@ -2065,12 +2112,6 @@ public:
 		assert(_popWait.empty());
 	}
 public:
-	template <typename... Args>
-	void post(Args&&... msg)
-	{
-		push(any_handler(), std::forward<Args>(msg)...);
-	}
-
 	template <typename Notify, typename... Args>
 	void push(Notify&& ntf, Args&&... msg)
 	{
@@ -2362,6 +2403,11 @@ public:
 	CoOtherReceiver_<co_channel<Types...>> other_receiver()
 	{
 		return CoOtherReceiver_<co_channel<Types...>>{*this};
+	}
+
+	CoWrapTryPush_<co_channel<Types...>> wrap_try_push()
+	{
+		return CoWrapTryPush_<co_channel<Types...>>{*this};
 	}
 private:
 	template <typename Handler>
@@ -2939,11 +2985,10 @@ public:
 	co_channel(const shared_strand& strand, size_t buffLength = 1)
 		:co_channel<void_type>(strand, buffLength) {}
 public:
-	void post() { push(any_handler()); }
-	template <typename Notify> void push(Notify&& ntf, void_type p = void_type()){ co_channel<void_type>::push(std::forward<Notify>(ntf), void_type()); }
-	template <typename Notify> void try_push(Notify&& ntf, void_type p = void_type()){ co_channel<void_type>::try_push(std::forward<Notify>(ntf), void_type()); }
-	template <typename Notify> void timed_push(int ms, Notify&& ntf, void_type p = void_type()){ co_channel<void_type>::timed_push(ms, std::forward<Notify>(ntf), void_type()); }
-	template <typename Notify> void timed_push(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, void_type p = void_type()){ co_channel<void_type>::timed_push(timer, ms, std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void push(Notify&& ntf, void_type = void_type()){ co_channel<void_type>::push(std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void try_push(Notify&& ntf, void_type = void_type()){ co_channel<void_type>::try_push(std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void timed_push(int ms, Notify&& ntf, void_type = void_type()){ co_channel<void_type>::timed_push(ms, std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void timed_push(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, void_type = void_type()){ co_channel<void_type>::timed_push(timer, ms, std::forward<Notify>(ntf), void_type()); }
 };
 
 template <>
@@ -2971,12 +3016,6 @@ public:
 		assert(_popWait.empty());
 	}
 public:
-	template <typename... Args>
-	void post(Args&&... msg)
-	{
-		push(any_handler(), std::forward<Args>(msg)...);
-	}
-
 	template <typename Notify, typename... Args>
 	void push(Notify&& ntf, Args&&... msg)
 	{
@@ -3268,6 +3307,11 @@ public:
 	CoOtherReceiver_<co_nil_channel<Types...>> other_receiver()
 	{
 		return CoOtherReceiver_<co_nil_channel<Types...>>{*this};
+	}
+
+	CoWrapTryPush_<co_nil_channel<Types...>> wrap_try_push()
+	{
+		return CoWrapTryPush_<co_nil_channel<Types...>>{*this};
 	}
 private:
 	template <typename Handler>
@@ -3879,11 +3923,10 @@ public:
 	co_nil_channel(const shared_strand& strand)
 		:co_nil_channel<void_type>(strand) {}
 public:
-	void post() { push(any_handler()); }
-	template <typename Notify> void push(Notify&& ntf, void_type p = void_type()){ co_nil_channel<void_type>::push(std::forward<Notify>(ntf), void_type()); }
-	template <typename Notify> void try_push(Notify&& ntf, void_type p = void_type()){ co_nil_channel<void_type>::try_push(std::forward<Notify>(ntf), void_type()); }
-	template <typename Notify> void timed_push(int ms, Notify&& ntf, void_type p = void_type()){ co_nil_channel<void_type>::timed_push(ms, std::forward<Notify>(ntf), void_type()); }
-	template <typename Notify> void timed_push(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, void_type p = void_type()){ co_nil_channel<void_type>::timed_push(timer, ms, std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void push(Notify&& ntf, void_type = void_type()){ co_nil_channel<void_type>::push(std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void try_push(Notify&& ntf, void_type = void_type()){ co_nil_channel<void_type>::try_push(std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void timed_push(int ms, Notify&& ntf, void_type = void_type()){ co_nil_channel<void_type>::timed_push(ms, std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void timed_push(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, void_type = void_type()){ co_nil_channel<void_type>::timed_push(timer, ms, std::forward<Notify>(ntf), void_type()); }
 };
 
 template <>
@@ -4032,12 +4075,6 @@ public:
 		assert(_waitQueue.empty());
 	}
 public:
-	template <typename... Args>
-	void post(Args&&... msg)
-	{
-		push(any_handler(), std::forward<Args>(msg)...);
-	}
-
 	template <typename Notify, typename... Args>
 	void push(Notify&& ntf, Args&&... msg)
 	{
@@ -4731,7 +4768,6 @@ class co_csp_channel<void_type(Types...)> : public co_csp_channel<void_type1(Typ
 public:
 	co_csp_channel(const shared_strand& strand) :parent(strand) {}
 public:
-	template <typename... Args> void post(Args&&... msg) { push(any_handler(), std::forward<Args>(msg)...); }
 	template <typename Notify, typename... Args> void push(Notify&& ntf, Args&&... msg){ parent::push(push_notify<RM_CREF(Notify)>(bool(), ntf), std::forward<Args>(msg)...); }
 	template <typename Notify, typename... Args> void try_push(Notify&& ntf, Args&&... msg){ parent::try_push(push_notify<RM_CREF(Notify)>(bool(), ntf), std::forward<Args>(msg)...); }
 	template <typename Notify, typename... Args> void timed_push(int ms, Notify&& ntf, Args&&... msg){ parent::timed_push(ms, push_notify<RM_CREF(Notify)>(bool(), ntf), std::forward<Args>(msg)...); }
