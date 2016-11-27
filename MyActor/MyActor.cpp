@@ -149,14 +149,34 @@ void csp_test()
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [](my_actor* self)
 	{
 		csp_channel<int(move_test, bool)> csp(self->self_strand());
+		co_go(self->self_strand())[&](co_generator)
+		{
+			co_begin_context;
+			int i;
+			bool b;
+			move_test mt;
+			csp_result<int> res;
+			co_use_state;
+			co_end_context(ctx);
+			
+			co_begin;
+			for (ctx.i = 0; ctx.i < 3; ctx.i++)
+			{
+				co_sleep(1000);
+				co_csp_io(csp, ctx.res) >> co_chan_multi(ctx.mt, ctx.b);
+				trace_comma("csp msg", ctx.mt, "generator", ctx.b);
+				ctx.res.return_(-ctx.i);
+			}
+			co_end;
+		};
 		child_handle ch1 = self->create_child([&](my_actor* self)
 		{
-			for (int i = 0; i < 6; i++)
+			for (int i = 0; i < 3; i++)
 			{
-				csp.wait(self, [&](move_test& msg, bool rval)->int
+				csp.wait(self, [&](move_test& msg, bool b)->int
 				{
 					self->sleep(1000);
-					trace_comma(self->self_id(), "csp msg", msg, "generator", rval);
+					trace_comma(self->self_id(), "csp msg", msg, "generator", b);
 					return -i;
 				});
 			}
@@ -166,8 +186,6 @@ void csp_test()
 			co_begin_context;
 			int i;
 			int res;
-			move_test mt;
-			bool bl;
 			co_use_state;
 			co_end_context(ctx);
 			
@@ -175,7 +193,7 @@ void csp_test()
 			for (ctx.i = 0; ctx.i < 3; ctx.i++)
 			{
 				co_sleep(100);
-				co_csp_send(csp, ctx.res) co_chan_multi(move_test(ctx.i), true);
+				co_csp_io(csp, ctx.res) << co_chan_multi(move_test(ctx.i), true);
 				trace_comma("csp return ", ctx.res);
 			}
 			co_end;
@@ -1002,6 +1020,78 @@ void co_perfor_test()
 	trace_line("end co_perfor_test");
 }
 
+void co_convar_test()
+{
+	trace_line("begin co_convar_test");
+	io_engine ios;
+	ios.run();
+	bool sign = false;
+	bool over = false;
+	co_mutex mutex(boost_strand::create(ios));
+	co_condition_variable conVar(boost_strand::create(ios));
+
+	co_go(ios)[&](co_generator)
+	{
+		co_begin_context;
+		int i;
+		co_use_id;
+		co_end_context(ctx);
+
+		co_begin;
+		for (ctx.i = 0; ctx.i < 3; ctx.i++)
+		{
+			co_sleep(500);
+			co_mutex_lock_guard(mutex)
+			{
+				co_sleep(500);
+				sign = true;
+				trace_line("wait notify");
+				co_convar_wait(conVar, mutex);
+				trace_line("notified");
+			}
+		}
+		co_mutex_lock_guard(mutex)
+		{
+			over = true;
+		}
+		co_end;
+	};
+	co_go(ios)[&](co_generator)
+	{
+		co_begin_context;
+		int i;
+		bool check;
+		co_use_id;
+		co_end_context(ctx);
+
+		co_begin;
+		ctx.check = true;
+		while (ctx.check)
+		{
+			co_sleep(600);
+			co_mutex_lock_guard(mutex)
+			{
+				if (!over)
+				{
+					if (sign)
+					{
+						sign = false;
+						conVar.notify_one();
+					}
+				}
+				else
+				{
+					ctx.check = false;
+				}
+			}
+		}
+		co_end;
+	};
+
+	ios.stop();
+	trace_line("end co_convar_test");
+}
+
 void co_mutex_test()
 {
 	trace_line("begin co_mutex_test");
@@ -1258,6 +1348,8 @@ int main(int argc, char *argv[])
 	co_select_msg_test();
 	trace("\n");
 	co_mutex_test();
+	trace("\n");
+	co_convar_test();
 	trace("\n");
 	co_perfor_test();
 	trace("\n");

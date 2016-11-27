@@ -423,6 +423,33 @@ inline void clear_function(std::function<R(Args...)>& f)
 	f = std::function<R(Args...)>();
 }
 
+template <typename T>
+struct ForwardCopy_
+{
+	typedef T&& type;
+};
+
+template <typename T>
+struct ForwardCopy_<T&>
+{
+	typedef T type;
+};
+
+template <typename T>
+struct ForwardCopy_<const T&>
+{
+	typedef T type;
+};
+
+/*!
+@brief 将左值复制一份，右值不动
+*/
+template <typename T>
+auto forward_copy(T&& p)->typename ForwardCopy_<T>::type
+{
+	return (T&&)p;
+}
+
 #ifdef _MSC_VER
 #ifndef snprintf
 #define snprintf sprintf_s

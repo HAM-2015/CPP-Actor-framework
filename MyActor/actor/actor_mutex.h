@@ -80,11 +80,13 @@ private:
 };
 //////////////////////////////////////////////////////////////////////////
 
+class actor_condition_variable;
 /*!
 @brief 在一定范围内锁定mutex，同时运行的Actor也会被锁定强制退出
 */
 class actor_lock_guard
 {
+	friend actor_condition_variable;
 public:
 	actor_lock_guard(actor_mutex& amutex, my_actor* host);
 	~actor_lock_guard();
@@ -236,5 +238,27 @@ private:
 	my_actor* _host;
 	bool _isUnlock;
 	NONE_COPY(actor_shared_lock)
+};
+//////////////////////////////////////////////////////////////////////////
+
+/*!
+@brief 条件变量
+*/
+class actor_condition_variable
+{
+public:
+	actor_condition_variable(const shared_strand& strand);
+	~actor_condition_variable();
+public:
+	void wait(my_actor* host, actor_lock_guard& lg);
+	void wait(my_actor* host, actor_mutex& mtx);
+	void wait(my_actor* host, co_mutex& mtx);
+	bool timed_wait(my_actor* host, actor_lock_guard& lg, int ms);
+	bool timed_wait(my_actor* host, actor_mutex& mtx, int ms);
+	bool timed_wait(my_actor* host, co_mutex& mtx, int ms);
+	void notify_one();
+	void notify_all();
+private:
+	co_condition_variable _conVar;
 };
 #endif

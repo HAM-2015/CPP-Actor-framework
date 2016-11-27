@@ -73,9 +73,10 @@ bool actor_mutex::timed_lock(int ms, my_actor* host)
 {
 	host->assert_enter();
 	host->lock_quit();
+	overlap_timer::timer_handle timer;
 	co_async_state state = host->trig<co_async_state>([&](trig_once_notifer<co_async_state>&& ntf)
 	{
-		_mutex.timed_lock(host->self_id(), ms, std::move(ntf));
+		_mutex.timed_lock(timer, host->self_id(), ms, std::move(ntf));
 	});
 	host->unlock_quit();
 	return co_async_state::co_async_ok == state;
@@ -85,9 +86,10 @@ bool actor_mutex::timed_lock(int ms, my_actor* host, wrap_local_handler_face<voi
 {
 	host->assert_enter();
 	host->lock_quit();
+	overlap_timer::timer_handle timer;
 	co_async_state state = host->trig<co_async_state>([&](trig_once_notifer<co_async_state>&& ntf)
 	{
-		_mutex.timed_lock(host->self_id(), ms, std::move(ntf), wrap_ref_handler(lockNtf));
+		_mutex.timed_lock(timer, host->self_id(), ms, std::move(ntf), wrap_ref_handler(lockNtf));
 	});
 	host->unlock_quit();
 	return co_async_state::co_async_ok == state;
@@ -217,9 +219,10 @@ bool actor_shared_mutex::timed_lock(int ms, my_actor* host)
 {
 	host->assert_enter();
 	host->lock_quit();
+	overlap_timer::timer_handle timer;
 	co_async_state state = host->trig<co_async_state>([&](trig_once_notifer<co_async_state>&& ntf)
 	{
-		_mutex.timed_lock(host->self_id(), ms, std::move(ntf));
+		_mutex.timed_lock(timer, host->self_id(), ms, std::move(ntf));
 	});
 	host->unlock_quit();
 	return co_async_state::co_async_ok == state;
@@ -229,9 +232,10 @@ bool actor_shared_mutex::timed_lock(int ms, my_actor* host, wrap_local_handler_f
 {
 	host->assert_enter();
 	host->lock_quit();
+	overlap_timer::timer_handle timer;
 	co_async_state state = host->trig<co_async_state>([&](trig_once_notifer<co_async_state>&& ntf)
 	{
-		_mutex.timed_lock(host->self_id(), ms, std::move(ntf), wrap_ref_handler(lockNtf));
+		_mutex.timed_lock(timer, host->self_id(), ms, std::move(ntf), wrap_ref_handler(lockNtf));
 	});
 	host->unlock_quit();
 	return co_async_state::co_async_ok == state;
@@ -275,9 +279,10 @@ bool actor_shared_mutex::timed_lock_shared(int ms, my_actor* host)
 {
 	host->assert_enter();
 	host->lock_quit();
+	overlap_timer::timer_handle timer;
 	co_async_state state = host->trig<co_async_state>([&](trig_once_notifer<co_async_state>&& ntf)
 	{
-		_mutex.timed_lock_shared(host->self_id(), ms, std::move(ntf));
+		_mutex.timed_lock_shared(timer, host->self_id(), ms, std::move(ntf));
 	});
 	host->unlock_quit();
 	return co_async_state::co_async_ok == state;
@@ -287,9 +292,10 @@ bool actor_shared_mutex::timed_lock_shared(int ms, my_actor* host, wrap_local_ha
 {
 	host->assert_enter();
 	host->lock_quit();
+	overlap_timer::timer_handle timer;
 	co_async_state state = host->trig<co_async_state>([&](trig_once_notifer<co_async_state>&& ntf)
 	{
-		_mutex.timed_lock_shared(host->self_id(), ms, std::move(ntf), wrap_ref_handler(lockNtf));
+		_mutex.timed_lock_shared(timer, host->self_id(), ms, std::move(ntf), wrap_ref_handler(lockNtf));
 	});
 	host->unlock_quit();
 	return co_async_state::co_async_ok == state;
@@ -452,4 +458,66 @@ void actor_shared_lock::lock_shared()
 {
 	_isUnlock = false;
 	_amutex.lock_shared(_host);
+}
+//////////////////////////////////////////////////////////////////////////
+
+actor_condition_variable::actor_condition_variable(const shared_strand& strand)
+:_conVar(strand) {}
+
+actor_condition_variable::~actor_condition_variable()
+{
+}
+
+void actor_condition_variable::wait(my_actor* host, actor_lock_guard& lg)
+{
+	wait(host, lg._amutex);
+}
+
+void actor_condition_variable::wait(my_actor* host, actor_mutex& mtx)
+{
+	wait(host, mtx.comutex());
+}
+
+void actor_condition_variable::wait(my_actor* host, co_mutex& mtx)
+{
+	host->assert_enter();
+	host->lock_quit();
+	host->trig([&](trig_once_notifer<>&& ntf)
+	{
+		_conVar.wait(host->self_id(), mtx, std::move(ntf));
+	});
+	host->unlock_quit();
+}
+
+bool actor_condition_variable::timed_wait(my_actor* host, actor_lock_guard& lg, int ms)
+{
+	return timed_wait(host, lg._amutex, ms);
+}
+
+bool actor_condition_variable::timed_wait(my_actor* host, actor_mutex& mtx, int ms)
+{
+	return timed_wait(host, mtx.comutex(), ms);
+}
+
+bool actor_condition_variable::timed_wait(my_actor* host, co_mutex& mtx, int ms)
+{
+	host->assert_enter();
+	host->lock_quit();
+	overlap_timer::timer_handle timer;
+	co_async_state state = host->trig<co_async_state>([&](trig_once_notifer<co_async_state>&& ntf)
+	{
+		_conVar.timed_wait(timer, host->self_id(), ms, mtx, std::move(ntf));
+	});
+	host->unlock_quit();
+	return co_async_state::co_async_ok == state;
+}
+
+void actor_condition_variable::notify_one()
+{
+	_conVar.notify_one();
+}
+
+void actor_condition_variable::notify_all()
+{
+	_conVar.notify_all();
 }

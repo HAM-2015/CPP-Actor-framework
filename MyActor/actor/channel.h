@@ -36,10 +36,10 @@ public:
 	}
 
 	template <typename... Args>
-	void take(my_actor* host, Args&... args)
+	void take(my_actor* host, Args&... msg)
 	{
 		co_async_state state = co_async_state::co_async_undefined;
-		parent::pop(host->make_same_context(state, args...));
+		parent::pop(host->make_same_context(state, msg...));
 		if (co_async_state::co_async_ok != state)
 		{
 			throw channel_io_exception(state);
@@ -47,11 +47,11 @@ public:
 	}
 
 	template <typename... Args>
-	bool try_take(my_actor* host, Args&... args)
+	bool try_take(my_actor* host, Args&... msg)
 	{
 		my_actor::quit_guard qg(host);
 		co_async_state state = co_async_state::co_async_undefined;
-		parent::try_pop(host->make_same_context(state, args...));
+		parent::try_pop(host->make_same_context(state, msg...));
 		if (co_async_state::co_async_ok == state)
 		{
 			return true;
@@ -64,11 +64,11 @@ public:
 	}
 
 	template <typename... Args>
-	bool timed_take(int ms, my_actor* host, Args&... args)
+	bool timed_take(int ms, my_actor* host, Args&... msg)
 	{
 		co_async_state state = co_async_state::co_async_undefined;
 		overlap_timer::timer_handle timer;
-		parent::timed_pop(timer, ms, host->make_same_context(state, args...));
+		parent::timed_pop(timer, ms, host->make_same_context(state, msg...));
 		if (co_async_state::co_async_ok == state)
 		{
 			return true;
@@ -362,12 +362,12 @@ class chan_connector
 	struct connector_handler
 	{
 		template <typename... Args>
-		void operator()(co_async_state state, Args&&... args)
+		void operator()(co_async_state state, Args&&... msg)
 		{
 			assert(co_async_state::co_async_ok == state);
 			if (!_connector._connSign2._disableAppend)
 			{
-				_connector._chan2.append_push_notify(wrap_bind_(std::bind([](co_async_state st, chan_connector<Chan1, Chan2>& _connector, RM_CREF(Args)&... args)
+				_connector._chan2.append_push_notify(wrap_bind_(std::bind([](co_async_state st, chan_connector<Chan1, Chan2>& _connector, RM_CREF(Args)&... msg)
 				{
 					if (co_async_state::co_async_ok == st)
 					{
@@ -378,9 +378,9 @@ class chan_connector
 							{
 								_connector.connector();
 							}
-						}, __1, std::ref(_connector))), std::move(args)...);
+						}, __1, std::ref(_connector))), std::move(msg)...);
 					}
-				}, __1, std::ref(_connector), std::forward<Args>(args)...)), _connector._connSign2);
+				}, __1, std::ref(_connector), std::forward<Args>(msg)...)), _connector._connSign2);
 			}
 		}
 
