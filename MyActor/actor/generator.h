@@ -340,11 +340,11 @@ struct __co_context_no_capture{};
 	}while (0)
 //当前generator调度器
 #define co_strand co_self.gen_strand()
-//单线回调时使用
+//单线回调时与co_yield配合使用，多线调度时与co_async_sign，co_await配合使用
 #define co_shared_this co_self.shared_this()
-//多线回调时使用
+//与co_await回调时配合使用
 #define co_async_this co_self.async_this()
-//多线回调时使用标记
+//多线回调时使用标记，与co_shared_this配合
 #define co_async_sign co_self.shared_async_sign()
 
 //发送一个任务到另一个strand中执行，执行完成后接着下一行

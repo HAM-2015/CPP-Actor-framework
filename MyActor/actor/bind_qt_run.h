@@ -24,11 +24,11 @@
 #define CO_BEGIN_RUN_IN_QT_UI CO_BEGIN_RUN_IN_QT_UI_AT(this)
 //结束在qt-ui线程中执行的一段连续逻辑，只有当这段逻辑执行完毕后才会执行END后续代码
 #define END_RUN_IN_QT_UI });} while (false)
-#define CO_END_RUN_IN_QT_UI });} while (false)
+#define CO_END_RUN_IN_QT_UI }); _co_await;} while (false)
 //////////////////////////////////////////////////////////////////////////
 //在Actor中，嵌入一段在qt-ui线程中执行的语句
 #define run_in_qt_ui_at(__this_ui__, __host__, ...)  do {(__this_ui__)->send(__host__, [&]{ option_pck(__VA_ARGS__) });} while (false)
-#define co_run_in_qt_ui_at(__this_ui__, ...)  do {(__this_ui__)->co_send(co_self, [&]{ option_pck(__VA_ARGS__) });} while (false)
+#define co_run_in_qt_ui_at(__this_ui__, ...)  do {(__this_ui__)->co_send(co_self, [&]{ option_pck(__VA_ARGS__) }); _co_await;} while (false)
 
 //在Actor中，嵌入一段在qt-ui线程中执行的语句
 #define run_in_qt_ui(...) run_in_qt_ui_at(this, self, __VA_ARGS__)
@@ -72,7 +72,7 @@
 #define __CO_CLOSE_QT_UI_AT(__this_ui__, __frame__, __delete__) do {\
 	co_lock_stop;\
 	assert(!(__this_ui__)->run_in_ui_thread());\
-	co_call_([&](co_generator){\
+	co_call([&](co_generator){\
 		co_begin_context;\
 		bool __inside_loop;\
 		co_end_context(_ctx);\
@@ -108,42 +108,43 @@
 #define co_close_qt_ui_destroy_at(__this_ui__, __frame__) __CO_CLOSE_QT_UI_AT(__this_ui__, __frame__, __DESTROY_FRAME)
 #define co_close_qt_ui_destroy(__frame__) co_close_qt_ui_destroy_at(this, __frame__)
 
-#define __IN_CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __delete__) do {\
+#define __CLOSE_IN_QT_UI_AT(__this_ui__, __host__, __frame__, __delete__) do {\
 	my_actor::quit_guard qg(__host__);\
 	assert((__this_ui__)->run_in_ui_thread());\
 	assert(!(__frame__)->running_in_this_thread());\
 	if (!(__frame__)->is_wait_close())\
 		(__frame__)->close();\
 	while ((__frame__)->is_wait_close())\
-		(__host__)->yield();\
+		if ((__this_ui__)->is_wait_close()){(__host__)->usleep(1);}else{(__host__)->yield();}\
 	__delete__(__frame__);\
 } while (false)
 
-#define __CO_IN_CLOSE_QT_UI_AT(__this_ui__, __frame__, __delete__) do {\
+#define __CO_CLOSE_IN_QT_UI_AT(__this_ui__, __frame__, __delete__) do {\
 	co_lock_stop;\
 	assert((__this_ui__)->run_in_ui_thread());\
 	assert(!(__frame__)->running_in_this_thread());\
 	if (!(__frame__)->is_wait_close())\
 		(__frame__)->close();\
 	while ((__frame__)->is_wait_close())\
-		co_tick;\
+		if ((__this_ui__)->is_wait_close()){co_usleep(1);}else{co_tick;}\
+	__delete__(__frame__);\
 	co_unlock_stop;\
 } while (false)
 
 //在UI线程Actor中，关闭一个qt-ui对象
-#define in_close_qt_ui_at(__this_ui__, __host__, __frame__) __IN_CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __NO_DELETE_FRAME)
-#define in_close_qt_ui(__frame__) in_close_qt_ui_at(this, self, __frame__)
-#define in_close_qt_ui_delete_at(__this_ui__, __host__, __frame__) __IN_CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __DELETE_FRAME)
-#define in_close_qt_ui_delete(__frame__) in_close_qt_ui_delete_at(this, self, __frame__)
-#define in_close_qt_ui_destroy_at(__this_ui__, __host__, __frame__) __IN_CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __DESTROY_FRAME)
-#define in_close_qt_ui_destroy(__frame__) in_close_qt_ui_destroy_at(this, self, __frame__)
+#define close_in_qt_ui_at(__this_ui__, __host__, __frame__) __CLOSE_IN_QT_UI_AT(__this_ui__, __host__, __frame__, __NO_DELETE_FRAME)
+#define close_in_qt_ui(__frame__) close_in_qt_ui_at(this, self, __frame__)
+#define close_in_qt_ui_delete_at(__this_ui__, __host__, __frame__) __CLOSE_IN_QT_UI_AT(__this_ui__, __host__, __frame__, __DELETE_FRAME)
+#define close_in_qt_ui_delete(__frame__) close_in_qt_ui_delete_at(this, self, __frame__)
+#define close_in_qt_ui_destroy_at(__this_ui__, __host__, __frame__) __CLOSE_IN_QT_UI_AT(__this_ui__, __host__, __frame__, __DESTROY_FRAME)
+#define close_in_qt_ui_destroy(__frame__) close_in_qt_ui_destroy_at(this, self, __frame__)
 
-#define co_in_close_qt_ui_at(__this_ui__, __frame__) __CO_IN_CLOSE_QT_UI_AT(__this_ui__, __frame__, __NO_DELETE_FRAME)
-#define co_in_close_qt_ui(__frame__) co_in_close_qt_ui_at(this, __frame__)
-#define co_in_close_qt_ui_delete_at(__this_ui__, __frame__) __CO_IN_CLOSE_QT_UI_AT(__this_ui__, __frame__, __DELETE_FRAME)
-#define co_in_close_qt_ui_delete(__frame__) co_in_close_qt_ui_delete_at(this, __frame__)
-#define co_in_close_qt_ui_destroy_at(__this_ui__, __frame__) __CO_IN_CLOSE_QT_UI_AT(__this_ui__, __frame__, __DESTROY_FRAME)
-#define co_in_close_qt_ui_destroy(__frame__) co_in_close_qt_ui_destroy_at(this, __frame__)
+#define co_close_in_qt_ui_at(__this_ui__, __frame__) __CO_CLOSE_IN_QT_UI_AT(__this_ui__, __frame__, __NO_DELETE_FRAME)
+#define co_close_in_qt_ui(__frame__) co_close_in_qt_ui_at(this, __frame__)
+#define co_close_in_qt_ui_delete_at(__this_ui__, __frame__) __CO_CLOSE_IN_QT_UI_AT(__this_ui__, __frame__, __DELETE_FRAME)
+#define co_close_in_qt_ui_delete(__frame__) co_close_in_qt_ui_delete_at(this, __frame__)
+#define co_close_in_qt_ui_destroy_at(__this_ui__, __frame__) __CO_CLOSE_IN_QT_UI_AT(__this_ui__, __frame__, __DESTROY_FRAME)
+#define co_close_in_qt_ui_destroy(__frame__) co_close_in_qt_ui_destroy_at(this, __frame__)
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -366,7 +367,7 @@ public:
 		{
 			CHECK_EXCEPTION(handler);
 			host->_revert_this(host)->_co_async_next();
-		}, std::move(co_self.async_this()), std::forward<Handler>(handler)));
+		}, std::move(co_async_this), std::forward<Handler>(handler)));
 	}
 
 	/*!
