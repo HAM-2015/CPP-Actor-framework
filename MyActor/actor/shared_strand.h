@@ -28,11 +28,11 @@ typedef std::shared_ptr<boost_strand> shared_strand;
 
 #ifdef ENABLE_NEXT_TICK
 
-#define RUN_HANDLER handler_capture<RM_CREF(Handler)>(TRY_MOVE(handler), this)
+#define RUN_HANDLER handler_capture<RM_CREF(Handler)>(std::forward<Handler>(handler), this)
 
 #else //ENABLE_NEXT_TICK
 
-#define RUN_HANDLER TRY_MOVE(handler)
+#define RUN_HANDLER std::forward<Handler>(handler)
 
 #endif //ENABLE_NEXT_TICK
 
@@ -43,7 +43,7 @@ if (_strand)\
 }\
 else\
 {\
-	post_choose(TRY_MOVE(handler)); \
+	post_choose(std::forward<Handler>(handler)); \
 };
 
 #define CHOOSE_DISPATCH()\
@@ -53,7 +53,7 @@ if (_strand)\
 }\
 else\
 {\
-	dispatch_choose(TRY_MOVE(handler)); \
+	dispatch_choose(std::forward<Handler>(handler)); \
 };
 
 #ifdef ENABLE_POST_FRONT
@@ -64,7 +64,7 @@ if (_strand)\
 }\
 else\
 {\
-	post_choose(TRY_MOVE(handler)); \
+	post_choose(std::forward<Handler>(handler)); \
 };
 
 #define CHOOSE_DISPATCH_FRONT()\
@@ -74,7 +74,7 @@ if (_strand)\
 }\
 else\
 {\
-	dispatch_choose(TRY_MOVE(handler)); \
+	dispatch_choose(std::forward<Handler>(handler)); \
 };
 #endif //ENABLE_POST_FRONT
 
@@ -84,12 +84,12 @@ else\
 	typedef wrap_next_tick_handler<RM_CREF(Handler), true> wrap_tick_type1; \
 	typedef wrap_next_tick_handler<RM_CREF(Handler), false> wrap_tick_type2; \
 	void* const space = alloc_space(sizeof(wrap_tick_type1)); \
-	if (space) _backTickQueue->push_back(new(space)wrap_tick_type1(TRY_MOVE(handler))); \
-	else _backTickQueue->push_back(new(_reuMemAlloc->allocate(sizeof(wrap_tick_type2)))wrap_tick_type2(TRY_MOVE(handler)));
+	if (space) _backTickQueue->push_back(new(space)wrap_tick_type1(std::forward<Handler>(handler))); \
+	else _backTickQueue->push_back(new(_reuMemAlloc->allocate(sizeof(wrap_tick_type2)))wrap_tick_type2(std::forward<Handler>(handler)));
 
 #else //ENABLE_NEXT_TICK
 
-#define APPEND_TICK()	post(TRY_MOVE(handler));
+#define APPEND_TICK()	post(std::forward<Handler>(handler));
 
 #endif //ENABLE_NEXT_TICK
 
@@ -101,7 +101,7 @@ if (_strand)\
 }\
 else\
 {\
-	post_choose(TRY_MOVE(handler)); \
+	post_choose(std::forward<Handler>(handler)); \
 }
 
 #ifdef DISABLE_BOOST_TIMER
@@ -130,7 +130,7 @@ class boost_strand
 	{
 		template <typename Handler>
 		handler_capture(Handler&& handler, boost_strand* strand)
-			:capture_base(strand), _handler(TRY_MOVE(handler)) {}
+			:capture_base(strand), _handler(std::forward<Handler>(handler)) {}
 
 		handler_capture(const handler_capture& s)
 			:capture_base(s._strand), _handler(std::move(s._handler)) {}
@@ -160,7 +160,7 @@ class boost_strand
 	{
 		template <typename H>
 		wrap_next_tick_handler(H&& h)
-			:_handler(TRY_MOVE(h)) {}
+			:_handler(std::forward<H>(h)) {}
 
 		size_t invoke()
 		{
@@ -178,7 +178,7 @@ class boost_strand
 	{
 		template <typename H>
 		wrap_next_tick_handler(H&& h)
-			:_handler(TRY_MOVE(h)) {}
+			:_handler(std::forward<H>(h)) {}
 
 		size_t invoke()
 		{
@@ -197,7 +197,7 @@ class boost_strand
 	{
 		template <typename H1, typename CB1>
 		wrap_async_invoke(H1&& h, CB1&& cb)
-			:_h(TRY_MOVE(h)), _cb(TRY_MOVE(cb)) {}
+			:_h(std::forward<H1>(h)), _cb(std::forward<CB1>(cb)) {}
 
 		wrap_async_invoke(wrap_async_invoke&& s)
 			:_h(std::move(s._h)), _cb(std::move(s._cb)) {}
@@ -223,7 +223,7 @@ class boost_strand
 	{
 		template <typename H1, typename CB1>
 		wrap_async_invoke_void(H1&& h, CB1&& cb)
-			:_h(TRY_MOVE(h)), _cb(TRY_MOVE(cb)) {}
+			:_h(std::forward<H1>(h)), _cb(std::forward<CB1>(cb)) {}
 
 		wrap_async_invoke_void(wrap_async_invoke_void&& s)
 			:_h(std::move(s._h)), _cb(std::move(s._cb)) {}
@@ -285,7 +285,7 @@ public:
 		}
 		else
 		{
-			post(TRY_MOVE(handler));
+			post(std::forward<Handler>(handler));
 		}
 	}
 
@@ -329,7 +329,7 @@ public:
 		}
 		else
 		{
-			post_front(TRY_MOVE(handler));
+			post_front(std::forward<Handler>(handler));
 		}
 	}
 
@@ -384,12 +384,12 @@ public:
 #ifdef ENABLE_NEXT_TICK
 		if (running_in_this_thread())
 		{
-			next_tick(TRY_MOVE(handler));
+			next_tick(std::forward<Handler>(handler));
 		}
 		else
 #endif //ENABLE_NEXT_TICK
 		{
-			post(TRY_MOVE(handler));
+			post(std::forward<Handler>(handler));
 		}
 	}
 
@@ -399,7 +399,7 @@ public:
 	template <typename Handler>
 	wrapped_dispatch_handler<boost_strand, RM_CREF(Handler)> wrap_asio(Handler&& handler)
 	{
-		return wrapped_dispatch_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_dispatch_handler<boost_strand, RM_CREF(Handler)>(this, std::forward<Handler>(handler));
 	}
 
 	/*!
@@ -408,7 +408,7 @@ public:
 	template <typename Handler>
 	wrapped_dispatch_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_asio(Handler&& handler)
 	{
-		return wrapped_dispatch_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+		return wrapped_dispatch_handler<boost_strand, RM_CREF(Handler), true>(this, std::forward<Handler>(handler));
 	}
 
 	/*!
@@ -417,7 +417,7 @@ public:
 	template <typename Handler>
 	wrapped_distribute_handler<boost_strand, RM_CREF(Handler)> wrap(Handler&& handler)
 	{
-		return wrapped_distribute_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_distribute_handler<boost_strand, RM_CREF(Handler)>(this, std::forward<Handler>(handler));
 	}
 
 	/*!
@@ -426,7 +426,7 @@ public:
 	template <typename Handler>
 	wrapped_distribute_handler<boost_strand, RM_CREF(Handler), true> suck_wrap(Handler&& handler)
 	{
-		return wrapped_distribute_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+		return wrapped_distribute_handler<boost_strand, RM_CREF(Handler), true>(this, std::forward<Handler>(handler));
 	}
 
 	/*!
@@ -435,7 +435,7 @@ public:
 	template <typename Handler>
 	wrapped_post_handler<boost_strand, RM_CREF(Handler)> wrap_post(Handler&& handler)
 	{
-		return wrapped_post_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_post_handler<boost_strand, RM_CREF(Handler)>(this, std::forward<Handler>(handler));
 	}
 
 	/*!
@@ -444,7 +444,7 @@ public:
 	template <typename Handler>
 	wrapped_hold_work_post_handler<boost_strand, RM_CREF(Handler)> wrap_hold_post(Handler&& handler)
 	{
-		return wrapped_hold_work_post_handler<boost_strand, RM_CREF(Handler)>(get_io_service(), this, TRY_MOVE(handler));
+		return wrapped_hold_work_post_handler<boost_strand, RM_CREF(Handler)>(get_io_service(), this, std::forward<Handler>(handler));
 	}
 
 	/*!
@@ -453,7 +453,7 @@ public:
 	template <typename Handler>
 	wrapped_post_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_post(Handler&& handler)
 	{
-		return wrapped_post_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+		return wrapped_post_handler<boost_strand, RM_CREF(Handler), true>(this, std::forward<Handler>(handler));
 	}
 
 #ifdef ENABLE_POST_FRONT
@@ -463,7 +463,7 @@ public:
 	template <typename Handler>
 	wrapped_dispatch_front_handler<boost_strand, RM_CREF(Handler)> wrap_asio_front(Handler&& handler)
 	{
-		return wrapped_dispatch_front_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_dispatch_front_handler<boost_strand, RM_CREF(Handler)>(this, std::forward<Handler>(handler));
 	}
 
 	/*!
@@ -472,7 +472,7 @@ public:
 	template <typename Handler>
 	wrapped_dispatch_front_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_asio_front(Handler&& handler)
 	{
-		return wrapped_dispatch_front_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+		return wrapped_dispatch_front_handler<boost_strand, RM_CREF(Handler), true>(this, std::forward<Handler>(handler));
 	}
 
 	/*!
@@ -481,7 +481,7 @@ public:
 	template <typename Handler>
 	wrapped_distribute_front_handler<boost_strand, RM_CREF(Handler)> wrap_front(Handler&& handler)
 	{
-		return wrapped_distribute_front_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_distribute_front_handler<boost_strand, RM_CREF(Handler)>(this, std::forward<Handler>(handler));
 	}
 
 	/*!
@@ -490,7 +490,7 @@ public:
 	template <typename Handler>
 	wrapped_distribute_front_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_front(Handler&& handler)
 	{
-		return wrapped_distribute_front_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+		return wrapped_distribute_front_handler<boost_strand, RM_CREF(Handler), true>(this, std::forward<Handler>(handler));
 	}
 
 	/*!
@@ -499,7 +499,7 @@ public:
 	template <typename Handler>
 	wrapped_post_front_handler<boost_strand, RM_CREF(Handler)> wrap_post_front(Handler&& handler)
 	{
-		return wrapped_post_front_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_post_front_handler<boost_strand, RM_CREF(Handler)>(this, std::forward<Handler>(handler));
 	}
 
 	/*!
@@ -508,7 +508,7 @@ public:
 	template <typename Handler>
 	wrapped_hold_work_post_front_handler<boost_strand, RM_CREF(Handler)> wrap_hold_post_front(Handler&& handler)
 	{
-		return wrapped_hold_work_post_front_handler<boost_strand, RM_CREF(Handler)>(get_io_service(), this, TRY_MOVE(handler));
+		return wrapped_hold_work_post_front_handler<boost_strand, RM_CREF(Handler)>(get_io_service(), this, std::forward<Handler>(handler));
 	}
 
 	/*!
@@ -517,7 +517,7 @@ public:
 	template <typename Handler>
 	wrapped_post_front_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_post_front(Handler&& handler)
 	{
-		return wrapped_post_front_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+		return wrapped_post_front_handler<boost_strand, RM_CREF(Handler), true>(this, std::forward<Handler>(handler));
 	}
 #endif //ENABLE_POST_FRONT
 
@@ -527,7 +527,7 @@ public:
 	template <typename Handler>
 	wrapped_next_tick_handler<boost_strand, RM_CREF(Handler)> wrap_next_tick(Handler&& handler)
 	{
-		return wrapped_next_tick_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_next_tick_handler<boost_strand, RM_CREF(Handler)>(this, std::forward<Handler>(handler));
 	}
 
 	/*!
@@ -536,7 +536,7 @@ public:
 	template <typename Handler>
 	wrapped_next_tick_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_next_tick(Handler&& handler)
 	{
-		return wrapped_next_tick_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+		return wrapped_next_tick_handler<boost_strand, RM_CREF(Handler), true>(this, std::forward<Handler>(handler));
 	}
 
 	/*!
@@ -545,7 +545,7 @@ public:
 	template <typename Handler>
 	wrapped_try_tick_handler<boost_strand, RM_CREF(Handler)> wrap_try_tick(Handler&& handler)
 	{
-		return wrapped_try_tick_handler<boost_strand, RM_CREF(Handler)>(this, TRY_MOVE(handler));
+		return wrapped_try_tick_handler<boost_strand, RM_CREF(Handler)>(this, std::forward<Handler>(handler));
 	}
 
 	/*!
@@ -554,7 +554,7 @@ public:
 	template <typename Handler>
 	wrapped_try_tick_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_try_tick(Handler&& handler)
 	{
-		return wrapped_try_tick_handler<boost_strand, RM_CREF(Handler), true>(this, TRY_MOVE(handler));
+		return wrapped_try_tick_handler<boost_strand, RM_CREF(Handler), true>(this, std::forward<Handler>(handler));
 	}
 
 	/*!
@@ -639,16 +639,16 @@ private:
 #if (ENABLE_QT_ACTOR && ENABLE_UV_ACTOR)
 		if (strand_ui == _strandChoose)
 		{
-			post_ui(TRY_MOVE(handler));
+			post_ui(std::forward<Handler>(handler));
 		}
 		else
 		{
-			post_uv(TRY_MOVE(handler));
+			post_uv(std::forward<Handler>(handler));
 		}
 #elif ENABLE_QT_ACTOR
-		post_ui(TRY_MOVE(handler));
+		post_ui(std::forward<Handler>(handler));
 #elif ENABLE_UV_ACTOR
-		post_uv(TRY_MOVE(handler));
+		post_uv(std::forward<Handler>(handler));
 #endif
 	}
 
@@ -658,16 +658,16 @@ private:
 #if (ENABLE_QT_ACTOR && ENABLE_UV_ACTOR)
 		if (strand_ui == _strandChoose)
 		{
-			dispatch_ui(TRY_MOVE(handler));
+			dispatch_ui(std::forward<Handler>(handler));
 		}
 		else
 		{
-			dispatch_uv(TRY_MOVE(handler));
+			dispatch_uv(std::forward<Handler>(handler));
 		}
 #elif ENABLE_QT_ACTOR
-		dispatch_ui(TRY_MOVE(handler));
+		dispatch_ui(std::forward<Handler>(handler));
 #elif ENABLE_UV_ACTOR
-		dispatch_uv(TRY_MOVE(handler));
+		dispatch_uv(std::forward<Handler>(handler));
 #endif
 	}
 #endif
@@ -755,13 +755,13 @@ public:
 	template <typename H, typename CB>
 	void asyncInvoke(H&& h, CB&& cb)
 	{
-		try_tick(wrap_async_invoke<RM_CREF(H), RM_CREF(CB)>(TRY_MOVE(h), TRY_MOVE(cb)));
+		try_tick(wrap_async_invoke<RM_CREF(H), RM_CREF(CB)>(std::forward<H>(h), std::forward<CB>(cb)));
 	}
 
 	template <typename H, typename CB>
 	void asyncInvokeVoid(H&& h, CB&& cb)
 	{
-		try_tick(wrap_async_invoke_void<RM_CREF(H), RM_CREF(CB)>(TRY_MOVE(h), TRY_MOVE(cb)));
+		try_tick(wrap_async_invoke_void<RM_CREF(H), RM_CREF(CB)>(std::forward<H>(h), std::forward<CB>(cb)));
 	}
 };
 

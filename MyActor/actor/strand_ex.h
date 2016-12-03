@@ -27,28 +27,28 @@ private:
 	template <typename Handler>
 	void post(Handler&& handler)
 	{
-		//_service.post(_impl, TRY_MOVE(handler));
+		//_service.post(_impl, std::forward<Handler>(handler));
 		_service.post(_impl, handler);
 	}
 
 	template <typename Handler>
 	void dispatch(Handler&& handler)
 	{
-		//_service.dispatch(_impl, TRY_MOVE(handler));
+		//_service.dispatch(_impl, std::forward<Handler>(handler));
 		_service.dispatch(_impl, handler);
 	}
 #ifdef ENABLE_POST_FRONT
 	template <typename Handler>
 	void post_front(Handler&& handler)
 	{
-		//_service.post_front(_impl, TRY_MOVE(handler));
+		//_service.post_front(_impl, std::forward<Handler>(handler));
 		_service.post_front(_impl, handler);
 	}
 
 	template <typename Handler>
 	void dispatch_front(Handler&& handler)
 	{
-		//_service.dispatch_front(_impl, TRY_MOVE(handler));
+		//_service.dispatch_front(_impl, std::forward<Handler>(handler));
 		_service.dispatch_front(_impl, handler);
 	}
 #endif

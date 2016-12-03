@@ -106,7 +106,7 @@ public:
 		_socket.async_connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), std::bind([](Handler& handler, const boost::system::error_code& ec)
 		{
 			handler(!ec);
-		}, TRY_MOVE(handler), __1));
+		}, std::forward<Handler>(handler), __1));
 	}
 
 	/*!
@@ -119,7 +119,7 @@ public:
 		{
 			result res = { s, !ec };
 			handler(res);
-		}, TRY_MOVE(handler), __1, __2));
+		}, std::forward<Handler>(handler), __1, __2));
 	}
 
 	/*!
@@ -132,7 +132,7 @@ public:
 		{
 			result res = { s, !ec };
 			handler(res);
-		}, TRY_MOVE(handler), __1, __2));
+		}, std::forward<Handler>(handler), __1, __2));
 	}
 
 	/*!
@@ -145,7 +145,7 @@ public:
 		{
 			result res = { s, !ec };
 			handler(res);
-		}, TRY_MOVE(handler), __1, __2));
+		}, std::forward<Handler>(handler), __1, __2));
 	}
 
 	/*!
@@ -158,7 +158,7 @@ public:
 		{
 			result res = { s, !ec };
 			handler(res);
-		}, TRY_MOVE(handler), __1, __2));
+		}, std::forward<Handler>(handler), __1, __2));
 	}
 private:
 	boost::asio::ip::tcp::socket _socket;
@@ -218,7 +218,7 @@ public:
 		_acceptor->async_accept(socket.boost_socket(), std::bind([](Handler& handler, const boost::system::error_code& ec)
 		{
 			handler(!ec);
-		}, TRY_MOVE(handler), __1));
+		}, std::forward<Handler>(handler), __1));
 	}
 private:
 	boost::asio::io_service& _ios;
@@ -374,7 +374,7 @@ public:
 		_socket.async_connect(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), std::bind([](Handler& handler, const boost::system::error_code& ec)
 		{
 			handler(!ec);
-		}, TRY_MOVE(handler), __1));
+		}, std::forward<Handler>(handler), __1));
 	}
 
 	/*!
@@ -387,7 +387,7 @@ public:
 		{
 			result res = { s, !ec };
 			handler(res);
-		}, TRY_MOVE(handler), __1, __2));
+		}, std::forward<Handler>(handler), __1, __2));
 	}
 
 	/*!
@@ -396,7 +396,7 @@ public:
 	template <typename Handler>
 	void async_send_to(const char* remoteIp, unsigned short remotePort, const void* buff, size_t length, Handler&& handler, int flags = 0)
 	{
-		async_send_to(remote_sender_endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), buff, length, TRY_MOVE(handler), flags);
+		async_send_to(remote_sender_endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), buff, length, std::forward<Handler>(handler), flags);
 	}
 
 	/*!
@@ -409,7 +409,7 @@ public:
 		{
 			result res = { s, !ec };
 			handler(res);
-		}, TRY_MOVE(handler), __1, __2));
+		}, std::forward<Handler>(handler), __1, __2));
 	}
 
 	/*!
@@ -422,7 +422,7 @@ public:
 		{
 			result res = { s, !ec };
 			handler(res);
-		}, TRY_MOVE(handler), __1, __2));
+		}, std::forward<Handler>(handler), __1, __2));
 	}
 
 	/*!
@@ -435,7 +435,7 @@ public:
 		{
 			result res = { s, !ec };
 			handler(res);
-		}, TRY_MOVE(handler), __1, __2));
+		}, std::forward<Handler>(handler), __1, __2));
 	}
 private:
 	boost::asio::ip::udp::socket _socket;

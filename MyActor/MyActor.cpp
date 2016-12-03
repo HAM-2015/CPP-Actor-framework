@@ -17,7 +17,7 @@ void wait_multi_msg()
 		actor_handle act1 = my_actor::create(self->self_strand(), [&](my_actor* self)
 		{
 			my_actor::quit_guard qg(self);
-			self->run_mutex_blocks_safe(mutex_block_pump_check_state<int>(self, [&](int msg)
+			self->select_msg_blocks_safe(select_block_pump_check_state<int>(self, [&](int msg)
 			{
 				trace_comma(self->self_id(), "begin msg int");
 				self->sleep(500);
@@ -29,7 +29,7 @@ void wait_multi_msg()
 			{
 				trace_line("msg int state ", s);
 				return false;
-			}), mutex_block_pump<move_test>(self, [&](const move_test& msg)
+			}), select_block_pump<move_test>(self, [&](const move_test& msg)
 			{
 				trace_comma(self->self_id(), "begin msg int");
 				self->sleep(500);
@@ -37,7 +37,7 @@ void wait_multi_msg()
 				self->sleep(500);
 				trace_comma(self->self_id(), "end msg int");
 				return false;
-			}), mutex_block_quit(self, [&]()
+			}), select_block_quit(self, [&]()
 			{
 				msg_pump_handle<int> pump1 = self->connect_msg_pump<int>(true);
 				msg_pump_handle<move_test> pump2 = self->connect_msg_pump<move_test>(true);
@@ -1155,11 +1155,13 @@ void co_select_msg_test()
 	co_msg_buffer<move_test> msgBuff(boost_strand::create(ios));
 	co_channel<move_test> msgChan(boost_strand::create(ios), 1);
 	co_nil_channel<void> doneMsg(boost_strand::create(ios));
+	co_csp_channel<move_test(move_test)> csp(boost_strand::create(ios));
 	co_go(ios)[&](co_generator)
 	{
 		co_begin_context;
 		move_test mt;
-		co_select_msg;
+		csp_result<move_test> cspRes;
+		co_use_select;
 		co_end_context_init(ctx, (co_self), co_select_init);
 
 		co_begin;
@@ -1167,14 +1169,21 @@ void co_select_msg_test()
 		co_select_case_to(msgBuff) >> ctx.mt;
 		if (co_select_state_is_ok)
 		{
-			info_trace_line("buff_1: ", ctx.mt);
+			info_trace_line("buff: ", ctx.mt);
 			co_sleep(10);
 		}
 		co_select_case_to(msgChan) >> ctx.mt;
 		if (co_select_state_is_ok)
 		{
-			info_trace_line("chan_2: ", ctx.mt);
+			info_trace_line("chan: ", ctx.mt);
 			co_sleep(10);
+		}
+		co_select_case_csp_to(csp, ctx.cspRes) >> ctx.mt;
+		if (co_select_state_is_ok)
+		{
+			info_trace_line("csp: ", ctx.mt);
+			co_sleep(10);
+			ctx.cspRes.return_(move_test(456));
 		}
 		co_select_case_void(doneMsg);
 		{
@@ -1194,6 +1203,8 @@ void co_select_msg_test()
 		co_end_context(ctx);
 
 		co_begin;
+		co_csp_io(csp, ctx.mt) << move_test(123);
+		info_trace_line("csp result: ", ctx.mt);
 		for (ctx.i = 0; ctx.i < 5; ctx.i++)
 		{
 			co_chan_io(msgBuff) << move_test(ctx.i);
@@ -1209,6 +1220,59 @@ void co_select_msg_test()
 	};
 	ios.stop();
 	trace_line("end co_select_msg_test");
+}
+
+void co_chan_perfor_test()
+{
+	trace_line("begin co_chan_perfor_test");
+	io_engine ios;
+	const int msgNum = 10000000;
+	for (int i = 1; i <= 4; i++)
+	{
+		ios.run(i);
+		trace_line(i, " threads, msg number", msgNum);
+		std::atomic<int> msgCount(0);
+		std::atomic<int> recCount(0);
+		long long beginTick = get_tick_ms();
+		for (int j = 1; j <= i; j++)
+		{
+			std::shared_ptr<co_channel<int>> channel(new co_channel<int>(boost_strand::create(ios), 3));
+			for (int k = 0; k < 100; k++)
+			{
+				co_go(channel->self_strand())[&, channel](co_generator)
+				{
+					co_begin_context;
+					co_use_state;
+					co_end_context(ctx);
+
+					co_begin;
+					while (++msgCount <= msgNum)
+					{
+						co_chan_aff_io(*channel) << msgCount;
+					}
+					co_end;
+				};
+				co_go(channel->self_strand())[&, channel](co_generator)
+				{
+					co_begin_context;
+					int res;
+					co_use_state;
+					co_end_context(ctx);
+
+					co_begin;
+					while (++recCount <= msgNum)
+					{
+						co_chan_aff_io(*channel) >> ctx.res;
+					}
+					co_end;
+				};
+			}
+		}
+		ios.stop();
+		long long time = get_tick_ms() - beginTick;
+		trace_line("time ", time, ", perfor ", (size_t)((double)msgNum * 1000.0 / (double)time), "/s");
+	}
+	trace_line("end co_chan_perfor_test");
 }
 
 void co_msg_test()
@@ -1345,14 +1409,20 @@ int main(int argc, char *argv[])
 	trace("\n");
 	co_msg_test();
 	trace("\n");
+#ifdef NDEBUG
+	co_chan_perfor_test();
+	trace("\n");
+#endif
 	co_select_msg_test();
 	trace("\n");
 	co_mutex_test();
 	trace("\n");
 	co_convar_test();
 	trace("\n");
+#ifdef NDEBUG
 	co_perfor_test();
 	trace("\n");
+#endif
 	auto_stack_test();
 	trace("\n");
 	suspend_test();

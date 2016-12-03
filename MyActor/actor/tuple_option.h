@@ -174,7 +174,7 @@ struct ApplyArg_
 	template <typename Handler, typename Tuple, typename... Args>
 	static inline R append(Handler& h, Tuple&& tup, Args&&... args)
 	{
-		return ApplyArg_<R, N - 1>::append(h, TRY_MOVE(tup), tuple_move<N - 1, Tuple&&>::get(TRY_MOVE(tup)), TRY_MOVE(args)...);
+		return ApplyArg_<R, N - 1>::append(h, std::forward<Tuple>(tup), tuple_move<N - 1, Tuple&&>::get(std::forward<Tuple>(tup)), std::forward<Args>(args)...);
 	}
 };
 
@@ -184,7 +184,7 @@ struct ApplyArg_<R, 0>
 	template <typename Handler, typename Tuple, typename... Args>
 	static inline R append(Handler& h, Tuple&&, Args&&... args)
 	{
-		return h(TRY_MOVE(args)...);
+		return h(std::forward<Args>(args)...);
 	}
 };
 
@@ -197,7 +197,7 @@ struct TupleInvokeWrap_<R, Handler, std::tuple<TYPES...>&&>
 	template <typename... Args>
 	inline R operator ()(Args&&... args) const
 	{
-		return ApplyArg_<R, sizeof...(TYPES)>::append(_h, std::move(_tuple), TRY_MOVE(args)...);
+		return ApplyArg_<R, sizeof...(TYPES)>::append(_h, std::move(_tuple), std::forward<Args>(args)...);
 	}
 
 	Handler& _h;
@@ -210,7 +210,7 @@ struct TupleInvokeWrap_<R, Handler, std::tuple<TYPES...>&>
 	template <typename... Args>
 	inline R operator ()(Args&&... args) const
 	{
-		return ApplyArg_<R, sizeof...(TYPES)>::append(_h, _tuple, TRY_MOVE(args)...);
+		return ApplyArg_<R, sizeof...(TYPES)>::append(_h, _tuple, std::forward<Args>(args)...);
 	}
 
 	Handler& _h;
@@ -223,7 +223,7 @@ struct TupleInvokeWrap_<R, Handler, const std::tuple<TYPES...>&>
 	template <typename... Args>
 	inline R operator ()(Args&&... args) const
 	{
-		return ApplyArg_<R, sizeof...(TYPES)>::append(_h, _tuple, TRY_MOVE(args)...);
+		return ApplyArg_<R, sizeof...(TYPES)>::append(_h, _tuple, std::forward<Args>(args)...);
 	}
 
 	Handler& _h;
@@ -236,7 +236,7 @@ struct TupleInvokeWrap_<R, Handler, const std::tuple<TYPES...>&&>
 	template <typename... Args>
 	inline R operator ()(Args&&... args) const
 	{
-		return ApplyArg_<R, sizeof...(TYPES)>::append(_h, _tuple, TRY_MOVE(args)...);
+		return ApplyArg_<R, sizeof...(TYPES)>::append(_h, _tuple, std::forward<Args>(args)...);
 	}
 
 	Handler& _h;
@@ -249,7 +249,7 @@ struct TupleInvokeWrap_<R, Handler, TYPE>
 	template <typename... Args>
 	inline R operator ()(Args&&... args) const
 	{
-		return _h((TYPE)_type, TRY_MOVE(args)...);
+		return _h((TYPE)_type, std::forward<Args>(args)...);
 	}
 
 	Handler& _h;
@@ -262,7 +262,7 @@ struct InvokeWrapObj_
 	template <typename... Args>
 	inline R operator ()(Args&&... args) const
 	{
-		return (obj->*pf)(TRY_MOVE(args)...);
+		return (obj->*pf)(std::forward<Args>(args)...);
 	}
 
 	F pf;
@@ -282,7 +282,7 @@ struct TupleInvoke_
 	static inline R tuple_invoke(Handler& h, First&& fst, Tuple&&... tups)
 	{
 		TupleInvokeWrap_<R, Handler, First&&> wrap = { h, fst };
-		return tuple_invoke(wrap, TRY_MOVE(tups)...);
+		return tuple_invoke(wrap, std::forward<Tuple>(tups)...);
 	}
 };
 
@@ -293,7 +293,7 @@ struct TupleInvoke_<R, true>
 	static inline R tuple_invoke(F pf, C* obj, Tuple&&... tups)
 	{
 		InvokeWrapObj_<R, F, C> wrap = { pf, obj };
-		return TupleInvoke_<R, false>::tuple_invoke(wrap, TRY_MOVE(tups)...);
+		return TupleInvoke_<R, false>::tuple_invoke(wrap, std::forward<Tuple>(tups)...);
 	}
 };
 
@@ -321,7 +321,7 @@ struct CheckClassFunc_<R(C::*)(Types...) const>
 template <typename R = void, typename Handler, typename Unknown, typename... Tuple>
 inline R tuple_invoke(Handler&& h, Unknown&& unkown, Tuple&&... tups)
 {
-	return TupleInvoke_<R, CheckClassFunc_<RM_REF(Handler)>::value>::tuple_invoke(h, TRY_MOVE(unkown), TRY_MOVE(tups)...);
+	return TupleInvoke_<R, CheckClassFunc_<RM_REF(Handler)>::value>::tuple_invoke(h, std::forward<Unknown>(unkown), std::forward<Tuple>(tups)...);
 }
 
 template <typename R = void, typename Handler>
@@ -341,7 +341,7 @@ struct ApplyRval_
 		R operator ()(Args&&... args)
 		{
 			bool rval = 0 != try_move<Arg>::can_move;
-			return _h(_arg, rval, TRY_MOVE(args)...);
+			return _h(_arg, rval, std::forward<Args>(args)...);
 		}
 
 		Handler& _h;
@@ -352,7 +352,7 @@ struct ApplyRval_
 	static inline R append(Handler& h, First&& fst, Args&&... args)
 	{
 		wrap_handler<Handler, First&&> wrap = { h, fst };
-		return ApplyRval_<R, N - 1>::append(wrap, TRY_MOVE(args)...);
+		return ApplyRval_<R, N - 1>::append(wrap, std::forward<Args>(args)...);
 	}
 };
 
@@ -372,7 +372,7 @@ struct RvalInvoke_
 	template <typename Handler, typename... Args>
 	static inline R invoke(Handler& h, Args&&... args)
 	{
-		return ApplyRval_<R, sizeof...(Args)>::append(h, TRY_MOVE(args)...);
+		return ApplyRval_<R, sizeof...(Args)>::append(h, std::forward<Args>(args)...);
 	}
 };
 
@@ -383,7 +383,7 @@ struct RvalInvoke_<R, true>
 	static inline R invoke(F pf, C* obj, Args&&... args)
 	{
 		InvokeWrapObj_<R, F, C> wrap = { pf, obj };
-		return RvalInvoke_<R, false>::invoke(wrap, TRY_MOVE(args)...);
+		return RvalInvoke_<R, false>::invoke(wrap, std::forward<Args>(args)...);
 	}
 };
 
@@ -393,7 +393,7 @@ struct RvalInvoke_<R, true>
 template <typename R = void, typename Handler, typename Unknown, typename... Args>
 inline R try_rval_invoke(Handler&& h, Unknown&& unkown, Args&&... args)
 {
-	return RvalInvoke_<R, CheckClassFunc_<RM_REF(Handler)>::value>::invoke(h, TRY_MOVE(unkown), TRY_MOVE(args)...);
+	return RvalInvoke_<R, CheckClassFunc_<RM_REF(Handler)>::value>::invoke(h, std::forward<Unknown>(unkown), std::forward<Args>(args)...);
 }
 
 template <typename R = void, typename Handler>

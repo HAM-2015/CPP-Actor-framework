@@ -122,7 +122,7 @@ struct BreakOfScope2_
 {
 	template <typename H>
 	BreakOfScope2_(H&& handler)
-	:_handler(TRY_MOVE(handler)) {}
+	:_handler(std::forward<H>(handler)) {}
 
 	~BreakOfScope2_() __disable_noexcept
 	{
@@ -143,7 +143,7 @@ struct MakeBreakOfScope2_
 	template <typename Handler>
 	BreakOfScope2_<RM_CREF(Handler)> operator -(Handler&& handler)
 	{
-		return BreakOfScope2_<RM_CREF(Handler)>(TRY_MOVE(handler));
+		return BreakOfScope2_<RM_CREF(Handler)>(std::forward<Handler>(handler));
 	}
 };
 
@@ -336,6 +336,15 @@ struct any_handler
 	void operator()(Args&&...){}
 };
 
+/*!
+@brief 接受任何传值，但不处理
+*/
+struct any_accept
+{
+	template <typename Args>
+	void operator=(Args&&){}
+};
+
 #define breakpoint_mark {int __mark=0;}
 
 /*!
@@ -449,6 +458,17 @@ auto forward_copy(T&& p)->typename ForwardCopy_<T>::type
 {
 	return (T&&)p;
 }
+
+#define forward_copys1(p1) forward_copy(p1)
+#define forward_copys2(p1,p2) forward_copy(p1),forward_copy(p2)
+#define forward_copys3(p1,p2,p3) forward_copy(p1),forward_copy(p2),forward_copy(p3)
+#define forward_copys4(p1,p2,p3,p4) forward_copy(p1),forward_copy(p2),forward_copy(p3),forward_copy(p4)
+#define forward_copys5(p1,p2,p3,p4,p5) forward_copy(p1),forward_copy(p2),forward_copy(p3),forward_copy(p4),forward_copy(p5)
+#define forward_copys6(p1,p2,p3,p4,p5,p6) forward_copy(p1),forward_copy(p2),forward_copy(p3),forward_copy(p4),forward_copy(p5),forward_copy(p6)
+#define forward_copys7(p1,p2,p3,p4,p5,p6,p7) forward_copy(p1),forward_copy(p2),forward_copy(p3),forward_copy(p4),forward_copy(p5),forward_copy(p6),forward_copy(p7)
+#define forward_copys8(p1,p2,p3,p4,p5,p6,p7,p8) forward_copy(p1),forward_copy(p2),forward_copy(p3),forward_copy(p4),forward_copy(p5),forward_copy(p6),forward_copy(p7),forward_copy(p8)
+#define forward_copys9(p1,p2,p3,p4,p5,p6,p7,p8,p9) forward_copy(p1),forward_copy(p2),forward_copy(p3),forward_copy(p4),forward_copy(p5),forward_copy(p6),forward_copy(p7),forward_copy(p8),forward_copy(p9)
+#define forward_copys(...) _BOND_LR__(forward_copys, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
 
 #ifdef _MSC_VER
 #ifndef snprintf

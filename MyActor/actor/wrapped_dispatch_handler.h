@@ -10,7 +10,7 @@ public:
 	template <typename H>
 	wrapped_dispatch_handler(Dispatcher* dispatcher, H&& handler)
 		: _dispatcher(dispatcher),
-		_handler(TRY_MOVE(handler))
+		_handler(std::forward<H>(handler))
 	{
 	}
 
@@ -31,13 +31,13 @@ public:
 	template <typename... Args>
 	void operator()(Args&&... args)
 	{
-		_dispatcher->dispatch(wrap_capture(_handler, TRY_MOVE(args)...));
+		_dispatcher->dispatch(wrap_capture(_handler, std::forward<Args>(args)...));
 	}
 
 	template <typename... Args>
 	void operator()(Args&&... args) const
 	{
-		_dispatcher->dispatch(wrap_capture(_handler, TRY_MOVE(args)...));
+		_dispatcher->dispatch(wrap_capture(_handler, std::forward<Args>(args)...));
 	}
 
 	Dispatcher* _dispatcher;
@@ -52,7 +52,7 @@ public:
 	template <typename H>
 	wrapped_dispatch_handler(Dispatcher* dispatcher, H&& handler)
 		: _dispatcher(dispatcher),
-		_handler(TRY_MOVE(handler))
+		_handler(std::forward<H>(handler))
 #if (_DEBUG || DEBUG)
 		, _checkOnce(new std::atomic<bool>(false))
 #endif
@@ -102,7 +102,7 @@ public:
 	template <typename H>
 	wrapped_dispatch_front_handler(Dispatcher* dispatcher, H&& handler)
 		: _dispatcher(dispatcher),
-		_handler(TRY_MOVE(handler))
+		_handler(std::forward<H>(handler))
 	{
 	}
 
@@ -123,13 +123,13 @@ public:
 	template <typename... Args>
 	void operator()(Args&&... args)
 	{
-		_dispatcher->dispatch_front(wrap_capture(_handler, TRY_MOVE(args)...));
+		_dispatcher->dispatch_front(wrap_capture(_handler, std::forward<Args>(args)...));
 	}
 
 	template <typename... Args>
 	void operator()(Args&&... args) const
 	{
-		_dispatcher->dispatch_front(wrap_capture(_handler, TRY_MOVE(args)...));
+		_dispatcher->dispatch_front(wrap_capture(_handler, std::forward<Args>(args)...));
 	}
 
 	Dispatcher* _dispatcher;
@@ -144,7 +144,7 @@ public:
 	template <typename H>
 	wrapped_dispatch_front_handler(Dispatcher* dispatcher, H&& handler)
 		: _dispatcher(dispatcher),
-		_handler(TRY_MOVE(handler))
+		_handler(std::forward<H>(handler))
 #if (_DEBUG || DEBUG)
 		, _checkOnce(new std::atomic<bool>(false))
 #endif

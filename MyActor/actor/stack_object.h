@@ -34,14 +34,14 @@ public:
 		{
 			free();
 		}
-		new(_space)type(TRY_MOVE(args)...);
+		new(_space)type(std::forward<Args>(args)...);
 		_null = false;
 	}
 
 	template <typename Arg>
 	void operator =(Arg&& arg)
 	{
-		create(TRY_MOVE(arg));
+		create(std::forward<Arg>(arg));
 	}
 
 	operator Type&()
@@ -126,14 +126,14 @@ public:
 	void create(Args&&... args)
 	{
 		assert(_null);
-		new(_space)type(TRY_MOVE(args)...);
+		new(_space)type(std::forward<Args>(args)...);
 		DEBUG_OPERATION(_null = false);
 	}
 
 	template <typename Arg>
 	void operator =(Arg&& arg)
 	{
-		create(TRY_MOVE(arg));
+		create(std::forward<Arg>(arg));
 	}
 
 	operator Type&()

@@ -11,7 +11,7 @@ public:
 	template <typename H>
 	wrapped_post_handler(Poster* poster, H&& handler)
 		: _poster(poster),
-		_handler(TRY_MOVE(handler))
+		_handler(std::forward<H>(handler))
 	{
 	}
 
@@ -32,13 +32,13 @@ public:
 	template <typename... Args>
 	void operator()(Args&&... args)
 	{
-		_poster->post(wrap_capture(_handler, TRY_MOVE(args)...));
+		_poster->post(wrap_capture(_handler, std::forward<Args>(args)...));
 	}
 
 	template <typename... Args>
 	void operator()(Args&&... args) const
 	{
-		_poster->post(wrap_capture(_handler, TRY_MOVE(args)...));
+		_poster->post(wrap_capture(_handler, std::forward<Args>(args)...));
 	}
 
 	Poster* _poster;
@@ -53,7 +53,7 @@ public:
 	template <typename H>
 	wrapped_post_handler(Poster* poster, H&& handler)
 		: _poster(poster),
-		_handler(TRY_MOVE(handler))
+		_handler(std::forward<H>(handler))
 #if (_DEBUG || DEBUG)
 		, _checkOnce(new std::atomic<bool>(false))
 #endif
@@ -102,7 +102,7 @@ public:
 	template <typename H>
 	wrapped_hold_work_post_handler(boost::asio::io_service& ios, Poster* poster, H&& handler)
 		: _holdWork(ios), _poster(poster),
-		_handler(TRY_MOVE(handler))
+		_handler(std::forward<H>(handler))
 	{
 	}
 
@@ -124,13 +124,13 @@ public:
 	template <typename... Args>
 	void operator()(Args&&... args)
 	{
-		_poster->post(wrap_capture(_handler, TRY_MOVE(args)...));
+		_poster->post(wrap_capture(_handler, std::forward<Args>(args)...));
 	}
 
 	template <typename... Args>
 	void operator()(Args&&... args) const
 	{
-		_poster->post(wrap_capture(_handler, TRY_MOVE(args)...));
+		_poster->post(wrap_capture(_handler, std::forward<Args>(args)...));
 	}
 
 private:
@@ -148,7 +148,7 @@ public:
 	template <typename H>
 	wrapped_post_front_handler(Poster* poster, H&& handler)
 		: _poster(poster),
-		_handler(TRY_MOVE(handler))
+		_handler(std::forward<H>(handler))
 	{
 	}
 
@@ -169,13 +169,13 @@ public:
 	template <typename... Args>
 	void operator()(Args&&... args)
 	{
-		_poster->post_front(wrap_capture(_handler, TRY_MOVE(args)...));
+		_poster->post_front(wrap_capture(_handler, std::forward<Args>(args)...));
 	}
 
 	template <typename... Args>
 	void operator()(Args&&... args) const
 	{
-		_poster->post_front(wrap_capture(_handler, TRY_MOVE(args)...));
+		_poster->post_front(wrap_capture(_handler, std::forward<Args>(args)...));
 	}
 
 	Poster* _poster;
@@ -190,7 +190,7 @@ public:
 	template <typename H>
 	wrapped_post_front_handler(Poster* poster, H&& handler)
 		: _poster(poster),
-		_handler(TRY_MOVE(handler))
+		_handler(std::forward<H>(handler))
 #if (_DEBUG || DEBUG)
 		, _checkOnce(new std::atomic<bool>(false))
 #endif
@@ -239,7 +239,7 @@ public:
 	template <typename H>
 	wrapped_hold_work_post_front_handler(boost::asio::io_service& ios, Poster* poster, H&& handler)
 		: _holdWork(ios), _poster(poster),
-		_handler(TRY_MOVE(handler))
+		_handler(std::forward<H>(handler))
 	{
 	}
 
@@ -261,13 +261,13 @@ public:
 	template <typename... Args>
 	void operator()(Args&&... args)
 	{
-		_poster->post_front(wrap_capture(_handler, TRY_MOVE(args)...));
+		_poster->post_front(wrap_capture(_handler, std::forward<Args>(args)...));
 	}
 
 	template <typename... Args>
 	void operator()(Args&&... args) const
 	{
-		_poster->post_front(wrap_capture(_handler, TRY_MOVE(args)...));
+		_poster->post_front(wrap_capture(_handler, std::forward<Args>(args)...));
 	}
 
 private:

@@ -10,7 +10,7 @@ public:
 	template <typename H>
 	wrapped_next_tick_handler(Poster* poster, H&& handler)
 		: _poster(poster),
-		_handler(TRY_MOVE(handler))
+		_handler(std::forward<H>(handler))
 	{
 	}
 
@@ -31,13 +31,13 @@ public:
 	template <typename... Args>
 	void operator()(Args&&... args)
 	{
-		_poster->next_tick(wrap_capture(_handler, TRY_MOVE(args)...));
+		_poster->next_tick(wrap_capture(_handler, std::forward<Args>(args)...));
 	}
 
 	template <typename... Args>
 	void operator()(Args&&... args) const
 	{
-		_poster->next_tick(wrap_capture(_handler, TRY_MOVE(args)...));
+		_poster->next_tick(wrap_capture(_handler, std::forward<Args>(args)...));
 	}
 
 	Poster* _poster;
@@ -52,7 +52,7 @@ public:
 	template <typename H>
 	wrapped_next_tick_handler(Poster* poster, H&& handler)
 		: _poster(poster),
-		_handler(TRY_MOVE(handler))
+		_handler(std::forward<H>(handler))
 #if (_DEBUG || DEBUG)
 		, _checkOnce(new std::atomic<bool>(false))
 #endif

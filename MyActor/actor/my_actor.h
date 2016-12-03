@@ -202,13 +202,13 @@ struct DstReceiverRef_<types_pck<ARGS...>, types_pck<OUTS...>> : public DstRecei
 //////////////////////////////////////////////////////////////////////////
 
 template <typename... ARGS>
-class mutex_block_msg;
+class select_block_msg;
 
 template <typename... ARGS>
-class mutex_block_trig;
+class select_block_trig;
 
 template <typename... ARGS>
-class mutex_block_pump;
+class select_block_pump;
 
 template <typename... ARGS>
 class msg_handle;
@@ -217,12 +217,12 @@ template <typename... ARGS>
 class trig_handle;
 
 template <typename... ARGS>
-class mutex_block_pump_check_state;
+class select_block_pump_check_state;
 
 template <typename... ARGS>
 class MsgNotiferBase_;
 
-struct run_mutex_block_force_quit {};
+struct select_msg_block_force_quit {};
 
 enum pump_check_state
 {
@@ -234,13 +234,13 @@ enum pump_check_state
 #ifdef ENABLE_CHECK_LOST
 
 template <typename... ARGS>
-class mutex_block_msg_check_lost;
+class select_block_msg_check_lost;
 
 template <typename... ARGS>
-class mutex_block_trig_check_lost;
+class select_block_trig_check_lost;
 
 template <typename... ARGS>
-class mutex_block_pump_check_lost;
+class select_block_pump_check_lost;
 
 #endif
 
@@ -326,7 +326,7 @@ public:
 			typedef std::tuple<TYPE_PIPE(ARGS)...> args_tuple;
 			if (ActorFunc_::self_strand(_hostActor.get())->running_in_this_thread())
 			{
-				_msgHandle->push_msg(args_tuple(TRY_MOVE(args)...));
+				_msgHandle->push_msg(args_tuple(std::forward<Args>(args)...));
 			}
 			else
 			{
@@ -336,7 +336,7 @@ public:
 					{
 						msgHandle->push_msg(std::move(args));
 					}
-				}, _hostActor, _msgHandle, _closed, args_tuple(TRY_MOVE(args)...)));
+				}, _hostActor, _msgHandle, _closed, args_tuple(std::forward<Args>(args)...)));
 			}
 		}
 	}
@@ -415,7 +415,7 @@ protected:
 		s._msgHandle = NULL;
 	}
 
-	void copy(const MsgNotiferBase_<ARGS...>& s)
+	void operator =(const MsgNotiferBase_<ARGS...>& s)
 	{
 		_msgHandle = s._msgHandle;
 		_hostActor = s._hostActor;
@@ -425,7 +425,7 @@ protected:
 #endif
 	}
 
-	void move(MsgNotiferBase_<ARGS...>&& s)
+	void operator =(MsgNotiferBase_<ARGS...>&& s)
 	{
 		_msgHandle = s._msgHandle;
 		_hostActor = std::move(s._hostActor);
@@ -462,12 +462,12 @@ public:
 
 	void operator=(const msg_notifer<ARGS...>& s)
 	{
-		MsgNotiferBase_<ARGS...>::copy(s);
+		MsgNotiferBase_<ARGS...>::operator =(s);
 	}
 
 	void operator=(msg_notifer<ARGS...>&& s)
 	{
-		MsgNotiferBase_<ARGS...>::move(std::move(s));
+		MsgNotiferBase_<ARGS...>::operator =(std::move(s));
 	}
 };
 
@@ -489,12 +489,12 @@ public:
 
 	void operator=(const trig_notifer<ARGS...>& s)
 	{
-		MsgNotiferBase_<ARGS...>::copy(s);
+		MsgNotiferBase_<ARGS...>::operator =(s);
 	}
 
 	void operator=(trig_notifer<ARGS...>&& s)
 	{
-		MsgNotiferBase_<ARGS...>::move(std::move(s));
+		MsgNotiferBase_<ARGS...>::operator =(std::move(s));
 	}
 };
 
@@ -506,9 +506,9 @@ class msg_handle : public ActorMsgHandlePush_<ARGS...>
 	typedef DstReceiverBase_<TYPE_PIPE(ARGS)...> dst_receiver;
 	typedef msg_notifer<ARGS...> MsgNotifer;
 
-	friend mutex_block_msg<ARGS...>;
+	friend select_block_msg<ARGS...>;
 #ifdef ENABLE_CHECK_LOST
-	friend mutex_block_msg_check_lost<ARGS...>;
+	friend select_block_msg_check_lost<ARGS...>;
 #endif
 	friend my_actor;
 public:
@@ -609,9 +609,9 @@ class msg_handle<> : public ActorMsgHandlePush_<>
 	typedef ActorMsgHandlePush_<> Parent;
 	typedef msg_notifer<> MsgNotifer;
 
-	friend mutex_block_msg<>;
+	friend select_block_msg<>;
 #ifdef ENABLE_CHECK_LOST
-	friend mutex_block_msg_check_lost<>;
+	friend select_block_msg_check_lost<>;
 #endif
 	friend my_actor;
 public:
@@ -727,9 +727,9 @@ class trig_handle : public ActorMsgHandlePush_<ARGS...>
 	typedef DstReceiverBase_<TYPE_PIPE(ARGS)...> dst_receiver;
 	typedef trig_notifer<ARGS...> MsgNotifer;
 
-	friend mutex_block_trig<ARGS...>;
+	friend select_block_trig<ARGS...>;
 #ifdef ENABLE_CHECK_LOST
-	friend mutex_block_trig_check_lost<ARGS...>;
+	friend select_block_trig_check_lost<ARGS...>;
 #endif
 	friend my_actor;
 public:
@@ -842,9 +842,9 @@ class trig_handle<> : public ActorMsgHandlePush_<>
 	typedef ActorMsgHandlePush_<> Parent;
 	typedef trig_notifer<> MsgNotifer;
 
-	friend mutex_block_trig<>;
+	friend select_block_trig<>;
 #ifdef ENABLE_CHECK_LOST
-	friend mutex_block_trig_check_lost<>;
+	friend select_block_trig_check_lost<>;
 #endif
 	friend my_actor;
 public:
@@ -991,12 +991,12 @@ class MsgPump_ : public MsgPumpBase_
 
 	friend my_actor;
 	friend MsgPool_<ARGS...>;
-	friend mutex_block_pump<ARGS...>;
-	friend mutex_block_pump_check_state<ARGS...>;
+	friend select_block_pump<ARGS...>;
+	friend select_block_pump_check_state<ARGS...>;
 	friend pump_handler;
 	friend msg_pump_handle<ARGS...>;
 #ifdef ENABLE_CHECK_LOST
-	friend mutex_block_pump_check_lost<ARGS...>;
+	friend select_block_pump_check_lost<ARGS...>;
 #endif
 	FRIEND_SHARED_PTR(MsgPump_<ARGS...>);
 private:
@@ -1217,7 +1217,7 @@ private:
 	{
 		assert(_strand->running_in_this_thread());
 		assert(_hostActor);
-		_pumpHandler = TRY_MOVE(pumpHandler);
+		_pumpHandler = std::forward<PumpHandler>(pumpHandler);
 		_pumpCount = 0;
 		if (_waiting)
 		{
@@ -1792,11 +1792,11 @@ class MsgPumpVoid_ : public MsgPumpBase_
 
 	friend my_actor;
 	friend MsgPoolVoid_;
-	friend mutex_block_pump<>;
-	friend mutex_block_pump_check_state<>;
+	friend select_block_pump<>;
+	friend select_block_pump_check_state<>;
 	friend pump_handler;
 #ifdef ENABLE_CHECK_LOST
-	friend mutex_block_pump_check_lost<>;
+	friend select_block_pump_check_lost<>;
 #endif
 protected:
 	MsgPumpVoid_(my_actor* hostActor, bool checkLost);
@@ -1856,11 +1856,11 @@ template <>
 class MsgPump_<> : public MsgPumpVoid_
 {
 	friend my_actor;
-	friend mutex_block_pump<>;
-	friend mutex_block_pump_check_state<>;
+	friend select_block_pump<>;
+	friend select_block_pump_check_state<>;
 	friend msg_pump_handle<>;
 #ifdef ENALBE_CHECK_LOST
-	friend mutex_block_pump_check_lost<>;
+	friend select_block_pump_check_lost<>;
 #endif
 	FRIEND_SHARED_PTR(MsgPump_<>);
 public:
@@ -1891,10 +1891,10 @@ template <typename... ARGS>
 class msg_pump_handle
 {
 	friend my_actor;
-	friend mutex_block_pump<ARGS...>;
-	friend mutex_block_pump_check_state<ARGS...>;
+	friend select_block_pump<ARGS...>;
+	friend select_block_pump_check_state<ARGS...>;
 #ifdef ENABLE_CHECK_LOST
-	friend mutex_block_pump_check_lost<ARGS...>;
+	friend select_block_pump_check_lost<ARGS...>;
 #endif
 
 	typedef MsgPump_<ARGS...> pump;
@@ -1991,11 +1991,11 @@ public:
 #ifdef ENABLE_CHECK_LOST
 	template <typename ActorHandle, typename CheckPumpLost>
 	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool, ActorHandle&& hostActor, CheckPumpLost&& autoCheckLost)
-		:_msgPool(msgPool), _hostActor(TRY_MOVE(hostActor)), _autoCheckLost(TRY_MOVE(autoCheckLost)) {}
+		:_msgPool(msgPool), _hostActor(std::forward<ActorHandle>(hostActor)), _autoCheckLost(std::forward<CheckPumpLost>(autoCheckLost)) {}
 #else
 	template <typename ActorHandle>
 	post_actor_msg(const std::shared_ptr<msg_pool_type>& msgPool, ActorHandle&& hostActor)
-		:_msgPool(msgPool), _hostActor(TRY_MOVE(hostActor)) {}
+		:_msgPool(msgPool), _hostActor(std::forward<ActorHandle>(hostActor)) {}
 #endif
 	post_actor_msg(const post_actor_msg<ARGS...>& s)
 		:_hostActor(s._hostActor), _msgPool(s._msgPool)
@@ -2034,7 +2034,7 @@ public:
 	{
 		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
 		assert(!empty());
-		_msgPool->push_msg(std::tuple<TYPE_PIPE(ARGS)...>(TRY_MOVE(args)...), _hostActor);
+		_msgPool->push_msg(std::tuple<TYPE_PIPE(ARGS)...>(std::forward<Args>(args)...), _hostActor);
 	}
 
 	void operator()() const
@@ -2103,7 +2103,7 @@ protected:
 @brief msg_handle消息互斥执行块
 */
 template <typename... ARGS>
-class mutex_block_msg : public MutexBlock_
+class select_block_msg : public MutexBlock_
 {
 	typedef msg_handle<ARGS...> MsgHandle;
 	typedef DstReceiverBuff_<ARGS...> dst_receiver;
@@ -2111,11 +2111,11 @@ class mutex_block_msg : public MutexBlock_
 	friend my_actor;
 public:
 	template <typename Handler>
-	mutex_block_msg(MsgHandle& msgHandle, Handler&& handler)
-		:_msgHandle(msgHandle), __MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor) {}
+	select_block_msg(MsgHandle& msgHandle, Handler&& handler)
+		:_msgHandle(msgHandle), __MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), msgHandle._hostActor) {}
 
 #ifdef __GNUG__
-	mutex_block_msg(mutex_block_msg&& s)
+	select_block_msg(select_block_msg&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler))
 	{
 		assert(false);
@@ -2173,7 +2173,7 @@ private:
 @brief trig_handle消息互斥执行块
 */
 template <typename... ARGS>
-class mutex_block_trig : public MutexBlock_
+class select_block_trig : public MutexBlock_
 {
 	typedef trig_handle<ARGS...> MsgHandle;
 	typedef DstReceiverBuff_<ARGS...> dst_receiver;
@@ -2181,11 +2181,11 @@ class mutex_block_trig : public MutexBlock_
 	friend my_actor;
 public:
 	template <typename Handler>
-	mutex_block_trig(MsgHandle& msgHandle, Handler&& handler)
-		:_msgHandle(msgHandle), __MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor) {}
+	select_block_trig(MsgHandle& msgHandle, Handler&& handler)
+		:_msgHandle(msgHandle), __MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), msgHandle._hostActor) {}
 
 #ifdef __GNUG__
-	mutex_block_trig(mutex_block_trig&& s)
+	select_block_trig(select_block_trig&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler))
 	{
 		assert(false);
@@ -2243,7 +2243,7 @@ private:
 @brief msg_pump消息互斥执行块
 */
 template <typename... ARGS>
-class mutex_block_pump : public MutexBlock_
+class select_block_pump : public MutexBlock_
 {
 	typedef msg_pump_handle<ARGS...> pump_handle;
 	typedef DstReceiverBuff_<ARGS...> dst_receiver;
@@ -2251,19 +2251,19 @@ class mutex_block_pump : public MutexBlock_
 	friend my_actor;
 public:
 	template <typename Handler>
-	mutex_block_pump(my_actor* host, Handler&& handler, bool checkLost = false)
-		:mutex_block_pump(0, host, TRY_MOVE(handler), checkLost) {}
+	select_block_pump(my_actor* host, Handler&& handler, bool checkLost = false)
+		:select_block_pump(0, host, std::forward<Handler>(handler), checkLost) {}
 
 	template <typename Handler>
-	mutex_block_pump(const int id, my_actor* host, Handler&& handler, bool checkLost = false)
-		: mutex_block_pump(ActorFunc_::connect_msg_pump<ARGS...>(id, host, checkLost), TRY_MOVE(handler)) {}
+	select_block_pump(const int id, my_actor* host, Handler&& handler, bool checkLost = false)
+		: select_block_pump(ActorFunc_::connect_msg_pump<ARGS...>(id, host, checkLost), std::forward<Handler>(handler)) {}
 
 	template <typename Handler>
-	mutex_block_pump(const pump_handle& pump, Handler&& handler)
-		: _msgHandle(pump), __MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), pump.get()->_hostActor) {}
+	select_block_pump(const pump_handle& pump, Handler&& handler)
+		: _msgHandle(pump), __MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), pump.get()->_hostActor) {}
 
 #ifdef __GNUG__
-	mutex_block_pump(mutex_block_pump&& s)
+	select_block_pump(select_block_pump&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler))
 	{
 		assert(false);
@@ -2323,18 +2323,18 @@ private:
 };
 
 template <>
-class mutex_block_msg<> : public MutexBlock_
+class select_block_msg<> : public MutexBlock_
 {
 	typedef msg_handle<> MsgHandle;
 
 	friend my_actor;
 public:
 	template <typename Handler>
-	mutex_block_msg(MsgHandle& msgHandle, Handler&& handler)
-		:_msgHandle(msgHandle), _has(false), __MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor) {}
+	select_block_msg(MsgHandle& msgHandle, Handler&& handler)
+		:_msgHandle(msgHandle), _has(false), __MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), msgHandle._hostActor) {}
 
 #ifdef __GNUG__
-	mutex_block_msg(mutex_block_msg&& s)
+	select_block_msg(select_block_msg&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler))
 	{
 		assert(false);
@@ -2389,18 +2389,18 @@ private:
 };
 
 template <>
-class mutex_block_trig<> : public MutexBlock_
+class select_block_trig<> : public MutexBlock_
 {
 	typedef trig_handle<> MsgHandle;
 
 	friend my_actor;
 public:
 	template <typename Handler>
-	mutex_block_trig(MsgHandle& msgHandle, Handler&& handler)
-		:_msgHandle(msgHandle), _has(false), __MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor) {}
+	select_block_trig(MsgHandle& msgHandle, Handler&& handler)
+		:_msgHandle(msgHandle), _has(false), __MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), msgHandle._hostActor) {}
 
 #ifdef __GNUG__
-	mutex_block_trig(mutex_block_trig&& s)
+	select_block_trig(select_block_trig&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler))
 	{
 		assert(false);
@@ -2455,26 +2455,26 @@ private:
 };
 
 template <>
-class mutex_block_pump<> : public MutexBlock_
+class select_block_pump<> : public MutexBlock_
 {
 	typedef msg_pump_handle<> pump_handle;
 
 	friend my_actor;
 public:
 	template <typename Handler>
-	mutex_block_pump(my_actor* host, Handler&& handler, bool checkLost = false)
-		:mutex_block_pump(0, host, TRY_MOVE(handler), checkLost) {}
+	select_block_pump(my_actor* host, Handler&& handler, bool checkLost = false)
+		:select_block_pump(0, host, std::forward<Handler>(handler), checkLost) {}
 
 	template <typename Handler>
-	mutex_block_pump(const int id, my_actor* host, Handler&& handler, bool checkLost = false)
-		: mutex_block_pump(ActorFunc_::connect_msg_pump(id, host, checkLost), TRY_MOVE(handler)) {}
+	select_block_pump(const int id, my_actor* host, Handler&& handler, bool checkLost = false)
+		: select_block_pump(ActorFunc_::connect_msg_pump(id, host, checkLost), std::forward<Handler>(handler)) {}
 
 	template <typename Handler>
-	mutex_block_pump(const pump_handle& pump, Handler&& handler)
-		: _msgHandle(pump), _has(false), __MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), pump.get()->_hostActor) {}
+	select_block_pump(const pump_handle& pump, Handler&& handler)
+		: _msgHandle(pump), _has(false), __MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), pump.get()->_hostActor) {}
 
 #ifdef __GNUG__
-	mutex_block_pump(mutex_block_pump&& s)
+	select_block_pump(select_block_pump&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler))
 	{
 		assert(false);
@@ -2533,13 +2533,13 @@ private:
 	bool _has;
 };
 
-class mutex_block_quit : public MutexBlock_
+class select_block_quit : public MutexBlock_
 {
 	friend my_actor;
 public:
 	template <typename Handler>
-	mutex_block_quit(my_actor* host, Handler&& handler)
-		:_host(host), _quitHandler(TRY_MOVE(handler)), _quitNtfed(false)
+	select_block_quit(my_actor* host, Handler&& handler)
+		:_host(host), _quitHandler(std::forward<Handler>(handler)), _quitNtfed(false)
 	{
 		check_lock_quit();
 	}
@@ -2557,13 +2557,13 @@ private:
 	bool _quitNtfed;
 };
 
-class mutex_block_sign : public MutexBlock_
+class select_block_sign : public MutexBlock_
 {
 	friend my_actor;
 public:
 	template <typename Handler>
-	mutex_block_sign(my_actor* host, int id, Handler&& handler)
-		:_host(host), _signHandler(TRY_MOVE(handler)), _mask((size_t)1 << id), _signNtfed(false)
+	select_block_sign(my_actor* host, int id, Handler&& handler)
+		:_host(host), _signHandler(std::forward<Handler>(handler)), _mask((size_t)1 << id), _signNtfed(false)
 	{
 		assert(id >= 0 && id < 8 * sizeof(void*));
 	}
@@ -2583,7 +2583,7 @@ private:
 //////////////////////////////////////////////////////////////////////////
 
 template <typename... ARGS>
-class mutex_block_pump_check_state : public MutexBlock_
+class select_block_pump_check_state : public MutexBlock_
 {
 	typedef msg_pump_handle<ARGS...> pump_handle;
 	typedef DstReceiverBuff_<ARGS...> dst_receiver;
@@ -2591,23 +2591,23 @@ class mutex_block_pump_check_state : public MutexBlock_
 	friend my_actor;
 public:
 	template <typename Handler, typename StateHandler>
-	mutex_block_pump_check_state(my_actor* host, Handler&& handler, StateHandler&& stateHandler)
-		:mutex_block_pump_check_state(0, host, TRY_MOVE(handler), TRY_MOVE(stateHandler)) {}
+	select_block_pump_check_state(my_actor* host, Handler&& handler, StateHandler&& stateHandler)
+		:select_block_pump_check_state(0, host, std::forward<Handler>(handler), std::forward<StateHandler>(stateHandler)) {}
 
 	template <typename Handler, typename StateHandler>
-	mutex_block_pump_check_state(const int id, my_actor* host, Handler&& handler, StateHandler&& stateHandler)
-		:mutex_block_pump_check_state(ActorFunc_::connect_msg_pump<ARGS...>(id, host, true), TRY_MOVE(handler), TRY_MOVE(stateHandler)) {}
+	select_block_pump_check_state(const int id, my_actor* host, Handler&& handler, StateHandler&& stateHandler)
+		: select_block_pump_check_state(ActorFunc_::connect_msg_pump<ARGS...>(id, host, true), std::forward<Handler>(handler), std::forward<StateHandler>(stateHandler)) {}
 
 	template <typename Handler, typename StateHandler>
-	mutex_block_pump_check_state(const pump_handle& pump, Handler&& handler, StateHandler&& stateHandler)
+	select_block_pump_check_state(const pump_handle& pump, Handler&& handler, StateHandler&& stateHandler)
 		:_msgHandle(pump), _readySign(0), _connected(false), _disconnected(false), _lostNtfed(false),
-		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), pump.get()->_hostActor),
-		__MUTEX_BLOCK_HANDLER_WRAP(_stateHandler, TRY_MOVE(stateHandler), pump.get()->_hostActor)		
+		__MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), pump.get()->_hostActor),
+		__MUTEX_BLOCK_HANDLER_WRAP(_stateHandler, std::forward<StateHandler>(stateHandler), pump.get()->_hostActor)
 	{
 	}
 
 #ifdef __GNUG__
-	mutex_block_pump_check_state(mutex_block_pump_check_state&& s)
+	select_block_pump_check_state(select_block_pump_check_state&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _stateHandler(std::move(s._stateHandler)),
 		_readySign(s._readySign), _connected(s._connected), _disconnected(s._disconnected), _lostNtfed(s._lostNtfed)
 	{
@@ -2714,30 +2714,30 @@ private:
 };
 
 template <>
-class mutex_block_pump_check_state<> : public MutexBlock_
+class select_block_pump_check_state<> : public MutexBlock_
 {
 	typedef msg_pump_handle<> pump_handle;
 
 	friend my_actor;
 public:
 	template <typename Handler, typename StateHandler>
-	mutex_block_pump_check_state(my_actor* host, Handler&& handler, StateHandler&& stateHandler)
-		:mutex_block_pump_check_state(0, host, TRY_MOVE(handler), TRY_MOVE(stateHandler)) {}
+	select_block_pump_check_state(my_actor* host, Handler&& handler, StateHandler&& stateHandler)
+		:select_block_pump_check_state(0, host, std::forward<Handler>(handler), std::forward<StateHandler>(stateHandler)) {}
 
 	template <typename Handler, typename StateHandler>
-	mutex_block_pump_check_state(const int id, my_actor* host, Handler&& handler, StateHandler&& stateHandler)
-		: mutex_block_pump_check_state(ActorFunc_::connect_msg_pump<>(id, host, true), TRY_MOVE(handler), TRY_MOVE(stateHandler)) {}
+	select_block_pump_check_state(const int id, my_actor* host, Handler&& handler, StateHandler&& stateHandler)
+		: select_block_pump_check_state(ActorFunc_::connect_msg_pump<>(id, host, true), std::forward<Handler>(handler), std::forward<StateHandler>(stateHandler)) {}
 
 	template <typename Handler, typename StateHandler>
-	mutex_block_pump_check_state(const pump_handle& pump, Handler&& handler, StateHandler&& stateHandler)
+	select_block_pump_check_state(const pump_handle& pump, Handler&& handler, StateHandler&& stateHandler)
 		:_msgHandle(pump), _readySign(0), _has(false), _connected(false), _disconnected(false), _lostNtfed(false),
-		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), pump.get()->_hostActor),
-		__MUTEX_BLOCK_HANDLER_WRAP(_stateHandler, TRY_MOVE(stateHandler), pump.get()->_hostActor)
+		__MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), pump.get()->_hostActor),
+		__MUTEX_BLOCK_HANDLER_WRAP(_stateHandler, std::forward<StateHandler>(stateHandler), pump.get()->_hostActor)
 	{
 	}
 
 #ifdef __GNUG__
-	mutex_block_pump_check_state(mutex_block_pump_check_state&& s)
+	select_block_pump_check_state(select_block_pump_check_state&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _stateHandler(std::move(s._stateHandler)),
 		_readySign(s._readySign), _connected(s._connected), _disconnected(s._disconnected), _lostNtfed(s._lostNtfed)
 	{
@@ -2850,7 +2850,7 @@ private:
 @brief msg_handle消息互斥执行块，带通知句柄丢失处理
 */
 template <typename... ARGS>
-class mutex_block_msg_check_lost : public MutexBlock_
+class select_block_msg_check_lost : public MutexBlock_
 {
 	typedef msg_handle<ARGS...> MsgHandle;
 	typedef DstReceiverBuff_<ARGS...> dst_receiver;
@@ -2858,16 +2858,16 @@ class mutex_block_msg_check_lost : public MutexBlock_
 	friend my_actor;
 public:
 	template <typename Handler, typename LostHandler>
-	mutex_block_msg_check_lost(MsgHandle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+	select_block_msg_check_lost(MsgHandle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
 		:_msgHandle(msgHandle), _readySign(0), _lostNtfed(false),
-		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor),
-		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, TRY_MOVE(lostHandler), msgHandle._hostActor)
+		__MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), msgHandle._hostActor),
+		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, std::forward<LostHandler>(lostHandler), msgHandle._hostActor)
 	{
 		_msgHandle.check_lost(true);
 	}
 
 #ifdef __GNUG__
-	mutex_block_msg_check_lost(mutex_block_msg_check_lost&& s)
+	select_block_msg_check_lost(select_block_msg_check_lost&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _lostHandler(std::move(s._lostHandler)),
 		_readySign(s._readySign), _lostNtfed(s._lostNtfed)
 	{
@@ -2943,7 +2943,7 @@ private:
 @brief trig_handle消息互斥执行块，带通知句柄丢失处理
 */
 template <typename... ARGS>
-class mutex_block_trig_check_lost : public MutexBlock_
+class select_block_trig_check_lost : public MutexBlock_
 {
 	typedef trig_handle<ARGS...> MsgHandle;
 	typedef DstReceiverBuff_<ARGS...> dst_receiver;
@@ -2951,16 +2951,16 @@ class mutex_block_trig_check_lost : public MutexBlock_
 	friend my_actor;
 public:
 	template <typename Handler, typename LostHandler>
-	mutex_block_trig_check_lost(MsgHandle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+	select_block_trig_check_lost(MsgHandle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
 		:_msgHandle(msgHandle), _readySign(0), _lostNtfed(false),
-		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor),
-		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, TRY_MOVE(lostHandler), msgHandle._hostActor)
+		__MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), msgHandle._hostActor),
+		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, std::forward<LostHandler>(lostHandler), msgHandle._hostActor)
 	{
 		_msgHandle.check_lost(true);
 	}
 
 #ifdef __GNUG__
-	mutex_block_trig_check_lost(mutex_block_trig_check_lost&& s)
+	select_block_trig_check_lost(select_block_trig_check_lost&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _lostHandler(std::move(s._lostHandler)),
 		_readySign(s._readySign), _lostNtfed(s._lostNtfed)
 	{
@@ -3036,7 +3036,7 @@ private:
 @brief msg_pump消息互斥执行块，带通知句柄丢失处理
 */
 template <typename... ARGS>
-class mutex_block_pump_check_lost : public MutexBlock_
+class select_block_pump_check_lost : public MutexBlock_
 {
 	typedef msg_pump_handle<ARGS...> pump_handle;
 	typedef DstReceiverBuff_<ARGS...> dst_receiver;
@@ -3044,24 +3044,24 @@ class mutex_block_pump_check_lost : public MutexBlock_
 	friend my_actor;
 public:
 	template <typename Handler, typename LostHandler>
-	mutex_block_pump_check_lost(my_actor* host, Handler&& handler, LostHandler&& lostHandler)
-		:mutex_block_pump_check_lost(0, host, TRY_MOVE(handler), TRY_MOVE(lostHandler)) {}
+	select_block_pump_check_lost(my_actor* host, Handler&& handler, LostHandler&& lostHandler)
+		:select_block_pump_check_lost(0, host, std::forward<Handler>(handler), std::forward<LostHandler>(lostHandler)) {}
 
 	template <typename Handler, typename LostHandler>
-	mutex_block_pump_check_lost(const int id, my_actor* host, Handler&& handler, LostHandler&& lostHandler)
-		: mutex_block_pump_check_lost(ActorFunc_::connect_msg_pump<ARGS...>(id, host, true), TRY_MOVE(handler), TRY_MOVE(lostHandler)) {}
+	select_block_pump_check_lost(const int id, my_actor* host, Handler&& handler, LostHandler&& lostHandler)
+		: select_block_pump_check_lost(ActorFunc_::connect_msg_pump<ARGS...>(id, host, true), std::forward<Handler>(handler), std::forward<LostHandler>(lostHandler)) {}
 
 	template <typename Handler, typename LostHandler>
-	mutex_block_pump_check_lost(const pump_handle& pump, Handler&& handler, LostHandler&& lostHandler)
+	select_block_pump_check_lost(const pump_handle& pump, Handler&& handler, LostHandler&& lostHandler)
 		:_msgHandle(pump), _readySign(0), _lostNtfed(false),
-		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), pump.get()->_hostActor),
-		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, TRY_MOVE(lostHandler), pump.get()->_hostActor)
+		__MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), pump.get()->_hostActor),
+		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, std::forward<LostHandler>(lostHandler), pump.get()->_hostActor)
 	{
 		_msgHandle.check_lost(true);
 	}
 	
 #ifdef __GNUG__
-	mutex_block_pump_check_lost(mutex_block_pump_check_lost&& s)
+	select_block_pump_check_lost(select_block_pump_check_lost&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _lostHandler(std::move(s._lostHandler)),
 		_readySign(s._readySign), _lostNtfed(s._lostNtfed)
 	{
@@ -3138,23 +3138,23 @@ private:
 };
 
 template <>
-class mutex_block_msg_check_lost<> : public MutexBlock_
+class select_block_msg_check_lost<> : public MutexBlock_
 {
 	typedef msg_handle<> MsgHandle;
 
 	friend my_actor;
 public:
 	template <typename Handler, typename LostHandler>
-	mutex_block_msg_check_lost(MsgHandle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+	select_block_msg_check_lost(MsgHandle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
 		:_msgHandle(msgHandle), _readySign(0), _has(false), _lostNtfed(false),
-		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor),
-		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, TRY_MOVE(lostHandler), msgHandle._hostActor)
+		__MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), msgHandle._hostActor),
+		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, std::forward<LostHandler>(lostHandler), msgHandle._hostActor)
 	{
 		_msgHandle.check_lost(true);
 	}
 	
 #ifdef __GNUG__
-	mutex_block_msg_check_lost(mutex_block_msg_check_lost&& s)
+	select_block_msg_check_lost(select_block_msg_check_lost&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _lostHandler(std::move(s._lostHandler)),
 		_readySign(s._readySign), _lostNtfed(s._lostNtfed)
 	{
@@ -3227,23 +3227,23 @@ private:
 };
 
 template <>
-class mutex_block_trig_check_lost<> : public MutexBlock_
+class select_block_trig_check_lost<> : public MutexBlock_
 {
 	typedef trig_handle<> MsgHandle;
 
 	friend my_actor;
 public:
 	template <typename Handler, typename LostHandler>
-	mutex_block_trig_check_lost(MsgHandle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+	select_block_trig_check_lost(MsgHandle& msgHandle, Handler&& handler, LostHandler&& lostHandler)
 		:_msgHandle(msgHandle), _readySign(0), _has(false), _lostNtfed(false),
-		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), msgHandle._hostActor),
-		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, TRY_MOVE(lostHandler), msgHandle._hostActor)
+		__MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), msgHandle._hostActor),
+		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, std::forward<LostHandler>(lostHandler), msgHandle._hostActor)
 	{
 		_msgHandle.check_lost(true);
 	}
 	
 #ifdef __GNUG__
-	mutex_block_trig_check_lost(mutex_block_trig_check_lost&& s)
+	select_block_trig_check_lost(select_block_trig_check_lost&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _lostHandler(std::move(s._lostHandler)),
 		_readySign(s._readySign), _lostNtfed(s._lostNtfed)
 	{
@@ -3316,31 +3316,31 @@ private:
 };
 
 template <>
-class mutex_block_pump_check_lost<> : public MutexBlock_
+class select_block_pump_check_lost<> : public MutexBlock_
 {
 	typedef msg_pump_handle<> pump_handle;
 
 	friend my_actor;
 public:
 	template <typename Handler, typename LostHandler>
-	mutex_block_pump_check_lost(my_actor* host, Handler&& handler, LostHandler&& lostHandler)
-		:mutex_block_pump_check_lost(0, host, TRY_MOVE(handler), TRY_MOVE(lostHandler)) {}
+	select_block_pump_check_lost(my_actor* host, Handler&& handler, LostHandler&& lostHandler)
+		:select_block_pump_check_lost(0, host, std::forward<Handler>(handler), std::forward<LostHandler>(lostHandler)) {}
 
 	template <typename Handler, typename LostHandler>
-	mutex_block_pump_check_lost(const int id, my_actor* host, Handler&& handler, LostHandler&& lostHandler)
-		: mutex_block_pump_check_lost(ActorFunc_::connect_msg_pump(id, host, true), TRY_MOVE(handler), TRY_MOVE(lostHandler)) {}
+	select_block_pump_check_lost(const int id, my_actor* host, Handler&& handler, LostHandler&& lostHandler)
+		: select_block_pump_check_lost(ActorFunc_::connect_msg_pump(id, host, true), std::forward<Handler>(handler), std::forward<LostHandler>(lostHandler)) {}
 
 	template <typename Handler, typename LostHandler>
-	mutex_block_pump_check_lost(const pump_handle& pump, Handler&& handler, LostHandler&& lostHandler)
+	select_block_pump_check_lost(const pump_handle& pump, Handler&& handler, LostHandler&& lostHandler)
 		:_msgHandle(pump), _readySign(0), _has(false), _lostNtfed(false),
-		__MUTEX_BLOCK_HANDLER_WRAP(_handler, TRY_MOVE(handler), pump.get()->_hostActor),
-		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, TRY_MOVE(lostHandler), pump.get()->_hostActor)
+		__MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), pump.get()->_hostActor),
+		__MUTEX_BLOCK_HANDLER_WRAP(_lostHandler, std::forward<LostHandler>(lostHandler), pump.get()->_hostActor)
 	{
 		_msgHandle.check_lost(true);
 	}
 	
 #ifdef __GNUG__
-	mutex_block_pump_check_lost(mutex_block_pump_check_lost&& s)
+	select_block_pump_check_lost(select_block_pump_check_lost&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _lostHandler(std::move(s._lostHandler)),
 		_readySign(s._readySign), _lostNtfed(s._lostNtfed)
 	{
@@ -3419,47 +3419,47 @@ private:
 //////////////////////////////////////////////////////////////////////////
 
 template <typename Handler, typename... ARGS>
-mutex_block_msg<ARGS...> make_mutex_block_msg(msg_handle<ARGS...>& msgHandle, Handler&& handler)
+select_block_msg<ARGS...> make_select_block_msg(msg_handle<ARGS...>& msgHandle, Handler&& handler)
 {
-	return mutex_block_msg<ARGS...>(msgHandle, TRY_MOVE(handler));
+	return select_block_msg<ARGS...>(msgHandle, std::forward<Handler>(handler));
 }
 
 template <typename Handler, typename... ARGS>
-mutex_block_trig<ARGS...> make_mutex_block_trig(trig_handle<ARGS...>& msgHandle, Handler&& handler)
+select_block_trig<ARGS...> make_select_block_trig(trig_handle<ARGS...>& msgHandle, Handler&& handler)
 {
-	return mutex_block_trig<ARGS...>(msgHandle, TRY_MOVE(handler));
+	return select_block_trig<ARGS...>(msgHandle, std::forward<Handler>(handler));
 }
 
 template <typename Handler, typename... ARGS>
-mutex_block_pump<ARGS...> make_mutex_block_pump(const msg_pump_handle<ARGS...>& msgHandle, Handler&& handler)
+select_block_pump<ARGS...> make_select_block_pump(const msg_pump_handle<ARGS...>& msgHandle, Handler&& handler)
 {
-	return mutex_block_pump<ARGS...>(msgHandle, TRY_MOVE(handler));
+	return select_block_pump<ARGS...>(msgHandle, std::forward<Handler>(handler));
 }
 
 template <typename Handler, typename StateHandler, typename... ARGS>
-mutex_block_pump_check_state<ARGS...> make_mutex_block_pump_check_state(const msg_pump_handle<ARGS...>& msgHandle, Handler&& handler, StateHandler&& stateHandler)
+select_block_pump_check_state<ARGS...> make_select_block_pump_check_state(const msg_pump_handle<ARGS...>& msgHandle, Handler&& handler, StateHandler&& stateHandler)
 {
-	return mutex_block_pump_check_state<ARGS...>(msgHandle, TRY_MOVE(handler), TRY_MOVE(stateHandler));
+	return select_block_pump_check_state<ARGS...>(msgHandle, std::forward<Handler>(handler), std::forward<StateHandler>(stateHandler));
 }
 
 #ifdef ENABLE_CHECK_LOST
 
 template <typename Handler, typename LostHandler, typename... ARGS>
-mutex_block_msg_check_lost<ARGS...> make_mutex_block_msg_check_lost(msg_handle<ARGS...>& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+select_block_msg_check_lost<ARGS...> make_select_block_msg_check_lost(msg_handle<ARGS...>& msgHandle, Handler&& handler, LostHandler&& lostHandler)
 {
-	return mutex_block_msg_check_lost<ARGS...>(msgHandle, TRY_MOVE(handler), TRY_MOVE(lostHandler));
+	return select_block_msg_check_lost<ARGS...>(msgHandle, std::forward<Handler>(handler), std::forward<LostHandler>(lostHandler));
 }
 
 template <typename Handler, typename LostHandler, typename... ARGS>
-mutex_block_trig_check_lost<ARGS...> make_mutex_block_trig_check_lost(trig_handle<ARGS...>& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+select_block_trig_check_lost<ARGS...> make_select_block_trig_check_lost(trig_handle<ARGS...>& msgHandle, Handler&& handler, LostHandler&& lostHandler)
 {
-	return mutex_block_trig_check_lost<ARGS...>(msgHandle, TRY_MOVE(handler), TRY_MOVE(lostHandler));
+	return select_block_trig_check_lost<ARGS...>(msgHandle, std::forward<Handler>(handler), std::forward<LostHandler>(lostHandler));
 }
 
 template <typename Handler, typename LostHandler, typename... ARGS>
-mutex_block_pump_check_lost<ARGS...> make_mutex_block_pump_check_lost(const msg_pump_handle<ARGS...>& msgHandle, Handler&& handler, LostHandler&& lostHandler)
+select_block_pump_check_lost<ARGS...> make_select_block_pump_check_lost(const msg_pump_handle<ARGS...>& msgHandle, Handler&& handler, LostHandler&& lostHandler)
 {
-	return mutex_block_pump_check_lost<ARGS...>(msgHandle, TRY_MOVE(handler), TRY_MOVE(lostHandler));
+	return select_block_pump_check_lost<ARGS...>(msgHandle, std::forward<Handler>(handler), std::forward<LostHandler>(lostHandler));
 }
 
 #endif
@@ -3468,28 +3468,16 @@ mutex_block_pump_check_lost<ARGS...> make_mutex_block_pump_check_lost(const msg_
 class TrigOnceBase_
 {
 protected:
-	TrigOnceBase_()
-		DEBUG_OPERATION(:_pIsTrig(new std::atomic<bool>(false)))
-	{}
-
-	TrigOnceBase_(const TrigOnceBase_& s)
-		:_hostActor(s._hostActor)
-	{
-		DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
-	}
-
-	TrigOnceBase_(TrigOnceBase_&& s)
-		:_hostActor(std::move(s._hostActor))
-	{
-		DEBUG_OPERATION(_pIsTrig = std::move(s._pIsTrig));
-	}
+	TrigOnceBase_();
+	TrigOnceBase_(const TrigOnceBase_& s);
+	TrigOnceBase_(TrigOnceBase_&& s);
 protected:
 	template <typename DST, typename... Args>
 	void _trig_handler(bool* sign, DST& dstRec, Args&&... args) const
 	{
 		assert(!_pIsTrig->exchange(true));
 		assert(_hostActor);
-		ActorFunc_::_trig_handler(_hostActor.get(), sign, dstRec, std::tuple<RM_CREF(Args)...>(TRY_MOVE(args)...));
+		ActorFunc_::_trig_handler(_hostActor.get(), sign, dstRec, std::tuple<RM_CREF(Args)...>(std::forward<Args>(args)...));
 		reset();
 	}
 
@@ -3498,7 +3486,7 @@ protected:
 	{
 		assert(!_pIsTrig->exchange(true));
 		assert(_hostActor);
-		ActorFunc_::_trig_handler2(_hostActor.get(), closed, sign, dstRec, std::tuple<RM_CREF(Args)...>(TRY_MOVE(args)...));
+		ActorFunc_::_trig_handler2(_hostActor.get(), closed, sign, dstRec, std::tuple<RM_CREF(Args)...>(std::forward<Args>(args)...));
 		reset();
 	}
 
@@ -3507,7 +3495,7 @@ protected:
 	{
 		assert(!_pIsTrig->exchange(true));
 		assert(_hostActor);
-		ActorFunc_::_trig_handler(_hostActor.get(), sign, dstRec, TRY_MOVE(args));
+		ActorFunc_::_trig_handler(_hostActor.get(), sign, dstRec, std::forward<SRC>(args));
 		reset();
 	}
 
@@ -3516,7 +3504,7 @@ protected:
 	{
 		assert(!_pIsTrig->exchange(true));
 		assert(_hostActor);
-		ActorFunc_::_trig_handler2(_hostActor.get(), closed, sign, dstRec, TRY_MOVE(args));
+		ActorFunc_::_trig_handler2(_hostActor.get(), closed, sign, dstRec, std::forward<SRC>(args));
 		reset();
 	}
 
@@ -3524,8 +3512,8 @@ protected:
 	void tick_handler(shared_bool& closed, bool* sign) const;
 	virtual void reset() const = 0;
 protected:
-	void copy(const TrigOnceBase_& s);
-	void move(TrigOnceBase_&& s);
+	void operator =(const TrigOnceBase_& s);
+	void operator =(TrigOnceBase_&& s);
 protected:
 	mutable actor_handle _hostActor;
 	DEBUG_OPERATION(std::shared_ptr<std::atomic<bool> > _pIsTrig);
@@ -3566,7 +3554,7 @@ public:
 
 	void operator =(trig_once_notifer&& s)
 	{
-		TrigOnceBase_::move(std::move(s));
+		TrigOnceBase_::operator =(std::move(s));
 		_dstRec = s._dstRec;
 		_sign = s._sign;
 		s._dstRec = NULL;
@@ -3575,7 +3563,7 @@ public:
 
 	void operator =(const trig_once_notifer& s)
 	{
-		TrigOnceBase_::copy(s);
+		TrigOnceBase_::operator =(s);
 		_dstRec = s._dstRec;
 		_sign = s._sign;
 	}
@@ -3584,7 +3572,7 @@ public:
 	void operator()(Args&&... args) const
 	{
 		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
-		_trig_handler(_sign, *_dstRec, TRY_MOVE(args)...);
+		_trig_handler(_sign, *_dstRec, std::forward<Args>(args)...);
 	}
 
 	void operator()() const
@@ -3676,7 +3664,7 @@ public:
 	void operator()(Args&&... args)
 	{
 		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
-		Parent::_trig_handler2(_closed, _sign, _dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
+		Parent::_trig_handler2(_closed, _sign, _dstRef, try_ref_move<ARGS>::move(std::forward<Args>(args))...);
 	}
 
 	void operator()()
@@ -3756,7 +3744,7 @@ public:
 	{
 		static_assert(sizeof...(ARGS) >= sizeof...(Args), "");
 		typedef typename types_to_tuple<typename prefix_types<sizeof...(Args), TYPE_PIPE(ARGS)...>::types>::tuple_type tuple_type;
-		Parent::_trig_handler4(_closed, _sign, _dstRef, tuple_type(TRY_MOVE(args)...));
+		Parent::_trig_handler4(_closed, _sign, _dstRef, tuple_type(std::forward<Args>(args)...));
 	}
 
 	void operator()()
@@ -3835,7 +3823,7 @@ public:
 	void operator()(Args&&... args) const
 	{
 		static_assert(sizeof...(ARGS) == sizeof...(Args), "");
-		Parent::_trig_handler(_sign, _dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
+		Parent::_trig_handler(_sign, _dstRef, try_ref_move<ARGS>::move(std::forward<Args>(args))...);
 	}
 
 	void operator()() const
@@ -3914,7 +3902,7 @@ public:
 	{
 		static_assert(sizeof...(ARGS) >= sizeof...(Args), "");
 		typedef typename types_to_tuple<typename prefix_types<sizeof...(Args), TYPE_PIPE(ARGS)...>::types>::tuple_type tuple_type;
-		Parent::_trig_handler3(_sign, _dstRef, tuple_type(TRY_MOVE(args)...));
+		Parent::_trig_handler3(_sign, _dstRef, tuple_type(std::forward<Args>(args)...));
 	}
 
 	void operator()() const
@@ -3952,7 +3940,7 @@ class on_callback_handler : public TrigOnceBase_
 public:
 	template <typename H>
 	on_callback_handler(my_actor* host, H&& h)
-		:_closed(shared_bool::new_(false)), _handler(TRY_MOVE(h)), _selfEarly(host), _bsign(false), _sign(&_bsign)
+		:_closed(shared_bool::new_(false)), _handler(std::forward<H>(h)), _selfEarly(host), _bsign(false), _sign(&_bsign)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
 	}
@@ -4023,7 +4011,7 @@ struct sync_result
 	void return_(Args&&... args)
 	{
 		assert(_res);
-		_res->create(TRY_MOVE(args)...);
+		_res->create(std::forward<Args>(args)...);
 		{
 			assert(_mutex && _con);
 			std::lock_guard<std::mutex> lg(*_mutex);
@@ -4036,7 +4024,7 @@ struct sync_result
 	void operator =(T&& r)
 	{
 		assert(_res);
-		_res->create(TRY_MOVE(r));
+		_res->create(std::forward<T>(r));
 		{
 			assert(_mutex && _con);
 			std::lock_guard<std::mutex> lg(*_mutex);
@@ -4113,7 +4101,7 @@ public:
 			_result._mutex = &mutex;
 			_result._con = &con;
 			std::unique_lock<std::mutex> ul(mutex);
-			Parent::_trig_handler(&_result._sign, _dstRef, try_ref_move<ARGS>::move(TRY_MOVE(args))...);
+			Parent::_trig_handler(&_result._sign, _dstRef, try_ref_move<ARGS>::move(std::forward<Args>(args))...);
 			con.wait(ul);
 		}
 		return stack_obj_move::move(res);
@@ -4159,7 +4147,7 @@ class wrapped_sync_handler
 public:
 	template <typename H>
 	wrapped_sync_handler(H&& h, sync_result<R>& res)
-		:_handler(TRY_MOVE(h)), _result(&res)
+		:_handler(std::forward<H>(h)), _result(&res)
 	{
 		DEBUG_OPERATION(_pIsTrig = std::shared_ptr<std::atomic<bool> >(new std::atomic<bool>(false)));
 	}
@@ -4204,7 +4192,7 @@ public:
 			_result->_mutex = &mutex;
 			_result->_con = &con;
 			std::unique_lock<std::mutex> ul(mutex);
-			_handler(TRY_MOVE(args)...);
+			_handler(std::forward<Args>(args)...);
 			con.wait(ul);
 		}
 		DEBUG_OPERATION(_pIsTrig->exchange(false));
@@ -4227,7 +4215,7 @@ class wrapped_sync_handler2
 public:
 	template <typename H>
 	wrapped_sync_handler2(H&& h, sync_result<R>& res)
-		:_handler(TRY_MOVE(h)), _result(&res), _syncSt(new sync_st)
+		:_handler(std::forward<H>(h)), _result(&res), _syncSt(new sync_st)
 	{
 		DEBUG_OPERATION(_pIsTrig = std::shared_ptr<std::atomic<bool> >(new std::atomic<bool>(false)));
 	}
@@ -4272,7 +4260,7 @@ public:
 			_result->_mutex = &_syncSt->mutex;
 			_result->_con = &_syncSt->con;
 			std::unique_lock<std::mutex> ul(_syncSt->mutex);
-			_handler(TRY_MOVE(args)...);
+			_handler(std::forward<Args>(args)...);
 			_syncSt->con.wait(ul);
 		}
 		DEBUG_OPERATION(_pIsTrig->exchange(false));
@@ -4291,13 +4279,13 @@ private:
 template <typename R, typename Handler>
 wrapped_sync_handler<R, RM_CREF(Handler)> wrap_sync(sync_result<R>& res, Handler&& h)
 {
-	return wrapped_sync_handler<R, RM_CREF(Handler)>(TRY_MOVE(h), res);
+	return wrapped_sync_handler<R, RM_CREF(Handler)>(std::forward<Handler>(h), res);
 }
 
 template <typename R, typename Handler>
 wrapped_sync_handler2<R, RM_CREF(Handler)> wrap_sync2(sync_result<R>& res, Handler&& h)
 {
-	return wrapped_sync_handler2<R, RM_CREF(Handler)>(TRY_MOVE(h), res);
+	return wrapped_sync_handler2<R, RM_CREF(Handler)>(std::forward<Handler>(h), res);
 }
 //////////////////////////////////////////////////////////////////////////
 
@@ -4440,7 +4428,7 @@ class my_actor : public ActorTimerFace_
 	{
 		template <typename Handler>
 		suspend_resume_option(bool isSuspend, Handler&& h)
-			:_isSuspend(isSuspend), _h(TRY_MOVE(h)) {}
+			:_isSuspend(isSuspend), _h(std::forward<Handler>(h)) {}
 
 		bool _isSuspend;
 		std::function<void()> _h;
@@ -4608,7 +4596,7 @@ class my_actor : public ActorTimerFace_
 	{
 		template <typename ActorHandle>
 		async_invoke_handler(ActorHandle&& host, bool* sign, DST& dst)
-			:_sharedThis(TRY_MOVE(host)), _sign(sign), _dstRec(dst) {}
+			:_sharedThis(std::forward<ActorHandle>(host)), _sign(sign), _dstRec(dst) {}
 
 		async_invoke_handler(const async_invoke_handler<DST, ARG>& s)
 			:_sharedThis(s._sharedThis), _dstRec(s._dstRec), _sign(s._sign) {}
@@ -4622,7 +4610,7 @@ class my_actor : public ActorTimerFace_
 		template <typename Arg>
 		void operator ()(Arg&& arg)
 		{
-			_sharedThis->_trig_handler(_sign, _dstRec, TRY_MOVE(arg));
+			_sharedThis->_trig_handler(_sign, _dstRec, std::forward<Arg>(arg));
 		}
 
 		actor_handle _sharedThis;
@@ -4637,7 +4625,7 @@ class my_actor : public ActorTimerFace_
 	{
 		template <typename ActorHandle>
 		async_invoke_handler(ActorHandle&& host, bool* sign, DST& dst)
-			:_sharedThis(TRY_MOVE(host)), _sign(sign), _dstRec(dst) {}
+			:_sharedThis(std::forward<ActorHandle>(host)), _sign(sign), _dstRec(dst) {}
 
 		async_invoke_handler(const async_invoke_handler<DST, ARG&>& s)
 			:_sharedThis(s._sharedThis), _dstRec(s._dstRec), _sign(s._sign) {}
@@ -4665,7 +4653,7 @@ class my_actor : public ActorTimerFace_
 	{
 		template <typename ActorHandle, typename H>
 		wrap_delay_trig(ActorHandle&& self, H&& h)
-			: _count(self->_timerStateCount), _lockSelf(TRY_MOVE(self)), _h(TRY_MOVE(h)) {}
+			: _count(self->_timerStateCount), _lockSelf(std::forward<ActorHandle>(self)), _h(std::forward<H>(h)) {}
 
 		wrap_delay_trig(wrap_delay_trig&& s)
 			:_count(s._count), _lockSelf(std::move(s._lockSelf)), _h(std::move(s._h)) {}
@@ -4693,7 +4681,7 @@ class my_actor : public ActorTimerFace_
 	{
 		template <typename ActorHandle>
 		wrap_trig_run_one(ActorHandle&& self, bool* sign)
-			:_lockSelf(TRY_MOVE(self)), _sign(sign) {}
+			:_lockSelf(std::forward<ActorHandle>(self)), _sign(sign) {}
 
 		void operator()()
 		{
@@ -4735,7 +4723,7 @@ class my_actor : public ActorTimerFace_
 	{
 		template <typename ActorHandle>
 		wrap_check_trig_run_one(shared_bool& closed, ActorHandle&& self, bool* sign)
-			:_closed(closed), _lockSelf(TRY_MOVE(self)), _sign(sign) {}
+			:_closed(closed), _lockSelf(std::forward<ActorHandle>(self)), _sign(sign) {}
 
 		void operator()()
 		{
@@ -4786,7 +4774,7 @@ class my_actor : public ActorTimerFace_
 	{
 		template <typename H>
 		wrap_timer_handler(H&& h)
-			:_handler(TRY_MOVE(h)) {}
+			:_handler(std::forward<H>(h)) {}
 
 		void invoke()
 		{
@@ -4813,8 +4801,8 @@ class my_actor : public ActorTimerFace_
 	class actor_run;
 	friend actor_run;
 	friend child_handle;
-	friend mutex_block_quit;
-	friend mutex_block_sign;
+	friend select_block_quit;
+	friend select_block_sign;
 	friend MsgPumpBase_;
 	friend msg_handle_base;
 	friend TrigOnceBase_;
@@ -4892,16 +4880,16 @@ public:
 	template <typename SharedStrand, typename MainFunc, typename NotifyFunc>
 	static actor_handle create_and_notify(SharedStrand&& actorStrand, MainFunc&& mainFunc, NotifyFunc&& notifyFunc, size_t stackSize = DEFAULT_STACKSIZE)
 	{
-		actor_handle newActor = create(TRY_MOVE(actorStrand), TRY_MOVE(mainFunc), stackSize);
-		newActor->_quitCallback.push_back(TRY_MOVE(notifyFunc));
+		actor_handle newActor = create(std::forward<SharedStrand>(actorStrand), std::forward<MainFunc>(mainFunc), stackSize);
+		newActor->_quitCallback.push_back(std::forward<NotifyFunc>(notifyFunc));
 		return newActor;
 	}
 
 	template <typename SharedStrand, typename NotifyFunc>
 	static actor_handle create_and_notify(SharedStrand&& actorStrand, AutoStackActorFace_&& wrapActor, NotifyFunc&& notifyFunc)
 	{
-		actor_handle newActor = create(TRY_MOVE(actorStrand), std::move(wrapActor));
-		newActor->_quitCallback.push_back(TRY_MOVE(notifyFunc));
+		actor_handle newActor = create(std::forward<SharedStrand>(actorStrand), std::move(wrapActor));
+		newActor->_quitCallback.push_back(std::forward<NotifyFunc>(notifyFunc));
 		return newActor;
 	}
 public:
@@ -5216,7 +5204,7 @@ public:
 	template <typename Handler>
 	__yield_interrupt void run_generator(Handler&& h)
 	{
-		run_generator(_strand, TRY_MOVE(h));
+		run_generator(_strand, std::forward<Handler>(h));
 	}
 
 	/*!
@@ -5289,7 +5277,7 @@ public:
 		assert_enter();
 		if (ms >= 0)
 		{
-			timeout(ms, TRY_MOVE(handler));
+			timeout(ms, std::forward<Handler>(handler));
 		}
 		else
 		{
@@ -5306,7 +5294,7 @@ public:
 	void deadline_trig(long long us, Handler&& handler)
 	{
 		assert_enter();
-		deadline(us, TRY_MOVE(handler));
+		deadline(us, std::forward<Handler>(handler));
 	}
 
 	/*!
@@ -5415,7 +5403,7 @@ public:
 	{
 		assert_enter();
 		bool sign = false;
-		exeStrand->asyncInvokeVoid(TRY_MOVE(h), std::bind([&sign](actor_handle& shared_this)
+		exeStrand->asyncInvokeVoid(std::forward<H>(h), std::bind([&sign](actor_handle& shared_this)
 		{
 			my_actor* const self = shared_this.get();
 			self->_strand->distribute(wrap_trig_run_one(std::move(shared_this), &sign));
@@ -5431,7 +5419,7 @@ public:
 		assert_enter();
 		bool sign = false;
 		std::tuple<stack_obj<TYPE_PIPE(R)>> dstRec;
-		exeStrand->asyncInvoke(TRY_MOVE(h), async_invoke_handler<std::tuple<stack_obj<TYPE_PIPE(R)>>, R>(shared_from_this(), &sign, dstRec));
+		exeStrand->asyncInvoke(std::forward<H>(h), async_invoke_handler<std::tuple<stack_obj<TYPE_PIPE(R)>>, R>(shared_from_this(), &sign, dstRec));
 		assert(!sign);
 		sign = true;
 		push_yield();
@@ -5441,13 +5429,13 @@ public:
 	template <typename H>
 	__yield_interrupt void async_send_self(H&& h)
 	{
-		async_send(_strand, TRY_MOVE(h));
+		async_send(_strand, std::forward<H>(h));
 	}
 
 	template <typename R, typename H>
 	__yield_interrupt R async_send_self(H&& h)
 	{
-		return async_send<R>(_strand, TRY_MOVE(h));
+		return async_send<R>(_strand, std::forward<H>(h));
 	}
 
 	template <typename H>
@@ -5971,7 +5959,7 @@ public:
 	callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_context(int ms, TimedHandler&& th, Outs&... outs)
 	{
 		assert_enter();
-		delay_trig(ms, TRY_MOVE(th));
+		delay_trig(ms, std::forward<TimedHandler>(th));
 		return callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, true, outs...);
 	}
 
@@ -6019,7 +6007,7 @@ public:
 	same_callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_timed_same_context(int ms, TimedHandler&& th, Outs&... outs)
 	{
 		assert_enter();
-		delay_trig(ms, TRY_MOVE(th));
+		delay_trig(ms, std::forward<TimedHandler>(th));
 		return same_callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, true, outs...);
 	}
 
@@ -6051,7 +6039,7 @@ public:
 	asio_callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_asio_timed_context(int ms, TimedHandler&& th, Outs&... outs)
 	{
 		assert_enter();
-		delay_trig(ms, TRY_MOVE(th));
+		delay_trig(ms, std::forward<TimedHandler>(th));
 		return asio_callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, true, outs...);
 	}
 
@@ -6083,7 +6071,7 @@ public:
 	asio_same_callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>> make_asio_timed_same_context(int ms, TimedHandler&& th, Outs&... outs)
 	{
 		assert_enter();
-		delay_trig(ms, TRY_MOVE(th));
+		delay_trig(ms, std::forward<TimedHandler>(th));
 		return asio_same_callback_handler<types_pck<typename check_stack_obj_type<Outs>::type...>, types_pck<Outs...>>(this, true, outs...);
 	}
 
@@ -6094,7 +6082,7 @@ public:
 	on_callback_handler<RM_CREF(Handler), R> make_on_callback_context(Handler&& handler)
 	{
 		assert_enter();
-		return on_callback_handler<RM_CREF(Handler), R>(this, TRY_MOVE(handler));
+		return on_callback_handler<RM_CREF(Handler), R>(this, std::forward<Handler>(handler));
 	}
 
 	/*!
@@ -6620,7 +6608,7 @@ public:
 		{
 			msg_pump_handle<Args...> pump = my_actor::_connect_msg_pump<Args...>(id, self, false);
 			agentActor(self, pump);
-		}, TRY_MOVE(agentActor), __1), stackSize);
+		}, std::forward<Handler>(agentActor), __1), stackSize);
 		childActor->_parentActor = shared_from_this();
 		msg_agent_to<Args...>(id, childActor);
 		if (autoRun)
@@ -6651,19 +6639,19 @@ public:
 	template <typename... Args, typename Handler>
 	__yield_interrupt child_handle msg_agent_to_actor(const int id, bool autoRun, Handler&& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
-		return msg_agent_to_actor<Args...>(id, self_strand(), autoRun, TRY_MOVE(agentActor), stackSize);
+		return msg_agent_to_actor<Args...>(id, self_strand(), autoRun, std::forward<Handler>(agentActor), stackSize);
 	}
 
 	template <typename... Args, typename Handler>
 	__yield_interrupt child_handle msg_agent_to_actor(const shared_strand& strand, bool autoRun, Handler&& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
-		return msg_agent_to_actor<Args...>(0, strand, autoRun, TRY_MOVE(agentActor), stackSize);
+		return msg_agent_to_actor<Args...>(0, strand, autoRun, std::forward<Handler>(agentActor), stackSize);
 	}
 
 	template <typename... Args, typename Handler>
 	__yield_interrupt child_handle msg_agent_to_actor(bool autoRun, Handler&& agentActor, size_t stackSize = DEFAULT_STACKSIZE)
 	{
-		return msg_agent_to_actor<Args...>(0, self_strand(), autoRun, TRY_MOVE(agentActor), stackSize);
+		return msg_agent_to_actor<Args...>(0, self_strand(), autoRun, std::forward<Handler>(agentActor), stackSize);
 	}
 
 	template <typename... Args, typename Handler>
@@ -7659,7 +7647,7 @@ public:
 		return msg_agent_handle<Args...>(id, shared_from_this());
 	}
 private:
-	static bool _mutex_ready(MutexBlock_** const mbs, const size_t N)
+	static bool _select_ready(MutexBlock_** const mbs, const size_t N)
 	{
 		bool r = false;
 		for (size_t i = 0; i < N; i++)
@@ -7669,7 +7657,7 @@ private:
 		return r;
 	}
 
-	static bool _mutex_ready2(const size_t st, MutexBlock_** const mbs, const size_t N)
+	static bool _select_ready2(const size_t st, MutexBlock_** const mbs, const size_t N)
 	{
 		assert(st < N);
 		size_t i = st;
@@ -7684,7 +7672,7 @@ private:
 		return true;
 	}
 
-	static void _mutex_cancel(MutexBlock_** const mbs, const size_t N)
+	static void _select_cancel(MutexBlock_** const mbs, const size_t N)
 	{
 		for (size_t i = 0; i < N; i++)
 		{
@@ -7692,7 +7680,7 @@ private:
 		}
 	}
 
-	static bool _mutex_go(MutexBlock_** const mbs, const size_t N)
+	static bool _select_go(MutexBlock_** const mbs, const size_t N)
 	{
 		try
 		{
@@ -7704,14 +7692,14 @@ private:
 			}
 			return isQuit;
 		}
-		catch (run_mutex_block_force_quit&)
+		catch (select_msg_block_force_quit&)
 		{
 			return true;
 		}
 		DEBUG_OPERATION(catch (...) { assert(false); } return true;)
 	}
 
-	static void _mutex_check_lost(MutexBlock_** const mbs, const size_t N)
+	static void _select_check_lost(MutexBlock_** const mbs, const size_t N)
 	{
 #ifdef ENABLE_CHECK_LOST
 		for (size_t i = 0; i < N; i++)
@@ -7721,7 +7709,7 @@ private:
 #endif
 	}
 
-	static bool _mutex_go_count(size_t& runCount, MutexBlock_** const mbs, const size_t N)
+	static bool _select_go_count(size_t& runCount, MutexBlock_** const mbs, const size_t N)
 	{
 		try
 		{
@@ -7737,7 +7725,7 @@ private:
 			}
 			return isQuit;
 		}
-		catch (run_mutex_block_force_quit&)
+		catch (select_msg_block_force_quit&)
 		{
 			runCount++;
 			return true;
@@ -7770,12 +7758,12 @@ private:
 	}
 
 	template <typename Ready>
-	__yield_interrupt void _run_mutex_blocks(Ready&& mutexReady, MutexBlock_** const mbList, const size_t N)
+	__yield_interrupt void _select_msg_blocks(Ready&& mutexReady, MutexBlock_** const mbList, const size_t N)
 	{
 		lock_quit();
 		DEBUG_OPERATION(_check_host_id(this, mbList, N));//判断句柄是不是都是自己的
 		assert(_cmp_snap_id(mbList, N));//判断有没有重复参数
-		BREAK_OF_SCOPE_EXEC(_mutex_cancel(mbList, N));
+		BREAK_OF_SCOPE_EXEC(_select_cancel(mbList, N));
 		do
 		{
 			DEBUG_OPERATION(auto nt = yield_count());
@@ -7783,26 +7771,26 @@ private:
 			{
 				assert(yield_count() == nt);
 				unlock_quit();
-				_mutex_check_lost(mbList, N);
+				_select_check_lost(mbList, N);
 				push_yield();
-				_mutex_check_lost(mbList, N);
+				_select_check_lost(mbList, N);
 				lock_quit();
 				DEBUG_OPERATION(nt = yield_count());
 			}
-			_mutex_cancel(mbList, N);
+			_select_cancel(mbList, N);
 			assert(yield_count() == nt);
-		} while (!_mutex_go(mbList, N));
+		} while (!_select_go(mbList, N));
 		unlock_quit();
 	}
 
 	template <typename Ready>
-	__yield_interrupt size_t _timed_run_mutex_blocks(const int ms, Ready&& mutexReady, MutexBlock_** const mbList, const size_t N)
+	__yield_interrupt size_t _timed_select_msg_blocks(const int ms, Ready&& mutexReady, MutexBlock_** const mbList, const size_t N)
 	{
 		lock_quit();
 		size_t runCount = 0;
 		DEBUG_OPERATION(_check_host_id(this, mbList, N));//判断句柄是不是都是自己的
 		assert(_cmp_snap_id(mbList, N));//判断有没有重复参数
-		BREAK_OF_SCOPE_EXEC(_mutex_cancel(mbList, N));
+		BREAK_OF_SCOPE_EXEC(_select_cancel(mbList, N));
 		do
 		{
 			DEBUG_OPERATION(auto nt = yield_count());
@@ -7810,7 +7798,7 @@ private:
 			{
 				assert(yield_count() == nt);
 				unlock_quit();
-				_mutex_check_lost(mbList, N);
+				_select_check_lost(mbList, N);
 				if (ms >= 0)
 				{
 					bool overtime = false;
@@ -7831,69 +7819,69 @@ private:
 				{
 					push_yield();
 				}
-				_mutex_check_lost(mbList, N);
+				_select_check_lost(mbList, N);
 				lock_quit();
 				DEBUG_OPERATION(nt = yield_count());
 			}
-			_mutex_cancel(mbList, N);
+			_select_cancel(mbList, N);
 			assert(yield_count() == nt);
-		} while (!_mutex_go_count(runCount, mbList, N));
+		} while (!_select_go_count(runCount, mbList, N));
 		unlock_quit();
 		return runCount;
 	}
 public:
 	/*!
-	@brief 运行互斥消息执行块（阻塞），每次有几个取几个
+	@brief 运行select消息执行块（阻塞），每次有几个取几个
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt void run_mutex_blocks_many(MutexBlocks&&... mbs)
+	__yield_interrupt void select_msg_blocks_many(MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");
 		MutexBlock_* mbList[N] = { &mbs... };
-		_run_mutex_blocks([&]()->bool
+		_select_msg_blocks([&]()->bool
 		{
-			return _mutex_ready(mbList, N);
+			return _select_ready(mbList, N);
 		}, mbList, N);
 	}
 
 	/*!
-	@brief 运行互斥消息执行块（阻塞），每次从头开始优先只取一条消息
+	@brief 运行select消息执行块（阻塞），每次从头开始优先只取一条消息
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt void run_mutex_blocks_safe(MutexBlocks&&... mbs)
+	__yield_interrupt void select_msg_blocks_safe(MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");
 		MutexBlock_* mbList[N] = { &mbs... };
-		_run_mutex_blocks([&]()->bool
+		_select_msg_blocks([&]()->bool
 		{
-			return _mutex_ready2(0, mbList, N);
+			return _select_ready2(0, mbList, N);
 		}, mbList, N);
 	}
 
 	/*!
-	@brief 运行互斥消息执行块（阻塞），每次依次往后开始优先只取一条消息
+	@brief 运行select消息执行块（阻塞），每次依次往后开始优先只取一条消息
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt void run_mutex_blocks_rotation(MutexBlocks&&... mbs)
+	__yield_interrupt void select_msg_blocks_rotation(MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");
 		MutexBlock_* mbList[N] = { &mbs... };
 		size_t i = -1;
-		_run_mutex_blocks([&]()->bool
+		_select_msg_blocks([&]()->bool
 		{
 			i = N - 1 != i ? i + 1 : 0;
-			return _mutex_ready2(i, mbList, N);
+			return _select_ready2(i, mbList, N);
 		}, mbList, N);
 	}
 
 	/*!
-	@brief 运行互斥消息执行块（阻塞，带优先级），每次只取一条消息
+	@brief 运行select消息执行块（阻塞，带优先级），每次只取一条消息
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt void run_mutex_blocks_priority(MutexBlocks&&... mbs)
+	__yield_interrupt void select_msg_blocks_priority(MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");
@@ -7901,66 +7889,66 @@ public:
 		const size_t m = 2 * N + 1;
 		const size_t cmax = N* (N + 1) / 2;
 		size_t ct = 0;
-		_run_mutex_blocks([&]()->bool
+		_select_msg_blocks([&]()->bool
 		{
 			ct = cmax != ct ? ct + 1 : 1;
 			const size_t i = (m + 1 - (size_t)std::sqrt(m * m - 8 * ct)) / 2 - 1;
-			return _mutex_ready2(i, mbList, N);
+			return _select_ready2(i, mbList, N);
 		}, mbList, N);
 	}
 
 	/*!
-	@brief 超时等待运行互斥消息执行块（阻塞），每次有几个取几个
+	@brief 超时等待运行select消息执行块（阻塞），每次有几个取几个
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt size_t timed_run_mutex_blocks_many(const int ms, MutexBlocks&&... mbs)
+	__yield_interrupt size_t timed_select_msg_blocks_many(const int ms, MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");
 		MutexBlock_* mbList[N] = { &mbs... };
-		return _timed_run_mutex_blocks(ms, [&]()->bool
+		return _timed_select_msg_blocks(ms, [&]()->bool
 		{
-			return _mutex_ready(mbList, N);
+			return _select_ready(mbList, N);
 		}, mbList, N);
 	}
 
 	/*!
-	@brief 超时等待运行互斥消息执行块（阻塞），每次从头开始优先只取一条消息
+	@brief 超时等待运行select消息执行块（阻塞），每次从头开始优先只取一条消息
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt size_t timed_run_mutex_blocks_safe(const int ms, MutexBlocks&&... mbs)
+	__yield_interrupt size_t timed_select_msg_blocks_safe(const int ms, MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");
 		MutexBlock_* mbList[N] = { &mbs... };
-		return _timed_run_mutex_blocks(ms, [&]()->bool
+		return _timed_select_msg_blocks(ms, [&]()->bool
 		{
-			return _mutex_ready2(0, mbList, N);
+			return _select_ready2(0, mbList, N);
 		}, mbList, N);
 	}
 
 	/*!
-	@brief 超时等待运行互斥消息执行块（阻塞），每次依次往后开始优先只取一条消息
+	@brief 超时等待运行select消息执行块（阻塞），每次依次往后开始优先只取一条消息
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt size_t timed_run_mutex_blocks_rotation(const int ms, MutexBlocks&&... mbs)
+	__yield_interrupt size_t timed_select_msg_blocks_rotation(const int ms, MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");
 		MutexBlock_* mbList[N] = { &mbs... };
 		size_t i = -1;
-		return _timed_run_mutex_blocks(ms, [&]()->bool
+		return _timed_select_msg_blocks(ms, [&]()->bool
 		{
 			i = N - 1 != i ? i + 1 : 0;
-			return _mutex_ready2(i, mbList, N);
+			return _select_ready2(i, mbList, N);
 		}, mbList, N);
 	}
 
 	/*!
-	@brief 超时等待运行互斥消息执行块（阻塞，带优先级），每次只取一条消息
+	@brief 超时等待运行select消息执行块（阻塞，带优先级），每次只取一条消息
 	*/
 	template <typename... MutexBlocks>
-	__yield_interrupt size_t timed_run_mutex_blocks_priority(const int ms, MutexBlocks&&... mbs)
+	__yield_interrupt size_t timed_select_msg_blocks_priority(const int ms, MutexBlocks&&... mbs)
 	{
 		const size_t N = sizeof...(MutexBlocks);
 		static_assert(N > 0, "");
@@ -7968,11 +7956,11 @@ public:
 		const size_t m = 2 * N + 1;
 		const size_t cmax = N* (N + 1) / 2;
 		size_t ct = 0;
-		return _timed_run_mutex_blocks(ms, [&]()->bool
+		return _timed_select_msg_blocks(ms, [&]()->bool
 		{
 			ct = cmax != ct ? ct + 1 : 1;
 			const size_t i = (m + 1 - (size_t)std::sqrt(m * m - 8 * ct)) / 2 - 1;
-			return _mutex_ready2(i, mbList, N);
+			return _select_ready2(i, mbList, N);
 		}, mbList, N);
 	}
 public:
@@ -8374,7 +8362,7 @@ private:
 		typedef wrap_timer_handler<RM_CREF(Handler)> wrap_type;
 		_timerStateCompleted = false;
 		_timerStateTime = (long long)ms * 1000;
-		_timerStateCb = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
+		_timerStateCb = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(std::forward<Handler>(handler));
 		_timerStateHandle = _strand->actor_timer()->timeout(_timerStateTime, shared_from_this());
 	}
 
@@ -8385,7 +8373,7 @@ private:
 		assert(!_timerStateCb);
 		typedef wrap_timer_handler<RM_CREF(Handler)> wrap_type;
 		_timerStateCompleted = false;
-		_timerStateCb = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(TRY_MOVE(handler));
+		_timerStateCb = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(std::forward<Handler>(handler));
 		_timerStateHandle = _strand->actor_timer()->timeout(us, shared_from_this(), true);
 		_timerStateTime = us > _timerStateHandle._beginStamp ? us - _timerStateHandle._beginStamp : 0;
 	}
@@ -8496,7 +8484,7 @@ struct ActorReadyGo_
 		{
 			return my_actor::create_and_notify(std::move(_strand), std::move(handler), std::move(_notify), _stackSize);
 		}
-		return my_actor::create(std::move(_strand), TRY_MOVE(handler), _stackSize);
+		return my_actor::create(std::move(_strand), std::forward<Handler>(handler), _stackSize);
 	}
 
 	shared_strand _strand;
@@ -8509,7 +8497,7 @@ struct ActorGo_ : protected ActorReadyGo_
 {
 	template <typename... Args>
 	ActorGo_(Args&&... args)
-		:ActorReadyGo_(TRY_MOVE(args)...) {}
+		:ActorReadyGo_(std::forward<Args>(args)...) {}
 
 	template <typename Handler>
 	actor_handle operator -(AutoStackActor_<Handler>&& wrapActor)
@@ -8522,7 +8510,7 @@ struct ActorGo_ : protected ActorReadyGo_
 	template <typename Handler>
 	actor_handle operator -(Handler&& handler)
 	{
-		actor_handle actor = ActorReadyGo_::operator-(TRY_MOVE(handler));
+		actor_handle actor = ActorReadyGo_::operator-(std::forward<Handler>(handler));
 		actor->run();
 		return actor;
 	}
@@ -8539,14 +8527,14 @@ template <typename R, typename H>
 R ActorFunc_::send(my_actor* host, const shared_strand& exeStrand, H&& h)
 {
 	assert(host);
-	return host->send<R>(exeStrand, TRY_MOVE(h));
+	return host->send<R>(exeStrand, std::forward<H>(h));
 }
 
 template <typename R, typename H>
 R ActorFunc_::async_send(my_actor* host, const shared_strand& exeStrand, H&& h)
 {
 	assert(host);
-	return host->async_send<R>(exeStrand, TRY_MOVE(h));
+	return host->async_send<R>(exeStrand, std::forward<H>(h));
 }
 
 template <typename... Args>
@@ -8560,21 +8548,21 @@ template <typename H>
 void ActorFunc_::delay_trig(my_actor* host, int ms, H&& h)
 {
 	assert(host);
-	host->delay_trig(ms, TRY_MOVE(h));
+	host->delay_trig(ms, std::forward<H>(h));
 }
 
 template <typename DST, typename SRC>
 void ActorFunc_::_trig_handler(my_actor* host, bool* sign, DST& dstRec, SRC&& args)
 {
 	assert(host);
-	host->_trig_handler(sign, dstRec, TRY_MOVE(args));
+	host->_trig_handler(sign, dstRec, std::forward<SRC>(args));
 }
 
 template <typename DST, typename SRC>
 void ActorFunc_::_trig_handler2(my_actor* host, shared_bool& closed, bool* sign, DST& dstRec, SRC&& args)
 {
 	assert(host);
-	host->_trig_handler2(closed, sign, dstRec, TRY_MOVE(args));
+	host->_trig_handler2(closed, sign, dstRec, std::forward<SRC>(args));
 }
 
 #endif

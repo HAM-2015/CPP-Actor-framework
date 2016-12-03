@@ -596,7 +596,7 @@ struct OnceHandler_
 {
 	template <typename H>
 	OnceHandler_(bool, H&& h)
-		:_handler(TRY_MOVE(h)) {}
+		:_handler(std::forward<H>(h)) {}
 
 	OnceHandler_(const OnceHandler_<Handler, R>& s)
 		:_handler(std::move(s._handler)) {}
@@ -604,13 +604,13 @@ struct OnceHandler_
 	template <typename... Args>
 	R operator()(Args&&... args)
 	{
-		return agent_result<R>::invoke(_handler, TRY_MOVE(args)...);
+		return agent_result<R>::invoke(_handler, std::forward<Args>(args)...);
 	}
 
 	template <typename... Args>
 	R operator()(Args&&... args) const
 	{
-		return agent_result<R>::invoke(_handler, TRY_MOVE(args)...);
+		return agent_result<R>::invoke(_handler, std::forward<Args>(args)...);
 	}
 
 	mutable Handler _handler;
@@ -619,7 +619,7 @@ struct OnceHandler_
 template <typename R = void, typename Handler>
 OnceHandler_<RM_CREF(Handler), R> wrap_once_handler(Handler&& handler)
 {
-	return OnceHandler_<RM_CREF(Handler), R>(bool(), TRY_MOVE(handler));
+	return OnceHandler_<RM_CREF(Handler), R>(bool(), std::forward<Handler>(handler));
 }
 
 template <typename Handler, typename R>
@@ -631,13 +631,13 @@ struct RefHandler_
 	template <typename... Args>
 	R operator()(Args&&... args)
 	{
-		return agent_result<R>::invoke(_handler, TRY_MOVE(args)...);
+		return agent_result<R>::invoke(_handler, std::forward<Args>(args)...);
 	}
 
 	template <typename... Args>
 	R operator()(Args&&... args) const
 	{
-		return agent_result<R>::invoke(_handler, TRY_MOVE(args)...);
+		return agent_result<R>::invoke(_handler, std::forward<Args>(args)...);
 	}
 
 	Handler& _handler;

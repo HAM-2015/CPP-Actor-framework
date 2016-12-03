@@ -2,6 +2,7 @@
 
 mem_alloc_base* generator::_genObjAlloc = NULL;
 std::atomic<long long>* generator::_id = NULL;
+any_accept generator::__anyAccept;
 
 void generator::install(std::atomic<long long>* id)
 {

@@ -30,7 +30,7 @@ public:
 	{
 		BEGIN_CHECK_EXCEPTION;
 		void* newNode = _alloc.allocate();
-		new(newNode)T(TRY_MOVE(args)...);
+		new(newNode)T(std::forward<Args>(args)...);
 		new_back((node*)newNode);
 		END_CHECK_EXCEPTION;
 	}
@@ -40,7 +40,7 @@ public:
 	{
 		BEGIN_CHECK_EXCEPTION;
 		void* newNode = _alloc.allocate();
-		new(newNode)T(TRY_MOVE(args)...);
+		new(newNode)T(std::forward<Args>(args)...);
 		new_front((node*)newNode);
 		END_CHECK_EXCEPTION;
 	}
@@ -257,7 +257,7 @@ public:
 		{
 			assert(!_has);
 			BEGIN_CHECK_EXCEPTION;
-			new(_data)T(TRY_MOVE(args)...);
+			new(_data)T(std::forward<Args>(args)...);
 			DEBUG_OPERATION(_has = true);
 			END_CHECK_EXCEPTION;
 		}
@@ -366,7 +366,7 @@ class fixed_buffer
 		template <typename Arg>
 		void set(Arg&& arg)
 		{
-			new(space)T(TRY_MOVE(arg));
+			new(space)T(std::forward<Arg>(arg));
 		}
 
 		T& get()
@@ -443,7 +443,7 @@ public:
 	{
 		assert(!full());
 		const size_t i = (0 != _index) ? (_index - 1) : (_maxSize - 1);
-		_buffer[i].set(TRY_MOVE(arg));
+		_buffer[i].set(std::forward<Arg>(arg));
 		_index = i;
 		_size++;
 	}

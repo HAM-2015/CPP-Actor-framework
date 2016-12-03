@@ -1072,6 +1072,22 @@ bool MsgPumpVoid_::isDisconnected()
 }
 //////////////////////////////////////////////////////////////////////////
 
+TrigOnceBase_::TrigOnceBase_()
+DEBUG_OPERATION(:_pIsTrig(new std::atomic<bool>(false)))
+{}
+
+TrigOnceBase_::TrigOnceBase_(const TrigOnceBase_& s)
+:_hostActor(s._hostActor)
+{
+	DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
+}
+
+TrigOnceBase_::TrigOnceBase_(TrigOnceBase_&& s)
+: _hostActor(std::move(s._hostActor))
+{
+	DEBUG_OPERATION(_pIsTrig = std::move(s._pIsTrig));
+}
+
 void TrigOnceBase_::tick_handler(bool* sign) const
 {
 	assert(!_pIsTrig->exchange(true));
@@ -1088,35 +1104,35 @@ void TrigOnceBase_::tick_handler(shared_bool& closed, bool* sign) const
 	reset();
 }
 
-void TrigOnceBase_::copy(const TrigOnceBase_& s)
+void TrigOnceBase_::operator =(const TrigOnceBase_& s)
 {
 	_hostActor = s._hostActor;
 	DEBUG_OPERATION(_pIsTrig = s._pIsTrig);
 }
 
-void TrigOnceBase_::move(TrigOnceBase_&& s)
+void TrigOnceBase_::operator =(TrigOnceBase_&& s)
 {
 	_hostActor = std::move(s._hostActor);
 	DEBUG_OPERATION(_pIsTrig = std::move(s._pIsTrig));
 }
 //////////////////////////////////////////////////////////////////////////
 
-bool mutex_block_quit::ready()
+bool select_block_quit::ready()
 {
 	_host->_waitingQuit = true;
 	return !_quitNtfed && _host->quit_msg();
 }
 
-void mutex_block_quit::cancel()
+void select_block_quit::cancel()
 {
 	_host->_waitingQuit = false;
 }
 
-void mutex_block_quit::check_lost()
+void select_block_quit::check_lost()
 {
 }
 
-bool mutex_block_quit::go_run(bool& isRun)
+bool select_block_quit::go_run(bool& isRun)
 {
 	if (!_quitNtfed && _host->quit_msg())
 	{
@@ -1128,38 +1144,38 @@ bool mutex_block_quit::go_run(bool& isRun)
 	return false;
 }
 
-size_t mutex_block_quit::snap_id()
+size_t select_block_quit::snap_id()
 {
 	return -1;
 }
 
-long long mutex_block_quit::host_id()
+long long select_block_quit::host_id()
 {
 	return _host->self_id();
 }
 
-void mutex_block_quit::check_lock_quit()
+void select_block_quit::check_lock_quit()
 {
 	assert(_host->_lockQuit > 0);
 }
 //////////////////////////////////////////////////////////////////////////
 
-bool mutex_block_sign::ready()
+bool select_block_sign::ready()
 {
 	_host->_waitingTrigMask |= _mask;
 	return !_signNtfed && (_host->_trigSignMask & _mask);
 }
 
-void mutex_block_sign::cancel()
+void select_block_sign::cancel()
 {
 	_host->_waitingTrigMask &= (-1 ^ _mask);
 }
 
-void mutex_block_sign::check_lost()
+void select_block_sign::check_lost()
 {
 }
 
-bool mutex_block_sign::go_run(bool& isRun)
+bool select_block_sign::go_run(bool& isRun)
 {
 	if (!_signNtfed && (_host->_trigSignMask & _mask))
 	{
@@ -1171,12 +1187,12 @@ bool mutex_block_sign::go_run(bool& isRun)
 	return false;
 }
 
-size_t mutex_block_sign::snap_id()
+size_t select_block_sign::snap_id()
 {
 	return (-1 ^ ((size_t)-1 >> 1)) | _mask;
 }
 
-long long mutex_block_sign::host_id()
+long long select_block_sign::host_id()
 {
 	return _host->self_id();
 }

@@ -1088,13 +1088,13 @@ public:
 template <typename T, typename MUTEX, typename CREATER, typename DESTROYER>
 static obj_pool<T>* create_pool_mt(size_t poolSize, CREATER&& creater, DESTROYER&& destroyer)
 {
-	return new ObjPool_<T, RM_CREF(CREATER), RM_CREF(DESTROYER), MUTEX>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
+	return new ObjPool_<T, RM_CREF(CREATER), RM_CREF(DESTROYER), MUTEX>(poolSize, std::forward<CREATER>(creater), std::forward<DESTROYER>(destroyer));
 }
 
 template <typename T, typename MUTEX, typename CREATER>
 static obj_pool<T>* create_pool_mt(size_t poolSize, CREATER&& creater)
 {
-	return create_pool_mt<T, MUTEX>(poolSize, TRY_MOVE(creater), [](T* p)->bool
+	return create_pool_mt<T, MUTEX>(poolSize, std::forward<CREATER>(creater), [](T* p)->bool
 	{
 		typedef T type;
 		p->~type();
@@ -1119,13 +1119,13 @@ static obj_pool<T>* create_pool_mt(size_t poolSize)
 template <typename T, typename CREATER, typename DESTROYER>
 static obj_pool<T>* create_pool(size_t poolSize, CREATER&& creater, DESTROYER&& destroyer)
 {
-	return create_pool_mt<T, null_mutex>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
+	return create_pool_mt<T, null_mutex>(poolSize, std::forward<CREATER>(creater), std::forward<DESTROYER>(destroyer));
 }
 
 template <typename T, typename CREATER>
 static obj_pool<T>* create_pool(size_t poolSize, CREATER&& creater)
 {
-	return create_pool_mt<T, null_mutex>(poolSize, TRY_MOVE(creater));
+	return create_pool_mt<T, null_mutex>(poolSize, std::forward<CREATER>(creater));
 }
 
 template <typename T>
@@ -1137,13 +1137,13 @@ static obj_pool<T>* create_pool(size_t poolSize)
 template <typename T, typename MUTEX, typename CREATER, typename DESTROYER>
 static obj_pool<T>* create_pool_mt2(size_t poolSize, CREATER&& creater, DESTROYER&& destroyer)
 {
-	return new ObjPool2_<T, RM_CREF(CREATER), RM_CREF(DESTROYER), MUTEX>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
+	return new ObjPool2_<T, RM_CREF(CREATER), RM_CREF(DESTROYER), MUTEX>(poolSize, std::forward<CREATER>(creater), std::forward<DESTROYER>(destroyer));
 }
 
 template <typename T, typename MUTEX, typename CREATER>
 static obj_pool<T>* create_pool_mt2(size_t poolSize, CREATER&& creater)
 {
-	return create_pool_mt2<T, MUTEX>(poolSize, TRY_MOVE(creater), [](T* p)->bool
+	return create_pool_mt2<T, MUTEX>(poolSize, std::forward<CREATER>(creater), [](T* p)->bool
 	{
 		typedef T type;
 		p->~type();
@@ -1168,13 +1168,13 @@ static obj_pool<T>* create_pool_mt2(size_t poolSize)
 template <typename T, typename CREATER, typename DESTROYER>
 static obj_pool<T>* create_pool2(size_t poolSize, CREATER&& creater, DESTROYER&& destroyer)
 {
-	return create_pool_mt2<T, null_mutex>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
+	return create_pool_mt2<T, null_mutex>(poolSize, std::forward<CREATER>(creater), std::forward<DESTROYER>(destroyer));
 }
 
 template <typename T, typename CREATER>
 static obj_pool<T>* create_pool2(size_t poolSize, CREATER&& creater)
 {
-	return create_pool_mt2<T, null_mutex>(poolSize, TRY_MOVE(creater));
+	return create_pool_mt2<T, null_mutex>(poolSize, std::forward<CREATER>(creater));
 }
 
 template <typename T>
@@ -1194,7 +1194,7 @@ class ObjPool_ : protected MUTEX, public obj_pool<T>
 public:
 	template <typename Creater, typename Destroyer>
 	ObjPool_(size_t poolSize, Creater&& creater, Destroyer&& destroyer)
-		:_creater(TRY_MOVE(creater)), _destroyer(TRY_MOVE(destroyer)), _poolSize(poolSize), _nodeCount(0), _link(NULL)
+		:_creater(std::forward<Creater>(creater)), _destroyer(std::forward<Destroyer>(destroyer)), _poolSize(poolSize), _nodeCount(0), _link(NULL)
 	{
 #if (_DEBUG || DEBUG)
 		_blockNumber = 0;
@@ -1302,7 +1302,7 @@ class ObjPool2_ : protected MUTEX, public obj_pool<T>
 public:
 	template <typename Creater, typename Destroyer>
 	ObjPool2_(size_t poolSize, Creater&& creater, Destroyer&& destroyer)
-		:_creater(TRY_MOVE(creater)), _destroyer(TRY_MOVE(destroyer)), _nodeAlloc(poolSize), _nodeCount(0), _link(NULL)
+		:_creater(std::forward<Creater>(creater)), _destroyer(std::forward<Destroyer>(destroyer)), _nodeAlloc(poolSize), _nodeCount(0), _link(NULL)
 	{
 #if (_DEBUG || DEBUG)
 		_blockNumber = 0;
@@ -1411,13 +1411,13 @@ public:
 template <typename T, typename MUTEX, typename CREATER, typename DESTROYER>
 static shared_obj_pool<T>* create_shared_pool_mt(size_t poolSize, CREATER&& creater, DESTROYER&& destroyer)
 {
-	return new SharedObjPool_<T, RM_CREF(CREATER), RM_CREF(DESTROYER), MUTEX>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
+	return new SharedObjPool_<T, RM_CREF(CREATER), RM_CREF(DESTROYER), MUTEX>(poolSize, std::forward<CREATER>(creater), std::forward<DESTROYER>(destroyer));
 }
 
 template <typename T, typename MUTEX, typename CREATER>
 static shared_obj_pool<T>* create_shared_pool_mt(size_t poolSize, CREATER&& creater)
 {
-	return create_shared_pool_mt<T, MUTEX>(poolSize, TRY_MOVE(creater), [](T* p)->bool
+	return create_shared_pool_mt<T, MUTEX>(poolSize, std::forward<CREATER>(creater), [](T* p)->bool
 	{
 		typedef T type;
 		p->~type();
@@ -1442,13 +1442,13 @@ static shared_obj_pool<T>* create_shared_pool_mt(size_t poolSize)
 template <typename T, typename CREATER, typename DESTROYER>
 static shared_obj_pool<T>* create_shared_pool(size_t poolSize, CREATER&& creater, DESTROYER&& destroyer)
 {
-	return create_shared_pool_mt<T, null_mutex>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
+	return create_shared_pool_mt<T, null_mutex>(poolSize, std::forward<CREATER>(creater), std::forward<DESTROYER>(destroyer));
 }
 
 template <typename T, typename CREATER>
 static shared_obj_pool<T>* create_shared_pool(size_t poolSize, CREATER&& creater)
 {
-	return create_shared_pool_mt<T, null_mutex>(poolSize, TRY_MOVE(creater));
+	return create_shared_pool_mt<T, null_mutex>(poolSize, std::forward<CREATER>(creater));
 }
 
 template <typename T>
@@ -1460,13 +1460,13 @@ static shared_obj_pool<T>* create_shared_pool(size_t poolSize)
 template <typename T, typename MUTEX, typename CREATER, typename DESTROYER>
 static shared_obj_pool<T>* create_shared_pool_mt2(size_t poolSize, CREATER&& creater, DESTROYER&& destroyer)
 {
-	return new SharedObjPool2_<T, RM_CREF(CREATER), RM_CREF(DESTROYER), MUTEX>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
+	return new SharedObjPool2_<T, RM_CREF(CREATER), RM_CREF(DESTROYER), MUTEX>(poolSize, std::forward<CREATER>(creater), std::forward<DESTROYER>(destroyer));
 }
 
 template <typename T, typename MUTEX, typename CREATER>
 static shared_obj_pool<T>* create_shared_pool_mt2(size_t poolSize, CREATER&& creater)
 {
-	return create_shared_pool_mt2<T, MUTEX>(poolSize, TRY_MOVE(creater), [](T* p)->bool
+	return create_shared_pool_mt2<T, MUTEX>(poolSize, std::forward<CREATER>(creater), [](T* p)->bool
 	{
 		typedef T type;
 		p->~type();
@@ -1491,13 +1491,13 @@ static shared_obj_pool<T>* create_shared_pool_mt2(size_t poolSize)
 template <typename T, typename CREATER, typename DESTROYER>
 static shared_obj_pool<T>* create_shared_pool2(size_t poolSize, CREATER&& creater, DESTROYER&& destroyer)
 {
-	return create_shared_pool_mt2<T, null_mutex>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
+	return create_shared_pool_mt2<T, null_mutex>(poolSize, std::forward<CREATER>(creater), std::forward<DESTROYER>(destroyer));
 }
 
 template <typename T, typename CREATER>
 static shared_obj_pool<T>* create_shared_pool2(size_t poolSize, CREATER&& creater)
 {
-	return create_shared_pool_mt2<T, null_mutex>(poolSize, TRY_MOVE(creater));
+	return create_shared_pool_mt2<T, null_mutex>(poolSize, std::forward<CREATER>(creater));
 }
 
 template <typename T>
@@ -1588,7 +1588,7 @@ public:
 	template <typename... Args>
 	void construct(void* p, Args&&... args)
 	{
-		new(p)_Tp(TRY_MOVE(args)...);
+		new(p)_Tp(std::forward<Args>(args)...);
 	}
 
 	void destroy(_Tp* p)
@@ -1681,7 +1681,7 @@ public:
 	template <typename... Args>
 	void construct(void* p, Args&&... args)
 	{
-		new(p)_Tp(TRY_MOVE(args)...);
+		new(p)_Tp(std::forward<Args>(args)...);
 	}
 
 	void destroy(_Tp* p)
@@ -1775,7 +1775,7 @@ public:
 	template <typename... Args>
 	void construct(void* p, Args&&... args)
 	{
-		new(p)_Tp(TRY_MOVE(args)...);
+		new(p)_Tp(std::forward<Args>(args)...);
 	}
 
 	void destroy(_Tp* p)
@@ -1870,7 +1870,7 @@ public:
 	template <typename... Args>
 	void construct(void* p, Args&&... args)
 	{
-		new(p)_Tp(TRY_MOVE(args)...);
+		new(p)_Tp(std::forward<Args>(args)...);
 	}
 
 	void destroy(_Tp* p)
@@ -1889,7 +1889,7 @@ mem_alloc_base* make_ref_count_alloc(size_t poolSize, DESTROYER&& destroyer)
 	try
 	{
 		RefAlloc_ refAll = { refCountAlloc, poolSize };
-		std::shared_ptr<T>(NULL, TRY_MOVE(destroyer), CreateRefAlloc_<void, ALLOC>(&refAll));
+		std::shared_ptr<T>(NULL, std::forward<DESTROYER>(destroyer), CreateRefAlloc_<void, ALLOC>(&refAll));
 	}
 	catch (...) {}
 	return refCountAlloc;
@@ -1902,7 +1902,7 @@ mem_alloc_base* make_shared_space_alloc(size_t poolSize, DESTROYER&& destroyer)
 	try
 	{
 		RefAlloc_ refAll = { refCountAlloc, poolSize };
-		std::shared_ptr<T>(NULL, TRY_MOVE(destroyer), CreateSharedSpaceAlloc_<void, T, ALLOC>(&refAll));
+		std::shared_ptr<T>(NULL, std::forward<DESTROYER>(destroyer), CreateSharedSpaceAlloc_<void, T, ALLOC>(&refAll));
 	}
 	catch (...) {}
 	return refCountAlloc;
@@ -1926,7 +1926,7 @@ public:
 	SharedObjPool_(size_t poolSize, Creater&& creater, Destroyer&& destroyer)
 	{
 		_refCountAlloc = make_ref_count_alloc<T, mem_alloc_mt<void, MUTEX>>(poolSize, [this](T*){});
-		_dataAlloc = create_pool_mt<T, MUTEX>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
+		_dataAlloc = create_pool_mt<T, MUTEX>(poolSize, std::forward<Creater>(creater), std::forward<Destroyer>(destroyer));
 	}
 public:
 	~SharedObjPool_()
@@ -1952,7 +1952,7 @@ public:
 	SharedObjPool2_(size_t poolSize, Creater&& creater, Destroyer&& destroyer)
 	{
 		_refCountAlloc = make_ref_count_alloc<T, mem_alloc_mt2<void, MUTEX>>(poolSize, [this](T*){});
-		_dataAlloc = create_pool_mt2<T, MUTEX>(poolSize, TRY_MOVE(creater), TRY_MOVE(destroyer));
+		_dataAlloc = create_pool_mt2<T, MUTEX>(poolSize, std::forward<Creater>(creater), std::forward<Destroyer>(destroyer));
 	}
 public:
 	~SharedObjPool2_()

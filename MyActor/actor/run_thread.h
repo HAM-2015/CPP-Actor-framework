@@ -21,7 +21,7 @@ class run_thread
 	{
 		template <typename H>
 		thread_handler(H&& h)
-			:_h(TRY_MOVE(h)) {}
+			:_h(std::forward<H>(h)) {}
 
 		void invoke()
 		{
@@ -56,7 +56,7 @@ public:
 	template <typename Handler>
 	run_thread(Handler&& h)
 	{
-		handler_face* handler = new thread_handler<RM_CREF(Handler)>(TRY_MOVE(h));
+		handler_face* handler = new thread_handler<RM_CREF(Handler)>(std::forward<Handler>(h));
 #ifdef _WIN32
 		_threadID = 0;
 		_handle = CreateThread(NULL, 0, thread_exec, handler, 0, &_threadID);
@@ -72,7 +72,7 @@ public:
 	{
 		h();
 		cb();
-	}, TRY_MOVE(h), TRY_MOVE(cb))) {}
+	}, std::forward<Handler>(h), std::forward<Callback>(cb))) {}
 
 	~run_thread();
 private:
