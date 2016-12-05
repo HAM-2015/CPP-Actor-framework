@@ -21,7 +21,7 @@ MACOS_FRAMEWORKS :=
 LINUX_PACKAGES := 
 
 CFLAGS := -ggdb -ffunction-sections -O0
-CXXFLAGS := -ggdb -ffunction-sections -Wa,-mbig-obj -O0 -std=c++11
+CXXFLAGS := -ggdb -ffunction-sections -Wa,-mbig-obj -O0 -std=c++11 -Wall -Wno-reorder -Wno-unused-but-set-variable -Wno-unused-variable -Wno-delete-non-virtual-dtor -Wno-strict-aliasing
 ASFLAGS := 
 LDFLAGS := -Wl,-gc-sections -static
 COMMONFLAGS := 

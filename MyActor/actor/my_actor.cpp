@@ -2891,7 +2891,7 @@ void my_actor::switch_pause_play(std::function<void(bool)> h)
 
 void my_actor::notify_trig_sign(int id)
 {
-	assert(id >= 0 && id < 8 * sizeof(void*));
+	assert(id >= 0 && id < 8 * (int)sizeof(void*));
 	if (_strand->running_in_this_thread())
 	{
 		if (!_quited)
@@ -2927,7 +2927,7 @@ void my_actor::notify_trig_sign(int id)
 void my_actor::reset_trig_sign(int id)
 {
 	assert_enter();
-	assert(id >= 0 && id < 8 * sizeof(void*));
+	assert(id >= 0 && id < 8 * (int)sizeof(void*));
 	const size_t mask = (size_t)1 << id;
 	_trigSignMask &= (-1 ^ mask);
 }
@@ -3458,7 +3458,7 @@ bool my_actor::timed_wait_trig_sign(int ms, int id)
 bool my_actor::try_wait_trig_sign(int id)
 {
 	assert_enter();
-	assert(id >= 0 && id < 8 * sizeof(void*));
+	assert(id >= 0 && id < 8 * (int)sizeof(void*));
 	const size_t mask = (size_t)1 << id;
 	return 0 != (mask & _trigSignMask);
 }

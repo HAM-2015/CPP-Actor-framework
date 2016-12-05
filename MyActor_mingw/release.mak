@@ -21,7 +21,7 @@ MACOS_FRAMEWORKS :=
 LINUX_PACKAGES := 
 
 CFLAGS := -ffunction-sections -O2
-CXXFLAGS := -ffunction-sections -O2 -fno-rtti -std=c++11
+CXXFLAGS := -ffunction-sections -O2 -fno-rtti -std=c++11 -Wall -Wno-reorder -Wno-unused-but-set-variable -Wno-unused-variable -Wno-delete-non-virtual-dtor -Wno-strict-aliasing
 ASFLAGS := 
 LDFLAGS := -Wl,-gc-sections -static
 COMMONFLAGS := 

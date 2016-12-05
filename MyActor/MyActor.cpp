@@ -1165,22 +1165,22 @@ void co_select_msg_test()
 		co_end_context_init(ctx, (co_self), co_select_init);
 
 		co_begin;
-		co_begin_select0;
+		co_begin_select;
 		co_select_case_to(msgBuff) >> ctx.mt;
-		if (co_select_state_is_ok)
 		{
+			assert(co_select_state_is_ok);
 			info_trace_line("buff: ", ctx.mt);
 			co_sleep(10);
 		}
 		co_select_case_to(msgChan) >> ctx.mt;
-		if (co_select_state_is_ok)
 		{
+			assert(co_select_state_is_ok);
 			info_trace_line("chan: ", ctx.mt);
 			co_sleep(10);
 		}
 		co_select_case_csp_to(csp, ctx.cspRes) >> ctx.mt;
-		if (co_select_state_is_ok)
 		{
+			assert(co_select_state_is_ok);
 			info_trace_line("csp: ", ctx.mt);
 			co_sleep(10);
 			ctx.cspRes.return_(move_test(456));
@@ -1189,7 +1189,7 @@ void co_select_msg_test()
 		{
 			assert(co_select_state_is_ok);
 			info_trace_line("select msg done");
-			co_select_done0;
+			co_select_exit;
 		}
 		co_end_select;
 		co_end;

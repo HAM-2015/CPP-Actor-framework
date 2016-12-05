@@ -342,7 +342,7 @@ std::list<stack_line_info> get_stack_list(size_t maxDepth, size_t offset, bool m
 	assert(maxDepth && maxDepth <= 32);
 	void* traceback[32];
 	int depth = backtrace(traceback, maxDepth);
-	if (depth > offset)
+	if (depth > (int)offset)
 	{
 		return get_stack_list(&traceback[offset], depth - offset, module, symbolName);
 	}

@@ -778,8 +778,8 @@ private:
 		if (_hasMsg)
 		{
 			_hasMsg = false;
-			dst.move_from(std::move(*(msg_type*)_msgBuff));
-			((msg_type*)_msgBuff)->~msg_type();
+			dst.move_from(std::move(*as_ptype<msg_type>(_msgBuff)));
+			as_ptype<msg_type>(_msgBuff)->~msg_type();
 			return true;
 		}
 		assert(!Parent::_closed);
@@ -810,7 +810,7 @@ public:
 		if (_hasMsg)
 		{
 			_hasMsg = false;
-			((msg_type*)_msgBuff)->~msg_type();
+			as_ptype<msg_type>(_msgBuff)->~msg_type();
 		}
 		_dstRec = NULL;
 		Parent::_waiting = false;
@@ -1110,8 +1110,8 @@ private:
 		if (_hasMsg)
 		{
 			_hasMsg = false;
-			dst.move_from(std::move(*(msg_type*)_msgSpace));
-			((msg_type*)_msgSpace)->~msg_type();
+			dst.move_from(std::move(*as_ptype<msg_type>(_msgSpace)));
+			as_ptype<msg_type>(_msgSpace)->~msg_type();
 			return true;
 		}
 		_dstRec = &dst;
@@ -1134,7 +1134,7 @@ private:
 		if (_hasMsg)
 		{
 			_hasMsg = false;
-			dst.move_from(std::move(*(msg_type*)_msgSpace));
+			dst.move_from(std::move(*as_ptype<msg_type>(_msgSpace)));
 			((msg_type*)_msgSpace)->~msg_type();
 			return true;
 		}
@@ -1249,8 +1249,8 @@ private:
 		if (_hasMsg)
 		{
 			_hasMsg = false;
-			suck.create(std::move(*(msg_type*)_msgSpace));
-			((msg_type*)_msgSpace)->~msg_type();
+			suck.create(std::move(*as_ptype<msg_type>(_msgSpace)));
+			as_ptype<msg_type>(_msgSpace)->~msg_type();
 		}
 		losted = _losted;
 		_losted = false;
@@ -1261,7 +1261,7 @@ private:
 		assert(_strand->running_in_this_thread());
 		if (_hasMsg)
 		{
-			((msg_type*)_msgSpace)->~msg_type();
+			as_ptype<msg_type>(_msgSpace)->~msg_type();
 		}
 		_hasMsg = false;
 		_dstRec = NULL;
@@ -1362,7 +1362,7 @@ class MsgPool_ : public MsgPoolBase_
 		{
 			if (_isMsg)
 			{
-				((msg_type*)_msg)->~msg_type();
+				as_ptype<msg_type>(_msg)->~msg_type();
 				_isMsg = false;
 			}
 		}
@@ -1370,7 +1370,7 @@ class MsgPool_ : public MsgPoolBase_
 		msg_type& get()
 		{
 			assert(_isMsg);
-			return *(msg_type*)_msg;
+			return *as_ptype<msg_type>(_msg);
 		}
 
 		__space_align char _msg[sizeof(msg_type)];
@@ -2565,7 +2565,7 @@ public:
 	select_block_sign(my_actor* host, int id, Handler&& handler)
 		:_host(host), _signHandler(std::forward<Handler>(handler)), _mask((size_t)1 << id), _signNtfed(false)
 	{
-		assert(id >= 0 && id < 8 * sizeof(void*));
+		assert(id >= 0 && id < 8 * (int)sizeof(void*));
 	}
 private:
 	bool ready();
@@ -6320,7 +6320,7 @@ public:
 	__yield_interrupt bool timed_wait_trig_sign(int ms, int id, TimedHandler&& th)
 	{
 		assert_enter();
-		assert(id >= 0 && id < 8 * sizeof(void*));
+		assert(id >= 0 && id < 8 * (int)sizeof(void*));
 		const size_t mask = (size_t)1 << id;
 		if (!(mask & _trigSignMask))
 		{
@@ -6462,7 +6462,6 @@ private:
 	void update_msg_list(const std::shared_ptr<msg_pool_status::pck<Args...>>& msgPck, const std::shared_ptr<MsgPool_<Args...>>& newPool)
 	{
 		typedef typename MsgPool_<Args...>::pump_handler pump_handler;
-		typedef typename MsgPump_<Args...>::msg_type msg_type;
 
 		size_t stackl = 0;
 		msg_pool_status::pck<Args...>* uStack[16];

@@ -1212,7 +1212,7 @@ public:
 			_nodeCount--;
 			node* t = it;
 			it = it->_link;
-			bool ok = _destroyer((T*)t->_data);
+			bool ok = _destroyer(as_ptype<T>(t->_data));
 			assert(ok);
 			free(t);
 		}
@@ -1231,7 +1231,7 @@ public:
 				_nodeCount--;
 				node* r = _link;
 				_link = _link->_link;
-				return (T*)r->_data;
+				return as_ptype<T>(r->_data);
 			}
 		}
 		node* newNode = (node*)malloc(sizeof(node));
@@ -1250,7 +1250,7 @@ public:
 			free(newNode);
 			throw;
 		}
-		return (T*)newNode->_data;
+		return as_ptype<T>(newNode->_data);
 	}
 
 	void recycle(T* p)
@@ -1263,8 +1263,8 @@ public:
 			if (_nodeCount < _poolSize)
 			{
 				_nodeCount++;
-				((node*)p)->_link = _link;
-				_link = (node*)p;
+				as_ptype<node>(p)->_link = _link;
+				_link = as_ptype<node>(p);
 				return;
 			}
 		}
@@ -1276,8 +1276,8 @@ public:
 		{
 			std::lock_guard<MUTEX> lg(*this);
 			_nodeCount++;
-			((node*)p)->_link = _link;
-			_link = (node*)p;
+			as_ptype<node>(p)->_link = _link;
+			_link = as_ptype<node>(p);
 		}
 	}
 private:
@@ -1320,7 +1320,7 @@ public:
 			_nodeCount--;
 			node* t = it;
 			it = it->_link;
-			bool ok = _destroyer((T*)t->_data);
+			bool ok = _destroyer(as_ptype<T>(t->_data));
 			assert(ok);
 			_nodeAlloc.deallocate(t);
 		}
@@ -1358,7 +1358,7 @@ public:
 			_nodeAlloc.deallocate(newNode);
 			throw;
 		}
-		return (T*)newNode->_data;
+		return as_ptype<T>(newNode->_data);
 	}
 
 	void recycle(T* p)
@@ -1371,8 +1371,8 @@ public:
 			if (_nodeCount < _nodeAlloc.pool_size())
 			{
 				_nodeCount++;
-				((node*)p)->_link = _link;
-				_link = (node*)p;
+				as_ptype<node>(p)->_link = _link;
+				_link = as_ptype<node>(p);
 				return;
 			}
 		}
@@ -1384,8 +1384,8 @@ public:
 		{
 			std::lock_guard<MUTEX> lg(*this);
 			_nodeCount++;
-			((node*)p)->_link = _link;
-			_link = (node*)p;
+			as_ptype<node>(p)->_link = _link;
+			_link = as_ptype<node>(p);
 		}
 	}
 private:

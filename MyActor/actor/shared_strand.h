@@ -726,14 +726,14 @@ public:
 	R syncInvoke(H&& h)
 	{
 		assert(!in_this_ios());
-		__space_align char r[sizeof(R)];
+		__space_align char space[sizeof(R)];
 		std::mutex mutex;
 		std::condition_variable con;
 		std::unique_lock<std::mutex> ul(mutex);
 		post([&]
 		{
 			BEGIN_CHECK_EXCEPTION;
-			new(r)R(h());
+			new(space)R(h());
 			END_CHECK_EXCEPTION;
 			mutex.lock();
 			con.notify_one();
@@ -742,10 +742,9 @@ public:
 		con.wait(ul);
 		BREAK_OF_SCOPE(
 		{
-			typedef R T_;
-			((T_*)r)->~R();
+			as_ptype<R>(space)->~R();
 		});
-		return (R&&)(*(R*)r);
+		return std::forward<R>(*as_ptype<R>(space));
 	}
 
 	/*!

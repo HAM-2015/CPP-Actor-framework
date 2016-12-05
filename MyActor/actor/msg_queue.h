@@ -48,13 +48,13 @@ public:
 	T& front()
 	{
 		assert(_size && _head);
-		return *(T*)_head->_data;
+		return *as_ptype<T>(_head->_data);
 	}
 
 	T& back()
 	{
 		assert(_size && _tail);
-		return *(T*)_tail->_data;
+		return *as_ptype<T>(_tail->_data);
 	}
 
 	void pop_front()
@@ -67,7 +67,7 @@ public:
 			assert(!_head);
 			_tail = NULL;
 		}
-		((T*)frontNode->_data)->~T();
+		as_ptype<T>(frontNode->_data)->~T();
 		_alloc.deallocate(frontNode);
 	}
 
@@ -88,7 +88,7 @@ public:
 		{
 			_size--;
 			assert((int)_size >= 0);
-			((T*)pIt->_data)->~T();
+			as_ptype<T>(pIt->_data)->~T();
 			node* t = pIt;
 			pIt = pIt->_next;
 			_alloc.deallocate(t);
@@ -357,7 +357,7 @@ class fixed_buffer
 	{
 		void destroy()
 		{
-			((T*)space)->~T();
+			as_ptype<T>(space)->~T();
 #if (_DEBUG || DEBUG)
 			memset(space, 0xcf, sizeof(space));
 #endif
@@ -371,7 +371,7 @@ class fixed_buffer
 
 		T& get()
 		{
-			return *(T*)space;
+			return *as_ptype<T>(space);
 		}
 
 		__space_align char space[sizeof(T)];

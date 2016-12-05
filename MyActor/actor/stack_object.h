@@ -46,7 +46,7 @@ public:
 
 	operator Type&()
 	{
-		return *(type*)_space;
+		return get();
 	}
 
 	bool has() const
@@ -69,13 +69,12 @@ public:
 	Type& get()
 	{
 		assert(!_null);
-		return *(type*)_space;
+		return *as_ptype<type>(_space);
 	}
 
 	Type& operator *()
 	{
-		assert(!_null);
-		return *(type*)_space;
+		return get();
 	}
 
 	/*!
@@ -90,7 +89,7 @@ private:
 	void free()
 	{
 		assert(!_null);
-		((type*)_space)->~type();
+		as_ptype<type>(_space)->~type();
 #if (_DEBUG || DEBUG)
 		memset(_space, 0xcf, sizeof(_space));
 #endif
@@ -138,7 +137,7 @@ public:
 
 	operator Type&()
 	{
-		return *(type*)_space;
+		return get();
 	}
 
 	/*!
@@ -148,7 +147,7 @@ public:
 	{
 		assert(!_null);
 		DEBUG_OPERATION(_null = true);
-		((type*)_space)->~type();
+		as_ptype<type>(_space)->~type();
 #if (_DEBUG || DEBUG)
 		memset(_space, 0xcf, sizeof(_space));
 #endif
@@ -157,13 +156,12 @@ public:
 	Type& get()
 	{
 		assert(!_null);
-		return *(type*)_space;
+		return *as_ptype<type>(_space);
 	}
 
 	Type& operator *()
 	{
-		assert(!_null);
-		return *(type*)_space;
+		return get();
 	}
 
 	/*!

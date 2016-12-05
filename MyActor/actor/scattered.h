@@ -345,7 +345,17 @@ struct any_accept
 	void operator=(Args&&){}
 };
 
-#define breakpoint_mark {int __mark=0;}
+#define debug_mark {int __mark=0;}
+
+/*!
+@brief 指针类型转换
+*/
+template <typename Type>
+Type* as_ptype(void* p)
+{
+	union { void* _ap_pvoid; Type* _as_ptype; } caster = { p };
+	return caster._as_ptype;
+}
 
 /*!
 @brief 启用高精度时钟

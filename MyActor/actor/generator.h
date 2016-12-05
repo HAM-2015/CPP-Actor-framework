@@ -42,6 +42,7 @@ struct __co_context_no_capture{};
 	bool __coSwitchDefaultSign = false;\
 	bool __coSwitchPreSign = false;\
 	bool __selectCaseDoSign = false;\
+	bool __selectCaseTyiedIo = false;\
 	bool __forYieldSwitch = false;\
 	int __selectCaseStep = 0;\
 	int __selectStep = 0;\
@@ -56,6 +57,7 @@ struct __co_context_no_capture{};
 	bool __coSwitchDefaultSign = false;\
 	bool __coSwitchPreSign = false;\
 	bool __selectCaseDoSign = false;\
+	bool __selectCaseTyiedIo = false;\
 	bool __forYieldSwitch = false;\
 	int __selectCaseStep = 0;\
 	int __selectStep = 0;\
@@ -527,104 +529,108 @@ struct __co_context_no_capture{};
 #define co_select_state_is_overtime (co_async_state::co_async_overtime == co_select_state)
 
 //开始从多个channel/msg_buffer中以select方式轮流读取数据(只能与co_end_select配合)
-#define co_begin_select(__label__) {\
+#define co_begin_select_(__label__) {\
 	DEBUG_OPERATION(co_select._labelId=__label__); DEBUG_OPERATION(co_select._checkRepeat=true);\
 	co_lock_stop; co_select._ntfPump.reset(); co_select._ntfSign.clear();\
 	for (__selectStep=0,co_select._selectId=-1;;){\
-	if (1==__selectStep) {co_select._ntfPump.pop(co_async_result_(co_select._ntfState, co_select._selectId)); _co_await; __selectStep=1;}\
+	if (1==__selectStep) {co_select._ntfPump.pop(co_async_result_(co_ignore, co_select._selectId, co_select_state)); _co_await; __selectStep=1;}\
 	else if (2==__selectStep) {co_select._ntfPump.close(co_async); _co_await; break;};\
 	if (0) {goto __select_ ## __label__; __select_ ## __label__: __selectStep=2; co_select._selectId=-1;}\
 	co_begin_switch(co_select._selectId);\
-	co_switch_default; if(0){
+	co_switch_default; if(0){do{
 
-#define co_begin_select0 co_begin_select(0)
-#define co_begin_select1 co_begin_select(1)
-#define co_begin_select2 co_begin_select(2)
+#define co_begin_select co_begin_select_(0)
+#define co_begin_select1 co_begin_select_(1)
+#define co_begin_select2 co_begin_select_(2)
 
 //开始从多个channel/msg_buffer中以select方式读取一次数据(只能与co_end_select_once配合)
 #define co_begin_select_once {{\
 	co_lock_stop; co_select._ntfPump.reset(); co_select._ntfSign.clear(); DEBUG_OPERATION(co_select._checkRepeat=true);\
 	for (__selectStep=0,co_select._selectId=-1;__selectStep<=2;__selectStep++){\
-	if (1==__selectStep) {co_select._ntfPump.pop(co_async_result_(co_select._ntfState, co_select._selectId)); _co_await; __selectStep=1;}\
+	if (1==__selectStep) {co_select._ntfPump.pop(co_async_result_(co_ignore, co_select._selectId, co_select_state)); _co_await; __selectStep=1;}\
 	else if (2==__selectStep) {co_select._ntfPump.close(co_async); _co_await; __selectStep=2; co_select._selectId=-1;};\
 	co_begin_switch(co_select._selectId);\
-	co_switch_default; if(0){
+	co_switch_default; if(0){do{
 
 #define co_begin_timed_select_once(__ms__) {{\
 	co_lock_stop; co_select._ntfPump.reset(); co_select._ntfSign.clear(); DEBUG_OPERATION(co_select._checkRepeat=true);\
-	co_strand->over_timer()->timeout(__ms__, co_timer, [&]{co_select._ntfPump.post(0);});\
+	co_strand->over_timer()->timeout(__ms__, co_timer, [&]{co_select._ntfPump.post(0, co_async_state::co_async_ok);});\
 	for (__selectStep=0,co_select._selectId=-1;__selectStep<=2;__selectStep++){\
-	if (1==__selectStep) {co_select._ntfPump.pop(co_async_result_(co_select._ntfState, co_select._selectId)); _co_await; __selectStep=1;\
+	if (1==__selectStep) {co_select._ntfPump.pop(co_async_result_(co_ignore, co_select._selectId, co_select_state)); _co_await; __selectStep=1;\
 	co_strand->over_timer()->cancel(co_timer);}\
 	else if (2==__selectStep) {co_select._ntfPump.close(co_async); _co_await; __selectStep=2; co_select._selectId=-1;};\
 	co_begin_switch(co_select._selectId);\
-	co_switch_default; if(0==co_select._selectId){
+	co_switch_default; if(0==co_select._selectId){do{
 
-#define _co_select_case(__check__, __chan__) __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;}if(1==__selectStep) break;\
-	co_switch_case(((size_t)&(__chan__)));\
+#define _co_select_case(__check__, __chan__) }while(0); __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;}if(1==__selectStep) break;\
+	co_switch_case((size_t)&(__chan__));\
 	for(__selectCaseStep=0, __selectCaseDoSign=false; __selectCaseStep<2; __selectCaseStep++)\
-	if (1==__selectCaseStep) {if (0==__selectStep || __selectCaseDoSign) {assert(!co_select._checkRepeat || __selectStep || co_select._ntfSign.end()==co_select._ntfSign.find(((size_t)&(__chan__))));\
-	(__chan__).append_pop_notify([&](co_async_state st){if(co_async_state::co_async_fail!=st){co_select._ntfPump.post((size_t)&(__chan__));}}, co_select._ntfSign[(size_t)&(__chan__)]);}\
-		else if (2==__selectStep) {(__chan__).remove_pop_notify(co_async_result_(co_select._ntfState), co_select._ntfSign[((size_t)&(__chan__))]); _co_await;__selectCaseStep=1;__selectStep=2;}}\
-	else if (1==__selectStep && (__check__)) {
+	if (1==__selectCaseStep) {if (0==__selectStep || __selectCaseDoSign) {const size_t chanId=(size_t)&(__chan__); assert(!co_select._checkRepeat || __selectStep || co_select._ntfSign.end()==co_select._ntfSign.find(chanId));\
+	(__chan__).append_pop_notify([&__coContext, chanId](co_async_state st){if(co_async_state::co_async_fail!=st){co_select._ntfPump.post(chanId, st);}}, co_select._ntfSign[chanId]);}\
+		else if (2==__selectStep) {(__chan__).remove_pop_notify(co_async_result_(co_select_state), co_select._ntfSign[(size_t)&(__chan__)]); _co_await;__selectCaseStep=1;__selectStep=2;}}\
+	else if (1==__selectStep && (__check__)) {do{
 
-#define _co_select_case_once(__check__, __chan__) __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;}if(1==__selectStep) break;\
-	co_switch_case(((size_t)&(__chan__)));\
+#define _co_select_case_once(__check__, __chan__) }while(0); __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;}if(1==__selectStep) break;\
+	co_switch_case((size_t)&(__chan__));\
 	for(__selectCaseStep=0; __selectCaseStep<2; __selectCaseStep++)\
-	if (1==__selectCaseStep) {if (0==__selectStep) {assert(!co_select._checkRepeat || co_select._ntfSign.end()==co_select._ntfSign.find(((size_t)&(__chan__))));\
-	(__chan__).append_pop_notify([&](co_async_state st){if(co_async_state::co_async_fail!=st){co_select._ntfPump.post((size_t)&(__chan__));}}, co_select._ntfSign[(size_t)&(__chan__)]);}\
-		else if (2==__selectStep) {(__chan__).remove_pop_notify(co_async_result_(co_select._ntfState), co_select._ntfSign[((size_t)&(__chan__))]); _co_await;__selectCaseStep=1;__selectStep=2;}}\
-	else if (1==__selectStep && (__check__)) {
+	if (1==__selectCaseStep) {if (0==__selectStep) {const size_t chanId=(size_t)&(__chan__); assert(!co_select._checkRepeat || co_select._ntfSign.end()==co_select._ntfSign.find(chanId));\
+	(__chan__).append_pop_notify([&__coContext, chanId](co_async_state st){if(co_async_state::co_async_fail!=st){co_select._ntfPump.post(chanId, st);}}, co_select._ntfSign[chanId]);}\
+		else if (2==__selectStep) {(__chan__).remove_pop_notify(co_async_result_(co_select_state), co_select._ntfSign[(size_t)&(__chan__)]); _co_await;__selectCaseStep=1;__selectStep=2;}}\
+	else if (1==__selectStep && (__check__)) {do{
 
-//从channel/msg_buffer中检测是否有数据
-#define co_select_case_once_(__chan__) _co_select_case_once(1, __chan__) co_select._ntfState = co_async_state::co_async_undefined
-#define co_select_case_(__chan__) co_select_case_once_(1, __chan__)
+#define _co_switch_case_try_io_await \
+	if(0){BOND_LINE(__try_io_fail):break;}\
+	_co_for(__selectCaseTyiedIo = false, __forYieldSwitch = false;;__forYieldSwitch = true)\
+	if (__forYieldSwitch) {if(__selectCaseTyiedIo)_co_await; if(co_select_state_is_fail){goto BOND_LINE(__try_io_fail);}else{_co_for_break;}}\
+	else
+
+//从channel/msg_buffer中检测是否有数据，但不立即读取
+#define co_select_case_once_(__chan__) _co_select_case_once(1, __chan__) co_select_state = co_async_state::co_async_undefined;
+#define co_select_case_(__chan__) _co_select_case(1, __chan__) co_select_state = co_async_state::co_async_undefined;
 //从channel/msg_buffer中读取数据
-#define co_select_check_case(__check__, __chan__, ...) _co_select_case(__check__, __chan__) (__chan__).try_pop(co_async_result_(co_select._ntfState, __VA_ARGS__)); _co_await;
+#define co_select_check_case(__check__, __chan__, ...) _co_select_case(__check__, __chan__) if(co_select_state_is_ok){(__chan__).try_pop(co_async_result_(co_select_state, __VA_ARGS__)); _co_await; if(co_select_state_is_fail)break;}
 #define co_select_case(__chan__, ...) co_select_check_case(1, __chan__, __VA_ARGS__)
-#define co_select_check_case_to(__check__, __chan__) _co_select_case(__check__, __chan__) co_await _make_co_chan_try_io(__chan__, co_select_state, co_self)
+#define co_select_check_case_to(__check__, __chan__) _co_select_case(__check__, __chan__) _co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_io(__chan__, co_select_state, co_self)
 #define co_select_case_to(__chan__) co_select_check_case_to(1, __chan__)
-#define co_select_check_case_csp_to(__check__, __chan__, __res__) _co_select_case(__check__, __chan__) co_await _make_co_csp_try_io(__res__, __chan__, co_select_state, co_self)
+#define co_select_check_case_csp_to(__check__, __chan__, __res__) _co_select_case(__check__, __chan__) _co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_try_io(__res__, __chan__, co_select_state, co_self)
 #define co_select_case_csp_to(__chan__, __res__) co_select_check_case_csp_to(1, __chan__, __res__)
 //从channel/msg_buffer中读取空数据
-#define co_select_check_case_void(__check__, __chan__) _co_select_case(__check__, __chan__) (__chan__).try_pop(co_async_result_(co_select._ntfState)); _co_await;
+#define co_select_check_case_void(__check__, __chan__) _co_select_case(__check__, __chan__) if(co_select_state_is_ok){(__chan__).try_pop(co_async_result_(co_select_state)); _co_await; if(co_select_state_is_fail)break;}
 #define co_select_case_void(__chan__) co_select_check_case_void(1, __chan__)
 //从channel/msg_buffer中读取一次数据
-#define co_select_check_case_once(__check__, __chan__, ...) _co_select_case_once(__check__, __chan__) (__chan__).try_pop(co_async_result_(co_select._ntfState, __VA_ARGS__)); _co_await;
+#define co_select_check_case_once(__check__, __chan__, ...) _co_select_case_once(__check__, __chan__) if(co_select_state_is_ok){(__chan__).try_pop(co_async_result_(co_select_state, __VA_ARGS__)); _co_await; if(co_select_state_is_fail)break;}
 #define co_select_case_once(__chan__, ...) co_select_check_case_once(1, __chan__, __VA_ARGS__)
-#define co_select_check_case_once_to(__check__, __chan__) _co_select_case_once(__check__, __chan__) co_await _make_co_chan_try_io(__chan__, co_select_state, co_self)
+#define co_select_check_case_once_to(__check__, __chan__) _co_select_case_once(__check__, __chan__) _co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_io(__chan__, co_select_state, co_self)
 #define co_select_case_once_to(__chan__) co_select_check_case_once_to(1, __chan__)
-#define co_select_check_case_csp_once_to(__check__, __chan__, __res__) _co_select_case_once(__check__, __chan__) co_await _make_co_csp_try_io(__res__, __chan__, co_select_state, co_self)
+#define co_select_check_case_csp_once_to(__check__, __chan__, __res__) _co_select_case_once(__check__, __chan__) _co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_try_io(__res__, __chan__, co_select_state, co_self)
 #define co_select_case_csp_once_to(__chan__, __res__) co_select_check_case_csp_once_to(1, __chan__, __res__)
 //从channel/msg_buffer中读取一次空数据
-#define co_select_check_case_void_once(__check__, __chan__) _co_select_case_once(__check__, __chan__) (__chan__).try_pop(co_async_result_(co_select._ntfState)); _co_await;
+#define co_select_check_case_void_once(__check__, __chan__) _co_select_case_once(__check__, __chan__) if(co_select_state_is_ok){(__chan__).try_pop(co_async_result_(co_select_state)); _co_await; if(co_select_state_is_fail)break;}
 #define co_select_case_void_once(__chan__) co_select_check_case_void_once(1, __chan__)
 
 //结束从多个channel/msg_buffer中以select方式读取数据(只能与co_begin_select配合)
-#define co_end_select __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;}\
+#define co_end_select }while(0); __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;}\
 	co_end_switch; if (0==__selectStep) {assert(!co_select._ntfSign.empty()); __selectStep=1;}}co_unlock_stop;}
 
 //结束从多个channel/msg_buffer中以select方式读取数据(只能与co_begin_select_once配合)
-#define co_end_select_once __selectCaseStep=0;__selectStep=1;}\
+#define co_end_select_once }while(0); __selectCaseStep=0;__selectStep=1;}\
 	co_end_switch; if (0==__selectStep) {assert(!co_select._ntfSign.empty());}}co_unlock_stop;}}
 
 //结束select读取(只能在co_begin_select(__label__)/co_end_select中使用)
-#define co_select_done(__label__) do{assert(__label__==co_select._labelId);__selectCaseStep=3;__selectStep=1;__selectCaseDoSign=false;goto __select_ ## __label__;}while(0)
-#define co_select_done0 co_select_done(0)
-#define co_select_done1 co_select_done(1)
-#define co_select_done2 co_select_done(2)
+#define co_select_exit_(__label__) do{assert(__label__==co_select._labelId);__selectCaseStep=3;__selectStep=1;__selectCaseDoSign=false;goto __select_ ## __label__;}while(0)
+#define co_select_exit co_select_exit_(0)
+#define co_select_exit1 co_select_exit_(1)
+#define co_select_exit2 co_select_exit_(2)
 
 //取消一个channel的case
-#define co_select_cancel_case(__chan__) do{{assert(co_select._ntfSign.end()!=co_select._ntfSign.find(((size_t)&(__chan__))));\
-	co_notify_sign& sign=co_select._ntfSign[((size_t)&(__chan__))];sign._disableAppend=true;\
-	(__chan__).remove_pop_notify(co_async_result_(co_select._ntfState), sign);} _co_await;}while (0)
+#define co_select_cancel_case(__chan__) do{{const size_t chanId=(size_t)&(__chan__); assert(co_select._ntfSign.end()!=co_select._ntfSign.find(chanId));\
+	co_notify_sign& sign=co_select._ntfSign[chanId]; sign._disableAppend=true; (__chan__).remove_pop_notify(co_async_result_(co_select_state), sign);} _co_await;}while (0)
 //取消当前channel case
 #define co_select_cancel_curr_case do{co_select._ntfSign[co_select._selectId]._disableAppend=true;}while (0)
 //恢复一个channel的case
-#define co_select_resume_case(__chan__) do{assert(co_select._ntfSign.end()!=co_select._ntfSign.find(((size_t)&(__chan__))));\
-	co_notify_sign& sign=co_select._ntfSign[((size_t)&(__chan__))];sign._disableAppend=false;\
-	if(((size_t)&(__chan__))!=co_select._selectId){(__chan__).append_pop_notify([&](co_async_state st){if(co_async_state::co_async_fail!=st){\
-	co_select._ntfPump.push([](co_async_state){}, ((size_t)&(__chan__)));}}, sign);}}while (0)
+#define co_select_resume_case(__chan__) do{const size_t chanId=(size_t)&(__chan__); assert(co_select._ntfSign.end()!=co_select._ntfSign.find(chanId));\
+	co_notify_sign& sign=co_select._ntfSign[chanId]; sign._disableAppend=false;\
+	if(chanId!=co_select._selectId){(__chan__).append_pop_notify([&__coContext, chanId](co_async_state st){if(co_async_state::co_async_fail!=st){co_select._ntfPump.post(chanId);}}, sign);}}while (0)
 //当前select-case id
 #define co_select_curr_id (co_select._selectId)
 
@@ -2219,18 +2225,18 @@ private:
 		DEBUG_OPERATION(ntfSign._key = 0);
 		ntfSign._ntfSign = false;
 		ntfSign._effect = true;
-		if (_closed)
-		{
-			ntfSign._ntfSign = true;
-			ntfSign._effect = false;
-			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
-			return;
-		}
 		if (ntfSign._disableAppend)
 		{
 			ntfSign._ntfSign = true;
 			ntfSign._effect = false;
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
+			return;
+		}
+		if (_closed)
+		{
+			ntfSign._ntfSign = true;
+			ntfSign._effect = false;
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
 		if (!_msgBuff.empty())
@@ -2295,18 +2301,18 @@ private:
 		DEBUG_OPERATION(ntfSign._key = 1);
 		ntfSign._ntfSign = false;
 		ntfSign._effect = true;
-		if (_closed)
-		{
-			ntfSign._ntfSign = true;
-			ntfSign._effect = false;
-			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
-			return;
-		}
 		if (ntfSign._disableAppend)
 		{
 			ntfSign._ntfSign = true;
 			ntfSign._effect = false;
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
+			return;
+		}
+		if (_closed)
+		{
+			ntfSign._ntfSign = true;
+			ntfSign._effect = false;
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
 		ntfSign._ntfSign = true;
@@ -3150,18 +3156,18 @@ private:
 		DEBUG_OPERATION(ntfSign._key = 2);
 		ntfSign._ntfSign = false;
 		ntfSign._effect = true;
-		if (_closed)
-		{
-			ntfSign._ntfSign = true;
-			ntfSign._effect = false;
-			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
-			return;
-		}
 		if (ntfSign._disableAppend)
 		{
 			ntfSign._ntfSign = true;
 			ntfSign._effect = false;
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
+			return;
+		}
+		if (_closed)
+		{
+			ntfSign._ntfSign = true;
+			ntfSign._effect = false;
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
 		if (!_buffer.empty())
@@ -3226,18 +3232,18 @@ private:
 		DEBUG_OPERATION(ntfSign._key = 3);
 		ntfSign._ntfSign = false;
 		ntfSign._effect = true;
-		if (_closed)
-		{
-			ntfSign._ntfSign = true;
-			ntfSign._effect = false;
-			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
-			return;
-		}
 		if (ntfSign._disableAppend)
 		{
 			ntfSign._ntfSign = true;
 			ntfSign._effect = false;
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
+			return;
+		}
+		if (_closed)
+		{
+			ntfSign._ntfSign = true;
+			ntfSign._effect = false;
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
 		if (!_buffer.full())
@@ -4224,18 +4230,18 @@ private:
 		DEBUG_OPERATION(ntfSign._key = 4);
 		ntfSign._ntfSign = false;
 		ntfSign._effect = true;
-		if (_closed)
-		{
-			ntfSign._ntfSign = true;
-			ntfSign._effect = false;
-			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
-			return;
-		}
 		if (ntfSign._disableAppend)
 		{
 			ntfSign._ntfSign = true;
 			ntfSign._effect = false;
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
+			return;
+		}
+		if (_closed)
+		{
+			ntfSign._ntfSign = true;
+			ntfSign._effect = false;
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
 		if (_tempBuffer.has())
@@ -4301,18 +4307,18 @@ private:
 		DEBUG_OPERATION(ntfSign._key = 5);
 		ntfSign._ntfSign = false;
 		ntfSign._effect = true;
-		if (_closed)
-		{
-			ntfSign._ntfSign = true;
-			ntfSign._effect = false;
-			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
-			return;
-		}
 		if (ntfSign._disableAppend)
 		{
 			ntfSign._ntfSign = true;
 			ntfSign._effect = false;
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
+			return;
+		}
+		if (_closed)
+		{
+			ntfSign._ntfSign = true;
+			ntfSign._effect = false;
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
 		if (!_tempBuffer.has())
@@ -5268,18 +5274,18 @@ private:
 		DEBUG_OPERATION(ntfSign._key = 6);
 		ntfSign._ntfSign = false;
 		ntfSign._effect = true;
-		if (_closed)
-		{
-			ntfSign._ntfSign = true;
-			ntfSign._effect = false;
-			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
-			return;
-		}
 		if (ntfSign._disableAppend)
 		{
 			ntfSign._ntfSign = true;
 			ntfSign._effect = false;
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
+			return;
+		}
+		if (_closed)
+		{
+			ntfSign._ntfSign = true;
+			ntfSign._effect = false;
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
 		if (!_sendQueue.empty())
@@ -5553,7 +5559,7 @@ struct co_select_sign
 		DEBUG_OPERATION(_labelId = -1);
 	}
 
-	co_msg_buffer<size_t> _ntfPump;
+	co_msg_buffer<size_t, co_async_state> _ntfPump;
 	msg_map<size_t, co_notify_sign> _ntfSign;
 	size_t _selectId;
 	co_async_state _ntfState;
