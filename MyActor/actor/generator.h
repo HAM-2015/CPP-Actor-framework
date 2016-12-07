@@ -319,7 +319,7 @@ struct __co_context_no_capture{};
 #define co_dead_usleep(__us__) do{co_self._co_dead_usleep(__us__); _co_yield;}while (0)
 #define co_timeout(__ms__, __th__) CoTimeout_(__ms__, co_strand->over_timer(), __th__)-
 #define co_deadline(__us__, __th__) CoDeadline_(__us__, co_strand->over_timer(), __th__)-
-#define co_interval(__ms__, __th__) CoInterval_(__ms__, co_strand->over_timer(), __th__)-
+#define co_interval(__ms__, ...) CoInterval_(__ms__, co_strand->over_timer(), __VA_ARGS__)-
 #define co_cancel_timer(__th__) co_strand->over_timer()->cancel(__th__)
 
 //创建一个generator，立即运行
@@ -539,7 +539,7 @@ struct __co_context_no_capture{};
 		if (1==__selectStep) {\
 			do{\
 				co_select._ntfPump.pop(co_async_result_(co_ignore, co_select._selectId, co_select_state)); _co_await;\
-				co_select._currSign=&co_select._ntfSign[co_select._selectId];\
+				co_select._currSign=&co_select._ntfSign[co_select_curr_id];\
 				co_select._currSign->_appended=false;\
 			}while(co_select._currSign->_disable);\
 			__selectStep=1;\
@@ -547,8 +547,8 @@ struct __co_context_no_capture{};
 			break;\
 		}\
 		if(0){goto __select_ ## __label__; __select_ ## __label__: __selectStep=2; co_select._selectId=-1;}\
-		co_begin_switch(co_select._selectId);\
-		co_switch_default; if(0){do{
+		co_begin_switch(co_select_curr_id);\
+		co_switch_default; if(1==__selectStep){assert(!"channel unexpected change");}if(0){do{
 
 #define co_begin_select co_begin_select_(0)
 #define co_begin_select1 co_begin_select_(1)
@@ -560,7 +560,7 @@ struct __co_context_no_capture{};
 	for (__selectStep=0, co_select._selectId=-1, __selectCaseTyiedIoFailed=false; __selectStep<=2; __selectStep++) {\
 		if (1==__selectStep || __selectCaseTyiedIoFailed) {\
 			co_select._ntfPump.pop(co_async_result_(co_ignore, co_select._selectId, co_select_state)); _co_await;\
-			co_select._currSign=&co_select._ntfSign[co_select._selectId];\
+			co_select._currSign=&co_select._ntfSign[co_select_curr_id];\
 			assert(!co_select._currSign->_disable);\
 			co_select._currSign->_appended=false;\
 			__selectCaseTyiedIoFailed=false;\
@@ -568,8 +568,8 @@ struct __co_context_no_capture{};
 		} else if (2==__selectStep) {\
 			co_select._selectId=-1;\
 		}\
-		co_begin_switch(co_select._selectId);\
-		co_switch_default; if(0){do{
+		co_begin_switch(co_select_curr_id);\
+		co_switch_default; if(1==__selectStep){assert(!"channel unexpected change");}if(0){do{
 
 #define co_begin_timed_select_once(__ms__) {{\
 	co_lock_stop; co_select._ntfPump.close(co_async); _co_await; co_select.reset();\
@@ -577,8 +577,8 @@ struct __co_context_no_capture{};
 	for (__selectStep=0, co_select._selectId=-1, __selectCaseTyiedIoFailed=false; __selectStep<=2; __selectStep++) {\
 		if (1==__selectStep || __selectCaseTyiedIoFailed) {\
 			co_select._ntfPump.pop(co_async_result_(co_ignore, co_select._selectId, co_select_state)); _co_await;\
-			if (0!=co_select._selectId) {\
-				co_select._currSign=&co_select._ntfSign[co_select._selectId];\
+			if (0!=co_select_curr_id) {\
+				co_select._currSign=&co_select._ntfSign[co_select_curr_id];\
 				assert(!co_select._currSign->_disable);\
 				co_select._currSign->_appended=false;\
 			}\
@@ -588,15 +588,15 @@ struct __co_context_no_capture{};
 			co_select._selectId=-1;\
 			co_strand->over_timer()->cancel(co_timer);\
 		}\
-		co_begin_switch(co_select._selectId);\
-		co_switch_default; if(0==co_select._selectId) {do{
+		co_begin_switch(co_select_curr_id);\
+		co_switch_default; if(1==__selectStep && 0!=co_select_curr_id){assert(!"channel unexpected change");}if(0==co_select_curr_id) {do{
 
 #define _co_select_case(__chan__) }while(0); __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;}if(1==__selectStep) break;\
 	co_switch_case((size_t)&(__chan__));\
 	if (1!=__selectStep) {\
 		co_select._selectId=(size_t)&(__chan__);\
 		if (0==__selectStep) {\
-			assert(co_select._ntfSign.end()==co_select._ntfSign.find(co_select_curr_id));\
+			assert(co_select_curr_id && co_select._ntfSign.end()==co_select._ntfSign.find(co_select_curr_id));\
 		}\
 		co_select._currSign=&co_select._ntfSign[co_select_curr_id];\
 	}\
@@ -627,7 +627,7 @@ struct __co_context_no_capture{};
 	if (1!=__selectStep) {\
 		co_select._selectId=(size_t)&(__chan__);\
 		if (0==__selectStep) {\
-			assert(co_select._ntfSign.end()==co_select._ntfSign.find(co_select_curr_id));\
+			assert(co_select_curr_id && co_select._ntfSign.end()==co_select._ntfSign.find(co_select_curr_id));\
 		};\
 		co_select._currSign=&co_select._ntfSign[co_select_curr_id];\
 	}\
@@ -958,9 +958,9 @@ struct CoDeadline_
 
 struct CoInterval_
 {
-	CoInterval_(int ms, overlap_timer* tm, overlap_timer::timer_handle& th) :_ms(ms), _tm(tm), _th(th){}
-	template <typename Handler> void operator-(Handler&& handler) { _tm->interval(_ms, _th, std::forward<Handler>(handler)); }
-	int _ms; overlap_timer* _tm; overlap_timer::timer_handle& _th;
+	CoInterval_(int ms, overlap_timer* tm, overlap_timer::timer_handle& th, bool immed = false) :_immed(immed), _ms(ms), _tm(tm), _th(th){}
+	template <typename Handler> void operator-(Handler&& handler) { _tm->interval(_ms, _th, std::forward<Handler>(handler), _immed); }
+	bool _immed; int _ms; overlap_timer* _tm; overlap_timer::timer_handle& _th;
 };
 
 template <typename... _Types>

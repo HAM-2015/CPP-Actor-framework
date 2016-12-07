@@ -131,7 +131,7 @@ public:
 	@brief 循环定时调用一个handler，在依赖的strand线程中调用
 	*/
 	template <typename Handler>
-	void interval(int ms, Handler&& handler)
+	void interval(int ms, Handler&& handler, bool immed = false)
 	{
 		assert(self_strand()->running_in_this_thread());
 		assert(!_handler);
@@ -157,6 +157,10 @@ public:
 			}
 		}, __1, deadtime), wrap_timer_handler(_reuMem, std::forward<Handler>(handler)));
 		_timerHandle = _actorTimer->timeout(deadtime, _weakThis.lock(), true);
+		if (immed)
+		{
+			_handler->invoke();
+		}
 	}
 
 	/*!
@@ -292,7 +296,7 @@ public:
 	@brief 循环定时调用一个handler，在依赖的strand线程中调用
 	*/
 	template <typename Handler>
-	void interval(int ms, timer_handle& timerHandle, Handler&& handler)
+	void interval(int ms, timer_handle& timerHandle, Handler&& handler, bool immed = false)
 	{
 		assert(self_strand()->running_in_this_thread());
 		assert(timerHandle.is_null());
@@ -318,6 +322,10 @@ public:
 			}
 		}, __1, deadtime), AsyncTimer_::wrap_timer_handler(_reuMem, std::forward<Handler>(handler)));
 		_timeout(deadtime, timerHandle, true);
+		if (immed)
+		{
+			timerHandle._handler->invoke();
+		}
 	}
 
 	/*!
