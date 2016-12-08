@@ -673,6 +673,9 @@ struct __co_context_no_capture{};
 //从channel/msg_buffer中读取数据
 #define co_select_case_to(__chan__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_io(__chan__, co_select_state, co_self)
 #define co_select_case_csp_to(__chan__, __res__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_try_io(__res__, __chan__, co_select_state, co_self)
+//从channel/msg_buffer中读取数据时立即下一轮侦听
+#define co_select_case_seamless_to(__chan__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_seamless_try_io(__chan__, co_select_state, co_self, co_select)
+#define co_select_case_csp_seamless_to(__chan__, __res__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_seamless_try_io(__res__, __chan__, co_select_state, co_self, co_select)
 //从channel/msg_buffer中读取一次数据
 #define co_select_case_once_to(__chan__) _co_select_case_once(__chan__) _co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_io(__chan__, co_select_state, co_self)
 #define co_select_case_csp_once_to(__chan__, __res__) _co_select_case_once(__chan__) _co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_try_io(__res__, __chan__, co_select_state, co_self)
@@ -687,10 +690,50 @@ struct __co_context_no_capture{};
 		}\
 	}
 
+//从channel/msg_buffer中读取数据时立即下一轮侦听
+#define co_select_case_seamless(__chan__, ...) _co_select_case(__chan__)\
+	if(co_select_state_is_ok){\
+		{\
+			co_notify_sign* const currSign=co_select._currSign;\
+			assert(!currSign->_appended && !currSign->_disable);\
+			currSign->_appended=true;\
+			const size_t chanId=co_select_curr_id;\
+			(__chan__).try_pop_and_append_notify(co_async_result_(co_select_state, __VA_ARGS__), [&__coContext, chanId](co_async_state st) {\
+				if (co_async_state::co_async_fail!=st) {\
+					co_select._ntfPump.post(chanId, st);\
+				}\
+			}, *currSign);\
+		} _co_await;\
+		if(co_select_state_is_fail){\
+			__selectCaseTyiedIoFailed=true;\
+			break;\
+		}\
+	}
+
 //从channel/msg_buffer中读取空数据
 #define co_select_case_void(__chan__) _co_select_case(__chan__)\
 	if(co_select_state_is_ok){\
 		(__chan__).try_pop(co_async_result_(co_select_state)); _co_await;\
+		if(co_select_state_is_fail){\
+			__selectCaseTyiedIoFailed=true;\
+			break;\
+		}\
+	}
+
+//从channel/msg_buffer中读取数据时立即下一轮侦听
+#define co_select_case_seamless_void(__chan__) _co_select_case(__chan__)\
+	if(co_select_state_is_ok){\
+		{\
+			co_notify_sign* const currSign=co_select._currSign;\
+			assert(!currSign->_appended && !currSign->_disable);\
+			currSign->_appended=true;\
+			const size_t chanId=co_select_curr_id;\
+			(__chan__).try_pop_and_append_notify(co_async_result_(co_select_state), [&__coContext, chanId](co_async_state st) {\
+				if (co_async_state::co_async_fail!=st) {\
+					co_select._ntfPump.post(chanId, st);\
+				}\
+			}, *currSign);\
+		} _co_await;\
 		if(co_select_state_is_fail){\
 			__selectCaseTyiedIoFailed=true;\
 			break;\
@@ -738,6 +781,8 @@ struct __co_context_no_capture{};
 			const size_t chanId=(size_t)&(__chan__);\
 			assert(co_select._ntfSign.end()!=co_select._ntfSign.find(chanId));\
 			co_notify_sign& sign=co_select._ntfSign[chanId];\
+			if (sign._disable)\
+				break;\
 			sign._disable=true;\
 			if (!sign._appended)\
 				break;\
@@ -745,8 +790,6 @@ struct __co_context_no_capture{};
 		} _co_await;\
 	}while (0)
 
-//取消当前channel case
-#define co_select_cancel_curr_case do{assert(!co_select._currSign->_appended); co_select._currSign->_disable=true;}while (0)
 //恢复一个channel的case
 #define co_select_resume_case(__chan__) \
 	do{\
@@ -1627,6 +1670,20 @@ private:
 };
 template <typename Chan> CoChanTryIo_<Chan> _make_co_chan_try_io(Chan& chan, co_async_state& state, generator& host) { return CoChanTryIo_<Chan>(chan, state, host); }
 
+struct co_select_sign;
+template <typename Chan> struct CoChanSeamlessTryIo_
+{
+	CoChanSeamlessTryIo_(Chan& chan, co_async_state& state, generator& host, co_select_sign& selectSign) :_chan(chan), _state(state), _host(host), _selectSign(selectSign) {}
+	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
+	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanSeamlessTryIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
+	void operator>>(void_type&&) { pop(this); }
+private:
+	template <typename... Args> static void pop(CoChanSeamlessTryIo_* this_, Args&&... args);
+private:
+	Chan& _chan; co_async_state& _state; generator& _host; co_select_sign& _selectSign;
+};
+template <typename Chan> CoChanSeamlessTryIo_<Chan> _make_co_chan_seamless_try_io(Chan& chan, co_async_state& state, generator& host, co_select_sign& selectSign) { return CoChanSeamlessTryIo_<Chan>(chan, state, host, selectSign); }
+
 template <typename Chan> struct CoChanTrySafeIo_
 {
 	CoChanTrySafeIo_(Chan& chan, co_async_state& state, generator& host) :_chan(chan), _state(state), _host(host) {}
@@ -1709,6 +1766,23 @@ private:
 	R& _res; CspChan& _chan; co_async_state& _state; generator& _host;
 };
 template <typename R, typename CspChan> CoCspTryIo_<R, CspChan> _make_co_csp_try_io(R& res, CspChan& chan, co_async_state& state, generator& host) { return CoCspTryIo_<R, CspChan>(res, chan, state, host); };
+
+template <typename R, typename CspChan>
+struct CoCspSeamlessTryIo_
+{
+	CoCspSeamlessTryIo_(R& res, CspChan& chan, co_async_state& state, generator& host, co_select_sign& selectSign) :_res(res), _chan(chan), _state(state), _host(host), _selectSign(selectSign) {}
+	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
+	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoCspSeamlessTryIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
+	void operator>>(void_type&&) { pop(this); }
+private:
+	template <typename... Args> static void pop(CoCspSeamlessTryIo_* this_, Args&&... args);
+private:
+	R& _res; CspChan& _chan; co_async_state& _state; generator& _host; co_select_sign& _selectSign;
+};
+template <typename R, typename CspChan> CoCspSeamlessTryIo_<R, CspChan> _make_co_csp_seamless_try_io(R& res, CspChan& chan, co_async_state& state, generator& host, co_select_sign& selectSign)
+{
+	return CoCspSeamlessTryIo_<R, CspChan>(res, chan, state, host, selectSign);
+};
 
 template <typename R, typename CspChan>
 struct CoCspTimedIo_
@@ -2082,6 +2156,22 @@ public:
 		}
 	}
 
+	template <typename CbNotify, typename MsgNotify>
+	void try_pop_and_append_notify(CbNotify&& cb, MsgNotify&& msgNtf, co_notify_sign& ntfSign)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_try_pop_and_append_notify(std::forward<CbNotify>(cb), std::forward<MsgNotify>(msgNtf), ntfSign);
+		}
+		else
+		{
+			_strand->post(std::bind([this, &ntfSign](typename CoChanMsgMove_<CbNotify>::type& cb, typename CoChanMsgMove_<MsgNotify>::type& msgNtf)
+			{
+				_try_pop_and_append_notify(CoChanMsgMove_<CbNotify>::move(cb), CoChanMsgMove_<MsgNotify>::move(msgNtf), ntfSign);
+			}, CoChanMsgMove_<CbNotify>::forward(cb), std::forward<MsgNotify>(msgNtf)));
+		}
+	}
+
 	template <typename Notify>
 	void remove_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
@@ -2392,6 +2482,49 @@ private:
 			}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
 			ntfSign._ntfNode = --_waitQueue.end();
 			ntfSign._nodeEffect = true;
+		}
+	}
+
+	template <typename CbNotify, typename MsgNotify>
+	void _try_pop_and_append_notify(CbNotify&& cb, MsgNotify&& msgNtf, co_notify_sign& ntfSign)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(!ntfSign._nodeEffect);
+		if (_closed)
+		{
+			CHECK_EXCEPTION(msgNtf, co_async_state::co_async_closed);
+			CHECK_EXCEPTION(cb, co_async_state::co_async_closed);
+			return;
+		}
+		auto appendWait = [&]
+		{
+			_waitQueue.push_back(CoNotifyHandlerFace_::wrap_notify(_alloc, std::bind([this, &ntfSign](typename CoChanMsgMove_<MsgNotify>::type& ntf, co_async_state state)
+			{
+				assert(ntfSign._nodeEffect);
+				ntfSign._nodeEffect = false;
+				CHECK_EXCEPTION(ntf, state);
+			}, CoChanMsgMove_<MsgNotify>::forward(msgNtf), __1)));
+			ntfSign._ntfNode = --_waitQueue.end();
+			ntfSign._nodeEffect = true;
+		};
+		if (!_msgBuff.empty())
+		{
+			msg_type msg(std::move(_msgBuff.front()));
+			_msgBuff.pop_front();
+			if (!_msgBuff.empty())
+			{
+				CHECK_EXCEPTION(msgNtf, co_async_state::co_async_ok);
+			}
+			else
+			{
+				appendWait();
+			}
+			CHECK_EXCEPTION(tuple_invoke, cb, std::tuple<co_async_state>(co_async_state::co_async_ok), std::move(msg));
+		}
+		else
+		{
+			appendWait();
+			CHECK_EXCEPTION(cb, co_async_state::co_async_fail);
 		}
 	}
 
@@ -2771,6 +2904,22 @@ public:
 			{
 				_append_pop_notify(CoChanMsgMove_<Notify>::move(ntf), ntfSign);
 			}, CoChanMsgMove_<Notify>::forward(ntf)));
+		}
+	}
+
+	template <typename CbNotify, typename MsgNotify>
+	void try_pop_and_append_notify(CbNotify&& cb, MsgNotify&& msgNtf, co_notify_sign& ntfSign)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_try_pop_and_append_notify(std::forward<CbNotify>(cb), std::forward<MsgNotify>(msgNtf), ntfSign);
+		}
+		else
+		{
+			_strand->post(std::bind([this, &ntfSign](typename CoChanMsgMove_<CbNotify>::type& cb, typename CoChanMsgMove_<MsgNotify>::type& msgNtf)
+			{
+				_try_pop_and_append_notify(CoChanMsgMove_<CbNotify>::move(cb), CoChanMsgMove_<MsgNotify>::move(msgNtf), ntfSign);
+			}, CoChanMsgMove_<CbNotify>::forward(cb), std::forward<MsgNotify>(msgNtf)));
 		}
 	}
 
@@ -3315,6 +3464,55 @@ private:
 		}
 	}
 
+	template <typename CbNotify, typename MsgNotify>
+	void _try_pop_and_append_notify(CbNotify&& cb, MsgNotify&& msgNtf, co_notify_sign& ntfSign)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(!ntfSign._nodeEffect);
+		if (_closed)
+		{
+			CHECK_EXCEPTION(msgNtf, co_async_state::co_async_closed);
+			CHECK_EXCEPTION(cb, co_async_state::co_async_closed);
+			return;
+		}
+		auto appendWait = [&]
+		{
+			_popWait.push_back(CoNotifyHandlerFace_::wrap_notify(_alloc, std::bind([&ntfSign](typename CoChanMsgMove_<MsgNotify>::type& ntf, co_async_state state)
+			{
+				assert(ntfSign._nodeEffect);
+				ntfSign._nodeEffect = false;
+				CHECK_EXCEPTION(ntf, state);
+			}, CoChanMsgMove_<MsgNotify>::forward(msgNtf), __1)));
+			ntfSign._ntfNode = --_popWait.end();
+			ntfSign._nodeEffect = true;
+		};
+		if (!_buffer.empty())
+		{
+			msg_type msg(std::move(_buffer.front()));
+			_buffer.pop_front();
+			if (!_pushWait.empty())
+			{
+				CoNotifyHandlerFace_* pushNtf = _pushWait.front();
+				_pushWait.pop_front();
+				pushNtf->invoke(_alloc);
+			}
+			if (!_buffer.empty())
+			{
+				CHECK_EXCEPTION(msgNtf, co_async_state::co_async_ok);
+			}
+			else
+			{
+				appendWait();
+			}
+			CHECK_EXCEPTION(tuple_invoke, cb, std::tuple<co_async_state>(co_async_state::co_async_ok), std::move(msg));
+		}
+		else
+		{
+			appendWait();
+			CHECK_EXCEPTION(cb, co_async_state::co_async_fail);
+		}
+	}
+
 	template <typename Notify>
 	void _remove_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
@@ -3810,6 +4008,22 @@ public:
 			{
 				_append_pop_notify(CoChanMsgMove_<Notify>::move(ntf), ntfSign);
 			}, CoChanMsgMove_<Notify>::forward(ntf)));
+		}
+	}
+
+	template <typename CbNotify, typename MsgNotify>
+	void try_pop_and_append_notify(CbNotify&& cb, MsgNotify&& msgNtf, co_notify_sign& ntfSign)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_try_pop_and_append_notify(std::forward<CbNotify>(cb), std::forward<MsgNotify>(msgNtf), ntfSign);
+		}
+		else
+		{
+			_strand->post(std::bind([this, &ntfSign](typename CoChanMsgMove_<CbNotify>::type& cb, typename CoChanMsgMove_<MsgNotify>::type& msgNtf)
+			{
+				_try_pop_and_append_notify(CoChanMsgMove_<CbNotify>::move(cb), CoChanMsgMove_<MsgNotify>::move(msgNtf), ntfSign);
+			}, CoChanMsgMove_<CbNotify>::forward(cb), std::forward<MsgNotify>(msgNtf)));
 		}
 	}
 
@@ -4385,6 +4599,54 @@ private:
 			}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
 			ntfSign._ntfNode = --_popWait.end();
 			ntfSign._nodeEffect = true;
+		}
+	}
+
+	template <typename CbNotify, typename MsgNotify>
+	void _try_pop_and_append_notify(CbNotify&& cb, MsgNotify&& msgNtf, co_notify_sign& ntfSign)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(!ntfSign._nodeEffect);
+		if (_closed)
+		{
+			CHECK_EXCEPTION(msgNtf, co_async_state::co_async_closed);
+			CHECK_EXCEPTION(cb, co_async_state::co_async_closed);
+			return;
+		}
+		auto appendWait = [&]
+		{
+			assert(_pushWait.empty());
+			_popWait.push_back(CoNotifyHandlerFace_::wrap_notify(_alloc, std::bind([&ntfSign](typename CoChanMsgMove_<MsgNotify>::type& ntf, co_async_state state)
+			{
+				assert(ntfSign._nodeEffect);
+				ntfSign._nodeEffect = false;
+				CHECK_EXCEPTION(ntf, state);
+			}, CoChanMsgMove_<MsgNotify>::forward(msgNtf), __1)));
+			ntfSign._ntfNode = --_popWait.end();
+			ntfSign._nodeEffect = true;
+		};
+		if (_tempBuffer.has())
+		{
+			assert(!_pushWait.empty());
+			msg_type msg(std::move(_tempBuffer.get()));
+			_tempBuffer.destroy();
+			CoNotifyHandlerFace_* pushNtf = _pushWait.front();
+			_pushWait.pop_front();
+			pushNtf->invoke(_alloc);
+			if (_tempBuffer.has())
+			{
+				CHECK_EXCEPTION(msgNtf, co_async_state::co_async_ok);
+			}
+			else
+			{
+				appendWait();
+			}
+			CHECK_EXCEPTION(tuple_invoke, cb, std::tuple<co_async_state>(co_async_state::co_async_ok), std::move(msg));
+		}
+		else
+		{
+			appendWait();
+			CHECK_EXCEPTION(cb, co_async_state::co_async_fail);
 		}
 	}
 
@@ -4998,6 +5260,22 @@ public:
 		}
 	}
 
+	template <typename CbNotify, typename MsgNotify>
+	void try_pop_and_append_notify(CbNotify&& cb, MsgNotify&& msgNtf, co_notify_sign& ntfSign)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_try_pop_and_append_notify(std::forward<CbNotify>(cb), std::forward<MsgNotify>(msgNtf), ntfSign);
+		}
+		else
+		{
+			_strand->post(std::bind([this, &ntfSign](typename CoChanMsgMove_<CbNotify>::type& cb, typename CoChanMsgMove_<MsgNotify>::type& msgNtf)
+			{
+				_try_pop_and_append_notify(CoChanMsgMove_<CbNotify>::move(cb), CoChanMsgMove_<MsgNotify>::move(msgNtf), ntfSign);
+			}, CoChanMsgMove_<CbNotify>::forward(cb), std::forward<MsgNotify>(msgNtf)));
+		}
+	}
+
 	template <typename Notify>
 	void remove_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
@@ -5278,7 +5556,7 @@ private:
 			send_pck pck = std::move(_sendQueue.front());
 			pck.cancel_timer(_strand, _alloc);
 			_sendQueue.pop_front();
-			tuple_invoke(ntf, std::make_tuple(co_async_state::co_async_ok, csp_result<R>(pck._ntf)), std::move(pck._msg));
+			CHECK_EXCEPTION(tuple_invoke, ntf, std::make_tuple(co_async_state::co_async_ok, csp_result<R>(pck._ntf)), std::move(pck._msg));
 		}
 	}
 
@@ -5300,7 +5578,7 @@ private:
 			send_pck pck = std::move(_sendQueue.front());
 			pck.cancel_timer(_strand, _alloc);
 			_sendQueue.pop_front();
-			tuple_invoke(ntf, std::make_tuple(co_async_state::co_async_ok, csp_result<R>(pck._ntf)), std::move(pck._msg));
+			CHECK_EXCEPTION(tuple_invoke, ntf, std::make_tuple(co_async_state::co_async_ok, csp_result<R>(pck._ntf)), std::move(pck._msg));
 		}
 	}
 
@@ -5350,7 +5628,7 @@ private:
 			send_pck pck = std::move(_sendQueue.front());
 			pck.cancel_timer(_strand, _alloc);
 			_sendQueue.pop_front();
-			tuple_invoke(ntf, std::make_tuple(co_async_state::co_async_ok, csp_result<R>(pck._ntf)), std::move(pck._msg));
+			CHECK_EXCEPTION(tuple_invoke, ntf, std::make_tuple(co_async_state::co_async_ok, csp_result<R>(pck._ntf)), std::move(pck._msg));
 		}
 	}
 
@@ -5397,7 +5675,7 @@ private:
 			send_pck pck = std::move(_sendQueue.front());
 			pck.cancel_timer(_strand, _alloc);
 			_sendQueue.pop_front();
-			tuple_invoke(ntf, std::make_tuple(co_async_state::co_async_ok, csp_result<R>(pck._ntf)), std::move(pck._msg));
+			CHECK_EXCEPTION(tuple_invoke, ntf, std::make_tuple(co_async_state::co_async_ok, csp_result<R>(pck._ntf)), std::move(pck._msg));
 		}
 	}
 
@@ -5425,6 +5703,50 @@ private:
 			}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
 			ntfSign._ntfNode = --_waitQueue.end();
 			ntfSign._nodeEffect = true;
+		}
+	}
+
+	template <typename CbNotify, typename MsgNotify>
+	void _try_pop_and_append_notify(CbNotify&& cb, MsgNotify&& msgNtf, co_notify_sign& ntfSign)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(!ntfSign._nodeEffect);
+		if (_closed)
+		{
+			CHECK_EXCEPTION(msgNtf, co_async_state::co_async_closed);
+			CHECK_EXCEPTION(cb, co_async_state::co_async_closed);
+			return;
+		}
+		auto appendWait = [&]
+		{
+			_waitQueue.push_back(CoNotifyHandlerFace_::wrap_notify(_alloc, std::bind([&ntfSign](typename CoChanMsgMove_<MsgNotify>::type& ntf, co_async_state state)
+			{
+				assert(ntfSign._nodeEffect);
+				ntfSign._nodeEffect = false;
+				CHECK_EXCEPTION(ntf, state);
+			}, CoChanMsgMove_<MsgNotify>::forward(msgNtf), __1)));
+			ntfSign._ntfNode = --_waitQueue.end();
+			ntfSign._nodeEffect = true;
+		};
+		if (!_sendQueue.empty())
+		{
+			send_pck pck = std::move(_sendQueue.front());
+			pck.cancel_timer(_strand, _alloc);
+			_sendQueue.pop_front();
+			if (!_sendQueue.empty())
+			{
+				CHECK_EXCEPTION(msgNtf, co_async_state::co_async_ok);
+			}
+			else
+			{
+				appendWait();
+			}
+			CHECK_EXCEPTION(tuple_invoke, cb, std::make_tuple(co_async_state::co_async_ok, csp_result<R>(pck._ntf)), std::move(pck._msg));
+		}
+		else
+		{
+			appendWait();
+			CHECK_EXCEPTION(cb, co_async_state::co_async_fail);
 		}
 	}
 
@@ -7230,4 +7552,40 @@ private:
 	msg_list<CoNotifyHandlerFace_*> _waitQueue;
 	NONE_COPY(co_condition_variable);
 };
+//////////////////////////////////////////////////////////////////////////
+
+template <typename Chan> template <typename... Args>
+void CoChanSeamlessTryIo_<Chan>::pop(CoChanSeamlessTryIo_* this_, Args&&... args)
+{
+	co_generator = this_->_host;
+	co_select_sign& selectSign = this_->_selectSign;
+	const size_t chanId = selectSign._selectId;
+	assert(chanId == (size_t)&this_->_chan && !selectSign._currSign->_appended && !selectSign._currSign->_disable);
+	selectSign._currSign->_appended = true;
+	this_->_chan.try_pop_and_append_notify(co_async_result_(this_->_state, args...), [&, chanId](co_async_state st)
+	{
+		if (co_async_state::co_async_fail != st)
+		{
+			selectSign._ntfPump.post(chanId, st);
+		}
+	}, *this_->_selectSign._currSign);
+}
+
+template <typename R, typename CspChan> template <typename... Args>
+void CoCspSeamlessTryIo_<R, CspChan>::pop(CoCspSeamlessTryIo_* this_, Args&&... args)
+{
+	co_generator = this_->_host;
+	co_select_sign& selectSign = this_->_selectSign;
+	const size_t chanId = selectSign._selectId;
+	assert(chanId == (size_t)&this_->_chan && !selectSign._currSign->_appended && !selectSign._currSign->_disable);
+	selectSign._currSign->_appended = true;
+	this_->_chan.try_pop_and_append_notify(co_async_result_(this_->_state, this_->_res, args...), [&, chanId](co_async_state st)
+	{
+		if (co_async_state::co_async_fail != st)
+		{
+			selectSign._ntfPump.post(chanId, st);
+		}
+	}, *selectSign._currSign);
+}
+
 #endif
