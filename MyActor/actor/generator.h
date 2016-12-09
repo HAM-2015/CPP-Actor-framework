@@ -670,18 +670,18 @@ struct __co_context_no_capture{};
 //从channel/msg_buffer中检测当前是否有数据，但不立即读取
 #define co_select_case_once_(__chan__) _co_select_case_once(__chan__)
 #define co_select_case_(__chan__) _co_select_case(__chan__)
-//从channel/msg_buffer中读取数据
-#define co_select_case_to(__chan__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_io(__chan__, co_select_state, co_self)
-#define co_select_case_csp_to(__chan__, __res__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_try_io(__res__, __chan__, co_select_state, co_self)
+//从channel/msg_buffer中读取数据，处理完成后开始下一轮侦听
+#define co_select_slow_case_to(__chan__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_io(__chan__, co_select_state, co_self)
+#define co_select_slow_case_csp_to(__chan__, __res__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_try_io(__res__, __chan__, co_select_state, co_self)
 //从channel/msg_buffer中读取数据时立即下一轮侦听
-#define co_select_case_seamless_to(__chan__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_seamless_try_io(__chan__, co_select_state, co_self, co_select)
-#define co_select_case_csp_seamless_to(__chan__, __res__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_seamless_try_io(__res__, __chan__, co_select_state, co_self, co_select)
+#define co_select_case_to(__chan__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_seamless_try_io(__chan__, co_select_state, co_self, co_select)
+#define co_select_case_csp_to(__chan__, __res__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_seamless_try_io(__res__, __chan__, co_select_state, co_self, co_select)
 //从channel/msg_buffer中读取一次数据
 #define co_select_case_once_to(__chan__) _co_select_case_once(__chan__) _co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_io(__chan__, co_select_state, co_self)
 #define co_select_case_csp_once_to(__chan__, __res__) _co_select_case_once(__chan__) _co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_try_io(__res__, __chan__, co_select_state, co_self)
 
-//从channel/msg_buffer中读取数据
-#define co_select_case(__chan__, ...) _co_select_case(__chan__)\
+//从channel/msg_buffer中读取数据，处理完成后开始下一轮侦听
+#define co_select_slow_case(__chan__, ...) _co_select_case(__chan__)\
 	if(co_select_state_is_ok){\
 		(__chan__).try_pop(co_async_result_(co_select_state, __VA_ARGS__)); _co_await;\
 		if(co_select_state_is_fail){\
@@ -691,7 +691,7 @@ struct __co_context_no_capture{};
 	}
 
 //从channel/msg_buffer中读取数据时立即下一轮侦听
-#define co_select_case_seamless(__chan__, ...) _co_select_case(__chan__)\
+#define co_select_case(__chan__, ...) _co_select_case(__chan__)\
 	if(co_select_state_is_ok){\
 		{\
 			co_notify_sign* const currSign=co_select._currSign;\
@@ -710,8 +710,8 @@ struct __co_context_no_capture{};
 		}\
 	}
 
-//从channel/msg_buffer中读取空数据
-#define co_select_case_void(__chan__) _co_select_case(__chan__)\
+//从channel/msg_buffer中读取空数据，处理完成后开始下一轮侦听
+#define co_select_slow_case_void(__chan__) _co_select_case(__chan__)\
 	if(co_select_state_is_ok){\
 		(__chan__).try_pop(co_async_result_(co_select_state)); _co_await;\
 		if(co_select_state_is_fail){\
@@ -721,7 +721,7 @@ struct __co_context_no_capture{};
 	}
 
 //从channel/msg_buffer中读取数据时立即下一轮侦听
-#define co_select_case_seamless_void(__chan__) _co_select_case(__chan__)\
+#define co_select_case_void(__chan__) _co_select_case(__chan__)\
 	if(co_select_state_is_ok){\
 		{\
 			co_notify_sign* const currSign=co_select._currSign;\
@@ -7559,16 +7559,17 @@ void CoChanSeamlessTryIo_<Chan>::pop(CoChanSeamlessTryIo_* this_, Args&&... args
 {
 	co_generator = this_->_host;
 	co_select_sign& selectSign = this_->_selectSign;
+	co_notify_sign* const currSign = selectSign._currSign;
 	const size_t chanId = selectSign._selectId;
-	assert(chanId == (size_t)&this_->_chan && !selectSign._currSign->_appended && !selectSign._currSign->_disable);
-	selectSign._currSign->_appended = true;
+	assert(chanId == (size_t)&this_->_chan && !currSign->_appended && !currSign->_disable);
+	currSign->_appended = true;
 	this_->_chan.try_pop_and_append_notify(co_async_result_(this_->_state, args...), [&, chanId](co_async_state st)
 	{
 		if (co_async_state::co_async_fail != st)
 		{
 			selectSign._ntfPump.post(chanId, st);
 		}
-	}, *this_->_selectSign._currSign);
+	}, *currSign);
 }
 
 template <typename R, typename CspChan> template <typename... Args>
@@ -7576,16 +7577,17 @@ void CoCspSeamlessTryIo_<R, CspChan>::pop(CoCspSeamlessTryIo_* this_, Args&&... 
 {
 	co_generator = this_->_host;
 	co_select_sign& selectSign = this_->_selectSign;
+	co_notify_sign* const currSign = selectSign._currSign;
 	const size_t chanId = selectSign._selectId;
-	assert(chanId == (size_t)&this_->_chan && !selectSign._currSign->_appended && !selectSign._currSign->_disable);
-	selectSign._currSign->_appended = true;
+	assert(chanId == (size_t)&this_->_chan && !currSign->_appended && !currSign->_disable);
+	currSign->_appended = true;
 	this_->_chan.try_pop_and_append_notify(co_async_result_(this_->_state, this_->_res, args...), [&, chanId](co_async_state st)
 	{
 		if (co_async_state::co_async_fail != st)
 		{
 			selectSign._ntfPump.post(chanId, st);
 		}
-	}, *selectSign._currSign);
+	}, *currSign);
 }
 
 #endif

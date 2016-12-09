@@ -1185,7 +1185,7 @@ void co_select_msg_test()
 			co_sleep(10);
 			ctx.cspRes.return_(move_test(456));
 		}
-		co_select_case_void(doneMsg);
+		co_select_slow_case_void(doneMsg);
 		{
 			assert(co_select_state_is_ok);
 			info_trace_line("select msg done");

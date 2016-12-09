@@ -47,8 +47,7 @@ bool generator::_next()
 			clear_function(_handler);
 			if (_notify)
 			{
-				CHECK_EXCEPTION(_notify);
-				clear_function(_notify);
+				CHECK_EXCEPTION(std::function<void()>(std::move(_notify)));
 			}
 			_sharedThis.reset();
 			return true;
