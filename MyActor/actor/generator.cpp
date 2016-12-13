@@ -34,17 +34,17 @@ generator::~generator()
 bool generator::_next()
 {
 	assert(_strand->running_in_this_thread());
-	assert(_handler);
+	assert(_baseHandler);
 	assert(!__ctx || !__inside);
 	DEBUG_OPERATION(if (__ctx) __inside = true);
-	CHECK_EXCEPTION(_handler, *this);
+	CHECK_EXCEPTION(!_callStack.empty() ? _callStack.front()._handler : _baseHandler, *this);
 	assert(!__ctx || __coNext);
 	if (!__ctx)
 	{
 		if (_callStack.empty())
 		{
 			_strand->actor_timer()->cancel(_timerHandle);
-			clear_function(_handler);
+			clear_function(_baseHandler);
 			if (_notify)
 			{
 				CHECK_EXCEPTION(std::function<void()>(std::move(_notify)));
@@ -55,9 +55,8 @@ bool generator::_next()
 		call_stack_pck& topStack = _callStack.front();
 		__ctx = topStack._ctx;
 		__coNext = -1 == __coNext ? __coNext : topStack._coNext;
-		_handler = std::move(topStack._handler);
 		_callStack.pop_front();
-		return _next();
+		return _done() ? true : _next();
 	}
 	else if (0 > __coNext)
 	{
@@ -86,7 +85,7 @@ generator_handle generator::create(shared_strand strand, std::function<void(gene
 	}, ref_count_alloc2<generator>(space, _genObjAlloc));
 	res->_weakThis = res;
 	res->_strand = std::move(strand);
-	res->_handler = std::move(handler);
+	res->_baseHandler = std::move(handler);
 	res->_notify = std::move(notify);
 	return res;
 }
@@ -138,7 +137,7 @@ void generator::stop()
 		}
 		else
 		{
-			clear_function(_handler);
+			clear_function(_baseHandler);
 			clear_function(_notify);
 		}
 	} 
@@ -153,7 +152,7 @@ void generator::stop()
 			}
 			else
 			{
-				clear_function(host->_handler);
+				clear_function(host->_baseHandler);
 				clear_function(host->_notify);
 			}
 		}, _weakThis.lock()));
@@ -301,8 +300,7 @@ void generator::_co_shared_async_next(shared_bool& sign)
 
 void generator::_co_push_stack(int coNext, std::function<void(generator&)>&& handler)
 {
-	_callStack.push_front(call_stack_pck(coNext, __ctx, std::move(_handler)));
-	_handler = std::move(handler);
+	_callStack.push_front(call_stack_pck(coNext, __ctx, std::move(handler)));
 }
 
 bool generator::_done()

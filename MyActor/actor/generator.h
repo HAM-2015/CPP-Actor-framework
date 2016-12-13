@@ -835,11 +835,11 @@ class generator : public ActorTimerFace_
 	struct call_stack_pck
 	{
 		call_stack_pck(int coNext, void* ctx, std::function<void(generator&)>&& handler)
-		:_coNext(coNext), _ctx(ctx), _handler(std::move(handler)) {}
+		:_handler(std::move(handler)), _ctx(ctx), _coNext(coNext)  {}
 		std::function<void(generator&)> _handler;
 		void* _ctx;
 		int _coNext;
-		RVALUE_CONSTRUCT3(call_stack_pck, _coNext, _ctx, _handler);
+		RVALUE_CONSTRUCT3(call_stack_pck, _handler, _ctx, _coNext);
 	};
 private:
 	generator();
@@ -911,7 +911,7 @@ private:
 private:
 	std::weak_ptr<generator> _weakThis;
 	std::shared_ptr<generator> _sharedThis;
-	std::function<void(generator&)> _handler;
+	std::function<void(generator&)> _baseHandler;
 	std::function<void()> _notify;
 	msg_queue<call_stack_pck> _callStack;
 	shared_strand _strand;

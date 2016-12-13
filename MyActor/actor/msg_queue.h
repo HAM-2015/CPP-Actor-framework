@@ -83,18 +83,16 @@ public:
 
 	void clear()
 	{
-		node* pIt = _head;
-		while (pIt)
+		while (_head)
 		{
 			_size--;
 			assert((int)_size >= 0);
-			as_ptype<T>(pIt->_data)->~T();
-			node* t = pIt;
-			pIt = pIt->_next;
-			_alloc.deallocate(t);
+			node* frontNode = _head;
+			_head = _head->_next;
+			as_ptype<T>(frontNode->_data)->~T();
+			_alloc.deallocate(frontNode);
 		}
-		assert(0 == _size);
-		_head = NULL;
+		assert(0 == _size && !_head);
 		_tail = NULL;
 	}
 
