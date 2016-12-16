@@ -877,25 +877,26 @@ void create_child_test()
 	io_engine ios;
 	ios.run();
 	int count = 0;
-	BEGIN_RECURSIVE_ACTOR(createActor, self);
-	if (++count < 100)
+	actor_recursive(createActor, self)
 	{
-		info_trace_line("create_child ", count);
-		child_handle child1 = self->create_child([&](my_actor* self)
+		if (++count < 100)
 		{
-			self->sleep(1000);
-			createActor(self);
-		});
-		child_handle child2 = self->create_child([&](my_actor* self)
-		{
-			self->sleep(1000);
-			createActor(self);
-		});
-		self->child_run(child1, child2);
-		self->child_wait_quit(child1, child2);
-	}
-	self->after_exit_clean_stack();
-	END_RECURSIVE_ACTOR(createActor);
+			info_trace_line("create_child ", count);
+			child_handle child1 = self->create_child([&](my_actor* self)
+			{
+				self->sleep(1000);
+				createActor(self);
+			});
+			child_handle child2 = self->create_child([&](my_actor* self)
+			{
+				self->sleep(1000);
+				createActor(self);
+			});
+			self->child_run(child1, child2);
+			self->child_wait_quit(child1, child2);
+		}
+		self->after_exit_clean_stack();
+	};
 	my_actor::create(boost_strand::create(ios), wrap_ref_handler(createActor))->run();
 	ios.stop();
 	trace_line("end create_child_test");

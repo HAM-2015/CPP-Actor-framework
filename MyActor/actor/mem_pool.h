@@ -748,6 +748,80 @@ public:
 	_Reusalble* _reuMem;
 };
 //////////////////////////////////////////////////////////////////////////
+
+class lifo_alloc
+{
+#if (_DEBUG || DEBUG)
+	struct alloc_node
+	{
+		bool operator ==(const alloc_node& s)
+		{
+			return s.ptr == ptr && s.size == size;
+		}
+
+		void* ptr;
+		size_t size;
+	};
+#endif
+public:
+	lifo_alloc(size_t poolSize)
+		:_poolSize(poolSize), _sumSize(0)
+	{
+		_pool = malloc(poolSize);
+	}
+
+	~lifo_alloc()
+	{
+		assert(!_sumSize);
+		assert(_allocStack.empty());
+		free(_pool);
+	}
+public:
+	void* allocate(size_t size)
+	{
+		const size_t s = MEM_ALIGN(size, sizeof(void*));
+		void* np = (char*)_pool + _sumSize;
+		_sumSize += s;
+		if (_sumSize <= _poolSize)
+		{
+			DEBUG_OPERATION(memset(np, 0xaf, s));
+		}
+		else
+		{
+			np = malloc(s);
+		}
+		DEBUG_OPERATION(_allocStack.push_front(alloc_node{ np, size }));
+		return np;
+	}
+
+	void deallocate(void* p, size_t size)
+	{
+		assert((alloc_node{ p, size }) == _allocStack.front());
+		DEBUG_OPERATION(_allocStack.pop_front());
+		const size_t s = MEM_ALIGN(size, sizeof(void*));
+		if (_sumSize <= _poolSize)
+		{
+			DEBUG_OPERATION(memset(p, 0xbf, s));
+		}
+		else
+		{
+			free(p);
+		}
+		_sumSize -= s;
+	}
+
+	bool overflow()
+	{
+		return _sumSize > _poolSize;
+	}
+private:
+	void* _pool;
+	size_t _sumSize;
+	const size_t _poolSize;
+	DEBUG_OPERATION(std::list<alloc_node> _allocStack);
+};
+//////////////////////////////////////////////////////////////////////////
+
 template <typename _Ty = void, typename _All = mem_alloc_mt<>>
 class pool_alloc_mt;
 
@@ -1064,10 +1138,10 @@ public:
 };
 //////////////////////////////////////////////////////////////////////////
 
-template <typename T, typename CREATER, typename DESTROYER, typename MUTEX>
+template <typename T, typename MUTEX>
 class SharedObjPool_;
 
-template <typename T, typename CREATER, typename DESTROYER, typename MUTEX>
+template <typename T, typename MUTEX>
 class SharedObjPool2_;
 
 template <typename T, typename CREATER, typename DESTROYER, typename MUTEX>
@@ -1391,7 +1465,7 @@ public:
 private:
 	CREATER _creater;
 	DESTROYER _destroyer;
-	mem_alloc2<node> _nodeAlloc;
+	mem_alloc_mt2<node, MUTEX> _nodeAlloc;
 	node* _link;
 	size_t _nodeCount;
 #if (_DEBUG || DEBUG)
@@ -1411,7 +1485,7 @@ public:
 template <typename T, typename MUTEX, typename CREATER, typename DESTROYER>
 static shared_obj_pool<T>* create_shared_pool_mt(size_t poolSize, CREATER&& creater, DESTROYER&& destroyer)
 {
-	return new SharedObjPool_<T, RM_CREF(CREATER), RM_CREF(DESTROYER), MUTEX>(poolSize, std::forward<CREATER>(creater), std::forward<DESTROYER>(destroyer));
+	return new SharedObjPool_<T, MUTEX>(poolSize, std::forward<CREATER>(creater), std::forward<DESTROYER>(destroyer));
 }
 
 template <typename T, typename MUTEX, typename CREATER>
@@ -1460,7 +1534,7 @@ static shared_obj_pool<T>* create_shared_pool(size_t poolSize)
 template <typename T, typename MUTEX, typename CREATER, typename DESTROYER>
 static shared_obj_pool<T>* create_shared_pool_mt2(size_t poolSize, CREATER&& creater, DESTROYER&& destroyer)
 {
-	return new SharedObjPool2_<T, RM_CREF(CREATER), RM_CREF(DESTROYER), MUTEX>(poolSize, std::forward<CREATER>(creater), std::forward<DESTROYER>(destroyer));
+	return new SharedObjPool2_<T, MUTEX>(poolSize, std::forward<CREATER>(creater), std::forward<DESTROYER>(destroyer));
 }
 
 template <typename T, typename MUTEX, typename CREATER>
@@ -1918,7 +1992,7 @@ std::shared_ptr<Class> make_shared_space_obj(mem_alloc_base* alloc, Args&&... ar
 	}, ref_count_alloc2<Class>(space, alloc));
 }
 
-template <typename T, typename CREATER, typename DESTROYER, typename MUTEX>
+template <typename T, typename MUTEX>
 class SharedObjPool_ : public shared_obj_pool<T>
 {
 public:
@@ -1944,7 +2018,7 @@ private:
 	mem_alloc_base* _refCountAlloc;
 };
 
-template <typename T, typename CREATER, typename DESTROYER, typename MUTEX>
+template <typename T, typename MUTEX>
 class SharedObjPool2_ : public shared_obj_pool<T>
 {
 public:

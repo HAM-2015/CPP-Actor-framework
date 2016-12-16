@@ -406,8 +406,12 @@ template <typename... _Types>
 struct LocalRecursive_;
 template <typename... _Types>
 struct LocalRecursiveFace_;
-template <typename Handler, typename _Rt, typename... _Types>
+template <typename... _Types>
 struct LocalRecursiveInvoker_;
+template <typename... _Types>
+struct RecursiveLambda_;
+template <typename... _Types>
+struct WrapRecursiveLambda_;
 
 template <typename _Rt, typename... _Types>
 struct LocalRecursiveFace_<_Rt(_Types...)>
@@ -473,6 +477,46 @@ struct LocalRecursive_<_Rt(_Types...)>
 	NONE_COPY(LocalRecursive_);
 };
 
+template <typename Handler, typename _Rt, typename... _Types>
+struct RecursiveLambda_<Handler, _Rt(_Types...)>
+{
+	RecursiveLambda_(char* space, LocalRecursive_<_Rt(_Types...)>& locRec, Handler&& handler)
+	:_handler(std::forward<Handler>(handler)), _locRec(locRec)
+	{
+		_locRec.set_handler(space, _handler);
+	}
+
+	~RecursiveLambda_()
+	{
+		_locRec.destroy();
+	}
+
+	template <typename... Args>
+	_Rt operator()(Args&&... args)
+	{
+		return _handler(std::forward<Args>(args)...);
+	}
+
+	Handler _handler;
+	LocalRecursive_<_Rt(_Types...)>& _locRec;
+};
+
+template <typename _Rt, typename... _Types>
+struct WrapRecursiveLambda_<_Rt(_Types...)>
+{
+	WrapRecursiveLambda_(char* space, LocalRecursive_<_Rt(_Types...)>& locRec)
+	:_space(space), _locRec(locRec) {}
+
+	template <typename Handler>
+	RecursiveLambda_<Handler, _Rt(_Types...)> operator -(Handler&& handler)
+	{
+		return RecursiveLambda_<Handler, _Rt(_Types...)>(_space, _locRec, std::forward<Handler>(handler));
+	}
+
+	char* _space;
+	LocalRecursive_<_Rt(_Types...)>& _locRec;
+};
+
 #define DEFINE_LOCAL_RECURSIVE(__name__, __type__)\
 	LocalRecursive_<__type__> __name__;
 
@@ -504,6 +548,13 @@ struct LocalRecursive_<_Rt(_Types...)>
 #define BEGIN_RECURSIVE_ACTOR(__name__, __self__) BEGIN_RECURSIVE(__name__, void(my_actor*)) [&](my_actor* __self__) {
 
 #define END_RECURSIVE_ACTOR(__name__)  } END_RECURSIVE(__name__)
+
+#define local_recursive(__name__, __result_type__, __params_type__) \
+	LocalRecursive_<__result_type__ __params_type__> __name__; \
+	__space_align char BOND_NAME(__space_, __name__)[sizeof(LocalRecursiveInvoker_<null_handler<>, void()>)]; \
+	auto BOND_NAME(__lambda_, __name__) = WrapRecursiveLambda_<__result_type__ __params_type__>(BOND_NAME(__space_, __name__), __name__) - [&]__params_type__->__result_type__
+
+#define actor_recursive(__name__, __self__) local_recursive(__name__, void, (my_actor* __self__))
 
 #define WRAP_LAMBDA_REF(__name__, __lmd__)\
 	auto BOND_NAME(__lambda, __name__) = __lmd__; \
