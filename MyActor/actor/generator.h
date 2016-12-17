@@ -41,6 +41,7 @@ struct __co_context_no_capture{};
 	bool __coSwitchFirstLoopSign = false;\
 	bool __coSwitchDefaultSign = false;\
 	bool __coSwitchPreSign = false;\
+	bool __coSwitchSign = false;\
 	bool __selectCaseDoSign = false;\
 	bool __selectCaseTyiedIo = false;\
 	bool __selectCaseTyiedIoFailed = false;\
@@ -57,6 +58,7 @@ struct __co_context_no_capture{};
 	bool __coSwitchFirstLoopSign = false;\
 	bool __coSwitchDefaultSign = false;\
 	bool __coSwitchPreSign = false;\
+	bool __coSwitchSign = false;\
 	bool __selectCaseDoSign = false;\
 	bool __selectCaseTyiedIo = false;\
 	bool __selectCaseTyiedIoFailed = false;\
@@ -148,7 +150,7 @@ struct __co_context_no_capture{};
 #define co_begin }\
 	if (!co_self.__coNext) {co_self.__coNext = (__COUNTER__+1)/2;}else co_check_stop;\
 	__coNext=co_self.__coNext; co_self.__coNext=0;\
-	switch(__coNext) { case __COUNTER__/2:;
+	switch(co_self.__coNextEx ? co_self.__coNextEx : __coNext) { case __COUNTER__/2:;
 
 //结束generator的代码区域
 #define co_end break;default:assert(false);} co_stop;
@@ -296,7 +298,7 @@ struct __co_context_no_capture{};
 	assert(co_self.__inside);\
 	co_check_stop;\
 	_co_for(__forYieldSwitch = false;;__forYieldSwitch = true)\
-	if (__forYieldSwitch) {if (-1 != co_self.__coNext){co_self.__coNext = -2;}\
+	if (__forYieldSwitch) {co_self.__coNextEx=0; if (-1 != co_self.__coNext){co_self.__coNext = -2;}\
 	return; case (__COUNTER__+1)/2:; _co_for_break;}\
 	else CoCall_(co_self, __COUNTER__/2)-
 
@@ -391,6 +393,15 @@ struct __co_context_no_capture{};
 #define co_switch_case(__val__) __coSwitchPreSign=true;}if (__coSwitchPreSign || (__coSwitchFirstLoopSign&&__coSwitchTempVal==(size_t)(__val__))){
 #define co_switch_default __coSwitchPreSign=true;}if(!__coSwitchDefaultSign && !__coSwitchPreSign){__coSwitchDefaultSign=true;}else{
 #define co_end_switch __coSwitchPreSign=true;}}
+
+//在co_switch内部case冲突时使用
+#define co_avoid if(0){int __t=__COUNTER__-__COUNTER__;}
+//因为generator内部无法在switch-case里面co_yield，替换原有switch关键字实现generator内switch-case功能，不支持嵌套
+#define co_switch(__exp__) \
+	_co_for(assert(co_self.__inside && !co_self.__coNextEx),\
+		co_self.__coNextEx=(__COUNTER__+1)/2, __coSwitchSign=true, __forYieldSwitch=false;;__forYieldSwitch=true)\
+	if (__forYieldSwitch) {co_self.__coNextEx=0; _co_for_break;}\
+	else case __COUNTER__/2: switch (__coSwitchSign ? (__exp__) : __coNext)
 
 //push数据到channel/msg_buffer
 #define co_chan_push(__chan__, ...) do{(__chan__).push(co_async_result(co_last_state), __VA_ARGS__); _co_await;}while (0)
@@ -945,12 +956,13 @@ class generator : public ActorTimerFace_
 	FRIEND_SHARED_PTR(generator);
 	struct call_stack_pck
 	{
-		call_stack_pck(int coNext, void* ctx, std::function<void(generator&)>&& handler)
-		:_handler(std::move(handler)), _ctx(ctx), _coNext(coNext)  {}
+		call_stack_pck(int coNext, int coNextEx, void* ctx, std::function<void(generator&)>&& handler)
+		:_handler(std::move(handler)), _ctx(ctx), _coNext(coNext), _coNextEx(coNextEx)  {}
 		std::function<void(generator&)> _handler;
 		void* _ctx;
 		int _coNext;
-		RVALUE_CONSTRUCT3(call_stack_pck, _handler, _ctx, _coNext);
+		int _coNextEx;
+		RVALUE_CONSTRUCT4(call_stack_pck, _handler, _ctx, _coNext, _coNextEx);
 	};
 private:
 	generator();
@@ -1034,6 +1046,7 @@ public:
 	void* __ctx;
 	shared_bool __sharedSign;
 	int __coNext;
+	int __coNextEx;
 	unsigned char __lockStop;
 	bool __readyQuit;
 	bool __asyncSign;

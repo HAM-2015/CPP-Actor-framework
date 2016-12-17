@@ -18,7 +18,7 @@ void generator::uninstall()
 }
 
 generator::generator()
-: __ctx(NULL), __coNext(0), __lockStop(0), __readyQuit(false), __asyncSign(false)
+: __ctx(NULL), __coNext(0), __coNextEx(0), __lockStop(0), __readyQuit(false), __asyncSign(false)
 #if (_DEBUG || DEBUG)
 , _isRun(false), __inside(false), __awaitSign(false), __sharedAwaitSign(false), __yieldSign(false)
 #endif
@@ -54,6 +54,7 @@ bool generator::_next()
 		}
 		call_stack_pck& topStack = _callStack.front();
 		__ctx = topStack._ctx;
+		__coNextEx = topStack._coNextEx;
 		__coNext = -1 == __coNext ? __coNext : topStack._coNext;
 		_callStack.pop_front();
 		return _done() ? true : _next();
@@ -300,7 +301,7 @@ void generator::_co_shared_async_next(shared_bool& sign)
 
 void generator::_co_push_stack(int coNext, std::function<void(generator&)>&& handler)
 {
-	_callStack.push_front(call_stack_pck(coNext, __ctx, std::move(handler)));
+	_callStack.push_front(call_stack_pck(coNext, __coNextEx, __ctx, std::move(handler)));
 }
 
 bool generator::_done()
