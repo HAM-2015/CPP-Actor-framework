@@ -366,27 +366,7 @@ struct __co_context_no_capture{};
 #define co_begin_async_send(__strand__) {co_self._co_async_send(__strand__, [&]{
 #define co_end_async_send });_co_yield;}
 
-#define _case(id, p) case p:goto __co_case_ ## id ## _ ## p;
-#define _case_default(id) default:goto __co_case_ ## id ## _default;
-#define _switch_case1(id,p1) _case(id,p1)_case_default(id)
-#define _switch_case2(id,p1,p2) _case(id,p1)_case(id,p2)_case_default(id)
-#define _switch_case3(id,p1,p2,p3) _case(id,p1)_case(id,p2)_case(id,p3)_case_default(id)
-#define _switch_case4(id,p1,p2,p3,p4) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case_default(id)
-#define _switch_case5(id,p1,p2,p3,p4,p5) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case(id,p5)_case_default(id)
-#define _switch_case6(id,p1,p2,p3,p4,p5,p6) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case(id,p5)_case(id,p6)_case_default(id)
-#define _switch_case7(id,p1,p2,p3,p4,p5,p6,p7) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case(id,p5)_case(id,p6)_case(id,p7)_case_default(id)
-#define _switch_case8(id,p1,p2,p3,p4,p5,p6,p7,p8) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case(id,p5)_case(id,p6)_case(id,p7)_case(id,p8)_case_default(id)
-#define _switch_case9(id,p1,p2,p3,p4,p5,p6,p7,p8,p9) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case(id,p5)_case(id,p6)_case(id,p7)_case(id,p8)_case(id,p9)_case_default(id)
-#define _switch_case10(id,p1,p2,p3,p4,p5,p6,p7,p8,p9,p10) _case(id,p1)_case(id,p2)_case(id,p3)_case(id,p4)_case(id,p5)_case(id,p6)_case(id,p7)_case(id,p8)_case(id,p9)_case(id,p10)_case_default(id)
-#define _switch_case(id, ...) _BOND_LR__(_switch_case, MPL_ARGS_SIZE(__VA_ARGS__))(id, __VA_ARGS__)
-#define co_define_int_name(__name__, __val__) enum{__name__=__val__};
-//因为generator内部无法在switch-case里面co_yield，提供该宏间接实现switch效果
-#define co_begin_switch_ex(id, __val__, ...) do{switch(__val__) {_switch_case(id, __VA_ARGS__)}
-#define co_switch_case_ex(id, p) __co_case_ ## id ##_ ## p:
-#define co_switch_default_ex(id) co_switch_case_ex(id, default)
-#define co_end_switch_ex }while (0)
-
-//因为generator内部无法在switch-case里面co_yield，提供该宏间接实现switch效果
+//提供该宏间接实现动态case的switch效果
 #define co_begin_switch(__val__) for(__coSwitchPreSign=false,__coSwitchDefaultSign=false,__coSwitchFirstLoopSign=true,__coSwitchTempVal=(size_t)(__val__);\
 	__coSwitchFirstLoopSign || (!__coSwitchPreSign && __coSwitchDefaultSign);__coSwitchFirstLoopSign=false){if(0){
 #define co_switch_case_(__val__) __coSwitchPreSign=true;}if (__coSwitchPreSign || __coSwitchTempVal==(size_t)(__val__)){
@@ -394,14 +374,20 @@ struct __co_context_no_capture{};
 #define co_switch_default __coSwitchPreSign=true;}if(!__coSwitchDefaultSign && !__coSwitchPreSign){__coSwitchDefaultSign=true;}else{
 #define co_end_switch __coSwitchPreSign=true;}}
 
-//在co_switch内部case冲突时使用
-#define co_avoid if(0){int __t=__COUNTER__-__COUNTER__;}
-//因为generator内部无法在switch-case里面co_yield，替换原有switch关键字实现generator内switch-case功能，不支持嵌套
+#define _switch_mark (((unsigned long long)1) << 32)
+//generator无法reenter到switch-case内，替换原有switch关键字实现generator内switch-case功能，不支持嵌套
 #define co_switch(__exp__) \
 	_co_for(assert(co_self.__inside && !co_self.__coNextEx),\
 		co_self.__coNextEx=(__COUNTER__+1)/2, __coSwitchSign=true, __forYieldSwitch=false;;__forYieldSwitch=true)\
 	if (__forYieldSwitch) {co_self.__coNextEx=0; _co_for_break;}\
-	else case __COUNTER__/2: switch (__coSwitchSign ? (__exp__) : __coNext)
+	else case __COUNTER__/2: switch(__coSwitchSign ? co_calc{\
+	const auto val = (__exp__); static_assert(sizeof(val) <= 4, "switch value must be 32bit");\
+	return ((unsigned long long)(unsigned)(val)) | _switch_mark;} : __coNext)
+
+#define co_case(__num__) case (((unsigned long long)(unsigned)(__num__)) | _switch_mark):\
+	static_assert(sizeof(decltype(__num__)) <= 4, "case number must be 32bit");
+
+#define co_default() default:;
 
 //push数据到channel/msg_buffer
 #define co_chan_push(__chan__, ...) do{(__chan__).push(co_async_result(co_last_state), __VA_ARGS__); _co_await;}while (0)
