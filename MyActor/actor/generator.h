@@ -219,6 +219,12 @@ struct __co_context_no_capture{};
 	co_strand->next_tick(std::bind([](generator_handle& host){\
 	if(!host->__ctx)return; host->_revert_this(host)->_next(); }, std::move(co_shared_this))); _co_yield;}while (0)
 
+//挂起generator，等待调度器下次IO后触发
+#define co_io_tick do{\
+	assert(co_self.__inside);\
+	co_strand->post(std::bind([](generator_handle& host){\
+	if(!host->__ctx)return; host->_revert_this(host)->_next(); }, std::move(co_shared_this))); _co_yield;}while (0)
+
 #define _co_await do{\
 	assert(co_self.__inside);\
 	assert(co_self.__awaitSign || co_self.__sharedAwaitSign);\
@@ -294,7 +300,7 @@ struct __co_context_no_capture{};
 	}while (0)
 
 //递归调用另一个generator，直到执行完毕后接着下一行
-#define co_call_with \
+#define co_call_of \
 	assert(co_self.__inside);\
 	co_check_stop;\
 	_co_for(__forYieldSwitch = false;;__forYieldSwitch = true)\
@@ -302,17 +308,17 @@ struct __co_context_no_capture{};
 	return; case (__COUNTER__+1)/2:; _co_for_break;}\
 	else CoCall_(co_self, __COUNTER__/2)-
 
-#define co_call(...) co_call_with _co_call_bind(__VA_ARGS__)
+#define co_call(...) co_call_of _co_call_bind(__VA_ARGS__)
 
 //在指定strand中，递归调用另一个generator，直到执行完毕后接着下一行
-#define co_st_call_with(__strand__) \
+#define co_st_call_of(__strand__) \
 	assert(co_self.__inside);\
 	co_check_stop; co_lock_stop;\
 	_co_for(__forYieldSwitch = false;;__forYieldSwitch = true)\
 	if (__forYieldSwitch) {_co_await; co_unlock_stop; _co_for_break;}\
 	else CoStCall(__strand__, co_self)-
 
-#define co_st_call(__strand__, ...) co_st_call_with(__strand__) _co_call_bind(__VA_ARGS__)
+#define co_st_call(__strand__, ...) co_st_call_of(__strand__) _co_call_bind(__VA_ARGS__)
 
 //sleep，毫秒
 #define co_sleep_(__th__, __ms__) do{\
@@ -380,7 +386,7 @@ struct __co_context_no_capture{};
 	_co_for(assert(co_self.__inside && !co_self.__coNextEx),\
 		co_self.__coNextEx=(__COUNTER__+1)/2, __coSwitchSign=true, __forYieldSwitch=false;;__forYieldSwitch=true)\
 	if (__forYieldSwitch) {co_self.__coNextEx=0; _co_for_break;}\
-	else case __COUNTER__/2: switch(__coSwitchSign ? co_calc{\
+	else case __COUNTER__/2: switch(__coSwitchSign ? co_calc()->unsigned long long{\
 	const auto val = (__exp__); static_assert(sizeof(val) <= 4, "switch value must be 32bit");\
 	return ((unsigned long long)(unsigned)(val)) | _switch_mark;} : __coNext)
 
@@ -924,7 +930,7 @@ struct __co_context_no_capture{};
 #define co_hold_work_init __holdWork(co_strand->get_io_service())
 
 //包装一个有局部变量的计算，然后返回一个结果
-#define co_calc CoLocalWrapCalc_()*[&]()
+#define co_calc CoLocalWrapCalc_()*[&]
 #define co_calc_of CoLocalWrapCalc_()*
 //generator function类型
 #define co_func_type std::function<void(generator&)>

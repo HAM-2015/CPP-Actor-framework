@@ -93,7 +93,7 @@ void overlap_timer::_timeout(long long us, timer_handle& timerHandle, bool deadl
 	}
 	assert(_lockStrand->running_in_this_thread());
 	timerHandle._timestamp = get_tick_us();
-	long long et = deadline ? us : (timerHandle._timestamp + us) & -256;
+	long long et = deadline ? us : (timerHandle._timestamp + us);
 	if (et >= _extMaxTick)
 	{
 		_extMaxTick = et;
@@ -209,7 +209,7 @@ void overlap_timer::event_handler(int tc)
 		{
 			handler_queue::iterator iter = _handlerQueue.begin();
 			long long ct = get_tick_us();
-			if (iter->first > ct + 500)
+			if (iter->first > ct)
 			{
 				_extFinishTime = iter->first;
 				timer_loop(_extFinishTime, _extFinishTime - ct);

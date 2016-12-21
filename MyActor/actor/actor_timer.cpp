@@ -48,7 +48,7 @@ ActorTimer_::timer_handle ActorTimer_::timeout(long long us, actor_face_handle&&
 	assert(_lockStrand->running_in_this_thread());
 	timer_handle timerHandle;
 	timerHandle._beginStamp = get_tick_us();
-	long long et = deadline ? us : (timerHandle._beginStamp + us) & -256;
+	long long et = deadline ? us : (timerHandle._beginStamp + us);
 	if (et >= _extMaxTick)
 	{
 		_extMaxTick = et;
@@ -159,7 +159,7 @@ void ActorTimer_::event_handler(int tc)
 		{
 			handler_queue::iterator iter = _handlerQueue.begin();
 			long long ct = get_tick_us();
-			if (iter->first > ct + 500)
+			if (iter->first > ct)
 			{
 				_extFinishTime = iter->first;
 				timer_loop(_extFinishTime, _extFinishTime - ct);
