@@ -4,6 +4,7 @@
 #include <mutex>
 #include <memory>
 #include <memory.h>
+#include <atomic>
 #include "try_move.h"
 #include "scattered.h"
 
@@ -21,6 +22,17 @@ struct mem_alloc_base
 	virtual void deallocate(void* p) = 0;
 	virtual bool shared() const = 0;
 	virtual size_t alloc_size() const = 0;
+	virtual size_t pool_size() const = 0;
+	virtual bool overflow() { return false; }
+	virtual void tls_init(size_t threadNum) {}
+	virtual void tls_uninit() {}
+	NONE_COPY(mem_alloc_base);
+};
+
+struct mem_alloc_face : public mem_alloc_base
+{
+	mem_alloc_face(){}
+	virtual ~mem_alloc_face(){}
 
 	size_t pool_size() const
 	{
@@ -35,7 +47,6 @@ struct mem_alloc_base
 	size_t _nodeCount;
 	size_t _poolMaxSize;
 	size_t _freeNumber;
-	NONE_COPY(mem_alloc_base);
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -62,7 +73,7 @@ struct mem_alloc_mt<void, MUTEX>
 };
 
 template <typename DATA, typename MUTEX>
-struct mem_alloc_mt : protected MUTEX, public mem_alloc_base
+struct mem_alloc_mt : protected MUTEX, public mem_alloc_face
 {
 	struct node_space;
 
@@ -255,7 +266,7 @@ struct mem_alloc_mt2<void, MUTEX>
 };
 
 template <typename DATA, typename MUTEX>
-struct mem_alloc_mt2 : protected MUTEX, public mem_alloc_base
+struct mem_alloc_mt2 : protected MUTEX, public mem_alloc_face
 {
 	typedef typename mem_alloc_mt<DATA>::node_space node_space;
 	typedef MUTEX mutex_type;
@@ -362,8 +373,247 @@ struct mem_alloc_mt2 : protected MUTEX, public mem_alloc_base
 	node_space* _pool;
 };
 
+
+template <typename DATA>
+struct MemTlsNode_
+{
+	struct node_space;
+
+#if (_DEBUG || DEBUG)
+	struct hold_space
+	{
+		void operator =(node_space* link)
+		{
+			_link = link;
+		}
+
+		operator node_space*()
+		{
+			return _link;
+		}
+
+		__space_align char _[MEM_ALIGN(sizeof(DATA), sizeof(void*))];
+		node_space* _link;
+	};
+#endif
+
+	union BUFFER
+	{
+#if (_DEBUG || DEBUG)
+		__space_align char _space[MEM_ALIGN(sizeof(DATA), sizeof(void*)) + sizeof(void*)];
+		hold_space _link;
+#else
+		__space_align char _space[MEM_ALIGN(sizeof(DATA), sizeof(void*))];
+		node_space* _link;
+#endif
+	};
+
+	struct node_space
+	{
+		void set_bf()
+		{
+#if (_DEBUG || DEBUG)
+			memset(get_ptr(), 0xBF, sizeof(_buff._space));
+#endif
+		}
+
+		void set_af()
+		{
+#if (_DEBUG || DEBUG)
+			memset(get_ptr(), 0xAF, sizeof(_buff._space));
+#endif
+		}
+
+		void* get_ptr()
+		{
+			return _buff._space;
+		}
+
+		void set_head()
+		{
+#if (_DEBUG || DEBUG)
+			_size = sizeof(DATA);
+#endif
+		}
+
+		void check_head()
+		{
+			assert(sizeof(DATA) <= _size);
+		}
+
+		static node_space* get_node(void* p)
+		{
+#if (_DEBUG || DEBUG)
+			return (node_space*)((unsigned char*)p - sizeof(size_t));
+#else
+			return (node_space*)p;
+#endif
+		}
+
+#if (_DEBUG || DEBUG)
+		size_t _size;
+#endif
+		BUFFER _buff;
+	};
+
+	MemTlsNode_(size_t poolSize)
+	{
+		_nodeCount = 0;
+		_poolMaxSize = poolSize;
+		_pool = NULL;
+	}
+
+	~MemTlsNode_()
+	{
+		while (_pool)
+		{
+			node_space* t = _pool;
+			_pool = _pool->_buff._link;
+			free(t);
+		}
+	}
+
+	void* allocate()
+	{
+		{
+			if (_pool)
+			{
+				_nodeCount--;
+				node_space* fixedSpace = _pool;
+				_pool = fixedSpace->_buff._link;
+				fixedSpace->set_af();
+				return fixedSpace->get_ptr();
+			}
+		}
+		node_space* p = (node_space*)malloc(sizeof(node_space));
+		p->set_head();
+		return p->get_ptr();
+	}
+
+	void deallocate(void* p)
+	{
+		node_space* space = node_space::get_node(p);
+		space->check_head();
+		space->set_bf();
+		{
+			if (_nodeCount < _poolMaxSize)
+			{
+				_nodeCount++;
+				space->_buff._link = _pool;
+				_pool = space;
+				return;
+			}
+		}
+		free(space);
+	}
+
+	node_space* _pool;
+	size_t _nodeCount;
+	size_t _poolMaxSize;
+};
+
+struct MemAllocTls_
+{
+	static void** getTlsValueBuff();
+};
+
+template <size_t TLS_INDEX, typename DATA>
+struct mem_alloc_tls;
+
+template <size_t TLS_INDEX>
+struct mem_alloc_tls<TLS_INDEX, void>
+{
+	template <typename _Other>
+	struct rebind
+	{
+		typedef mem_alloc_tls<TLS_INDEX, _Other> other;
+	};
+};
+
+template <size_t TLS_INDEX, typename DATA>
+struct mem_alloc_tls: public mem_alloc_base
+{
+	typedef MemTlsNode_<DATA> alloc_type;
+	typedef typename alloc_type::node_space node_space;
+
+	template <typename _Other>
+	struct rebind
+	{
+		typedef mem_alloc_tls<TLS_INDEX, _Other> other;
+	};
+
+	mem_alloc_tls(size_t poolSize)
+	:_poolSize(poolSize)
+	{
+		DEBUG_OPERATION(_nodeCount = 0);
+	}
+
+	~mem_alloc_tls()
+	{
+		assert(0 == _nodeCount);
+	}
+
+	void tls_init(size_t threadNum)
+	{
+		void** tlsSpace = MemAllocTls_::getTlsValueBuff();
+		tlsSpace[TLS_INDEX] = new alloc_type(_poolSize / threadNum);
+	}
+
+	void tls_uninit()
+	{
+		void** tlsSpace = MemAllocTls_::getTlsValueBuff();
+		delete (alloc_type*)tlsSpace[TLS_INDEX];
+		tlsSpace[TLS_INDEX] = NULL;
+	}
+
+	void* allocate()
+	{
+		DEBUG_OPERATION(_nodeCount++);
+		void** tlsSpace = MemAllocTls_::getTlsValueBuff();
+		if (tlsSpace && tlsSpace[TLS_INDEX])
+		{
+			return ((alloc_type*)tlsSpace[TLS_INDEX])->allocate();
+		}
+		node_space* p = (node_space*)malloc(sizeof(node_space));
+		p->set_head();
+		return p->get_ptr();
+	}
+
+	void deallocate(void* p)
+	{
+		DEBUG_OPERATION(_nodeCount--);
+		void** tlsSpace = MemAllocTls_::getTlsValueBuff();
+		if (tlsSpace && tlsSpace[TLS_INDEX])
+		{
+			((alloc_type*)tlsSpace[TLS_INDEX])->deallocate(p);
+		}
+		else
+		{
+			free(node_space::get_node(p));
+		}
+	}
+
+	size_t pool_size() const
+	{
+		return _poolSize;
+	}
+
+	size_t alloc_size() const
+	{
+		return sizeof(DATA);
+	}
+
+	bool shared() const
+	{
+		return true;
+	}
+
+	size_t _poolSize;
+	DEBUG_OPERATION(std::atomic<size_t> _nodeCount);
+};
+
 template <typename MUTEX = std::mutex>
-struct dymem_alloc_mt : protected MUTEX, public mem_alloc_base
+struct dymem_alloc_mt : protected MUTEX, public mem_alloc_face
 {
 	struct dy_node 
 	{
@@ -881,11 +1131,11 @@ public:
 	{
 		if (shared)
 		{
-			_memAlloc = std::shared_ptr<mem_alloc_base>(new mem_alloc_mt_type(poolSize));
+			_memAlloc = std::make_shared<mem_alloc_mt_type>(poolSize);
 		}
 		else
 		{
-			_memAlloc = std::shared_ptr<mem_alloc_base>(new mem_alloc_type(poolSize));
+			_memAlloc = std::make_shared<mem_alloc_type>(poolSize);
 		}
 	}
 
@@ -904,7 +1154,7 @@ public:
 		}
 		else
 		{
-			_memAlloc = std::shared_ptr<mem_alloc_base>(new mem_alloc_type(s._memAlloc->_poolMaxSize));
+			_memAlloc = std::make_shared<mem_alloc_type>(s._memAlloc->_poolMaxSize);
 		}
 	}
 
@@ -915,7 +1165,7 @@ public:
 		{
 // 			if (sizeof(_Ty) > s._memAlloc->alloc_size())
 // 			{
-// 				_memAlloc = std::shared_ptr<mem_alloc_base>(new mem_alloc_mt_type(s._memAlloc->_poolMaxSize));
+// 				_memAlloc = std::make_shared<mem_alloc_mt_type>(s._memAlloc->_poolMaxSize);
 // 			} 
 // 			else
 			{
@@ -925,7 +1175,7 @@ public:
 		}
 		else
 		{
-			_memAlloc = std::shared_ptr<mem_alloc_base>(new mem_alloc_type(s._memAlloc->_poolMaxSize));
+			_memAlloc = std::make_shared<mem_alloc_type>(s._memAlloc->_poolMaxSize);
 		}
 	}
 
@@ -994,11 +1244,11 @@ public:
 	{
 		if (!_memAlloc->shared())
 		{
-			_memAlloc = std::shared_ptr<mem_alloc_base>(new mem_alloc_mt_type(-1 == poolSize ? _memAlloc->_poolMaxSize : poolSize));
+			_memAlloc = std::make_shared<mem_alloc_mt_type>(-1 == poolSize ? _memAlloc->_poolMaxSize : poolSize);
 		}
 	}
 
-	std::shared_ptr<mem_alloc_base> _memAlloc;
+	std::shared_ptr<mem_alloc_face> _memAlloc;
 };
 //////////////////////////////////////////////////////////////////////////
 

@@ -920,7 +920,7 @@ struct qt_ui_sync_check_lost_notifer<R(ARGS...)>
 {
 	template <typename Parent>
 	explicit qt_ui_sync_check_lost_notifer(Parent* parent)
-		: _runBase((bind_qt_run_base*)parent), _parent(parent), _mutex(std::shared_ptr<std::mutex>(new std::mutex))
+		: _runBase((bind_qt_run_base*)parent), _parent(parent), _mutex(std::make_shared<std::mutex>())
 	{
 		DEBUG_OPERATION(_notifyCount = 0);
 	}

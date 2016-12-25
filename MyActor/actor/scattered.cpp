@@ -110,7 +110,7 @@ move_test::move_test(const move_test& s)
 
 move_test::move_test(int id, const std::function<void(std::shared_ptr<count>)>& cb)
 {
-	_count = std::shared_ptr<count>(new count);
+	_count = std::make_shared<count>();
 	_count->_copyCount = 0;
 	_count->_moveCount = 0;
 	_count->_id = id;
@@ -120,7 +120,7 @@ move_test::move_test(int id, const std::function<void(std::shared_ptr<count>)>& 
 
 move_test::move_test(int id)
 {
-	_count = std::shared_ptr<count>(new count);
+	_count = std::make_shared<count>();
 	_count->_copyCount = 0;
 	_count->_moveCount = 0;
 	_count->_id = id;

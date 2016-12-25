@@ -16,6 +16,7 @@ public:
 	struct result
 	{
 		size_t s;///<字节数
+		int code;///<错误码
 		bool ok;///<是否成功
 	};
 public:
@@ -26,6 +27,11 @@ public:
 	@brief 设置no_delay属性
 	*/
 	bool no_delay();
+
+	/*!
+	@brief linux下优化异步返回（如果有数据，在async_xxx操作中直接回调）
+	*/
+	void fast_callback();
 
 	/*!
 	@brief 本地端口IP
@@ -105,7 +111,8 @@ public:
 	{
 		_socket.async_connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), std::bind([](Handler& handler, const boost::system::error_code& ec)
 		{
-			handler(!ec);
+			result res = { 0, ec.value(), !ec };
+			handler(res);
 		}, std::forward<Handler>(handler), __1));
 	}
 
@@ -117,7 +124,7 @@ public:
 	{
 		boost::asio::async_read(_socket, boost::asio::buffer(buff, length), std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
 		{
-			result res = { s, !ec };
+			result res = { s, ec.value(), !ec };
 			handler(res);
 		}, std::forward<Handler>(handler), __1, __2));
 	}
@@ -130,7 +137,7 @@ public:
 	{
 		_socket.async_read_some(boost::asio::buffer(buff, length), std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
 		{
-			result res = { s, !ec };
+			result res = { s, ec.value(), !ec };
 			handler(res);
 		}, std::forward<Handler>(handler), __1, __2));
 	}
@@ -143,7 +150,7 @@ public:
 	{
 		boost::asio::async_write(_socket, boost::asio::buffer(buff, length), std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
 		{
-			result res = { s, !ec };
+			result res = { s, ec.value(), !ec };
 			handler(res);
 		}, std::forward<Handler>(handler), __1, __2));
 	}
@@ -156,7 +163,7 @@ public:
 	{
 		_socket.async_write_some(boost::asio::buffer(buff, length), std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
 		{
-			result res = { s, !ec };
+			result res = { s, ec.value(), !ec };
 			handler(res);
 		}, std::forward<Handler>(handler), __1, __2));
 	}
@@ -217,7 +224,8 @@ public:
 	{
 		_acceptor->async_accept(socket.boost_socket(), std::bind([](Handler& handler, const boost::system::error_code& ec)
 		{
-			handler(!ec);
+			tcp_socket::result res = { 0, ec.value(), !ec };
+			handler(res);
 		}, std::forward<Handler>(handler), __1));
 	}
 private:
@@ -238,6 +246,7 @@ public:
 	struct result
 	{
 		size_t s;///<字节数
+		int code;///<错误码
 		bool ok;///<是否成功
 	};
 public:
@@ -288,6 +297,11 @@ public:
 	@brief 获取boost socket对象
 	*/
 	boost::asio::ip::udp::socket& boost_socket();
+
+	/*!
+	@brief linux下优化异步返回（如果有数据，在async_xxx操作中直接回调）
+	*/
+	void fast_callback();
 
 	/*!
 	@brief 设定一个远程端口作为默认发送接收目标
@@ -373,7 +387,8 @@ public:
 	{
 		_socket.async_connect(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), std::bind([](Handler& handler, const boost::system::error_code& ec)
 		{
-			handler(!ec);
+			result res = { 0, ec.value(), !ec };
+			handler(res);
 		}, std::forward<Handler>(handler), __1));
 	}
 
@@ -385,7 +400,7 @@ public:
 	{
 		_socket.async_send_to(boost::asio::buffer(buff, length), remoteEndpoint, flags, std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
 		{
-			result res = { s, !ec };
+			result res = { s, ec.value(), !ec };
 			handler(res);
 		}, std::forward<Handler>(handler), __1, __2));
 	}
@@ -407,7 +422,7 @@ public:
 	{
 		_socket.async_send(boost::asio::buffer(buff, length), flags, std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
 		{
-			result res = { s, !ec };
+			result res = { s, ec.value(), !ec };
 			handler(res);
 		}, std::forward<Handler>(handler), __1, __2));
 	}
@@ -420,7 +435,7 @@ public:
 	{
 		_socket.async_receive_from(boost::asio::buffer(buff, length), _remoteSenderEndpoint, flags, std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
 		{
-			result res = { s, !ec };
+			result res = { s, ec.value(), !ec };
 			handler(res);
 		}, std::forward<Handler>(handler), __1, __2));
 	}
@@ -433,7 +448,7 @@ public:
 	{
 		_socket.async_receive(boost::asio::buffer(buff, length), flags, std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
 		{
-			result res = { s, !ec };
+			result res = { s, ec.value(), !ec };
 			handler(res);
 		}, std::forward<Handler>(handler), __1, __2));
 	}

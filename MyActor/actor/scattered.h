@@ -30,12 +30,14 @@
 #ifdef _MSC_VER
 #define FRIEND_SHARED_PTR(__T__)\
 	friend std::shared_ptr<__T__>;\
-	friend std::_Ref_count<__T__>;
+	friend std::_Ref_count<__T__>;\
+	friend std::_Ref_count_obj<__T__>;
 #elif __GNUG__
 #define FRIEND_SHARED_PTR(__T__)\
-	friend std::shared_ptr<__T__>; \
+	friend std::shared_ptr<__T__>;\
 	friend std::__shared_count<__gnu_cxx::__default_lock_policy>;\
-	friend std::_Sp_counted_ptr<__T__*, __gnu_cxx::__default_lock_policy>;
+	friend std::_Sp_counted_ptr<__T__*, __gnu_cxx::__default_lock_policy>;\
+	friend __gnu_cxx::new_allocator<__T__>;
 #endif
 
 #ifdef _MSC_VER
@@ -214,7 +216,7 @@ class ActorTimerFace_
 #endif
 
 //内存边界对齐
-#define MEM_ALIGN(__o, __a) (((__o) + ((__a)-1)) & (0-__a))
+#define MEM_ALIGN(__o, __a) (((__o) + ((__a)-1)) & (0-(__a)))
 
 //禁用对象拷贝
 #define NONE_COPY(__T__) \

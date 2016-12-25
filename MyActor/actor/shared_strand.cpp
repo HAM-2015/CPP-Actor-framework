@@ -196,7 +196,7 @@ overlap_timer* boost_strand::over_timer()
 
 std::shared_ptr<AsyncTimer_> boost_strand::make_timer()
 {
-	std::shared_ptr<AsyncTimer_> res(new AsyncTimer_(_actorTimer));
+	std::shared_ptr<AsyncTimer_> res = std::make_shared<AsyncTimer_>(_actorTimer);
 	res->_weakThis = res;
 	return res;
 }
@@ -216,15 +216,15 @@ void boost_strand::run_tick_front()
 {
 	while (!_frontTickQueue->empty())
 	{
-		wrap_next_tick_face* tick = _frontTickQueue->front();
+		wrap_next_tick_face* const tick = _frontTickQueue->front();
 		_frontTickQueue->pop_front();
-		size_t spaceSize = tick->invoke();
+		const size_t spaceSize = tick->invoke();
 		switch (MEM_ALIGN(spaceSize, NEXT_TICK_SPACE_SIZE) / NEXT_TICK_SPACE_SIZE)
 		{
 		case 1: _nextTickAlloc[0]->deallocate(tick); break;
 		case 2: _nextTickAlloc[1]->deallocate(tick); break;
-		case 4: _nextTickAlloc[2]->deallocate(tick); break;
-		default: _reuMemAlloc->deallocate(tick);
+		case 3: case 4: _nextTickAlloc[2]->deallocate(tick); break;
+		default: _reuMemAlloc->deallocate(tick); break;
 		}
 	}
 }
@@ -238,15 +238,15 @@ void boost_strand::run_tick_back()
 		size_t tickCount = 0;
 		do
 		{
-			wrap_next_tick_face* tick = _backTickQueue->front();
+			wrap_next_tick_face* const tick = _backTickQueue->front();
 			_backTickQueue->pop_front();
-			size_t spaceSize = tick->invoke();
+			const size_t spaceSize = tick->invoke();
 			switch (MEM_ALIGN(spaceSize, NEXT_TICK_SPACE_SIZE) / NEXT_TICK_SPACE_SIZE)
 			{
 			case 1: _nextTickAlloc[0]->deallocate(tick); break;
 			case 2: _nextTickAlloc[1]->deallocate(tick); break;
-			case 4: _nextTickAlloc[2]->deallocate(tick); break;
-			default: _reuMemAlloc->deallocate(tick);
+			case 3: case 4: _nextTickAlloc[2]->deallocate(tick); break;
+			default: _reuMemAlloc->deallocate(tick); break;
 			}
 		} while (!_backTickQueue->empty() && ++tickCount <= _thisRoundCount);
 		std::swap(_frontTickQueue, _backTickQueue);
@@ -263,7 +263,7 @@ void* boost_strand::alloc_space(size_t size)
 	{
 	case 1: return !_nextTickAlloc[0]->overflow() ? _nextTickAlloc[0]->allocate() : NULL;
 	case 2: return !_nextTickAlloc[1]->overflow() ? _nextTickAlloc[1]->allocate() : NULL;
-	case 4: return !_nextTickAlloc[2]->overflow() ? _nextTickAlloc[2]->allocate() : NULL;
+	case 3: case 4: return !_nextTickAlloc[2]->overflow() ? _nextTickAlloc[2]->allocate() : NULL;
 	}
 	return NULL;
 }

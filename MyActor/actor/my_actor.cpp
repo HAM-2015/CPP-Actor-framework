@@ -64,9 +64,6 @@ static autoActorStackMng* s_autoActorStackMng = NULL;
 mem_alloc_base* shared_bool::_sharedBoolAlloc = NULL;
 std::recursive_mutex* TraceMutex_::_mutex = NULL;
 std::atomic<my_actor::id>* my_actor::_actorIDCount = NULL;
-msg_list_shared_alloc<actor_handle>::shared_node_alloc* my_actor::_childActorListAll = NULL;
-msg_list_shared_alloc<std::function<void()> >::shared_node_alloc* my_actor::_quitExitCallbackAll = NULL;
-msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc* my_actor::_suspendResumeQueueAll = NULL;
 msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc* my_actor::msg_pool_status::_msgTypeMapAll = NULL;
 
 void my_actor::install()
@@ -86,16 +83,13 @@ void my_actor::install()
 		bind_qt_run_base::install();
 #endif
 #ifdef ENABLE_CHECK_LOST
-		s_checkLostObjAlloc = make_shared_space_alloc<CheckLost_, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [](CheckLost_*){});
-		s_checkPumpLostObjAlloc = make_shared_space_alloc<CheckPumpLost_, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [](CheckPumpLost_*){});
+		s_checkLostObjAlloc = make_shared_space_alloc<CheckLost_, mem_alloc_tls<CHECK_LOST_ALLOC_INDEX, void>>(MEM_POOL_LENGTH, [](CheckLost_*){});
+		s_checkPumpLostObjAlloc = make_shared_space_alloc<CheckPumpLost_, mem_alloc_tls<CHECK_PUMP_LOST_ALLOC_INDEX, void>>(MEM_POOL_LENGTH, [](CheckPumpLost_*){});
 #endif
 		s_autoActorStackMng = new autoActorStackMng;
-		shared_bool::_sharedBoolAlloc = make_shared_space_alloc<bool, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [](bool*){});
+		shared_bool::_sharedBoolAlloc = make_shared_space_alloc<bool, mem_alloc_tls<SHARED_BOOL_ALLOC_INDEX, void>>(MEM_POOL_LENGTH, [](bool*){});
 		my_actor::_actorIDCount = new std::atomic<my_actor::id>(0);
 		s_shared_initer._actorIDCount = my_actor::_actorIDCount;
-		my_actor::_childActorListAll = new msg_list_shared_alloc<actor_handle>::shared_node_alloc(MEM_POOL_LENGTH);
-		my_actor::_quitExitCallbackAll = new msg_list_shared_alloc<std::function<void()> >::shared_node_alloc(MEM_POOL_LENGTH);
-		my_actor::_suspendResumeQueueAll = new msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc(MEM_POOL_LENGTH);
 		my_actor::msg_pool_status::_msgTypeMapAll = new msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc(MEM_POOL_LENGTH);
 		generator::install(my_actor::_actorIDCount);
 	}
@@ -118,16 +112,13 @@ void my_actor::install(const shared_initer* initer)
 		bind_qt_run_base::install();
 #endif
 #ifdef ENABLE_CHECK_LOST
-		s_checkLostObjAlloc = make_shared_space_alloc<CheckLost_, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [](CheckLost_*){});
-		s_checkPumpLostObjAlloc = make_shared_space_alloc<CheckPumpLost_, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [](CheckPumpLost_*){});
+		s_checkLostObjAlloc = make_shared_space_alloc<CheckLost_, mem_alloc_tls<CHECK_LOST_ALLOC_INDEX, void>>(MEM_POOL_LENGTH, [](CheckLost_*){});
+		s_checkPumpLostObjAlloc = make_shared_space_alloc<CheckPumpLost_, mem_alloc_tls<CHECK_PUMP_LOST_ALLOC_INDEX, void>>(MEM_POOL_LENGTH, [](CheckPumpLost_*){});
 #endif
 		s_autoActorStackMng = new autoActorStackMng;
-		shared_bool::_sharedBoolAlloc = make_shared_space_alloc<bool, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [](bool*){});
+		shared_bool::_sharedBoolAlloc = make_shared_space_alloc<bool, mem_alloc_tls<SHARED_BOOL_ALLOC_INDEX, void>>(MEM_POOL_LENGTH, [](bool*){});
 		my_actor::_actorIDCount = initer->_actorIDCount;
 		s_shared_initer._actorIDCount = initer->_actorIDCount;
-		my_actor::_childActorListAll = new msg_list_shared_alloc<actor_handle>::shared_node_alloc(MEM_POOL_LENGTH);
-		my_actor::_quitExitCallbackAll = new msg_list_shared_alloc<std::function<void()> >::shared_node_alloc(MEM_POOL_LENGTH);
-		my_actor::_suspendResumeQueueAll = new msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc(MEM_POOL_LENGTH);
 		my_actor::msg_pool_status::_msgTypeMapAll = new msg_map_shared_alloc<my_actor::msg_pool_status::id_key, std::shared_ptr<my_actor::msg_pool_status::pck_base> >::shared_node_alloc(MEM_POOL_LENGTH);
 		generator::install(my_actor::_actorIDCount);
 	}
@@ -146,12 +137,6 @@ void my_actor::uninstall()
 			delete my_actor::_actorIDCount;
 		s_shared_initer._actorIDCount = NULL;
 		my_actor::_actorIDCount = NULL;
-		delete my_actor::_childActorListAll;
-		my_actor::_childActorListAll = NULL;
-		delete my_actor::_quitExitCallbackAll;
-		my_actor::_quitExitCallbackAll = NULL;
-		delete my_actor::_suspendResumeQueueAll;
-		my_actor::_suspendResumeQueueAll = NULL;
 		delete my_actor::msg_pool_status::_msgTypeMapAll;
 		my_actor::msg_pool_status::_msgTypeMapAll = NULL;
 		delete s_autoActorStackMng;
@@ -182,6 +167,29 @@ const shared_initer* my_actor::get_initer()
 	return &s_shared_initer;
 }
 //////////////////////////////////////////////////////////////////////////
+
+void my_actor::tls_init(size_t threadNum)
+{
+	shared_bool::_sharedBoolAlloc->tls_init(threadNum);
+#ifdef ENABLE_CHECK_LOST
+	s_checkLostObjAlloc->tls_init(threadNum);
+	s_checkPumpLostObjAlloc->tls_init(threadNum);
+#endif
+}
+
+void my_actor::tls_uninit()
+{
+#ifdef ENABLE_CHECK_LOST
+	s_checkPumpLostObjAlloc->tls_uninit();
+	s_checkLostObjAlloc->tls_uninit();
+#endif
+	shared_bool::_sharedBoolAlloc->tls_uninit();
+}
+
+void** MemAllocTls_::getTlsValueBuff()
+{
+	return io_engine::getTlsValueBuff();
+}
 
 void shared_bool::reset()
 {
@@ -1809,10 +1817,6 @@ void my_actor::undump_segmentation_fault()
 //////////////////////////////////////////////////////////////////////////
 
 my_actor::my_actor()
-:_suspendResumeQueue(*_suspendResumeQueueAll),
-_quitCallback(*_quitExitCallbackAll),
-_beginQuitExec(*_quitExitCallbackAll),
-_childActorList(*_childActorListAll)
 {
 	_actorPull = NULL;
 	_actorPush = NULL;
@@ -2360,7 +2364,7 @@ const actor_handle& my_actor::parent_actor()
 	return _parentActor;
 }
 
-const msg_list_shared_alloc<actor_handle>& my_actor::children()
+const std::list<actor_handle>& my_actor::children()
 {
 	return _childActorList;
 }

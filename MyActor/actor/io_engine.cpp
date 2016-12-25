@@ -1,6 +1,7 @@
 #include "io_engine.h"
 #include "mem_pool.h"
 #include "my_actor.h"
+#include "generator.h"
 #include "context_yield.h"
 #include "waitable_timer.h"
 
@@ -39,7 +40,6 @@ void io_engine::uninstall()
 io_engine::io_engine(bool enableTimer, const char* title)
 {
 	_opend = false;
-	_suspend = false;
 	_runLock = NULL;
 	_title = title ? title : "io_engine";
 #ifdef WIN32
@@ -85,106 +85,104 @@ void io_engine::run(size_t threadNum, sched policy)
 	if (!_opend)
 	{
 		_opend = true;
-		_suspend = false;
-		_run(threadNum, policy);
-	}
-}
-
-void io_engine::_run(size_t threadNum, sched policy)
-{
-	_runCount = 0;
-	_runLock = new boost::asio::io_service::work(_ios);
-	_handleList.resize(threadNum);
+		_runCount = 0;
+		_runLock = new boost::asio::io_service::work(_ios);
+		_handleList.resize(threadNum);
 #ifdef __linux__
-	_policy = policy;
+		_policy = policy;
 #endif
-	size_t rc = 0;
-	std::shared_ptr<std::mutex> blockMutex(new std::mutex);
-	std::shared_ptr<std::condition_variable> blockConVar(new std::condition_variable);
-	std::unique_lock<std::mutex> ul(*blockMutex);
-	for (size_t i = 0; i < threadNum; i++)
-	{
-		run_thread* newThread = new run_thread([&, i]
+		size_t rc = 0;
+		std::shared_ptr<std::mutex> blockMutex = std::make_shared<std::mutex>();
+		std::shared_ptr<std::condition_variable> blockConVar = std::make_shared<std::condition_variable>();
+		std::unique_lock<std::mutex> ul(*blockMutex);
+		for (size_t i = 0; i < threadNum; i++)
 		{
-			try
+			run_thread* newThread = new run_thread([&, threadNum, i]
 			{
+				try
 				{
-					run_thread::set_current_thread_name(_title.c_str());
+					{
+						run_thread::set_current_thread_name(_title.c_str());
 #ifdef WIN32
-					SetThreadPriority(GetCurrentThread(), _priority);
-					DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &_handleList[i], 0, FALSE, DUPLICATE_SAME_ACCESS);
+						SetThreadPriority(GetCurrentThread(), _priority);
+						DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &_handleList[i], 0, FALSE, DUPLICATE_SAME_ACCESS);
 #elif __linux__
-					pthread_attr_init(&_handleList[i]);
-					pthread_attr_setschedpolicy (&_handleList[i], _policy);
-					if (0 == i)
-					{
-						struct sched_param pm;
-						int rs = pthread_attr_getschedparam(&_handleList[i], &pm);
-						_priority = (priority)pm.sched_priority;
-					}
+						pthread_attr_init(&_handleList[i]);
+						pthread_attr_setschedpolicy(&_handleList[i], _policy);
+						if (0 == i)
+						{
+							struct sched_param pm;
+							int rs = pthread_attr_getschedparam(&_handleList[i], &pm);
+							_priority = (priority)pm.sched_priority;
+						}
 #endif
-					auto lockMutex = blockMutex;
-					auto lockConVar = blockConVar;
-					std::unique_lock<std::mutex> ul(*lockMutex);
-					if (threadNum == ++rc)
-					{
-						lockConVar->notify_all();
+						auto lockMutex = blockMutex;
+						auto lockConVar = blockConVar;
+						std::unique_lock<std::mutex> ul(*lockMutex);
+						if (threadNum == ++rc)
+						{
+							lockConVar->notify_all();
+						}
+						else
+						{
+							lockConVar->wait(ul);
+						}
 					}
-					else
+					context_yield::convert_thread_to_fiber();
+					__space_align void* tlsBuff[64] = { 0 };
+					_tls->set_space(tlsBuff);
+					my_actor::tls_init(threadNum);
+					generator::tls_init(threadNum);
+					safe_stack_info safeStack;
+					setTlsValue(ACTOR_SAFE_STACK_INDEX, &safeStack);
+					safeStack.ctx = context_yield::make_context(MAX_STACKSIZE, [](context_yield::context_info* ctx, void* param)
 					{
-						lockConVar->wait(ul);
-					}
+						while (true)
+						{
+							context_yield::push_yield(ctx);
+							safe_stack_info* const safeStack = (safe_stack_info*)param;
+							CHECK_EXCEPTION(*safeStack->handler);
+						}
+					}, &safeStack);
+#if (__linux__ && ENABLE_DUMP_STACK)
+					__space_align char dumpStack[8 kB];
+					my_actor::dump_segmentation_fault(dumpStack, sizeof(dumpStack));
+#endif
+					_runCount += _ios.run();
+#if (__linux__ && ENABLE_DUMP_STACK)
+					my_actor::undump_segmentation_fault();
+#endif
+					context_yield::delete_context(safeStack.ctx);
+					generator::tls_uninit();
+					my_actor::tls_uninit();
+					_tls->set_space(NULL);
+					context_yield::convert_fiber_to_thread();
 				}
-				context_yield::convert_thread_to_fiber();
-				__space_align void* tlsBuff[64] = { 0 };
-				_tls->set_space(tlsBuff);
-				safe_stack_info safeStack;
-				setTlsValue(ACTOR_SAFE_STACK_INDEX, &safeStack);
-				safeStack.ctx = context_yield::make_context(MAX_STACKSIZE, [](context_yield::context_info* ctx, void* param)
+				catch (boost::exception&)
 				{
-					while (true)
-					{
-						context_yield::push_yield(ctx);
-						safe_stack_info* const safeStack = (safe_stack_info*)param;
-						CHECK_EXCEPTION(*safeStack->handler);
-					}
-				}, &safeStack);
-#if (__linux__ && ENABLE_DUMP_STACK)
-				__space_align char dumpStack[8 kB];
-				my_actor::dump_segmentation_fault(dumpStack, sizeof(dumpStack));
-#endif
-				_runCount += _ios.run();
-#if (__linux__ && ENABLE_DUMP_STACK)
-				my_actor::undump_segmentation_fault();
-#endif
-				context_yield::delete_context(safeStack.ctx);
-				_tls->set_space(NULL);
-				context_yield::convert_fiber_to_thread();
-			}
-			catch (boost::exception&)
-			{
-				trace_line("\nerror: ", "boost::exception");
-				exit(2);
-			}
-			catch (std::exception&)
-			{
-				trace_line("\nerror: ", "std::exception");
-				exit(3);
-			}
-			catch (std::shared_ptr<std::string>& msg)
-			{
-				trace_line("\nerror: ", *msg);
-				exit(4);
-			}
-			catch (...)
-			{
-				exit(-1);
-			}
-		});
-		_threadsID.insert(newThread->get_id());
-		_runThreads.push_back(newThread);
+					trace_line("\nerror: ", "boost::exception");
+					exit(2);
+				}
+				catch (std::exception&)
+				{
+					trace_line("\nerror: ", "std::exception");
+					exit(3);
+				}
+				catch (std::shared_ptr<std::string>& msg)
+				{
+					trace_line("\nerror: ", *msg);
+					exit(4);
+				}
+				catch (...)
+				{
+					exit(-1);
+				}
+			});
+			_threadsID.insert(newThread->get_id());
+			_runThreads.push_back(newThread);
+		}
+		blockConVar->wait(ul);
 	}
-	blockConVar->wait(ul);
 }
 
 void io_engine::stop()
@@ -192,61 +190,29 @@ void io_engine::stop()
 	std::lock_guard<std::mutex> lg(_runMutex);
 	if (_opend)
 	{
-		if (_suspend)
+		assert(!runningInThisIos());
+		delete _runLock;
+		_runLock = NULL;
+		while (!_runThreads.empty())
+		{
+			_runThreads.front()->join();
+			delete _runThreads.front();
+			_runThreads.pop_front();
+		}
+		_ios.reset();
+		_threadsID.clear();
+		_ctrlMutex.lock();
+		for (auto& ele : _handleList)
 		{
 #ifdef WIN32
-			_run(_threadsID.size(), sched_other);
+			CloseHandle(ele);
 #elif __linux__
-			_run(_threadsID.size(), _policy);
+			pthread_attr_destroy(&ele);
 #endif
 		}
-		_stop();
+		_handleList.clear();
+		_ctrlMutex.unlock();
 		_opend = false;
-		_suspend = false;
-	}
-}
-
-void io_engine::_stop()
-{
-	assert(!runningInThisIos());
-	delete _runLock;
-	_runLock = NULL;
-	while (!_runThreads.empty())
-	{
-		_runThreads.front()->join();
-		delete _runThreads.front();
-		_runThreads.pop_front();
-	}
-	_ios.reset();
-	_threadsID.clear();
-	_ctrlMutex.lock();
-	for (auto& ele : _handleList)
-	{
-#ifdef WIN32
-		CloseHandle(ele);
-#elif __linux__
-		pthread_attr_destroy(&ele);
-#endif
-	}
-	_handleList.clear();
-	_ctrlMutex.unlock();
-}
-
-void io_engine::changeThreadNumber(size_t threadNum)
-{
-	std::lock_guard<std::mutex> lg(_runMutex);
-	if (_opend && threadNum != threadNumber())
-	{
-		assert(!_suspend);
-		_ios.stop();
-#ifdef WIN32
-		_stop();
-		_run(threadNum, sched_other);
-#elif __linux__
-		auto policy = _policy;
-		_stop();
-		_run(threadNum, policy);
-#endif
 	}
 }
 
@@ -269,31 +235,6 @@ void io_engine::switch_invoke(wrap_local_handler_face<void()>* handler)
 	si->handler = handler;
 	context_yield::pull_yield(si->ctx);
 	si->handler = NULL;
-}
-
-void io_engine::suspend()
-{
-	std::lock_guard<std::mutex> lg(_ctrlMutex);
-	if (_opend && !_suspend)
-	{
-		_ios.stop();
-		_stop();
-		_suspend = true;
-	}
-}
-
-void io_engine::resume()
-{
-	std::lock_guard<std::mutex> lg(_ctrlMutex);
-	if (_opend && _suspend)
-	{
-#ifdef WIN32
-		_run(_threadsID.size(), sched_other);
-#elif __linux__
-		_run(_threadsID.size(), _policy);
-#endif
-		_suspend = false;
-	}
 }
 
 void io_engine::runPriority(priority pri)

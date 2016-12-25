@@ -212,6 +212,7 @@ struct __co_context_no_capture{};
 #define co_shared_async_safe_result(...) _co_shared_async_safe_result(co_shared_this, co_async_sign, __VA_ARGS__)
 #define co_shared_async_safe_result_(...) _co_shared_async_same_safe_result(co_shared_this, co_async_sign, __VA_ARGS__)
 #define co_ignore (generator::__anyAccept)
+#define co_async_ignore CoAsyncIgnoreResult_(std::move(co_async_this))
 
 //挂起generator，等待调度器下次触发
 #define co_tick do{\
@@ -331,9 +332,12 @@ struct __co_context_no_capture{};
 #define co_usleep(__us__) do{co_self._co_usleep(__us__); _co_yield;}while (0)
 #define co_dead_sleep(__ms__) do{co_self._co_dead_sleep(__ms__); _co_yield;}while (0)
 #define co_dead_usleep(__us__) do{co_self._co_dead_usleep(__us__); _co_yield;}while (0)
-#define co_timeout(__ms__, __th__) CoTimeout_(__ms__, co_strand->over_timer(), __th__)-
-#define co_deadline(__us__, __th__) CoDeadline_(__us__, co_strand->over_timer(), __th__)-
-#define co_interval(__ms__, ...) CoInterval_(__ms__, co_strand->over_timer(), __VA_ARGS__)-
+#define co_timeout_of(__ms__, __th__) CoTimeout_(__ms__, co_strand->over_timer(), __th__)-
+#define co_deadline_of(__us__, __th__) CoDeadline_(__us__, co_strand->over_timer(), __th__)-
+#define co_interval_of(__ms__, .../*__th__, [immed=false]*/) CoInterval_(__ms__, co_strand->over_timer(), __VA_ARGS__)-
+#define co_timeout(__ms__, __th__, __handler__) co_strand->over_timer()->timeout(__ms__, __th__, __handler__)
+#define co_deadline(__us__, __th__, __handler__) co_strand->over_timer()->deadline(__us__, __th__, __handler__)
+#define co_interval(__ms__, __th__, .../*__handler__, [immed=false]*/) co_strand->over_timer()->interval(__ms__, __th__, __VA_ARGS__)
 #define co_cancel_timer(__th__) co_strand->over_timer()->cancel(__th__)
 
 //创建一个generator，立即运行
@@ -945,6 +949,7 @@ typedef std::shared_ptr<generator> generator_handle;
 class generator : public ActorTimerFace_
 {
 	friend my_actor;
+	friend io_engine;
 	FRIEND_SHARED_PTR(generator);
 	struct call_stack_pck
 	{
@@ -1023,6 +1028,8 @@ private:
 	void timeout_handler();
 	static void install(std::atomic<long long>* id);
 	static void uninstall();
+	static void tls_init(size_t threadNum);
+	static void tls_uninit();
 private:
 	std::weak_ptr<generator> _weakThis;
 	std::shared_ptr<generator> _sharedThis;
@@ -1120,6 +1127,24 @@ struct CoInterval_
 	CoInterval_(int ms, overlap_timer* tm, overlap_timer::timer_handle& th, bool immed = false) :_immed(immed), _ms(ms), _tm(tm), _th(th){}
 	template <typename Handler> void operator-(Handler&& handler) { _tm->interval(_ms, _th, std::forward<Handler>(handler), _immed); }
 	bool _immed; int _ms; overlap_timer* _tm; overlap_timer::timer_handle& _th;
+};
+
+struct CoAsyncIgnoreResult_
+{
+	CoAsyncIgnoreResult_(generator_handle&& gen)
+	:_gen(std::move(gen)) {}
+
+	template <typename... Args>
+	void operator()(Args&&... args)
+	{
+		assert(_gen);
+		_gen->_revert_this(_gen)->_co_async_next();
+	}
+
+	generator_handle _gen;
+	void operator=(const CoAsyncIgnoreResult_&) = delete;
+	RVALUE_CONSTRUCT1(CoAsyncIgnoreResult_, _gen);
+	LVALUE_CONSTRUCT1(CoAsyncIgnoreResult_, _gen);
 };
 
 template <typename... _Types>
@@ -2208,7 +2233,7 @@ public:
 
 	static std::shared_ptr<co_msg_buffer> make(const shared_strand& strand, size_t poolSize = sizeof(void*))
 	{
-		return std::shared_ptr<co_msg_buffer>(new co_msg_buffer(strand, poolSize));
+		return std::make_shared<co_msg_buffer>(strand, poolSize);
 	}
 public:
 	template <typename... Args>
@@ -2896,7 +2921,7 @@ public:
 
 	static std::shared_ptr<co_msg_buffer> make(const shared_strand& strand, size_t = sizeof(void*))
 	{
-		return std::shared_ptr<co_msg_buffer>(new co_msg_buffer(strand));
+		return std::make_shared<co_msg_buffer>(strand);
 	}
 public:
 	void post(void_type = void_type()) { push(any_handler()); }
@@ -2928,7 +2953,7 @@ public:
 
 	static std::shared_ptr<co_channel> make(const shared_strand& strand, size_t buffLength = 1)
 	{
-		return std::shared_ptr<co_channel>(new co_channel(strand, buffLength));
+		return std::make_shared<co_channel>(strand, buffLength);
 	}
 public:
 	template <typename... Args>
@@ -4029,7 +4054,7 @@ public:
 
 	static std::shared_ptr<co_channel> make(const shared_strand& strand, size_t buffLength = 1)
 	{
-		return std::shared_ptr<co_channel>(new co_channel(strand, buffLength));
+		return std::make_shared<co_channel>(strand, buffLength);
 	}
 public:
 	template <typename Notify> void push(Notify&& ntf, void_type = void_type()){ co_channel<void_type>::push(std::forward<Notify>(ntf), void_type()); }
@@ -4064,7 +4089,7 @@ public:
 
 	static std::shared_ptr<co_nil_channel> make(const shared_strand& strand)
 	{
-		return std::shared_ptr<co_nil_channel>(new co_nil_channel(strand));
+		return std::make_shared<co_nil_channel>(strand);
 	}
 public:
 	template <typename... Args>
@@ -5258,7 +5283,7 @@ public:
 
 	static std::shared_ptr<co_nil_channel> make(const shared_strand& strand)
 	{
-		return std::shared_ptr<co_nil_channel>(new co_nil_channel(strand));
+		return std::make_shared<co_nil_channel>(strand);
 	}
 public:
 	template <typename Notify> void push(Notify&& ntf, void_type = void_type()){ co_nil_channel<void_type>::push(std::forward<Notify>(ntf), void_type()); }
@@ -5422,7 +5447,7 @@ public:
 
 	static std::shared_ptr<co_csp_channel> make(const shared_strand& strand)
 	{
-		return std::shared_ptr<co_csp_channel>(new co_csp_channel(strand));
+		return std::make_shared<co_csp_channel>(strand);
 	}
 public:
 	template <typename Notify, typename... Args>
@@ -6624,7 +6649,7 @@ public:
 
 	static std::shared_ptr<co_csp_channel> make(const shared_strand& strand)
 	{
-		return std::shared_ptr<co_csp_channel>(new co_csp_channel(strand));
+		return std::make_shared<co_csp_channel>(strand);
 	}
 };
 

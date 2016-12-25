@@ -1237,7 +1237,7 @@ void co_chan_perfor_test()
 		long long beginTick = get_tick_ms();
 		for (int j = 1; j <= i; j++)
 		{
-			std::shared_ptr<co_channel<int>> channel(new co_channel<int>(boost_strand::create(ios), 3));
+			std::shared_ptr<co_channel<int>> channel = std::make_shared<co_channel<int>>(boost_strand::create(ios), 3);
 			for (int k = 0; k < 100; k++)
 			{
 				co_go(channel->self_strand())[&, channel](co_generator)

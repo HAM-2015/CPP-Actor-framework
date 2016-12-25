@@ -166,7 +166,7 @@ class boost_strand
 		{
 			CHECK_EXCEPTION(_handler);
 			this->~wrap_next_tick_handler();
-			return sizeof(*this);
+			return sizeof(wrap_next_tick_handler);
 		}
 
 		Handler _handler;

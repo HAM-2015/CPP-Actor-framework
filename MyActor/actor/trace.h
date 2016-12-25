@@ -9,6 +9,8 @@
 #include <sstream>
 #include <iostream> 
 #include <mutex>
+#include <tuple>
+#include <initializer_list>
 #include "try_move.h"
 #ifdef TRACE_ANDROID_LOG
 #include <android/log.h>
@@ -145,6 +147,27 @@ struct TraceMatch_<std::list<T>>
 	}
 };
 
+template <typename T>
+struct TraceMatch_<std::initializer_list<T>>
+{
+	static void trace(_Tracestreambase& out, const std::initializer_list<T>& s)
+	{
+		out << "{";
+		int l = (int)s.size();
+		auto it = s.begin();
+		for (int i = 0; i < l - 1; i++, ++it)
+		{
+			TraceMatch_<RM_CREF(T)>::trace(out, *it);
+			out << ", ";
+		}
+		if (l)
+		{
+			TraceMatch_<RM_CREF(T)>::trace(out, *it);
+		}
+		out << "}";
+	}
+};
+
 template <typename K, typename V>
 struct TraceMatch_<std::map<K, V>>
 {
@@ -237,29 +260,75 @@ struct TraceMatch_<std::multiset<T>>
 	}
 };
 
+template <size_t N>
+struct TraceTuple_
+{
+	template <typename... Types>
+	static void trace(_Tracestreambase& out, const std::tuple<Types...>& args)
+	{
+		const size_t i = sizeof...(Types)-N;
+		typedef typename std::tuple_element<i, std::tuple<Types...>>::type trace_type;
+		TraceMatch_<RM_CREF(trace_type)>::trace(out, std::get<i>(args));
+		out << ", ";
+		TraceTuple_<N - 1>::trace(out, args);
+	}
+};
+
+template <>
+struct TraceTuple_<1>
+{
+	template <typename... Types>
+	static void trace(_Tracestreambase& out, const std::tuple<Types...>& args)
+	{
+		const size_t i = sizeof...(Types)-1;
+		typedef typename std::tuple_element<i, std::tuple<Types...>>::type trace_type;
+		TraceMatch_<RM_CREF(trace_type)>::trace(out, std::get<i>(args));
+		out << ">";
+	}
+};
+
+template <>
+struct TraceTuple_<0>
+{
+	static void trace(_Tracestreambase& out, const std::tuple<>& args)
+	{
+		out << ">";
+	}
+};
+
+template <typename... Types>
+struct TraceMatch_<std::tuple<Types...>>
+{
+	static void trace(_Tracestreambase& out, const std::tuple<Types...>& args)
+	{
+		out << "<";
+		TraceTuple_<sizeof...(Types)>::trace(out, args);
+	}
+};
+
 template <typename First>
 void _trace(_Tracestreambase& out, First&& fst)
 {
-	TraceMatch_<RM_CREF(First)>::trace(out, fst);
+	TraceMatch_<RM_CREF(First)>::trace(out, std::forward<First>(fst));
 }
 
 template <typename First>
 void _trace_space(_Tracestreambase& out, First&& fst)
 {
-	TraceMatch_<RM_CREF(First)>::trace(out, fst);
+	TraceMatch_<RM_CREF(First)>::trace(out, std::forward<First>(fst));
 }
 
 template <typename First>
 void _trace_comma(_Tracestreambase& out, First&& fst)
 {
-	TraceMatch_<RM_CREF(First)>::trace(out, fst);
+	TraceMatch_<RM_CREF(First)>::trace(out, std::forward<First>(fst));
 }
 
 template <typename First, typename... Args>
 void _trace(_Tracestreambase& out, First&& fst, Args&&... args)
 {
 	static_assert(sizeof...(Args) > 0, "");
-	TraceMatch_<RM_CREF(First)>::trace(out, fst);
+	TraceMatch_<RM_CREF(First)>::trace(out, std::forward<First>(fst));
 	_trace(out, std::forward<Args>(args)...);
 }
 
@@ -267,7 +336,7 @@ template <typename First, typename... Args>
 void _trace_space(_Tracestreambase& out, First&& fst, Args&&... args)
 {
 	static_assert(sizeof...(Args) > 0, "");
-	TraceMatch_<RM_CREF(First)>::trace(out, fst);
+	TraceMatch_<RM_CREF(First)>::trace(out, std::forward<First>(fst));
 	out << " ";
 	_trace_space(out, std::forward<Args>(args)...);
 }
@@ -276,7 +345,7 @@ template <typename First, typename... Args>
 void _trace_comma(_Tracestreambase& out, First&& fst, Args&&... args)
 {
 	static_assert(sizeof...(Args) > 0, "");
-	TraceMatch_<RM_CREF(First)>::trace(out, fst);
+	TraceMatch_<RM_CREF(First)>::trace(out, std::forward<First>(fst));
 	out << ", ";
 	_trace_comma(out, std::forward<Args>(args)...);
 }

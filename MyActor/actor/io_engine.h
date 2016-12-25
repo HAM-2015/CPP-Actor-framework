@@ -82,11 +82,6 @@ public:
 	void stop();
 
 	/*!
-	@brief 改变调度线程数，之前的线程将退出
-	*/
-	void changeThreadNumber(size_t threadNum);
-
-	/*!
 	@brief 检测当前函数是否在本调度器中执行
 	*/
 	bool runningInThisIos();
@@ -95,16 +90,6 @@ public:
 	@brief 调度器线程数
 	*/
 	size_t threadNumber();
-
-	/*!
-	@brief 挂起任务
-	*/
-	void suspend();
-
-	/*!
-	@brief 恢复任务
-	*/
-	void resume();
 
 	/*!
 	@brief 调度器线程优先级设置，（linux下 sched_fifo, sched_rr 有效 ）
@@ -179,11 +164,7 @@ private:
 	static void install();
 	static void uninstall();
 private:
-	void _run(size_t threadNum, sched policy);
-	void _stop();
-private:
 	bool _opend;
-	bool _suspend;
 	shared_obj_pool<boost_strand>* _strandPool;
 #ifdef DISABLE_BOOST_TIMER
 #ifdef ENABLE_GLOBAL_TIMER

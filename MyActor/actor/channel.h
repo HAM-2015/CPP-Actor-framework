@@ -135,7 +135,7 @@ public:
 
 	static std::shared_ptr<msg_buffer> make(const shared_strand& strand, size_t poolSize = sizeof(void*))
 	{
-		return std::shared_ptr<msg_buffer>(new msg_buffer(strand, poolSize));
+		return std::make_shared<msg_buffer>(strand, poolSize);
 	}
 };
 
@@ -148,7 +148,7 @@ public:
 
 	static std::shared_ptr<channel> make(const shared_strand& strand, size_t buffLength = 1)
 	{
-		return std::shared_ptr<channel>(new channel(strand, buffLength));
+		return std::make_shared<channel>(strand, buffLength);
 	}
 };
 
@@ -161,7 +161,7 @@ public:
 
 	static std::shared_ptr<nil_channel> make(const shared_strand& strand)
 	{
-		return std::shared_ptr<nil_channel>(new nil_channel(strand));
+		return std::make_shared<nil_channel>(strand);
 	}
 };
 //////////////////////////////////////////////////////////////////////////
@@ -207,7 +207,7 @@ public:
 
 	static std::shared_ptr<csp_channel> make(const shared_strand& strand)
 	{
-		return std::shared_ptr<csp_channel>(new csp_channel(strand));
+		return std::make_shared<csp_channel>(strand);
 	}
 public:
 	template <typename... Args>
@@ -348,7 +348,7 @@ public:
 
 	static std::shared_ptr<csp_channel> make(const shared_strand& strand)
 	{
-		return std::shared_ptr<csp_channel>(new csp_channel(strand));
+		return std::make_shared<csp_channel>(strand);
 	}
 public:
 	template <typename... Args>

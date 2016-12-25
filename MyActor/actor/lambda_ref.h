@@ -434,7 +434,7 @@ struct LocalRecursiveInvoker_<Handler, _Rt(_Types...)> : public LocalRecursiveFa
 	void destroy()
 	{
 		this->~LocalRecursiveInvoker_();
-		DEBUG_OPERATION(memset(this, 0xcf, sizeof(*this)));
+		DEBUG_OPERATION(memset(this, 0xcf, sizeof(LocalRecursiveInvoker_)));
 	}
 
 	Handler& _handler;

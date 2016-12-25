@@ -1016,7 +1016,7 @@ private:
 #ifndef ENABLE_CHECK_LOST
 		assert(!checkLost);
 #endif
-		std::shared_ptr<MsgPump_<ARGS...>> res(new MsgPump_<ARGS...>());
+		std::shared_ptr<MsgPump_<ARGS...>> res = std::make_shared<MsgPump_<ARGS...>>();
 		res->_weakThis = res;
 		res->_hasMsg = false;
 		res->_waiting = false;
@@ -1591,7 +1591,7 @@ private:
 private:
 	static std::shared_ptr<MsgPool_<ARGS...>> make(const shared_strand& strand, size_t fixedSize)
 	{
-		std::shared_ptr<MsgPool_<ARGS...>> res(new MsgPool_<ARGS...>(fixedSize));
+		std::shared_ptr<MsgPool_<ARGS...>> res = std::make_shared<MsgPool_<ARGS...>>(fixedSize);
 		res->_weakThis = res;
 		res->_strand = strand;
 		res->_waiting = false;
@@ -1879,7 +1879,7 @@ private:
 
 	static std::shared_ptr<MsgPump_> make(my_actor* hostActor, bool checkLost)
 	{
-		std::shared_ptr<MsgPump_> res(new MsgPump_(hostActor, checkLost));
+		std::shared_ptr<MsgPump_> res = std::make_shared<MsgPump_>(hostActor, checkLost);
 		res->_weakThis = res;
 		return res;
 	}
@@ -4149,7 +4149,7 @@ public:
 	wrapped_sync_handler(H&& h, sync_result<R>& res)
 		:_handler(std::forward<H>(h)), _result(&res)
 	{
-		DEBUG_OPERATION(_pIsTrig = std::shared_ptr<std::atomic<bool> >(new std::atomic<bool>(false)));
+		DEBUG_OPERATION(_pIsTrig = std::make_shared<std::atomic<bool> >(false));
 	}
 
 	wrapped_sync_handler(const wrapped_sync_handler& s)
@@ -4217,7 +4217,7 @@ public:
 	wrapped_sync_handler2(H&& h, sync_result<R>& res)
 		:_handler(std::forward<H>(h)), _result(&res), _syncSt(new sync_st)
 	{
-		DEBUG_OPERATION(_pIsTrig = std::shared_ptr<std::atomic<bool> >(new std::atomic<bool>(false)));
+		DEBUG_OPERATION(_pIsTrig = std::make_shared<std::atomic<bool> >(false));
 	}
 
 	wrapped_sync_handler2(const wrapped_sync_handler2& s)
@@ -4312,8 +4312,8 @@ private:
 private:
 	actor_handle _actor;
 	trig_handle<> _quiteAth;
-	msg_list_shared_alloc<actor_handle>::iterator _actorIt;
-	msg_list_shared_alloc<std::function<void()> >::iterator _athIt;
+	std::list<actor_handle>::iterator _actorIt;
+	std::list<std::function<void()> >::iterator _athIt;
 	bool _started : 1;
 	bool _quited : 1;
 	NONE_COPY(child_handle);
@@ -5252,9 +5252,9 @@ public:
 	/*!
 	@brief 获取子Actor
 	*/
-	const msg_list_shared_alloc<actor_handle>& children();
+	const std::list<actor_handle>& children();
 public:
-	typedef msg_list_shared_alloc<std::function<void()> >::iterator quit_iterator;
+	typedef std::list<std::function<void()> >::iterator quit_iterator;
 
 	/*!
 	@brief 注册一个资源释放函数，在强制准备退出Actor时执行
@@ -5448,7 +5448,7 @@ public:
 			bool running = false;
 			trig_handle<> ath;
 			trig_notifer<> ntf = make_trig_notifer_to_self(ath);
-			std::shared_ptr<std::mutex> mutex(new std::mutex);
+			std::shared_ptr<std::mutex> mutex = std::make_shared<std::mutex>();
 			exeStrand->post(std::bind([&h, &running, &ntf](std::shared_ptr<std::mutex>& mutex, shared_bool& deadSign)
 			{
 				bool run = false;
@@ -6378,7 +6378,7 @@ private:
 			auto& res = host->_msgPoolStatus._msgTypeMap.insert(make_pair(typeID, std::shared_ptr<pck_type>())).first->second;
 			if (!res)
 			{
-				res = std::shared_ptr<pck_type>(new pck_type(host));
+				res = std::make_shared<pck_type>(host);
 			}
 			assert(std::dynamic_pointer_cast<pck_type>(res));
 			return std::static_pointer_cast<pck_type>(res);
@@ -8351,6 +8351,12 @@ public:
 	@brief 卸载my_actor框架
 	*/
 	static void uninstall();
+
+	/*!
+	@brief 
+	*/
+	static void tls_init(size_t threadNum);
+	static void tls_uninit();
 private:
 	template <typename Handler>
 	void timeout(int ms, Handler&& handler)
@@ -8425,10 +8431,10 @@ private:
 	ActorTimer_::timer_handle _timerStateHandle;///<定时器句柄
 	reusable_mem _reuMem;///<定时器内存管理
 	main_func _mainFunc;///<Actor入口
-	msg_list_shared_alloc<suspend_resume_option> _suspendResumeQueue;///<挂起/恢复操作队列
-	msg_list_shared_alloc<std::function<void()> > _quitCallback;///<Actor结束后的回调函数
-	msg_list_shared_alloc<std::function<void()> > _beginQuitExec;///<Actor准备退出时调用的函数，后注册的先执行
-	msg_list_shared_alloc<actor_handle> _childActorList;///<子Actor集合，子Actor都退出后，父Actor才能退出
+	std::list<suspend_resume_option> _suspendResumeQueue;///<挂起/恢复操作队列
+	std::list<std::function<void()> > _quitCallback;///<Actor结束后的回调函数
+	std::list<std::function<void()> > _beginQuitExec;///<Actor准备退出时调用的函数，后注册的先执行
+	std::list<actor_handle> _childActorList;///<子Actor集合，子Actor都退出后，父Actor才能退出
 	int _timerStateCount;///<定时器计数
 	bool _timerStateSuspend : 1;///<定时器是否挂起
 	bool _timerStateCompleted : 1;///<定时器是否完成
@@ -8450,9 +8456,6 @@ public:
 private:
 #endif
 	static std::atomic<my_actor::id>* _actorIDCount;///<ID计数
-	static msg_list_shared_alloc<my_actor::suspend_resume_option>::shared_node_alloc* _suspendResumeQueueAll;
-	static msg_list_shared_alloc<std::function<void()> >::shared_node_alloc* _quitExitCallbackAll;
-	static msg_list_shared_alloc<actor_handle>::shared_node_alloc* _childActorListAll;
 };
 
 //////////////////////////////////////////////////////////////////////////

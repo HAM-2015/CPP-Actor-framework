@@ -6,7 +6,7 @@ any_accept generator::__anyAccept;
 
 void generator::install(std::atomic<long long>* id)
 {
-	_genObjAlloc = make_shared_space_alloc<generator, mem_alloc_mt<void>>(MEM_POOL_LENGTH, [](generator*){});
+	_genObjAlloc = make_shared_space_alloc<generator, mem_alloc_tls<GENERATOR_ALLOC_INDEX, void>>(MEM_POOL_LENGTH, [](generator*){});
 	_id = id;
 }
 
@@ -15,6 +15,16 @@ void generator::uninstall()
 	delete _genObjAlloc;
 	_genObjAlloc = NULL;
 	_id = NULL;
+}
+
+void generator::tls_init(size_t threadNum)
+{
+	_genObjAlloc->tls_init(threadNum);
+}
+
+void generator::tls_uninit()
+{
+	_genObjAlloc->tls_uninit();
 }
 
 generator::generator()
