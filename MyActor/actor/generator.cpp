@@ -28,9 +28,9 @@ void generator::tls_uninit()
 }
 
 generator::generator()
-: __ctx(NULL), __coNext(0), __coNextEx(0), __lockStop(0), __readyQuit(false), __asyncSign(false)
+: __ctx(NULL), __coNext(0), __coNextEx(0), __lockStop(0), __readyQuit(false), __asyncSign(false), __yieldSign(false)
 #if (_DEBUG || DEBUG)
-, _isRun(false), __inside(false), __awaitSign(false), __sharedAwaitSign(false), __yieldSign(false)
+, _isRun(false), __inside(false), __awaitSign(false), __sharedAwaitSign(false)
 #endif
 {
 }
@@ -47,6 +47,7 @@ bool generator::_next()
 	assert(_baseHandler);
 	assert(!__ctx || !__inside);
 	DEBUG_OPERATION(if (__ctx) __inside = true);
+	__yieldSign = true;
 	CHECK_EXCEPTION(!_callStack.empty() ? _callStack.front()._handler : _baseHandler, *this);
 	assert(!__ctx || __coNext);
 	if (!__ctx)
@@ -188,6 +189,7 @@ generator* generator::_revert_this(generator_handle& s)
 generator_handle& generator::shared_this()
 {
 	assert(_sharedThis);
+	__yieldSign = false;
 	return _sharedThis;
 }
 
@@ -197,6 +199,7 @@ generator_handle& generator::async_this()
 	assert(__inside);
 	assert(!__awaitSign && !__sharedAwaitSign);
 	DEBUG_OPERATION(__awaitSign = true);
+	__yieldSign = false;
 	return _sharedThis;
 }
 
@@ -275,6 +278,26 @@ void generator::_co_async_next2()
 	{
 		__asyncSign = true;
 	}
+}
+
+void generator::_co_asio_next()
+{
+	_strand->dispatch(std::bind([](generator_handle& host)
+	{
+		if (host->__ctx)
+		{
+			generator* host_ = host->_revert_this(host);
+			if (host_->__asyncSign)
+			{
+				host_->__asyncSign = false;
+				host_->_next();
+			}
+			else
+			{
+				host_->__asyncSign = true;
+			}
+		}
+	}, std::move(shared_this())));
 }
 
 void generator::_co_reset_shared_sign()

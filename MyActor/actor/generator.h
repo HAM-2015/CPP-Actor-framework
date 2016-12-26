@@ -199,6 +199,7 @@ struct __co_context_no_capture{};
 
 //带返回值的generator异步回调接口
 #define co_async_result(...) _co_async_result(std::move(co_async_this), __VA_ARGS__)
+#define co_asio_result(...) _co_asio_result(std::move(co_async_this), __VA_ARGS__)
 #define co_anext_result(...) _co_anext_result(std::move(co_shared_this), __VA_ARGS__)
 #define co_async_result_(...) _co_async_same_result(std::move(co_async_this), __VA_ARGS__)
 #define co_anext_result_(...) _co_anext_same_result(std::move(co_shared_this), __VA_ARGS__)
@@ -213,6 +214,7 @@ struct __co_context_no_capture{};
 #define co_shared_async_safe_result_(...) _co_shared_async_same_safe_result(co_shared_this, co_async_sign, __VA_ARGS__)
 #define co_ignore (generator::__anyAccept)
 #define co_async_ignore CoAsyncIgnoreResult_(std::move(co_async_this))
+#define co_asio_ignore CoAsioIgnoreResult_(std::move(co_async_this))
 
 //挂起generator，等待调度器下次触发
 #define co_tick do{\
@@ -225,6 +227,13 @@ struct __co_context_no_capture{};
 	assert(co_self.__inside);\
 	co_strand->post(std::bind([](generator_handle& host){\
 	if(!host->__ctx)return; host->_revert_this(host)->_next(); }, std::move(co_shared_this))); _co_yield;}while (0)
+
+//检测上次异步操作有没有发生切换，没有就切换一次
+#define co_try_tick do{if(!co_last_yield){co_tick;}}while (0)
+#define co_try_io_tick do{if(!co_last_yield){co_io_tick;}}while (0)
+
+//检测上次异步操作有没有发生切换
+#define co_last_yield ((const bool&)co_self.__yieldSign)
 
 #define _co_await do{\
 	assert(co_self.__inside);\
@@ -981,6 +990,7 @@ public:
 	void _co_tick_next();
 	void _co_async_next();
 	void _co_async_next2();
+	void _co_asio_next();
 	void _co_reset_shared_sign();
 	void _co_shared_async_next(shared_bool& sign);
 	bool _done();
@@ -1049,11 +1059,11 @@ public:
 	unsigned char __lockStop;
 	bool __readyQuit;
 	bool __asyncSign;
+	bool __yieldSign;
 #if (_DEBUG || DEBUG)
 	bool __inside;
 	bool __awaitSign;
 	bool __sharedAwaitSign;
-	bool __yieldSign;
 #endif
 	static any_accept __anyAccept;
 	NONE_COPY(generator);
@@ -1147,6 +1157,24 @@ struct CoAsyncIgnoreResult_
 	LVALUE_CONSTRUCT1(CoAsyncIgnoreResult_, _gen);
 };
 
+struct CoAsioIgnoreResult_
+{
+	CoAsioIgnoreResult_(generator_handle&& gen)
+	:_gen(std::move(gen)) {}
+
+	template <typename... Args>
+	void operator()(Args&&... args)
+	{
+		assert(_gen);
+		_gen->_revert_this(_gen)->_co_asio_next();
+	}
+
+	generator_handle _gen;
+	void operator=(const CoAsioIgnoreResult_&) = delete;
+	RVALUE_CONSTRUCT1(CoAsioIgnoreResult_, _gen);
+	LVALUE_CONSTRUCT1(CoAsioIgnoreResult_, _gen);
+};
+
 template <typename... _Types>
 struct CoAsyncResult_
 {
@@ -1166,6 +1194,27 @@ struct CoAsyncResult_
 	void operator=(const CoAsyncResult_&) = delete;
 	RVALUE_CONSTRUCT2(CoAsyncResult_, _gen, _result);
 	LVALUE_CONSTRUCT2(CoAsyncResult_, _gen, _result);
+};
+
+template <typename... _Types>
+struct CoAsioResult_
+{
+	CoAsioResult_(generator_handle&& gen, _Types&... result)
+	:_gen(std::move(gen)), _result(result...) {}
+
+	template <typename... Args>
+	void operator()(Args&&... args)
+	{
+		assert(_gen);
+		_result = std::tuple<Args&&...>(std::forward<Args>(args)...);
+		_gen->_revert_this(_gen)->_co_asio_next();
+	}
+
+	generator_handle _gen;
+	std::tuple<_Types&...> _result;
+	void operator=(const CoAsioResult_&) = delete;
+	RVALUE_CONSTRUCT2(CoAsioResult_, _gen, _result);
+	LVALUE_CONSTRUCT2(CoAsioResult_, _gen, _result);
 };
 
 template <typename... _Types>
@@ -1517,6 +1566,12 @@ template <typename... Args>
 CoAsyncResult_<Args...> _co_async_result(generator_handle&& gen, Args&... result)
 {
 	return CoAsyncResult_<Args...>(std::move(gen), result...);
+}
+
+template <typename... Args>
+CoAsioResult_<Args...> _co_asio_result(generator_handle&& gen, Args&... result)
+{
+	return CoAsioResult_<Args...>(std::move(gen), result...);
 }
 
 template <typename... Args>
