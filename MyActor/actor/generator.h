@@ -71,7 +71,6 @@ struct __co_context_no_capture{};
 #define _co_stop() \
 	auto __stop = [&co_self]{\
 	DEBUG_OPERATION(co_self.__inside = false);\
-	co_self._co_reset_shared_sign();\
 	struct co_context_tag* const pCtx = static_cast<struct co_context_tag*>(co_self.__ctx);\
 	if((void*)-1!=(void*)pCtx){delete pCtx;}\
 	co_self.__ctx = NULL;}
@@ -79,7 +78,6 @@ struct __co_context_no_capture{};
 #define _co_stop_dealloc(__dealloc__) \
 	auto __stop = [&]{\
 	DEBUG_OPERATION(co_self.__inside = false);\
-	co_self._co_reset_shared_sign();\
 	struct co_context_tag* const pCtx = static_cast<struct co_context_tag*>(co_self.__ctx);\
 	if((void*)-1!=(void*)pCtx){pCtx->~co_context_tag(); (__dealloc__)(pCtx);}\
 	co_self.__ctx = NULL;}
@@ -87,7 +85,6 @@ struct __co_context_no_capture{};
 #define _co_stop_no_ctx() \
 	auto __stop = [&co_self]{\
 	DEBUG_OPERATION(co_self.__inside = false);\
-	co_self._co_reset_shared_sign();\
 	assert((void*)-1==(void*)co_self.__ctx);\
 	co_self.__ctx = NULL;}
 
@@ -171,33 +168,14 @@ struct __co_context_no_capture{};
 	if (__forYieldSwitch) {_co_yield; _co_for_break;}\
 	else
 
-//generator异步回调接口
-#define co_async \
-	co_strand->wrap(std::bind([](generator_handle& host){\
-	assert(host);\
-	if (!host->__ctx) return;\
-	generator* host_ = host->_revert_this(host);\
-	if (host_->__asyncSign) {host_->__asyncSign = false; host_->_next();}\
-	else {host_->__asyncSign = true;};\
-	}, std::move(co_async_this)))
+//不带参数的异步回调方法
+#define co_async CoAsync_(std::move(co_async_this))
+//不带参数的可共享异步回调方法
+#define co_shared_async CoShardAsync_(co_shared_this, co_async_sign)
+//不带参数的不加线程判断的异步回调方法
+#define co_anext CoAnext_(std::move(co_shared_this))
 
-//generator可共享异步回调接口
-#define co_shared_async \
-	co_strand->wrap(std::bind([](generator_handle& host, shared_bool& sign){\
-	if (sign) return;\
-	generator* host_ = host.get();\
-	if (!host_->__ctx) return;\
-	if (host_->__asyncSign) {host_->__asyncSign = false; host_->_next();}\
-	else {host_->__asyncSign = true;};\
-	}, co_shared_this, co_async_sign))
-
-#define co_anext \
-	co_strand->wrap(std::bind([](generator_handle& host){\
-	assert(host);\
-	host->_revert_this(host)->_next();\
-	}, std::move(co_shared_this)))
-
-//带返回值的generator异步回调接口
+//带参数的异步回调方法
 #define co_async_result(...) _co_async_result(std::move(co_async_this), __VA_ARGS__)
 #define co_asio_result(...) _co_asio_result(std::move(co_async_this), __VA_ARGS__)
 #define co_anext_result(...) _co_anext_result(std::move(co_shared_this), __VA_ARGS__)
@@ -207,13 +185,17 @@ struct __co_context_no_capture{};
 #define co_anext_safe_result(...) _co_anext_safe_result(std::move(co_shared_this), __VA_ARGS__)
 #define co_async_safe_result_(...) _co_async_same_safe_result(std::move(co_async_this), __VA_ARGS__)
 #define co_anext_safe_result_(...) _co_anext_same_safe_result(std::move(co_shared_this), __VA_ARGS__)
-//带返回值的generator可共享异步回调接口
+//带参数的可共享异步回调方法
 #define co_shared_async_result(...) _co_shared_async_result(co_shared_this, co_async_sign, __VA_ARGS__)
 #define co_shared_async_result_(...) _co_shared_async_same_result(co_shared_this, co_async_sign, __VA_ARGS__)
 #define co_shared_async_safe_result(...) _co_shared_async_safe_result(co_shared_this, co_async_sign, __VA_ARGS__)
 #define co_shared_async_safe_result_(...) _co_shared_async_same_safe_result(co_shared_this, co_async_sign, __VA_ARGS__)
+//忽略一个参数
 #define co_ignore (generator::__anyAccept)
+//忽略所有异步参数
 #define co_async_ignore CoAsyncIgnoreResult_(std::move(co_async_this))
+#define co_shared_async_ignore CoShardAsyncIgnoreResult_(co_shared_this, co_async_sign)
+#define co_anext_ignore CoAnextIgnoreResult_(std::move(co_shared_this))
 #define co_asio_ignore CoAsioIgnoreResult_(std::move(co_async_this))
 
 //挂起generator，等待调度器下次触发
@@ -241,7 +223,6 @@ struct __co_context_no_capture{};
 	DEBUG_OPERATION(co_self.__awaitSign = co_self.__sharedAwaitSign = false);\
 	if (co_self.__asyncSign) {co_self.__asyncSign = false;}\
 	else {co_self.__asyncSign = true; _co_yield;}\
-	co_self._co_reset_shared_sign();\
 	}while (0)
 
 #define _co_timed_await(__ms__, __handler__) do{\
@@ -370,7 +351,7 @@ struct __co_context_no_capture{};
 	if (0==--co_self.__lockStop && co_self.__readyQuit) co_stop;\
 	}while (0)
 //当前generator调度器
-#define co_strand co_self.gen_strand()
+#define co_strand co_self.self_strand()
 //单线回调时与co_yield配合使用，多线调度时与co_async_sign，co_await配合使用
 #define co_shared_this co_self.shared_this()
 //与co_await回调时配合使用
@@ -977,7 +958,7 @@ public:
 	static generator_handle create(shared_strand strand, std::function<void(generator&)> handler, std::function<void()> notify = std::function<void()>());
 	void run();
 	void stop();
-	const shared_strand& gen_strand();
+	const shared_strand& self_strand();
 	generator_handle& shared_this();
 	generator_handle& async_this();
 	const shared_bool& shared_async_sign();
@@ -989,22 +970,21 @@ public:
 	void _co_next();
 	void _co_tick_next();
 	void _co_async_next();
-	void _co_async_next2();
+	void _co_top_next();
 	void _co_asio_next();
-	void _co_reset_shared_sign();
 	void _co_shared_async_next(shared_bool& sign);
 	bool _done();
 
 	template <typename Handler>
 	bool _co_send(const shared_strand& strand, Handler&& handler)
 	{
-		if (gen_strand() != strand)
+		if (self_strand() != strand)
 		{
 			strand->post(std::bind([](generator_handle& gen, Handler& handler)
 			{
 				CHECK_EXCEPTION(handler);
 				generator* const self = gen.get();
-				self->gen_strand()->post(std::bind([](generator_handle& gen)
+				self->self_strand()->post(std::bind([](generator_handle& gen)
 				{
 					gen->_revert_this(gen)->_next();
 				}, std::move(gen)));
@@ -1022,7 +1002,7 @@ public:
 		{
 			CHECK_EXCEPTION(handler);
 			generator* const self = gen.get();
-			self->gen_strand()->distribute(std::bind([](generator_handle& gen)
+			self->self_strand()->distribute(std::bind([](generator_handle& gen)
 			{
 				gen->_revert_this(gen)->_next();
 			}, std::move(gen)));
@@ -1048,12 +1028,12 @@ private:
 	msg_queue<call_stack_pck> _callStack;
 	shared_strand _strand;
 	ActorTimer_::timer_handle _timerHandle;
+	shared_bool _sharedSign;
 	DEBUG_OPERATION(bool _isRun);
 	static mem_alloc_base* _genObjAlloc;
 	static std::atomic<long long>* _id;
 public:
 	void* __ctx;
-	shared_bool __sharedSign;
 	int __coNext;
 	int __coNextEx;
 	unsigned char __lockStop;
@@ -1175,6 +1155,95 @@ struct CoAsioIgnoreResult_
 	LVALUE_CONSTRUCT1(CoAsioIgnoreResult_, _gen);
 };
 
+struct CoShardAsyncIgnoreResult_
+{
+	CoShardAsyncIgnoreResult_(generator_handle& gen, const shared_bool& sign)
+	:_gen(gen), _sign(sign) {}
+
+	template <typename... Args>
+	void operator()(Args&&... args)
+	{
+		assert(_gen);
+		_gen->_co_shared_async_next(_sign);
+	}
+
+	generator_handle _gen;
+	shared_bool _sign;
+	void operator=(const CoShardAsyncIgnoreResult_&) = delete;
+	RVALUE_CONSTRUCT2(CoShardAsyncIgnoreResult_, _gen, _sign);
+	LVALUE_CONSTRUCT2(CoShardAsyncIgnoreResult_, _gen, _sign);
+};
+
+struct CoAnextIgnoreResult_
+{
+	CoAnextIgnoreResult_(generator_handle&& gen)
+	:_gen(std::move(gen)) {}
+
+	template <typename... Args>
+	void operator()(Args&&... args)
+	{
+		assert(_gen);
+		_gen->_revert_this(_gen)->_next();
+	}
+
+	generator_handle _gen;
+	void operator=(const CoAnextIgnoreResult_&) = delete;
+	RVALUE_CONSTRUCT1(CoAnextIgnoreResult_, _gen);
+	LVALUE_CONSTRUCT1(CoAnextIgnoreResult_, _gen);
+};
+
+struct CoAsync_
+{
+	CoAsync_(generator_handle&& gen)
+	:_gen(std::move(gen)) {}
+
+	void operator()()
+	{
+		assert(_gen);
+		_gen->_revert_this(_gen)->_co_async_next();
+	}
+
+	generator_handle _gen;
+	void operator=(const CoAsync_&) = delete;
+	RVALUE_CONSTRUCT1(CoAsync_, _gen);
+	LVALUE_CONSTRUCT1(CoAsync_, _gen);
+};
+
+struct CoShardAsync_
+{
+	CoShardAsync_(generator_handle& gen, const shared_bool& sign)
+	:_gen(gen), _sign(sign) {}
+
+	void operator()()
+	{
+		assert(_gen);
+		_gen->_co_shared_async_next(_sign);
+	}
+
+	generator_handle _gen;
+	shared_bool _sign;
+	void operator=(const CoShardAsync_&) = delete;
+	RVALUE_CONSTRUCT2(CoShardAsync_, _gen, _sign);
+	LVALUE_CONSTRUCT2(CoShardAsync_, _gen, _sign);
+};
+
+struct CoAnext_
+{
+	CoAnext_(generator_handle&& gen)
+	:_gen(std::move(gen)) {}
+
+	void operator()()
+	{
+		assert(_gen);
+		_gen->_revert_this(_gen)->_next();
+	}
+
+	generator_handle _gen;
+	void operator=(const CoAnext_&) = delete;
+	RVALUE_CONSTRUCT1(CoAnext_, _gen);
+	LVALUE_CONSTRUCT1(CoAnext_, _gen);
+};
+
 template <typename... _Types>
 struct CoAsyncResult_
 {
@@ -1227,24 +1296,24 @@ struct CoAsyncSafeResult_
 	void operator()(Args&&... args)
 	{
 		assert(_gen);
-		if (_gen->gen_strand()->running_in_this_thread())
+		if (_gen->self_strand()->running_in_this_thread())
 		{
 			if (!_gen->_done())
 			{
 				_result = std::tuple<Args&&...>(std::forward<Args>(args)...);
-				_gen->_revert_this(_gen)->_co_async_next2();
+				_gen->_revert_this(_gen)->_co_top_next();
 			}
 		}
 		else
 		{
 			typedef std::tuple<RM_CREF(Args)...> tuple_type;
 			generator* gen = _gen.get();
-			gen->gen_strand()->post(std::bind([](generator_handle& _gen, std::tuple<_Types&...>& _result, tuple_type& args)
+			gen->self_strand()->post(std::bind([](generator_handle& _gen, std::tuple<_Types&...>& _result, tuple_type& args)
 			{
 				if (!_gen->_done())
 				{
 					_result = std::move(args);
-					_gen->_revert_this(_gen)->_co_async_next2();
+					_gen->_revert_this(_gen)->_co_top_next();
 				}
 			}, std::move(_gen), _result, tuple_type(std::forward<Args>(args)...)));
 		}
@@ -1288,24 +1357,24 @@ struct CoAsyncSameSafeResult_
 	void operator()(Args&&... args)
 	{
 		assert(_gen);
-		if (_gen->gen_strand()->running_in_this_thread())
+		if (_gen->self_strand()->running_in_this_thread())
 		{
 			if (!_gen->_done())
 			{
 				same_copy_to_tuple(_result, std::forward<Args>(args)...);
-				_gen->_revert_this(_gen)->_co_async_next2();
+				_gen->_revert_this(_gen)->_co_top_next();
 			}
 		}
 		else
 		{
 			typedef std::tuple<RM_CREF(Args)...> tuple_type;
 			generator* gen = _gen.get();
-			gen->gen_strand()->post(std::bind([](generator_handle& _gen, std::tuple<_Types&...>& _result, tuple_type& args)
+			gen->self_strand()->post(std::bind([](generator_handle& _gen, std::tuple<_Types&...>& _result, tuple_type& args)
 			{
 				if (!_gen->_done())
 				{
 					same_copy_tuple_to_tuple(_result, std::move(args));
-					_gen->_revert_this(_gen)->_co_async_next2();
+					_gen->_revert_this(_gen)->_co_top_next();
 				}
 			}, std::move(_gen), _result, tuple_type(std::forward<Args>(args)...)));
 		}
@@ -1327,6 +1396,7 @@ struct CoShardAsyncResult_
 	template <typename... Args>
 	void operator()(Args&&... args)
 	{
+		assert(_gen);
 		_result = std::tuple<Args&&...>(std::forward<Args>(args)...);
 		_gen->_co_shared_async_next(_sign);
 	}
@@ -1348,24 +1418,25 @@ struct CoShardAsyncSafeResult_
 	template <typename... Args>
 	void operator()(Args&&... args)
 	{
-		if (_gen->gen_strand()->running_in_this_thread())
+		assert(_gen);
+		if (_gen->self_strand()->running_in_this_thread())
 		{
 			if (!_gen->_done() && !_sign)
 			{
 				_result = std::tuple<Args&&...>(std::forward<Args>(args)...);
-				_gen->_co_async_next2();
+				_gen->_co_top_next();
 			}
 		}
 		else
 		{
 			typedef std::tuple<RM_CREF(Args)...> tuple_type;
 			generator* gen = _gen.get();
-			gen->gen_strand()->post(std::bind([](generator_handle& _gen, shared_bool& _sign, std::tuple<_Types&...>& _result, tuple_type& args)
+			gen->self_strand()->post(std::bind([](generator_handle& _gen, shared_bool& _sign, std::tuple<_Types&...>& _result, tuple_type& args)
 			{
 				if (!_gen->_done() && !_sign)
 				{
 					_result = std::move(args);
-					_gen->_co_async_next2();
+					_gen->_co_top_next();
 				}
 			}, std::move(_gen), std::move(_sign), _result, tuple_type(std::forward<Args>(args)...)));
 		}
@@ -1388,6 +1459,7 @@ struct CoShardAsyncSameResult_
 	template <typename... Args>
 	void operator()(Args&&... args)
 	{
+		assert(_gen);
 		same_copy_to_tuple(_result, std::forward<Args>(args)...);
 		_gen->_co_shared_async_next(_sign);
 	}
@@ -1409,24 +1481,25 @@ struct CoShardAsyncSameSafeResult_
 	template <typename... Args>
 	void operator()(Args&&... args)
 	{
-		if (_gen->gen_strand()->running_in_this_thread())
+		assert(_gen);
+		if (_gen->self_strand()->running_in_this_thread())
 		{
 			if (!_gen->_done() && !_sign)
 			{
 				same_copy_to_tuple(_result, std::forward<Args>(args)...);
-				_gen->_co_async_next2();
+				_gen->_co_top_next();
 			}
 		}
 		else
 		{
 			typedef std::tuple<RM_CREF(Args)...> tuple_type;
 			generator* gen = _gen.get();
-			gen->gen_strand()->post(std::bind([](generator_handle& _gen, shared_bool& _sign, std::tuple<_Types&...>& _result, tuple_type& args)
+			gen->self_strand()->post(std::bind([](generator_handle& _gen, shared_bool& _sign, std::tuple<_Types&...>& _result, tuple_type& args)
 			{
 				if (!_gen->_done() && !_sign)
 				{
 					same_copy_tuple_to_tuple(_result, std::move(args));
-					_gen->_co_async_next2();
+					_gen->_co_top_next();
 				}
 			}, std::move(_gen), std::move(_sign), _result, tuple_type(std::forward<Args>(args)...)));
 		}
@@ -1471,7 +1544,7 @@ struct CoAnextSafeResult_
 	void operator()(Args&&... args)
 	{
 		assert(_gen);
-		if (_gen->gen_strand()->running_in_this_thread())
+		if (_gen->self_strand()->running_in_this_thread())
 		{
 			if (!_gen->_done())
 			{
@@ -1483,7 +1556,7 @@ struct CoAnextSafeResult_
 		{
 			typedef std::tuple<RM_CREF(Args)...> tuple_type;
 			generator* gen = _gen.get();
-			gen->gen_strand()->post(std::bind([](generator_handle& _gen, std::tuple<_Types&...>& _result, tuple_type& args)
+			gen->self_strand()->post(std::bind([](generator_handle& _gen, std::tuple<_Types&...>& _result, tuple_type& args)
 			{
 				if (!_gen->_done())
 				{
@@ -1532,7 +1605,7 @@ struct CoAnextSameSafeResult_
 	void operator()(Args&&... args)
 	{
 		assert(_gen);
-		if (_gen->gen_strand()->running_in_this_thread())
+		if (_gen->self_strand()->running_in_this_thread())
 		{
 			if (!_gen->_done())
 			{
@@ -1544,7 +1617,7 @@ struct CoAnextSameSafeResult_
 		{
 			typedef std::tuple<RM_CREF(Args)...> tuple_type;
 			generator* gen = _gen.get();
-			gen->gen_strand()->post(std::bind([](generator_handle& _gen, std::tuple<_Types&...>& _result, tuple_type& args)
+			gen->self_strand()->post(std::bind([](generator_handle& _gen, std::tuple<_Types&...>& _result, tuple_type& args)
 			{
 				if (!_gen->_done())
 				{

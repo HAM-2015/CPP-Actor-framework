@@ -2303,6 +2303,8 @@ struct shared_bool
 	shared_bool(shared_bool&& s);
 	explicit shared_bool(const std::shared_ptr<bool>& pb);
 	explicit shared_bool(std::shared_ptr<bool>&& pb);
+	bool operator==(const shared_bool& s) const;
+	bool operator!=(const shared_bool& s) const;
 	void operator=(const shared_bool& s);
 	void operator=(shared_bool&& s);
 	void operator=(bool b);

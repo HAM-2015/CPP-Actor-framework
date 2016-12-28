@@ -17,7 +17,7 @@ qt_strand::~qt_strand()
 
 shared_qt_strand qt_strand::create(io_engine& ioEngine, bind_qt_run_base* ui)
 {
-	shared_qt_strand res(new qt_strand);
+	shared_qt_strand res = std::make_shared<qt_strand>();
 	res->_ioEngine = &ioEngine;
 	res->_ui = ui;
 	res->_actorTimer = new ActorTimer_(res);

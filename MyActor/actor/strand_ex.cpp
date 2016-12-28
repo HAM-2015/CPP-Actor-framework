@@ -16,6 +16,11 @@ struct get_impl_running_strand_ex
 	bool _running;
 };
 
+struct get_impl_safe_running_strand_ex
+{
+	bool _running;
+};
+
 namespace boost
 {
 	namespace asio
@@ -43,6 +48,14 @@ namespace boost
 			{
 				fh._running = impl->locked_;
 			}
+
+			template <>
+			void boost::asio::detail::strand_service::post(boost::asio::detail::strand_service::implementation_type& impl, get_impl_safe_running_strand_ex& fh)
+			{
+				impl->mutex_.lock();
+				fh._running = impl->locked_;
+				impl->mutex_.unlock();
+			}
 		}
 	}
 }
@@ -59,8 +72,7 @@ StrandEx_::~StrandEx_()
 
 bool StrandEx_::running_in_this_thread() const
 {
-	//return boost::asio::detail::call_stack<boost::asio::detail::strand_service::strand_impl>::contains(_impl) != 0;
-	return _service.running_in_this_thread(_impl);
+	return boost::asio::detail::call_stack<boost::asio::detail::strand_service::strand_impl>::contains(_impl) != 0;
 }
 
 bool StrandEx_::empty() const
@@ -84,7 +96,16 @@ bool StrandEx_::waiting_empty() const
 
 bool StrandEx_::running() const
 {
+	assert(running_in_this_thread());
 	get_impl_running_strand_ex t;
+	_service.post((boost::asio::detail::strand_service::implementation_type&)_impl, t);
+	return t._running;
+}
+
+bool StrandEx_::safe_running() const
+{
+	assert(!running_in_this_thread());
+	get_impl_safe_running_strand_ex t;
 	_service.post((boost::asio::detail::strand_service::implementation_type&)_impl, t);
 	return t._running;
 }

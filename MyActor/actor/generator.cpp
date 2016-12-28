@@ -54,6 +54,11 @@ bool generator::_next()
 	{
 		if (_callStack.empty())
 		{
+			if (!_sharedSign.empty())
+			{
+				_sharedSign = true;
+				_sharedSign.reset();
+			}
 			_strand->actor_timer()->cancel(_timerHandle);
 			clear_function(_baseHandler);
 			if (_notify)
@@ -209,63 +214,86 @@ const shared_bool& generator::shared_async_sign()
 	assert(__inside);
 	assert(!__awaitSign);
 	DEBUG_OPERATION(__sharedAwaitSign = true);
-	if (__sharedSign.empty())
+	if (_sharedSign.empty())
 	{
-		__sharedSign = shared_bool::new_(false);
+		_sharedSign = shared_bool::new_(false);
 	}
-	return __sharedSign;
+	return _sharedSign;
 }
 
-const shared_strand& generator::gen_strand()
+const shared_strand& generator::self_strand()
 {
 	return _strand;
 }
 
 void generator::_co_next()
 {
-	_strand->distribute(std::bind([](generator_handle& host)
+	if (_strand->running_in_this_thread())
 	{
-		if (host->__ctx)
+		if (__ctx)
 		{
-			assert(!host->__asyncSign);
-			host->_revert_this(host)->_next();
+			assert(!__asyncSign);
+			_next();
 		}
-	}, std::move(shared_this())));
+		else
+		{
+			_sharedThis.reset();
+		}
+	}
+	else
+	{
+		_strand->post(std::bind([](generator_handle& host)
+		{
+			generator* const host_ = host.get();
+			if (host_->__ctx)
+			{
+				assert(!host_->__asyncSign);
+				host_->_revert_this(host)->_next();
+			}
+		}, std::move(_sharedThis)));
+	}
 }
 
 void generator::_co_tick_next()
 {
 	_strand->next_tick(std::bind([](generator_handle& host)
 	{
-		if (host->__ctx)
+		generator* const host_ = host.get();
+		if (host_->__ctx)
 		{
-			assert(!host->__asyncSign);
-			host->_revert_this(host)->_next();
+			assert(!host_->__asyncSign);
+			host_->_revert_this(host)->_next();
 		}
-	}, std::move(shared_this())));
+	}, std::move(_sharedThis)));
 }
 
 void generator::_co_async_next()
 {
-	_strand->distribute(std::bind([](generator_handle& host)
+	if (_strand->running_in_this_thread())
 	{
-		if (host->__ctx)
+		if (__ctx)
 		{
-			generator* host_ = host->_revert_this(host);
-			if (host_->__asyncSign)
-			{
-				host_->__asyncSign = false;
-				host_->_next();
-			}
-			else
-			{
-				host_->__asyncSign = true;
-			}
+			_co_top_next();
 		}
-	}, std::move(shared_this())));
+		else
+		{
+			_sharedThis.reset();
+		}
+	}
+	else
+	{
+		_strand->post(std::bind([](generator_handle& host)
+		{
+			generator* const host_ = host.get();
+			if (host_->__ctx)
+			{
+				host_->_revert_this(host)->_co_top_next();
+			}
+		}, std::move(_sharedThis)));
+	}
 }
 
-void generator::_co_async_next2()
+void generator::_co_top_next()
 {
 	assert(_strand->running_in_this_thread());
 	assert(__ctx);
@@ -284,52 +312,42 @@ void generator::_co_asio_next()
 {
 	_strand->dispatch(std::bind([](generator_handle& host)
 	{
-		if (host->__ctx)
+		generator* const host_ = host.get();
+		if (host_->__ctx)
 		{
-			generator* host_ = host->_revert_this(host);
-			if (host_->__asyncSign)
-			{
-				host_->__asyncSign = false;
-				host_->_next();
-			}
-			else
-			{
-				host_->__asyncSign = true;
-			}
+			host_->_revert_this(host)->_co_top_next();
 		}
-	}, std::move(shared_this())));
-}
-
-void generator::_co_reset_shared_sign()
-{
-	if (!__sharedSign.empty())
-	{
-		__sharedSign = true;
-		__sharedSign.reset();
-	}
+	}, std::move(_sharedThis)));
 }
 
 void generator::_co_shared_async_next(shared_bool& sign)
 {
-	_strand->distribute(std::bind([](generator_handle& host, shared_bool& sign)
+	if (sign.empty() || sign)
 	{
-		if (sign)
+		return;
+	}
+	if (_strand->running_in_this_thread())
+	{
+		assert(_sharedSign == sign && __ctx);
+		_sharedSign = true;
+		_sharedSign.reset();
+		_co_top_next();
+	}
+	else
+	{
+		_strand->post(std::bind([](generator_handle& host, shared_bool& sign)
 		{
-			return;
-		}
-		if (host->__ctx)
-		{
-			if (host->__asyncSign)
+			assert(!sign.empty());
+			if (!sign)
 			{
-				host->__asyncSign = false;
-				host->_next();
+				generator* const host_ = host.get();
+				assert(host_->_sharedSign == sign && host_->__ctx);
+				host_->_sharedSign = true;
+				host_->_sharedSign.reset();
+				host_->_co_top_next();
 			}
-			else
-			{
-				host->__asyncSign = true;
-			}
-		}
-	}, _weakThis.lock(), std::move(sign)));
+		}, _weakThis.lock(), std::move(sign)));
+	}
 }
 
 void generator::_co_push_stack(int coNext, std::function<void(generator&)>&& handler)

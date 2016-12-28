@@ -116,36 +116,25 @@ class boost_strand
 	typedef StrandEx_ strand_type;
 
 #ifdef ENABLE_NEXT_TICK
-
-	struct capture_base
+	template <typename Handler>
+	struct handler_capture
 	{
-		capture_base(boost_strand* strand);
-		void begin_run();
-		void end_run();
-		boost_strand* _strand;
-	};
-
-	template <typename H>
-	struct handler_capture : public capture_base
-	{
-		template <typename Handler>
-		handler_capture(Handler&& handler, boost_strand* strand)
-			:capture_base(strand), _handler(std::forward<Handler>(handler)) {}
+		template <typename H>
+		handler_capture(H&& handler, boost_strand* strand)
+			:_strand(strand), _handler(std::forward<H>(handler)) {}
 
 		handler_capture(const handler_capture& s)
-			:capture_base(s._strand), _handler(std::move(s._handler)) {}
-
-		handler_capture(handler_capture&& s)
-			:capture_base(s._strand), _handler(std::move(s._handler)) {}
+			:_strand(s._strand), _handler(std::move(s._handler)) {}
 
 		void operator ()()
 		{
-			begin_run();
-			_handler();
-			end_run();
+			_strand->run_tick_front();
+			CHECK_EXCEPTION(_handler);
+			_strand->run_tick_back();
 		}
 
-		mutable H _handler;
+		boost_strand* _strand;
+		mutable Handler _handler;
 	private:
 		void operator =(const handler_capture&) = delete;
 	};
@@ -159,8 +148,8 @@ class boost_strand
 	struct wrap_next_tick_handler : public wrap_next_tick_face
 	{
 		template <typename H>
-		wrap_next_tick_handler(H&& h)
-			:_handler(std::forward<H>(h)) {}
+		wrap_next_tick_handler(H&& handler)
+			:_handler(std::forward<H>(handler)) {}
 
 		size_t invoke()
 		{
@@ -177,8 +166,8 @@ class boost_strand
 	struct wrap_next_tick_handler<Handler, false> : public wrap_next_tick_face
 	{
 		template <typename H>
-		wrap_next_tick_handler(H&& h)
-			:_handler(std::forward<H>(h)) {}
+		wrap_next_tick_handler(H&& handler)
+			:_handler(std::forward<H>(handler)) {}
 
 		size_t invoke()
 		{
@@ -593,6 +582,11 @@ public:
 	@brief 是否在运行
 	*/
 	virtual bool is_running();
+
+	/*!
+	@brief 是否在运行
+	*/
+	bool safe_is_running();
 
 	/*!
 	@brief 获取当前调度器代理

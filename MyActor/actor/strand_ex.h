@@ -23,6 +23,7 @@ private:
 	bool ready_empty() const;
 	bool waiting_empty() const;
 	bool running() const;
+	bool safe_running() const;
 
 	template <typename Handler>
 	void post(Handler&& handler)

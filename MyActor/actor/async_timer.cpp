@@ -32,10 +32,32 @@ void AsyncTimer_::cancel()
 	assert(self_strand()->running_in_this_thread());
 	if (_handler)
 	{
+		_actorTimer->cancel(_timerHandle);
 		_handler->destroy(_reuMem);
 		_handler = NULL;
-		_actorTimer->cancel(_timerHandle);
 	}
+}
+
+bool AsyncTimer_::advance()
+{
+	assert(self_strand()->running_in_this_thread());
+	if (_handler)
+	{
+		if (!_isInterval)
+		{
+			_actorTimer->cancel(_timerHandle);
+			wrap_base* cb = _handler;
+			_handler = NULL;
+			cb->invoke(true);
+			cb->destroy(_reuMem);
+		}
+		else if (!_handler->is_top_call())
+		{
+			_handler->invoke(true);
+			return true;
+		}
+	}
+	return false;
 }
 
 shared_strand AsyncTimer_::self_strand()
@@ -121,39 +143,68 @@ void overlap_timer::_timeout(long long us, timer_handle& timerHandle, bool deadl
 	}
 }
 
-void overlap_timer::cancel(timer_handle& th)
+void overlap_timer::_cancel(timer_handle& timerHandle)
+{
+	handler_queue::iterator itNode = timerHandle._queueNode;
+	if (_handlerQueue.size() == 1)
+	{
+		_extMaxTick = 0;
+		_handlerQueue.erase(itNode);
+		//如果没有定时任务就退出定时循环
+		boost::system::error_code ec;
+		((timer_type*)_timer)->cancel(ec);
+		_timerCount++;
+		_looping = false;
+	}
+	else if (itNode->first == _extMaxTick)
+	{
+		_handlerQueue.erase(itNode++);
+		if (_handlerQueue.end() == itNode)
+		{
+			itNode--;
+		}
+		_extMaxTick = itNode->first;
+	}
+	else
+	{
+		_handlerQueue.erase(itNode);
+	}
+}
+
+void overlap_timer::cancel(timer_handle& timerHandle)
 {
 	assert(_weakStrand.lock()->running_in_this_thread());
-	if (!th.is_null())
+	if (!timerHandle.is_null())
 	{//删除当前定时器节点
 		assert(_lockStrand);
-		th._handler->destroy(_reuMem);
-		th.reset();
-		handler_queue::iterator itNode = th._queueNode;
-		if (_handlerQueue.size() == 1)
+		_cancel(timerHandle);
+		timerHandle._handler->destroy(_reuMem);
+		timerHandle.reset();
+	}
+}
+
+bool overlap_timer::advance(timer_handle& timerHandle)
+{
+	assert(_weakStrand.lock()->running_in_this_thread());
+	if (!timerHandle.is_null())
+	{
+		assert(_lockStrand);
+		if (!timerHandle._isInterval)
 		{
-			_extMaxTick = 0;
-			_handlerQueue.erase(itNode);
-			//如果没有定时任务就退出定时循环
-			boost::system::error_code ec;
-			((timer_type*)_timer)->cancel(ec);
-			_timerCount++;
-			_looping = false;
+			_cancel(timerHandle);
+			AsyncTimer_::wrap_base* cb = timerHandle._handler;
+			timerHandle._handler = NULL;
+			cb->invoke(true);
+			cb->destroy(_reuMem);
+			return true;
 		}
-		else if (itNode->first == _extMaxTick)
+		else if (!timerHandle._handler->is_top_call())
 		{
-			_handlerQueue.erase(itNode++);
-			if (_handlerQueue.end() == itNode)
-			{
-				itNode--;
-			}
-			_extMaxTick = itNode->first;
-		}
-		else
-		{
-			_handlerQueue.erase(itNode);
+			timerHandle._handler->invoke(true);
+			return true;
 		}
 	}
+	return false;
 }
 
 shared_strand overlap_timer::self_strand()

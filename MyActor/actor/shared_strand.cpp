@@ -2,31 +2,6 @@
 #include "actor_timer.h"
 #include "async_timer.h"
 
-#ifdef ENABLE_NEXT_TICK
-
-boost_strand::capture_base::capture_base(boost_strand* strand)
-:_strand(strand) {}
-
-void boost_strand::capture_base::begin_run()
-{
-	if (0 == _strand->_thisRoundCount)
-	{
-		_strand->run_tick_front();
-	}
-}
-
-void boost_strand::capture_base::end_run()
-{
-	_strand->_thisRoundCount++;
-	if (_strand->ready_empty())
-	{
-		_strand->run_tick_back();
-		_strand->_thisRoundCount = 0;
-	}
-}
-
-#endif
-
 boost_strand::boost_strand()
 :_ioEngine(NULL), _strand(NULL), _actorTimer(NULL)
 #ifdef ENABLE_NEXT_TICK
@@ -51,6 +26,7 @@ boost_strand::~boost_strand()
 #ifdef ENABLE_NEXT_TICK
 	assert(!_frontTickQueue || _frontTickQueue->empty());
 	assert(!_backTickQueue || _backTickQueue->empty());
+	assert(!_strand || (ready_empty() && waiting_empty()));
 	delete _nextTickAlloc[0];
 	delete _nextTickAlloc[1];
 	delete _nextTickAlloc[2];
@@ -166,6 +142,12 @@ bool boost_strand::is_running()
 	return _strand->running();
 }
 
+bool boost_strand::safe_is_running()
+{
+	assert(_strand);
+	return _strand->safe_running();
+}
+
 size_t boost_strand::ios_thread_number()
 {
 	assert(_ioEngine);
@@ -204,16 +186,22 @@ std::shared_ptr<AsyncTimer_> boost_strand::make_timer()
 #ifdef ENABLE_NEXT_TICK
 bool boost_strand::ready_empty()
 {
+	assert(_strand);
 	return _strand->ready_empty();
 }
 
 bool boost_strand::waiting_empty()
 {
+	assert(_strand);
 	return _strand->waiting_empty();
 }
 
 void boost_strand::run_tick_front()
 {
+	if (_thisRoundCount)
+	{
+		return;
+	}
 	while (!_frontTickQueue->empty())
 	{
 		wrap_next_tick_face* const tick = _frontTickQueue->front();
@@ -231,28 +219,32 @@ void boost_strand::run_tick_front()
 
 void boost_strand::run_tick_back()
 {
-	assert(ready_empty());
+	_thisRoundCount++;
+	if (!ready_empty())
+	{
+		return;
+	}
+	size_t tickCount = _thisRoundCount;
+	_thisRoundCount = 0;
+	while (!_backTickQueue->empty() && tickCount--)
+	{
+		wrap_next_tick_face* const tick = _backTickQueue->front();
+		_backTickQueue->pop_front();
+		const size_t spaceSize = tick->invoke();
+		switch (MEM_ALIGN(spaceSize, NEXT_TICK_SPACE_SIZE) / NEXT_TICK_SPACE_SIZE)
+		{
+		case 1: _nextTickAlloc[0]->deallocate(tick); break;
+		case 2: _nextTickAlloc[1]->deallocate(tick); break;
+		case 3: case 4: _nextTickAlloc[2]->deallocate(tick); break;
+		default: _reuMemAlloc->deallocate(tick); break;
+		}
+	}
 	if (!_backTickQueue->empty())
 	{
-		shared_strand lockThis = _weakThis.lock();
-		size_t tickCount = 0;
-		do
-		{
-			wrap_next_tick_face* const tick = _backTickQueue->front();
-			_backTickQueue->pop_front();
-			const size_t spaceSize = tick->invoke();
-			switch (MEM_ALIGN(spaceSize, NEXT_TICK_SPACE_SIZE) / NEXT_TICK_SPACE_SIZE)
-			{
-			case 1: _nextTickAlloc[0]->deallocate(tick); break;
-			case 2: _nextTickAlloc[1]->deallocate(tick); break;
-			case 3: case 4: _nextTickAlloc[2]->deallocate(tick); break;
-			default: _reuMemAlloc->deallocate(tick); break;
-			}
-		} while (!_backTickQueue->empty() && ++tickCount <= _thisRoundCount);
 		std::swap(_frontTickQueue, _backTickQueue);
 		if (!_frontTickQueue->empty() && waiting_empty())
 		{
-			post(std::bind([](const shared_strand& st){}, std::move(lockThis)));
+			post(any_handler());
 		}
 	}
 }

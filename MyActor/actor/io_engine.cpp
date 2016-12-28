@@ -53,7 +53,11 @@ io_engine::io_engine(bool enableTimer, const char* title)
 		new(p)boost_strand();
 	}, [](boost_strand* p)->bool
 	{
-		if (!p->is_running())
+		if (p->running_in_this_thread())
+		{
+			assert(p->is_running());
+		}
+		else if (!p->safe_is_running())
 		{
 			p->~boost_strand();
 			return true;

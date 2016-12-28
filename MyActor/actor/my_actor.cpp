@@ -213,6 +213,16 @@ shared_bool::operator bool() const
 	return *_ptr;
 }
 
+bool shared_bool::operator==(const shared_bool& s) const
+{
+	return _ptr == s._ptr;
+}
+
+bool shared_bool::operator!=(const shared_bool& s) const
+{
+	return _ptr != s._ptr;
+}
+
 void shared_bool::operator=(shared_bool&& s)
 {
 	_ptr = std::move(s._ptr);

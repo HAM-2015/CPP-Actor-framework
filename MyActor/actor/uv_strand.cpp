@@ -112,7 +112,7 @@ uv_strand::~uv_strand()
 
 shared_uv_strand uv_strand::create(io_engine& ioEngine, uv_loop_t* uvLoop)
 {
-	shared_uv_strand res(new uv_strand);
+	shared_uv_strand res = std::make_shared<uv_strand>();
 	res->_ioEngine = &ioEngine;
 	res->_uvLoop = uvLoop;
 	res->_threadID = run_thread::this_thread_id();
