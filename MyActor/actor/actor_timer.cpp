@@ -69,7 +69,7 @@ ActorTimer_::timer_handle ActorTimer_::timeout(long long us, actor_face_handle&&
 	else if ((unsigned long long)et < (unsigned long long)_extFinishTime)
 	{//定时期限前于当前定时器期限，取消后重新计时
 		boost::system::error_code ec;
-		((timer_type*)_timer)->cancel(ec);
+		as_ptype<timer_type>(_timer)->cancel(ec);
 		_timerCount++;
 		_extFinishTime = et;
 		timer_loop(et, et - timerHandle._beginStamp);
@@ -91,7 +91,7 @@ void ActorTimer_::cancel(timer_handle& th)
 			_handlerQueue.erase(itNode);
 			//如果没有定时任务就退出定时循环
 			boost::system::error_code ec;
-			((timer_type*)_timer)->cancel(ec);
+			as_ptype<timer_type>(_timer)->cancel(ec);
 			_timerCount++;
 			_looping = false;
 		} 
@@ -115,11 +115,15 @@ void ActorTimer_::timer_loop(long long abs, long long rel)
 {
 	int tc = ++_timerCount;
 #ifdef DISABLE_BOOST_TIMER
-	((timer_type*)_timer)->async_wait(micseconds(abs), micseconds(rel), tc);
+	as_ptype<timer_type>(_timer)->async_wait(micseconds(abs), micseconds(rel), tc);
 #else
 	boost::system::error_code ec;
-	((timer_type*)_timer)->expires_from_now(micseconds(rel), ec);
-	((timer_type*)_timer)->async_wait(_lockStrand->wrap_asio([this, tc](const boost::system::error_code&)
+#ifdef DISABLE_HIGH_TIMER
+	as_ptype<timer_type>(_timer)->expires_from_now(micseconds(rel), ec);
+#else
+	as_ptype<timer_type>(_timer)->expires_at(timer_type::time_point(micseconds(abs)), ec);
+#endif
+	as_ptype<timer_type>(_timer)->async_wait(_lockStrand->wrap_asio([this, tc](const boost::system::error_code&)
 	{
 		event_handler(tc);
 	}));
