@@ -2,6 +2,8 @@
 #include "actor_timer.h"
 #include "async_timer.h"
 
+#define NEXT_TICK_SPACE_SIZE (sizeof(void*)*8)
+
 boost_strand::boost_strand()
 :_ioEngine(NULL), _strand(NULL), _actorTimer(NULL)
 #ifdef ENABLE_NEXT_TICK
@@ -49,11 +51,11 @@ shared_strand boost_strand::create(io_engine& ioEngine)
 		res->_strand = new strand_type(ioEngine);
 #ifdef ENABLE_NEXT_TICK
 		res->_reuMemAlloc = new reusable_mem();
-		res->_nextTickAlloc[0] = new mem_alloc2<char[NEXT_TICK_SPACE_SIZE]>(MEM_POOL_LENGTH);
-		res->_nextTickAlloc[1] = new mem_alloc2<char[NEXT_TICK_SPACE_SIZE * 2]>(MEM_POOL_LENGTH / 2);
-		res->_nextTickAlloc[2] = new mem_alloc2<char[NEXT_TICK_SPACE_SIZE * 4]>(MEM_POOL_LENGTH / 4);
-		res->_frontTickQueue = new msg_queue<wrap_next_tick_face*, mem_alloc2<>>(MEM_POOL_LENGTH);
-		res->_backTickQueue = new msg_queue<wrap_next_tick_face*, mem_alloc2<>>(MEM_POOL_LENGTH);
+		res->_nextTickAlloc[0] = new mem_alloc2<char[NEXT_TICK_SPACE_SIZE]>(ioEngine._poolSize);
+		res->_nextTickAlloc[1] = new mem_alloc2<char[NEXT_TICK_SPACE_SIZE * 2]>(ioEngine._poolSize / 2);
+		res->_nextTickAlloc[2] = new mem_alloc2<char[NEXT_TICK_SPACE_SIZE * 4]>(ioEngine._poolSize / 4);
+		res->_frontTickQueue = new msg_queue<wrap_next_tick_face*, mem_alloc2<>>(ioEngine._poolSize);
+		res->_backTickQueue = new msg_queue<wrap_next_tick_face*, mem_alloc2<>>(ioEngine._poolSize);
 #endif
 		res->_actorTimer = new ActorTimer_(res);
 		res->_overTimer = new overlap_timer(res);
@@ -152,6 +154,12 @@ size_t boost_strand::ios_thread_number()
 {
 	assert(_ioEngine);
 	return _ioEngine->threadNumber();
+}
+
+bool boost_strand::only_self()
+{
+	assert(_strand);
+	return _strand->only_self();
 }
 
 io_engine& boost_strand::get_io_engine()

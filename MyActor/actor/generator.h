@@ -311,24 +311,29 @@ struct __co_context_no_capture{};
 
 #define co_st_call(__strand__, ...) co_st_call_of(__strand__) _co_call_bind(__VA_ARGS__)
 
-//sleep，毫秒
-#define co_sleep_(__th__, __ms__) do{\
-	assert(co_self.__inside);\
-	co_strand->over_timer()->timeout(__ms__, __th__, wrap_bind_(std::bind([](generator_handle& host){\
-	if(!host->__ctx)return; host->_revert_this(host)->_next(); }, std::move(co_shared_this)))); _co_yield; }while (0)
-
-//延时
+//sleep等待
 #define co_sleep(__ms__) do{co_self._co_sleep(__ms__); _co_yield;}while (0)
 #define co_usleep(__us__) do{co_self._co_usleep(__us__); _co_yield;}while (0)
+#define co_sleep_(__ms__) do{co_timeout(__ms__, co_timer, co_anext); _co_yield;}while (0)
+#define co_usleep_(__us__) do{co_utimeout(__us__, co_timer, co_anext); _co_yield;}while (0)
+
+//各种异步延时
 #define co_dead_sleep(__ms__) do{co_self._co_dead_sleep(__ms__); _co_yield;}while (0)
 #define co_dead_usleep(__us__) do{co_self._co_dead_usleep(__us__); _co_yield;}while (0)
 #define co_timeout_of(__ms__, __th__) CoTimeout_(__ms__, co_strand->over_timer(), __th__)-
+#define co_utimeout_of(__us__, __th__) CouTimeout_(__us__, co_strand->over_timer(), __th__)-
 #define co_deadline_of(__us__, __th__) CoDeadline_(__us__, co_strand->over_timer(), __th__)-
 #define co_interval_of(__ms__, .../*__th__, [immed=false]*/) CoInterval_(__ms__, co_strand->over_timer(), __VA_ARGS__)-
+#define co_uinterval_of(__us__, .../*__th__, [immed=false]*/) CouInterval_(__us__, co_strand->over_timer(), __VA_ARGS__)-
 #define co_timeout(__ms__, __th__, __handler__) co_strand->over_timer()->timeout(__ms__, __th__, __handler__)
+#define co_utimeout(__us__, __th__, __handler__) co_strand->over_timer()->utimeout(__us__, __th__, __handler__)
 #define co_deadline(__us__, __th__, __handler__) co_strand->over_timer()->deadline(__us__, __th__, __handler__)
 #define co_interval(__ms__, __th__, .../*__handler__, [immed=false]*/) co_strand->over_timer()->interval(__ms__, __th__, __VA_ARGS__)
+#define co_uinterval(__us__, __th__, .../*__handler__, [immed=false]*/) co_strand->over_timer()->uinterval(__us__, __th__, __VA_ARGS__)
+//取消延时
 #define co_cancel_timer(__th__) co_strand->over_timer()->cancel(__th__)
+//提前触发延时
+#define co_advance_timer(__th__) co_strand->over_timer()->advance(__th__)
 
 //创建一个generator，立即运行
 #define co_go(...) CoGo_(__VA_ARGS__)-
@@ -986,7 +991,7 @@ public:
 				generator* const self = gen.get();
 				self->self_strand()->post(std::bind([](generator_handle& gen)
 				{
-					gen->_revert_this(gen)->_next();
+					gen->_revert_this(gen)->_co_next();
 				}, std::move(gen)));
 			}, std::move(shared_this()), std::forward<Handler>(handler)));
 			return true;
@@ -1004,7 +1009,7 @@ public:
 			generator* const self = gen.get();
 			self->self_strand()->distribute(std::bind([](generator_handle& gen)
 			{
-				gen->_revert_this(gen)->_next();
+				gen->_revert_this(gen)->_co_next();
 			}, std::move(gen)));
 		}, std::move(shared_this()), std::forward<Handler>(handler)));
 	}
@@ -1105,6 +1110,13 @@ struct CoTimeout_
 	int _ms; overlap_timer* _tm; overlap_timer::timer_handle& _th;
 };
 
+struct CouTimeout_
+{
+	CouTimeout_(long long us, overlap_timer* tm, overlap_timer::timer_handle& th) :_us(us), _tm(tm), _th(th){}
+	template <typename Handler> void operator-(Handler&& handler) { _tm->utimeout(_us, _th, std::forward<Handler>(handler)); }
+	long long _us; overlap_timer* _tm; overlap_timer::timer_handle& _th;
+};
+
 struct CoDeadline_
 {
 	CoDeadline_(long long us, overlap_timer* tm, overlap_timer::timer_handle& th) :_us(us), _tm(tm), _th(th){}
@@ -1117,6 +1129,13 @@ struct CoInterval_
 	CoInterval_(int ms, overlap_timer* tm, overlap_timer::timer_handle& th, bool immed = false) :_immed(immed), _ms(ms), _tm(tm), _th(th){}
 	template <typename Handler> void operator-(Handler&& handler) { _tm->interval(_ms, _th, std::forward<Handler>(handler), _immed); }
 	bool _immed; int _ms; overlap_timer* _tm; overlap_timer::timer_handle& _th;
+};
+
+struct CouInterval_
+{
+	CouInterval_(long long us, overlap_timer* tm, overlap_timer::timer_handle& th, bool immed = false) :_immed(immed), _us(us), _tm(tm), _th(th){}
+	template <typename Handler> void operator-(Handler&& handler) { _tm->uinterval(_us, _th, std::forward<Handler>(handler), _immed); }
+	bool _immed; long long _us; overlap_timer* _tm; overlap_timer::timer_handle& _th;
 };
 
 struct CoAsyncIgnoreResult_
@@ -1183,7 +1202,7 @@ struct CoAnextIgnoreResult_
 	void operator()(Args&&... args)
 	{
 		assert(_gen);
-		_gen->_revert_this(_gen)->_next();
+		_gen->_revert_this(_gen)->_co_next();
 	}
 
 	generator_handle _gen;
@@ -1235,7 +1254,7 @@ struct CoAnext_
 	void operator()()
 	{
 		assert(_gen);
-		_gen->_revert_this(_gen)->_next();
+		_gen->_revert_this(_gen)->_co_next();
 	}
 
 	generator_handle _gen;
@@ -1524,7 +1543,7 @@ struct CoAnextResult_
 	{
 		assert(_gen);
 		_result = std::tuple<Args&&...>(std::forward<Args>(args)...);
-		_gen->_revert_this(_gen)->_next();
+		_gen->_revert_this(_gen)->_co_next();
 	}
 
 	generator_handle _gen;
@@ -1585,7 +1604,7 @@ struct CoAnextSameResult_
 	{
 		assert(_gen);
 		same_copy_to_tuple(_result, std::forward<Args>(args)...);
-		_gen->_revert_this(_gen)->_next();
+		_gen->_revert_this(_gen)->_co_next();
 	}
 
 	generator_handle _gen;

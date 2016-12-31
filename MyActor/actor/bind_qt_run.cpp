@@ -92,6 +92,18 @@ bool bind_qt_run_base::ui_tls::running_in_this_thread(bind_qt_run_base* s)
 	}
 	return false;
 }
+
+size_t bind_qt_run_base::ui_tls::running_depth()
+{
+	size_t dp = 0;
+	void** const tlsBuff = io_engine::getTlsValueBuff();
+	if (tlsBuff && tlsBuff[QT_UI_TLS_INDEX])
+	{
+		ui_tls* uiTls = (ui_tls*)tlsBuff[QT_UI_TLS_INDEX];
+		dp = uiTls->_uiStack.size();
+	}
+	return dp;
+}
 //////////////////////////////////////////////////////////////////////////
 
 mem_alloc_mt2<bind_qt_run_base::task_event>* bind_qt_run_base::task_event::_taskAlloc = NULL;
@@ -167,6 +179,12 @@ bool bind_qt_run_base::run_in_ui_thread()
 bool bind_qt_run_base::running_in_this_thread()
 {
 	return ui_tls::running_in_this_thread(this);
+}
+
+bool bind_qt_run_base::only_self()
+{
+	assert(running_in_this_thread());
+	return 1 == ui_tls::running_depth();
 }
 
 bool bind_qt_run_base::is_wait_close()

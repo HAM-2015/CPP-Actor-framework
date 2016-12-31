@@ -67,6 +67,7 @@ public:
 #endif
 public:
 	io_engine(bool enableTimer = true, const char* title = NULL);
+	io_engine(size_t poolSize, bool enableTimer = true, const char* title = NULL);
 	~io_engine();
 public:
 	/*!
@@ -165,6 +166,7 @@ private:
 	static void uninstall();
 private:
 	bool _opend;
+	size_t _poolSize;
 	shared_obj_pool<boost_strand>* _strandPool;
 #ifdef DISABLE_BOOST_TIMER
 #ifdef ENABLE_GLOBAL_TIMER

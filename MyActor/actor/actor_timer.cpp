@@ -119,11 +119,7 @@ void ActorTimer_::timer_loop(long long abs, long long rel)
 #else
 	boost::system::error_code ec;
 	((timer_type*)_timer)->expires_from_now(micseconds(rel), ec);
-#ifdef ENABLE_POST_FRONT
-	((timer_type*)_timer)->async_wait(_lockStrand->wrap_asio_front([this, tc](const boost::system::error_code&)
-#else
 	((timer_type*)_timer)->async_wait(_lockStrand->wrap_asio([this, tc](const boost::system::error_code&)
-#endif
 	{
 		event_handler(tc);
 	}));
@@ -134,11 +130,7 @@ void ActorTimer_::timer_loop(long long abs, long long rel)
 void ActorTimer_::post_event(int tc)
 {
 	assert(_lockStrand);
-#ifdef ENABLE_POST_FRONT
-	_lockStrand->post_front([this, tc]
-#else
 	_lockStrand->post([this, tc]
-#endif
 	{
 		event_handler(tc);
 		if (!_lockStrand)

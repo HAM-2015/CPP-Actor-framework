@@ -32,6 +32,7 @@ class uv_strand : public boost_strand
 		static uv_strand* pop_stack();
 		static uv_strand* pop_stack(uv_tls*);
 		static bool running_in_this_thread(uv_strand*);
+		static size_t running_depth();
 		static void init();
 		static void reset();
 
@@ -77,6 +78,7 @@ public:
 	shared_strand clone();
 	bool in_this_ios();
 	bool running_in_this_thread();
+	bool only_self();
 	bool sync_safe();
 	bool is_running();
 	void enter_wait_close();

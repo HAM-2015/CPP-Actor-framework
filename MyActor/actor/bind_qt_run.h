@@ -174,6 +174,7 @@ protected:
 		static bind_qt_run_base* pop_stack();
 		static bind_qt_run_base* pop_stack(ui_tls*);
 		static bool running_in_this_thread(bind_qt_run_base*);
+		static size_t running_depth();
 		static void init();
 		static void reset();
 
@@ -306,6 +307,11 @@ public:
 	@brief 检测现在是否运行在本UI的post任务下
 	*/
 	bool running_in_this_thread();
+
+	/*!
+	@brief 当前调用栈里是否只有当前ui
+	*/
+	bool only_self();
 
 	/*!
 	@brief 是否在等待关闭
@@ -540,6 +546,11 @@ public:
 	bool running_in_this_thread()
 	{
 		return bind_qt_run_base::running_in_this_thread();
+	}
+
+	bool only_self()
+	{
+		return bind_qt_run_base::only_self();
 	}
 
 	template <typename Handler>

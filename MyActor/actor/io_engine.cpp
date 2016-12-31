@@ -5,6 +5,85 @@
 #include "context_yield.h"
 #include "waitable_timer.h"
 
+#ifdef ASIO_HANDLER_ALLOCATE_EX
+
+#define ASIO_HANDLER_SPACE_SIZE (sizeof(void*)*16)
+typedef MemTlsNode_<char[ASIO_HANDLER_SPACE_SIZE]> handler_alloc1;
+typedef MemTlsNode_<char[ASIO_HANDLER_SPACE_SIZE * 2]> handler_alloc2;
+typedef MemTlsNode_<char[ASIO_HANDLER_SPACE_SIZE * 3]> handler_alloc3;
+typedef MemTlsNode_<char[ASIO_HANDLER_SPACE_SIZE * 4]> handler_alloc4;
+typedef ReuMemTls_ handler_reu_alloc;
+
+namespace boost
+{
+	namespace asio
+	{
+		void* asio_handler_allocate_ex(std::size_t size)
+		{
+			void* pointer = NULL;
+			void*** tls = (void***)io_engine::getTlsValueBuff();
+			if (tls && tls[ASIO_HANDLER_ALLOC_EX_INDEX])
+			{
+				void** const alloc = tls[ASIO_HANDLER_ALLOC_EX_INDEX];
+				switch (MEM_ALIGN(size + 1, ASIO_HANDLER_SPACE_SIZE) / ASIO_HANDLER_SPACE_SIZE)
+				{
+				case 1: pointer = !as_ptype<handler_alloc1>(alloc[0])->overflow() ? as_ptype<handler_alloc1>(alloc[0])->allocate() : NULL; break;
+				case 2: pointer = !as_ptype<handler_alloc2>(alloc[1])->overflow() ? as_ptype<handler_alloc2>(alloc[1])->allocate() : NULL; break;
+				case 3: pointer = !as_ptype<handler_alloc3>(alloc[2])->overflow() ? as_ptype<handler_alloc3>(alloc[2])->allocate() : NULL; break;
+				case 4: pointer = !as_ptype<handler_alloc4>(alloc[3])->overflow() ? as_ptype<handler_alloc4>(alloc[3])->allocate() : NULL; break;
+				}
+				if (pointer)
+				{
+					as_ptype<char>(pointer)[size] = 1;
+				}
+				else
+				{
+					pointer = as_ptype<handler_reu_alloc>(alloc[4])->allocate(size + 1);
+					as_ptype<char>(pointer)[size] = 2;
+				}
+			}
+			else
+			{
+				pointer = malloc(size + 1);
+				as_ptype<char>(pointer)[size] = 0;
+			}
+			return pointer;
+		}
+
+		void asio_handler_deallocate_ex(void* pointer, std::size_t size)
+		{
+			const char type = as_ptype<char>(pointer)[size];
+			if (type)
+			{
+				void*** tls = (void***)io_engine::getTlsValueBuff();
+				assert(tls && tls[ASIO_HANDLER_ALLOC_EX_INDEX]);
+				void** const alloc = tls[ASIO_HANDLER_ALLOC_EX_INDEX];
+				if (1 == type)
+				{
+					switch (MEM_ALIGN(size + 1, ASIO_HANDLER_SPACE_SIZE) / ASIO_HANDLER_SPACE_SIZE)
+					{
+					case 1: as_ptype<handler_alloc1>(alloc[0])->deallocate(pointer); break;
+					case 2: as_ptype<handler_alloc2>(alloc[1])->deallocate(pointer); break;
+					case 3: as_ptype<handler_alloc3>(alloc[2])->deallocate(pointer); break;
+					case 4: as_ptype<handler_alloc4>(alloc[3])->deallocate(pointer); break;
+					default: assert(false); break;
+					}
+				}
+				else
+				{
+					assert(2 == type);
+					as_ptype<handler_reu_alloc>(alloc[4])->deallocate(pointer, size + 1);
+				}
+			}
+			else
+			{
+				free(pointer);
+			}
+		}
+	}
+}
+#endif
+
 struct safe_stack_info
 {
 	wrap_local_handler_face<void()>* handler = NULL;
@@ -38,9 +117,13 @@ void io_engine::uninstall()
 }
 
 io_engine::io_engine(bool enableTimer, const char* title)
+:io_engine(MEM_POOL_LENGTH, enableTimer, title) {}
+
+io_engine::io_engine(size_t poolSize, bool enableTimer, const char* title)
 {
 	_opend = false;
 	_runLock = NULL;
+	_poolSize = poolSize > 4 ? poolSize : 4;
 	_title = title ? title : "io_engine";
 #ifdef WIN32
 	_priority = normal;
@@ -137,6 +220,17 @@ void io_engine::run(size_t threadNum, sched policy)
 					_tls->set_space(tlsBuff);
 					my_actor::tls_init(threadNum);
 					generator::tls_init(threadNum);
+#ifdef ASIO_HANDLER_ALLOCATE_EX
+					void* asioAll[5] =
+					{
+						new handler_alloc1(_poolSize),
+						new handler_alloc2(_poolSize / 2),
+						new handler_alloc3(_poolSize / 3),
+						new handler_alloc4(_poolSize / 4),
+						new handler_reu_alloc()
+					};
+					tlsBuff[ASIO_HANDLER_ALLOC_EX_INDEX] = asioAll;
+#endif
 					safe_stack_info safeStack;
 					setTlsValue(ACTOR_SAFE_STACK_INDEX, &safeStack);
 					safeStack.ctx = context_yield::make_context(MAX_STACKSIZE, [](context_yield::context_info* ctx, void* param)
@@ -157,6 +251,13 @@ void io_engine::run(size_t threadNum, sched policy)
 					my_actor::undump_segmentation_fault();
 #endif
 					context_yield::delete_context(safeStack.ctx);
+#ifdef ASIO_HANDLER_ALLOCATE_EX
+					delete (handler_alloc1*)asioAll[0];
+					delete (handler_alloc2*)asioAll[1];
+					delete (handler_alloc3*)asioAll[2];
+					delete (handler_alloc4*)asioAll[3];
+					delete (handler_reu_alloc*)asioAll[4];
+#endif
 					generator::tls_uninit();
 					my_actor::tls_uninit();
 					_tls->set_space(NULL);

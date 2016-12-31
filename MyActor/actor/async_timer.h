@@ -183,11 +183,11 @@ public:
 	template <typename Handler>
 	long long timeout(int ms, Handler&& handler)
 	{
-		return timeout_us((long long)ms * 1000, std::forward<Handler>(handler));
+		return utimeout((long long)ms * 1000, std::forward<Handler>(handler));
 	}
 
 	template <typename Handler>
-	long long timeout_us(long long us, Handler&& handler)
+	long long utimeout(long long us, Handler&& handler)
 	{
 		assert(self_strand()->running_in_this_thread());
 		assert(!_handler);
@@ -200,11 +200,11 @@ public:
 	template <typename Handler>
 	long long timeout2(int ms, Handler&& handler)
 	{
-		return timeout_us2((long long)ms * 1000, std::forward<Handler>(handler));
+		return utimeout2((long long)ms * 1000, std::forward<Handler>(handler));
 	}
 
 	template <typename Handler>
-	long long timeout_us2(long long us, Handler&& handler)
+	long long utimeout2(long long us, Handler&& handler)
 	{
 		assert(self_strand()->running_in_this_thread());
 		assert(!_handler);
@@ -245,17 +245,17 @@ public:
 	template <typename Handler>
 	void interval(int ms, Handler&& handler, bool immed = false)
 	{
-		interval_us((long long)ms * 1000, std::forward<Handler>(handler), immed);
+		uinterval((long long)ms * 1000, std::forward<Handler>(handler), immed);
 	}
 
 	template <typename Handler>
 	void interval2(int ms, Handler&& handler, bool immed = false)
 	{
-		interval_us2((long long)ms * 1000, std::forward<Handler>(handler), immed);
+		uinterval2((long long)ms * 1000, std::forward<Handler>(handler), immed);
 	}
 
 	template <typename Handler>
-	void interval_us(long long intervalus, Handler&& handler, bool immed = false)
+	void uinterval(long long intervalus, Handler&& handler, bool immed = false)
 	{
 		assert(self_strand()->running_in_this_thread());
 		assert(!_handler);
@@ -287,7 +287,7 @@ public:
 	}
 
 	template <typename Handler>
-	void interval_us2(long long intervalus, Handler&& handler, bool immed = false)
+	void uinterval2(long long intervalus, Handler&& handler, bool immed = false)
 	{
 		assert(self_strand()->running_in_this_thread());
 		assert(!_handler);
@@ -327,6 +327,11 @@ public:
 	@brief 提前本次计时触发，在依赖的strand线程中调用
 	*/
 	bool advance();
+
+	/*!
+	@brief 是否已经完成
+	*/
+	bool completed();
 
 	/*!
 	@brief 
@@ -410,12 +415,12 @@ public:
 		{
 			return _timestamp;
 		}
-	private:
-		bool is_null() const
+
+		bool completed()
 		{
 			return !_handler;
 		}
-
+	private:
 		void reset()
 		{
 			_timestamp = 0;
@@ -438,20 +443,20 @@ public:
 	template <typename Handler>
 	void timeout(int ms, timer_handle& timerHandle, Handler&& handler)
 	{
-		timeout_us((long long)ms * 1000, timerHandle, std::forward<Handler>(handler));
+		utimeout((long long)ms * 1000, timerHandle, std::forward<Handler>(handler));
 	}
 
 	template <typename Handler>
 	void timeout2(int ms, timer_handle& timerHandle, Handler&& handler)
 	{
-		timeout_us2((long long)ms * 1000, timerHandle, std::forward<Handler>(handler));
+		utimeout2((long long)ms * 1000, timerHandle, std::forward<Handler>(handler));
 	}
 
 	template <typename Handler>
-	void timeout_us(long long us, timer_handle& timerHandle, Handler&& handler)
+	void utimeout(long long us, timer_handle& timerHandle, Handler&& handler)
 	{
 		assert(_weakStrand.lock()->running_in_this_thread());
-		assert(timerHandle.is_null());
+		assert(timerHandle.completed());
 		timerHandle._isInterval = false;
 		timerHandle._handler = AsyncTimer_::wrap_timer_handler(_reuMem, std::bind([&timerHandle](Handler& handler)
 		{
@@ -462,10 +467,10 @@ public:
 	}
 
 	template <typename Handler>
-	void timeout_us2(long long us, timer_handle& timerHandle, Handler&& handler)
+	void utimeout2(long long us, timer_handle& timerHandle, Handler&& handler)
 	{
 		assert(_weakStrand.lock()->running_in_this_thread());
-		assert(timerHandle.is_null());
+		assert(timerHandle.completed());
 		timerHandle._isInterval = false;
 		timerHandle._handler = AsyncTimer_::wrap_advance_timer_handler(_reuMem, std::bind([&timerHandle](bool isAdvance, Handler& handler)
 		{
@@ -482,7 +487,7 @@ public:
 	void deadline(long long us, timer_handle& timerHandle, Handler&& handler)
 	{
 		assert(_weakStrand.lock()->running_in_this_thread());
-		assert(timerHandle.is_null());
+		assert(timerHandle.completed());
 		timerHandle._isInterval = false;
 		timerHandle._handler = AsyncTimer_::wrap_timer_handler(_reuMem, std::bind([&timerHandle](Handler& handler)
 		{
@@ -496,7 +501,7 @@ public:
 	void deadline2(long long us, timer_handle& timerHandle, Handler&& handler)
 	{
 		assert(_weakStrand.lock()->running_in_this_thread());
-		assert(timerHandle.is_null());
+		assert(timerHandle.completed());
 		timerHandle._isInterval = false;
 		timerHandle._handler = AsyncTimer_::wrap_advance_timer_handler(_reuMem, std::bind([&timerHandle](bool isAdvance, Handler& handler)
 		{
@@ -512,20 +517,20 @@ public:
 	template <typename Handler>
 	void interval(int ms, timer_handle& timerHandle, Handler&& handler, bool immed = false)
 	{
-		interval_us((long long)ms * 1000, timerHandle, std::forward<Handler>(handler), immed);
+		uinterval((long long)ms * 1000, timerHandle, std::forward<Handler>(handler), immed);
 	}
 
 	template <typename Handler>
 	void interval2(int ms, timer_handle& timerHandle, Handler&& handler, bool immed = false)
 	{
-		interval_us2((long long)ms * 1000, timerHandle, std::forward<Handler>(handler), immed);
+		uinterval2((long long)ms * 1000, timerHandle, std::forward<Handler>(handler), immed);
 	}
 
 	template <typename Handler>
-	void interval_us(long long intervalus, timer_handle& timerHandle, Handler&& handler, bool immed = false)
+	void uinterval(long long intervalus, timer_handle& timerHandle, Handler&& handler, bool immed = false)
 	{
 		assert(self_strand()->running_in_this_thread());
-		assert(timerHandle.is_null());
+		assert(timerHandle.completed());
 		timerHandle._isInterval = true;
 		long long const deadtime = get_tick_us() + intervalus;
 		timerHandle._handler = AsyncTimer_::wrap_interval_timer_handler(_reuMem, std::bind([this, &timerHandle, intervalus](AsyncTimer_::wrap_base* const thisHandler, long long& deadtime)
@@ -554,10 +559,10 @@ public:
 	}
 
 	template <typename Handler>
-	void interval_us2(long long intervalus, timer_handle& timerHandle, Handler&& handler, bool immed = false)
+	void uinterval2(long long intervalus, timer_handle& timerHandle, Handler&& handler, bool immed = false)
 	{
 		assert(self_strand()->running_in_this_thread());
-		assert(timerHandle.is_null());
+		assert(timerHandle.completed());
 		timerHandle._isInterval = true;
 		long long const deadtime = get_tick_us() + intervalus;
 		timerHandle._handler = AsyncTimer_::wrap_advance_interval_timer_handler(_reuMem, std::bind([this, &timerHandle, intervalus](bool isAdvance, AsyncTimer_::wrap_base* const thisHandler, long long& deadtime)

@@ -85,6 +85,17 @@ bool uv_strand::uv_tls::running_in_this_thread(uv_strand* s)
 	return false;
 }
 
+size_t uv_strand::uv_tls::running_depth()
+{
+	size_t dp = 0;
+	void** const tlsBuff = io_engine::getTlsValueBuff();
+	if (tlsBuff && tlsBuff[UV_TLS_INDEX])
+	{
+		uv_tls* uvTls = (uv_tls*)tlsBuff[UV_TLS_INDEX];
+		dp = uvTls->_uvStack.size();
+	}
+	return dp;
+}
 //////////////////////////////////////////////////////////////////////////
 
 uv_strand::uv_strand()
@@ -171,6 +182,12 @@ bool uv_strand::running_in_this_thread()
 {
 	assert(_uvLoop);
 	return uv_tls::running_in_this_thread(this);
+}
+
+bool uv_strand::only_self()
+{
+	assert(running_in_this_thread());
+	return 1 == uv_tls::running_depth();
 }
 
 bool uv_strand::sync_safe()

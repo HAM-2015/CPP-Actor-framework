@@ -36,11 +36,7 @@ namespace boost
 			template <>
 			void boost::asio::detail::strand_service::post(boost::asio::detail::strand_service::implementation_type& impl, get_impl_waiting_empty_strand_ex& fh)
 			{
-#ifdef ENABLE_POST_FRONT
-				fh._empty = impl->waiting_queue_.empty() && impl->front_queue_.empty();
-#else
 				fh._empty = impl->waiting_queue_.empty();
-#endif
 			}
 
 			template <>
@@ -108,4 +104,14 @@ bool StrandEx_::safe_running() const
 	get_impl_safe_running_strand_ex t;
 	_service.post((boost::asio::detail::strand_service::implementation_type&)_impl, t);
 	return t._running;
+}
+
+bool StrandEx_::only_self() const
+{
+	assert(running_in_this_thread());
+#ifdef ASIO_CALL_STACK_DEPTH
+	return 1 == boost::asio::detail::call_stack<boost::asio::detail::strand_service::strand_impl>::stack_depth();
+#else
+	return true;
+#endif
 }

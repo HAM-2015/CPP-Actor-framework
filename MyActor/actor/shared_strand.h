@@ -24,8 +24,6 @@ class overlap_timer;
 class boost_strand;
 typedef std::shared_ptr<boost_strand> shared_strand;
 
-#define NEXT_TICK_SPACE_SIZE (sizeof(void*)*8)
-
 #ifdef ENABLE_NEXT_TICK
 
 #define RUN_HANDLER handler_capture<RM_CREF(Handler)>(std::forward<Handler>(handler), this)
@@ -55,28 +53,6 @@ else\
 {\
 	dispatch_choose(std::forward<Handler>(handler)); \
 };
-
-#ifdef ENABLE_POST_FRONT
-#define CHOOSE_POST_FRONT()\
-if (_strand)\
-{\
-	_strand->post_front(RUN_HANDLER); \
-}\
-else\
-{\
-	post_choose(std::forward<Handler>(handler)); \
-};
-
-#define CHOOSE_DISPATCH_FRONT()\
-if (_strand)\
-{\
-	_strand->dispatch_front(RUN_HANDLER); \
-}\
-else\
-{\
-	dispatch_choose(std::forward<Handler>(handler)); \
-};
-#endif //ENABLE_POST_FRONT
 
 #ifdef ENABLE_NEXT_TICK
 
@@ -304,51 +280,6 @@ public:
 #endif
 	}
 
-#ifdef ENABLE_POST_FRONT
-	/*!
-	@brief 如果在本strand中调用则直接执行，否则添加到队列头部等待执行
-	@param handler 被调用函数
-	*/
-	template <typename Handler>
-	void distribute_front(Handler&& handler)
-	{
-		if (running_in_this_thread())
-		{
-			handler();
-		}
-		else
-		{
-			post_front(std::forward<Handler>(handler));
-		}
-	}
-
-	/*!
-	@brief 如果当前strand没任务就直接执行，否则添加到队列头部等待执行
-	*/
-	template <typename Handler>
-	void dispatch_front(Handler&&  handler)
-	{
-#if (ENABLE_QT_ACTOR || ENABLE_UV_ACTOR)
-		CHOOSE_DISPATCH_FRONT();
-#else
-		_strand->dispatch_front(RUN_HANDLER);
-#endif
-	}
-
-	/*!
-	@brief 添加一个任务到 strand 等待队列头部
-	*/
-	template <typename Handler>
-	void post_front(Handler&& handler)
-	{
-#if (ENABLE_QT_ACTOR || ENABLE_UV_ACTOR)
-		CHOOSE_POST_FRONT();
-#else
-		_strand->post_front(RUN_HANDLER);
-#endif
-	}
-#endif //ENABLE_POST_FRONT
-
 	/*!
 	@brief 添加一个任务到 tick 队列
 	*/
@@ -445,71 +376,6 @@ public:
 		return wrapped_post_handler<boost_strand, RM_CREF(Handler), true>(this, std::forward<Handler>(handler));
 	}
 
-#ifdef ENABLE_POST_FRONT
-	/*!
-	@brief 把被调用函数包装到dispatch_front中，用于不同strand间消息传递
-	*/
-	template <typename Handler>
-	wrapped_dispatch_front_handler<boost_strand, RM_CREF(Handler)> wrap_asio_front(Handler&& handler)
-	{
-		return wrapped_dispatch_front_handler<boost_strand, RM_CREF(Handler)>(this, std::forward<Handler>(handler));
-	}
-
-	/*!
-	@brief 把被调用函数包装到dispatch_front中，用于不同strand间消息传递，调用后参数将强制被右值引用，且只能调用一次
-	*/
-	template <typename Handler>
-	wrapped_dispatch_front_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_asio_front(Handler&& handler)
-	{
-		return wrapped_dispatch_front_handler<boost_strand, RM_CREF(Handler), true>(this, std::forward<Handler>(handler));
-	}
-
-	/*!
-	@brief 把被调用函数包装到distribute_front中，用于不同strand间消息传递
-	*/
-	template <typename Handler>
-	wrapped_distribute_front_handler<boost_strand, RM_CREF(Handler)> wrap_front(Handler&& handler)
-	{
-		return wrapped_distribute_front_handler<boost_strand, RM_CREF(Handler)>(this, std::forward<Handler>(handler));
-	}
-
-	/*!
-	@brief 把被调用函数包装到distribute_front中，用于不同strand间消息传递，调用后参数将强制被右值引用，且只能调用一次
-	*/
-	template <typename Handler>
-	wrapped_distribute_front_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_front(Handler&& handler)
-	{
-		return wrapped_distribute_front_handler<boost_strand, RM_CREF(Handler), true>(this, std::forward<Handler>(handler));
-	}
-
-	/*!
-	@brief 把被调用函数包装到post_front中
-	*/
-	template <typename Handler>
-	wrapped_post_front_handler<boost_strand, RM_CREF(Handler)> wrap_post_front(Handler&& handler)
-	{
-		return wrapped_post_front_handler<boost_strand, RM_CREF(Handler)>(this, std::forward<Handler>(handler));
-	}
-
-	/*!
-	@brief 把被调用函数包装到post_front中，并且锁定ios，直到释放通知函数包
-	*/
-	template <typename Handler>
-	wrapped_hold_work_post_front_handler<boost_strand, RM_CREF(Handler)> wrap_hold_post_front(Handler&& handler)
-	{
-		return wrapped_hold_work_post_front_handler<boost_strand, RM_CREF(Handler)>(get_io_service(), this, std::forward<Handler>(handler));
-	}
-
-	/*!
-	@brief 把被调用函数包装到post_front中，调用后参数将强制被右值引用，且只能调用一次
-	*/
-	template <typename Handler>
-	wrapped_post_front_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_post_front(Handler&& handler)
-	{
-		return wrapped_post_front_handler<boost_strand, RM_CREF(Handler), true>(this, std::forward<Handler>(handler));
-	}
-#endif //ENABLE_POST_FRONT
-
 	/*!
 	@brief 把被调用函数包装到tick中
 	*/
@@ -566,6 +432,11 @@ public:
 	@brief 依赖的ios调度器运行线程数
 	*/
 	size_t ios_thread_number();
+
+	/*!
+	@brief 调用栈里只有当前strand
+	*/
+	virtual bool only_self();
 
 	/*!
 	@brief 判断是否在本strand中运行

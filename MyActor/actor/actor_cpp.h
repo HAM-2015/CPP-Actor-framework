@@ -15,6 +15,7 @@ DISABLE_HIGH_TIMER 禁用high_resolution_timer计时，将启用deadline_timer计时
 DISABLE_BOOST_TIMER 禁用boost计时器，用waitable_timer计时
 ENABLE_GLOBAL_TIMER 启用全局定时器(DISABLE_BOOST_TIMER下使用)
 ENABLE_TLS_CHECK_SELF 启用TLS技术检测当前代码运行在哪个Actor下
+ENABLE_ASIO_HANDLER_ALLOCATE_EX 启用asio handler扩展分配器
 
 */
 

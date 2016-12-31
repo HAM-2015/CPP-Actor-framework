@@ -228,29 +228,15 @@ const shared_strand& generator::self_strand()
 
 void generator::_co_next()
 {
-	if (_strand->running_in_this_thread())
+	assert(_strand->running_in_this_thread());
+	if (__ctx)
 	{
-		if (__ctx)
-		{
-			assert(!__asyncSign);
-			_next();
-		}
-		else
-		{
-			_sharedThis.reset();
-		}
+		assert(!__asyncSign);
+		_next();
 	}
 	else
 	{
-		_strand->post(std::bind([](generator_handle& host)
-		{
-			generator* const host_ = host.get();
-			if (host_->__ctx)
-			{
-				assert(!host_->__asyncSign);
-				host_->_revert_this(host)->_next();
-			}
-		}, std::move(_sharedThis)));
+		_sharedThis.reset();
 	}
 }
 
@@ -312,6 +298,7 @@ void generator::_co_asio_next()
 {
 	_strand->dispatch(std::bind([](generator_handle& host)
 	{
+		assert(host->_strand->only_self());
 		generator* const host_ = host.get();
 		if (host_->__ctx)
 		{

@@ -191,6 +191,11 @@ struct mem_alloc_mt : protected MUTEX, public mem_alloc_face
 		assert(0 == _nodeCount);
 	}
 
+	bool overflow()
+	{
+		return _nodeCount + _freeNumber > _poolMaxSize;
+	}
+
 	void* allocate()
 	{
 		{
@@ -317,6 +322,11 @@ struct mem_alloc_mt2 : protected MUTEX, public mem_alloc_face
 		}
 		free(_pblock);
 		assert(0 == _nodeCount);
+	}
+
+	bool overflow()
+	{
+		return _nodeCount + _freeNumber > _poolMaxSize;
 	}
 
 	void* allocate()
@@ -458,6 +468,7 @@ struct MemTlsNode_
 
 	MemTlsNode_(size_t poolSize)
 	{
+		_freeNumber = 0;
 		_nodeCount = 0;
 		_poolMaxSize = poolSize;
 		_pool = NULL;
@@ -473,9 +484,15 @@ struct MemTlsNode_
 		}
 	}
 
+	bool overflow()
+	{
+		return _nodeCount + _freeNumber > _poolMaxSize;
+	}
+
 	void* allocate()
 	{
 		{
+			_freeNumber++;
 			if (_pool)
 			{
 				_nodeCount--;
@@ -496,6 +513,7 @@ struct MemTlsNode_
 		space->check_head();
 		space->set_bf();
 		{
+			_freeNumber--;
 			if (_nodeCount < _poolMaxSize)
 			{
 				_nodeCount++;
@@ -508,8 +526,61 @@ struct MemTlsNode_
 	}
 
 	node_space* _pool;
+	size_t _freeNumber;
 	size_t _nodeCount;
 	size_t _poolMaxSize;
+};
+
+struct ReuMemTls_
+{
+	struct node
+	{
+		size_t _size;
+		node* _next;
+	};
+public:
+	ReuMemTls_()
+	{
+		_top = NULL;
+	}
+
+	~ReuMemTls_()
+	{
+		while (_top)
+		{
+			void* p = _top;
+			_top = _top->_next;
+			free(p);
+		}
+	}
+
+	void* allocate(size_t size)
+	{
+		void* freeMem = NULL;
+		{
+			if (_top)
+			{
+				node* p = _top;
+				_top = _top->_next;
+				if (p->_size >= size)
+				{
+					return p;
+				}
+				free(p);
+			}
+		}
+		return malloc(size > sizeof(node) ? size : sizeof(node));
+	}
+
+	void deallocate(void* p, size_t size)
+	{
+		node* dp = (node*)p;
+		dp->_size = size;
+		dp->_next = _top;
+		_top = dp;
+	}
+private:
+	node* _top;
 };
 
 struct MemAllocTls_
@@ -715,6 +786,11 @@ struct dymem_alloc_mt : protected MUTEX, public mem_alloc_face
 		assert(0 == _nodeCount);
 	}
 
+	bool overflow()
+	{
+		return _nodeCount + _freeNumber > _poolMaxSize;
+	}
+
 	void* allocate()
 	{
 		{
@@ -848,7 +924,6 @@ struct dymem_alloc : public dymem_alloc_mt<null_mutex>
 template <typename MUTEX = std::mutex>
 class reusable_mem_mt : protected MUTEX
 {
-#pragma pack(push, 1)
 	struct node
 	{
 		size_t _size;
@@ -858,7 +933,6 @@ class reusable_mem_mt : protected MUTEX
 			void* _addr[1];
 		};
 	};
-#pragma pack(pop)
 public:
 	reusable_mem_mt()
 	{

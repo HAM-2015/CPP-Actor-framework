@@ -65,4 +65,9 @@ bool qt_strand::is_running()
 {
 	return true;
 }
+
+bool qt_strand::only_self()
+{
+	return _ui->only_self();
+}
 #endif

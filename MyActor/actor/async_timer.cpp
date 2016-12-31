@@ -60,6 +60,12 @@ bool AsyncTimer_::advance()
 	return false;
 }
 
+bool AsyncTimer_::completed()
+{
+	assert(self_strand()->running_in_this_thread());
+	return !_handler;
+}
+
 shared_strand AsyncTimer_::self_strand()
 {
 	return _actorTimer->_weakStrand.lock();
@@ -174,7 +180,7 @@ void overlap_timer::_cancel(timer_handle& timerHandle)
 void overlap_timer::cancel(timer_handle& timerHandle)
 {
 	assert(_weakStrand.lock()->running_in_this_thread());
-	if (!timerHandle.is_null())
+	if (!timerHandle.completed())
 	{//删除当前定时器节点
 		assert(_lockStrand);
 		_cancel(timerHandle);
@@ -186,7 +192,7 @@ void overlap_timer::cancel(timer_handle& timerHandle)
 bool overlap_timer::advance(timer_handle& timerHandle)
 {
 	assert(_weakStrand.lock()->running_in_this_thread());
-	if (!timerHandle.is_null())
+	if (!timerHandle.completed())
 	{
 		assert(_lockStrand);
 		if (!timerHandle._isInterval)
@@ -220,11 +226,7 @@ void overlap_timer::timer_loop(long long abs, long long rel)
 #else
 	boost::system::error_code ec;
 	((timer_type*)_timer)->expires_from_now(micseconds(rel), ec);
-#ifdef ENABLE_POST_FRONT
-	((timer_type*)_timer)->async_wait(_lockStrand->wrap_asio_front([this, tc](const boost::system::error_code&)
-#else
 	((timer_type*)_timer)->async_wait(_lockStrand->wrap_asio([this, tc](const boost::system::error_code&)
-#endif
 	{
 		event_handler(tc);
 	}));
@@ -235,11 +237,7 @@ void overlap_timer::timer_loop(long long abs, long long rel)
 void overlap_timer::post_event(int tc)
 {
 	assert(_lockStrand);
-#ifdef ENABLE_POST_FRONT
-	_lockStrand->post_front([this, tc]
-#else
 	_lockStrand->post([this, tc]
-#endif
 	{
 		event_handler(tc);
 		if (!_lockStrand)

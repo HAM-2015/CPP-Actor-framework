@@ -26,6 +26,7 @@ private:
 	bool running_in_this_thread();
 	bool sync_safe();
 	bool is_running();
+	bool only_self();
 	template <typename Handler>
 	void _dispatch_ui(Handler&& handler);
 	template <typename Handler>
