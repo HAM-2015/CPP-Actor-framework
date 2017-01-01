@@ -139,8 +139,6 @@ bind_qt_run_base::bind_qt_run_base()
 {
 	DEBUG_OPERATION(_taskCount = 0);
 	_threadID = run_thread::this_thread_id();
-	_readyQueue = new msg_queue<wrap_handler_face*>(32);
-	_waitQueue = new msg_queue<wrap_handler_face*>(32);
 	ui_tls::init();
 }
 
@@ -154,10 +152,8 @@ bind_qt_run_base::~bind_qt_run_base()
 	assert(!_eventLoop);
 	assert(!_checkCloseHandler);
 	assert(!_locked);
-	assert(_readyQueue->empty());
-	assert(_waitQueue->empty());
-	delete _readyQueue;
-	delete _waitQueue;
+	assert(_readyQueue.empty());
+	assert(_waitQueue.empty());
 	if (_qtStrand)
 	{
 		_qtStrand->release();
@@ -230,13 +226,13 @@ void bind_qt_run_base::append_task(wrap_handler_face* h)
 	_queueMutex.lock();
 	if (_locked)
 	{
-		_waitQueue->push_back(h);
+		_waitQueue.push_back(h);
 		_queueMutex.unlock();
 	}
 	else
 	{
 		_locked = true;
-		_readyQueue->push_back(h);
+		_readyQueue.push_back(h);
 		_queueMutex.unlock();
 		post_task_event();
 	}
@@ -247,17 +243,16 @@ void bind_qt_run_base::run_one_task()
 	ui_tls* uiTls = ui_tls::push_stack(this);
 	do
 	{
-		while (!_readyQueue->empty())
+		while (!_readyQueue.empty())
 		{
-			wrap_handler_face* h = _readyQueue->front();
-			_readyQueue->pop_front();
+			wrap_handler_face* h = static_cast<wrap_handler_face*>(_readyQueue.pop_front());
 			h->invoke();
 			_reuMem.deallocate(h);
 		}
 		_queueMutex.lock();
-		if (!_waitQueue->empty())
+		if (!_waitQueue.empty())
 		{
-			std::swap(_readyQueue, _waitQueue);
+			_waitQueue.swap(_readyQueue);
 			_queueMutex.unlock();
 			if (is_wait_close())
 			{

@@ -108,8 +108,6 @@ uv_strand::uv_strand()
 	_waitClose = false;
 	_uvReq = new uv_work_t;
 	_uvReq->data = NULL;
-	_readyQueue = new msg_queue<wrap_handler_face*>(32);
-	_waitQueue = new msg_queue<wrap_handler_face*>(32);
 #if (ENABLE_QT_ACTOR && ENABLE_UV_ACTOR)
 	_strandChoose = boost_strand::strand_uv;
 #endif
@@ -142,8 +140,8 @@ void uv_strand::release()
 	assert(!_doRunSign);
 	assert(!_waitClose);
 	assert(!_waitCount);
-	assert(_readyQueue->empty());
-	assert(_waitQueue->empty());
+	assert(_readyQueue.empty());
+	assert(_waitQueue.empty());
 	if (_uvReq->data)
 	{
 		_uvReq->data = NULL;
@@ -154,10 +152,6 @@ void uv_strand::release()
 	}
 	_uvReq = NULL;
 	_uvLoop = NULL;
-	delete _readyQueue;
-	delete _waitQueue;
-	_readyQueue = NULL;
-	_waitQueue = NULL;
 	uv_tls::reset();
 }
 
@@ -227,13 +221,13 @@ void uv_strand::append_task(wrap_handler_face* h)
 		std::lock_guard<std::mutex> lg(_queueMutex);
 		if (_locked)
 		{
-			_waitQueue->push_back(h);
+			_waitQueue.push_back(h);
 			return;
 		}
 		else
 		{
 			_locked = true;
-			_readyQueue->push_back(h);
+			_readyQueue.push_back(h);
 			if (_doRunWait)
 			{
 				_doRunWait = false;
@@ -248,17 +242,16 @@ void uv_strand::append_task(wrap_handler_face* h)
 void uv_strand::run_one_task()
 {
 	uv_tls* uvTls = uv_tls::push_stack(this);
-	while (!_readyQueue->empty())
+	while (!_readyQueue.empty())
 	{
-		wrap_handler_face* h = _readyQueue->front();
-		_readyQueue->pop_front();
+		wrap_handler_face* h = static_cast<wrap_handler_face*>(_readyQueue.pop_front());
 		h->invoke();
 		_reuMem.deallocate(h);
 	}
 	_queueMutex.lock();
-	if (!_waitQueue->empty())
+	if (!_waitQueue.empty())
 	{
-		std::swap(_readyQueue, _waitQueue);
+		_waitQueue.swap(_readyQueue);
 		_queueMutex.unlock();
 		post_task_event();
 	}
@@ -280,19 +273,18 @@ void uv_strand::enter_wait_close()
 	}
 	uv_tls* uvTls = uv_tls::push_stack(this);
 	_waitClose = true;
-	do 
+	do
 	{
-		while (!_readyQueue->empty())
+		while (!_readyQueue.empty())
 		{
-			wrap_handler_face* h = _readyQueue->front();
-			_readyQueue->pop_front();
+			wrap_handler_face* h = static_cast<wrap_handler_face*>(_readyQueue.pop_front());
 			h->invoke();
 			_reuMem.deallocate(h);
 		}
 		std::unique_lock<std::mutex> ul(_queueMutex);
-		if (!_waitQueue->empty())
+		if (!_waitQueue.empty())
 		{
-			std::swap(_readyQueue, _waitQueue);
+			_waitQueue.swap(_readyQueue);
 		}
 		else if (!_doRunSign)
 		{

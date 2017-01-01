@@ -60,8 +60,8 @@ else\
 	typedef wrap_next_tick_handler<RM_CREF(Handler), true> wrap_tick_type1; \
 	typedef wrap_next_tick_handler<RM_CREF(Handler), false> wrap_tick_type2; \
 	void* const space = alloc_space(sizeof(wrap_tick_type1)); \
-	if (space) _backTickQueue->push_back(new(space)wrap_tick_type1(std::forward<Handler>(handler))); \
-	else _backTickQueue->push_back(new(_reuMemAlloc->allocate(sizeof(wrap_tick_type2)))wrap_tick_type2(std::forward<Handler>(handler)));
+	if (space) push_next_tick(new(space)wrap_tick_type1(std::forward<Handler>(handler))); \
+	else push_next_tick(new(_reuMemAlloc->allocate(sizeof(wrap_tick_type2)))wrap_tick_type2(std::forward<Handler>(handler)));
 
 #else //ENABLE_NEXT_TICK
 
@@ -115,7 +115,7 @@ class boost_strand
 		void operator =(const handler_capture&) = delete;
 	};
 
-	struct wrap_next_tick_face
+	struct wrap_next_tick_face : public op_queue::face
 	{
 		virtual size_t invoke() = 0;
 	};
@@ -541,13 +541,14 @@ protected:
 #ifdef ENABLE_NEXT_TICK
 	bool ready_empty();
 	bool waiting_empty();
+	void push_next_tick(op_queue::face* handler);
 	void run_tick_front();
 	void run_tick_back();
 	size_t _thisRoundCount;
 	reusable_mem* _reuMemAlloc;
 	mem_alloc_base* _nextTickAlloc[3];
-	msg_queue<wrap_next_tick_face*, mem_alloc2<>>* _backTickQueue;
-	msg_queue<wrap_next_tick_face*, mem_alloc2<>>* _frontTickQueue;
+	op_queue _backTickQueue;
+	op_queue _frontTickQueue;
 #endif //ENABLE_NEXT_TICK
 protected:
 #if (ENABLE_QT_ACTOR && ENABLE_UV_ACTOR)

@@ -304,7 +304,6 @@ public:
 			_tail = newNode;
 		}
 		_size++;
-		return newNode;
 	}
 
 	T& front()
@@ -345,6 +344,129 @@ private:
 	node* _head;
 	node* _tail;
 	size_t _size;
+};
+
+class op_queue
+{
+public:
+	struct face
+	{
+		friend op_queue;
+	private:
+		face* _next;
+	};
+
+	op_queue()
+		:_head(NULL), _tail(NULL) {}
+
+	~op_queue()
+	{
+		assert(empty());
+	}
+public:
+	void push_back(face* newFace)
+	{
+		newFace->_next = NULL;
+		if (!_head)
+		{
+			_head = newFace;
+		}
+		else
+		{
+			_tail->_next = newFace;
+		}
+		_tail = newFace;
+	}
+
+	void push_front(face* newFace)
+	{
+		newFace->_next = _head;
+		_head = newFace;
+		if (!_tail)
+		{
+			_tail = newFace;
+		}
+	}
+
+	void push_back(op_queue& other)
+	{
+		if (this != &other)
+		{
+			if (!_head)
+			{
+				_head = other._head;
+				_tail = other._tail;
+				other._head = other._tail = NULL;
+			}
+			else if (other._head)
+			{
+				_tail->_next = other._head;
+				_tail = other._tail;
+				other._head = other._tail = NULL;
+			}
+		}
+	}
+
+	void push_front(op_queue& other)
+	{
+		if (this != &other)
+		{
+			if (!_head)
+			{
+				_head = other._head;
+				_tail = other._tail;
+				other._head = other._tail = NULL;
+			}
+			else if (other._head)
+			{
+				other._tail->_next = _head;
+				_head = other._head;
+				other._head = other._tail = NULL;
+			}
+		}
+	}
+
+	void swap(op_queue& other)
+	{
+		face* t1 = other._head;
+		face* t2 = other._tail;
+		other._head = _head;
+		other._tail = _tail;
+		_head = t1;
+		_tail = t2;
+	}
+
+	face* front()
+	{
+		assert(_head);
+		return _head;
+	}
+
+	face* back()
+	{
+		assert(_tail);
+		return _tail;
+	}
+
+	face* pop_front()
+	{
+		assert(_head);
+		face* frontFace = _head;
+		_head = _head->_next;
+		if (!_head)
+		{
+			_tail = NULL;
+		}
+		return frontFace;
+	}
+
+	bool empty()
+	{
+		return !_head;
+	}
+private:
+	face* _head;
+	face* _tail;
 };
 //////////////////////////////////////////////////////////////////////////
 

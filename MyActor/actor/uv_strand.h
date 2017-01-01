@@ -41,7 +41,7 @@ class uv_strand : public boost_strand
 		int _count;
 	};
 
-	struct wrap_handler_face
+	struct wrap_handler_face : public op_queue::face
 	{
 		virtual void invoke() = 0;
 	};
@@ -168,8 +168,8 @@ private:
 	reusable_mem_mt<> _reuMem;
 	std::mutex _queueMutex;
 	std::condition_variable _doRunConVar;
-	msg_queue<wrap_handler_face*>* _waitQueue;
-	msg_queue<wrap_handler_face*>* _readyQueue;
+	op_queue _waitQueue;
+	op_queue _readyQueue;
 	int _waitCount;
 	bool _doRunSign;
 	bool _waitClose;

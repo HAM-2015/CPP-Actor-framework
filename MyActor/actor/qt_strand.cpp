@@ -68,6 +68,7 @@ bool qt_strand::is_running()
 
 bool qt_strand::only_self()
 {
+	assert(_ui);
 	return _ui->only_self();
 }
 #endif

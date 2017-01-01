@@ -183,7 +183,7 @@ protected:
 		int _count;
 	};
 
-	struct wrap_handler_face
+	struct wrap_handler_face : public op_queue::face
 	{
 		virtual void invoke() = 0;
 	};
@@ -498,8 +498,8 @@ private:
 	std::mutex _checkTimedMutex;
 	std::mutex _queueMutex;
 	wrap_handler_face* _checkCloseHandler;
-	msg_queue<wrap_handler_face*>* _waitQueue;
-	msg_queue<wrap_handler_face*>* _readyQueue;
+	op_queue _waitQueue;
+	op_queue _readyQueue;
 	shared_qt_strand _qtStrand;
 protected:
 	DEBUG_OPERATION(std::atomic<size_t> _taskCount);

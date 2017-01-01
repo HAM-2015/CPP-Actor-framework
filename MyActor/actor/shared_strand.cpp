@@ -9,8 +9,6 @@ boost_strand::boost_strand()
 #ifdef ENABLE_NEXT_TICK
 ,_thisRoundCount(0)
 ,_reuMemAlloc(NULL)
-,_frontTickQueue(NULL)
-,_backTickQueue(NULL)
 #endif //ENABLE_NEXT_TICK
 #if (ENABLE_QT_ACTOR && ENABLE_UV_ACTOR)
 ,_strandChoose(strand_default)
@@ -26,15 +24,13 @@ boost_strand::boost_strand()
 boost_strand::~boost_strand()
 {
 #ifdef ENABLE_NEXT_TICK
-	assert(!_frontTickQueue || _frontTickQueue->empty());
-	assert(!_backTickQueue || _backTickQueue->empty());
+	assert(_frontTickQueue.empty());
+	assert(_backTickQueue.empty());
 	assert(!_strand || (ready_empty() && waiting_empty()));
 	delete _nextTickAlloc[0];
 	delete _nextTickAlloc[1];
 	delete _nextTickAlloc[2];
 	delete _reuMemAlloc;
-	delete _frontTickQueue;
-	delete _backTickQueue;
 #endif //ENABLE_NEXT_TICK
 	delete _actorTimer;
 	delete _overTimer;
@@ -54,8 +50,6 @@ shared_strand boost_strand::create(io_engine& ioEngine)
 		res->_nextTickAlloc[0] = new mem_alloc2<char[NEXT_TICK_SPACE_SIZE]>(ioEngine._poolSize);
 		res->_nextTickAlloc[1] = new mem_alloc2<char[NEXT_TICK_SPACE_SIZE * 2]>(ioEngine._poolSize / 2);
 		res->_nextTickAlloc[2] = new mem_alloc2<char[NEXT_TICK_SPACE_SIZE * 4]>(ioEngine._poolSize / 4);
-		res->_frontTickQueue = new msg_queue<wrap_next_tick_face*, mem_alloc2<>>(ioEngine._poolSize);
-		res->_backTickQueue = new msg_queue<wrap_next_tick_face*, mem_alloc2<>>(ioEngine._poolSize);
 #endif
 		res->_actorTimer = new ActorTimer_(res);
 		res->_overTimer = new overlap_timer(res);
@@ -132,7 +126,7 @@ bool boost_strand::empty(bool checkTick)
 	assert(_strand);
 	assert(running_in_this_thread());
 #ifdef ENABLE_NEXT_TICK
-	return _strand->empty() && (checkTick ? _frontTickQueue->empty() && _backTickQueue->empty() : true);
+	return _strand->empty() && (checkTick ? _frontTickQueue.empty() && _backTickQueue.empty() : true);
 #else
 	return _strand->empty();
 #endif
@@ -204,16 +198,20 @@ bool boost_strand::waiting_empty()
 	return _strand->waiting_empty();
 }
 
+void boost_strand::push_next_tick(op_queue::face* handler)
+{
+	_backTickQueue.push_back(handler);
+}
+
 void boost_strand::run_tick_front()
 {
 	if (_thisRoundCount)
 	{
 		return;
 	}
-	while (!_frontTickQueue->empty())
+	while (!_frontTickQueue.empty())
 	{
-		wrap_next_tick_face* const tick = _frontTickQueue->front();
-		_frontTickQueue->pop_front();
+		wrap_next_tick_face* const tick = static_cast<wrap_next_tick_face*>(_frontTickQueue.pop_front());
 		const size_t spaceSize = tick->invoke();
 		switch (MEM_ALIGN(spaceSize, NEXT_TICK_SPACE_SIZE) / NEXT_TICK_SPACE_SIZE)
 		{
@@ -234,10 +232,9 @@ void boost_strand::run_tick_back()
 	}
 	size_t tickCount = _thisRoundCount;
 	_thisRoundCount = 0;
-	while (!_backTickQueue->empty() && tickCount--)
+	while (!_backTickQueue.empty() && tickCount--)
 	{
-		wrap_next_tick_face* const tick = _backTickQueue->front();
-		_backTickQueue->pop_front();
+		wrap_next_tick_face* const tick = static_cast<wrap_next_tick_face*>(_backTickQueue.pop_front());
 		const size_t spaceSize = tick->invoke();
 		switch (MEM_ALIGN(spaceSize, NEXT_TICK_SPACE_SIZE) / NEXT_TICK_SPACE_SIZE)
 		{
@@ -247,10 +244,10 @@ void boost_strand::run_tick_back()
 		default: _reuMemAlloc->deallocate(tick); break;
 		}
 	}
-	if (!_backTickQueue->empty())
+	if (!_backTickQueue.empty())
 	{
-		std::swap(_frontTickQueue, _backTickQueue);
-		if (!_frontTickQueue->empty() && waiting_empty())
+		_backTickQueue.swap(_frontTickQueue);
+		if (waiting_empty())
 		{
 			post(any_handler());
 		}
