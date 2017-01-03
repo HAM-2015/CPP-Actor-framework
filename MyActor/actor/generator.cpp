@@ -17,9 +17,9 @@ void generator::uninstall()
 	_id = NULL;
 }
 
-void generator::tls_init(size_t threadNum)
+void generator::tls_init()
 {
-	_genObjAlloc->tls_init(threadNum);
+	_genObjAlloc->tls_init();
 }
 
 void generator::tls_uninit()

@@ -5391,7 +5391,7 @@ public:
 	{
 		assert_enter();
 		auto wh = wrap_local_handler(h);
-		self_io_engine().switch_invoke(&wh);
+		self_io_engine().switchInvoke(&wh);
 	}
 
 	/*!
@@ -5512,7 +5512,7 @@ private:
 	__yield_interrupt void run_in_safe_stack_after_quited(H&& h)
 	{
 		auto wh = wrap_local_handler(h);
-		self_io_engine().switch_invoke(&wh);
+		self_io_engine().switchInvoke(&wh);
 	}
 public:
 	/*!
@@ -8355,7 +8355,7 @@ public:
 	/*!
 	@brief 
 	*/
-	static void tls_init(size_t threadNum);
+	static void tls_init();
 	static void tls_uninit();
 private:
 	template <typename Handler>

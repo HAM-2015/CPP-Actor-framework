@@ -1023,7 +1023,7 @@ private:
 	void timeout_handler();
 	static void install(std::atomic<long long>* id);
 	static void uninstall();
-	static void tls_init(size_t threadNum);
+	static void tls_init();
 	static void tls_uninit();
 private:
 	std::weak_ptr<generator> _weakThis;

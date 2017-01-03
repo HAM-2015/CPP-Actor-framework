@@ -125,7 +125,7 @@ public:
 	/*!
 	@brief 切换到一个安全栈内执行
 	*/
-	void switch_invoke(wrap_local_handler_face<void()>* handler);
+	void switchInvoke(wrap_local_handler_face<void()>* handler);
 
 	/*!
 	@brief 在非ios线程中初始化一个tls空间

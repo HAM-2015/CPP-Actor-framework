@@ -24,7 +24,7 @@ struct mem_alloc_base
 	virtual size_t alloc_size() const = 0;
 	virtual size_t pool_size() const = 0;
 	virtual bool overflow() { return false; }
-	virtual void tls_init(size_t threadNum) {}
+	virtual void tls_init() {}
 	virtual void tls_uninit() {}
 	NONE_COPY(mem_alloc_base);
 };
@@ -624,10 +624,10 @@ struct mem_alloc_tls: public mem_alloc_base
 		assert(0 == _nodeCount);
 	}
 
-	void tls_init(size_t threadNum)
+	void tls_init()
 	{
 		void** tlsSpace = MemAllocTls_::getTlsValueBuff();
-		tlsSpace[TLS_INDEX] = new alloc_type(_poolSize / threadNum);
+		tlsSpace[TLS_INDEX] = new alloc_type(_poolSize);
 	}
 
 	void tls_uninit()

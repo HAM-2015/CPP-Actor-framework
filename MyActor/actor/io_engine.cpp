@@ -184,7 +184,7 @@ void io_engine::run(size_t threadNum, sched policy)
 		std::unique_lock<std::mutex> ul(*blockMutex);
 		for (size_t i = 0; i < threadNum; i++)
 		{
-			run_thread* newThread = new run_thread([&, threadNum, i]
+			run_thread* newThread = new run_thread([&, i]
 			{
 				try
 				{
@@ -218,8 +218,8 @@ void io_engine::run(size_t threadNum, sched policy)
 					context_yield::convert_thread_to_fiber();
 					__space_align void* tlsBuff[64] = { 0 };
 					_tls->set_space(tlsBuff);
-					my_actor::tls_init(threadNum);
-					generator::tls_init(threadNum);
+					my_actor::tls_init();
+					generator::tls_init();
 #ifdef ASIO_HANDLER_ALLOCATE_EX
 					void* asioAll[5] =
 					{
@@ -333,7 +333,7 @@ size_t io_engine::threadNumber()
 	return _threadsID.size();
 }
 
-void io_engine::switch_invoke(wrap_local_handler_face<void()>* handler)
+void io_engine::switchInvoke(wrap_local_handler_face<void()>* handler)
 {
 	safe_stack_info* si = (safe_stack_info*)getTlsValue(ACTOR_SAFE_STACK_INDEX);
 	assert(!si->handler);

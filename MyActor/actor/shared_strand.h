@@ -60,8 +60,8 @@ else\
 	typedef wrap_next_tick_handler<RM_CREF(Handler), true> wrap_tick_type1; \
 	typedef wrap_next_tick_handler<RM_CREF(Handler), false> wrap_tick_type2; \
 	void* const space = alloc_space(sizeof(wrap_tick_type1)); \
-	if (space) push_next_tick(new(space)wrap_tick_type1(std::forward<Handler>(handler))); \
-	else push_next_tick(new(_reuMemAlloc->allocate(sizeof(wrap_tick_type2)))wrap_tick_type2(std::forward<Handler>(handler)));
+	push_next_tick(space ? static_cast<wrap_next_tick_face*>(new(space)wrap_tick_type1(std::forward<Handler>(handler))) : \
+	static_cast<wrap_next_tick_face*>(new(_reuMemAlloc->allocate(sizeof(wrap_tick_type2)))wrap_tick_type2(std::forward<Handler>(handler))));
 
 #else //ENABLE_NEXT_TICK
 
@@ -541,7 +541,7 @@ protected:
 #ifdef ENABLE_NEXT_TICK
 	bool ready_empty();
 	bool waiting_empty();
-	void push_next_tick(op_queue::face* handler);
+	void push_next_tick(wrap_next_tick_face* handler);
 	void run_tick_front();
 	void run_tick_back();
 	size_t _thisRoundCount;

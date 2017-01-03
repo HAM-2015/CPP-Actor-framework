@@ -168,12 +168,12 @@ const shared_initer* my_actor::get_initer()
 }
 //////////////////////////////////////////////////////////////////////////
 
-void my_actor::tls_init(size_t threadNum)
+void my_actor::tls_init()
 {
-	shared_bool::_sharedBoolAlloc->tls_init(threadNum);
+	shared_bool::_sharedBoolAlloc->tls_init();
 #ifdef ENABLE_CHECK_LOST
-	s_checkLostObjAlloc->tls_init(threadNum);
-	s_checkPumpLostObjAlloc->tls_init(threadNum);
+	s_checkLostObjAlloc->tls_init();
+	s_checkPumpLostObjAlloc->tls_init();
 #endif
 }
 

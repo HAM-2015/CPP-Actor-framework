@@ -198,7 +198,7 @@ bool boost_strand::waiting_empty()
 	return _strand->waiting_empty();
 }
 
-void boost_strand::push_next_tick(op_queue::face* handler)
+void boost_strand::push_next_tick(wrap_next_tick_face* handler)
 {
 	_backTickQueue.push_back(handler);
 }
