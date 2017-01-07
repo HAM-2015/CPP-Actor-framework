@@ -46,6 +46,7 @@ struct __co_context_no_capture{};
 	bool __selectCaseTyiedIo = false;\
 	bool __selectCaseTyiedIoFailed = false;\
 	bool __forYieldSwitch = false;\
+	bool __isBestCall = false;\
 	int __selectCaseStep = 0;\
 	int __selectStep = 0;\
 	int __coNext = 0;
@@ -63,6 +64,7 @@ struct __co_context_no_capture{};
 	bool __selectCaseTyiedIo = false;\
 	bool __selectCaseTyiedIoFailed = false;\
 	bool __forYieldSwitch = false;\
+	bool __isBestCall = false;\
 	int __selectCaseStep = 0;\
 	int __selectStep = 0;\
 	int __coNext = 0;\
@@ -227,16 +229,16 @@ struct __co_context_no_capture{};
 
 #define _co_timed_await(__ms__, __handler__) do{\
 	assert(co_self.__inside);\
-	co_strand->over_timer()->timeout(__ms__, co_timer, [&]__handler__); _co_await;\
-	co_strand->over_timer()->cancel(co_timer);\
+	co_timeout(__ms__, co_timer, [&]__handler__); _co_await; \
+	co_cancel_timer(co_timer); \
 	}while (0)
 
 #define _co_timed_await2(__ms__) do{\
 	assert(co_self.__inside);\
-	co_strand->over_timer()->timeout(__ms__, co_timer, wrap_bind_(std::bind([&](generator_handle& gen, shared_bool& sign){\
+	co_timeout(__ms__, co_timer, wrap_bind_(std::bind([&](generator_handle& gen, shared_bool& sign){\
 	co_last_state = co_async_state::co_async_overtime;\
 	co_shared_async_next(gen, sign);}, co_shared_this, co_async_sign)));\
-	_co_await; co_strand->over_timer()->cancel(co_timer);\
+	_co_await; co_cancel_timer(co_timer); \
 	}while (0)
 
 //generator await原语，与co_async之类使用
@@ -311,6 +313,18 @@ struct __co_context_no_capture{};
 
 #define co_st_call(__strand__, ...) co_st_call_of(__strand__) _co_call_bind(__VA_ARGS__)
 
+//判断strand属性，决定是用co_call_of还是co_st_call_of
+#define co_best_call_of(__strand__) \
+	assert(co_self.__inside);\
+	co_check_stop;\
+	_co_for(__forYieldSwitch = false;;__forYieldSwitch = true)\
+	if (__forYieldSwitch) {if(!__isBestCall){co_lock_stop; _co_await; co_unlock_stop;}\
+	else{co_self.__coNextEx=0; if (-1 != co_self.__coNext){co_self.__coNext = -2;}\
+	return; case (__COUNTER__+1)/2:;}_co_for_break;}\
+	else CoBestCall(__strand__, co_self, __isBestCall, __COUNTER__/2)-
+
+#define co_best_call(__strand__, ...) co_best_call_of(__strand__) _co_call_bind(__VA_ARGS__)
+
 //sleep等待
 #define co_sleep(__ms__) do{co_self._co_sleep(__ms__); _co_yield;}while (0)
 #define co_usleep(__us__) do{co_self._co_usleep(__us__); _co_yield;}while (0)
@@ -320,20 +334,24 @@ struct __co_context_no_capture{};
 //各种异步延时
 #define co_dead_sleep(__ms__) do{co_self._co_dead_sleep(__ms__); _co_yield;}while (0)
 #define co_dead_usleep(__us__) do{co_self._co_dead_usleep(__us__); _co_yield;}while (0)
-#define co_timeout_of(__ms__, __th__) CoTimeout_(__ms__, co_strand->over_timer(), __th__)-
-#define co_utimeout_of(__us__, __th__) CouTimeout_(__us__, co_strand->over_timer(), __th__)-
-#define co_deadline_of(__us__, __th__) CoDeadline_(__us__, co_strand->over_timer(), __th__)-
-#define co_interval_of(__ms__, .../*__th__, [immed=false]*/) CoInterval_(__ms__, co_strand->over_timer(), __VA_ARGS__)-
-#define co_uinterval_of(__us__, .../*__th__, [immed=false]*/) CouInterval_(__us__, co_strand->over_timer(), __VA_ARGS__)-
-#define co_timeout(__ms__, __th__, __handler__) co_strand->over_timer()->timeout(__ms__, __th__, __handler__)
-#define co_utimeout(__us__, __th__, __handler__) co_strand->over_timer()->utimeout(__us__, __th__, __handler__)
-#define co_deadline(__us__, __th__, __handler__) co_strand->over_timer()->deadline(__us__, __th__, __handler__)
-#define co_interval(__ms__, __th__, .../*__handler__, [immed=false]*/) co_strand->over_timer()->interval(__ms__, __th__, __VA_ARGS__)
-#define co_uinterval(__us__, __th__, .../*__handler__, [immed=false]*/) co_strand->over_timer()->uinterval(__us__, __th__, __VA_ARGS__)
+#define co_timeout_of(__ms__, __th__) CoTimeout_(__ms__, co_over_timer, __th__)-
+#define co_utimeout_of(__us__, __th__) CouTimeout_(__us__, co_over_timer, __th__)-
+#define co_deadline_of(__us__, __th__) CoDeadline_(__us__, co_over_timer, __th__)-
+#define co_interval_of(__ms__, .../*__th__, [immed=false]*/) CoInterval_(__ms__, co_over_timer, __VA_ARGS__)-
+#define co_uinterval_of(__us__, .../*__th__, [immed=false]*/) CouInterval_(__us__, co_over_timer, __VA_ARGS__)-
+#define co_timeout co_over_timer->timeout
+#define co_utimeout co_over_timer->utimeout
+#define co_deadline co_over_timer->deadline
+#define co_interval co_over_timer->interval
+#define co_uinterval co_over_timer->uinterval
 //取消延时
-#define co_cancel_timer(__th__) co_strand->over_timer()->cancel(__th__)
+#define co_cancel_timer co_over_timer->cancel
 //提前触发延时
-#define co_advance_timer(__th__) co_strand->over_timer()->advance(__th__)
+#define co_advance_timer co_over_timer->advance
+//重新开始计时
+#define co_restart_timer co_over_timer->restart
+//当前overlap_timer定时器
+#define co_over_timer co_strand->over_timer()
 
 //创建一个generator，立即运行
 #define co_go(...) CoGo_(__VA_ARGS__)-
@@ -599,7 +617,7 @@ struct __co_context_no_capture{};
 
 #define co_begin_timed_select_once(__ms__) {{\
 	co_lock_stop; co_select._ntfPump.close(co_async); _co_await; co_select.reset();\
-	co_strand->over_timer()->timeout(__ms__, co_timer, [&]{co_select._ntfPump.post(0, co_async_state::co_async_ok);});\
+	co_timeout(__ms__, co_timer, [&]{co_select._ntfPump.post(0, co_async_state::co_async_ok);});\
 	for (__selectStep=0, co_select._selectId=-1, __selectCaseTyiedIoFailed=false; __selectStep<=2; __selectStep++) {\
 		if (1==__selectStep || __selectCaseTyiedIoFailed) {\
 			co_select._ntfPump.pop(co_async_result_(co_ignore, co_select._selectId, co_select_state)); _co_await;\
@@ -612,7 +630,7 @@ struct __co_context_no_capture{};
 			__selectStep=1;\
 		} else if (2==__selectStep) {\
 			co_select._selectId=-1;\
-			co_strand->over_timer()->cancel(co_timer);\
+			co_cancel_timer(co_timer);\
 		}\
 		co_begin_switch(co_select_curr_id);\
 		co_switch_default; if(1==__selectStep && 0!=co_select_curr_id){assert(!"channel unexpected change");}if(0==co_select_curr_id) {do{
@@ -1799,6 +1817,31 @@ struct CoStCall
 private:
 	generator& co_self;
 	shared_strand _strand;
+};
+
+struct CoBestCall
+{
+	CoBestCall(shared_strand strand, generator& gen, bool& isBest, int coNext)
+	:_strand(std::move(strand)), co_self(gen), _isBest(isBest), _coNext(coNext) {}
+
+	template <typename Handler>
+	void operator-(Handler&& handler)
+	{
+		_isBest = co_strand == _strand;
+		if (_isBest)
+		{
+			co_self._co_push_stack(_coNext, std::forward<Handler>(handler));
+		}
+		else
+		{
+			generator::create(std::move(_strand), std::forward<Handler>(handler), co_async)->run();
+		}
+	}
+private:
+	generator& co_self;
+	bool& _isBest;
+	shared_strand _strand;
+	int _coNext;
 };
 
 struct CoLocalWrapCalc_

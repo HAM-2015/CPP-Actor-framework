@@ -20,7 +20,7 @@ typedef long long micseconds;
 #endif
 
 AsyncTimer_::AsyncTimer_(ActorTimer_* actorTimer)
-:_actorTimer(actorTimer), _handler(NULL), _isInterval(false) {}
+:_actorTimer(actorTimer), _handler(NULL), _currTimeout(0), _isInterval(false) {}
 
 AsyncTimer_::~AsyncTimer_()
 {
@@ -35,6 +35,7 @@ void AsyncTimer_::cancel()
 		_actorTimer->cancel(_timerHandle);
 		_handler->destroy(_reuMem);
 		_handler = NULL;
+		_currTimeout = 0;
 	}
 }
 
@@ -46,16 +47,51 @@ bool AsyncTimer_::advance()
 		if (!_isInterval)
 		{
 			_actorTimer->cancel(_timerHandle);
-			wrap_base* cb = _handler;
+			wrap_base* const cb = _handler;
 			_handler = NULL;
+			_currTimeout = 0;
 			cb->invoke(true);
 			cb->destroy(_reuMem);
+			return true;
 		}
 		else if (!_handler->is_top_call())
 		{
 			_handler->invoke(true);
 			return true;
 		}
+	}
+	return false;
+}
+
+void AsyncTimer_::tick_advance()
+{
+	assert(self_strand()->running_in_this_thread());
+	if (_actorTimer->_lockStrand)
+	{
+		_actorTimer->_lockStrand->next_tick(std::bind([](async_timer& this_)
+		{
+			this_->advance();
+		}, _weakThis.lock()));
+	}
+}
+
+bool AsyncTimer_::restart()
+{
+	assert(self_strand()->running_in_this_thread());
+	if (_handler && _currTimeout)
+	{
+		if (!_isInterval)
+		{
+			_actorTimer->cancel(_timerHandle);
+			_timerHandle = _actorTimer->timeout(_currTimeout, _weakThis.lock());
+		}
+		else if (!_handler->is_top_call())
+		{
+			_actorTimer->cancel(_timerHandle);
+			_timerHandle = _actorTimer->timeout(_currTimeout, _weakThis.lock());
+			_handler->deadtime_ref() = _timerHandle._beginStamp + _currTimeout;
+		}
+		return true;
 	}
 	return false;
 }
@@ -81,8 +117,9 @@ void AsyncTimer_::timeout_handler()
 	_timerHandle.reset();
 	if (!_isInterval)
 	{
-		wrap_base* cb = _handler;
+		wrap_base* const cb = _handler;
 		_handler = NULL;
+		_currTimeout = 0;
 		cb->invoke();
 		cb->destroy(_reuMem);
 	}
@@ -151,38 +188,41 @@ void overlap_timer::_timeout(long long us, timer_handle& timerHandle, bool deadl
 
 void overlap_timer::_cancel(timer_handle& timerHandle)
 {
-	handler_queue::iterator itNode = timerHandle._queueNode;
-	if (_handlerQueue.size() == 1)
+	if (timerHandle._timestamp)
 	{
-		_extMaxTick = 0;
-		_handlerQueue.erase(itNode);
-		//如果没有定时任务就退出定时循环
-		boost::system::error_code ec;
-		as_ptype<timer_type>(_timer)->cancel(ec);
-		_timerCount++;
-		_looping = false;
-	}
-	else if (itNode->first == _extMaxTick)
-	{
-		_handlerQueue.erase(itNode++);
-		if (_handlerQueue.end() == itNode)
+		assert(_lockStrand);
+		handler_queue::iterator itNode = timerHandle._queueNode;
+		if (_handlerQueue.size() == 1)
 		{
-			itNode--;
+			_extMaxTick = 0;
+			_handlerQueue.erase(itNode);
+			//如果没有定时任务就退出定时循环
+			boost::system::error_code ec;
+			as_ptype<timer_type>(_timer)->cancel(ec);
+			_timerCount++;
+			_looping = false;
 		}
-		_extMaxTick = itNode->first;
-	}
-	else
-	{
-		_handlerQueue.erase(itNode);
+		else if (itNode->first == _extMaxTick)
+		{
+			_handlerQueue.erase(itNode++);
+			if (_handlerQueue.end() == itNode)
+			{
+				itNode--;
+			}
+			_extMaxTick = itNode->first;
+		}
+		else
+		{
+			_handlerQueue.erase(itNode);
+		}
 	}
 }
 
 void overlap_timer::cancel(timer_handle& timerHandle)
 {
-	assert(_weakStrand.lock()->running_in_this_thread());
+	assert(self_strand()->running_in_this_thread());
 	if (!timerHandle.completed())
 	{//删除当前定时器节点
-		assert(_lockStrand);
 		_cancel(timerHandle);
 		timerHandle._handler->destroy(_reuMem);
 		timerHandle.reset();
@@ -191,15 +231,14 @@ void overlap_timer::cancel(timer_handle& timerHandle)
 
 bool overlap_timer::advance(timer_handle& timerHandle)
 {
-	assert(_weakStrand.lock()->running_in_this_thread());
+	assert(self_strand()->running_in_this_thread());
 	if (!timerHandle.completed())
 	{
-		assert(_lockStrand);
 		if (!timerHandle._isInterval)
 		{
 			_cancel(timerHandle);
-			AsyncTimer_::wrap_base* cb = timerHandle._handler;
-			timerHandle._handler = NULL;
+			AsyncTimer_::wrap_base* const cb = timerHandle._handler;
+			timerHandle.reset();
 			cb->invoke(true);
 			cb->destroy(_reuMem);
 			return true;
@@ -209,6 +248,39 @@ bool overlap_timer::advance(timer_handle& timerHandle)
 			timerHandle._handler->invoke(true);
 			return true;
 		}
+	}
+	return false;
+}
+
+void overlap_timer::tick_advance(timer_handle& timerHandle)
+{
+	assert(self_strand()->running_in_this_thread());
+	if (_lockStrand)
+	{
+		_lockStrand->next_tick([&]()
+		{
+			advance(timerHandle);
+		});
+	}
+}
+
+bool overlap_timer::restart(timer_handle& timerHandle)
+{
+	assert(self_strand()->running_in_this_thread());
+	if (!timerHandle.completed() && timerHandle._currTimeout)
+	{
+		if (!timerHandle._isInterval)
+		{
+			_cancel(timerHandle);
+			_timeout(timerHandle._currTimeout, timerHandle);
+		}
+		else if (!timerHandle._handler->is_top_call())
+		{
+			_cancel(timerHandle);
+			_timeout(timerHandle._currTimeout, timerHandle);
+			timerHandle._handler->deadtime_ref() = timerHandle._timestamp + timerHandle._currTimeout;
+		}
+		return true;
 	}
 	return false;
 }
@@ -271,18 +343,19 @@ void overlap_timer::event_handler(int tc)
 			else
 			{
 				timer_handle* const timerHandle = iter->second;
-				_handlerQueue.erase(iter);
+				AsyncTimer_::wrap_base* const cb = timerHandle->_handler;
 				if (!timerHandle->_isInterval)
 				{
-					AsyncTimer_::wrap_base* cb = timerHandle->_handler;
-					timerHandle->_handler = NULL;
+					timerHandle->reset();
 					cb->invoke();
 					cb->destroy(_reuMem);
 				}
 				else
 				{
-					timerHandle->_handler->invoke();
+					timerHandle->_timestamp = 0;
+					cb->invoke();
 				}
+				_handlerQueue.erase(iter);
 			}
 		}
 		_looping = false;

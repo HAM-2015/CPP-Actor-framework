@@ -68,7 +68,7 @@ public:
 	/*!
 	@brief 
 	*/
-	co_mutex& comutex();
+	co_mutex& co_ref();
 private:
 	void quited_lock(my_actor* host);
 	void quited_unlock(my_actor* host);
@@ -190,7 +190,7 @@ public:
 	/*!
 	@brief
 	*/
-	co_shared_mutex& comutex();
+	co_shared_mutex& co_ref();
 private:
 	void lock(my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
 	bool timed_lock(int ms, my_actor* host, wrap_local_handler_face<void()>&& lockNtf);
@@ -250,14 +250,34 @@ public:
 	actor_condition_variable(const shared_strand& strand);
 	~actor_condition_variable();
 public:
+	/*!
+	@brief 等待通知
+	*/
 	void wait(my_actor* host, actor_lock_guard& lg);
 	void wait(my_actor* host, actor_mutex& mtx);
 	void wait(my_actor* host, co_mutex& mtx);
+
+	/*!
+	@brief 延时等待通知
+	*/
 	bool timed_wait(my_actor* host, actor_lock_guard& lg, int ms);
 	bool timed_wait(my_actor* host, actor_mutex& mtx, int ms);
 	bool timed_wait(my_actor* host, co_mutex& mtx, int ms);
+
+	/*!
+	@brief 通知一个等待
+	*/
 	void notify_one();
+
+	/*!
+	@brief 通知所有在等待的
+	*/
 	void notify_all();
+
+	/*!
+	@brief 
+	*/
+	co_condition_variable& co_ref();
 private:
 	co_condition_variable _conVar;
 };

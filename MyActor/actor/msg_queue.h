@@ -627,8 +627,8 @@ public:
 		_size--;
 	}
 
-	template <typename Arg>
-	void push_back(Arg&& arg)
+	template <typename... Args>
+	void push_back(Args&&...)
 	{
 		assert(!full());
 		_size++;

@@ -136,7 +136,7 @@ const shared_strand& actor_mutex::self_strand()
 	return _mutex.self_strand();
 }
 
-co_mutex& actor_mutex::comutex()
+co_mutex& actor_mutex::co_ref()
 {
 	return _mutex;
 }
@@ -395,7 +395,7 @@ const shared_strand& actor_shared_mutex::self_strand()
 	return _mutex.self_strand();
 }
 
-co_shared_mutex& actor_shared_mutex::comutex()
+co_shared_mutex& actor_shared_mutex::co_ref()
 {
 	return _mutex;
 }
@@ -475,7 +475,7 @@ void actor_condition_variable::wait(my_actor* host, actor_lock_guard& lg)
 
 void actor_condition_variable::wait(my_actor* host, actor_mutex& mtx)
 {
-	wait(host, mtx.comutex());
+	wait(host, mtx.co_ref());
 }
 
 void actor_condition_variable::wait(my_actor* host, co_mutex& mtx)
@@ -496,7 +496,7 @@ bool actor_condition_variable::timed_wait(my_actor* host, actor_lock_guard& lg, 
 
 bool actor_condition_variable::timed_wait(my_actor* host, actor_mutex& mtx, int ms)
 {
-	return timed_wait(host, mtx.comutex(), ms);
+	return timed_wait(host, mtx.co_ref(), ms);
 }
 
 bool actor_condition_variable::timed_wait(my_actor* host, co_mutex& mtx, int ms)
@@ -520,4 +520,9 @@ void actor_condition_variable::notify_one()
 void actor_condition_variable::notify_all()
 {
 	_conVar.notify_all();
+}
+
+co_condition_variable& actor_condition_variable::co_ref()
+{
+	return _conVar;
 }

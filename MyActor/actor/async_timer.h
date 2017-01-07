@@ -28,6 +28,7 @@ class AsyncTimer_ : public ActorTimerFace_
 		virtual void invoke(bool isAdvance = false) = 0;
 		virtual void destroy(reusable_mem& reuMem) = 0;
 		virtual void set_sign(bool* sign) = 0;
+		virtual long long& deadtime_ref() = 0;
 		virtual bool is_top_call() = 0;
 		virtual wrap_base* interval_handler() = 0;
 	};
@@ -51,6 +52,7 @@ class AsyncTimer_ : public ActorTimerFace_
 		}
 
 		void set_sign(bool* sign) {}
+		long long& deadtime_ref() { return *(long long*)NULL; }
 		bool is_top_call() { return false; }
 		wrap_base* interval_handler() { return NULL; }
 
@@ -76,6 +78,7 @@ class AsyncTimer_ : public ActorTimerFace_
 		}
 
 		void set_sign(bool* sign) {}
+		long long& deadtime_ref() { return *(long long*)NULL; }
 		bool is_top_call() { return false; }
 		wrap_base* interval_handler() { return NULL; }
 
@@ -87,11 +90,11 @@ class AsyncTimer_ : public ActorTimerFace_
 	{
 		template <typename H>
 		wrap_interval_handler(H&& h, wrap_base* intervalHandler)
-			:_h(std::forward<H>(h)), _sign(NULL), _intervalHandler(intervalHandler) {}
+			:_h(std::forward<H>(h)), _sign(NULL), _deadtime(0), _intervalHandler(intervalHandler) {}
 
 		void invoke(bool isAdvance = false)
 		{
-			CHECK_EXCEPTION(_h, this);
+			CHECK_EXCEPTION(_h, isAdvance, this);
 		}
 
 		void destroy(reusable_mem& reuMem)
@@ -113,50 +116,9 @@ class AsyncTimer_ : public ActorTimerFace_
 			_sign = sign;
 		}
 
-		bool is_top_call()
+		long long& deadtime_ref()
 		{
-			return NULL != _sign;
-		}
-
-		wrap_base* interval_handler()
-		{
-			return _intervalHandler;
-		}
-
-		bool* _sign;
-		wrap_base* _intervalHandler;
-		Handler _h;
-	};
-
-	template <typename Handler>
-	struct wrap_advance_interval_handler : public wrap_base
-	{
-		template <typename H>
-		wrap_advance_interval_handler(H&& h, wrap_base* intervalHandler)
-			:_h(std::forward<H>(h)), _sign(NULL), _intervalHandler(intervalHandler) {}
-
-		void invoke(bool isAdvance = false)
-		{
-			CHECK_EXCEPTION(_h, isAdvance, this);
-		}
-
-		void destroy(reusable_mem& reuMem)
-		{
-			if (!_sign)
-			{
-				_intervalHandler->destroy(reuMem);
-			}
-			else
-			{
-				*_sign = true;
-			}
-			this->~wrap_advance_interval_handler();
-			reuMem.deallocate(this);
-		}
-
-		void set_sign(bool* sign)
-		{
-			_sign = sign;
+			return _deadtime;
 		}
 
 		bool is_top_call()
@@ -169,6 +131,7 @@ class AsyncTimer_ : public ActorTimerFace_
 			return _intervalHandler;
 		}
 
+		long long _deadtime;
 		bool* _sign;
 		wrap_base* _intervalHandler;
 		Handler _h;
@@ -192,8 +155,9 @@ public:
 		assert(self_strand()->running_in_this_thread());
 		assert(!_handler);
 		_isInterval = false;
+		_currTimeout = us;
 		_handler = wrap_timer_handler(_reuMem, std::forward<Handler>(handler));
-		_timerHandle = _actorTimer->timeout(us, _weakThis.lock(), false);
+		_timerHandle = _actorTimer->timeout(us, _weakThis.lock());
 		return _timerHandle._beginStamp;
 	}
 
@@ -209,8 +173,9 @@ public:
 		assert(self_strand()->running_in_this_thread());
 		assert(!_handler);
 		_isInterval = false;
+		_currTimeout = us;
 		_handler = wrap_advance_timer_handler(_reuMem, std::forward<Handler>(handler));
-		_timerHandle = _actorTimer->timeout(us, _weakThis.lock(), false);
+		_timerHandle = _actorTimer->timeout(us, _weakThis.lock());
 		return _timerHandle._beginStamp;
 	}
 
@@ -260,8 +225,8 @@ public:
 		assert(self_strand()->running_in_this_thread());
 		assert(!_handler);
 		_isInterval = true;
-		long long const deadtime = get_tick_us() + intervalus;
-		_handler = wrap_interval_timer_handler(_reuMem, std::bind([this, intervalus](wrap_base* const thisHandler, long long& deadtime)
+		_currTimeout = intervalus;
+		_handler = wrap_interval_timer_handler(_reuMem, std::bind([this, intervalus](bool isAdvance, wrap_base* const thisHandler)
 		{
 			bool sign = false;
 			AsyncTimer_* const this_ = this;
@@ -271,18 +236,27 @@ public:
 			if (!sign)
 			{
 				thisHandler->set_sign(NULL);
-				deadtime += intervalus;
-				_timerHandle = _actorTimer->timeout(deadtime, _weakThis.lock(), true);
+				if (!isAdvance)
+				{
+					long long& deadtime = thisHandler->deadtime_ref();
+					deadtime += intervalus;
+					_timerHandle = _actorTimer->timeout(deadtime, _weakThis.lock(), true);
+				}
 			}
 			else
 			{
 				intervalHandler->destroy(this_->_reuMem);
 			}
-		}, __1, deadtime), wrap_timer_handler(_reuMem, std::forward<Handler>(handler)));
-		_timerHandle = _actorTimer->timeout(deadtime, _weakThis.lock(), true);
+		}, __1, __2), wrap_timer_handler(_reuMem, std::forward<Handler>(handler)));
 		if (immed)
 		{
+			_handler->deadtime_ref() = get_tick_us();
 			_handler->invoke();
+		}
+		else
+		{
+			_timerHandle = _actorTimer->timeout(intervalus, _weakThis.lock());
+			_handler->deadtime_ref() = _timerHandle._beginStamp + intervalus;
 		}
 	}
 
@@ -292,8 +266,8 @@ public:
 		assert(self_strand()->running_in_this_thread());
 		assert(!_handler);
 		_isInterval = true;
-		long long const deadtime = get_tick_us() + intervalus;
-		_handler = wrap_advance_interval_timer_handler(_reuMem, std::bind([this, intervalus](bool isAdvance, wrap_base* const thisHandler, long long& deadtime)
+		_currTimeout = intervalus;
+		_handler = wrap_interval_timer_handler(_reuMem, std::bind([this, intervalus](bool isAdvance, wrap_base* const thisHandler)
 		{
 			bool sign = false;
 			AsyncTimer_* const this_ = this;
@@ -303,18 +277,27 @@ public:
 			if (!sign)
 			{
 				thisHandler->set_sign(NULL);
-				deadtime += intervalus;
-				_timerHandle = _actorTimer->timeout(deadtime, _weakThis.lock(), true);
+				if (!isAdvance)
+				{
+					long long& deadtime = thisHandler->deadtime_ref();
+					deadtime += intervalus;
+					_timerHandle = _actorTimer->timeout(deadtime, _weakThis.lock(), true);
+				}
 			}
 			else
 			{
 				intervalHandler->destroy(this_->_reuMem);
 			}
-		}, __1, __2, deadtime), wrap_advance_timer_handler(_reuMem, std::forward<Handler>(handler)));
-		_timerHandle = _actorTimer->timeout(deadtime, _weakThis.lock(), true);
+		}, __1, __2), wrap_advance_timer_handler(_reuMem, std::forward<Handler>(handler)));
 		if (immed)
 		{
+			_handler->deadtime_ref() = get_tick_us();
 			_handler->invoke();
+		}
+		else
+		{
+			_timerHandle = _actorTimer->timeout(intervalus, _weakThis.lock());
+			_handler->deadtime_ref() = _timerHandle._beginStamp + intervalus;
 		}
 	}
 
@@ -327,6 +310,16 @@ public:
 	@brief 提前本次计时触发，在依赖的strand线程中调用
 	*/
 	bool advance();
+
+	/*!
+	@brief 提前本次计时触发，在依赖的strand线程中调用
+	*/
+	void tick_advance();
+
+	/*!
+	@brief 相对计时下，重新开始计时
+	*/
+	bool restart();
 
 	/*!
 	@brief 是否已经完成
@@ -365,17 +358,11 @@ private:
 		typedef wrap_interval_handler<RM_CREF(Handler)> wrap_type;
 		return new(reuMem.allocate(sizeof(wrap_type)))wrap_type(std::forward<Handler>(handler), intervalHandler);
 	}
-
-	template <typename Handler>
-	static wrap_base* wrap_advance_interval_timer_handler(reusable_mem& reuMem, Handler&& handler, wrap_base* intervalHandler)
-	{
-		typedef wrap_advance_interval_handler<RM_CREF(Handler)> wrap_type;
-		return new(reuMem.allocate(sizeof(wrap_type)))wrap_type(std::forward<Handler>(handler), intervalHandler);
-	}
 private:
-	wrap_base* _handler;
-	reusable_mem _reuMem;
 	ActorTimer_* _actorTimer;
+	wrap_base* _handler;
+	long long _currTimeout;
+	reusable_mem _reuMem;
 	std::weak_ptr<AsyncTimer_> _weakThis;
 	ActorTimer_::timer_handle _timerHandle;
 	bool _isInterval;
@@ -404,11 +391,11 @@ public:
 		friend overlap_timer;
 	public:
 		timer_handle()
-			:_timestamp(0), _handler(NULL), _isInterval(false) {}
+			:_timestamp(0), _currTimeout(0), _handler(NULL), _isInterval(false) {}
 
 		~timer_handle()
 		{
-			assert(0 == _handler);
+			assert(NULL == _handler);
 		}
 
 		long long timestamp()
@@ -424,10 +411,12 @@ public:
 		void reset()
 		{
 			_timestamp = 0;
+			_currTimeout = 0;
 			_handler = NULL;
 		}
 	private:
 		long long _timestamp;
+		long long _currTimeout;
 		handler_queue::iterator _queueNode;
 		AsyncTimer_::wrap_base* _handler;
 		bool _isInterval;
@@ -458,6 +447,7 @@ public:
 		assert(_weakStrand.lock()->running_in_this_thread());
 		assert(timerHandle.completed());
 		timerHandle._isInterval = false;
+		timerHandle._currTimeout = us;
 		timerHandle._handler = AsyncTimer_::wrap_timer_handler(_reuMem, std::bind([&timerHandle](Handler& handler)
 		{
 			timerHandle.reset();
@@ -472,6 +462,7 @@ public:
 		assert(_weakStrand.lock()->running_in_this_thread());
 		assert(timerHandle.completed());
 		timerHandle._isInterval = false;
+		timerHandle._currTimeout = us;
 		timerHandle._handler = AsyncTimer_::wrap_advance_timer_handler(_reuMem, std::bind([&timerHandle](bool isAdvance, Handler& handler)
 		{
 			timerHandle.reset();
@@ -532,8 +523,8 @@ public:
 		assert(self_strand()->running_in_this_thread());
 		assert(timerHandle.completed());
 		timerHandle._isInterval = true;
-		long long const deadtime = get_tick_us() + intervalus;
-		timerHandle._handler = AsyncTimer_::wrap_interval_timer_handler(_reuMem, std::bind([this, &timerHandle, intervalus](AsyncTimer_::wrap_base* const thisHandler, long long& deadtime)
+		timerHandle._currTimeout = intervalus;
+		timerHandle._handler = AsyncTimer_::wrap_interval_timer_handler(_reuMem, std::bind([this, &timerHandle, intervalus](bool isAdvance, AsyncTimer_::wrap_base* const thisHandler)
 		{
 			bool sign = false;
 			overlap_timer* const this_ = this;
@@ -543,18 +534,27 @@ public:
 			if (!sign)
 			{
 				thisHandler->set_sign(NULL);
-				deadtime += intervalus;
-				_timeout(deadtime, timerHandle, true);
+				if (!isAdvance)
+				{
+					long long& deadtime = thisHandler->deadtime_ref();
+					deadtime += intervalus;
+					_timeout(deadtime, timerHandle, true);
+				}
 			}
 			else
 			{
 				intervalHandler->destroy(this_->_reuMem);
 			}
-		}, __1, deadtime), AsyncTimer_::wrap_timer_handler(_reuMem, std::forward<Handler>(handler)));
-		_timeout(deadtime, timerHandle, true);
+		}, __1, __2), AsyncTimer_::wrap_timer_handler(_reuMem, std::forward<Handler>(handler)));
 		if (immed)
 		{
+			timerHandle._handler->deadtime_ref() = get_tick_us();
 			timerHandle._handler->invoke();
+		}
+		else
+		{
+			_timeout(intervalus, timerHandle);
+			timerHandle._handler->deadtime_ref() = timerHandle._timestamp + intervalus;
 		}
 	}
 
@@ -564,8 +564,8 @@ public:
 		assert(self_strand()->running_in_this_thread());
 		assert(timerHandle.completed());
 		timerHandle._isInterval = true;
-		long long const deadtime = get_tick_us() + intervalus;
-		timerHandle._handler = AsyncTimer_::wrap_advance_interval_timer_handler(_reuMem, std::bind([this, &timerHandle, intervalus](bool isAdvance, AsyncTimer_::wrap_base* const thisHandler, long long& deadtime)
+		timerHandle._currTimeout = intervalus;
+		timerHandle._handler = AsyncTimer_::wrap_interval_timer_handler(_reuMem, std::bind([this, &timerHandle, intervalus](bool isAdvance, AsyncTimer_::wrap_base* const thisHandler)
 		{
 			bool sign = false;
 			overlap_timer* const this_ = this;
@@ -575,18 +575,27 @@ public:
 			if (!sign)
 			{
 				thisHandler->set_sign(NULL);
-				deadtime += intervalus;
-				_timeout(deadtime, timerHandle, true);
+				if (!isAdvance)
+				{
+					long long& deadtime = thisHandler->deadtime_ref();
+					deadtime += intervalus;
+					_timeout(deadtime, timerHandle, true);
+				}
 			}
 			else
 			{
 				intervalHandler->destroy(this_->_reuMem);
 			}
-		}, __1, __2, deadtime), AsyncTimer_::wrap_advance_timer_handler(_reuMem, std::forward<Handler>(handler)));
-		_timeout(deadtime, timerHandle, true);
+		}, __1, __2), AsyncTimer_::wrap_advance_timer_handler(_reuMem, std::forward<Handler>(handler)));
 		if (immed)
 		{
+			timerHandle._handler->deadtime_ref() = get_tick_us();
 			timerHandle._handler->invoke();
+		}
+		else
+		{
+			_timeout(intervalus, timerHandle);
+			timerHandle._handler->deadtime_ref() = timerHandle._timestamp + intervalus;
 		}
 	}
 
@@ -599,6 +608,16 @@ public:
 	@brief 提前本次计时触发，在依赖的strand线程中调用
 	*/
 	bool advance(timer_handle& timerHandle);
+
+	/*!
+	@brief 提前本次计时触发，在依赖的strand线程中调用
+	*/
+	void tick_advance(timer_handle& timerHandle);
+
+	/*!
+	@brief 相对计时下，重新开始计时
+	*/
+	bool restart(timer_handle& timerHandle);
 
 	/*!
 	@brief
