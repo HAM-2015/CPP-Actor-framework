@@ -48,7 +48,7 @@ bool generator::_next()
 	assert(!__ctx || !__inside);
 	DEBUG_OPERATION(if (__ctx) __inside = true);
 	__yieldSign = true;
-	CHECK_EXCEPTION(!_callStack.empty() ? _callStack.front()._handler : _baseHandler, *this);
+	CHECK_EXCEPTION(!_callStack.empty() ? _callStack.front() : _baseHandler, *this);
 	assert(!__ctx || __coNext);
 	if (!__ctx)
 	{
@@ -93,7 +93,7 @@ bool generator::_next()
 	return false;
 }
 
-generator_handle generator::create(shared_strand strand, std::function<void(generator&)> handler, std::function<void()> notify)
+generator_handle generator::create(shared_strand strand, co_function handler, std::function<void()> notify)
 {
 	void* space = _genObjAlloc->allocate();
 	generator_handle res(new(space)generator(), [](generator* p)
@@ -337,7 +337,7 @@ void generator::_co_shared_async_next(shared_bool& sign)
 	}
 }
 
-void generator::_co_push_stack(int coNext, std::function<void(generator&)>&& handler)
+void generator::_co_push_stack(int coNext, co_function&& handler)
 {
 	_callStack.push_front(call_stack_pck(coNext, __coNextEx, __ctx, std::move(handler)));
 }

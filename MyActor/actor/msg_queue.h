@@ -470,6 +470,19 @@ private:
 };
 //////////////////////////////////////////////////////////////////////////
 
+template <size_t size>
+struct FixedNodeAlignTwoPow_ { enum { value = size }; typedef __space_align char type; };
+template <> struct FixedNodeAlignTwoPow_<1> { enum { value = 1 }; typedef char type; };
+template <> struct FixedNodeAlignTwoPow_<2> { enum { value = 2 }; typedef char type; };
+template <> struct FixedNodeAlignTwoPow_<3> { enum { value = 4 }; typedef char type; };
+template <> struct FixedNodeAlignTwoPow_<4> { enum { value = 4 }; typedef char type; };
+#if (_WIN64 || __x86_64__ || _ARM64)
+template <> struct FixedNodeAlignTwoPow_<5> { enum { value = 8 }; typedef char type; };
+template <> struct FixedNodeAlignTwoPow_<6> { enum { value = 8 }; typedef char type; };
+template <> struct FixedNodeAlignTwoPow_<7> { enum { value = 8 }; typedef char type; };
+template <> struct FixedNodeAlignTwoPow_<8> { enum { value = 8 }; typedef char type; };
+#endif
+
 template <typename T>
 class fixed_buffer
 {
@@ -494,7 +507,7 @@ class fixed_buffer
 			return *as_ptype<T>(space);
 		}
 
-		__space_align char space[sizeof(T)];
+		typename FixedNodeAlignTwoPow_<sizeof(T)>::type space[FixedNodeAlignTwoPow_<sizeof(T)>::value];
 	};
 public:
 	fixed_buffer(size_t maxSize)

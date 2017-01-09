@@ -383,6 +383,77 @@ struct mem_alloc_mt2 : protected MUTEX, public mem_alloc_face
 	node_space* _pool;
 };
 
+struct ReuMemMt_
+{
+	struct node
+	{
+		size_t _size;
+		node* _next;
+	};
+public:
+	ReuMemMt_()
+	{
+		_top = NULL;
+#if (_DEBUG || DEBUG)
+		_nodeCount = 0;
+#endif
+	}
+
+	~ReuMemMt_()
+	{
+		std::lock_guard<std::mutex> lg(_mutex);
+		while (_top)
+		{
+			assert(_nodeCount-- > 0);
+			void* p = _top;
+			_top = _top->_next;
+			free(p);
+		}
+		assert(0 == _nodeCount);
+	}
+
+	void* allocate(size_t size)
+	{
+		void* freeMem = NULL;
+		{
+			std::lock_guard<std::mutex> lg(_mutex);
+			if (_top)
+			{
+				node* p = _top;
+				_top = _top->_next;
+				if (p->_size >= size)
+				{
+					return p;
+				}
+				assert(_nodeCount-- > 0);
+				freeMem = p;
+			}
+#if (_DEBUG || DEBUG)
+			_nodeCount++;
+#endif
+		}
+		if (freeMem)
+		{
+			free(freeMem);
+		}
+		return malloc(size > sizeof(node) ? size : sizeof(node));
+	}
+
+	void deallocate(void* p, size_t size)
+	{
+		std::lock_guard<std::mutex> lg(_mutex);
+		node* dp = (node*)p;
+		dp->_size = size;
+		dp->_next = _top;
+		_top = dp;
+	}
+private:
+	node* _top;
+	std::mutex _mutex;
+#if (_DEBUG || DEBUG)
+	size_t _nodeCount;
+#endif
+};
 
 template <typename DATA>
 struct MemTlsNode_
@@ -556,18 +627,15 @@ public:
 
 	void* allocate(size_t size)
 	{
-		void* freeMem = NULL;
+		if (_top)
 		{
-			if (_top)
+			node* p = _top;
+			_top = _top->_next;
+			if (p->_size >= size)
 			{
-				node* p = _top;
-				_top = _top->_next;
-				if (p->_size >= size)
-				{
-					return p;
-				}
-				free(p);
+				return p;
 			}
+			free(p);
 		}
 		return malloc(size > sizeof(node) ? size : sizeof(node));
 	}

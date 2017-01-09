@@ -18,6 +18,8 @@ namespace boost
 {
 	namespace asio
 	{
+		static ReuMemMt_* s_asioReuMemMt = NULL;
+
 		void* asio_handler_allocate_ex(std::size_t size)
 		{
 			void* pointer = NULL;
@@ -44,7 +46,7 @@ namespace boost
 			}
 			else
 			{
-				pointer = malloc(size + 1);
+				pointer = s_asioReuMemMt->allocate(size + 1);
 				as_ptype<char>(pointer)[size] = 0;
 			}
 			return pointer;
@@ -77,7 +79,7 @@ namespace boost
 			}
 			else
 			{
-				free(pointer);
+				s_asioReuMemMt->deallocate(pointer, size + 1);
 			}
 		}
 	}
@@ -99,6 +101,9 @@ void io_engine::install()
 {
 	if (!_tls)
 	{
+#ifdef ASIO_HANDLER_ALLOCATE_EX
+		boost::asio::s_asioReuMemMt = new ReuMemMt_();
+#endif
 		_tls = new tls_space;
 #if (defined DISABLE_BOOST_TIMER) && (defined ENABLE_GLOBAL_TIMER)
 		_waitableTimer = new WaitableTimer_();
@@ -113,6 +118,10 @@ void io_engine::uninstall()
 #if (defined DISABLE_BOOST_TIMER) && (defined ENABLE_GLOBAL_TIMER)
 	delete _waitableTimer;
 	_waitableTimer = NULL;
+#endif
+#ifdef ASIO_HANDLER_ALLOCATE_EX
+	delete boost::asio::s_asioReuMemMt;
+	boost::asio::s_asioReuMemMt = NULL;
 #endif
 }
 

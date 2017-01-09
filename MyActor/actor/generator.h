@@ -996,12 +996,13 @@ struct __co_context_no_capture{};
 //包装一个有局部变量的计算，然后返回一个结果
 #define co_calc CoLocalWrapCalc_()*[&]
 #define co_calc_of CoLocalWrapCalc_()*
-//generator function类型
-#define co_func_type std::function<void(generator&)>
 
 class my_actor;
 class generator;
+//generator 句柄
 typedef std::shared_ptr<generator> generator_handle;
+//generator function入口
+typedef std::function<void(generator&)> co_function;
 
 /*!
 @brief 基于无栈协程(stackless coroutine)实现的generator
@@ -1013,9 +1014,15 @@ class generator : public ActorTimerFace_
 	FRIEND_SHARED_PTR(generator);
 	struct call_stack_pck
 	{
-		call_stack_pck(int coNext, int coNextEx, void* ctx, std::function<void(generator&)>&& handler)
-		:_handler(std::move(handler)), _ctx(ctx), _coNext(coNext), _coNextEx(coNextEx)  {}
-		std::function<void(generator&)> _handler;
+		call_stack_pck(int coNext, int coNextEx, void* ctx, co_function&& handler)
+		:_handler(std::move(handler)), _ctx(ctx), _coNext(coNext), _coNextEx(coNextEx) {}
+
+		operator co_function&()
+		{
+			return _handler;
+		}
+
+		co_function _handler;
 		void* _ctx;
 		int _coNext;
 		int _coNextEx;
@@ -1025,7 +1032,7 @@ private:
 	generator();
 	~generator();
 public:
-	static generator_handle create(shared_strand strand, std::function<void(generator&)> handler, std::function<void()> notify = std::function<void()>());
+	static generator_handle create(shared_strand strand, co_function handler, std::function<void()> notify = std::function<void()>());
 	void run();
 	void stop();
 	const shared_strand& self_strand();
@@ -1083,7 +1090,7 @@ public:
 	void _co_usleep(long long us);
 	void _co_dead_sleep(long long ms);
 	void _co_dead_usleep(long long us);
-	void _co_push_stack(int coNext, std::function<void(generator&)>&& handler);
+	void _co_push_stack(int coNext, co_function&& handler);
 private:
 	void timeout_handler();
 	static void install(std::atomic<long long>* id);
@@ -1093,7 +1100,7 @@ private:
 private:
 	std::weak_ptr<generator> _weakThis;
 	std::shared_ptr<generator> _sharedThis;
-	std::function<void(generator&)> _baseHandler;
+	co_function _baseHandler;
 	std::function<void()> _notify;
 	msg_queue<call_stack_pck> _callStack;
 	shared_strand _strand;
@@ -1885,13 +1892,13 @@ template <bool>
 struct CoCallBind_
 {
 	template <typename Handler, typename... Args>
-	static std::function<void(generator&)> bind(Handler&& handler, Args&&... args)
+	static co_function bind(Handler&& handler, Args&&... args)
 	{
 		return std::bind(std::forward<Handler>(handler), __1, std::forward<Args>(args)...);
 	}
 
 	template <typename Handler>
-	static std::function<void(generator&)> bind(Handler&& handler)
+	static co_function bind(Handler&& handler)
 	{
 		return std::forward<Handler>(handler);
 	}
@@ -1901,20 +1908,20 @@ template <>
 struct CoCallBind_<true>
 {
 	template <typename Func, typename Obj, typename... Args>
-	static std::function<void(generator&)> bind(Func func, Obj&& obj, Args&&... args)
+	static co_function bind(Func func, Obj&& obj, Args&&... args)
 	{
 		return std::bind(func, std::forward<Obj>(obj), __1, std::forward<Args>(args)...);
 	}
 };
 
 template <typename Handler, typename Unknown, typename... Args>
-static std::function<void(generator&)> _co_call_bind(Handler&& handler, Unknown&& unkown, Args&&... args)
+static co_function _co_call_bind(Handler&& handler, Unknown&& unkown, Args&&... args)
 {
 	return CoCallBind_<CheckClassFunc_<RM_REF(Handler)>::value>::bind(std::forward<Handler>(handler), std::forward<Unknown>(unkown), std::forward<Args>(args)...);
 }
 
 template <typename Handler>
-static std::function<void(generator&)> _co_call_bind(Handler&& handler)
+static co_function _co_call_bind(Handler&& handler)
 {
 	static_assert(!CheckClassFunc_<RM_REF(Handler)>::value, "");
 	return CoCallBind_<false>::bind(std::forward<Handler>(handler));
