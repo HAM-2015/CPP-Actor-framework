@@ -713,4 +713,78 @@ struct ValTryRefMove_<const T&>
 #define FUNCTION_ALLOCATOR(__dst__, __src__, __alloc__) __dst__(__src__)
 #endif
 
+#ifdef __linux__
+template <typename Handler>
+struct WrapContinuation_
+{
+	template <typename H>
+	WrapContinuation_(bool pl, H&& handler)
+		:_handler(std::forward<H>(handler)) {}
+
+	friend bool asio_handler_is_continuation(WrapContinuation_*)
+	{
+		return true;
+	}
+
+	template <typename... Args>
+	void operator()(Args&&... args)
+	{
+		_handler(std::forward<Args>(args)...);
+	}
+
+	Handler _handler;
+	RVALUE_CONSTRUCT1(WrapContinuation_, _handler);
+	LVALUE_CONSTRUCT1(WrapContinuation_, _handler);
+};
+
+template <typename Handler>
+WrapContinuation_<RM_CREF(Handler)> wrap_continuation(Handler&& handler)
+{
+	return WrapContinuation_<RM_CREF(Handler)>(bool(), std::forward<Handler>(handler));
+}
+
+template <typename Handler>
+struct WrapTried_
+{
+	template <typename H>
+	WrapTried_(bool pl, H&& handler)
+		:_handler(std::forward<H>(handler)) {}
+
+	friend bool asio_handler_is_tried(WrapTried_*)
+	{
+		return true;
+	}
+
+	template <typename... Args>
+	void operator()(Args&&... args)
+	{
+		_handler(std::forward<Args>(args)...);
+	}
+
+	Handler _handler;
+	RVALUE_CONSTRUCT1(WrapTried_, _handler);
+	LVALUE_CONSTRUCT1(WrapTried_, _handler);
+};
+
+template <typename Handler>
+WrapTried_<RM_CREF(Handler)> wrap_tried(Handler&& handler)
+{
+	return WrapTried_<RM_CREF(Handler)>(bool(), std::forward<Handler>(handler));
+}
+
+#elif WIN32
+
+template <typename Handler>
+Handler&& wrap_continuation(Handler&& handler)
+{
+	return (Handler&&)handler;
+}
+
+template <typename Handler>
+Handler&& wrap_tried(Handler&& handler)
+{
+	return (Handler&&)handler;
+}
+#endif
+
 #endif

@@ -107,6 +107,19 @@ generator_handle generator::create(shared_strand strand, co_function handler, st
 	return res;
 }
 
+generator_handle generator::create(shared_strand strand, co_function handler, generator_done_sign& doneSign)
+{
+	assert(!doneSign._notified);
+	if (!doneSign._strand)
+	{
+		doneSign._strand = strand;
+	}
+	return generator::create(std::move(strand), std::move(handler), [&doneSign]()
+	{
+		doneSign.notify_all();
+	});
+}
+
 long long generator::alloc_id()
 {
 	return ++(*_id);
@@ -378,4 +391,145 @@ void generator::timeout_handler()
 	assert(__ctx);
 	_timerHandle.reset();
 	_next();
+}
+//////////////////////////////////////////////////////////////////////////
+
+generator_done_sign::generator_done_sign()
+: _notified(false)
+{
+}
+
+generator_done_sign::generator_done_sign(shared_strand strand)
+: _strand(std::move(strand)), _notified(false)
+{
+}
+
+generator_done_sign::~generator_done_sign()
+{
+	assert(_notified);
+	assert(_waitList.empty());
+}
+
+void generator_done_sign::append_listen(std::function<void()> notify)
+{
+	assert(_strand);
+	if (_strand->running_in_this_thread())
+	{
+		if (_notified)
+		{
+			CHECK_EXCEPTION(notify);
+		}
+		else
+		{
+			_waitList.push_back(std::move(notify));
+		}
+	}
+	else
+	{
+		_strand->post(std::bind([this](std::function<void()>& notify)
+		{
+			if (_notified)
+			{
+				CHECK_EXCEPTION(notify);
+			}
+			else
+			{
+				_waitList.push_back(std::move(notify));
+			}
+		}, std::move(notify)));
+	}
+}
+
+void generator_done_sign::notify_all()
+{
+	assert(_strand);
+	_strand->distribute([this]()
+	{
+		_notified = true;
+		std::list<std::function<void()>> waitList(std::move(_waitList));
+		while (!waitList.empty())
+		{
+			CHECK_EXCEPTION(waitList.front());
+			waitList.pop_front();
+		}
+	});
+}
+
+const shared_strand& generator_done_sign::self_strand()
+{
+	return _strand;
+}
+//////////////////////////////////////////////////////////////////////////
+
+CoGo_::CoGo_(shared_strand strand, std::function<void()> ntf)
+:_strand(std::move(strand)), _ntf(std::move(ntf))
+{
+}
+
+CoGo_::CoGo_(io_engine& ios, std::function<void()> ntf)
+:_strand(boost_strand::create(ios)), _ntf(std::move(ntf))
+{
+}
+
+CoGo_::CoGo_(shared_strand strand, generator_done_sign& doneSign)
+:_strand(std::move(strand)), _ntf([&doneSign]()
+{
+	doneSign.notify_all();
+})
+{
+	assert(!doneSign._notified);
+	if (!doneSign._strand)
+	{
+		doneSign._strand = _strand;
+	}
+}
+
+CoGo_::CoGo_(io_engine& ios, generator_done_sign& doneSign)
+:_strand(boost_strand::create(ios)), _ntf([&doneSign]()
+{
+	doneSign.notify_all();
+})
+{
+	assert(!doneSign._notified);
+	if (!doneSign._strand)
+	{
+		doneSign._strand = _strand;
+	}
+}
+//////////////////////////////////////////////////////////////////////////
+
+CoCreate_::CoCreate_(shared_strand strand, std::function<void()> ntf)
+:_strand(std::move(strand)), _ntf(std::move(ntf))
+{
+}
+
+CoCreate_::CoCreate_(io_engine& ios, std::function<void()> ntf)
+:_strand(boost_strand::create(ios)), _ntf(std::move(ntf))
+{
+}
+
+CoCreate_::CoCreate_(shared_strand strand, generator_done_sign& doneSign)
+:_strand(std::move(strand)), _ntf([&doneSign]()
+{
+	doneSign.notify_all();
+})
+{
+	assert(!doneSign._notified);
+	if (!doneSign._strand)
+	{
+		doneSign._strand = _strand;
+	}
+}
+
+CoCreate_::CoCreate_(io_engine& ios, generator_done_sign& doneSign)
+:_strand(boost_strand::create(ios)), _ntf([&doneSign]()
+{
+	doneSign.notify_all();
+})
+{
+	assert(!doneSign._notified);
+	if (!doneSign._strand)
+	{
+		doneSign._strand = _strand;
+	}
 }

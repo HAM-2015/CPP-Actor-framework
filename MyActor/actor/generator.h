@@ -26,8 +26,11 @@ struct __co_context_no_capture{};
 #define _co_for for
 #endif
 
+#define _co_counter (__COUNTER__ - __coBeginCount)
+
 //开始定义generator函数体上下文，类似于局部变量
 #define co_begin_context \
+	enum { __coBeginCount = __COUNTER__+2 };\
 	static_assert(__COUNTER__+1 == __COUNTER__, ""); __co_context_no_capture const co_context_no_capture = __co_context_no_capture();\
 	struct co_context_tag {
 
@@ -147,9 +150,9 @@ struct __co_context_no_capture{};
 
 //开始generator的代码区域
 #define co_begin }\
-	if (!co_self.__coNext) {co_self.__coNext = (__COUNTER__+1)/2;}else co_check_stop;\
+	if (!co_self.__coNext) {co_self.__coNext = (_co_counter+1)/2;}else co_check_stop;\
 	__coNext=co_self.__coNext; co_self.__coNext=0;\
-	switch(co_self.__coNextEx ? co_self.__coNextEx : __coNext) { case __COUNTER__/2:;
+	switch(co_self.__coNextEx ? co_self.__coNextEx : __coNext) { case _co_counter/2:;
 
 //结束generator的代码区域
 #define co_end break;default:assert(false);} co_stop;
@@ -159,8 +162,8 @@ struct __co_context_no_capture{};
 	assert(!co_self.__awaitSign && !co_self.__sharedAwaitSign);\
 	co_check_stop;\
 	DEBUG_OPERATION(co_self.__inside = false);\
-	co_self.__coNext = (__COUNTER__+1)/2;\
-	return; case __COUNTER__/2:;\
+	co_self.__coNext = (_co_counter+1)/2;\
+	return; case _co_counter/2:;\
 	}while (0)
 
 //generator的yield原语
@@ -298,8 +301,8 @@ struct __co_context_no_capture{};
 	co_check_stop;\
 	_co_for(__forYieldSwitch = false;;__forYieldSwitch = true)\
 	if (__forYieldSwitch) {co_self.__coNextEx=0; if (-1 != co_self.__coNext){co_self.__coNext = -2;}\
-	return; case (__COUNTER__+1)/2:; _co_for_break;}\
-	else CoCall_(co_self, __COUNTER__/2)-
+	return; case (_co_counter+1)/2:; _co_for_break;}\
+	else CoCall_(co_self, _co_counter/2)-
 
 #define co_call(...) co_call_of _co_call_bind(__VA_ARGS__)
 
@@ -320,8 +323,8 @@ struct __co_context_no_capture{};
 	_co_for(__forYieldSwitch = false;;__forYieldSwitch = true)\
 	if (__forYieldSwitch) {if(!__isBestCall){co_lock_stop; _co_await; co_unlock_stop;}\
 	else{co_self.__coNextEx=0; if (-1 != co_self.__coNext){co_self.__coNext = -2;}\
-	return; case (__COUNTER__+1)/2:;}_co_for_break;}\
-	else CoBestCall(__strand__, co_self, __isBestCall, __COUNTER__/2)-
+	return; case (_co_counter+1)/2:;}_co_for_break;}\
+	else CoBestCall(__strand__, co_self, __isBestCall, _co_counter/2)-
 
 #define co_best_call(__strand__, ...) co_best_call_of(__strand__) _co_call_bind(__VA_ARGS__)
 
@@ -401,9 +404,9 @@ struct __co_context_no_capture{};
 //generator无法reenter到switch-case内，替换原有switch关键字实现generator内switch-case功能，不支持嵌套
 #define co_switch(__exp__) \
 	_co_for(assert(co_self.__inside && !co_self.__coNextEx),\
-		co_self.__coNextEx=(__COUNTER__+1)/2, __coSwitchSign=true, __forYieldSwitch=false;;__forYieldSwitch=true)\
+		co_self.__coNextEx=(_co_counter+1)/2, __coSwitchSign=true, __forYieldSwitch=false;;__forYieldSwitch=true)\
 	if (__forYieldSwitch) {co_self.__coNextEx=0; _co_for_break;}\
-	else case __COUNTER__/2: switch(__coSwitchSign ? co_calc()->unsigned long long{\
+	else case _co_counter/2: switch(__coSwitchSign ? co_calc()->unsigned long long{\
 	const auto val = (__exp__); static_assert(sizeof(val) <= 4, "switch value must be 32bit");\
 	return ((unsigned long long)(unsigned)(val)) | _switch_mark;} : __coNext)
 
@@ -999,6 +1002,9 @@ struct __co_context_no_capture{};
 
 class my_actor;
 class generator;
+class generator_done_sign;
+struct CoGo_;
+struct CoCreate_;
 //generator 句柄
 typedef std::shared_ptr<generator> generator_handle;
 //generator function入口
@@ -1033,6 +1039,7 @@ private:
 	~generator();
 public:
 	static generator_handle create(shared_strand strand, co_function handler, std::function<void()> notify = std::function<void()>());
+	static generator_handle create(shared_strand strand, co_function handler, generator_done_sign& doneSign);
 	void run();
 	void stop();
 	const shared_strand& self_strand();
@@ -1126,6 +1133,29 @@ public:
 	NONE_COPY(generator);
 };
 
+/*!
+@brief generator done监听
+*/
+class generator_done_sign
+{
+	friend generator;
+	friend CoGo_;
+	friend CoCreate_;
+public:
+	generator_done_sign();
+	generator_done_sign(shared_strand strand);
+	~generator_done_sign();
+public:
+	void append_listen(std::function<void()> notify);
+	const shared_strand& self_strand();
+private:
+	void notify_all();
+private:
+	shared_strand _strand;
+	std::list<std::function<void()>> _waitList;
+	bool _notified;
+};
+
 enum co_async_state : char
 {
 	co_async_undefined = (char)-1,
@@ -1149,11 +1179,10 @@ private:
 
 struct CoGo_
 {
-	CoGo_(shared_strand strand, std::function<void()> ntf = std::function<void()>())
-		:_strand(std::move(strand)), _ntf(std::move(ntf)) {}
-
-	CoGo_(io_engine& ios, std::function<void()> ntf = std::function<void()>())
-		:_strand(boost_strand::create(ios)), _ntf(std::move(ntf)) {}
+	CoGo_(shared_strand strand, std::function<void()> ntf = std::function<void()>());
+	CoGo_(io_engine& ios, std::function<void()> ntf = std::function<void()>());
+	CoGo_(shared_strand strand, generator_done_sign& doneSign);
+	CoGo_(io_engine& ios, generator_done_sign& doneSign);
 
 	template <typename Handler>
 	generator_handle operator-(Handler&& handler)
@@ -1169,11 +1198,10 @@ struct CoGo_
 
 struct CoCreate_
 {
-	CoCreate_(shared_strand strand, std::function<void()> ntf = std::function<void()>())
-	:_strand(std::move(strand)), _ntf(std::move(ntf)) {}
-
-	CoCreate_(io_engine& ios, std::function<void()> ntf = std::function<void()>())
-		:_strand(boost_strand::create(ios)), _ntf(std::move(ntf)) {}
+	CoCreate_(shared_strand strand, std::function<void()> ntf = std::function<void()>());
+	CoCreate_(io_engine& ios, std::function<void()> ntf = std::function<void()>());
+	CoCreate_(shared_strand strand, generator_done_sign& doneSign);
+	CoCreate_(io_engine& ios, generator_done_sign& doneSign);
 
 	template <typename Handler>
 	generator_handle operator-(Handler&& handler)
