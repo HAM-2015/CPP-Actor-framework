@@ -209,14 +209,14 @@ tcp_socket::result tcp_socket::try_write_same(const void* buff, size_t length)
 		socket_ops::init_buf(buf, buff, length);
 		boost::system::error_code ec;
 		signed_size_type bytes = socket_ops::send(_socket.native_handle(), &buf, 1, 0, ec);
-		if (ec)
-		{
-			res.code = ec.value();
-		}
-		else
+		if (bytes >= 0 && !ec)
 		{
 			res.ok = true;
 			res.s = (size_t)bytes;
+		}
+		else
+		{
+			res.code = ec.value();
 		}
 	}
 	else
@@ -236,14 +236,14 @@ tcp_socket::result tcp_socket::try_read_same(void* buff, size_t length)
 		socket_ops::init_buf(buf, buff, length);
 		boost::system::error_code ec;
 		signed_size_type bytes = socket_ops::recv(_socket.native_handle(), &buf, 1, 0, ec);
-		if (ec)
-		{
-			res.code = ec.value();
-		}
-		else
+		if (bytes >= 0 && !ec)
 		{
 			res.ok = true;
 			res.s = (size_t)bytes;
+		}
+		else
+		{
+			res.code = ec.value();
 		}
 	}
 	else
@@ -261,7 +261,8 @@ tcp_socket::result tcp_socket::try_mwrite_same(const void* const* buffs, const s
 		return _try_mwrite_same(buffs, lengths, count);
 	}
 	result res = { 0, 0, false };
-	for (size_t i = 0;; i++)
+	size_t i = 0;
+	while (true)
 	{
 		struct iovec msgs[32];
 		struct mmsghdr mhdr[32];
@@ -279,33 +280,48 @@ tcp_socket::result tcp_socket::try_mwrite_same(const void* const* buffs, const s
 			mhdr[ct].msg_hdr.msg_iov = &msgs[ct];
 			mhdr[ct].msg_hdr.msg_iovlen = 1;
 		}
-		if (ct)
+		if (!ct)
 		{
-			int pcks = ::sendmmsg(_socket.native_handle(), mhdr, (unsigned int)ct, MSG_NOSIGNAL);
-			if (pcks > 0)
+			break;
+		}
+		const int pcks = ::sendmmsg(_socket.native_handle(), mhdr, (unsigned int)ct, MSG_NOSIGNAL);
+		if (pcks > 0)
+		{
+			res.s += pcks;
+			const size_t lastTotPcks = i*static_array_length(msgs) + pcks;
+			*lastBytes = mhdr[pcks-1].msg_len;
+			if (*lastBytes != lengths[lastTotPcks-1])
 			{
-				res.s += pcks;
-				*lastBytes = mhdr[pcks-1].msg_len;
-				if ((size_t)pcks != ct || *lastBytes != lengths[i*static_array_length(msgs) + pcks - 1])
-				{
-					break;
-				}
+				break;
 			}
-			else
+			if ((size_t)pcks != ct)
 			{
-				int err = errno;
-				if (res.s && EAGAIN == err)
+				if (EINTR == errno)
 				{
-					break;
+					i = 0;
+					buffs += lastTotPcks;
+					lengths += lastTotPcks;
+					count -= lastTotPcks;
+					continue;
 				}
-				res.code = err;
-				return res;
+				break;
 			}
 		}
 		else
 		{
-			break;
+			const int err = errno;
+			if (EINTR == err)
+			{
+				continue;
+			}
+			if (res.s && (EAGAIN == err || EWOULDBLOCK == err))
+			{
+				break;
+			}
+			res.code = err;
+			return res;
 		}
+		i++;
 	}
 	res.ok = true;
 	return res;
@@ -316,7 +332,7 @@ tcp_socket::result tcp_socket::try_mwrite_same(const void* const* buffs, const s
 		result tr = try_write_same(buffs[i], lengths[i]);
 		if (!tr.ok)
 		{
-			if (i && boost::asio::error::try_again == tr.code)
+			if (i && (boost::asio::error::try_again == tr.code || boost::asio::error::would_block == tr.code))
 			{
 				break;
 			}
@@ -350,7 +366,8 @@ tcp_socket::result tcp_socket::try_mread_same(void* const* buffs, const size_t* 
 		return _try_mread_same(buffs, lengths, count);
 	}
 	result res = { 0, 0, false };
-	for (size_t i = 0;; i++)
+	size_t i = 0;
+	while (true)
 	{
 		struct iovec msgs[32];
 		struct mmsghdr mhdr[32];
@@ -368,34 +385,48 @@ tcp_socket::result tcp_socket::try_mread_same(void* const* buffs, const size_t* 
 			mhdr[ct].msg_hdr.msg_iov = &msgs[ct];
 			mhdr[ct].msg_hdr.msg_iovlen = 1;
 		}
-		if (ct)
+		if (!ct)
 		{
-			struct timespec timeout = { 0, 0 };
-			int pcks = ::recvmmsg(_socket.native_handle(), mhdr, (unsigned int)ct, 0, &timeout);
-			if (pcks > 0)
+			break;
+		}
+		const int pcks = ::recvmmsg(_socket.native_handle(), mhdr, (unsigned int)ct, 0, NULL);
+		if (pcks > 0)
+		{
+			res.s += pcks;
+			const size_t lastTotPcks = i*static_array_length(msgs) + pcks;
+			*lastBytes = mhdr[pcks-1].msg_len;
+			if (*lastBytes != lengths[lastTotPcks-1])
 			{
-				res.s += pcks;
-				*lastBytes = mhdr[pcks-1].msg_len;
-				if ((size_t)pcks != ct || *lastBytes != lengths[i*static_array_length(msgs) + pcks - 1])
-				{
-					break;
-				}
+				break;
 			}
-			else
+			if ((size_t)pcks != ct)
 			{
-				int err = errno;
-				if (res.s && EAGAIN == err)
+				if (EINTR == errno)
 				{
-					break;
+					i = 0;
+					buffs += lastTotPcks;
+					lengths += lastTotPcks;
+					count -= lastTotPcks;
+					continue;
 				}
-				res.code = err;
-				return res;
+				break;
 			}
 		}
 		else
 		{
-			break;
+			const int err = errno;
+			if (EINTR == err)
+			{
+				continue;
+			}
+			if (res.s && (EAGAIN == err || EWOULDBLOCK == err))
+			{
+				break;
+			}
+			res.code = err;
+			return res;
 		}
+		i++;
 	}
 	res.ok = true;
 	return res;
@@ -406,7 +437,7 @@ tcp_socket::result tcp_socket::try_mread_same(void* const* buffs, const size_t* 
 		result tr = try_read_same(buffs[i], lengths[i]);
 		if (!tr.ok)
 		{
-			if (i && boost::asio::error::try_again == tr.code)
+			if (i && (boost::asio::error::try_again == tr.code || boost::asio::error::would_block == tr.code))
 			{
 				break;
 			}
@@ -436,7 +467,8 @@ tcp_socket::result tcp_socket::_try_mwrite_same(const void* const* buffs, const 
 {
 #ifdef ENABLE_SCK_MULTI_IO
 	result res = { 0, 0, false };
-	for (size_t i = 0;; i++)
+	size_t i = 0;
+	while (true)
 	{
 		struct iovec msgs[32];
 		size_t ct = 0;
@@ -452,37 +484,38 @@ tcp_socket::result tcp_socket::_try_mwrite_same(const void* const* buffs, const 
 			msgs[ct].iov_len = lengths[k];
 			currTotBytes += lengths[k];
 		}
-		if (ct)
+		if (!ct)
 		{
-			struct mmsghdr mhdr;
-			memset(&mhdr, 0, sizeof(mhdr));
-			mhdr.msg_hdr.msg_iov = msgs;
-			mhdr.msg_hdr.msg_iovlen = ct;
-			struct timespec timeout = { 0, 0 };
-			int pcks = ::sendmmsg(_socket.native_handle(), &mhdr, 1, MSG_NOSIGNAL);
-			if (pcks > 0)
+			break;
+		}
+		struct mmsghdr mhdr;
+		memset(&mhdr, 0, sizeof(mhdr));
+		mhdr.msg_hdr.msg_iov = msgs;
+		mhdr.msg_hdr.msg_iovlen = ct;
+		const int pcks = ::sendmmsg(_socket.native_handle(), &mhdr, 1, MSG_NOSIGNAL);
+		if (pcks > 0)
+		{
+			res.s += mhdr.msg_len;
+			if (mhdr.msg_len != currTotBytes)
 			{
-				res.s += mhdr.msg_len;
-				if (mhdr.msg_len != currTotBytes)
-				{
-					break;
-				}
-			}
-			else
-			{
-				int err = errno;
-				if (res.s && EAGAIN == err)
-				{
-					break;
-				}
-				res.code = err;
-				return res;
+				break;
 			}
 		}
 		else
 		{
-			break;
+			const int err = errno;
+			if (EINTR == err)
+			{
+				continue;
+			}
+			if (res.s && (EAGAIN == err || EWOULDBLOCK == err))
+			{
+				break;
+			}
+			res.code = err;
+			return res;
 		}
+		i++;
 	}
 	res.ok = true;
 	return res;
@@ -495,7 +528,8 @@ tcp_socket::result tcp_socket::_try_mread_same(void* const* buffs, const size_t*
 {
 #ifdef ENABLE_SCK_MULTI_IO
 	result res = { 0, 0, false };
-	for (size_t i = 0;; i++)
+	size_t i = 0;
+	while (true)
 	{
 		struct iovec msgs[32];
 		size_t ct = 0;
@@ -511,37 +545,38 @@ tcp_socket::result tcp_socket::_try_mread_same(void* const* buffs, const size_t*
 			msgs[ct].iov_len = lengths[k];
 			currTotBytes += lengths[k];
 		}
-		if (ct)
+		if (!ct)
 		{
-			struct mmsghdr mhdr;
-			memset(&mhdr, 0, sizeof(mhdr));
-			mhdr.msg_hdr.msg_iov = msgs;
-			mhdr.msg_hdr.msg_iovlen = ct;
-			struct timespec timeout = { 0, 0 };
-			int pcks = ::recvmmsg(_socket.native_handle(), &mhdr, 1, 0, &timeout);
-			if (pcks > 0)
+			break;
+		}
+		struct mmsghdr mhdr;
+		memset(&mhdr, 0, sizeof(mhdr));
+		mhdr.msg_hdr.msg_iov = msgs;
+		mhdr.msg_hdr.msg_iovlen = ct;
+		const int pcks = ::recvmmsg(_socket.native_handle(), &mhdr, 1, 0, NULL);
+		if (pcks > 0)
+		{
+			res.s += mhdr.msg_len;
+			if (mhdr.msg_len != currTotBytes)
 			{
-				res.s += mhdr.msg_len;
-				if (mhdr.msg_len != currTotBytes)
-				{
-					break;
-				}
-			}
-			else
-			{
-				int err = errno;
-				if (res.s && EAGAIN == err)
-				{
-					break;
-				}
-				res.code = err;
-				return res;
+				break;
 			}
 		}
 		else
 		{
-			break;
+			const int err = errno;
+			if (EINTR == err)
+			{
+				continue;
+			}
+			if (res.s && (EAGAIN == err || EWOULDBLOCK == err))
+			{
+				break;
+			}
+			res.code = err;
+			return res;
 		}
+		i++;
 	}
 	res.ok = true;
 	return res;
@@ -930,14 +965,14 @@ udp_socket::result udp_socket::try_send(const void* buff, size_t length, int fla
 		socket_ops::init_buf(buf, buff, length);
 		boost::system::error_code ec;
 		signed_size_type bytes = socket_ops::send(_socket.native_handle(), &buf, 1, flags, ec);
-		if (ec)
-		{
-			res.code = ec.value();
-		}
-		else
+		if (bytes >= 0 && !ec)
 		{
 			res.ok = true;
 			res.s = (size_t)bytes;
+		}
+		else
+		{
+			res.code = ec.value();
 		}
 	}
 	else
@@ -951,7 +986,8 @@ udp_socket::result udp_socket::try_msend(const void* const* buffs, const size_t*
 {
 #ifdef ENABLE_SCK_MULTI_IO
 	result res = { 0, 0, false };
-	for (size_t i = 0;; i++)
+	size_t i = 0;
+	while (true)
 	{
 		struct iovec msgs[32];
 		struct mmsghdr mhdr[32];
@@ -969,39 +1005,54 @@ udp_socket::result udp_socket::try_msend(const void* const* buffs, const size_t*
 			mhdr[ct].msg_hdr.msg_iov = &msgs[ct];
 			mhdr[ct].msg_hdr.msg_iovlen = 1;
 		}
-		if (ct)
+		if (!ct)
 		{
-			int pcks = ::sendmmsg(_socket.native_handle(), mhdr, (unsigned int)ct, flags | MSG_NOSIGNAL);
-			if (pcks >= 0)
+			break;
+		}
+		const int pcks = ::sendmmsg(_socket.native_handle(), mhdr, (unsigned int)ct, flags | MSG_NOSIGNAL);
+		if (pcks > 0)
+		{
+			res.s += pcks;
+			if (bytes)
 			{
-				res.s += pcks;
-				if (bytes)
+				for (size_t j = 0; j < (size_t)pcks; j++)
 				{
-					for (size_t j = 0; j < (size_t)pcks; j++)
-					{
-						bytes[i*static_array_length(msgs) + j] = mhdr[j].msg_len;
-					}
-				}
-				if ((size_t)pcks != ct)
-				{
-					break;
+					bytes[i*static_array_length(msgs) + j] = mhdr[j].msg_len;
 				}
 			}
-			else
+			if ((size_t)pcks != ct)
 			{
-				int err = errno;
-				if (res.s && EAGAIN == err)
+				if (EINTR == errno)
 				{
-					break;
+					const size_t lastTotPcks = i*static_array_length(msgs) + pcks;
+					i = 0;
+					buffs += lastTotPcks;
+					lengths += lastTotPcks;
+					count -= lastTotPcks;
+					if (bytes)
+					{
+						bytes += lastTotPcks;
+					}
+					continue;
 				}
-				res.code = err;
-				return res;
+				break;
 			}
 		}
 		else
 		{
-			break;
+			const int err = errno;
+			if (EINTR == err)
+			{
+				continue;
+			}
+			if (res.s && (EAGAIN == err || EWOULDBLOCK == err))
+			{
+				break;
+			}
+			res.code = err;
+			return res;
 		}
+		i++;
 	}
 	res.ok = true;
 	return res;
@@ -1012,7 +1063,7 @@ udp_socket::result udp_socket::try_msend(const void* const* buffs, const size_t*
 		result tr = try_send(buffs[i], lengths[i], flags);
 		if (!tr.ok)
 		{
-			if (i && boost::asio::error::try_again == tr.code)
+			if (i && (boost::asio::error::try_again == tr.code || boost::asio::error::would_block == tr.code))
 			{
 				break;
 			}
@@ -1034,7 +1085,8 @@ udp_socket::result udp_socket::try_msend_to(const boost::asio::ip::udp::endpoint
 {
 #ifdef ENABLE_SCK_MULTI_IO
 	result res = { 0, 0, false };
-	for (size_t i = 0;; i++)
+	size_t i = 0;
+	while (true)
 	{
 		struct iovec msgs[32];
 		struct mmsghdr mhdr[32];
@@ -1054,39 +1106,54 @@ udp_socket::result udp_socket::try_msend_to(const boost::asio::ip::udp::endpoint
 			mhdr[ct].msg_hdr.msg_name = (void*)remoteEndpoints[i*static_array_length(msgs) + ct].data();
 			mhdr[ct].msg_hdr.msg_namelen = remoteEndpoints[i*static_array_length(msgs) + ct].size();
 		}
-		if (ct)
+		if (!ct)
 		{
-			int pcks = ::sendmmsg(_socket.native_handle(), mhdr, (unsigned int)ct, flags | MSG_NOSIGNAL);
-			if (pcks >= 0)
+			break;
+		}
+		const int pcks = ::sendmmsg(_socket.native_handle(), mhdr, (unsigned int)ct, flags | MSG_NOSIGNAL);
+		if (pcks > 0)
+		{
+			res.s += pcks;
+			if (bytes)
 			{
-				res.s += pcks;
-				if (bytes)
+				for (size_t j = 0; j < (size_t)pcks; j++)
 				{
-					for (size_t j = 0; j < (size_t)pcks; j++)
-					{
-						bytes[i*static_array_length(msgs) + j] = mhdr[j].msg_len;
-					}
-				}
-				if ((size_t)pcks != ct)
-				{
-					break;
+					bytes[i*static_array_length(msgs) + j] = mhdr[j].msg_len;
 				}
 			}
-			else
+			if ((size_t)pcks != ct)
 			{
-				int err = errno;
-				if (res.s && EAGAIN == err)
+				if (EINTR == errno)
 				{
-					break;
+					const size_t lastTotPcks = i*static_array_length(msgs) + pcks;
+					i = 0;
+					buffs += lastTotPcks;
+					lengths += lastTotPcks;
+					count -= lastTotPcks;
+					if (bytes)
+					{
+						bytes += lastTotPcks;
+					}
+					continue;
 				}
-				res.code = err;
-				return res;
+				break;
 			}
 		}
 		else
 		{
-			break;
+			const int err = errno;
+			if (EINTR == err)
+			{
+				continue;
+			}
+			if (res.s && (EAGAIN == err || EWOULDBLOCK == err))
+			{
+				break;
+			}
+			res.code = err;
+			return res;
 		}
+		i++;
 	}
 	res.ok = true;
 	return res;
@@ -1097,7 +1164,7 @@ udp_socket::result udp_socket::try_msend_to(const boost::asio::ip::udp::endpoint
 		result tr = try_send_to(remoteEndpoints[i], buffs[i], lengths[i], flags);
 		if (!tr.ok)
 		{
-			if (i && boost::asio::error::try_again == tr.code)
+			if (i && (boost::asio::error::try_again == tr.code || boost::asio::error::would_block == tr.code))
 			{
 				break;
 			}
@@ -1119,7 +1186,8 @@ udp_socket::result udp_socket::try_msend_to(const boost::asio::ip::udp::endpoint
 {
 #ifdef ENABLE_SCK_MULTI_IO
 	result res = { 0, 0, false };
-	for (size_t i = 0;; i++)
+	size_t i = 0;
+	while (true)
 	{
 		struct iovec msgs[32];
 		struct mmsghdr mhdr[32];
@@ -1139,39 +1207,54 @@ udp_socket::result udp_socket::try_msend_to(const boost::asio::ip::udp::endpoint
 			mhdr[ct].msg_hdr.msg_name = (void*)remoteEndpoint.data();
 			mhdr[ct].msg_hdr.msg_namelen = remoteEndpoint.size();
 		}
-		if (ct)
+		if (!ct)
 		{
-			int pcks = ::sendmmsg(_socket.native_handle(), mhdr, (unsigned int)ct, flags | MSG_NOSIGNAL);
-			if (pcks >= 0)
+			break;
+		}
+		const int pcks = ::sendmmsg(_socket.native_handle(), mhdr, (unsigned int)ct, flags | MSG_NOSIGNAL);
+		if (pcks > 0)
+		{
+			res.s += pcks;
+			if (bytes)
 			{
-				res.s += pcks;
-				if (bytes)
+				for (size_t j = 0; j < (size_t)pcks; j++)
 				{
-					for (size_t j = 0; j < (size_t)pcks; j++)
-					{
-						bytes[i*static_array_length(msgs) + j] = mhdr[j].msg_len;
-					}
-				}
-				if ((size_t)pcks != ct)
-				{
-					break;
+					bytes[i*static_array_length(msgs) + j] = mhdr[j].msg_len;
 				}
 			}
-			else
+			if ((size_t)pcks != ct)
 			{
-				int err = errno;
-				if (res.s && EAGAIN == err)
+				if (EINTR == errno)
 				{
-					break;
+					const size_t lastTotPcks = i*static_array_length(msgs) + pcks;
+					i = 0;
+					buffs += lastTotPcks;
+					lengths += lastTotPcks;
+					count -= lastTotPcks;
+					if (bytes)
+					{
+						bytes += lastTotPcks;
+					}
+					continue;
 				}
-				res.code = err;
-				return res;
+				break;
 			}
 		}
 		else
 		{
-			break;
+			const int err = errno;
+			if (EINTR == err)
+			{
+				continue;
+			}
+			if (res.s && (EAGAIN == err || EWOULDBLOCK == err))
+			{
+				break;
+			}
+			res.code = err;
+			return res;
 		}
+		i++;
 	}
 	res.ok = true;
 	return res;
@@ -1182,7 +1265,7 @@ udp_socket::result udp_socket::try_msend_to(const boost::asio::ip::udp::endpoint
 		result tr = try_send_to(remoteEndpoint, buffs[i], lengths[i], flags);
 		if (!tr.ok)
 		{
-			if (i && boost::asio::error::try_again == tr.code)
+			if (i && (boost::asio::error::try_again == tr.code || boost::asio::error::would_block == tr.code))
 			{
 				break;
 			}
@@ -1215,14 +1298,14 @@ udp_socket::result udp_socket::try_send_to(const boost::asio::ip::udp::endpoint&
 		socket_ops::init_buf(buf, buff, length);
 		boost::system::error_code ec;
 		signed_size_type bytes = socket_ops::sendto(_socket.native_handle(), &buf, 1, flags, remoteEndpoint.data(), remoteEndpoint.size(), ec);
-		if (ec)
-		{
-			res.code = ec.value();
-		}
-		else
+		if (bytes >= 0 && !ec)
 		{
 			res.ok = true;
 			res.s = (size_t)bytes;
+		}
+		else
+		{
+			res.code = ec.value();
 		}
 	}
 	else
@@ -1242,14 +1325,14 @@ udp_socket::result udp_socket::try_receive(void* buff, size_t length, int flags)
 		socket_ops::init_buf(buf, buff, length);
 		boost::system::error_code ec;
 		signed_size_type bytes = socket_ops::recv(_socket.native_handle(), &buf, 1, flags, ec);
-		if (ec)
-		{
-			res.code = ec.value();
-		}
-		else
+		if (bytes >= 0 && !ec)
 		{
 			res.ok = true;
 			res.s = (size_t)bytes;
+		}
+		else
+		{
+			res.code = ec.value();
 		}
 	}
 	else
@@ -1263,7 +1346,8 @@ udp_socket::result udp_socket::try_mreceive(void* const* buffs, const size_t* le
 {
 #ifdef ENABLE_SCK_MULTI_IO
 	result res = { 0, 0, false };
-	for (size_t i = 0;; i++)
+	size_t i = 0;
+	while (true)
 	{
 		struct iovec msgs[32];
 		struct mmsghdr mhdr[32];
@@ -1281,40 +1365,54 @@ udp_socket::result udp_socket::try_mreceive(void* const* buffs, const size_t* le
 			mhdr[ct].msg_hdr.msg_iov = &msgs[ct];
 			mhdr[ct].msg_hdr.msg_iovlen = 1;
 		}
-		if (ct)
+		if (!ct)
 		{
-			struct timespec timeout = { 0, 0 };
-			int pcks = ::recvmmsg(_socket.native_handle(), mhdr, (unsigned int)ct, flags, &timeout);
-			if (pcks >= 0)
+			break;
+		}
+		const int pcks = ::recvmmsg(_socket.native_handle(), mhdr, (unsigned int)ct, flags, NULL);
+		if (pcks > 0)
+		{
+			res.s += pcks;
+			if (bytes)
 			{
-				res.s += pcks;
-				if (bytes)
+				for (size_t j = 0; j < (size_t)pcks; j++)
 				{
-					for (size_t j = 0; j < (size_t)pcks; j++)
-					{
-						bytes[i*static_array_length(msgs) + j] = mhdr[j].msg_len;
-					}
-				}
-				if ((size_t)pcks != ct)
-				{
-					break;
+					bytes[i*static_array_length(msgs) + j] = mhdr[j].msg_len;
 				}
 			}
-			else
+			if ((size_t)pcks != ct)
 			{
-				int err = errno;
-				if (res.s && EAGAIN == err)
+				if (EINTR == errno)
 				{
-					break;
+					const size_t lastTotPcks = i*static_array_length(msgs) + pcks;
+					i = 0;
+					buffs += lastTotPcks;
+					lengths += lastTotPcks;
+					count -= lastTotPcks;
+					if (bytes)
+					{
+						bytes += lastTotPcks;
+					}
+					continue;
 				}
-				res.code = err;
-				return res;
+				break;
 			}
 		}
 		else
 		{
-			break;
+			const int err = errno;
+			if (EINTR == err)
+			{
+				continue;
+			}
+			if (res.s && (EAGAIN == err || EWOULDBLOCK == err))
+			{
+				break;
+			}
+			res.code = err;
+			return res;
 		}
+		i++;
 	}
 	res.ok = true;
 	return res;
@@ -1325,7 +1423,7 @@ udp_socket::result udp_socket::try_mreceive(void* const* buffs, const size_t* le
 		result tr = try_receive(buffs[i], lengths[i], flags);
 		if (!tr.ok)
 		{
-			if (i && boost::asio::error::try_again == tr.code)
+			if (i && (boost::asio::error::try_again == tr.code || boost::asio::error::would_block == tr.code))
 			{
 				break;
 			}
@@ -1347,7 +1445,8 @@ udp_socket::result udp_socket::try_mreceive_from(boost::asio::ip::udp::endpoint*
 {
 #ifdef ENABLE_SCK_MULTI_IO
 	result res = { 0, 0, false };
-	for (size_t i = 0;; i++)
+	size_t i = 0;
+	while (true)
 	{
 		struct iovec msgs[32];
 		struct mmsghdr mhdr[32];
@@ -1367,44 +1466,58 @@ udp_socket::result udp_socket::try_mreceive_from(boost::asio::ip::udp::endpoint*
 			mhdr[ct].msg_hdr.msg_name = (void*)remoteEndpoints[i*static_array_length(msgs) + ct].data();
 			mhdr[ct].msg_hdr.msg_namelen = remoteEndpoints[i*static_array_length(msgs) + ct].capacity();
 		}
-		if (ct)
+		if (!ct)
 		{
-			struct timespec timeout = { 0, 0 };
-			int pcks = ::recvmmsg(_socket.native_handle(), mhdr, (unsigned int)ct, flags, &timeout);
-			if (pcks >= 0)
+			break;
+		}
+		const int pcks = ::recvmmsg(_socket.native_handle(), mhdr, (unsigned int)ct, flags, NULL);
+		if (pcks > 0)
+		{
+			res.s += pcks;
+			for (size_t j = 0; j < (size_t)pcks; j++)
 			{
-				res.s += pcks;
+				remoteEndpoints[i*static_array_length(msgs) + j].resize(mhdr[ct].msg_hdr.msg_namelen);
+			}
+			if (bytes)
+			{
 				for (size_t j = 0; j < (size_t)pcks; j++)
 				{
-					remoteEndpoints[i*static_array_length(msgs) + j].resize(mhdr[ct].msg_hdr.msg_namelen);
-				}
-				if (bytes)
-				{
-					for (size_t j = 0; j < (size_t)pcks; j++)
-					{
-						bytes[i*static_array_length(msgs) + j] = mhdr[j].msg_len;
-					}
-				}
-				if ((size_t)pcks != ct)
-				{
-					break;
+					bytes[i*static_array_length(msgs) + j] = mhdr[j].msg_len;
 				}
 			}
-			else
+			if ((size_t)pcks != ct)
 			{
-				int err = errno;
-				if (res.s && EAGAIN == err)
+				if (EINTR == errno)
 				{
-					break;
+					const size_t lastTotPcks = i*static_array_length(msgs) + pcks;
+					i = 0;
+					buffs += lastTotPcks;
+					lengths += lastTotPcks;
+					count -= lastTotPcks;
+					if (bytes)
+					{
+						bytes += lastTotPcks;
+					}
+					continue;
 				}
-				res.code = err;
-				return res;
+				break;
 			}
 		}
 		else
 		{
-			break;
+			const int err = errno;
+			if (EINTR == err)
+			{
+				continue;
+			}
+			if (res.s && (EAGAIN == err || EWOULDBLOCK == err))
+			{
+				break;
+			}
+			res.code = err;
+			return res;
 		}
+		i++;
 	}
 	res.ok = true;
 	return res;
@@ -1415,7 +1528,7 @@ udp_socket::result udp_socket::try_mreceive_from(boost::asio::ip::udp::endpoint*
 		result tr = try_receive_from(remoteEndpoints[i], buffs[i], lengths[i], flags);
 		if (!tr.ok)
 		{
-			if (i && boost::asio::error::try_again == tr.code)
+			if (i && (boost::asio::error::try_again == tr.code || boost::asio::error::would_block == tr.code))
 			{
 				break;
 			}
@@ -1449,15 +1562,15 @@ udp_socket::result udp_socket::try_receive_from(boost::asio::ip::udp::endpoint& 
 		std::size_t addlen = remoteEndpoint.capacity();
 		boost::system::error_code ec;
 		signed_size_type bytes = socket_ops::recvfrom(_socket.native_handle(), &buf, 1, flags, remoteEndpoint.data(), &addlen, ec);
-		if (ec)
+		if (bytes >= 0 && !ec)
 		{
-			res.code = ec.value();
+			res.ok = true;
+			res.s = (size_t)bytes;
+			remoteEndpoint.resize(addlen);
 		}
 		else
 		{
-			remoteEndpoint.resize(addlen);
-			res.ok = true;
-			res.s = (size_t)bytes;
+			res.code = ec.value();
 		}
 	}
 	else
