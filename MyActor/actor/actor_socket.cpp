@@ -51,6 +51,11 @@ bool tcp_socket::is_pre_option()
 #endif
 }
 
+bool tcp_socket::try_again(const result& res)
+{
+	return boost::asio::error::try_again == res.code || boost::asio::error::would_block == res.code;
+}
+
 std::string tcp_socket::local_endpoint(unsigned short& port)
 {
 	boost::system::error_code ec;
@@ -221,7 +226,7 @@ tcp_socket::result tcp_socket::try_write_same(const void* buff, size_t length)
 	}
 	else
 	{
-		res.code = -1;
+		res.code = boost::asio::error::would_block;
 	}
 	return res;
 }
@@ -248,7 +253,7 @@ tcp_socket::result tcp_socket::try_read_same(void* buff, size_t length)
 	}
 	else
 	{
-		res.code = -1;
+		res.code = boost::asio::error::would_block;
 	}
 	return res;
 }
@@ -332,7 +337,7 @@ tcp_socket::result tcp_socket::try_mwrite_same(const void* const* buffs, const s
 		result tr = try_write_same(buffs[i], lengths[i]);
 		if (!tr.ok)
 		{
-			if (i && (boost::asio::error::try_again == tr.code || boost::asio::error::would_block == tr.code))
+			if (i && try_again(tr))
 			{
 				break;
 			}
@@ -437,7 +442,7 @@ tcp_socket::result tcp_socket::try_mread_same(void* const* buffs, const size_t* 
 		result tr = try_read_same(buffs[i], lengths[i]);
 		if (!tr.ok)
 		{
-			if (i && (boost::asio::error::try_again == tr.code || boost::asio::error::would_block == tr.code))
+			if (i && try_again(tr))
 			{
 				break;
 			}
@@ -787,6 +792,11 @@ bool udp_socket::is_pre_option()
 #endif
 }
 
+bool udp_socket::try_again(const result& res)
+{
+	return boost::asio::error::try_again == res.code || boost::asio::error::would_block == res.code;
+}
+
 boost::asio::ip::udp::endpoint udp_socket::make_endpoint(const char* remoteIp, unsigned short remotePort)
 {
 	return boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort);
@@ -977,7 +987,7 @@ udp_socket::result udp_socket::try_send(const void* buff, size_t length, int fla
 	}
 	else
 	{
-		res.code = -1;
+		res.code = boost::asio::error::would_block;
 	}
 	return res;
 }
@@ -1063,7 +1073,7 @@ udp_socket::result udp_socket::try_msend(const void* const* buffs, const size_t*
 		result tr = try_send(buffs[i], lengths[i], flags);
 		if (!tr.ok)
 		{
-			if (i && (boost::asio::error::try_again == tr.code || boost::asio::error::would_block == tr.code))
+			if (i && try_again(tr))
 			{
 				break;
 			}
@@ -1164,7 +1174,7 @@ udp_socket::result udp_socket::try_msend_to(const boost::asio::ip::udp::endpoint
 		result tr = try_send_to(remoteEndpoints[i], buffs[i], lengths[i], flags);
 		if (!tr.ok)
 		{
-			if (i && (boost::asio::error::try_again == tr.code || boost::asio::error::would_block == tr.code))
+			if (i && try_again(tr))
 			{
 				break;
 			}
@@ -1265,7 +1275,7 @@ udp_socket::result udp_socket::try_msend_to(const boost::asio::ip::udp::endpoint
 		result tr = try_send_to(remoteEndpoint, buffs[i], lengths[i], flags);
 		if (!tr.ok)
 		{
-			if (i && (boost::asio::error::try_again == tr.code || boost::asio::error::would_block == tr.code))
+			if (i && try_again(tr))
 			{
 				break;
 			}
@@ -1310,7 +1320,7 @@ udp_socket::result udp_socket::try_send_to(const boost::asio::ip::udp::endpoint&
 	}
 	else
 	{
-		res.code = -1;
+		res.code = boost::asio::error::would_block;
 	}
 	return res;
 }
@@ -1337,7 +1347,7 @@ udp_socket::result udp_socket::try_receive(void* buff, size_t length, int flags)
 	}
 	else
 	{
-		res.code = -1;
+		res.code = boost::asio::error::would_block;
 	}
 	return res;
 }
@@ -1423,7 +1433,7 @@ udp_socket::result udp_socket::try_mreceive(void* const* buffs, const size_t* le
 		result tr = try_receive(buffs[i], lengths[i], flags);
 		if (!tr.ok)
 		{
-			if (i && (boost::asio::error::try_again == tr.code || boost::asio::error::would_block == tr.code))
+			if (i && try_again(tr))
 			{
 				break;
 			}
@@ -1528,7 +1538,7 @@ udp_socket::result udp_socket::try_mreceive_from(boost::asio::ip::udp::endpoint*
 		result tr = try_receive_from(remoteEndpoints[i], buffs[i], lengths[i], flags);
 		if (!tr.ok)
 		{
-			if (i && (boost::asio::error::try_again == tr.code || boost::asio::error::would_block == tr.code))
+			if (i && try_again(tr))
 			{
 				break;
 			}
@@ -1575,7 +1585,7 @@ udp_socket::result udp_socket::try_receive_from(boost::asio::ip::udp::endpoint& 
 	}
 	else
 	{
-		res.code = -1;
+		res.code = boost::asio::error::would_block;
 	}
 	return res;
 }

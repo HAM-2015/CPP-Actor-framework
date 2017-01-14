@@ -17,7 +17,7 @@ class tcp_socket
 public:
 	struct result
 	{
-		size_t s;///<字节数
+		size_t s;///<字节数/缓存数
 		int code;///<错误码
 		bool ok;///<是否成功
 	};
@@ -139,13 +139,21 @@ public:
 		if (is_pre_option())
 		{
 			result res = try_read_same(buff, length);
-			if (res.ok)
+			if (!res.ok)
 			{
-				if (res.s == length)
+				if (!try_again(res))
 				{
 					handler(res);
 					return;
 				}
+			}
+			else if (res.s == length)
+			{
+				handler(res);
+				return;
+			}
+			else
+			{
 				buff = (char*)buff + res.s;
 				length -= res.s;
 				trySize = res.s;
@@ -175,7 +183,7 @@ public:
 		if (is_pre_option())
 		{
 			result res = try_read_same(buff, length);
-			if (res.ok)
+			if (res.ok || !try_again(res))
 			{
 				handler(res);
 				return;
@@ -208,13 +216,21 @@ public:
 		if (is_pre_option())
 		{
 			result res = try_write_same(buff, length);
-			if (res.ok)
+			if (!res.ok)
 			{
-				if (res.s == length)
+				if (!try_again(res))
 				{
 					handler(res);
 					return;
 				}
+			}
+			else if (res.s == length)
+			{
+				handler(res);
+				return;
+			}
+			else
+			{
 				buff = (const char*)buff + res.s;
 				length -= res.s;
 				trySize = res.s;
@@ -244,7 +260,7 @@ public:
 		if (is_pre_option())
 		{
 			result res = try_write_same(buff, length);
-			if (res.ok)
+			if (res.ok || !try_again(res))
 			{
 				handler(res);
 				return;
@@ -289,6 +305,11 @@ public:
 	@return lastBytes 不为 NULL 时返回实际读取了多少个缓存数据，为 NULL 时总共读取了多少字节数据
 	*/
 	result try_mread_same(void* const* buffs, const size_t* lengths, size_t count, size_t* lastBytes = NULL);
+
+	/*!
+	@brief try_io操作失败是否是因为EAGAIN
+	*/
+	static bool try_again(const result& res);
 private:
 	result _try_mwrite_same(const void* const* buffs, const size_t* lengths, size_t count);
 	result _try_mread_same(void* const* buffs, const size_t* lengths, size_t count);
@@ -377,7 +398,7 @@ class udp_socket
 public:
 	struct result
 	{
-		size_t s;///<字节数
+		size_t s;///<字节数/缓存数
 		int code;///<错误码
 		bool ok;///<是否成功
 	};
@@ -546,7 +567,7 @@ public:
 		if (is_pre_option())
 		{
 			result res = try_send_to(remoteEndpoint, buff, length, flags);
-			if (res.ok)
+			if (res.ok || !try_again(res))
 			{
 				handler(res);
 				return;
@@ -587,7 +608,7 @@ public:
 		if (is_pre_option())
 		{
 			result res = try_send(buff, length, flags);
-			if (res.ok)
+			if (res.ok || !try_again(res))
 			{
 				handler(res);
 				return;
@@ -619,7 +640,7 @@ public:
 		if (is_pre_option())
 		{
 			result res = try_receive_from(remoteEndpoint, buff, length, flags);
-			if (res.ok)
+			if (res.ok || !try_again(res))
 			{
 				handler(res);
 				return;
@@ -657,7 +678,7 @@ public:
 		if (is_pre_option())
 		{
 			result res = try_receive(buff, length, flags);
-			if (res.ok)
+			if (res.ok || !try_again(res))
 			{
 				handler(res);
 				return;
@@ -733,6 +754,11 @@ public:
 	@return 实际接收数据条数
 	*/
 	result try_mreceive_from(boost::asio::ip::udp::endpoint* remoteEndpoints, void* const* buffs, const size_t* lengths, size_t count, size_t* bytes = NULL, int flags = 0);
+
+	/*!
+	@brief try_io操作失败是否是因为EAGAIN
+	*/
+	static bool try_again(const result& res);
 private:
 	void set_internal_non_blocking();
 private:
