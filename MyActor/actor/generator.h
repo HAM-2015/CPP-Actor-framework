@@ -3431,7 +3431,7 @@ private:
 		std::list<CoNotifyHandlerFace_*> ntfsEx;
 		while (!_waitQueue.empty())
 		{
-			if (ntfNum < static_array_length(ntfs))
+			if (ntfNum < fixed_array_length(ntfs))
 			{
 				ntfs[ntfNum++] = _waitQueue.front();
 			}
@@ -3461,7 +3461,7 @@ private:
 		std::list<CoNotifyHandlerFace_*> ntfsEx;
 		while (!_waitQueue.empty())
 		{
-			if (ntfNum < static_array_length(ntfs))
+			if (ntfNum < fixed_array_length(ntfs))
 			{
 				ntfs[ntfNum++] = _waitQueue.front();
 			}
@@ -4567,7 +4567,7 @@ private:
 		std::list<CoNotifyHandlerFace_*> ntfsEx;
 		while (!_pushWait.empty())
 		{
-			if (ntfNum < static_array_length(ntfs))
+			if (ntfNum < fixed_array_length(ntfs))
 			{
 				ntfs[ntfNum++] = _pushWait.front();
 			}
@@ -4579,7 +4579,7 @@ private:
 		}
 		while (!_popWait.empty())
 		{
-			if (ntfNum < static_array_length(ntfs))
+			if (ntfNum < fixed_array_length(ntfs))
 			{
 				ntfs[ntfNum++] = _popWait.front();
 			}
@@ -4608,7 +4608,7 @@ private:
 		std::list<CoNotifyHandlerFace_*> ntfsEx;
 		while (!_pushWait.empty())
 		{
-			if (ntfNum < static_array_length(ntfs))
+			if (ntfNum < fixed_array_length(ntfs))
 			{
 				ntfs[ntfNum++] = _pushWait.front();
 			}
@@ -4620,7 +4620,7 @@ private:
 		}
 		while (!_popWait.empty())
 		{
-			if (ntfNum < static_array_length(ntfs))
+			if (ntfNum < fixed_array_length(ntfs))
 			{
 				ntfs[ntfNum++] = _popWait.front();
 			}
@@ -4649,7 +4649,7 @@ private:
 		std::list<CoNotifyHandlerFace_*> ntfsEx;
 		while (!_pushWait.empty())
 		{
-			if (ntfNum < static_array_length(ntfs))
+			if (ntfNum < fixed_array_length(ntfs))
 			{
 				ntfs[ntfNum++] = _pushWait.front();
 			}
@@ -4678,7 +4678,7 @@ private:
 		std::list<CoNotifyHandlerFace_*> ntfsEx;
 		while (!_popWait.empty())
 		{
-			if (ntfNum < static_array_length(ntfs))
+			if (ntfNum < fixed_array_length(ntfs))
 			{
 				ntfs[ntfNum++] = _popWait.front();
 			}
@@ -5870,7 +5870,7 @@ private:
 		std::list<CoNotifyHandlerFace_*> ntfsEx;
 		while (!_pushWait.empty())
 		{
-			if (ntfNum < static_array_length(ntfs))
+			if (ntfNum < fixed_array_length(ntfs))
 			{
 				ntfs[ntfNum++] = _pushWait.front();
 			}
@@ -5882,7 +5882,7 @@ private:
 		}
 		while (!_popWait.empty())
 		{
-			if (ntfNum < static_array_length(ntfs))
+			if (ntfNum < fixed_array_length(ntfs))
 			{
 				ntfs[ntfNum++] = _popWait.front();
 			}
@@ -5912,7 +5912,7 @@ private:
 		std::list<CoNotifyHandlerFace_*> ntfsEx;
 		while (!_pushWait.empty())
 		{
-			if (ntfNum < static_array_length(ntfs))
+			if (ntfNum < fixed_array_length(ntfs))
 			{
 				ntfs[ntfNum++] = _pushWait.front();
 			}
@@ -5924,7 +5924,7 @@ private:
 		}
 		while (!_popWait.empty())
 		{
-			if (ntfNum < static_array_length(ntfs))
+			if (ntfNum < fixed_array_length(ntfs))
 			{
 				ntfs[ntfNum++] = _popWait.front();
 			}
@@ -5954,7 +5954,7 @@ private:
 		std::list<CoNotifyHandlerFace_*> ntfsEx;
 		while (!_pushWait.empty())
 		{
-			if (ntfNum < static_array_length(ntfs))
+			if (ntfNum < fixed_array_length(ntfs))
 			{
 				ntfs[ntfNum++] = _pushWait.front();
 			}
@@ -5983,7 +5983,7 @@ private:
 		std::list<CoNotifyHandlerFace_*> ntfsEx;
 		while (!_popWait.empty())
 		{
-			if (ntfNum < static_array_length(ntfs))
+			if (ntfNum < fixed_array_length(ntfs))
 			{
 				ntfs[ntfNum++] = _popWait.front();
 			}
@@ -7246,7 +7246,7 @@ private:
 		std::list<CoNotifyHandlerFace_*> ntfsEx2;
 		while (!_waitQueue.empty())
 		{
-			if (ntfNum1 < static_array_length(ntfs1))
+			if (ntfNum1 < fixed_array_length(ntfs1))
 			{
 				ntfs1[ntfNum1++] = _waitQueue.front();
 			}
@@ -7258,7 +7258,7 @@ private:
 		}
 		while (!_sendQueue.empty())
 		{
-			if (ntfNum2 < static_array_length(ntfs2))
+			if (ntfNum2 < fixed_array_length(ntfs2))
 			{
 				ntfs2[ntfNum2++] = _sendQueue.front();
 			}
@@ -7306,7 +7306,7 @@ private:
 		std::list<CoNotifyHandlerFace_*> ntfsEx2;
 		while (!_waitQueue.empty())
 		{
-			if (ntfNum1 < static_array_length(ntfs1))
+			if (ntfNum1 < fixed_array_length(ntfs1))
 			{
 				ntfs1[ntfNum1++] = _waitQueue.front();
 			}
@@ -7318,7 +7318,7 @@ private:
 		}
 		while (!_sendQueue.empty())
 		{
-			if (ntfNum2 < static_array_length(ntfs2))
+			if (ntfNum2 < fixed_array_length(ntfs2))
 			{
 				ntfs2[ntfNum2++] = _sendQueue.front();
 			}
@@ -7363,7 +7363,7 @@ private:
 		std::list<CoNotifyHandlerFace_*> ntfsEx;
 		while (!_sendQueue.empty())
 		{
-			if (ntfNum < static_array_length(ntfs))
+			if (ntfNum < fixed_array_length(ntfs))
 			{
 				ntfs[ntfNum++] = _sendQueue.front();
 			}
@@ -7392,7 +7392,7 @@ private:
 		std::list<CoNotifyHandlerFace_*> ntfsEx;
 		while (!_waitQueue.empty())
 		{
-			if (ntfNum < static_array_length(ntfs))
+			if (ntfNum < fixed_array_length(ntfs))
 			{
 				ntfs[ntfNum++] = _waitQueue.front();
 			}
@@ -8636,7 +8636,7 @@ private:
 						assert(_inSet.find(it->_waitHostID) == _inSet.end());
 						DEBUG_OPERATION(_inSet[it->_waitHostID] = st_shared);
 						_sharedMap[it->_waitHostID]._count++;
-						if (ntfNum < static_array_length(ntfs))
+						if (ntfNum < fixed_array_length(ntfs))
 						{
 							ntfs[ntfNum++] = it->_ntf;
 						}
@@ -8710,7 +8710,7 @@ private:
 							assert(_inSet.find(it->_waitHostID) == _inSet.end());
 							DEBUG_OPERATION(_inSet[it->_waitHostID] = st_shared);
 							_sharedMap[it->_waitHostID]._count++;
-							if (ntfNum < static_array_length(ntfs))
+							if (ntfNum < fixed_array_length(ntfs))
 							{
 								ntfs[ntfNum++] = it->_ntf;
 							}
@@ -8999,7 +8999,7 @@ private:
 		std::list<CoNotifyHandlerFace_*> ntfsEx;
 		while (!_waitQueue.empty())
 		{
-			if (ntfNum < static_array_length(ntfs))
+			if (ntfNum < fixed_array_length(ntfs))
 			{
 				ntfs[ntfNum++] = _waitQueue.front();
 			}

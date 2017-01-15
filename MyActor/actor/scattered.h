@@ -427,12 +427,30 @@ struct type_hash<>
 };
 
 /*!
-@brief 静态数组元素个数
+@brief 固定数组元素个数
 */
 template <typename T, size_t N>
-size_t static_array_length(T(&)[N])
+size_t fixed_array_length(T(&)[N])
 {
 	return N;
+}
+
+/*!
+@brief 固定数组元素字节数
+*/
+template <typename T, size_t N>
+size_t fixed_array_bytes(T(&)[N])
+{
+	return N*sizeof(T);
+}
+
+/*!
+@brief 固定数组元素字节数
+*/
+template <typename T, size_t N>
+size_t fixed_array_bytes(T(&)[N], size_t max_bytes)
+{
+	return N*sizeof(T) < max_bytes ? N*sizeof(T) : max_bytes;
 }
 
 /*!

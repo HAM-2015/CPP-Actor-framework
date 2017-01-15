@@ -21,6 +21,80 @@ public:
 		int code;///<´íÎóÂë
 		bool ok;///<ÊÇ·ñ³É¹¦
 	};
+private:
+#ifdef ENABLE_ASIO_PRE_OP
+#ifdef HAS_ASIO_HANDLER_IS_TRIED
+	template <typename Handler>
+	struct async_read_op
+	{
+		template <typename H>
+		async_read_op(H&& handler, boost::asio::ip::tcp::socket& sck, void* buff, size_t currBytes, size_t totalBytes)
+		:_handler(std::forward<H>(handler)), _sck(sck), _buffer(buff), _currBytes(currBytes), _totalBytes(totalBytes) {}
+
+		void operator()(const boost::system::error_code& ec, size_t s)
+		{
+			_currBytes += s;
+			if (ec || _totalBytes == _currBytes)
+			{
+				tcp_socket::result res = { _currBytes, ec.value(), !ec };
+				_handler(res);
+			}
+			else
+			{
+				_sck.async_read_some(boost::asio::buffer((char*)_buffer + _currBytes, _totalBytes - _currBytes), std::move(*this));
+			}
+		}
+
+		friend bool asio_handler_is_tried(async_read_op*)
+		{
+			return true;
+		}
+
+		Handler _handler;
+		boost::asio::ip::tcp::socket& _sck;
+		void* const _buffer;
+		size_t _currBytes;
+		const size_t _totalBytes;
+		RVALUE_CONSTRUCT5(async_read_op, _handler, _sck, _buffer, _currBytes, _totalBytes);
+		LVALUE_CONSTRUCT5(async_read_op, _handler, _sck, _buffer, _currBytes, _totalBytes);
+	};
+	
+	template <typename Handler>
+	struct async_write_op
+	{
+		template <typename H>
+		async_write_op(H&& handler, boost::asio::ip::tcp::socket& sck, const void* buff, size_t currBytes, size_t totalBytes)
+		:_handler(std::forward<H>(handler)), _sck(sck), _buffer(buff), _currBytes(currBytes), _totalBytes(totalBytes) {}
+
+		void operator()(const boost::system::error_code& ec, size_t s)
+		{
+			_currBytes += s;
+			if (ec || _totalBytes == _currBytes)
+			{
+				tcp_socket::result res = { _currBytes, ec.value(), !ec };
+				_handler(res);
+			}
+			else
+			{
+				_sck.async_write_some(boost::asio::buffer((const char*)_buffer + _currBytes, _totalBytes - _currBytes), std::move(*this));
+			}
+		}
+
+		friend bool asio_handler_is_tried(async_write_op*)
+		{
+			return true;
+		}
+
+		Handler _handler;
+		boost::asio::ip::tcp::socket& _sck;
+		const void* const _buffer;
+		size_t _currBytes;
+		const size_t _totalBytes;
+		RVALUE_CONSTRUCT5(async_write_op, _handler, _sck, _buffer, _currBytes, _totalBytes);
+		LVALUE_CONSTRUCT5(async_write_op, _handler, _sck, _buffer, _currBytes, _totalBytes);
+	};
+#endif
+#endif
 public:
 	tcp_socket(boost::asio::io_service& ios);
 	~tcp_socket();
@@ -154,12 +228,15 @@ public:
 			}
 			else
 			{
-				buff = (char*)buff + res.s;
-				length -= res.s;
 				trySize = res.s;
 			}
+#ifdef HAS_ASIO_HANDLER_IS_TRIED
+			_socket.async_read_some(boost::asio::buffer((char*)buff + trySize, length - trySize),
+				async_read_op<RM_CREF(Handler)>(std::forward<Handler>(handler), _socket, buff, trySize, length));
+			return;
+#endif
 		}
-		boost::asio::async_read(_socket, boost::asio::buffer(buff, length), std::bind([trySize](Handler& handler, const boost::system::error_code& ec, size_t s)
+		boost::asio::async_read(_socket, boost::asio::buffer((char*)buff + trySize, length - trySize), std::bind([trySize](Handler& handler, const boost::system::error_code& ec, size_t s)
 		{
 			result res = { trySize + s, ec.value(), !ec };
 			handler(res);
@@ -231,12 +308,15 @@ public:
 			}
 			else
 			{
-				buff = (const char*)buff + res.s;
-				length -= res.s;
 				trySize = res.s;
 			}
+#ifdef HAS_ASIO_HANDLER_IS_TRIED
+			_socket.async_write_some(boost::asio::buffer((const char*)buff + trySize, length - trySize),
+				async_write_op<RM_CREF(Handler)>(std::forward<Handler>(handler), _socket, buff, trySize, length));
+			return;
+#endif
 		}
-		boost::asio::async_write(_socket, boost::asio::buffer(buff, length), std::bind([trySize](Handler& handler, const boost::system::error_code& ec, size_t s)
+		boost::asio::async_write(_socket, boost::asio::buffer((const char*)buff + trySize, length - trySize), std::bind([trySize](Handler& handler, const boost::system::error_code& ec, size_t s)
 		{
 			result res = { trySize + s, ec.value(), !ec };
 			handler(res);

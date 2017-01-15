@@ -789,7 +789,7 @@ public:
 			v8::Local<v8::Value> params[16];
 			castHandler(isolate, params);
 			size_t paramNum = 0;
-			while (!params[paramNum].IsEmpty() && paramNum < static_array_length(params))
+			while (!params[paramNum].IsEmpty() && paramNum < fixed_array_length(params))
 			{
 				paramNum++;
 			}
@@ -886,7 +886,7 @@ public:
 				v8::Local<v8::Value> params[16];
 				castHandler(isolate, params);
 				size_t paramNum = 0;
-				while (!params[paramNum].IsEmpty() && paramNum < static_array_length(params) - 1)
+				while (!params[paramNum].IsEmpty() && paramNum < fixed_array_length(params) - 1)
 				{
 					paramNum++;
 				}
@@ -973,7 +973,7 @@ public:
 			v8::Local<v8::Value> params[16];
 			castHandler(isolate, params);
 			size_t paramNum = 0;
-			while (!params[paramNum].IsEmpty() && paramNum < static_array_length(params))
+			while (!params[paramNum].IsEmpty() && paramNum < fixed_array_length(params))
 			{
 				paramNum++;
 			}
@@ -1016,7 +1016,7 @@ public:
 			v8::Local<v8::Value> params[16];
 			castHandler(isolate, params);
 			size_t paramNum = 0;
-			while (!params[paramNum].IsEmpty() && paramNum < static_array_length(params))
+			while (!params[paramNum].IsEmpty() && paramNum < fixed_array_length(params))
 			{
 				paramNum++;
 			}
@@ -1067,7 +1067,7 @@ public:
 			v8::Local<v8::Value> params[16];
 			castHandler(isolate, params);
 			size_t paramNum = 0;
-			while (!params[paramNum].IsEmpty() && paramNum < static_array_length(params) - 1)
+			while (!params[paramNum].IsEmpty() && paramNum < fixed_array_length(params) - 1)
 			{
 				paramNum++;
 			}
@@ -1121,7 +1121,7 @@ public:
 			v8::Local<v8::Value> params[16];
 			castHandler(isolate, params);
 			size_t paramNum = 0;
-			while (!params[paramNum].IsEmpty() && paramNum < static_array_length(params) - 1)
+			while (!params[paramNum].IsEmpty() && paramNum < fixed_array_length(params) - 1)
 			{
 				paramNum++;
 			}

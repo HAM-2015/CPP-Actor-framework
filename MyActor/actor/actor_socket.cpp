@@ -272,9 +272,9 @@ tcp_socket::result tcp_socket::try_mwrite_same(const void* const* buffs, const s
 		struct iovec msgs[32];
 		struct mmsghdr mhdr[32];
 		size_t ct = 0;
-		for (; ct < static_array_length(msgs); ct++)
+		for (; ct < fixed_array_length(msgs); ct++)
 		{
-			size_t k = i*static_array_length(msgs) + ct;
+			size_t k = i*fixed_array_length(msgs) + ct;
 			if (k >= count)
 			{
 				break;
@@ -293,7 +293,7 @@ tcp_socket::result tcp_socket::try_mwrite_same(const void* const* buffs, const s
 		if (pcks > 0)
 		{
 			res.s += pcks;
-			const size_t lastTotPcks = i*static_array_length(msgs) + pcks;
+			const size_t lastTotPcks = i*fixed_array_length(msgs) + pcks;
 			*lastBytes = mhdr[pcks-1].msg_len;
 			if (*lastBytes != lengths[lastTotPcks-1])
 			{
@@ -377,9 +377,9 @@ tcp_socket::result tcp_socket::try_mread_same(void* const* buffs, const size_t* 
 		struct iovec msgs[32];
 		struct mmsghdr mhdr[32];
 		size_t ct = 0;
-		for (; ct < static_array_length(msgs); ct++)
+		for (; ct < fixed_array_length(msgs); ct++)
 		{
-			size_t k = i*static_array_length(msgs) + ct;
+			size_t k = i*fixed_array_length(msgs) + ct;
 			if (k >= count)
 			{
 				break;
@@ -398,7 +398,7 @@ tcp_socket::result tcp_socket::try_mread_same(void* const* buffs, const size_t* 
 		if (pcks > 0)
 		{
 			res.s += pcks;
-			const size_t lastTotPcks = i*static_array_length(msgs) + pcks;
+			const size_t lastTotPcks = i*fixed_array_length(msgs) + pcks;
 			*lastBytes = mhdr[pcks-1].msg_len;
 			if (*lastBytes != lengths[lastTotPcks-1])
 			{
@@ -478,9 +478,9 @@ tcp_socket::result tcp_socket::_try_mwrite_same(const void* const* buffs, const 
 		struct iovec msgs[32];
 		size_t ct = 0;
 		size_t currTotBytes = 0;
-		for (; ct < static_array_length(msgs); ct++)
+		for (; ct < fixed_array_length(msgs); ct++)
 		{
-			size_t k = i*static_array_length(msgs) + ct;
+			size_t k = i*fixed_array_length(msgs) + ct;
 			if (k >= count)
 			{
 				break;
@@ -539,9 +539,9 @@ tcp_socket::result tcp_socket::_try_mread_same(void* const* buffs, const size_t*
 		struct iovec msgs[32];
 		size_t ct = 0;
 		size_t currTotBytes = 0;
-		for (; ct < static_array_length(msgs); ct++)
+		for (; ct < fixed_array_length(msgs); ct++)
 		{
-			size_t k = i*static_array_length(msgs) + ct;
+			size_t k = i*fixed_array_length(msgs) + ct;
 			if (k >= count)
 			{
 				break;
@@ -1002,9 +1002,9 @@ udp_socket::result udp_socket::try_msend(const void* const* buffs, const size_t*
 		struct iovec msgs[32];
 		struct mmsghdr mhdr[32];
 		size_t ct = 0;
-		for (; ct < static_array_length(msgs); ct++)
+		for (; ct < fixed_array_length(msgs); ct++)
 		{
-			size_t k = i*static_array_length(msgs) + ct;
+			size_t k = i*fixed_array_length(msgs) + ct;
 			if (k >= count)
 			{
 				break;
@@ -1027,14 +1027,14 @@ udp_socket::result udp_socket::try_msend(const void* const* buffs, const size_t*
 			{
 				for (size_t j = 0; j < (size_t)pcks; j++)
 				{
-					bytes[i*static_array_length(msgs) + j] = mhdr[j].msg_len;
+					bytes[i*fixed_array_length(msgs) + j] = mhdr[j].msg_len;
 				}
 			}
 			if ((size_t)pcks != ct)
 			{
 				if (EINTR == errno)
 				{
-					const size_t lastTotPcks = i*static_array_length(msgs) + pcks;
+					const size_t lastTotPcks = i*fixed_array_length(msgs) + pcks;
 					i = 0;
 					buffs += lastTotPcks;
 					lengths += lastTotPcks;
@@ -1101,9 +1101,9 @@ udp_socket::result udp_socket::try_msend_to(const boost::asio::ip::udp::endpoint
 		struct iovec msgs[32];
 		struct mmsghdr mhdr[32];
 		size_t ct = 0;
-		for (; ct < static_array_length(msgs); ct++)
+		for (; ct < fixed_array_length(msgs); ct++)
 		{
-			size_t k = i*static_array_length(msgs) + ct;
+			size_t k = i*fixed_array_length(msgs) + ct;
 			if (k >= count)
 			{
 				break;
@@ -1113,8 +1113,8 @@ udp_socket::result udp_socket::try_msend_to(const boost::asio::ip::udp::endpoint
 			memset(&mhdr[ct], 0, sizeof(mhdr[ct]));
 			mhdr[ct].msg_hdr.msg_iov = &msgs[ct];
 			mhdr[ct].msg_hdr.msg_iovlen = 1;
-			mhdr[ct].msg_hdr.msg_name = (void*)remoteEndpoints[i*static_array_length(msgs) + ct].data();
-			mhdr[ct].msg_hdr.msg_namelen = remoteEndpoints[i*static_array_length(msgs) + ct].size();
+			mhdr[ct].msg_hdr.msg_name = (void*)remoteEndpoints[i*fixed_array_length(msgs) + ct].data();
+			mhdr[ct].msg_hdr.msg_namelen = remoteEndpoints[i*fixed_array_length(msgs) + ct].size();
 		}
 		if (!ct)
 		{
@@ -1128,14 +1128,14 @@ udp_socket::result udp_socket::try_msend_to(const boost::asio::ip::udp::endpoint
 			{
 				for (size_t j = 0; j < (size_t)pcks; j++)
 				{
-					bytes[i*static_array_length(msgs) + j] = mhdr[j].msg_len;
+					bytes[i*fixed_array_length(msgs) + j] = mhdr[j].msg_len;
 				}
 			}
 			if ((size_t)pcks != ct)
 			{
 				if (EINTR == errno)
 				{
-					const size_t lastTotPcks = i*static_array_length(msgs) + pcks;
+					const size_t lastTotPcks = i*fixed_array_length(msgs) + pcks;
 					i = 0;
 					buffs += lastTotPcks;
 					lengths += lastTotPcks;
@@ -1202,9 +1202,9 @@ udp_socket::result udp_socket::try_msend_to(const boost::asio::ip::udp::endpoint
 		struct iovec msgs[32];
 		struct mmsghdr mhdr[32];
 		size_t ct = 0;
-		for (; ct < static_array_length(msgs); ct++)
+		for (; ct < fixed_array_length(msgs); ct++)
 		{
-			size_t k = i*static_array_length(msgs) + ct;
+			size_t k = i*fixed_array_length(msgs) + ct;
 			if (k >= count)
 			{
 				break;
@@ -1229,14 +1229,14 @@ udp_socket::result udp_socket::try_msend_to(const boost::asio::ip::udp::endpoint
 			{
 				for (size_t j = 0; j < (size_t)pcks; j++)
 				{
-					bytes[i*static_array_length(msgs) + j] = mhdr[j].msg_len;
+					bytes[i*fixed_array_length(msgs) + j] = mhdr[j].msg_len;
 				}
 			}
 			if ((size_t)pcks != ct)
 			{
 				if (EINTR == errno)
 				{
-					const size_t lastTotPcks = i*static_array_length(msgs) + pcks;
+					const size_t lastTotPcks = i*fixed_array_length(msgs) + pcks;
 					i = 0;
 					buffs += lastTotPcks;
 					lengths += lastTotPcks;
@@ -1362,9 +1362,9 @@ udp_socket::result udp_socket::try_mreceive(void* const* buffs, const size_t* le
 		struct iovec msgs[32];
 		struct mmsghdr mhdr[32];
 		size_t ct = 0;
-		for (; ct < static_array_length(msgs); ct++)
+		for (; ct < fixed_array_length(msgs); ct++)
 		{
-			size_t k = i*static_array_length(msgs) + ct;
+			size_t k = i*fixed_array_length(msgs) + ct;
 			if (k >= count)
 			{
 				break;
@@ -1387,14 +1387,14 @@ udp_socket::result udp_socket::try_mreceive(void* const* buffs, const size_t* le
 			{
 				for (size_t j = 0; j < (size_t)pcks; j++)
 				{
-					bytes[i*static_array_length(msgs) + j] = mhdr[j].msg_len;
+					bytes[i*fixed_array_length(msgs) + j] = mhdr[j].msg_len;
 				}
 			}
 			if ((size_t)pcks != ct)
 			{
 				if (EINTR == errno)
 				{
-					const size_t lastTotPcks = i*static_array_length(msgs) + pcks;
+					const size_t lastTotPcks = i*fixed_array_length(msgs) + pcks;
 					i = 0;
 					buffs += lastTotPcks;
 					lengths += lastTotPcks;
@@ -1461,9 +1461,9 @@ udp_socket::result udp_socket::try_mreceive_from(boost::asio::ip::udp::endpoint*
 		struct iovec msgs[32];
 		struct mmsghdr mhdr[32];
 		size_t ct = 0;
-		for (; ct < static_array_length(msgs); ct++)
+		for (; ct < fixed_array_length(msgs); ct++)
 		{
-			size_t k = i*static_array_length(msgs) + ct;
+			size_t k = i*fixed_array_length(msgs) + ct;
 			if (k >= count)
 			{
 				break;
@@ -1473,8 +1473,8 @@ udp_socket::result udp_socket::try_mreceive_from(boost::asio::ip::udp::endpoint*
 			memset(&mhdr[ct], 0, sizeof(mhdr[ct]));
 			mhdr[ct].msg_hdr.msg_iov = &msgs[ct];
 			mhdr[ct].msg_hdr.msg_iovlen = 1;
-			mhdr[ct].msg_hdr.msg_name = (void*)remoteEndpoints[i*static_array_length(msgs) + ct].data();
-			mhdr[ct].msg_hdr.msg_namelen = remoteEndpoints[i*static_array_length(msgs) + ct].capacity();
+			mhdr[ct].msg_hdr.msg_name = (void*)remoteEndpoints[i*fixed_array_length(msgs) + ct].data();
+			mhdr[ct].msg_hdr.msg_namelen = remoteEndpoints[i*fixed_array_length(msgs) + ct].capacity();
 		}
 		if (!ct)
 		{
@@ -1486,20 +1486,20 @@ udp_socket::result udp_socket::try_mreceive_from(boost::asio::ip::udp::endpoint*
 			res.s += pcks;
 			for (size_t j = 0; j < (size_t)pcks; j++)
 			{
-				remoteEndpoints[i*static_array_length(msgs) + j].resize(mhdr[ct].msg_hdr.msg_namelen);
+				remoteEndpoints[i*fixed_array_length(msgs) + j].resize(mhdr[ct].msg_hdr.msg_namelen);
 			}
 			if (bytes)
 			{
 				for (size_t j = 0; j < (size_t)pcks; j++)
 				{
-					bytes[i*static_array_length(msgs) + j] = mhdr[j].msg_len;
+					bytes[i*fixed_array_length(msgs) + j] = mhdr[j].msg_len;
 				}
 			}
 			if ((size_t)pcks != ct)
 			{
 				if (EINTR == errno)
 				{
-					const size_t lastTotPcks = i*static_array_length(msgs) + pcks;
+					const size_t lastTotPcks = i*fixed_array_length(msgs) + pcks;
 					i = 0;
 					buffs += lastTotPcks;
 					lengths += lastTotPcks;
