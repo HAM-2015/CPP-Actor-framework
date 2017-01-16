@@ -697,7 +697,7 @@ void socket_test()
 		child_handle cli = self->create_child([&](my_actor* self)
 		{
 			tcp_socket sck(self->self_io_service());
-			if (sck.connect(self, "127.0.0.1", 1234))
+			if (sck.connect(self, "127.0.0.1", 1234).ok)
 			{
 				char buf[128];
 				for (int i = 0; i < 10; i++)
@@ -735,7 +735,7 @@ void udp_test()
 		{
 			self->sleep(100);
 			udp_socket udp(self->self_io_service());
-			udp.connect(self, "127.0.0.1", 1234);
+			udp.connect("127.0.0.1", 1234);
 			char buf[128];
 			for (int i = 0; i < 3; i++)
 			{

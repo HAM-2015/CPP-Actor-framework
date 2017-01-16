@@ -102,7 +102,7 @@ public:
 	/*!
 	@brief 设置no_delay属性
 	*/
-	bool no_delay();
+	result no_delay();
 
 	/*!
 	@brief linux下优化异步返回（如果有数据，在async_xxx操作中直接回调）
@@ -127,7 +127,7 @@ public:
 	/*!
 	@brief 客户端模式下连接远端服务器
 	*/
-	bool connect(my_actor* host, const char* remoteIp, unsigned short remotePort);
+	result connect(my_actor* host, const char* remoteIp, unsigned short remotePort);
 
 	/*!
 	@brief 往buff缓冲区内读取数据，直到读满
@@ -177,13 +177,13 @@ public:
 	/*!
 	@brief 关闭socket
 	*/
-	bool close();
+	result close();
 
 	/*!
 	@brief 异步模式下，客户端模式下连接远端服务器
 	*/
 	template <typename Handler>
-	void async_connect(const boost::asio::ip::tcp::endpoint& endPoint, Handler&& handler)
+	bool async_connect(const boost::asio::ip::tcp::endpoint& endPoint, Handler&& handler)
 	{
 		_socket.async_connect(endPoint, std::bind([this](Handler& handler, const boost::system::error_code& ec)
 		{
@@ -194,19 +194,20 @@ public:
 			result res = { 0, ec.value(), !ec };
 			handler(res);
 		}, std::forward<Handler>(handler), __1));
+		return false;
 	}
 
 	template <typename Handler>
-	void async_connect(const char* remoteIp, unsigned short remotePort, Handler&& handler)
+	bool async_connect(const char* remoteIp, unsigned short remotePort, Handler&& handler)
 	{
-		async_connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), std::forward<Handler>(handler));
+		return async_connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), std::forward<Handler>(handler));
 	}
 
 	/*!
 	@brief 异步模式下，往buff缓冲区内读取数据，直到读满
 	*/
 	template <typename Handler>
-	void async_read(void* buff, size_t length, Handler&& handler)
+	bool async_read(void* buff, size_t length, Handler&& handler)
 	{
 #ifdef ENABLE_ASIO_PRE_OP
 		size_t trySize = 0;
@@ -218,13 +219,13 @@ public:
 				if (!try_again(res))
 				{
 					handler(res);
-					return;
+					return true;
 				}
 			}
 			else if (res.s == length)
 			{
 				handler(res);
-				return;
+				return true;
 			}
 			else
 			{
@@ -233,7 +234,7 @@ public:
 #ifdef HAS_ASIO_HANDLER_IS_TRIED
 			_socket.async_read_some(boost::asio::buffer((char*)buff + trySize, length - trySize),
 				async_read_op<RM_CREF(Handler)>(std::forward<Handler>(handler), _socket, buff, trySize, length));
-			return;
+			return false;
 #endif
 		}
 		boost::asio::async_read(_socket, boost::asio::buffer((char*)buff + trySize, length - trySize), std::bind([trySize](Handler& handler, const boost::system::error_code& ec, size_t s)
@@ -248,13 +249,14 @@ public:
 			handler(res);
 		}, std::forward<Handler>(handler), __1, __2));
 #endif
+		return false;
 	}
 
 	/*!
 	@brief 异步模式下，往buff缓冲区内读取数据，有多少读多少
 	*/
 	template <typename Handler>
-	void async_read_some(void* buff, size_t length, Handler&& handler)
+	bool async_read_some(void* buff, size_t length, Handler&& handler)
 	{
 #ifdef ENABLE_ASIO_PRE_OP
 		if (is_pre_option())
@@ -263,7 +265,7 @@ public:
 			if (res.ok || !try_again(res))
 			{
 				handler(res);
-				return;
+				return true;
 			}
 #ifdef HAS_ASIO_HANDLER_IS_TRIED
 			_socket.async_read_some(boost::asio::buffer(buff, length), wrap_tried(std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
@@ -271,7 +273,7 @@ public:
 				result res = { s, ec.value(), !ec };
 				handler(res);
 			}, std::forward<Handler>(handler), __1, __2)));
-			return;
+			return false;
 #endif
 		}
 #endif
@@ -280,13 +282,14 @@ public:
 			result res = { s, ec.value(), !ec };
 			handler(res);
 		}, std::forward<Handler>(handler), __1, __2));
+		return false;
 	}
 
 	/*!
 	@brief 异步模式下，将buff缓冲区内的数据全部发送出去
 	*/
 	template <typename Handler>
-	void async_write(const void* buff, size_t length, Handler&& handler)
+	bool async_write(const void* buff, size_t length, Handler&& handler)
 	{
 #ifdef ENABLE_ASIO_PRE_OP
 		size_t trySize = 0;
@@ -298,13 +301,13 @@ public:
 				if (!try_again(res))
 				{
 					handler(res);
-					return;
+					return true;
 				}
 			}
 			else if (res.s == length)
 			{
 				handler(res);
-				return;
+				return true;
 			}
 			else
 			{
@@ -313,7 +316,7 @@ public:
 #ifdef HAS_ASIO_HANDLER_IS_TRIED
 			_socket.async_write_some(boost::asio::buffer((const char*)buff + trySize, length - trySize),
 				async_write_op<RM_CREF(Handler)>(std::forward<Handler>(handler), _socket, buff, trySize, length));
-			return;
+			return false;
 #endif
 		}
 		boost::asio::async_write(_socket, boost::asio::buffer((const char*)buff + trySize, length - trySize), std::bind([trySize](Handler& handler, const boost::system::error_code& ec, size_t s)
@@ -328,13 +331,14 @@ public:
 			handler(res);
 		}, std::forward<Handler>(handler), __1, __2));
 #endif
+		return false;
 	}
 
 	/*!
 	@brief 异步模式下，将buff缓冲区内的数据发送出去，能发多少是多少
 	*/
 	template <typename Handler>
-	void async_write_some(const void* buff, size_t length, Handler&& handler)
+	bool async_write_some(const void* buff, size_t length, Handler&& handler)
 	{
 #ifdef ENABLE_ASIO_PRE_OP
 		if (is_pre_option())
@@ -343,7 +347,7 @@ public:
 			if (res.ok || !try_again(res))
 			{
 				handler(res);
-				return;
+				return true;
 			}
 #ifdef HAS_ASIO_HANDLER_IS_TRIED
 			_socket.async_write_some(boost::asio::buffer(buff, length), wrap_tried(std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
@@ -351,7 +355,7 @@ public:
 				result res = { s, ec.value(), !ec };
 				handler(res);
 			}, std::forward<Handler>(handler), __1, __2)));
-			return;
+			return false;
 #endif
 		}
 #endif
@@ -360,6 +364,7 @@ public:
 			result res = { s, ec.value(), !ec };
 			handler(res);
 		}, std::forward<Handler>(handler), __1, __2));
+		return false;
 	}
 
 	/*!
@@ -397,7 +402,7 @@ private:
 private:
 	boost::asio::ip::tcp::socket _socket;
 	bool _nonBlocking;
-#ifndef ENABLE_EP_FAST_CB
+#ifdef ENABLE_ASIO_PRE_OP
 	bool _preOption;
 #endif
 	NONE_COPY(tcp_socket);
@@ -451,7 +456,7 @@ public:
 	@brief 异步模式下，用socket侦听客户端连接
 	*/
 	template <typename Handler>
-	void async_accept(tcp_socket& socket, Handler&& handler)
+	bool async_accept(tcp_socket& socket, Handler&& handler)
 	{
 		_acceptor->async_accept(socket._socket, std::bind([&socket](Handler& handler, const boost::system::error_code& ec)
 		{
@@ -462,6 +467,7 @@ public:
 			tcp_socket::result res = { 0, ec.value(), !ec };
 			handler(res);
 		}, std::forward<Handler>(handler), __1));
+		return false;
 	}
 private:
 	boost::asio::io_service& _ios;
@@ -489,42 +495,42 @@ public:
 	/*!
 	@brief 关闭socket
 	*/
-	bool close();
+	result close();
 
 	/*!
 	@brief ip v4模式打开socket
 	*/
-	bool open_v4();
+	result open_v4();
 
 	/*!
 	@brief ip v6模式打开socket
 	*/
-	bool open_v6();
+	result open_v6();
 
 	/*!
 	@brief 绑定本地一个ip下某个端口接收发送数据
 	*/
-	bool bind(const char* ip, unsigned short port);
+	result bind(const char* ip, unsigned short port);
 
 	/*!
 	@brief 绑定ip v4下某个端口接收发送数据
 	*/
-	bool bind_v4(unsigned short port);
+	result bind_v4(unsigned short port);
 
 	/*!
 	@brief 绑定ip v6下某个端口接收发送数据
 	*/
-	bool bind_v6(unsigned short port);
+	result bind_v6(unsigned short port);
 
 	/*!
 	@brief 打开并绑定ip v4下某个端口接收发送数据
 	*/
-	bool open_bind_v4(unsigned short port);
+	result open_bind_v4(unsigned short port);
 
 	/*!
 	@brief 打开并绑定ip v6下某个端口接收发送数据
 	*/
-	bool open_bind_v6(unsigned short port);
+	result open_bind_v6(unsigned short port);
 
 	/*!
 	@brief linux下优化异步返回（如果有数据，在async_xxx操作中直接回调）
@@ -539,10 +545,8 @@ public:
 	/*!
 	@brief 设定一个远程端口作为默认发送接收目标
 	*/
-	bool connect(my_actor* host, const char* remoteIp, unsigned short remotePort);
-	bool connect(my_actor* host, const boost::asio::ip::udp::endpoint& remoteEndpoint);
-	bool sync_connect(const char* remoteIp, unsigned short remotePort);
-	bool sync_connect(const boost::asio::ip::udp::endpoint& remoteEndpoint);
+	result connect(const char* remoteIp, unsigned short remotePort);
+	result connect(const boost::asio::ip::udp::endpoint& remoteEndpoint);
 
 	/*!
 	@brief 发送buff缓冲区数据到指定目标
@@ -568,11 +572,6 @@ public:
 	@brief 接收远端发送的数据到buff缓冲区
 	*/
 	result receive(my_actor* host, void* buff, size_t length, int flags = 0);
-
-	/*!
-	@brief 在ms时间范围内，发送端设定一个远程端口作为默认发送接收目标
-	*/
-	bool timed_connect(my_actor* host, int ms, bool& overtime, const char* remoteIp, unsigned short remotePort);
 
 	/*!
 	@brief 在ms时间范围内，发送buff缓冲区数据到指定目标
@@ -615,33 +614,10 @@ public:
 	void reset_remote_sender_endpoint();
 
 	/*!
-	@brief 异步模式下，发送端设定一个远程端口作为默认发送接收目标
-	*/
-	template <typename Handler>
-	void async_connect(const boost::asio::ip::udp::endpoint& remoteEndpoint, Handler&& handler)
-	{
-		_socket.async_connect(remoteEndpoint, std::bind([this](Handler& handler, const boost::system::error_code& ec)
-		{
-			if (!ec)
-			{
-				set_internal_non_blocking();
-			}
-			result res = { 0, ec.value(), !ec };
-			handler(res);
-		}, std::forward<Handler>(handler), __1));
-	}
-
-	template <typename Handler>
-	void async_connect(const char* remoteIp, unsigned short remotePort, Handler&& handler)
-	{
-		async_connect(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), std::forward<Handler>(handler));
-	}
-
-	/*!
 	@brief 异步模式下，发送buff缓冲区数据到指定目标
 	*/
 	template <typename Handler>
-	void async_send_to(const boost::asio::ip::udp::endpoint& remoteEndpoint, const void* buff, size_t length, Handler&& handler, int flags = 0)
+	bool async_send_to(const boost::asio::ip::udp::endpoint& remoteEndpoint, const void* buff, size_t length, Handler&& handler, int flags = 0)
 	{
 #ifdef ENABLE_ASIO_PRE_OP
 		if (is_pre_option())
@@ -650,7 +626,7 @@ public:
 			if (res.ok || !try_again(res))
 			{
 				handler(res);
-				return;
+				return true;
 			}
 #ifdef HAS_ASIO_HANDLER_IS_TRIED
 			_socket.async_send_to(boost::asio::buffer(buff, length), remoteEndpoint, flags, wrap_tried(std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
@@ -658,7 +634,7 @@ public:
 				result res = { s, ec.value(), !ec };
 				handler(res);
 			}, std::forward<Handler>(handler), __1, __2)));
-			return;
+			return false;
 #endif
 		}
 #endif
@@ -667,22 +643,23 @@ public:
 			result res = { s, ec.value(), !ec };
 			handler(res);
 		}, std::forward<Handler>(handler), __1, __2));
+		return false;
 	}
 
 	/*!
 	@brief 异步模式下，发送buff缓冲区数据到指定目标
 	*/
 	template <typename Handler>
-	void async_send_to(const char* remoteIp, unsigned short remotePort, const void* buff, size_t length, Handler&& handler, int flags = 0)
+	bool async_send_to(const char* remoteIp, unsigned short remotePort, const void* buff, size_t length, Handler&& handler, int flags = 0)
 	{
-		async_send_to(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), buff, length, std::forward<Handler>(handler), flags);
+		return async_send_to(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), buff, length, std::forward<Handler>(handler), flags);
 	}
 
 	/*!
 	@brief 异步模式下，发送buff缓冲区数据到默认目标(connect成功后)
 	*/
 	template <typename Handler>
-	void async_send(const void* buff, size_t length, Handler&& handler, int flags = 0)
+	bool async_send(const void* buff, size_t length, Handler&& handler, int flags = 0)
 	{
 #ifdef ENABLE_ASIO_PRE_OP
 		if (is_pre_option())
@@ -691,7 +668,7 @@ public:
 			if (res.ok || !try_again(res))
 			{
 				handler(res);
-				return;
+				return true;
 			}
 #ifdef HAS_ASIO_HANDLER_IS_TRIED
 			_socket.async_send(boost::asio::buffer(buff, length), flags, wrap_tried(std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
@@ -699,7 +676,7 @@ public:
 				result res = { s, ec.value(), !ec };
 				handler(res);
 			}, std::forward<Handler>(handler), __1, __2)));
-			return;
+			return false;
 #endif
 		}
 #endif
@@ -708,13 +685,14 @@ public:
 			result res = { s, ec.value(), !ec };
 			handler(res);
 		}, std::forward<Handler>(handler), __1, __2));
+		return false;
 	}
 
 	/*!
 	@brief 异步模式下，接收远端发送的数据到buff缓冲区，并记录下远端地址
 	*/
 	template <typename Handler>
-	void async_receive_from(boost::asio::ip::udp::endpoint& remoteEndpoint, void* buff, size_t length, Handler&& handler, int flags = 0)
+	bool async_receive_from(boost::asio::ip::udp::endpoint& remoteEndpoint, void* buff, size_t length, Handler&& handler, int flags = 0)
 	{
 #ifdef ENABLE_ASIO_PRE_OP
 		if (is_pre_option())
@@ -723,7 +701,7 @@ public:
 			if (res.ok || !try_again(res))
 			{
 				handler(res);
-				return;
+				return true;
 			}
 #ifdef HAS_ASIO_HANDLER_IS_TRIED
 			_socket.async_receive_from(boost::asio::buffer(buff, length), remoteEndpoint, flags, wrap_tried(std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
@@ -731,7 +709,7 @@ public:
 				result res = { s, ec.value(), !ec };
 				handler(res);
 			}, std::forward<Handler>(handler), __1, __2)));
-			return;
+			return false;
 #endif
 		}
 #endif
@@ -740,19 +718,20 @@ public:
 			result res = { s, ec.value(), !ec };
 			handler(res);
 		}, std::forward<Handler>(handler), __1, __2));
+		return false;
 	}
 
 	template <typename Handler>
-	void async_receive_from(void* buff, size_t length, Handler&& handler, int flags = 0)
+	bool async_receive_from(void* buff, size_t length, Handler&& handler, int flags = 0)
 	{
-		async_receive_from(_remoteSenderEndpoint, buff, length, std::forward<Handler>(handler), flags);
+		return async_receive_from(_remoteSenderEndpoint, buff, length, std::forward<Handler>(handler), flags);
 	}
 
 	/*!
 	@brief 异步模式下，接收远端发送的数据到buff缓冲区
 	*/
 	template <typename Handler>
-	void async_receive(void* buff, size_t length, Handler&& handler, int flags = 0)
+	bool async_receive(void* buff, size_t length, Handler&& handler, int flags = 0)
 	{
 #ifdef ENABLE_ASIO_PRE_OP
 		if (is_pre_option())
@@ -761,7 +740,7 @@ public:
 			if (res.ok || !try_again(res))
 			{
 				handler(res);
-				return;
+				return true;
 			}
 #ifdef HAS_ASIO_HANDLER_IS_TRIED
 			_socket.async_receive(boost::asio::buffer(buff, length), flags, wrap_tried(std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
@@ -769,7 +748,7 @@ public:
 				result res = { s, ec.value(), !ec };
 				handler(res);
 			}, std::forward<Handler>(handler), __1, __2)));
-			return;
+			return false;
 #endif
 		}
 #endif
@@ -778,6 +757,7 @@ public:
 			result res = { s, ec.value(), !ec };
 			handler(res);
 		}, std::forward<Handler>(handler), __1, __2));
+		return false;
 	}
 
 	/*!
@@ -845,7 +825,7 @@ private:
 	boost::asio::ip::udp::socket _socket;
 	boost::asio::ip::udp::endpoint _remoteSenderEndpoint;
 	bool _nonBlocking;
-#ifndef ENABLE_EP_FAST_CB
+#ifdef ENABLE_ASIO_PRE_OP
 	bool _preOption;
 #endif
 	NONE_COPY(udp_socket);

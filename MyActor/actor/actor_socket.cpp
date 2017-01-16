@@ -2,7 +2,7 @@
 
 tcp_socket::tcp_socket(boost::asio::io_service& ios)
 :_socket(ios), _nonBlocking(false)
-#ifndef ENABLE_EP_FAST_CB
+#ifdef ENABLE_ASIO_PRE_OP
 , _preOption(false)
 #endif
 {}
@@ -10,42 +10,32 @@ tcp_socket::tcp_socket(boost::asio::io_service& ios)
 tcp_socket::~tcp_socket()
 {}
 
-bool tcp_socket::close()
+tcp_socket::result tcp_socket::close()
 {
 	boost::system::error_code ec;
 	_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
 	_socket.close(ec);
-	return !ec;
+	return result{ 0, ec.value(), !ec };
 }
 
-bool tcp_socket::no_delay()
+tcp_socket::result tcp_socket::no_delay()
 {
 	boost::system::error_code ec;
 	_socket.set_option(boost::asio::ip::tcp::no_delay(true), ec);
-	return !ec;
+	return result{ 0, ec.value(), !ec };
 }
 
 void tcp_socket::pre_option()
 {
 #ifdef ENABLE_ASIO_PRE_OP
-#ifdef ENABLE_EP_FAST_CB
-	assert(_socket.get_implementation().reactor_data_);
-	_socket.get_implementation().reactor_data_->reactor()->immed_op = true;
-#else
 	_preOption = true;
-#endif
 #endif
 }
 
 bool tcp_socket::is_pre_option()
 {
 #ifdef ENABLE_ASIO_PRE_OP
-#ifdef ENABLE_EP_FAST_CB
-	assert(_socket.get_implementation().reactor_data_);
-	return _socket.get_implementation().reactor_data_->reactor()->immed_op;
-#else
 	return _preOption;
-#endif
 #else
 	return false;
 #endif
@@ -90,13 +80,13 @@ void tcp_socket::set_internal_non_blocking()
 	_nonBlocking = socket_ops::set_internal_non_blocking(_socket.native_handle(), state, true, ec);
 }
 
-bool tcp_socket::connect(my_actor* host, const char* remoteIp, unsigned short remotePort)
+tcp_socket::result tcp_socket::connect(my_actor* host, const char* remoteIp, unsigned short remotePort)
 {
 	my_actor::quit_guard qg(host);
 	return host->trig<result>([&](trig_once_notifer<result>&& h)
 	{
 		async_connect(remoteIp, remotePort, std::move(h));
-	}).ok;
+	});
 }
 
 tcp_socket::result tcp_socket::read(my_actor* host, void* buff, size_t length)
@@ -693,7 +683,7 @@ bool tcp_acceptor::timed_accept(my_actor* host, int ms, bool& overtime, tcp_sock
 
 udp_socket::udp_socket(boost::asio::io_service& ios)
 :_socket(ios), _nonBlocking(false)
-#ifndef ENABLE_EP_FAST_CB
+#ifdef ENABLE_ASIO_PRE_OP
 , _preOption(false)
 #endif
 {}
@@ -701,21 +691,21 @@ udp_socket::udp_socket(boost::asio::io_service& ios)
 udp_socket::~udp_socket()
 {}
 
-bool udp_socket::open_v4()
+udp_socket::result udp_socket::open_v4()
 {
 	boost::system::error_code ec;
 	_socket.open(boost::asio::ip::udp::v4(), ec);
-	return !ec;
+	return result{ 0, ec.value(), !ec };
 }
 
-bool udp_socket::open_v6()
+udp_socket::result udp_socket::open_v6()
 {
 	boost::system::error_code ec;
 	_socket.open(boost::asio::ip::udp::v6(), ec);
-	return !ec;
+	return result{ 0, ec.value(), !ec };
 }
 
-bool udp_socket::bind(const char* ip, unsigned short port)
+udp_socket::result udp_socket::bind(const char* ip, unsigned short port)
 {
 	boost::system::error_code ec;
 	_socket.bind(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(ip), port), ec);
@@ -723,10 +713,10 @@ bool udp_socket::bind(const char* ip, unsigned short port)
 	{
 		set_internal_non_blocking();
 	}
-	return !ec;
+	return result{ 0, ec.value(), !ec };
 }
 
-bool udp_socket::bind_v4(unsigned short port)
+udp_socket::result udp_socket::bind_v4(unsigned short port)
 {
 	boost::system::error_code ec;
 	_socket.bind(boost::asio::ip::udp::endpoint(boost::asio::ip::address_v4(), port), ec);
@@ -734,10 +724,10 @@ bool udp_socket::bind_v4(unsigned short port)
 	{
 		set_internal_non_blocking();
 	}
-	return !ec;
+	return result{ 0, ec.value(), !ec };
 }
 
-bool udp_socket::bind_v6(unsigned short port)
+udp_socket::result udp_socket::bind_v6(unsigned short port)
 {
 	boost::system::error_code ec;
 	_socket.bind(boost::asio::ip::udp::endpoint(boost::asio::ip::address_v6(), port), ec);
@@ -745,48 +735,48 @@ bool udp_socket::bind_v6(unsigned short port)
 	{
 		set_internal_non_blocking();
 	}
-	return !ec;
+	return result{ 0, ec.value(), !ec };
 }
 
-bool udp_socket::open_bind_v4(unsigned short port)
+udp_socket::result udp_socket::open_bind_v4(unsigned short port)
 {
-	return open_v4() && bind_v4(port);
+	result res = open_v4();
+	if (res.ok)
+	{
+		return bind_v4(port);
+	}
+	return res;
 }
 
-bool udp_socket::open_bind_v6(unsigned short port)
+udp_socket::result udp_socket::open_bind_v6(unsigned short port)
 {
-	return open_v6() && bind_v6(port);
+	result res = open_v6();
+	if (res.ok)
+	{
+		return bind_v6(port);
+	}
+	return res;
 }
 
-bool udp_socket::close()
+udp_socket::result udp_socket::close()
 {
 	boost::system::error_code ec;
 	_socket.shutdown(boost::asio::ip::udp::socket::shutdown_both, ec);
 	_socket.close(ec);
-	return !ec;
+	return result{ 0, ec.value(), !ec };
 }
 
 void udp_socket::pre_option()
 {
 #ifdef ENABLE_ASIO_PRE_OP
-#ifdef ENABLE_EP_FAST_CB
-	assert(_socket.get_implementation().reactor_data_);
-	_socket.get_implementation().reactor_data_->reactor()->immed_op = true;
-#else
 	_preOption = true;
-#endif
 #endif
 }
 
 bool udp_socket::is_pre_option()
 {
 #ifdef ENABLE_ASIO_PRE_OP
-#ifdef ENABLE_EP_FAST_CB
-	assert(_socket.get_implementation().reactor_data_);
-	return _socket.get_implementation().reactor_data_->reactor()->immed_op;
-#else
 	return _preOption;
-#endif
 #else
 	return false;
 #endif
@@ -820,26 +810,12 @@ void udp_socket::set_internal_non_blocking()
 	_nonBlocking = socket_ops::set_internal_non_blocking(_socket.native_handle(), state, true, ec);
 }
 
-bool udp_socket::connect(my_actor* host, const char* remoteIp, unsigned short remotePort)
+udp_socket::result udp_socket::connect(const char* remoteIp, unsigned short remotePort)
 {
-	return connect(host, make_endpoint(remoteIp, remotePort));
+	return connect(make_endpoint(remoteIp, remotePort));
 }
 
-bool udp_socket::connect(my_actor* host, const boost::asio::ip::udp::endpoint& remoteEndpoint)
-{
-	my_actor::quit_guard qg(host);
-	return host->trig<result>([&](trig_once_notifer<result>&& h)
-	{
-		async_connect(remoteEndpoint, std::move(h));
-	}).ok;
-}
-
-bool udp_socket::sync_connect(const char* remoteIp, unsigned short remotePort)
-{
-	return sync_connect(make_endpoint(remoteIp, remotePort));
-}
-
-bool udp_socket::sync_connect(const boost::asio::ip::udp::endpoint& remoteEndpoint)
+udp_socket::result udp_socket::connect(const boost::asio::ip::udp::endpoint& remoteEndpoint)
 {
 	boost::system::error_code ec;
 	_socket.connect(remoteEndpoint, ec);
@@ -847,7 +823,7 @@ bool udp_socket::sync_connect(const boost::asio::ip::udp::endpoint& remoteEndpoi
 	{
 		set_internal_non_blocking();
 	}
-	return !ec;
+	return result{ 0, ec.value(), !ec };
 }
 
 udp_socket::result udp_socket::send_to(my_actor* host, const boost::asio::ip::udp::endpoint& remoteEndpoint, const void* buff, size_t length, int flags)
@@ -889,19 +865,6 @@ udp_socket::result udp_socket::receive(my_actor* host, void* buff, size_t length
 	{
 		async_receive(buff, length, std::move(h), flags);
 	});
-}
-
-bool udp_socket::timed_connect(my_actor* host, int ms, bool& overtime, const char* remoteIp, unsigned short remotePort)
-{
-	overtime = false;
-	result res = { 0, 0, false };
-	my_actor::quit_guard qg(host);
-	async_connect(remoteIp, remotePort, host->make_asio_timed_context(ms, [&]()
-	{
-		overtime = true;
-		close();
-	}, res));
-	return overtime ? false : res.ok;
 }
 
 udp_socket::result udp_socket::timed_send_to(my_actor* host, int ms, bool& overtime, const boost::asio::ip::udp::endpoint& remoteEndpoint, const void* buff, size_t length, int flags)

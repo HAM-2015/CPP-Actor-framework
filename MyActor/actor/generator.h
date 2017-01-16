@@ -378,6 +378,7 @@ struct __co_context_no_capture{};
 	}while (0)
 //当前generator调度器
 #define co_strand co_self.self_strand()
+#define co_ios co_strand->get_io_service()
 //单线回调时与co_yield配合使用，多线调度时与co_async_sign，co_await配合使用
 #define co_shared_this co_self.shared_this()
 //与co_await回调时配合使用
