@@ -46,6 +46,11 @@ bool tcp_socket::try_again(const result& res)
 	return boost::asio::error::try_again == res.code || boost::asio::error::would_block == res.code;
 }
 
+boost::asio::ip::tcp::endpoint tcp_socket::make_endpoint(const char* remoteIp, unsigned short remotePort)
+{
+	return boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort);
+}
+
 std::string tcp_socket::local_endpoint(unsigned short& port)
 {
 	boost::system::error_code ec;
@@ -80,13 +85,18 @@ void tcp_socket::set_internal_non_blocking()
 	_nonBlocking = socket_ops::set_internal_non_blocking(_socket.native_handle(), state, true, ec);
 }
 
-tcp_socket::result tcp_socket::connect(my_actor* host, const char* remoteIp, unsigned short remotePort)
+tcp_socket::result tcp_socket::connect(my_actor* host, const boost::asio::ip::tcp::endpoint& remoteEndpoint)
 {
 	my_actor::quit_guard qg(host);
 	return host->trig<result>([&](trig_once_notifer<result>&& h)
 	{
-		async_connect(remoteIp, remotePort, std::move(h));
+		async_connect(remoteEndpoint, std::move(h));
 	});
+}
+
+tcp_socket::result tcp_socket::connect(my_actor* host, const char* remoteIp, unsigned short remotePort)
+{
+	return connect(host, make_endpoint(remoteIp, remotePort));
 }
 
 tcp_socket::result tcp_socket::read(my_actor* host, void* buff, size_t length)
@@ -125,22 +135,27 @@ tcp_socket::result tcp_socket::write_some(my_actor* host, const void* buff, size
 	});
 }
 
-bool tcp_socket::timed_connect(my_actor* host, int ms, bool& overtime, const char* remoteIp, unsigned short remotePort)
+tcp_socket::result tcp_socket::timed_connect(my_actor* host, int ms, const boost::asio::ip::tcp::endpoint& remoteEndpoint)
 {
-	overtime = false;
+	bool overtime = false;
 	result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
-	async_connect(remoteIp, remotePort, host->make_asio_timed_context(ms, [&]()
+	async_connect(remoteEndpoint, host->make_asio_timed_context(ms, [&]()
 	{
 		overtime = true;
 		close();
 	}, res));
-	return overtime ? false : res.ok;
+	return overtime ? result{ 0, boost::asio::error::timed_out, false } : res;
 }
 
-tcp_socket::result tcp_socket::timed_read(my_actor* host, int ms, bool& overtime, void* buff, size_t length)
+tcp_socket::result tcp_socket::timed_connect(my_actor* host, int ms, const char* remoteIp, unsigned short remotePort)
 {
-	overtime = false;
+	return timed_connect(host, ms, make_endpoint(remoteIp, remotePort));
+}
+
+tcp_socket::result tcp_socket::timed_read(my_actor* host, int ms, void* buff, size_t length)
+{
+	bool overtime = false;
 	result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
 	async_read(buff, length, host->make_asio_timed_context(ms, [&]()
@@ -148,13 +163,12 @@ tcp_socket::result tcp_socket::timed_read(my_actor* host, int ms, bool& overtime
 		overtime = true;
 		close();
 	}, res));
-	if (overtime) res.ok = false;
-	return res;
+	return overtime ? result{ 0, boost::asio::error::timed_out, false } : res;
 }
 
-tcp_socket::result tcp_socket::timed_read_some(my_actor* host, int ms, bool& overtime, void* buff, size_t length)
+tcp_socket::result tcp_socket::timed_read_some(my_actor* host, int ms, void* buff, size_t length)
 {
-	overtime = false;
+	bool overtime = false;
 	result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
 	async_read_some(buff, length, host->make_asio_timed_context(ms, [&]()
@@ -162,13 +176,12 @@ tcp_socket::result tcp_socket::timed_read_some(my_actor* host, int ms, bool& ove
 		overtime = true;
 		close();
 	}, res));
-	if (overtime) res.ok = false;
-	return res;
+	return overtime ? result{ 0, boost::asio::error::timed_out, false } : res;
 }
 
-tcp_socket::result tcp_socket::timed_write(my_actor* host, int ms, bool& overtime, const void* buff, size_t length)
+tcp_socket::result tcp_socket::timed_write(my_actor* host, int ms, const void* buff, size_t length)
 {
-	overtime = false;
+	bool overtime = false;
 	result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
 	async_write(buff, length, host->make_asio_timed_context(ms, [&]()
@@ -176,13 +189,12 @@ tcp_socket::result tcp_socket::timed_write(my_actor* host, int ms, bool& overtim
 		overtime = true;
 		close();
 	}, res));
-	if (overtime) res.ok = false;
-	return res;
+	return overtime ? result{ 0, boost::asio::error::timed_out, false } : res;
 }
 
-tcp_socket::result tcp_socket::timed_write_some(my_actor* host, int ms, bool& overtime, const void* buff, size_t length)
+tcp_socket::result tcp_socket::timed_write_some(my_actor* host, int ms, const void* buff, size_t length)
 {
-	overtime = false;
+	bool overtime = false;
 	result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
 	async_write_some(buff, length, host->make_asio_timed_context(ms, [&]()
@@ -190,8 +202,7 @@ tcp_socket::result tcp_socket::timed_write_some(my_actor* host, int ms, bool& ov
 		overtime = true;
 		close();
 	}, res));
-	if (overtime) res.ok = false;
-	return res;
+	return overtime ? result{ 0, boost::asio::error::timed_out, false } : res;
 }
 
 tcp_socket::result tcp_socket::try_write_same(const void* buff, size_t length)
@@ -582,94 +593,87 @@ tcp_socket::result tcp_socket::_try_mread_same(void* const* buffs, const size_t*
 //////////////////////////////////////////////////////////////////////////
 
 tcp_acceptor::tcp_acceptor(boost::asio::io_service& ios)
-:_ios(ios), _opend(false) {}
+:_ios(ios) {}
 
 tcp_acceptor::~tcp_acceptor()
 {
-	assert(!_opend);
 }
 
-bool tcp_acceptor::open(const char* ip, unsigned short port)
+tcp_socket::result tcp_acceptor::open(const char* ip, unsigned short port)
 {
-	if (!_opend)
+	if (!_acceptor.has())
 	{
 		try
 		{
 			_acceptor.create(_ios, boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string(ip), port), false);
-			_opend = true;
-			return true;
+			return tcp_socket::result{ 0, 0, true };
 		}
-		catch (...)
+		catch (const boost::system::system_error& se)
 		{
+			return tcp_socket::result{ 0, se.code().value(), !se.code() };
 		}
 	}
-	return false;
+	return tcp_socket::result{ 0, 0, false };
 }
 
-bool tcp_acceptor::open_v4(unsigned short port)
+tcp_socket::result tcp_acceptor::open_v4(unsigned short port)
 {
-	if (!_opend)
+	if (!_acceptor.has())
 	{
 		try
 		{
 			_acceptor.create(_ios, boost::asio::ip::tcp::endpoint(boost::asio::ip::address_v4(), port), false);
-			_opend = true;
-			return true;
+			return tcp_socket::result{ 0, 0, true };
 		}
-		catch (...)
+		catch (const boost::system::system_error& se)
 		{
+			return tcp_socket::result{ 0, se.code().value(), !se.code() };
 		}
 	}
-	return false;
+	return tcp_socket::result{ 0, 0, false };
 }
 
-bool tcp_acceptor::open_v6(unsigned short port)
+tcp_socket::result tcp_acceptor::open_v6(unsigned short port)
 {
-	if (!_opend)
+	if (!_acceptor.has())
 	{
 		try
 		{
 			_acceptor.create(_ios, boost::asio::ip::tcp::endpoint(boost::asio::ip::address_v6(), port), false);
-			_opend = true;
-			return true;
+			return tcp_socket::result{ 0, 0, true };
 		}
-		catch (...)
+		catch (const boost::system::system_error& se)
 		{
+			return tcp_socket::result{ 0, se.code().value(), !se.code() };
 		}
 	}
-	return false;
+	return tcp_socket::result{ 0, 0, false };
 }
 
-bool tcp_acceptor::close()
+tcp_socket::result tcp_acceptor::close()
 {
-	if (_opend)
+	if (_acceptor.has())
 	{
-		_opend = false;
 		boost::system::error_code ec;
 		_acceptor->close(ec);
 		_acceptor.destroy();
-		return !ec;
+		return tcp_socket::result{ 0, ec.value(), !ec };
 	}
-	return false;
+	return tcp_socket::result{ 0, 0, false };
 }
 
-boost::asio::ip::tcp::acceptor& tcp_acceptor::boost_acceptor()
-{
-	return _acceptor.get();
-}
-
-bool tcp_acceptor::accept(my_actor* host, tcp_socket& socket)
+tcp_socket::result tcp_acceptor::accept(my_actor* host, tcp_socket& socket)
 {
 	my_actor::quit_guard qg(host);
 	return host->trig<tcp_socket::result>([&](trig_once_notifer<tcp_socket::result>&& h)
 	{
 		async_accept(socket, std::move(h));
-	}).ok;
+	});
 }
 
-bool tcp_acceptor::timed_accept(my_actor* host, int ms, bool& overtime, tcp_socket& socket)
+tcp_socket::result tcp_acceptor::timed_accept(my_actor* host, int ms, tcp_socket& socket)
 {
-	overtime = false;
+	bool overtime = false;
 	tcp_socket::result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
 	async_accept(socket, host->make_asio_timed_context(ms, [&]()
@@ -677,7 +681,7 @@ bool tcp_acceptor::timed_accept(my_actor* host, int ms, bool& overtime, tcp_sock
 		overtime = true;
 		close();
 	}, res));
-	return overtime ? false : res.ok;
+	return overtime ? tcp_socket::result{ 0, boost::asio::error::timed_out, false } : res;
 }
 //////////////////////////////////////////////////////////////////////////
 
@@ -837,7 +841,7 @@ udp_socket::result udp_socket::send_to(my_actor* host, const boost::asio::ip::ud
 
 udp_socket::result udp_socket::send_to(my_actor* host, const char* remoteIp, unsigned short remotePort, const void* buff, size_t length, int flags)
 {
-	return udp_socket::send_to(host, boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), buff, length, flags);
+	return udp_socket::send_to(host, make_endpoint(remoteIp, remotePort), buff, length, flags);
 }
 
 udp_socket::result udp_socket::send(my_actor* host, const void* buff, size_t length, int flags)
@@ -867,9 +871,9 @@ udp_socket::result udp_socket::receive(my_actor* host, void* buff, size_t length
 	});
 }
 
-udp_socket::result udp_socket::timed_send_to(my_actor* host, int ms, bool& overtime, const boost::asio::ip::udp::endpoint& remoteEndpoint, const void* buff, size_t length, int flags)
+udp_socket::result udp_socket::timed_send_to(my_actor* host, int ms, const boost::asio::ip::udp::endpoint& remoteEndpoint, const void* buff, size_t length, int flags)
 {
-	overtime = false;
+	bool overtime = false;
 	result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
 	async_send_to(remoteEndpoint, buff, length, host->make_asio_timed_context(ms, [&]()
@@ -877,18 +881,17 @@ udp_socket::result udp_socket::timed_send_to(my_actor* host, int ms, bool& overt
 		overtime = true;
 		close();
 	}, res), flags);
-	if (overtime) res.ok = false;
-	return res;
+	return overtime ? result{ 0, boost::asio::error::timed_out, false } : res;
 }
 
-udp_socket::result udp_socket::timed_send_to(my_actor* host, int ms, bool& overtime, const char* remoteIp, unsigned short remotePort, const void* buff, size_t length, int flags)
+udp_socket::result udp_socket::timed_send_to(my_actor* host, int ms, const char* remoteIp, unsigned short remotePort, const void* buff, size_t length, int flags)
 {
-	return timed_send_to(host, ms, overtime, boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), buff, length, flags);
+	return timed_send_to(host, ms, make_endpoint(remoteIp, remotePort), buff, length, flags);
 }
 
-udp_socket::result udp_socket::timed_send(my_actor* host, int ms, bool& overtime, const void* buff, size_t length, int flags)
+udp_socket::result udp_socket::timed_send(my_actor* host, int ms, const void* buff, size_t length, int flags)
 {
-	overtime = false;
+	bool overtime = false;
 	result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
 	async_send(buff, length, host->make_asio_timed_context(ms, [&]()
@@ -896,13 +899,12 @@ udp_socket::result udp_socket::timed_send(my_actor* host, int ms, bool& overtime
 		overtime = true;
 		close();
 	}, res), flags);
-	if (overtime) res.ok = false;
-	return res;
+	return overtime ? result{ 0, boost::asio::error::timed_out, false } : res;
 }
 
-udp_socket::result udp_socket::timed_receive_from(my_actor* host, int ms, bool& overtime, void* buff, size_t length, int flags)
+udp_socket::result udp_socket::timed_receive_from(my_actor* host, int ms, void* buff, size_t length, int flags)
 {
-	overtime = false;
+	bool overtime = false;
 	result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
 	async_receive_from(buff, length, host->make_asio_timed_context(ms, [&]()
@@ -910,13 +912,12 @@ udp_socket::result udp_socket::timed_receive_from(my_actor* host, int ms, bool& 
 		overtime = true;
 		close();
 	}, res), flags);
-	if (overtime) res.ok = false;
-	return res;
+	return overtime ? result{ 0, boost::asio::error::timed_out, false } : res;
 }
 
-udp_socket::result udp_socket::timed_receive(my_actor* host, int ms, bool& overtime, void* buff, size_t length, int flags)
+udp_socket::result udp_socket::timed_receive(my_actor* host, int ms, void* buff, size_t length, int flags)
 {
-	overtime = false;
+	bool overtime = false;
 	result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
 	async_receive(buff, length, host->make_asio_timed_context(ms, [&]()
@@ -924,8 +925,7 @@ udp_socket::result udp_socket::timed_receive(my_actor* host, int ms, bool& overt
 		overtime = true;
 		close();
 	}, res), flags);
-	if (overtime) res.ok = false;
-	return res;
+	return overtime ? result{ 0, boost::asio::error::timed_out, false } : res;
 }
 
 udp_socket::result udp_socket::try_send(const void* buff, size_t length, int flags)
@@ -1258,7 +1258,7 @@ udp_socket::result udp_socket::try_msend_to(const boost::asio::ip::udp::endpoint
 
 udp_socket::result udp_socket::try_send_to(const char* remoteIp, unsigned short remotePort, const void* buff, size_t length, int flags)
 {
-	return try_send_to(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), buff, length, flags);
+	return try_send_to(make_endpoint(remoteIp, remotePort), buff, length, flags);
 }
 
 udp_socket::result udp_socket::try_send_to(const boost::asio::ip::udp::endpoint& remoteEndpoint, const void* buff, size_t length, int flags)

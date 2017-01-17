@@ -1,15 +1,18 @@
 ﻿并发逻辑控制框架，适用于复杂业务逻辑;
-运行平台支持 windows XP/windows server 2003或以上、x86_x64-linux/armv7_v8-linux、armv7_v8-android;
-支持编译器VC2013/VC2015，GCC4.8+;
+支持系统 windows、x86_x64/armv7_v8-linux、armv7_v8-android;
+支持编译器 VC2013/VC2015，GCC4.8+;
 依赖于boost 1.5x;
-使用stackful/stackless协程构建，stackful运行时按需扩张栈空间(4K-1M)，4G内存最多可创建一千万以上stackless协程;
-actor/generator之间多种0-copy消息通信方式;
-1:n的方式划分串行调度队列，在不使用消息的情况下也可有效规避多个逻辑之间多线程安全问题;
-三级调度，主流x86处理器单线程下stackful调度一千万以上，stackless两千万以上;
-两级定时器队列，一个进程可只申请一个系统定时器句柄;
-QT异步UI驱动、NodeJs模块消息交互接口;
-暂时不提供开发文档，有问题或BUG发送至 591170887@qq.com;
 可以用来构建服务端/客户端，也可以用在与网络无关的程序中;
+基于stackful/stackless协程技术，actor基于stackful，generator基于stackless;
+actor/generator均可以类似普通函数一样调用别的actor/generator函数及传递参数;
+actor运行时按需扩张栈空间(4K-1M)，64位下4G内存最多可创建一千万以上generator对象;
+actor/generator之间多种0-copy消息通信方式;
+1:n的方式划分串行调度队列，在不使用消息时也可有效规避多个actor/generator逻辑之间的线程安全问题;
+三级调度，主流x86处理器单线程下actor调度一千万以上，generator两千万以上;
+优化过的高效定时器，定时器资源非常轻量;
+基于asio优化过的tcp/udp异步IO;
+支持QT-UI线程调度驱动，极大简化UI与后台逻辑之间的交互;
+私有项目，不提供开发文档，有兴趣请联系 591170887@qq.com;
 可以任意使用或编辑源码，而不需通知作者，当然作者也不对使用本框架造成的任何损失负责.
 
 svn url(版本保持最新):
@@ -22,10 +25,12 @@ https://github.com/HAM-2015/CPP-Actor-framework
 
 oschina url:
 http://git.oschina.net/hamasm/cpp-actor-framework
-http://www.oschina.net/code/snippet_2274073_45577
 
 ftp url:
 ftp://ham2015.6655.la/files/MyActor/
+
+2017-01-17
+优化asio异步IO，在linux下tcp/udp更加高效;
 
 2016-09-20
 添加generator下的channel通信机制（无缓存/有限缓存/无限缓存），支持select-case方式读取多个channel;

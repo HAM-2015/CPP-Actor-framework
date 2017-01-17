@@ -659,28 +659,26 @@ void socket_test()
 		child_handle srv = self->create_child([&](my_actor* self)
 		{
 			tcp_acceptor acc(self->self_io_service());
-			if (!acc.open("127.0.0.1", 1234))
+			if (!acc.open("127.0.0.1", 1234).ok)
 			{
 				trace_line("server port conflict");
 				return;
 			}
 			tcp_socket sck(self->self_io_service());
-			bool overtime = false;
-			if (acc.timed_accept(self, 1500, overtime, sck))
+			if (acc.timed_accept(self, 1500, sck).ok)
 			{
 				trace_line("new client connected");
 				acc.close();
 				char buf[128];
 				while (true)
 				{
-					bool overtime = false;
-					tcp_socket::result res = sck.timed_read_some(self, 2000, overtime, buf, sizeof(buf)-1);
+					tcp_socket::result res = sck.timed_read_some(self, 2000, buf, sizeof(buf)-1);
 					if (res.ok)
 					{
 						buf[res.s] = 0;
 						trace_comma(self->self_id(), "received", buf);
 					} 
-					else if (overtime)
+					else if (boost::asio::error::timed_out == res.code)
 					{
 						trace_comma(self->self_id(), "receive overtime");
 						break;

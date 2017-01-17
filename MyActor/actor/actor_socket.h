@@ -125,54 +125,61 @@ public:
 	std::string remote_endpoint(unsigned short& port);
 
 	/*!
+	@brief 创建一个远端目标
+	*/
+	static boost::asio::ip::tcp::endpoint make_endpoint(const char* remoteIp, unsigned short remotePort);
+
+	/*!
 	@brief 客户端模式下连接远端服务器
 	*/
+	result connect(my_actor* host, const boost::asio::ip::tcp::endpoint& remoteEndpoint);
 	result connect(my_actor* host, const char* remoteIp, unsigned short remotePort);
 
 	/*!
-	@brief 往buff缓冲区内读取数据，直到读满
+	@brief 往缓冲区内读取数据，直到读满
 	*/
 	result read(my_actor* host, void* buff, size_t length);
 
 	/*!
-	@brief 往buff缓冲区内读取数据，有多少读多少
+	@brief 往缓冲区内读取数据，有多少读多少
 	*/
 	result read_some(my_actor* host, void* buff, size_t length);
 
 	/*!
-	@brief 将buff缓冲区内的数据全部发送出去
+	@brief 将数据全部发送出去
 	*/
 	result write(my_actor* host, const void* buff, size_t length);
 
 	/*!
-	@brief 将buff缓冲区内的数据发送出去，能发多少是多少
+	@brief 将数据发送出去，能发多少是多少
 	*/
 	result write_some(my_actor* host, const void* buff, size_t length);
 
 	/*!
 	@brief 在ms时间范围内，客户端模式下连接远端服务器
 	*/
-	bool timed_connect(my_actor* host, int ms, bool& overtime, const char* remoteIp, unsigned short remotePort);
+	result timed_connect(my_actor* host, int ms, const boost::asio::ip::tcp::endpoint& remoteEndpoint);
+	result timed_connect(my_actor* host, int ms, const char* remoteIp, unsigned short remotePort);
 
 	/*!
-	@brief 在ms时间范围内，往buff缓冲区内读取数据，直到读满
+	@brief 在ms时间范围内，往缓冲区内读取数据，直到读满
 	*/
-	result timed_read(my_actor* host, int ms, bool& overtime, void* buff, size_t length);
+	result timed_read(my_actor* host, int ms, void* buff, size_t length);
 
 	/*!
-	@brief 在ms时间范围内，往buff缓冲区内读取数据，有多少读多少
+	@brief 在ms时间范围内，往缓冲区内读取数据，有多少读多少
 	*/
-	result timed_read_some(my_actor* host, int ms, bool& overtime, void* buff, size_t length);
+	result timed_read_some(my_actor* host, int ms, void* buff, size_t length);
 
 	/*!
-	@brief 在ms时间范围内，将buff缓冲区内的数据全部发送出去
+	@brief 在ms时间范围内，将数据全部发送出去
 	*/
-	result timed_write(my_actor* host, int ms, bool& overtime, const void* buff, size_t length);
+	result timed_write(my_actor* host, int ms, const void* buff, size_t length);
 
 	/*!
-	@brief 在ms时间范围内，将buff缓冲区内的数据发送出去，能发多少是多少
+	@brief 在ms时间范围内，将数据发送出去，能发多少是多少
 	*/
-	result timed_write_some(my_actor* host, int ms, bool& overtime, const void* buff, size_t length);
+	result timed_write_some(my_actor* host, int ms, const void* buff, size_t length);
 
 	/*!
 	@brief 关闭socket
@@ -183,9 +190,9 @@ public:
 	@brief 异步模式下，客户端模式下连接远端服务器
 	*/
 	template <typename Handler>
-	bool async_connect(const boost::asio::ip::tcp::endpoint& endPoint, Handler&& handler)
+	bool async_connect(const boost::asio::ip::tcp::endpoint& remoteEndpoint, Handler&& handler)
 	{
-		_socket.async_connect(endPoint, std::bind([this](Handler& handler, const boost::system::error_code& ec)
+		_socket.async_connect(remoteEndpoint, std::bind([this](Handler& handler, const boost::system::error_code& ec)
 		{
 			if (!ec)
 			{
@@ -200,11 +207,11 @@ public:
 	template <typename Handler>
 	bool async_connect(const char* remoteIp, unsigned short remotePort, Handler&& handler)
 	{
-		return async_connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string(remoteIp), remotePort), std::forward<Handler>(handler));
+		return async_connect(make_endpoint(remoteIp, remotePort), std::forward<Handler>(handler));
 	}
 
 	/*!
-	@brief 异步模式下，往buff缓冲区内读取数据，直到读满
+	@brief 异步模式下，往缓冲区内读取数据，直到读满
 	*/
 	template <typename Handler>
 	bool async_read(void* buff, size_t length, Handler&& handler)
@@ -253,7 +260,7 @@ public:
 	}
 
 	/*!
-	@brief 异步模式下，往buff缓冲区内读取数据，有多少读多少
+	@brief 异步模式下，往读取数据，有多少读多少
 	*/
 	template <typename Handler>
 	bool async_read_some(void* buff, size_t length, Handler&& handler)
@@ -286,7 +293,7 @@ public:
 	}
 
 	/*!
-	@brief 异步模式下，将buff缓冲区内的数据全部发送出去
+	@brief 异步模式下，将数据全部发送出去
 	*/
 	template <typename Handler>
 	bool async_write(const void* buff, size_t length, Handler&& handler)
@@ -335,7 +342,7 @@ public:
 	}
 
 	/*!
-	@brief 异步模式下，将buff缓冲区内的数据发送出去，能发多少是多少
+	@brief 异步模式下，将数据发送出去，能发多少是多少
 	*/
 	template <typename Handler>
 	bool async_write_some(const void* buff, size_t length, Handler&& handler)
@@ -420,37 +427,32 @@ public:
 	/*!
 	@brief 只允许特定ip连接该服务器
 	*/
-	bool open(const char* ip, unsigned short port);
+	tcp_socket::result open(const char* ip, unsigned short port);
 
 	/*!
 	@brief ip v4下打开服务器
 	*/
-	bool open_v4(unsigned short port);
+	tcp_socket::result open_v4(unsigned short port);
 
 	/*!
 	@brief ip v6下打开服务器
 	*/
-	bool open_v6(unsigned short port);
+	tcp_socket::result open_v6(unsigned short port);
 
 	/*!
 	@brief 关闭侦听器
 	*/
-	bool close();
-
-	/*!
-	@brief 获取boost acceptor对象
-	*/
-	boost::asio::ip::tcp::acceptor& boost_acceptor();
+	tcp_socket::result close();
 
 	/*!
 	@brief 用socket侦听客户端连接
 	*/
-	bool accept(my_actor* host, tcp_socket& socket);
+	tcp_socket::result accept(my_actor* host, tcp_socket& socket);
 
 	/*!
 	@brief 在ms时间范围内，用socket侦听客户端连接
 	*/
-	bool timed_accept(my_actor* host, int ms, bool& overtime, tcp_socket& socket);
+	tcp_socket::result timed_accept(my_actor* host, int ms, tcp_socket& socket);
 
 	/*!
 	@brief 异步模式下，用socket侦听客户端连接
@@ -471,8 +473,7 @@ public:
 	}
 private:
 	boost::asio::io_service& _ios;
-	stack_obj<boost::asio::ip::tcp::acceptor, false> _acceptor;
-	bool _opend;
+	stack_obj<boost::asio::ip::tcp::acceptor> _acceptor;
 	NONE_COPY(tcp_acceptor);
 };
 
@@ -549,54 +550,54 @@ public:
 	result connect(const boost::asio::ip::udp::endpoint& remoteEndpoint);
 
 	/*!
-	@brief 发送buff缓冲区数据到指定目标
+	@brief 发送数据到指定目标
 	*/
 	result send_to(my_actor* host, const boost::asio::ip::udp::endpoint& remoteEndpoint, const void* buff, size_t length, int flags = 0);
 
 	/*!
-	@brief 发送buff缓冲区数据到指定目标
+	@brief 发送数据到指定目标
 	*/
 	result send_to(my_actor* host, const char* remoteIp, unsigned short remotePort, const void* buff, size_t length, int flags = 0);
 
 	/*!
-	@brief 发送buff缓冲区数据到默认目标(connect成功后)
+	@brief 在connect成功后，发送数据到默认目标
 	*/
 	result send(my_actor* host, const void* buff, size_t length, int flags = 0);
 
 	/*!
-	@brief 接收远端发送的数据到buff缓冲区，并记录下远端地址
+	@brief 接收远端发送的数据到缓冲区，并记录下远端地址
 	*/
 	result receive_from(my_actor* host, void* buff, size_t length, int flags = 0);
 
 	/*!
-	@brief 接收远端发送的数据到buff缓冲区
+	@brief 接收远端发送的数据到缓冲区
 	*/
 	result receive(my_actor* host, void* buff, size_t length, int flags = 0);
 
 	/*!
-	@brief 在ms时间范围内，发送buff缓冲区数据到指定目标
+	@brief 在ms时间范围内，发送数据到指定目标（本地系统缓存满了会导致发送阻塞）
 	*/
-	result timed_send_to(my_actor* host, int ms, bool& overtime, const boost::asio::ip::udp::endpoint& remoteEndpoint, const void* buff, size_t length, int flags = 0);
+	result timed_send_to(my_actor* host, int ms, const boost::asio::ip::udp::endpoint& remoteEndpoint, const void* buff, size_t length, int flags = 0);
 
 	/*!
-	@brief 在ms时间范围内，发送buff缓冲区数据到指定目标
+	@brief 在ms时间范围内，发送数据到指定目标（本地系统缓存满了会导致发送阻塞）
 	*/
-	result timed_send_to(my_actor* host, int ms, bool& overtime, const char* remoteIp, unsigned short remotePort, const void* buff, size_t length, int flags = 0);
+	result timed_send_to(my_actor* host, int ms, const char* remoteIp, unsigned short remotePort, const void* buff, size_t length, int flags = 0);
 
 	/*!
-	@brief 在ms时间范围内，发送buff缓冲区数据到默认目标(connect成功后)
+	@brief connect成功后，在ms时间范围内，发送数据到默认目标（本地系统缓存满了会导致发送阻塞）
 	*/
-	result timed_send(my_actor* host, int ms, bool& overtime, const void* buff, size_t length, int flags = 0);
+	result timed_send(my_actor* host, int ms, const void* buff, size_t length, int flags = 0);
 
 	/*!
-	@brief 在ms时间范围内，接收远端发送的数据到buff缓冲区，并记录下远端地址
+	@brief 在ms时间范围内，接收远端发送的数据到缓冲区，并记录下远端地址
 	*/
-	result timed_receive_from(my_actor* host, int ms, bool& overtime, void* buff, size_t length, int flags = 0);
+	result timed_receive_from(my_actor* host, int ms, void* buff, size_t length, int flags = 0);
 
 	/*!
-	@brief 在ms时间范围内，接收远端发送的数据到buff缓冲区
+	@brief 在ms时间范围内，接收远端发送的数据到缓冲区
 	*/
-	result timed_receive(my_actor* host, int ms, bool& overtime, void* buff, size_t length, int flags = 0);
+	result timed_receive(my_actor* host, int ms, void* buff, size_t length, int flags = 0);
 
 	/*!
 	@brief 创建一个远端目标
@@ -614,7 +615,7 @@ public:
 	void reset_remote_sender_endpoint();
 
 	/*!
-	@brief 异步模式下，发送buff缓冲区数据到指定目标
+	@brief 异步模式下，发送数据到指定目标
 	*/
 	template <typename Handler>
 	bool async_send_to(const boost::asio::ip::udp::endpoint& remoteEndpoint, const void* buff, size_t length, Handler&& handler, int flags = 0)
@@ -647,7 +648,7 @@ public:
 	}
 
 	/*!
-	@brief 异步模式下，发送buff缓冲区数据到指定目标
+	@brief 异步模式下，发送数据到指定目标
 	*/
 	template <typename Handler>
 	bool async_send_to(const char* remoteIp, unsigned short remotePort, const void* buff, size_t length, Handler&& handler, int flags = 0)
@@ -656,7 +657,7 @@ public:
 	}
 
 	/*!
-	@brief 异步模式下，发送buff缓冲区数据到默认目标(connect成功后)
+	@brief 异步模式下，发送数据到默认目标(connect成功后)
 	*/
 	template <typename Handler>
 	bool async_send(const void* buff, size_t length, Handler&& handler, int flags = 0)
@@ -689,7 +690,7 @@ public:
 	}
 
 	/*!
-	@brief 异步模式下，接收远端发送的数据到buff缓冲区，并记录下远端地址
+	@brief 异步模式下，接收远端发送的数据到缓冲区，并记录下远端地址
 	*/
 	template <typename Handler>
 	bool async_receive_from(boost::asio::ip::udp::endpoint& remoteEndpoint, void* buff, size_t length, Handler&& handler, int flags = 0)
@@ -728,7 +729,7 @@ public:
 	}
 
 	/*!
-	@brief 异步模式下，接收远端发送的数据到buff缓冲区
+	@brief 异步模式下，接收远端发送的数据到缓冲区
 	*/
 	template <typename Handler>
 	bool async_receive(void* buff, size_t length, Handler&& handler, int flags = 0)
