@@ -9,6 +9,9 @@
 #include <pthread.h>
 #endif
 
+/*!
+@brief 线程对象
+*/
 class run_thread
 {
 	struct handler_face
@@ -20,18 +23,17 @@ class run_thread
 	struct thread_handler : public handler_face
 	{
 		template <typename H>
-		thread_handler(H&& h)
-			:_h(std::forward<H>(h)) {}
+		thread_handler(H&& handler)
+			:_handler(std::forward<H>(handler)) {}
 
 		void invoke()
 		{
-			_h();
+			CHECK_EXCEPTION(_handler);
 			delete this;
 		}
 
-		Handler _h;
+		Handler _handler;
 	};
-
 public:
 	struct thread_id
 	{
@@ -54,25 +56,25 @@ public:
 	run_thread();
 
 	template <typename Handler>
-	run_thread(Handler&& h)
+	run_thread(Handler&& handler)
 	{
-		handler_face* handler = new thread_handler<RM_CREF(Handler)>(std::forward<Handler>(h));
+		handler_face* handlerFace = new thread_handler<RM_CREF(Handler)>(std::forward<Handler>(handler));
 #ifdef _WIN32
 		_threadID = 0;
-		_handle = CreateThread(NULL, 0, thread_exec, handler, 0, &_threadID);
+		_handle = CreateThread(NULL, 0, thread_exec, handlerFace, 0, &_threadID);
 #elif __linux__
 		_pthread = 0;
-		pthread_create(&_pthread, NULL, thread_exec, handler);
+		pthread_create(&_pthread, NULL, thread_exec, handlerFace);
 #endif
 	}
 
 	template <typename Handler, typename Callback>
-	run_thread(Handler&& h, Callback&& cb)
-		:run_thread(std::bind([](RM_CREF(Handler)& h, RM_CREF(Callback)& cb)
+	run_thread(Handler&& handler, Callback&& cb)
+		:run_thread(std::bind([](Handler& handler, Callback& cb)
 	{
-		h();
+		handler();
 		cb();
-	}, std::forward<Handler>(h), std::forward<Callback>(cb))) {}
+	}, std::forward<Handler>(handler), std::forward<Callback>(cb))) {}
 
 	~run_thread();
 private:
@@ -98,6 +100,23 @@ private:
 	pthread_t _pthread;
 #endif
 	NONE_COPY(run_thread);
+};
+
+/*!
+@brief 线程局部存储
+*/
+struct tls_space
+{
+	tls_space();
+	~tls_space();
+	void set_space(void** val);
+	void** get_space();
+private:
+#ifdef WIN32
+	DWORD _index;
+#elif __linux__
+	pthread_key_t _key;
+#endif
 };
 
 #endif

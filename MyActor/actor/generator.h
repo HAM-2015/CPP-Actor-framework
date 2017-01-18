@@ -1324,15 +1324,8 @@ struct CoAnextIgnoreResult_
 
 struct CoAsync_
 {
-	CoAsync_(generator_handle&& gen)
-	:_gen(std::move(gen)) {}
-
-	void operator()()
-	{
-		assert(_gen);
-		_gen->_revert_this(_gen)->_co_async_next();
-	}
-
+	CoAsync_(generator_handle&& gen);
+	void operator()();
 	generator_handle _gen;
 	void operator=(const CoAsync_&) = delete;
 	RVALUE_CONSTRUCT1(CoAsync_, _gen);
@@ -1341,15 +1334,8 @@ struct CoAsync_
 
 struct CoShardAsync_
 {
-	CoShardAsync_(generator_handle& gen, const shared_bool& sign)
-	:_gen(gen), _sign(sign) {}
-
-	void operator()()
-	{
-		assert(_gen);
-		_gen->_co_shared_async_next(_sign);
-	}
-
+	CoShardAsync_(generator_handle& gen, const shared_bool& sign);
+	void operator()();
 	generator_handle _gen;
 	shared_bool _sign;
 	void operator=(const CoShardAsync_&) = delete;
@@ -1359,15 +1345,8 @@ struct CoShardAsync_
 
 struct CoAnext_
 {
-	CoAnext_(generator_handle&& gen)
-	:_gen(std::move(gen)) {}
-
-	void operator()()
-	{
-		assert(_gen);
-		_gen->_revert_this(_gen)->_co_next();
-	}
-
+	CoAnext_(generator_handle&& gen);
+	void operator()();
 	generator_handle _gen;
 	void operator=(const CoAnext_&) = delete;
 	RVALUE_CONSTRUCT1(CoAnext_, _gen);

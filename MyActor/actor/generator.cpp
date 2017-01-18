@@ -533,3 +533,37 @@ CoCreate_::CoCreate_(io_engine& ios, generator_done_sign& doneSign)
 		doneSign._strand = _strand;
 	}
 }
+//////////////////////////////////////////////////////////////////////////
+
+CoAsync_::CoAsync_(generator_handle&& gen)
+:_gen(std::move(gen))
+{
+}
+
+void CoAsync_::operator()()
+{
+	assert(_gen);
+	_gen->_revert_this(_gen)->_co_async_next();
+}
+
+CoShardAsync_::CoShardAsync_(generator_handle& gen, const shared_bool& sign)
+:_gen(gen), _sign(sign)
+{
+}
+
+void CoShardAsync_::operator()()
+{
+	assert(_gen);
+	_gen->_co_shared_async_next(_sign);
+}
+
+CoAnext_::CoAnext_(generator_handle&& gen)
+:_gen(std::move(gen))
+{
+}
+
+void CoAnext_::operator()()
+{
+	assert(_gen);
+	_gen->_revert_this(_gen)->_co_next();
+}

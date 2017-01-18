@@ -506,28 +506,6 @@ auto forward_copy(T&& p)->typename ForwardCopy_<T>::type
 #endif
 #endif
 
-#ifdef WIN32
-struct tls_space 
-{
-	tls_space();
-	~tls_space();
-	void set_space(void** val);
-	void** get_space();
-private:
-	size_t _index;
-};
-#elif __linux__
-struct tls_space
-{
-	tls_space();
-	~tls_space();
-	void set_space(void** val);
-	void** get_space();
-private:
-	pthread_key_t _key;
-};
-#endif
-
 #define __1 std::placeholders::_1
 #define __2 std::placeholders::_2
 #define __3 std::placeholders::_3

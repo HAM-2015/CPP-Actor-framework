@@ -14,10 +14,7 @@ run_thread::~run_thread()
 
 DWORD WINAPI run_thread::thread_exec(LPVOID p)
 {
-	handler_face* handler = (handler_face*)p;
-	BEGIN_CHECK_EXCEPTION;
-	handler->invoke();
-	END_CHECK_EXCEPTION;
+	as_ptype<handler_face>(p)->invoke();
 	return 0;
 }
 
@@ -115,7 +112,27 @@ void run_thread::sleep(int ms)
 {
 	Sleep(ms);
 }
+//////////////////////////////////////////////////////////////////////////
 
+tls_space::tls_space()
+{
+	_index = TlsAlloc();
+}
+
+tls_space::~tls_space()
+{
+	TlsFree(_index);
+}
+
+void tls_space::set_space(void** val)
+{
+	TlsSetValue(_index, (LPVOID)val);
+}
+
+void** tls_space::get_space()
+{
+	return (void**)TlsGetValue(_index);
+}
 #elif __linux__
 
 #include <unistd.h>
@@ -135,10 +152,7 @@ run_thread::~run_thread()
 
 void* run_thread::thread_exec(void* p)
 {
-	handler_face* handler = (handler_face*)p;
-	BEGIN_CHECK_EXCEPTION;
-	handler->invoke();
-	END_CHECK_EXCEPTION;
+	as_ptype<handler_face>(p)->invoke();
 	return NULL;
 }
 
@@ -245,7 +259,27 @@ void run_thread::sleep(int ms)
 {
 	usleep((__useconds_t)ms * 1000);
 }
+//////////////////////////////////////////////////////////////////////////
 
+tls_space::tls_space()
+{
+	pthread_key_create(&_key, NULL);
+}
+
+tls_space::~tls_space()
+{
+	pthread_key_delete(_key);
+}
+
+void tls_space::set_space(void** val)
+{
+	pthread_setspecific(_key, val);
+}
+
+void** tls_space::get_space()
+{
+	return (void**)pthread_getspecific(_key);
+}
 #endif
 
 bool run_thread::thread_id::operator<(const thread_id& s) const
