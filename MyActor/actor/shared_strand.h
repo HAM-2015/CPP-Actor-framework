@@ -359,15 +359,6 @@ public:
 	}
 
 	/*!
-	@brief 把被调用函数包装到post中，并且锁定ios，直到释放通知函数包
-	*/
-	template <typename Handler>
-	wrapped_hold_work_post_handler<boost_strand, RM_CREF(Handler)> wrap_hold_post(Handler&& handler)
-	{
-		return wrapped_hold_work_post_handler<boost_strand, RM_CREF(Handler)>(get_io_service(), this, std::forward<Handler>(handler));
-	}
-
-	/*!
 	@brief 把被调用函数包装到post中，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
@@ -431,7 +422,7 @@ public:
 	/*!
 	@brief 依赖的ios调度器运行线程数
 	*/
-	size_t ios_thread_number();
+	size_t io_threads();
 
 	/*!
 	@brief 调用栈里只有当前strand

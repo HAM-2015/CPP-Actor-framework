@@ -72,10 +72,10 @@ public:
 public:
 	/*!
 	@brief 开始运行调度器，非阻塞，启动完毕后立即返回
-	@param threadNum 调度器并发线程数
+	@param threads 调度器并发线程数
 	@param policy 线程调度策略(linux下有效，win下忽略)
 	*/
-	void run(size_t threadNum = 1, sched policy = sched_other);
+	void run(size_t threads = 1, sched policy = sched_other);
 
 	/*!
 	@brief 等待调度器中无任务时返回
@@ -90,7 +90,17 @@ public:
 	/*!
 	@brief 调度器线程数
 	*/
-	size_t threadNumber();
+	size_t ioThreads();
+
+	/*!
+	@brief 锁定调度器自然退出
+	*/
+	void holdWork();
+
+	/*!
+	@brief 释放调度器自然退出
+	*/
+	void releaseWork();
 
 	/*!
 	@brief 调度器线程优先级设置，（linux下 sched_fifo, sched_rr 有效 ）
@@ -183,7 +193,6 @@ private:
 	std::set<run_thread::thread_id> _threadsID;
 	std::list<run_thread*> _runThreads;
 	boost::asio::io_service _ios;
-	boost::asio::io_service::work* _runLock;
 #ifdef WIN32
 	std::vector<HANDLE> _handleList;
 #elif __linux__
@@ -192,6 +201,16 @@ private:
 #endif
 	static tls_space* _tls;
 	NONE_COPY(io_engine);
+};
+
+class io_work
+{
+public:
+	io_work(io_engine& ios);
+	~io_work();
+private:
+	io_engine& _ios;
+	NONE_COPY(io_work);
 };
 
 #endif

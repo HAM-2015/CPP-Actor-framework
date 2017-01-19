@@ -86,6 +86,60 @@ namespace boost
 }
 #endif
 
+namespace boost
+{
+	namespace asio
+	{
+		struct io_service_work_started
+		{
+		};
+
+		struct io_service_work_finished
+		{
+		};
+
+		namespace detail
+		{
+			struct io_service_work_check_outstanding_count
+			{
+			};
+#ifdef WIN32
+			template <>
+			void boost::asio::detail::win_iocp_io_service::dispatch(io_service_work_check_outstanding_count&)
+			{
+				assert(outstanding_work_ >= 0);
+			}
+#elif __linux__
+			template <>
+			void boost::asio::detail::task_io_service::dispatch(io_service_work_check_outstanding_count&)
+			{
+				assert(outstanding_work_ >= 0);
+			}
+#endif
+		}
+
+		template <>
+		void boost::asio::io_service::dispatch(io_service_work_started&&)
+		{
+#if (_DEBUG || DEBUG)
+			boost::asio::detail::io_service_work_check_outstanding_count cc;
+			impl_.dispatch(cc);
+#endif
+			impl_.work_started();
+		}
+
+		template <>
+		void boost::asio::io_service::dispatch(io_service_work_finished&&)
+		{
+			impl_.work_finished();
+#if (_DEBUG || DEBUG)
+			boost::asio::detail::io_service_work_check_outstanding_count cc;
+			impl_.dispatch(cc);
+#endif
+		}
+	}
+}
+
 struct safe_stack_info
 {
 	wrap_local_handler_face<void()>* handler = NULL;
@@ -131,7 +185,6 @@ io_engine::io_engine(bool enableTimer, const char* title)
 io_engine::io_engine(size_t poolSize, bool enableTimer, const char* title)
 {
 	_opend = false;
-	_runLock = NULL;
 	_poolSize = poolSize > 4 ? poolSize : 4;
 	_title = title ? title : "io_engine";
 #ifdef WIN32
@@ -174,16 +227,16 @@ io_engine::~io_engine()
 	delete _strandPool;
 }
 
-void io_engine::run(size_t threadNum, sched policy)
+void io_engine::run(size_t threads, sched policy)
 {
-	assert(threadNum >= 1);
+	assert(threads >= 1);
 	std::lock_guard<std::mutex> lg(_runMutex);
 	if (!_opend)
 	{
 		_opend = true;
 		_runCount = 0;
-		_runLock = new boost::asio::io_service::work(_ios);
-		_handleList.resize(threadNum);
+		holdWork();
+		_handleList.resize(threads);
 #ifdef __linux__
 		_policy = policy;
 #endif
@@ -191,7 +244,7 @@ void io_engine::run(size_t threadNum, sched policy)
 		std::shared_ptr<std::mutex> blockMutex = std::make_shared<std::mutex>();
 		std::shared_ptr<std::condition_variable> blockConVar = std::make_shared<std::condition_variable>();
 		std::unique_lock<std::mutex> ul(*blockMutex);
-		for (size_t i = 0; i < threadNum; i++)
+		for (size_t i = 0; i < threads; i++)
 		{
 			run_thread* newThread = new run_thread([&, i]
 			{
@@ -215,7 +268,7 @@ void io_engine::run(size_t threadNum, sched policy)
 						auto lockMutex = blockMutex;
 						auto lockConVar = blockConVar;
 						std::unique_lock<std::mutex> ul(*lockMutex);
-						if (threadNum == ++rc)
+						if (threads == ++rc)
 						{
 							lockConVar->notify_all();
 						}
@@ -305,8 +358,7 @@ void io_engine::stop()
 	if (_opend)
 	{
 		assert(!runningInThisIos());
-		delete _runLock;
-		_runLock = NULL;
+		releaseWork();
 		while (!_runThreads.empty())
 		{
 			_runThreads.front()->join();
@@ -336,10 +388,20 @@ bool io_engine::runningInThisIos()
 	return _threadsID.find(run_thread::this_thread_id()) != _threadsID.end();
 }
 
-size_t io_engine::threadNumber()
+size_t io_engine::ioThreads()
 {
 	assert(_opend);
 	return _threadsID.size();
+}
+
+void io_engine::holdWork()
+{
+	_ios.dispatch(boost::asio::io_service_work_started());
+}
+
+void io_engine::releaseWork()
+{
+	_ios.dispatch(boost::asio::io_service_work_finished());
 }
 
 void io_engine::switchInvoke(wrap_local_handler_face<void()>* handler)
@@ -433,4 +495,16 @@ void* io_engine::swapTlsValue(int i, void* val)
 void** io_engine::getTlsValueBuff()
 {
 	return _tls->get_space();
+}
+//////////////////////////////////////////////////////////////////////////
+
+io_work::io_work(io_engine& ios)
+:_ios(ios)
+{
+	_ios.holdWork();
+}
+
+io_work::~io_work()
+{
+	_ios.releaseWork();
 }

@@ -641,7 +641,7 @@ private:
 	long long _extMaxTick;
 	long long _extFinishTime;
 #ifdef DISABLE_BOOST_TIMER
-	stack_obj<boost::asio::io_service::work, false> _lockIos;
+	stack_obj<io_work, false> _lockIos;
 #endif
 	int _timerCount;
 	bool _looping;

@@ -112,7 +112,7 @@ bool boost_strand::in_this_ios()
 bool boost_strand::sync_safe()
 {
 	assert(_ioEngine);
-	return 1 == _ioEngine->threadNumber();
+	return 1 == _ioEngine->ioThreads();
 }
 
 bool boost_strand::running_in_this_thread()
@@ -144,10 +144,10 @@ bool boost_strand::safe_is_running()
 	return _strand->safe_running();
 }
 
-size_t boost_strand::ios_thread_number()
+size_t boost_strand::io_threads()
 {
 	assert(_ioEngine);
-	return _ioEngine->threadNumber();
+	return _ioEngine->ioThreads();
 }
 
 bool boost_strand::only_self()

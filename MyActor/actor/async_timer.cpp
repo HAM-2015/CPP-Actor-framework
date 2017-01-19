@@ -153,7 +153,7 @@ void overlap_timer::_timeout(long long us, timer_handle& timerHandle, bool deadl
 	{
 		_lockStrand = _weakStrand.lock();
 #ifdef DISABLE_BOOST_TIMER
-		_lockIos.create(_lockStrand->get_io_service());
+		_lockIos.create(_lockStrand->get_io_engine());
 #endif
 	}
 	assert(_lockStrand->running_in_this_thread());

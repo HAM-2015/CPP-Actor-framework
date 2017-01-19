@@ -1,11 +1,17 @@
 #include "actor_socket.h"
 
-tcp_socket::tcp_socket(boost::asio::io_service& ios)
+tcp_socket::tcp_socket(io_engine& ios)
 :_socket(ios), _nonBlocking(false)
 #ifdef ENABLE_ASIO_PRE_OP
 , _preOption(false)
 #endif
-{}
+{
+#ifdef HAS_ASIO_SEND_FILE
+	_sendFileState.fd = 0;
+	_sendFileState.off = NULL;
+	_sendFileState.count = 0;
+#endif
+}
 
 tcp_socket::~tcp_socket()
 {}
@@ -590,9 +596,39 @@ tcp_socket::result tcp_socket::_try_mread_same(void* const* buffs, const size_t*
 	return result{ 0, 0, false };
 #endif
 }
+
+#ifdef HAS_ASIO_SEND_FILE
+tcp_socket::result tcp_socket::try_send_file_same(int fd, size_t* offset, size_t count)
+{
+	using namespace boost::asio::detail;
+	result res = { 0, 0, false };
+	if (_nonBlocking)
+	{
+		socket_ops::send_file_pck pck = { fd, offset, count };
+		socket_ops::buf buf;
+		socket_ops::init_buf(buf, &pck, -1);
+		boost::system::error_code ec;
+		signed_size_type bytes = socket_ops::send(_socket.native_handle(), &buf, 1, 0, ec);
+		if (bytes >= 0 && !ec)
+		{
+			res.ok = true;
+			res.s = (size_t)bytes;
+		}
+		else
+		{
+			res.code = ec.value();
+		}
+	}
+	else
+	{
+		res.code = boost::asio::error::would_block;
+	}
+	return res;
+}
+#endif
 //////////////////////////////////////////////////////////////////////////
 
-tcp_acceptor::tcp_acceptor(boost::asio::io_service& ios)
+tcp_acceptor::tcp_acceptor(io_engine& ios)
 :_ios(ios) {}
 
 tcp_acceptor::~tcp_acceptor()
@@ -685,7 +721,7 @@ tcp_socket::result tcp_acceptor::timed_accept(my_actor* host, int ms, tcp_socket
 }
 //////////////////////////////////////////////////////////////////////////
 
-udp_socket::udp_socket(boost::asio::io_service& ios)
+udp_socket::udp_socket(io_engine& ios)
 :_socket(ios), _nonBlocking(false)
 #ifdef ENABLE_ASIO_PRE_OP
 , _preOption(false)
@@ -1552,3 +1588,33 @@ udp_socket::result udp_socket::try_receive_from(boost::asio::ip::udp::endpoint& 
 	}
 	return res;
 }
+
+#ifdef HAS_ASIO_SEND_FILE
+udp_socket::result udp_socket::try_send_file_seg(int fd, size_t* offset, size_t count)
+{
+	using namespace boost::asio::detail;
+	result res = { 0, 0, false };
+	if (_nonBlocking)
+	{
+		socket_ops::send_file_pck pck = { fd, offset, count };
+		socket_ops::buf buf;
+		socket_ops::init_buf(buf, &pck, -1);
+		boost::system::error_code ec;
+		signed_size_type bytes = socket_ops::send(_socket.native_handle(), &buf, 1, 0, ec);
+		if (bytes >= 0 && !ec)
+		{
+			res.ok = true;
+			res.s = (size_t)bytes;
+		}
+		else
+		{
+			res.code = ec.value();
+		}
+	}
+	else
+	{
+		res.code = boost::asio::error::would_block;
+	}
+	return res;
+}
+#endif

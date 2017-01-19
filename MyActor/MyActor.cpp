@@ -658,13 +658,13 @@ void socket_test()
 	{
 		child_handle srv = self->create_child([&](my_actor* self)
 		{
-			tcp_acceptor acc(self->self_io_service());
+			tcp_acceptor acc(self->self_io_engine());
 			if (!acc.open("127.0.0.1", 1234).ok)
 			{
 				trace_line("server port conflict");
 				return;
 			}
-			tcp_socket sck(self->self_io_service());
+			tcp_socket sck(self->self_io_engine());
 			if (acc.timed_accept(self, 1500, sck).ok)
 			{
 				trace_line("new client connected");
@@ -694,7 +694,7 @@ void socket_test()
 		});
 		child_handle cli = self->create_child([&](my_actor* self)
 		{
-			tcp_socket sck(self->self_io_service());
+			tcp_socket sck(self->self_io_engine());
 			if (sck.connect(self, "127.0.0.1", 1234).ok)
 			{
 				char buf[128];
@@ -732,7 +732,7 @@ void udp_test()
 		child_handle sender = self->create_child([](my_actor* self)
 		{
 			self->sleep(100);
-			udp_socket udp(self->self_io_service());
+			udp_socket udp(self->self_io_engine());
 			udp.connect("127.0.0.1", 1234);
 			char buf[128];
 			for (int i = 0; i < 3; i++)
@@ -745,7 +745,7 @@ void udp_test()
 		});
 		child_handle receiver = self->create_child([](my_actor* self)
 		{
-			udp_socket udp(self->self_io_service());
+			udp_socket udp(self->self_io_engine());
 			udp.open_bind_v4(1234);
 			char buf[128];
 			for (int i = 0; i < 3; i++)
@@ -777,7 +777,7 @@ void perfor_test()
 	actor_handle ah = my_actor::create(boost_strand::create(ios), [&](my_actor* self)
 	{
 		self->check_stack();
-		std::vector<shared_strand> strands = boost_strand::create_multi(ios.threadNumber(), ios);
+		std::vector<shared_strand> strands = boost_strand::create_multi(ios.ioThreads(), ios);
 		for (int n = 1; n < 200; n++)
 		{
 			int num = n*n;
@@ -978,11 +978,11 @@ void co_perfor_test()
 	trace_line("begin co_perfor_test");
 	io_engine ios;
 	ios.run(run_thread::cpu_thread_number());
-	std::vector<size_t> count(ios.threadNumber());
-	std::vector<shared_strand> strands = boost_strand::create_multi(ios.threadNumber(), ios);
+	std::vector<size_t> count(ios.ioThreads());
+	std::vector<shared_strand> strands = boost_strand::create_multi(ios.ioThreads(), ios);
 	std::list<generator_handle> gens;
 	size_t num = 1000;
-	for (size_t i = 0; i < ios.threadNumber(); i++)
+	for (size_t i = 0; i < ios.ioThreads(); i++)
 	{
 		for (size_t j = 0; j < num; j++)
 		{
@@ -1014,7 +1014,7 @@ void co_perfor_test()
 		gens.front()->stop();
 		gens.pop_front();
 	}
-	trace_line("generator number=", ios.threadNumber()*num, ", ", "switching frequency=", (int)f);
+	trace_line("generator number=", ios.ioThreads()*num, ", ", "switching frequency=", (int)f);
 	ios.stop();
 	trace_line("end co_perfor_test");
 }
