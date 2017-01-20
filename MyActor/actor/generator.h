@@ -870,7 +870,7 @@ struct __co_context_no_capture{};
 			const size_t chanId=co_select_curr_id;\
 			(__chan__).try_pop_and_append_notify(co_async_result_(co_select_state, __VA_ARGS__), [&__coContext, chanId](co_async_state st) {\
 				if (co_async_state::co_async_fail!=st) {\
-					co_select._ntfPump.post(chanId, st);\
+					co_select._ntfPump.send(chanId, st);\
 				}\
 			}, *currSign);\
 		} _co_await;\
@@ -900,7 +900,7 @@ struct __co_context_no_capture{};
 			const size_t chanId=co_select_curr_id;\
 			(__chan__).try_pop_and_append_notify(co_async_result_(co_select_state), [&__coContext, chanId](co_async_state st) {\
 				if (co_async_state::co_async_fail!=st) {\
-					co_select._ntfPump.post(chanId, st);\
+					co_select._ntfPump.send(chanId, st);\
 				}\
 			}, *currSign);\
 		} _co_await;\
@@ -978,13 +978,13 @@ struct __co_context_no_capture{};
 			if (sign._isPush) {\
 				(__chan__).append_push_notify([&__coContext, chanId](co_async_state st){\
 					if (co_async_state::co_async_fail!=st){\
-						co_select._ntfPump.post(chanId, st);\
+						co_select._ntfPump.send(chanId, st);\
 					}\
 				}, sign);\
 			} else {\
 				(__chan__).append_pop_notify([&__coContext, chanId](co_async_state st){\
 					if (co_async_state::co_async_fail!=st){\
-						co_select._ntfPump.post(chanId, st);\
+						co_select._ntfPump.send(chanId, st);\
 					}\
 				}, sign);\
 			}\
@@ -9020,7 +9020,7 @@ void CoChanSeamlessTryO_<Chan>::pop(CoChanSeamlessTryO_* this_, Args&&... args)
 	{
 		if (co_async_state::co_async_fail != st)
 		{
-			selectSign._ntfPump.post(chanId, st);
+			selectSign._ntfPump.send(chanId, st);
 		}
 	}, *currSign);
 }
@@ -9038,7 +9038,7 @@ void CoChanSeamlessTryI_<Chan>::push(CoChanSeamlessTryI_* this_, Args&&... args)
 	{
 		if (co_async_state::co_async_fail != st)
 		{
-			selectSign._ntfPump.post(chanId, st);
+			selectSign._ntfPump.send(chanId, st);
 		}
 	}, *currSign, std::forward<Args>(args)...);
 }
@@ -9056,7 +9056,7 @@ void CoCspSeamlessTryO_<R, CspChan>::pop(CoCspSeamlessTryO_* this_, Args&&... ar
 	{
 		if (co_async_state::co_async_fail != st)
 		{
-			selectSign._ntfPump.post(chanId, st);
+			selectSign._ntfPump.send(chanId, st);
 		}
 	}, *currSign);
 }
@@ -9074,7 +9074,7 @@ void CoCspSeamlessTryI_<R, CspChan>::push(CoCspSeamlessTryI_* this_, Args&&... a
 	{
 		if (co_async_state::co_async_fail != st)
 		{
-			selectSign._ntfPump.post(chanId, st);
+			selectSign._ntfPump.send(chanId, st);
 		}
 	}, *currSign, std::forward<Args>(args)...);
 }

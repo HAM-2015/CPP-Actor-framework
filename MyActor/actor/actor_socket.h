@@ -97,6 +97,7 @@ private:
 #endif
 
 #ifdef HAS_ASIO_SEND_FILE
+#ifdef __linux__
 	template <typename Handler>
 	struct async_send_file_op
 	{
@@ -110,9 +111,9 @@ private:
 			_sck._sendFileState.count -= s;
 			if (ec || !_sck._sendFileState.count || !s)
 			{
-				_sck._sendFileState.fd = 0;
-				_sck._sendFileState.off = NULL;
+				_sck._sendFileState.offset = NULL;
 				_sck._sendFileState.count = 0;
+				_sck._sendFileState.fd = 0;
 				tcp_socket::result res = { _currBytes, ec.value(), !ec };
 				_handler(res);
 			}
@@ -120,14 +121,6 @@ private:
 			{
 				_sck._socket.async_write_some(boost::asio::buffer((const char*)&_sck._sendFileState, -1), std::move(*this));
 			}
-		}
-
-		void start(int fd, size_t* offset, size_t count)
-		{
-			_sck._sendFileState.fd = fd;
-			_sck._sendFileState.off = offset;
-			_sck._sendFileState.count = count - _currBytes;
-			_sck._socket.async_write_some(boost::asio::buffer((const char*)&_sck._sendFileState, -1), std::move(*this));
 		}
 
 #ifdef HAS_ASIO_HANDLER_IS_TRIED
@@ -143,6 +136,7 @@ private:
 		RVALUE_CONSTRUCT3(async_send_file_op, _handler, _sck, _currBytes);
 		LVALUE_CONSTRUCT3(async_send_file_op, _handler, _sck, _currBytes);
 	};
+#endif
 #endif
 
 public:
@@ -426,16 +420,20 @@ public:
 
 #ifdef HAS_ASIO_SEND_FILE
 	/*!
-	@brief linux下发送一个文件
+	@brief 发送一个文件
 	*/
+#ifdef __linux__
 	template <typename Handler>
-	bool async_send_file(int fd, size_t* offset, size_t count, Handler&& handler)
+	bool async_send_file(int fd, unsigned long long* offset, size_t length, Handler&& handler)
 	{
 		assert(!_sendFileState.fd);
-		result res = try_send_file_same(fd, offset, count);
-		if (res.ok && res.s && res.s != count)
+		result res = try_send_file_same(fd, offset, length);
+		if (res.ok && res.s && res.s != length)
 		{
-			async_send_file_op<RM_CREF(Handler)>(std::forward<Handler>(handler), *this, res.s).start(fd, offset, count);
+			_sendFileState.offset = offset;
+			_sendFileState.count = length - res.s;
+			_sendFileState.fd = fd;
+			_socket.async_write_some(boost::asio::buffer((const char*)&_sendFileState, -1), async_send_file_op<RM_CREF(Handler)>(std::forward<Handler>(handler), *this, res.s));
 			return false;
 		}
 #ifdef ENABLE_ASIO_PRE_OP
@@ -451,6 +449,46 @@ public:
 		}, std::forward<Handler>(handler), res));
 		return false;
 	}
+#elif WIN32
+	template <typename Handler>
+	bool async_send_file(HANDLE hFile, unsigned long long* offset, size_t length, Handler&& handler)
+	{
+		if (offset)
+		{
+			LARGE_INTEGER off;
+			LARGE_INTEGER newOff;
+			off.QuadPart = (LONGLONG)*offset;
+			newOff.QuadPart = 0;
+			if (FALSE == ::SetFilePointerEx(hFile, off, &newOff, FILE_BEGIN) || off.QuadPart != newOff.QuadPart)
+			{
+				result res = { 0, ::WSAGetLastError(), false };
+#ifdef ENABLE_ASIO_PRE_OP
+				if (is_pre_option())
+				{
+					handler(res);
+					return true;
+				}
+#endif
+				_socket.get_io_service().post(std::bind([](Handler& handler, result& res)
+				{
+					handler(res);
+				}, std::forward<Handler>(handler), res));
+				return false;
+			}
+		}
+		boost::asio::detail::send_file_pck pck = { hFile, (DWORD)length };
+		_socket.async_write_some(boost::asio::buffer((const char*)&pck, -1), std::bind([offset](Handler& handler, const boost::system::error_code& ec, size_t s)
+		{
+			if (offset)
+			{
+				*offset += (unsigned long long)s;
+			}
+			result res = { s, ec.value(), !ec };
+			handler(res);
+		}, std::forward<Handler>(handler), __1, __2));
+		return false;
+	}
+#endif
 #endif
 
 	/*!
@@ -477,25 +515,25 @@ public:
 	*/
 	result try_mread_same(void* const* buffs, const size_t* lengths, size_t count, size_t* lastBytes = NULL);
 
-#ifdef HAS_ASIO_SEND_FILE
-	/*!
-	@brief linux下尝试发送一个文件，能发多少是多少
-	*/
-	result try_send_file_same(int fd, size_t* offset, size_t count);
-#endif
-
 	/*!
 	@brief try_io操作失败是否是因为EAGAIN
 	*/
 	static bool try_again(const result& res);
 private:
+#ifdef HAS_ASIO_SEND_FILE
+#ifdef __linux__
+	result try_send_file_same(int fd, unsigned long long* offset, size_t length);
+#endif
+#endif
 	result _try_mwrite_same(const void* const* buffs, const size_t* lengths, size_t count);
 	result _try_mread_same(void* const* buffs, const size_t* lengths, size_t count);
 	void set_internal_non_blocking();
 private:
 	boost::asio::ip::tcp::socket _socket;
 #ifdef HAS_ASIO_SEND_FILE
+#ifdef __linux__
 	boost::asio::detail::socket_ops::send_file_pck _sendFileState;
+#endif
 #endif
 	bool _nonBlocking;
 #ifdef ENABLE_ASIO_PRE_OP
@@ -904,13 +942,6 @@ public:
 	@return 实际接收数据条数
 	*/
 	result try_mreceive_from(boost::asio::ip::udp::endpoint* remoteEndpoints, void* const* buffs, const size_t* lengths, size_t count, size_t* bytes = NULL, int flags = 0);
-	
-#ifdef HAS_ASIO_SEND_FILE
-	/*!
-	@brief connect后，linux下尝试发送一个文件片段，能发多少是多少
-	*/
-	result try_send_file_seg(int fd, size_t* offset, size_t count);
-#endif
 
 	/*!
 	@brief try_io操作失败是否是因为EAGAIN
