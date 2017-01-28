@@ -453,28 +453,21 @@ public:
 	template <typename Handler>
 	bool async_send_file(HANDLE hFile, unsigned long long* offset, size_t length, Handler&& handler)
 	{
-		if (offset)
+		if (!init_send_file(hFile, offset, length))
 		{
-			LARGE_INTEGER off;
-			LARGE_INTEGER newOff;
-			off.QuadPart = (LONGLONG)*offset;
-			newOff.QuadPart = 0;
-			if (FALSE == ::SetFilePointerEx(hFile, off, &newOff, FILE_BEGIN) || off.QuadPart != newOff.QuadPart)
-			{
-				result res = { 0, ::WSAGetLastError(), false };
+			result res = { 0, ::WSAGetLastError(), false };
 #ifdef ENABLE_ASIO_PRE_OP
-				if (is_pre_option())
-				{
-					handler(res);
-					return true;
-				}
-#endif
-				_socket.get_io_service().post(std::bind([](Handler& handler, result& res)
-				{
-					handler(res);
-				}, std::forward<Handler>(handler), res));
-				return false;
+			if (is_pre_option())
+			{
+				handler(res);
+				return true;
 			}
+#endif
+			_socket.get_io_service().post(std::bind([](Handler& handler, result& res)
+			{
+				handler(res);
+			}, std::forward<Handler>(handler), res));
+			return false;
 		}
 		boost::asio::detail::send_file_pck pck = { hFile, (DWORD)length };
 		_socket.async_write_some(boost::asio::buffer((const char*)&pck, -1), std::bind([offset](Handler& handler, const boost::system::error_code& ec, size_t s)
@@ -522,7 +515,9 @@ public:
 private:
 #ifdef HAS_ASIO_SEND_FILE
 #ifdef __linux__
-	result try_send_file_same(int fd, unsigned long long* offset, size_t length);
+	result try_send_file_same(int fd, unsigned long long* offset, size_t& length);
+#elif WIN32
+	bool init_send_file(HANDLE hFile, unsigned long long* offset, size_t& length);
 #endif
 #endif
 	result _try_mwrite_same(const void* const* buffs, const size_t* lengths, size_t count);

@@ -601,12 +601,35 @@ tcp_socket::result tcp_socket::_try_mread_same(void* const* buffs, const size_t*
 
 #ifdef HAS_ASIO_SEND_FILE
 #ifdef __linux__
-tcp_socket::result tcp_socket::try_send_file_same(int fd, unsigned long long* offset, size_t length)
+tcp_socket::result tcp_socket::try_send_file_same(int fd, unsigned long long* offset, size_t& length)
 {
 	using namespace boost::asio::detail;
 	result res = { 0, 0, false };
 	if (_nonBlocking)
 	{
+		if ((size_t)-1 == length)
+		{
+			if (!offset)
+			{
+				off_t currpos = ::lseek(fd, 0, SEEK_CUR);
+				unsigned long long sl = (unsigned long long)::lseek(fd, 0, SEEK_END) - (unsigned long long)currpos;
+				if (sl >> 32)
+				{
+					return res;
+				}
+				length = (size_t)sl;
+				::lseek(fd, currpos, SEEK_SET);
+			}
+			else
+			{
+				unsigned long long sl = (unsigned long long)::lseek(fd, 0, SEEK_END) - *offset;
+				if (sl >> 32)
+				{
+					return res;
+				}
+				length = (size_t)sl;
+			}
+		}
 		socket_ops::send_file_pck pck = { offset, length, fd };
 		socket_ops::buf buf;
 		socket_ops::init_buf(buf, &pck, -1);
@@ -627,6 +650,37 @@ tcp_socket::result tcp_socket::try_send_file_same(int fd, unsigned long long* of
 		res.code = boost::asio::error::would_block;
 	}
 	return res;
+}
+#elif WIN32
+bool tcp_socket::init_send_file(HANDLE hFile, unsigned long long* offset, size_t& length)
+{
+	bool setOffOk = true;
+	if (offset)
+	{
+		LARGE_INTEGER off;
+		LARGE_INTEGER newOff;
+		off.QuadPart = (LONGLONG)*offset;
+		newOff.QuadPart = 0;
+		setOffOk = FALSE != ::SetFilePointerEx(hFile, off, &newOff, FILE_BEGIN) && off.QuadPart == newOff.QuadPart;
+	}
+	if (setOffOk)
+	{
+		if ((size_t)-1 != length)
+		{
+			return true;
+		}
+		LARGE_INTEGER fileSize;
+		if (FALSE != ::GetFileSizeEx(hFile, &fileSize))
+		{
+			unsigned long long sl = (unsigned long long)fileSize.QuadPart - (offset ? *offset : 0);
+			if (0 == (sl >> 32))
+			{
+				length = (size_t)sl;
+				return true;
+			}
+		}
+	}
+	return false;
 }
 #endif
 #endif
