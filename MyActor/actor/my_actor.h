@@ -3935,12 +3935,12 @@ private:
 template <typename Handler, typename R>
 class on_callback_handler : public TrigOnceBase_
 {
+	typedef RM_CREF(Handler) handler_type;
 	typedef TrigOnceBase_ Parent;
 	friend my_actor;
 public:
-	template <typename H>
-	on_callback_handler(my_actor* host, H&& h)
-		:_closed(shared_bool::new_(false)), _handler(std::forward<H>(h)), _selfEarly(host), _bsign(false), _sign(&_bsign)
+	on_callback_handler(my_actor* host, Handler& handler)
+		:_closed(shared_bool::new_(false)), _handler(std::forward<Handler>(handler)), _selfEarly(host), _bsign(false), _sign(&_bsign)
 	{
 		Parent::_hostActor = ActorFunc_::shared_from_this(host);
 	}
@@ -3992,7 +3992,7 @@ private:
 	void operator =(const on_callback_handler&) = delete;
 private:
 	shared_bool _closed;
-	Handler _handler;
+	handler_type _handler;
 	my_actor* const _selfEarly;
 	bool* _sign;
 	bool _bsign;
@@ -4144,10 +4144,10 @@ private:
 template <typename R, typename Handler>
 class wrapped_sync_handler
 {
+	typedef RM_CREF(Handler) handler_type;
 public:
-	template <typename H>
-	wrapped_sync_handler(H&& h, sync_result<R>& res)
-		:_handler(std::forward<H>(h)), _result(&res)
+	wrapped_sync_handler(Handler& handler, sync_result<R>& res)
+		:_handler(std::forward<Handler>(handler)), _result(&res)
 	{
 		DEBUG_OPERATION(_pIsTrig = std::make_shared<std::atomic<bool> >(false));
 	}
@@ -4199,7 +4199,7 @@ public:
 		return stack_obj_move::move(res);
 	}
 private:
-	Handler _handler;
+	handler_type _handler;
 	sync_result<R>* _result;
 	DEBUG_OPERATION(std::shared_ptr<std::atomic<bool> > _pIsTrig);
 };
@@ -4207,15 +4207,16 @@ private:
 template <typename R, typename Handler>
 class wrapped_sync_handler2
 {
+	typedef RM_CREF(Handler) handler_type;
+
 	struct sync_st
 	{
 		std::mutex mutex;
 		std::condition_variable con;
 	};
 public:
-	template <typename H>
-	wrapped_sync_handler2(H&& h, sync_result<R>& res)
-		:_handler(std::forward<H>(h)), _result(&res), _syncSt(new sync_st)
+	wrapped_sync_handler2(Handler& handler, sync_result<R>& res)
+		:_handler(std::forward<Handler>(handler)), _result(&res), _syncSt(new sync_st)
 	{
 		DEBUG_OPERATION(_pIsTrig = std::make_shared<std::atomic<bool> >(false));
 	}
@@ -4267,7 +4268,7 @@ public:
 		return stack_obj_move::move(res);
 	}
 private:
-	Handler _handler;
+	handler_type _handler;
 	sync_result<R>* _result;
 	std::shared_ptr<sync_st> _syncSt;
 	DEBUG_OPERATION(std::shared_ptr<std::atomic<bool> > _pIsTrig);
@@ -4277,15 +4278,15 @@ private:
 @brief 包装一个handler到与当前ios无关的线程中同步调用
 */
 template <typename R, typename Handler>
-wrapped_sync_handler<R, RM_CREF(Handler)> wrap_sync(sync_result<R>& res, Handler&& h)
+wrapped_sync_handler<R, Handler> wrap_sync(sync_result<R>& res, Handler&& handler)
 {
-	return wrapped_sync_handler<R, RM_CREF(Handler)>(std::forward<Handler>(h), res);
+	return wrapped_sync_handler<R, Handler>(handler, res);
 }
 
 template <typename R, typename Handler>
-wrapped_sync_handler2<R, RM_CREF(Handler)> wrap_sync2(sync_result<R>& res, Handler&& h)
+wrapped_sync_handler2<R, Handler> wrap_sync2(sync_result<R>& res, Handler&& handler)
 {
-	return wrapped_sync_handler2<R, RM_CREF(Handler)>(std::forward<Handler>(h), res);
+	return wrapped_sync_handler2<R, Handler>(handler, res);
 }
 //////////////////////////////////////////////////////////////////////////
 
@@ -4647,35 +4648,6 @@ class my_actor : public ActorTimerFace_
 	private:
 		void operator =(const async_invoke_handler&) = delete;
 	};
-	
-	template <typename Handler>
-	struct wrap_delay_trig
-	{
-		template <typename ActorHandle, typename H>
-		wrap_delay_trig(ActorHandle&& self, H&& h)
-			: _count(self->_timerStateCount), _lockSelf(std::forward<ActorHandle>(self)), _h(std::forward<H>(h)) {}
-
-		wrap_delay_trig(wrap_delay_trig&& s)
-			:_count(s._count), _lockSelf(std::move(s._lockSelf)), _h(std::move(s._h)) {}
-
-		wrap_delay_trig(const wrap_delay_trig& s)
-			:_count(s._count), _lockSelf(s._lockSelf), _h(s._h) {}
-
-		void operator ()()
-		{
-			assert(_lockSelf->self_strand()->running_in_this_thread());
-			if (!_lockSelf->_quited && _count == _lockSelf->_timerStateCount)
-			{
-				_h();
-			}
-		}
-
-		actor_handle _lockSelf;
-		const int _count;
-		Handler _h;
-	private:
-		void operator =(const wrap_delay_trig&) = delete;
-	};
 
 	struct wrap_trig_run_one
 	{
@@ -4772,9 +4744,10 @@ class my_actor : public ActorTimerFace_
 	template <typename Handler>
 	struct wrap_timer_handler : public wrap_timer_handler_face
 	{
-		template <typename H>
-		wrap_timer_handler(H&& h)
-			:_handler(std::forward<H>(h)) {}
+		typedef RM_CREF(Handler) handler_type;
+
+		wrap_timer_handler(Handler& handler)
+			:_handler(std::forward<Handler>(handler)) {}
 
 		void invoke()
 		{
@@ -4787,7 +4760,7 @@ class my_actor : public ActorTimerFace_
 			this->~wrap_timer_handler();
 		}
 
-		Handler _handler;
+		handler_type _handler;
 		NONE_COPY(wrap_timer_handler);
 	};
 
@@ -6079,10 +6052,10 @@ public:
 	@brief 创建上下文回调函数(Handler将在回调内部直接执行，可能触发线程安全问题)，直接作为回调函数使用，async_func(..., Handler self->make_on_context(...))
 	*/
 	template <typename R = void, typename Handler>
-	on_callback_handler<RM_CREF(Handler), R> make_on_callback_context(Handler&& handler)
+	on_callback_handler<Handler, R> make_on_callback_context(Handler&& handler)
 	{
 		assert_enter();
-		return on_callback_handler<RM_CREF(Handler), R>(this, std::forward<Handler>(handler));
+		return on_callback_handler<Handler, R>(this, std::forward<Handler>(handler));
 	}
 
 	/*!
@@ -8364,10 +8337,10 @@ private:
 		assert(ms >= 0);
 		assert(_timerStateCompleted);
 		assert(!_timerStateCb);
-		typedef wrap_timer_handler<RM_CREF(Handler)> wrap_type;
+		typedef wrap_timer_handler<Handler> wrap_type;
 		_timerStateCompleted = false;
 		_timerStateTime = (long long)ms * 1000;
-		_timerStateCb = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(std::forward<Handler>(handler));
+		_timerStateCb = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(handler);
 		_timerStateHandle = _strand->actor_timer()->timeout(_timerStateTime, shared_from_this());
 	}
 
@@ -8376,9 +8349,9 @@ private:
 	{
 		assert(_timerStateCompleted);
 		assert(!_timerStateCb);
-		typedef wrap_timer_handler<RM_CREF(Handler)> wrap_type;
+		typedef wrap_timer_handler<Handler> wrap_type;
 		_timerStateCompleted = false;
-		_timerStateCb = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(std::forward<Handler>(handler));
+		_timerStateCb = new(_reuMem.allocate(sizeof(wrap_type)))wrap_type(handler);
 		_timerStateHandle = _strand->actor_timer()->timeout(us, shared_from_this(), true);
 		_timerStateTime = us > _timerStateHandle._beginStamp ? us - _timerStateHandle._beginStamp : 0;
 	}

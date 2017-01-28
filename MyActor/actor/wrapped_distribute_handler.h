@@ -6,11 +6,11 @@
 template <typename Distributier, typename Handler, bool = false>
 class wrapped_distribute_handler
 {
+	typedef RM_CREF(Handler) handler_type;
 public:
-	template <typename H>
-	wrapped_distribute_handler(Distributier* distributier, H&& handler)
+	wrapped_distribute_handler(Distributier* distributier, Handler& handler)
 		: _distributier(distributier),
-		_handler(std::forward<H>(handler))
+		_handler(std::forward<Handler>(handler))
 	{
 	}
 
@@ -41,18 +41,18 @@ public:
 	}
 
 	Distributier* _distributier;
-	Handler _handler;
+	handler_type _handler;
 };
 //////////////////////////////////////////////////////////////////////////
 
 template <typename Distributier, typename Handler>
 class wrapped_distribute_handler<Distributier, Handler, true>
 {
+	typedef RM_CREF(Handler) handler_type;
 public:
-	template <typename H>
-	wrapped_distribute_handler(Distributier* distributier, H&& handler)
+	wrapped_distribute_handler(Distributier* distributier, Handler& handler)
 		: _distributier(distributier),
-		_handler(std::forward<H>(handler))
+		_handler(std::forward<Handler>(handler))
 #if (_DEBUG || DEBUG)
 		, _checkOnce(new std::atomic<bool>(false))
 #endif
@@ -87,7 +87,7 @@ public:
 	}
 
 	Distributier* _distributier;
-	Handler _handler;
+	handler_type _handler;
 #if (_DEBUG || DEBUG)
 	std::shared_ptr<std::atomic<bool> > _checkOnce;
 #endif

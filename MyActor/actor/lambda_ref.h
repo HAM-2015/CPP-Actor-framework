@@ -609,9 +609,10 @@ struct agent_result<void>
 template <typename Handler>
 struct WrapBind_
 {
-	template <typename H>
-	WrapBind_(bool, H&& h)
-		:_handler(std::forward<H>(h)) {}
+	typedef RM_CREF(Handler) handler_type;
+
+	WrapBind_(bool, Handler& handler)
+		:_handler(std::forward<Handler>(handler)) {}
 
 	template <typename... Args>
 	void operator()(Args&&... args)
@@ -625,7 +626,7 @@ struct WrapBind_
 		_handler(std::forward<Args>(args)...);
 	}
 
-	Handler _handler;
+	handler_type _handler;
 	RVALUE_COPY_CONSTRUCTION1(WrapBind_, _handler);
 };
 
@@ -633,7 +634,7 @@ template <typename Handler>
 WrapBind_<Handler> wrap_bind_(Handler&& handler)
 {
 	static_assert(std::is_rvalue_reference<Handler&&>::value, "");
-	return WrapBind_<Handler>(bool(), std::forward<Handler>(handler));
+	return WrapBind_<Handler>(bool(), handler);
 }
 
 template <typename... Args>
@@ -645,9 +646,10 @@ auto wrap_bind(Args&&... args)->decltype(wrap_bind_(std::bind(std::forward<Args>
 template <typename Handler, typename R>
 struct OnceHandler_
 {
-	template <typename H>
-	OnceHandler_(bool, H&& h)
-		:_handler(std::forward<H>(h)) {}
+	typedef RM_CREF(Handler) handler_type;
+
+	OnceHandler_(bool, Handler& handler)
+		:_handler(std::forward<Handler>(handler)) {}
 
 	OnceHandler_(const OnceHandler_<Handler, R>& s)
 		:_handler(std::move(s._handler)) {}
@@ -664,13 +666,13 @@ struct OnceHandler_
 		return agent_result<R>::invoke(_handler, std::forward<Args>(args)...);
 	}
 
-	mutable Handler _handler;
+	mutable handler_type _handler;
 };
 
 template <typename R = void, typename Handler>
-OnceHandler_<RM_CREF(Handler), R> wrap_once_handler(Handler&& handler)
+OnceHandler_<Handler, R> wrap_once_handler(Handler&& handler)
 {
-	return OnceHandler_<RM_CREF(Handler), R>(bool(), std::forward<Handler>(handler));
+	return OnceHandler_<Handler, R>(bool(), handler);
 }
 
 template <typename Handler, typename R>

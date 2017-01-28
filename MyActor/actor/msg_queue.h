@@ -29,9 +29,9 @@ public:
 	void push_back(Args&&... args)
 	{
 		BEGIN_CHECK_EXCEPTION;
-		void* newNode = _alloc.allocate();
-		new(newNode)T(std::forward<Args>(args)...);
-		new_back((node*)newNode);
+		node* newNode = as_ptype<node>(_alloc.allocate());
+		new(newNode->_data)T(std::forward<Args>(args)...);
+		new_back(newNode);
 		END_CHECK_EXCEPTION;
 	}
 
@@ -39,22 +39,22 @@ public:
 	void push_front(Args&&... args)
 	{
 		BEGIN_CHECK_EXCEPTION;
-		void* newNode = _alloc.allocate();
-		new(newNode)T(std::forward<Args>(args)...);
-		new_front((node*)newNode);
+		node* newNode = as_ptype<node>(_alloc.allocate());
+		new(newNode->_data)T(std::forward<Args>(args)...);
+		new_front(newNode);
 		END_CHECK_EXCEPTION;
 	}
 
 	T& front()
 	{
 		assert(_size && _head);
-		return *as_ptype<T>(_head->_data);
+		return as_ref<T>(_head->_data);
 	}
 
 	T& back()
 	{
 		assert(_size && _tail);
-		return *as_ptype<T>(_tail->_data);
+		return as_ref<T>(_tail->_data);
 	}
 
 	void pop_front()

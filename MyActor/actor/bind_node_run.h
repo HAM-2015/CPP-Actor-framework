@@ -624,18 +624,17 @@ struct CheckClassFuncResult<void>
 template <typename Handler>
 class NodeJsCallCpp_ : public node::ObjectWrap
 {
+	typedef RM_CREF(Handler) handler_type;
 private:
-	template <typename H>
-	NodeJsCallCpp_(H&& h):_handler(std::forward<H>(h)) {}
+	NodeJsCallCpp_(Handler& handler):_handler(std::forward<Handler>(handler)) {}
 	~NodeJsCallCpp_() {}
 public:
-	template <typename H>
-	static v8::Local<v8::Value> make(v8::Isolate* isolate, H&& h)
+	static v8::Local<v8::Value> make(v8::Isolate* isolate, Handler& handler)
 	{
 		v8::Local<v8::ObjectTemplate> objTemp = v8::ObjectTemplate::New(isolate);
 		objTemp->SetInternalFieldCount(1);
 		v8::Local<v8::Object> nodeObj = objTemp->NewInstance();
-		(new NodeJsCallCpp_(std::forward<H>(h)))->Wrap(nodeObj);
+		(new NodeJsCallCpp_(handler))->Wrap(nodeObj);
 		return nodeObj;
 	}
 
@@ -644,7 +643,7 @@ public:
 		_handler(args);
 	}
 private:
-	Handler _handler;
+	handler_type _handler;
 	NONE_COPY(NodeJsCallCpp_);
 };
 
@@ -664,16 +663,15 @@ struct CheckNodeJsCallCppOnceDestroy_ : public node::ObjectWrap
 template <typename Handler>
 class NodeJsCallCppOnce_
 {
+	typedef RM_CREF(Handler) handler_type;
 private:
-	template <typename H>
-	NodeJsCallCppOnce_(H&& h) :_handler(std::forward<H>(h)) {}
+	NodeJsCallCppOnce_(Handler& handler) :_handler(std::forward<Handler>(handler)) {}
 	~NodeJsCallCppOnce_() { DEBUG_OPERATION(_checkDestroy->destroyed = true); }
 public:
-	template <typename H>
-	static v8::Local<v8::Value> make(v8::Isolate* isolate, H&& h)
+	static v8::Local<v8::Value> make(v8::Isolate* isolate, Handler& handler)
 	{
 		v8::Local<v8::ObjectTemplate> objTemp = v8::ObjectTemplate::New(isolate);
-		NodeJsCallCppOnce_* newObj = new NodeJsCallCppOnce_(std::forward<H>(h));
+		NodeJsCallCppOnce_* newObj = new NodeJsCallCppOnce_(handler);
 #if (_DEBUG || DEBUG)
 		objTemp->SetInternalFieldCount(2);
 		v8::Local<v8::Object> nodeObj = objTemp->NewInstance();
@@ -697,7 +695,7 @@ private:
 #if (_DEBUG || DEBUG)
 	CheckNodeJsCallCppOnceDestroy_* _checkDestroy;
 #endif
-	Handler _handler;
+	handler_type _handler;
 	NONE_COPY(NodeJsCallCppOnce_);
 };
 
@@ -707,11 +705,11 @@ private:
 template <typename CastHandler>
 static v8::Local<v8::Function> make_js_call_cpp(v8::Isolate* isolate, CastHandler&& castHandler)
 {
-	typedef NodeJsCallCpp_<RM_CREF(CastHandler)> CastHandler_;
+	typedef NodeJsCallCpp_<CastHandler> CastHandler_;
 	return v8::Function::New(isolate, [](const v8::FunctionCallbackInfo<v8::Value>& args)
 	{
 		(node::ObjectWrap::Unwrap<CastHandler_>(args.Data()->ToObject()))->invoke(args);
-	}, CastHandler_::make(isolate, std::forward<CastHandler>(castHandler)));
+	}, CastHandler_::make(isolate, castHandler));
 }
 
 /*!
@@ -720,7 +718,7 @@ static v8::Local<v8::Function> make_js_call_cpp(v8::Isolate* isolate, CastHandle
 template <typename CastHandler>
 static v8::Local<v8::Function> make_js_call_cpp_once(v8::Isolate* isolate, CastHandler&& castHandler)
 {
-	typedef NodeJsCallCppOnce_<RM_CREF(CastHandler)> CastHandler_;
+	typedef NodeJsCallCppOnce_<CastHandler> CastHandler_;
 	return v8::Function::New(isolate, [](const v8::FunctionCallbackInfo<v8::Value>& args)
 	{
 		v8::Local<v8::Object> nodeObj = args.Data()->ToObject();
@@ -730,7 +728,7 @@ static v8::Local<v8::Function> make_js_call_cpp_once(v8::Isolate* isolate, CastH
 #else
 		static_cast<CastHandler_*>(v8::Local<v8::External>::Cast(nodeObj->GetInternalField(0))->Value())->invoke(args);
 #endif
-	}, CastHandler_::make(isolate, std::forward<CastHandler>(castHandler)));
+	}, CastHandler_::make(isolate, castHandler));
 }
 
 //////////////////////////////////////////////////////////////////////////

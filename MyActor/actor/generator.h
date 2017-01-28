@@ -6,11 +6,11 @@
 #include "async_timer.h"
 
 //在generator函数体内，获取当前generator对象
-#define co_self __co_self
+#define co_self __coSelf
 //作为generator函数体首个参数
 #define co_generator generator& co_self
 //在generator上下文初始化中(co_end_context_init)，设置当前不捕获外部变量
-#define co_context_no_capture __no_context_capture
+#define co_context_no_capture __noContextCapture
 struct __co_context_no_capture{};
 
 #if (_DEBUG || DEBUG)
@@ -28,7 +28,7 @@ struct __co_context_no_capture{};
 
 #define _co_counter (__COUNTER__ - __coBeginCount)
 
-//开始定义generator函数体上下文，类似于局部变量
+//开始定义generator函数体上下文
 #define co_begin_context \
 	enum { __coBeginCount = __COUNTER__+2 };\
 	static_assert(__COUNTER__+1 == __COUNTER__, ""); __co_context_no_capture const co_context_no_capture = __co_context_no_capture();\
@@ -55,7 +55,7 @@ struct __co_context_no_capture{};
 	int __coNext = 0;
 
 #define _co_end_no_context \
-	if (!co_self.__ctx){co_self._lockThis(); co_self.__ctx = (void*)-1;\
+	if (!co_self.__ctx){co_self.__ctx = (void*)-1;\
 	DEBUG_OPERATION(co_self.__inside = true);}\
 	_co_for_check_break_sign;\
 	size_t __coSwitchTempVal = 0;\
@@ -95,7 +95,7 @@ struct __co_context_no_capture{};
 
 //结束generator函数体上下文定义
 #define co_end_context(__ctx__) };\
-	if (!co_self.__ctx){co_self._lockThis(); co_self.__ctx = -1==co_self.__coNext ? (void*)-1 : new co_context_tag();\
+	if (!co_self.__ctx){co_self.__ctx = -1==co_self.__coNext ? (void*)-1 : new co_context_tag();\
 	_co_end_context(__ctx__); _co_stop(); if(0){
 
 #define _cop(__p__) decltype(__p__)& __p__
@@ -114,7 +114,7 @@ struct __co_context_no_capture{};
 
 //结束generator函数体上下文定义，带内部变量初始化
 #define co_end_context_init(__ctx__, __capture__, ...) _co_capture __capture__:__VA_ARGS__{}};\
-	if (!co_self.__ctx){co_self._lockThis(); co_self.__ctx = -1==co_self.__coNext ? (void*)-1 : new co_context_tag __capture__;\
+	if (!co_self.__ctx){co_self.__ctx = -1==co_self.__coNext ? (void*)-1 : new co_context_tag __capture__;\
 	_co_end_context(__ctx__); _co_stop(); if(0){
 
 //在generator结束时，做最后状态清理，可以不用
@@ -133,11 +133,11 @@ struct __co_context_no_capture{};
 #define co_context_space_size sizeof(co_context_tag)
 //
 #define co_end_context_alloc(__alloc__, __dealloc__, __ctx__) };\
-	if (!co_self.__ctx){co_self._lockThis(); co_self.__ctx = -1==co_self.__coNext ? (void*)-1 : new(__alloc__)co_context_tag();\
+	if (!co_self.__ctx){co_self.__ctx = -1==co_self.__coNext ? (void*)-1 : new(__alloc__)co_context_tag();\
 	_co_end_context(__ctx__); _co_stop_dealloc(__dealloc__); if(0){
 
 #define co_end_context_alloc_init(__alloc__, __dealloc__, __ctx__, __capture__, ...) _co_capture __capture__:__VA_ARGS__{}};\
-	if (!co_self.__ctx){co_self._lockThis(); co_self.__ctx = -1==co_self.__coNext ? (void*)-1 : new(__alloc__)co_context_tag __capture__;\
+	if (!co_self.__ctx){co_self.__ctx = -1==co_self.__coNext ? (void*)-1 : new(__alloc__)co_context_tag __capture__;\
 	_co_end_context(__ctx__); _co_stop_dealloc(__dealloc__); if(0){
 
 #define co_end_context_stack(__lifo_alloc__, __ctx__) \
@@ -328,6 +328,9 @@ struct __co_context_no_capture{};
 
 #define co_best_call(__strand__, ...) co_best_call_of(__strand__) _co_call_bind(__VA_ARGS__)
 
+//启动一个临时作用域
+#define co_scope co_call_of [&](co_generator)->void
+
 //sleep等待
 #define co_sleep(__ms__) do{co_self._co_sleep(__ms__); _co_yield;}while (0)
 #define co_usleep(__us__) do{co_self._co_usleep(__us__); _co_yield;}while (0)
@@ -408,11 +411,11 @@ struct __co_context_no_capture{};
 		co_self.__coNextEx=(_co_counter+1)/2, __coSwitchSign=true, __forYieldSwitch=false;;__forYieldSwitch=true)\
 	if (__forYieldSwitch) {co_self.__coNextEx=0; _co_for_break;}\
 	else case _co_counter/2: switch(__coSwitchSign ? co_calc()->unsigned long long{\
-	const auto val = (__exp__); static_assert(sizeof(val) <= 4, "switch value must be 32bit");\
+	const auto val = (__exp__); static_assert(sizeof(val) <= 4, "switch value must le 32bit");\
 	return ((unsigned long long)(unsigned)(val)) | _switch_mark;} : __coNext)
 
 #define co_case(__num__) case (((unsigned long long)(unsigned)(__num__)) | _switch_mark):\
-	static_assert(sizeof(decltype(__num__)) <= 4, "case number must be 32bit");
+	static_assert(sizeof(decltype(__num__)) <= 4, "case number must le 32bit");
 
 #define co_default() default:;
 
@@ -1050,7 +1053,6 @@ public:
 	static long long alloc_id();
 public:
 	bool _next();
-	void _lockThis();
 	generator* _revert_this(generator_handle&);
 	void _co_next();
 	void _co_tick_next();
@@ -1263,8 +1265,7 @@ struct CoAsyncIgnoreResult_
 
 	generator_handle _gen;
 	void operator=(const CoAsyncIgnoreResult_&) = delete;
-	RVALUE_CONSTRUCT1(CoAsyncIgnoreResult_, _gen);
-	LVALUE_CONSTRUCT1(CoAsyncIgnoreResult_, _gen);
+	COPY_CONSTRUCT1(CoAsyncIgnoreResult_, _gen);
 };
 
 struct CoAsioIgnoreResult_
@@ -1281,8 +1282,7 @@ struct CoAsioIgnoreResult_
 
 	generator_handle _gen;
 	void operator=(const CoAsioIgnoreResult_&) = delete;
-	RVALUE_CONSTRUCT1(CoAsioIgnoreResult_, _gen);
-	LVALUE_CONSTRUCT1(CoAsioIgnoreResult_, _gen);
+	COPY_CONSTRUCT1(CoAsioIgnoreResult_, _gen);
 };
 
 struct CoShardAsyncIgnoreResult_
@@ -1300,8 +1300,7 @@ struct CoShardAsyncIgnoreResult_
 	generator_handle _gen;
 	shared_bool _sign;
 	void operator=(const CoShardAsyncIgnoreResult_&) = delete;
-	RVALUE_CONSTRUCT2(CoShardAsyncIgnoreResult_, _gen, _sign);
-	LVALUE_CONSTRUCT2(CoShardAsyncIgnoreResult_, _gen, _sign);
+	COPY_CONSTRUCT2(CoShardAsyncIgnoreResult_, _gen, _sign);
 };
 
 struct CoAnextIgnoreResult_
@@ -1318,8 +1317,7 @@ struct CoAnextIgnoreResult_
 
 	generator_handle _gen;
 	void operator=(const CoAnextIgnoreResult_&) = delete;
-	RVALUE_CONSTRUCT1(CoAnextIgnoreResult_, _gen);
-	LVALUE_CONSTRUCT1(CoAnextIgnoreResult_, _gen);
+	COPY_CONSTRUCT1(CoAnextIgnoreResult_, _gen);
 };
 
 struct CoAsync_
@@ -1328,8 +1326,7 @@ struct CoAsync_
 	void operator()();
 	generator_handle _gen;
 	void operator=(const CoAsync_&) = delete;
-	RVALUE_CONSTRUCT1(CoAsync_, _gen);
-	LVALUE_CONSTRUCT1(CoAsync_, _gen);
+	COPY_CONSTRUCT1(CoAsync_, _gen);
 };
 
 struct CoShardAsync_
@@ -1339,8 +1336,7 @@ struct CoShardAsync_
 	generator_handle _gen;
 	shared_bool _sign;
 	void operator=(const CoShardAsync_&) = delete;
-	RVALUE_CONSTRUCT2(CoShardAsync_, _gen, _sign);
-	LVALUE_CONSTRUCT2(CoShardAsync_, _gen, _sign);
+	COPY_CONSTRUCT2(CoShardAsync_, _gen, _sign);
 };
 
 struct CoAnext_
@@ -1349,8 +1345,7 @@ struct CoAnext_
 	void operator()();
 	generator_handle _gen;
 	void operator=(const CoAnext_&) = delete;
-	RVALUE_CONSTRUCT1(CoAnext_, _gen);
-	LVALUE_CONSTRUCT1(CoAnext_, _gen);
+	COPY_CONSTRUCT1(CoAnext_, _gen);
 };
 
 template <typename... _Types>
@@ -1370,8 +1365,7 @@ struct CoAsyncResult_
 	generator_handle _gen;
 	std::tuple<_Types&...> _result;
 	void operator=(const CoAsyncResult_&) = delete;
-	RVALUE_CONSTRUCT2(CoAsyncResult_, _gen, _result);
-	LVALUE_CONSTRUCT2(CoAsyncResult_, _gen, _result);
+	COPY_CONSTRUCT2(CoAsyncResult_, _gen, _result);
 };
 
 template <typename... _Types>
@@ -1391,8 +1385,7 @@ struct CoAsioResult_
 	generator_handle _gen;
 	std::tuple<_Types&...> _result;
 	void operator=(const CoAsioResult_&) = delete;
-	RVALUE_CONSTRUCT2(CoAsioResult_, _gen, _result);
-	LVALUE_CONSTRUCT2(CoAsioResult_, _gen, _result);
+	COPY_CONSTRUCT2(CoAsioResult_, _gen, _result);
 };
 
 template <typename... _Types>
@@ -1431,8 +1424,7 @@ struct CoAsyncSafeResult_
 	generator_handle _gen;
 	std::tuple<_Types&...> _result;
 	void operator=(const CoAsyncSafeResult_&) = delete;
-	RVALUE_CONSTRUCT2(CoAsyncSafeResult_, _gen, _result);
-	LVALUE_CONSTRUCT2(CoAsyncSafeResult_, _gen, _result);
+	COPY_CONSTRUCT2(CoAsyncSafeResult_, _gen, _result);
 };
 
 template <typename... _Types>
@@ -1452,8 +1444,7 @@ struct CoAsyncSameResult_
 	generator_handle _gen;
 	std::tuple<_Types&...> _result;
 	void operator=(const CoAsyncSameResult_&) = delete;
-	RVALUE_CONSTRUCT2(CoAsyncSameResult_, _gen, _result);
-	LVALUE_CONSTRUCT2(CoAsyncSameResult_, _gen, _result);
+	COPY_CONSTRUCT2(CoAsyncSameResult_, _gen, _result);
 };
 
 template <typename... _Types>
@@ -1492,8 +1483,7 @@ struct CoAsyncSameSafeResult_
 	generator_handle _gen;
 	std::tuple<_Types&...> _result;
 	void operator=(const CoAsyncSameSafeResult_&) = delete;
-	RVALUE_CONSTRUCT2(CoAsyncSameSafeResult_, _gen, _result);
-	LVALUE_CONSTRUCT2(CoAsyncSameSafeResult_, _gen, _result);
+	COPY_CONSTRUCT2(CoAsyncSameSafeResult_, _gen, _result);
 };
 
 template <typename... _Types>
@@ -1514,8 +1504,7 @@ struct CoShardAsyncResult_
 	shared_bool _sign;
 	std::tuple<_Types&...> _result;
 	void operator=(const CoShardAsyncResult_&) = delete;
-	RVALUE_CONSTRUCT3(CoShardAsyncResult_, _gen, _sign, _result);
-	LVALUE_CONSTRUCT3(CoShardAsyncResult_, _gen, _sign, _result);
+	COPY_CONSTRUCT3(CoShardAsyncResult_, _gen, _sign, _result);
 };
 
 template <typename... _Types>
@@ -1555,8 +1544,7 @@ struct CoShardAsyncSafeResult_
 	shared_bool _sign;
 	std::tuple<_Types&...> _result;
 	void operator=(const CoShardAsyncSafeResult_&) = delete;
-	RVALUE_CONSTRUCT3(CoShardAsyncSafeResult_, _gen, _sign, _result);
-	LVALUE_CONSTRUCT3(CoShardAsyncSafeResult_, _gen, _sign, _result);
+	COPY_CONSTRUCT3(CoShardAsyncSafeResult_, _gen, _sign, _result);
 };
 
 template <typename... _Types>
@@ -1577,8 +1565,7 @@ struct CoShardAsyncSameResult_
 	shared_bool _sign;
 	std::tuple<_Types&...> _result;
 	void operator=(const CoShardAsyncSameResult_&) = delete;
-	RVALUE_CONSTRUCT3(CoShardAsyncSameResult_, _gen, _sign, _result);
-	LVALUE_CONSTRUCT3(CoShardAsyncSameResult_, _gen, _sign, _result);
+	COPY_CONSTRUCT3(CoShardAsyncSameResult_, _gen, _sign, _result);
 };
 
 template <typename... _Types>
@@ -1618,8 +1605,7 @@ struct CoShardAsyncSameSafeResult_
 	shared_bool _sign;
 	std::tuple<_Types&...> _result;
 	void operator=(const CoShardAsyncSameSafeResult_&) = delete;
-	RVALUE_CONSTRUCT3(CoShardAsyncSameSafeResult_, _gen, _sign, _result);
-	LVALUE_CONSTRUCT3(CoShardAsyncSameSafeResult_, _gen, _sign, _result);
+	COPY_CONSTRUCT3(CoShardAsyncSameSafeResult_, _gen, _sign, _result);
 };
 
 template <typename... _Types>
@@ -1639,8 +1625,7 @@ struct CoAnextResult_
 	generator_handle _gen;
 	std::tuple<_Types&...> _result;
 	void operator=(const CoAnextResult_&) = delete;
-	RVALUE_CONSTRUCT2(CoAnextResult_, _gen, _result);
-	LVALUE_CONSTRUCT2(CoAnextResult_, _gen, _result);
+	COPY_CONSTRUCT2(CoAnextResult_, _gen, _result);
 };
 
 template <typename... _Types>
@@ -1679,8 +1664,7 @@ struct CoAnextSafeResult_
 	generator_handle _gen;
 	std::tuple<_Types&...> _result;
 	void operator=(const CoAnextSafeResult_&) = delete;
-	RVALUE_CONSTRUCT2(CoAnextSafeResult_, _gen, _result);
-	LVALUE_CONSTRUCT2(CoAnextSafeResult_, _gen, _result);
+	COPY_CONSTRUCT2(CoAnextSafeResult_, _gen, _result);
 };
 
 template <typename... _Types>
@@ -1700,8 +1684,7 @@ struct CoAnextSameResult_
 	generator_handle _gen;
 	std::tuple<_Types&...> _result;
 	void operator=(const CoAnextSameResult_&) = delete;
-	RVALUE_CONSTRUCT2(CoAnextSameResult_, _gen, _result);
-	LVALUE_CONSTRUCT2(CoAnextSameResult_, _gen, _result);
+	COPY_CONSTRUCT2(CoAnextSameResult_, _gen, _result);
 };
 
 template <typename... _Types>
@@ -1740,8 +1723,7 @@ struct CoAnextSameSafeResult_
 	generator_handle _gen;
 	std::tuple<_Types&...> _result;
 	void operator=(const CoAnextSameSafeResult_&) = delete;
-	RVALUE_CONSTRUCT2(CoAnextSameSafeResult_, _gen, _result);
-	LVALUE_CONSTRUCT2(CoAnextSameSafeResult_, _gen, _result);
+	COPY_CONSTRUCT2(CoAnextSameSafeResult_, _gen, _result);
 };
 
 template <typename Chan>
@@ -1777,8 +1759,7 @@ struct CoChanRelay_
 	co_async_state& _stateRes;
 	generator_handle _gen;
 	void operator=(const CoChanRelay_&) = delete;
-	RVALUE_CONSTRUCT3(CoChanRelay_, _chan, _stateRes, _gen);
-	LVALUE_CONSTRUCT3(CoChanRelay_, _chan, _stateRes, _gen);
+	COPY_CONSTRUCT3(CoChanRelay_, _chan, _stateRes, _gen);
 };
 
 template <typename Chan>
@@ -1814,8 +1795,7 @@ struct CoChanTryRelay_
 	co_async_state& _stateRes;
 	generator_handle _gen;
 	void operator=(const CoChanTryRelay_&) = delete;
-	RVALUE_CONSTRUCT3(CoChanTryRelay_, _chan, _stateRes, _gen);
-	LVALUE_CONSTRUCT3(CoChanTryRelay_, _chan, _stateRes, _gen);
+	COPY_CONSTRUCT3(CoChanTryRelay_, _chan, _stateRes, _gen);
 };
 
 template <typename... Args>
@@ -2011,24 +1991,25 @@ struct CoNotifyHandlerFace_
 	template <typename Handler>
 	static CoNotifyHandlerFace_* wrap_notify(reusable_mem& alloc, Handler&& handler)
 	{
-		typedef CoNotifyHandler_<RM_CREF(Handler)> Handler_;
-		return new(alloc.allocate(sizeof(Handler_)))Handler_(std::forward<Handler>(handler));
+		typedef CoNotifyHandler_<Handler> Handler_;
+		return new(alloc.allocate(sizeof(Handler_)))Handler_(handler);
 	}
 
 	template <typename Handler>
 	static CoNotifyHandlerFace_* wrap_nil_state_notify(reusable_mem& alloc, Handler&& handler)
 	{
-		typedef CoNilStateNotifyHandler_<RM_CREF(Handler)> Handler_;
-		return new(alloc.allocate(sizeof(Handler_)))Handler_(std::forward<Handler>(handler));
+		typedef CoNilStateNotifyHandler_<Handler> Handler_;
+		return new(alloc.allocate(sizeof(Handler_)))Handler_(handler);
 	}
 };
 
 template <typename Handler>
 struct CoNotifyHandler_ : public CoNotifyHandlerFace_
 {
-	template <typename H>
-	CoNotifyHandler_(H&& h)
-		:_handler(std::forward<H>(h)) {}
+	typedef RM_CREF(Handler) handler_type;
+
+	CoNotifyHandler_(Handler& handler)
+		:_handler(std::forward<Handler>(handler)) {}
 
 	void invoke(reusable_mem& alloc, co_async_state state)
 	{
@@ -2043,7 +2024,7 @@ struct CoNotifyHandler_ : public CoNotifyHandlerFace_
 		this->~CoNotifyHandler_();
 	}
 
-	Handler _handler;
+	handler_type _handler;
 	NONE_COPY(CoNotifyHandler_);
 	RVALUE_CONSTRUCT1(CoNotifyHandler_, _handler);
 };
@@ -2051,9 +2032,10 @@ struct CoNotifyHandler_ : public CoNotifyHandlerFace_
 template <typename Handler>
 struct CoNilStateNotifyHandler_ : public CoNotifyHandlerFace_
 {
-	template <typename H>
-	CoNilStateNotifyHandler_(H&& h)
-		:_handler(std::forward<H>(h)) {}
+	typedef RM_CREF(Handler) handler_type;
+
+	CoNilStateNotifyHandler_(Handler& handler)
+		:_handler(std::forward<Handler>(handler)) {}
 
 	void invoke(reusable_mem& alloc, co_async_state state)
 	{
@@ -2069,7 +2051,7 @@ struct CoNilStateNotifyHandler_ : public CoNotifyHandlerFace_
 		this->~CoNilStateNotifyHandler_();
 	}
 
-	Handler _handler;
+	handler_type _handler;
 	NONE_COPY(CoNilStateNotifyHandler_);
 	RVALUE_CONSTRUCT1(CoNilStateNotifyHandler_, _handler);
 };
@@ -6029,9 +6011,10 @@ struct ResultNotifyFace_
 template <typename R, typename Notify>
 struct ResultNotify_ : public ResultNotifyFace_<R>
 {
-	template <typename Ntf>
-	ResultNotify_(reusable_mem& alloc, Ntf&& ntf)
-		:_alloc(&alloc), _ntf(std::forward<Ntf>(ntf)) {}
+	typedef RM_CREF(Notify) notify_type;
+
+	ResultNotify_(reusable_mem& alloc, Notify& ntf)
+		:_alloc(&alloc), _ntf(std::forward<Notify>(ntf)) {}
 
 	void invoke(co_async_state state, R res)
 	{
@@ -6051,7 +6034,7 @@ struct ResultNotify_ : public ResultNotifyFace_<R>
 		CHECK_EXCEPTION(ntf, state);
 	}
 
-	Notify _ntf;
+	notify_type _ntf;
 	reusable_mem* _alloc;
 	RVALUE_CONSTRUCT2(ResultNotify_, _ntf, _alloc);
 };
@@ -6643,8 +6626,8 @@ private:
 	ResultNotifyFace_<R>* wrap_result_notify(Notify&& ntf)
 	{
 		assert(_strand->running_in_this_thread());
-		typedef ResultNotify_<R, RM_CREF(Notify)> Notify_;
-		return new(_alloc.allocate(sizeof(Notify_)))Notify_(_alloc, std::forward<Notify>(ntf));
+		typedef ResultNotify_<R, Notify> Notify_;
+		return new(_alloc.allocate(sizeof(Notify_)))Notify_(_alloc, ntf);
 	}
 
 	template <typename Notify, typename... Args>

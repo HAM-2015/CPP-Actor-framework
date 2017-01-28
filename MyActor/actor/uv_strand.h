@@ -49,9 +49,10 @@ class uv_strand : public boost_strand
 	template <typename Handler>
 	struct wrap_handler : public wrap_handler_face
 	{
-		template <typename H>
-		wrap_handler(H&& h)
-			:_handler(std::forward<H>(h)) {}
+		typedef RM_CREF(Handler) handler_type;
+
+		wrap_handler(Handler& handler)
+			:_handler(std::forward<Handler>(handler)) {}
 
 		void invoke()
 		{
@@ -59,14 +60,14 @@ class uv_strand : public boost_strand
 			this->~wrap_handler();
 		}
 
-		Handler _handler;
+		handler_type _handler;
 	};
 
 	template <typename Handler>
 	wrap_handler_face* make_wrap_handler(reusable_mem_mt<>& reuMem, Handler&& handler)
 	{
-		typedef wrap_handler<RM_CREF(Handler)> handler_type;
-		return new(reuMem.allocate(sizeof(handler_type)))handler_type(std::forward<Handler>(handler));
+		typedef wrap_handler<Handler> handler_type;
+		return new(reuMem.allocate(sizeof(handler_type)))handler_type(handler);
 	}
 private:
 	uv_strand();
@@ -151,9 +152,9 @@ public:
 	template <typename Handler>
 	static void setImmediate(Handler&& handler, uv_loop_t* uvLoop = uv_default_loop())
 	{
-		typedef wrap_handler<RM_CREF(Handler)> handler_type;
+		typedef wrap_handler<Handler> handler_type;
 		uv_work_t* uvReq = new uv_work_t;
-		uvReq->data = new(malloc(sizeof(handler_type)))handler_type(std::forward<Handler>(handler));
+		uvReq->data = new(malloc(sizeof(handler_type)))handler_type(handler);
 		uv_queue_work(uvLoop, uvReq, [](uv_work_t*){}, [](uv_work_t* uv_op, int status)
 		{
 			((handler_type*)uv_op->data)->invoke();

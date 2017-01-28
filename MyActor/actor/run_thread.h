@@ -22,9 +22,10 @@ class run_thread
 	template <typename Handler>
 	struct thread_handler : public handler_face
 	{
-		template <typename H>
-		thread_handler(H&& handler)
-			:_handler(std::forward<H>(handler)) {}
+		typedef RM_CREF(Handler) handler_type;
+
+		thread_handler(Handler& handler)
+			:_handler(std::forward<Handler>(handler)) {}
 
 		void invoke()
 		{
@@ -32,7 +33,7 @@ class run_thread
 			delete this;
 		}
 
-		Handler _handler;
+		handler_type _handler;
 	};
 public:
 	struct thread_id
@@ -58,7 +59,7 @@ public:
 	template <typename Handler>
 	run_thread(Handler&& handler)
 	{
-		handler_face* handlerFace = new thread_handler<RM_CREF(Handler)>(std::forward<Handler>(handler));
+		handler_face* handlerFace = new thread_handler<Handler>(handler);
 #ifdef _WIN32
 		_threadID = 0;
 		_handle = CreateThread(NULL, 0, thread_exec, handlerFace, 0, &_threadID);

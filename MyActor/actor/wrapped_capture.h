@@ -5,44 +5,45 @@
 #include <atomic>
 #include <memory>
 
-template <typename H, typename... ARGS>
+template <typename Handler, typename... Args>
 struct wrapped_capture 
 {
-	template <typename Handler, typename... Args>
-	wrapped_capture(bool pl, Handler&& h, Args&&... args)
-		:_h(std::forward<Handler>(h)), _args(std::forward<Args>(args)...) {}
+	typedef RM_CREF(Handler) handler_type;
 
-	wrapped_capture(const wrapped_capture<H, ARGS...>& s)
-		:_h(s._h), _args(s._args) {}
+	wrapped_capture(bool pl, Handler& handler, Args&... args)
+		:_handler(std::forward<Handler>(handler)), _args(std::forward<Args>(args)...) {}
 
-	wrapped_capture(wrapped_capture<H, ARGS...>&& s)
-		:_h(std::move(s._h)), _args(std::move(s._args)) {}
+	wrapped_capture(const wrapped_capture<Handler, Args...>& s)
+		:_handler(s._handler), _args(s._args) {}
 
-	void operator =(const wrapped_capture<H, ARGS...>& s)
+	wrapped_capture(wrapped_capture<Handler, Args...>&& s)
+		:_handler(std::move(s._handler)), _args(std::move(s._args)) {}
+
+	void operator =(const wrapped_capture<Handler, Args...>& s)
 	{
-		_h = s._h;
+		_handler = s._handler;
 		_args = s._args;
 	}
 
-	void operator =(wrapped_capture<H, ARGS...>&& s)
+	void operator =(wrapped_capture<Handler, Args...>&& s)
 	{
-		_h = std::move(s._h);
+		_handler = std::move(s._handler);
 		_args = std::move(s._args);
 	}
 
 	void operator ()()
 	{
-		tuple_invoke(_h, _args);
+		tuple_invoke(_handler, _args);
 	}
 
-	H _h;
-	std::tuple<ARGS...> _args;
+	handler_type _handler;
+	std::tuple<RM_CREF(Args)...> _args;
 };
 
 template <typename Handler, typename... Args>
-wrapped_capture<RM_CREF(Handler), RM_CREF(Args)...> wrap_capture(Handler&& h, Args&&... args)
+wrapped_capture<Handler, Args...> wrap_capture(Handler&& handler, Args&&... args)
 {
-	return wrapped_capture<RM_CREF(Handler), RM_CREF(Args)...>(bool(), std::forward<Handler>(h), std::forward<Args>(args)...);
+	return wrapped_capture<Handler, Args...>(bool(), handler, args...);
 }
 
 #endif

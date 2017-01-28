@@ -122,16 +122,17 @@ private:
 template <typename Handler>
 struct BreakOfScope2_
 {
-	template <typename H>
-	BreakOfScope2_(H&& handler)
-	:_handler(std::forward<H>(handler)) {}
+	typedef RM_CREF(Handler) handler_type;
+
+	BreakOfScope2_(Handler& handler)
+	:_handler(std::forward<Handler>(handler)) {}
 
 	~BreakOfScope2_() __disable_noexcept
 	{
 		_handler();
 	}
 
-	Handler _handler;
+	handler_type _handler;
 public:
 	BreakOfScope2_(BreakOfScope2_&& s)
 		:_handler(s._handler) { assert(false);}
@@ -143,9 +144,9 @@ private:
 struct MakeBreakOfScope2_
 {
 	template <typename Handler>
-	BreakOfScope2_<RM_CREF(Handler)> operator -(Handler&& handler)
+	BreakOfScope2_<Handler> operator -(Handler&& handler)
 	{
-		return BreakOfScope2_<RM_CREF(Handler)>(std::forward<Handler>(handler));
+		return BreakOfScope2_<Handler>(handler);
 	}
 };
 
@@ -357,6 +358,15 @@ Type* as_ptype(void* p)
 {
 	union { void* _ap_pvoid; Type* _as_ptype; } caster = { p };
 	return caster._as_ptype;
+}
+
+/*!
+@brief 任意指针类型转对象引用
+*/
+template <typename Type>
+Type& as_ref(void* p)
+{
+	return *as_ptype<Type>(p);
 }
 
 /*!
@@ -653,6 +663,31 @@ struct ValTryRefMove_<const T&>
 	__val5__(s.__val5__), __val6__(s.__val6__) {}
 //////////////////////////////////////////////////////////////////////////
 
+#define COPY_CONSTRUCT1(__name__, __val1__)\
+	RVALUE_CONSTRUCT1(__name__, __val1__);\
+	LVALUE_CONSTRUCT1(__name__, __val1__);
+
+#define COPY_CONSTRUCT2(__name__, __val1__, __val2__)\
+	RVALUE_CONSTRUCT2(__name__, __val1__, __val2__);\
+	LVALUE_CONSTRUCT2(__name__, __val1__, __val2__);
+
+#define COPY_CONSTRUCT3(__name__, __val1__, __val2__, __val3__)\
+	RVALUE_CONSTRUCT3(__name__, __val1__, __val2__, __val3__);\
+	LVALUE_CONSTRUCT3(__name__, __val1__, __val2__, __val3__);
+
+#define COPY_CONSTRUCT4(__name__, __val1__, __val2__, __val3__, __val4__)\
+	RVALUE_CONSTRUCT4(__name__, __val1__, __val2__, __val3__, __val4__);\
+	LVALUE_CONSTRUCT4(__name__, __val1__, __val2__, __val3__, __val4__);
+
+#define COPY_CONSTRUCT5(__name__, __val1__, __val2__, __val3__, __val4__, __val5__)\
+	RVALUE_CONSTRUCT5(__name__, __val1__, __val2__, __val3__, __val4__, __val5__);\
+	LVALUE_CONSTRUCT5(__name__, __val1__, __val2__, __val3__, __val4__, __val5__);
+
+#define COPY_CONSTRUCT6(__name__, __val1__, __val2__, __val3__, __val4__, __val5__, __val6__)\
+	RVALUE_CONSTRUCT6(__name__, __val1__, __val2__, __val3__, __val4__, __val5__, __val6__);\
+	LVALUE_CONSTRUCT6(__name__, __val1__, __val2__, __val3__, __val4__, __val5__, __val6__);
+//////////////////////////////////////////////////////////////////////////
+
 #define RVALUE_COPY1(__name__, __val1__) public:\
 	void operator=(__name__&& s) { if (this != &s) { __val1__ = std::move(s.__val1__); } }
 
@@ -698,6 +733,7 @@ struct ValTryRefMove_<const T&>
 #define RVALUE_MOVE(__name__, ...) _BOND_LR__(RVALUE_MOVE, _PP_NARG(__VA_ARGS__))(__name__, __VA_ARGS__)
 #define RVALUE_CONSTRUCT(__name__, ...) _BOND_LR__(RVALUE_CONSTRUCT, _PP_NARG(__VA_ARGS__))(__name__, __VA_ARGS__)
 #define LVALUE_CONSTRUCT(__name__, ...) _BOND_LR__(LVALUE_CONSTRUCT, _PP_NARG(__VA_ARGS__))(__name__, __VA_ARGS__)
+#define COPY_CONSTRUCT(__name__, ...) _BOND_LR__(COPY_CONSTRUCT, _PP_NARG(__VA_ARGS__))(__name__, __VA_ARGS__)
 
 #ifdef _MSC_VER
 #if (_MSC_VER >= 1900)
@@ -713,9 +749,10 @@ struct ValTryRefMove_<const T&>
 template <typename Handler>
 struct WrapContinuation_
 {
-	template <typename H>
-	WrapContinuation_(bool pl, H&& handler)
-		:_handler(std::forward<H>(handler)) {}
+	typedef RM_CREF(Handler) handler_type;
+
+	WrapContinuation_(bool pl, Handler& handler)
+		:_handler(std::forward<Handler>(handler)) {}
 
 	friend bool asio_handler_is_continuation(WrapContinuation_*)
 	{
@@ -728,23 +765,23 @@ struct WrapContinuation_
 		_handler(std::forward<Args>(args)...);
 	}
 
-	Handler _handler;
-	RVALUE_CONSTRUCT1(WrapContinuation_, _handler);
-	LVALUE_CONSTRUCT1(WrapContinuation_, _handler);
+	handler_type _handler;
+	COPY_CONSTRUCT1(WrapContinuation_, _handler);
 };
 
 template <typename Handler>
-WrapContinuation_<RM_CREF(Handler)> wrap_continuation(Handler&& handler)
+WrapContinuation_<Handler> wrap_continuation(Handler&& handler)
 {
-	return WrapContinuation_<RM_CREF(Handler)>(bool(), std::forward<Handler>(handler));
+	return WrapContinuation_<Handler>(bool(), handler);
 }
 
 template <typename Handler>
 struct WrapTried_
 {
-	template <typename H>
-	WrapTried_(bool pl, H&& handler)
-		:_handler(std::forward<H>(handler)) {}
+	typedef RM_CREF(Handler) handler_type;
+
+	WrapTried_(bool pl, Handler& handler)
+		:_handler(std::forward<Handler>(handler)) {}
 
 	friend bool asio_handler_is_tried(WrapTried_*)
 	{
@@ -757,15 +794,14 @@ struct WrapTried_
 		_handler(std::forward<Args>(args)...);
 	}
 
-	Handler _handler;
-	RVALUE_CONSTRUCT1(WrapTried_, _handler);
-	LVALUE_CONSTRUCT1(WrapTried_, _handler);
+	handler_type _handler;
+	COPY_CONSTRUCT1(WrapTried_, _handler);
 };
 
 template <typename Handler>
-WrapTried_<RM_CREF(Handler)> wrap_tried(Handler&& handler)
+WrapTried_<Handler> wrap_tried(Handler&& handler)
 {
-	return WrapTried_<RM_CREF(Handler)>(bool(), std::forward<Handler>(handler));
+	return WrapTried_<Handler>(bool(), handler);
 }
 
 #elif WIN32

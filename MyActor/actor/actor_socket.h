@@ -27,9 +27,10 @@ private:
 	template <typename Handler>
 	struct async_read_op
 	{
-		template <typename H>
-		async_read_op(H&& handler, boost::asio::ip::tcp::socket& sck, void* buff, size_t currBytes, size_t totalBytes)
-			:_handler(std::forward<H>(handler)), _sck(sck), _buffer(buff), _currBytes(currBytes), _totalBytes(totalBytes) {}
+		typedef RM_CREF(Handler) handler_type;
+
+		async_read_op(Handler& handler, boost::asio::ip::tcp::socket& sck, void* buff, size_t currBytes, size_t totalBytes)
+			:_handler(std::forward<Handler>(handler)), _sck(sck), _buffer(buff), _currBytes(currBytes), _totalBytes(totalBytes) {}
 
 		void operator()(const boost::system::error_code& ec, size_t s)
 		{
@@ -50,21 +51,21 @@ private:
 			return true;
 		}
 
-		Handler _handler;
+		handler_type _handler;
 		boost::asio::ip::tcp::socket& _sck;
 		void* const _buffer;
 		size_t _currBytes;
 		const size_t _totalBytes;
-		RVALUE_CONSTRUCT5(async_read_op, _handler, _sck, _buffer, _currBytes, _totalBytes);
-		LVALUE_CONSTRUCT5(async_read_op, _handler, _sck, _buffer, _currBytes, _totalBytes);
+		COPY_CONSTRUCT5(async_read_op, _handler, _sck, _buffer, _currBytes, _totalBytes);
 	};
 
 	template <typename Handler>
 	struct async_write_op
 	{
-		template <typename H>
-		async_write_op(H&& handler, boost::asio::ip::tcp::socket& sck, const void* buff, size_t currBytes, size_t totalBytes)
-			:_handler(std::forward<H>(handler)), _sck(sck), _buffer(buff), _currBytes(currBytes), _totalBytes(totalBytes) {}
+		typedef RM_CREF(Handler) handler_type;
+
+		async_write_op(Handler& handler, boost::asio::ip::tcp::socket& sck, const void* buff, size_t currBytes, size_t totalBytes)
+			:_handler(std::forward<Handler>(handler)), _sck(sck), _buffer(buff), _currBytes(currBytes), _totalBytes(totalBytes) {}
 
 		void operator()(const boost::system::error_code& ec, size_t s)
 		{
@@ -85,13 +86,12 @@ private:
 			return true;
 		}
 
-		Handler _handler;
+		handler_type _handler;
 		boost::asio::ip::tcp::socket& _sck;
 		const void* const _buffer;
 		size_t _currBytes;
 		const size_t _totalBytes;
-		RVALUE_CONSTRUCT5(async_write_op, _handler, _sck, _buffer, _currBytes, _totalBytes);
-		LVALUE_CONSTRUCT5(async_write_op, _handler, _sck, _buffer, _currBytes, _totalBytes);
+		COPY_CONSTRUCT5(async_write_op, _handler, _sck, _buffer, _currBytes, _totalBytes);
 	};
 #endif
 #endif
@@ -101,9 +101,10 @@ private:
 	template <typename Handler>
 	struct async_send_file_op
 	{
-		template <typename H>
-		async_send_file_op(H&& handler, tcp_socket& sck, size_t currBytes)
-			:_handler(std::forward<H>(handler)), _sck(sck), _currBytes(currBytes) {}
+		typedef RM_CREF(Handler) handler_type;
+
+		async_send_file_op(Handler& handler, tcp_socket& sck, size_t currBytes)
+			:_handler(std::forward<Handler>(handler)), _sck(sck), _currBytes(currBytes) {}
 
 		void operator()(const boost::system::error_code& ec, size_t s)
 		{
@@ -130,11 +131,10 @@ private:
 		}
 #endif
 
-		Handler _handler;
+		handler_type _handler;
 		tcp_socket& _sck;
 		size_t _currBytes;
-		RVALUE_CONSTRUCT3(async_send_file_op, _handler, _sck, _currBytes);
-		LVALUE_CONSTRUCT3(async_send_file_op, _handler, _sck, _currBytes);
+		COPY_CONSTRUCT3(async_send_file_op, _handler, _sck, _currBytes);
 	};
 #endif
 #endif
@@ -284,7 +284,7 @@ public:
 			}
 #ifdef HAS_ASIO_HANDLER_IS_TRIED
 			_socket.async_read_some(boost::asio::buffer((char*)buff + trySize, length - trySize),
-				async_read_op<RM_CREF(Handler)>(std::forward<Handler>(handler), _socket, buff, trySize, length));
+				async_read_op<Handler>(handler, _socket, buff, trySize, length));
 			return false;
 #endif
 		}
@@ -366,7 +366,7 @@ public:
 			}
 #ifdef HAS_ASIO_HANDLER_IS_TRIED
 			_socket.async_write_some(boost::asio::buffer((const char*)buff + trySize, length - trySize),
-				async_write_op<RM_CREF(Handler)>(std::forward<Handler>(handler), _socket, buff, trySize, length));
+				async_write_op<Handler>(handler, _socket, buff, trySize, length));
 			return false;
 #endif
 		}
@@ -433,7 +433,7 @@ public:
 			_sendFileState.offset = offset;
 			_sendFileState.count = length - res.s;
 			_sendFileState.fd = fd;
-			_socket.async_write_some(boost::asio::buffer((const char*)&_sendFileState, -1), async_send_file_op<RM_CREF(Handler)>(std::forward<Handler>(handler), *this, res.s));
+			_socket.async_write_some(boost::asio::buffer((const char*)&_sendFileState, -1), async_send_file_op<Handler>(handler, *this, res.s));
 			return false;
 		}
 #ifdef ENABLE_ASIO_PRE_OP

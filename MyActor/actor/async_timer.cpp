@@ -89,7 +89,7 @@ bool AsyncTimer_::restart()
 		{
 			_actorTimer->cancel(_timerHandle);
 			_timerHandle = _actorTimer->timeout(_currTimeout, _weakThis.lock());
-			_handler->deadtime_ref() = _timerHandle._beginStamp + _currTimeout;
+			_handler->set_deadtime(_timerHandle._beginStamp + _currTimeout);
 		}
 		return true;
 	}
@@ -278,7 +278,7 @@ bool overlap_timer::restart(timer_handle& timerHandle)
 		{
 			_cancel(timerHandle);
 			_timeout(timerHandle._currTimeout, timerHandle);
-			timerHandle._handler->deadtime_ref() = timerHandle._timestamp + timerHandle._currTimeout;
+			timerHandle._handler->set_deadtime(timerHandle._timestamp + timerHandle._currTimeout);
 		}
 		return true;
 	}

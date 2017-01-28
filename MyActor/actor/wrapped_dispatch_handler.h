@@ -6,11 +6,11 @@
 template <typename Dispatcher, typename Handler, bool = false>
 class wrapped_dispatch_handler
 {
+	typedef RM_CREF(Handler) handler_type;
 public:
-	template <typename H>
-	wrapped_dispatch_handler(Dispatcher* dispatcher, H&& handler)
+	wrapped_dispatch_handler(Dispatcher* dispatcher, Handler& handler)
 		: _dispatcher(dispatcher),
-		_handler(std::forward<H>(handler))
+		_handler(std::forward<Handler>(handler))
 	{
 	}
 
@@ -41,18 +41,18 @@ public:
 	}
 
 	Dispatcher* _dispatcher;
-	Handler _handler;
+	handler_type _handler;
 };
 //////////////////////////////////////////////////////////////////////////
 
 template <typename Dispatcher, typename Handler>
 class wrapped_dispatch_handler<Dispatcher, Handler, true>
 {
+	typedef RM_CREF(Handler) handler_type;
 public:
-	template <typename H>
-	wrapped_dispatch_handler(Dispatcher* dispatcher, H&& handler)
+	wrapped_dispatch_handler(Dispatcher* dispatcher, Handler& handler)
 		: _dispatcher(dispatcher),
-		_handler(std::forward<H>(handler))
+		_handler(std::forward<Handler>(handler))
 #if (_DEBUG || DEBUG)
 		, _checkOnce(new std::atomic<bool>(false))
 #endif
@@ -87,7 +87,7 @@ public:
 	}
 
 	Dispatcher* _dispatcher;
-	Handler _handler;
+	handler_type _handler;
 #if (_DEBUG || DEBUG)
 	std::shared_ptr<std::atomic<bool> > _checkOnce;
 #endif

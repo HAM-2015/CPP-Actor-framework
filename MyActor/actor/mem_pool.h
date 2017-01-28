@@ -651,6 +651,8 @@ private:
 	node* _top;
 };
 
+typedef ReuMemTls_ reusable_mem2;
+
 struct MemAllocTls_
 {
 	static void** getTlsValueBuff();

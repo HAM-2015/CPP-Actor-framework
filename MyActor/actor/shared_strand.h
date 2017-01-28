@@ -26,7 +26,7 @@ typedef std::shared_ptr<boost_strand> shared_strand;
 
 #ifdef ENABLE_NEXT_TICK
 
-#define RUN_HANDLER handler_capture<RM_CREF(Handler)>(std::forward<Handler>(handler), this)
+#define RUN_HANDLER handler_capture<Handler>(handler, this)
 
 #else //ENABLE_NEXT_TICK
 
@@ -57,11 +57,11 @@ else\
 #ifdef ENABLE_NEXT_TICK
 
 #define APPEND_TICK()\
-	typedef wrap_next_tick_handler<RM_CREF(Handler), true> wrap_tick_type1; \
-	typedef wrap_next_tick_handler<RM_CREF(Handler), false> wrap_tick_type2; \
+	typedef wrap_next_tick_handler<Handler, true> wrap_tick_type1; \
+	typedef wrap_next_tick_handler<Handler, false> wrap_tick_type2; \
 	void* const space = alloc_space(sizeof(wrap_tick_type1)); \
-	push_next_tick(space ? static_cast<wrap_next_tick_face*>(new(space)wrap_tick_type1(std::forward<Handler>(handler))) : \
-	static_cast<wrap_next_tick_face*>(new(_reuMemAlloc->allocate(sizeof(wrap_tick_type2)))wrap_tick_type2(std::forward<Handler>(handler))));
+	push_next_tick(space ? static_cast<wrap_next_tick_face*>(new(space)wrap_tick_type1(handler)) : \
+	static_cast<wrap_next_tick_face*>(new(_reuMemAlloc->allocate(sizeof(wrap_tick_type2)))wrap_tick_type2(handler)));
 
 #else //ENABLE_NEXT_TICK
 
@@ -95,12 +95,10 @@ class boost_strand
 	template <typename Handler>
 	struct handler_capture
 	{
-		template <typename H>
-		handler_capture(H&& handler, boost_strand* strand)
-			:_strand(strand), _handler(std::forward<H>(handler)) {}
+		typedef RM_CREF(Handler) handler_type;
 
-		handler_capture(const handler_capture& s)
-			:_strand(s._strand), _handler(std::move(s._handler)) {}
+		handler_capture(Handler& handler, boost_strand* strand)
+			:_strand(strand), _handler(std::forward<Handler>(handler)) {}
 
 		void operator ()()
 		{
@@ -110,9 +108,10 @@ class boost_strand
 		}
 
 		boost_strand* _strand;
-		mutable Handler _handler;
+		handler_type _handler;
 	private:
 		void operator =(const handler_capture&) = delete;
+		COPY_CONSTRUCT2(handler_capture, _strand, _handler);
 	};
 
 	struct wrap_next_tick_face : public op_queue::face
@@ -123,9 +122,10 @@ class boost_strand
 	template <typename Handler, bool NtSpace>
 	struct wrap_next_tick_handler : public wrap_next_tick_face
 	{
-		template <typename H>
-		wrap_next_tick_handler(H&& handler)
-			:_handler(std::forward<H>(handler)) {}
+		typedef RM_CREF(Handler) handler_type;
+
+		wrap_next_tick_handler(Handler& handler)
+			:_handler(std::forward<Handler>(handler)) {}
 
 		size_t invoke()
 		{
@@ -134,16 +134,17 @@ class boost_strand
 			return sizeof(wrap_next_tick_handler);
 		}
 
-		Handler _handler;
+		handler_type _handler;
 		NONE_COPY(wrap_next_tick_handler);
 	};
 
 	template <typename Handler>
 	struct wrap_next_tick_handler<Handler, false> : public wrap_next_tick_face
 	{
-		template <typename H>
-		wrap_next_tick_handler(H&& handler)
-			:_handler(std::forward<H>(handler)) {}
+		typedef RM_CREF(Handler) handler_type;
+
+		wrap_next_tick_handler(Handler& handler)
+			:_handler(std::forward<Handler>(handler)) {}
 
 		size_t invoke()
 		{
@@ -152,62 +153,56 @@ class boost_strand
 			return (size_t)-1 >> 1;
 		}
 
-		Handler _handler;
+		handler_type _handler;
 		NONE_COPY(wrap_next_tick_handler);
 	};
 #endif //ENABLE_NEXT_TICK
 
-	template <typename H, typename CB>
+	template <typename Handler, typename Callback>
 	struct wrap_async_invoke
 	{
-		template <typename H1, typename CB1>
-		wrap_async_invoke(H1&& h, CB1&& cb)
-			:_h(std::forward<H1>(h)), _cb(std::forward<CB1>(cb)) {}
+		typedef RM_CREF(Handler) handler_type;
+		typedef RM_CREF(Callback) callback_type;
 
-		wrap_async_invoke(wrap_async_invoke&& s)
-			:_h(std::move(s._h)), _cb(std::move(s._cb)) {}
-
-		wrap_async_invoke(const wrap_async_invoke& s)
-			:_h(std::move(s._h)), _cb(std::move(s._cb)) {}
+		wrap_async_invoke(Handler& handler, Callback& callback)
+			:_handler(std::forward<Handler>(handler)), _callback(std::forward<Callback>(callback)) {}
 
 		void operator()()
 		{
 			BEGIN_CHECK_EXCEPTION;
-			_cb(_h());
+			_callback(_handler());
 			END_CHECK_EXCEPTION;
 		}
 
-		mutable H _h;
-		mutable CB _cb;
+		handler_type _handler;
+		callback_type _callback;
 	private:
 		void operator =(const wrap_async_invoke&) = delete;
+		COPY_CONSTRUCT2(wrap_async_invoke, _handler, _callback);
 	};
 
-	template <typename H, typename CB>
+	template <typename Handler, typename Callback>
 	struct wrap_async_invoke_void
 	{
-		template <typename H1, typename CB1>
-		wrap_async_invoke_void(H1&& h, CB1&& cb)
-			:_h(std::forward<H1>(h)), _cb(std::forward<CB1>(cb)) {}
+		typedef RM_CREF(Handler) handler_type;
+		typedef RM_CREF(Callback) callback_type;
 
-		wrap_async_invoke_void(wrap_async_invoke_void&& s)
-			:_h(std::move(s._h)), _cb(std::move(s._cb)) {}
-
-		wrap_async_invoke_void(const wrap_async_invoke_void& s)
-			:_h(std::move(s._h)), _cb(std::move(s._cb)) {}
+		wrap_async_invoke_void(Handler& handler, Callback& callback)
+			:_handler(std::forward<Handler>(handler)), _callback(std::forward<Callback>(callback)) {}
 
 		void operator()()
 		{
 			BEGIN_CHECK_EXCEPTION;
-			_h();
-			_cb();
+			_handler();
+			_callback();
 			END_CHECK_EXCEPTION;
 		}
 
-		mutable H _h;
-		mutable CB _cb;
+		handler_type _handler;
+		callback_type _callback;
 	private:
 		void operator =(const wrap_async_invoke_void&) = delete;
+		COPY_CONSTRUCT2(wrap_async_invoke_void, _handler, _callback);
 	};
 
 	friend my_actor;
@@ -317,90 +312,90 @@ public:
 	@brief 把被调用函数包装到dispatch中，用于不同strand间消息传递
 	*/
 	template <typename Handler>
-	wrapped_dispatch_handler<boost_strand, RM_CREF(Handler)> wrap_asio(Handler&& handler)
+	wrapped_dispatch_handler<boost_strand, Handler> wrap_asio(Handler&& handler)
 	{
-		return wrapped_dispatch_handler<boost_strand, RM_CREF(Handler)>(this, std::forward<Handler>(handler));
+		return wrapped_dispatch_handler<boost_strand, Handler>(this, handler);
 	}
 
 	/*!
 	@brief 把被调用函数包装到dispatch中，用于不同strand间消息传递，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_dispatch_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_asio(Handler&& handler)
+	wrapped_dispatch_handler<boost_strand, Handler, true> suck_wrap_asio(Handler&& handler)
 	{
-		return wrapped_dispatch_handler<boost_strand, RM_CREF(Handler), true>(this, std::forward<Handler>(handler));
+		return wrapped_dispatch_handler<boost_strand, Handler, true>(this, handler);
 	}
 
 	/*!
 	@brief 把被调用函数包装到distribute中，用于不同strand间消息传递
 	*/
 	template <typename Handler>
-	wrapped_distribute_handler<boost_strand, RM_CREF(Handler)> wrap(Handler&& handler)
+	wrapped_distribute_handler<boost_strand, Handler> wrap(Handler&& handler)
 	{
-		return wrapped_distribute_handler<boost_strand, RM_CREF(Handler)>(this, std::forward<Handler>(handler));
+		return wrapped_distribute_handler<boost_strand, Handler>(this, handler);
 	}
 
 	/*!
 	@brief 把被调用函数包装到distribute中，用于不同strand间消息传递，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_distribute_handler<boost_strand, RM_CREF(Handler), true> suck_wrap(Handler&& handler)
+	wrapped_distribute_handler<boost_strand, Handler, true> suck_wrap(Handler&& handler)
 	{
-		return wrapped_distribute_handler<boost_strand, RM_CREF(Handler), true>(this, std::forward<Handler>(handler));
+		return wrapped_distribute_handler<boost_strand, Handler, true>(this, handler);
 	}
 
 	/*!
 	@brief 把被调用函数包装到post中
 	*/
 	template <typename Handler>
-	wrapped_post_handler<boost_strand, RM_CREF(Handler)> wrap_post(Handler&& handler)
+	wrapped_post_handler<boost_strand, Handler> wrap_post(Handler&& handler)
 	{
-		return wrapped_post_handler<boost_strand, RM_CREF(Handler)>(this, std::forward<Handler>(handler));
+		return wrapped_post_handler<boost_strand, Handler>(this, handler);
 	}
 
 	/*!
 	@brief 把被调用函数包装到post中，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_post_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_post(Handler&& handler)
+	wrapped_post_handler<boost_strand, Handler, true> suck_wrap_post(Handler&& handler)
 	{
-		return wrapped_post_handler<boost_strand, RM_CREF(Handler), true>(this, std::forward<Handler>(handler));
+		return wrapped_post_handler<boost_strand, Handler, true>(this, handler);
 	}
 
 	/*!
 	@brief 把被调用函数包装到tick中
 	*/
 	template <typename Handler>
-	wrapped_next_tick_handler<boost_strand, RM_CREF(Handler)> wrap_next_tick(Handler&& handler)
+	wrapped_next_tick_handler<boost_strand, Handler> wrap_next_tick(Handler&& handler)
 	{
-		return wrapped_next_tick_handler<boost_strand, RM_CREF(Handler)>(this, std::forward<Handler>(handler));
+		return wrapped_next_tick_handler<boost_strand, Handler>(this, handler);
 	}
 
 	/*!
 	@brief 把被调用函数包装到tick中，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_next_tick_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_next_tick(Handler&& handler)
+	wrapped_next_tick_handler<boost_strand, Handler, true> suck_wrap_next_tick(Handler&& handler)
 	{
-		return wrapped_next_tick_handler<boost_strand, RM_CREF(Handler), true>(this, std::forward<Handler>(handler));
+		return wrapped_next_tick_handler<boost_strand, Handler, true>(this, handler);
 	}
 
 	/*!
 	@brief 把被调用函数包装到tick中
 	*/
 	template <typename Handler>
-	wrapped_try_tick_handler<boost_strand, RM_CREF(Handler)> wrap_try_tick(Handler&& handler)
+	wrapped_try_tick_handler<boost_strand, Handler> wrap_try_tick(Handler&& handler)
 	{
-		return wrapped_try_tick_handler<boost_strand, RM_CREF(Handler)>(this, std::forward<Handler>(handler));
+		return wrapped_try_tick_handler<boost_strand, Handler>(this, handler);
 	}
 
 	/*!
 	@brief 把被调用函数包装到tick中，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_try_tick_handler<boost_strand, RM_CREF(Handler), true> suck_wrap_try_tick(Handler&& handler)
+	wrapped_try_tick_handler<boost_strand, Handler, true> suck_wrap_try_tick(Handler&& handler)
 	{
-		return wrapped_try_tick_handler<boost_strand, RM_CREF(Handler), true>(this, std::forward<Handler>(handler));
+		return wrapped_try_tick_handler<boost_strand, Handler, true>(this, handler);
 	}
 
 	/*!
@@ -608,16 +603,16 @@ public:
 	@brief 在strand中调用某个带返回值函数，然后通过一个回调函数把返回值传出
 	@param cb 传出参数的函数
 	*/
-	template <typename H, typename CB>
-	void asyncInvoke(H&& h, CB&& cb)
+	template <typename Handler, typename Callback>
+	void asyncInvoke(Handler&& h, Callback&& cb)
 	{
-		try_tick(wrap_async_invoke<RM_CREF(H), RM_CREF(CB)>(std::forward<H>(h), std::forward<CB>(cb)));
+		try_tick(wrap_async_invoke<Handler, Callback>(h, cb));
 	}
 
-	template <typename H, typename CB>
-	void asyncInvokeVoid(H&& h, CB&& cb)
+	template <typename Handler, typename Callback>
+	void asyncInvokeVoid(Handler&& h, Callback&& cb)
 	{
-		try_tick(wrap_async_invoke_void<RM_CREF(H), RM_CREF(CB)>(std::forward<H>(h), std::forward<CB>(cb)));
+		try_tick(wrap_async_invoke_void<Handler, Callback>(h, cb));
 	}
 };
 

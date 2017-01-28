@@ -191,9 +191,10 @@ protected:
 	template <typename Handler>
 	struct wrap_handler : public wrap_handler_face
 	{
-		template <typename H>
-		wrap_handler(H&& h)
-			:_handler(std::forward<H>(h)) {}
+		typedef RM_CREF(Handler) handler_type;
+
+		wrap_handler(Handler& handler)
+			:_handler(std::forward<Handler>(handler)) {}
 
 		void invoke()
 		{
@@ -201,15 +202,16 @@ protected:
 			this->~wrap_handler();
 		}
 
-		Handler _handler;
+		handler_type _handler;
 	};
 
 	template <typename Handler>
 	struct wrap_timed_handler : public wrap_handler_face
 	{
-		template <typename H>
-		wrap_timed_handler(std::mutex& mutex, const shared_bool& deadSign, bool& running, H&& h)
-			:_mutex(mutex), _deadSign(deadSign), _running(running), _handler(std::forward<H>(h)) {}
+		typedef RM_CREF(Handler) handler_type;
+
+		wrap_timed_handler(std::mutex& mutex, const shared_bool& deadSign, bool& running, Handler& handler)
+			:_mutex(mutex), _deadSign(deadSign), _running(running), _handler(std::forward<Handler>(handler)) {}
 
 		void invoke()
 		{
@@ -232,29 +234,30 @@ protected:
 		std::mutex& _mutex;
 		shared_bool _deadSign;
 		bool& _running;
-		Handler _handler;
+		handler_type _handler;
 	};
 
 	template <typename Handler>
 	wrap_handler_face* make_wrap_handler(reusable_mem_mt<>& reuMem, Handler&& handler)
 	{
-		typedef wrap_handler<RM_CREF(Handler)> handler_type;
-		return new(reuMem.allocate(sizeof(handler_type)))handler_type(std::forward<Handler>(handler));
+		typedef wrap_handler<Handler> handler_type;
+		return new(reuMem.allocate(sizeof(handler_type)))handler_type(handler);
 	}
 
 	template <typename Handler>
 	wrap_handler_face* make_wrap_timed_handler(reusable_mem_mt<>& reuMem, std::mutex& mutex, const shared_bool& deadSign, bool& running, Handler&& handler)
 	{
-		typedef wrap_timed_handler<RM_CREF(Handler)> handler_type;
-		return new(reuMem.allocate(sizeof(handler_type)))handler_type(mutex, deadSign, running, std::forward<Handler>(handler));
+		typedef wrap_timed_handler<Handler> handler_type;
+		return new(reuMem.allocate(sizeof(handler_type)))handler_type(mutex, deadSign, running, handler);
 	}
 
 	template <typename Handler, typename R>
 	struct wrap_run_in_ui_handler
 	{
-		template <typename H>
-		wrap_run_in_ui_handler(bind_qt_run_base* ui, H&& h)
-			:_this(ui), _handler(std::forward<H>(h)) {}
+		typedef RM_CREF(Handler) handler_type;
+
+		wrap_run_in_ui_handler(bind_qt_run_base* ui, Handler& handler)
+			:_this(ui), _handler(std::forward<Handler>(handler)) {}
 
 		template <typename... Args>
 		R operator()(my_actor* host, Args&&... args)
@@ -266,13 +269,13 @@ protected:
 			else
 			{
 				stack_obj<R> result;
-				RUN_IN_QT_UI_AT(_this, host, stack_agent_result::invoke(result, _handler, (Args&&)args...));
+				run_in_qt_ui_at(_this, host, stack_agent_result::invoke(result, _handler, (Args&&)args...));
 				return stack_obj_move::move(result);
 			}
 		}
 
 		bind_qt_run_base* _this;
-		Handler _handler;
+		handler_type _handler;
 		RVALUE_COPY_CONSTRUCTION(wrap_run_in_ui_handler, _this, _handler);
 	};
 
@@ -418,9 +421,9 @@ public:
 	@brief 绑定一个函数到UI队列执行
 	*/
 	template <typename Handler>
-	wrapped_post_handler<bind_qt_run_base, RM_CREF(Handler)> wrap(Handler&& handler)
+	wrapped_post_handler<bind_qt_run_base, Handler> wrap(Handler&& handler)
 	{
-		return wrapped_post_handler<bind_qt_run_base, RM_CREF(Handler)>(this, std::forward<Handler>(handler));
+		return wrapped_post_handler<bind_qt_run_base, Handler>(this, handler);
 	}
 
 	template <typename Handler>
@@ -441,9 +444,9 @@ public:
 	@brief 绑定一个函数到UI线程中执行
 	*/
 	template <typename R, typename Handler>
-	wrap_run_in_ui_handler<RM_CREF(Handler), R> wrap_run_in_ui(Handler&& handler)
+	wrap_run_in_ui_handler<Handler, R> wrap_run_in_ui(Handler&& handler)
 	{
-		return wrap_run_in_ui_handler<RM_CREF(Handler), R>(this, std::forward<Handler>(handler));
+		return wrap_run_in_ui_handler<Handler, R>(this, handler);
 	}
 
 	/*!
@@ -470,6 +473,7 @@ public:
 private:
 	void append_task(wrap_handler_face*);
 protected:
+	virtual void post_event(QEvent *event) = 0;
 	virtual void post_task_event() = 0;
 	virtual void enter_loop() = 0;
 	virtual void close_now() = 0;
@@ -595,7 +599,7 @@ public:
 	}
 
 	template <typename R = void, typename Handler>
-	wrap_run_in_ui_handler<RM_CREF(Handler), R> wrap_run_in_ui(Handler&& handler)
+	wrap_run_in_ui_handler<Handler, R> wrap_run_in_ui(Handler&& handler)
 	{
 		return bind_qt_run_base::wrap_run_in_ui<R>(std::forward<Handler>(handler));
 	}
@@ -670,6 +674,12 @@ public:
 	{
 		return bind_qt_run_base::create_ui_child_actor(host, std::move(mainFunc), stackSize);
 	}
+
+	void post_event(QEvent *event) override final
+	{
+		assert(event->type() != QEvent::Type(QT_POST_TASK));
+		QCoreApplication::postEvent(this, event);
+	}
 private:
 	void post_task_event() override final
 	{
@@ -687,7 +697,7 @@ private:
 		}
 		else
 		{
-			customEvent_(e);
+			custom_event(e);
 		}
 	}
 
@@ -705,7 +715,7 @@ private:
 		_eventLoop->exit();
 	}
 protected:
-	virtual void customEvent_(QEvent*)
+	virtual void custom_event(QEvent*)
 	{
 
 	}

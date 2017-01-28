@@ -29,6 +29,7 @@ class AsyncTimer_ : public ActorTimerFace_
 		virtual void destroy(reusable_mem& reuMem) = 0;
 		virtual void set_sign(bool* sign) = 0;
 		virtual long long& deadtime_ref() = 0;
+		virtual void set_deadtime(long long us) = 0;
 		virtual bool is_top_call() = 0;
 		virtual wrap_base* interval_handler() = 0;
 	};
@@ -36,13 +37,14 @@ class AsyncTimer_ : public ActorTimerFace_
 	template <typename Handler>
 	struct wrap_handler : public wrap_base
 	{
-		template <typename H>
-		wrap_handler(H&& h)
-			:_h(std::forward<H>(h)) {}
+		typedef RM_CREF(Handler) handler_type;
+
+		wrap_handler(Handler& handler)
+			:_handler(std::forward<Handler>(handler)) {}
 
 		void invoke(bool isAdvance = false)
 		{
-			CHECK_EXCEPTION(_h);
+			CHECK_EXCEPTION(_handler);
 		}
 
 		void destroy(reusable_mem& reuMem)
@@ -53,22 +55,24 @@ class AsyncTimer_ : public ActorTimerFace_
 
 		void set_sign(bool* sign) {}
 		long long& deadtime_ref() { return *(long long*)NULL; }
+		void set_deadtime(long long us) {}
 		bool is_top_call() { return false; }
 		wrap_base* interval_handler() { return NULL; }
 
-		Handler _h;
+		handler_type _handler;
 	};
 
 	template <typename Handler>
 	struct wrap_advance_handler : public wrap_base
 	{
-		template <typename H>
-		wrap_advance_handler(H&& h)
-			:_h(std::forward<H>(h)) {}
+		typedef RM_CREF(Handler) handler_type;
+
+		wrap_advance_handler(Handler& handler)
+			:_handler(std::forward<Handler>(handler)) {}
 
 		void invoke(bool isAdvance = false)
 		{
-			CHECK_EXCEPTION(_h, isAdvance);
+			CHECK_EXCEPTION(_handler, isAdvance);
 		}
 
 		void destroy(reusable_mem& reuMem)
@@ -79,22 +83,24 @@ class AsyncTimer_ : public ActorTimerFace_
 
 		void set_sign(bool* sign) {}
 		long long& deadtime_ref() { return *(long long*)NULL; }
+		void set_deadtime(long long us) {}
 		bool is_top_call() { return false; }
 		wrap_base* interval_handler() { return NULL; }
 
-		Handler _h;
+		handler_type _handler;
 	};
 
 	template <typename Handler>
 	struct wrap_interval_handler : public wrap_base
 	{
-		template <typename H>
-		wrap_interval_handler(H&& h, wrap_base* intervalHandler)
-			:_h(std::forward<H>(h)), _sign(NULL), _deadtime(0), _intervalHandler(intervalHandler) {}
+		typedef RM_CREF(Handler) handler_type;
+
+		wrap_interval_handler(Handler& handler, wrap_base* intervalHandler)
+			:_handler(std::forward<Handler>(handler)), _sign(NULL), _deadtime(0), _intervalHandler(intervalHandler) {}
 
 		void invoke(bool isAdvance = false)
 		{
-			CHECK_EXCEPTION(_h, isAdvance, this);
+			CHECK_EXCEPTION(_handler, isAdvance, this);
 		}
 
 		void destroy(reusable_mem& reuMem)
@@ -121,6 +127,11 @@ class AsyncTimer_ : public ActorTimerFace_
 			return _deadtime;
 		}
 
+		void set_deadtime(long long us)
+		{
+			_deadtime = us;
+		}
+
 		bool is_top_call()
 		{
 			return NULL != _sign;
@@ -134,7 +145,7 @@ class AsyncTimer_ : public ActorTimerFace_
 		long long _deadtime;
 		bool* _sign;
 		wrap_base* _intervalHandler;
-		Handler _h;
+		handler_type _handler;
 	};
 private:
 	AsyncTimer_(ActorTimer_* actorTimer);
@@ -250,13 +261,13 @@ public:
 		}, __1, __2), wrap_timer_handler(_reuMem, std::forward<Handler>(handler)));
 		if (immed)
 		{
-			_handler->deadtime_ref() = get_tick_us();
+			_handler->set_deadtime(get_tick_us());
 			_handler->invoke();
 		}
 		else
 		{
 			_timerHandle = _actorTimer->timeout(intervalus, _weakThis.lock());
-			_handler->deadtime_ref() = _timerHandle._beginStamp + intervalus;
+			_handler->set_deadtime(_timerHandle._beginStamp + intervalus);
 		}
 	}
 
@@ -291,13 +302,13 @@ public:
 		}, __1, __2), wrap_advance_timer_handler(_reuMem, std::forward<Handler>(handler)));
 		if (immed)
 		{
-			_handler->deadtime_ref() = get_tick_us();
+			_handler->set_deadtime(get_tick_us());
 			_handler->invoke();
 		}
 		else
 		{
 			_timerHandle = _actorTimer->timeout(intervalus, _weakThis.lock());
-			_handler->deadtime_ref() = _timerHandle._beginStamp + intervalus;
+			_handler->set_deadtime(_timerHandle._beginStamp + intervalus);
 		}
 	}
 
@@ -341,22 +352,22 @@ private:
 	template <typename Handler>
 	static wrap_base* wrap_timer_handler(reusable_mem& reuMem, Handler&& handler)
 	{
-		typedef wrap_handler<RM_CREF(Handler)> wrap_type;
-		return new(reuMem.allocate(sizeof(wrap_type)))wrap_type(std::forward<Handler>(handler));
+		typedef wrap_handler<Handler> wrap_type;
+		return new(reuMem.allocate(sizeof(wrap_type)))wrap_type(handler);
 	}
 
 	template <typename Handler>
 	static wrap_base* wrap_advance_timer_handler(reusable_mem& reuMem, Handler&& handler)
 	{
-		typedef wrap_advance_handler<RM_CREF(Handler)> wrap_type;
-		return new(reuMem.allocate(sizeof(wrap_type)))wrap_type(std::forward<Handler>(handler));
+		typedef wrap_advance_handler<Handler> wrap_type;
+		return new(reuMem.allocate(sizeof(wrap_type)))wrap_type(handler);
 	}
 
 	template <typename Handler>
 	static wrap_base* wrap_interval_timer_handler(reusable_mem& reuMem, Handler&& handler, wrap_base* intervalHandler)
 	{
-		typedef wrap_interval_handler<RM_CREF(Handler)> wrap_type;
-		return new(reuMem.allocate(sizeof(wrap_type)))wrap_type(std::forward<Handler>(handler), intervalHandler);
+		typedef wrap_interval_handler<Handler> wrap_type;
+		return new(reuMem.allocate(sizeof(wrap_type)))wrap_type(handler, intervalHandler);
 	}
 private:
 	ActorTimer_* _actorTimer;
@@ -548,13 +559,13 @@ public:
 		}, __1, __2), AsyncTimer_::wrap_timer_handler(_reuMem, std::forward<Handler>(handler)));
 		if (immed)
 		{
-			timerHandle._handler->deadtime_ref() = get_tick_us();
+			timerHandle._handler->set_deadtime(get_tick_us());
 			timerHandle._handler->invoke();
 		}
 		else
 		{
 			_timeout(intervalus, timerHandle);
-			timerHandle._handler->deadtime_ref() = timerHandle._timestamp + intervalus;
+			timerHandle._handler->set_deadtime(timerHandle._timestamp + intervalus);
 		}
 	}
 
@@ -589,13 +600,13 @@ public:
 		}, __1, __2), AsyncTimer_::wrap_advance_timer_handler(_reuMem, std::forward<Handler>(handler)));
 		if (immed)
 		{
-			timerHandle._handler->deadtime_ref() = get_tick_us();
+			timerHandle._handler->set_deadtime(get_tick_us());
 			timerHandle._handler->invoke();
 		}
 		else
 		{
 			_timeout(intervalus, timerHandle);
-			timerHandle._handler->deadtime_ref() = timerHandle._timestamp + intervalus;
+			timerHandle._handler->set_deadtime(timerHandle._timestamp + intervalus);
 		}
 	}
 

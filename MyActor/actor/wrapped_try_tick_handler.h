@@ -6,11 +6,11 @@
 template <typename Poster, typename Handler, bool = false>
 class wrapped_try_tick_handler
 {
+	typedef RM_CREF(Handler) handler_type;
 public:
-	template <typename H>
-	wrapped_try_tick_handler(Poster* poster, H&& handler)
+	wrapped_try_tick_handler(Poster* poster, Handler& handler)
 		: _poster(poster),
-		_handler(std::forward<H>(handler))
+		_handler(std::forward<Handler>(handler))
 	{
 	}
 
@@ -41,18 +41,18 @@ public:
 	}
 
 	Poster* _poster;
-	Handler _handler;
+	handler_type _handler;
 };
 //////////////////////////////////////////////////////////////////////////
 
 template <typename Poster, typename Handler>
 class wrapped_try_tick_handler<Poster, Handler, true>
 {
+	typedef RM_CREF(Handler) handler_type;
 public:
-	template <typename H>
-	wrapped_try_tick_handler(Poster* poster, H&& handler)
+	wrapped_try_tick_handler(Poster* poster, Handler& handler)
 		: _poster(poster),
-		_handler(std::forward<H>(handler))
+		_handler(std::forward<Handler>(handler))
 #if (_DEBUG || DEBUG)
 		, _checkOnce(new std::atomic<bool>(false))
 #endif
@@ -87,7 +87,7 @@ public:
 	}
 
 	Poster* _poster;
-	Handler _handler;
+	handler_type _handler;
 #if (_DEBUG || DEBUG)
 	std::shared_ptr<std::atomic<bool> > _checkOnce;
 #endif

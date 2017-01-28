@@ -131,6 +131,7 @@ void generator::run()
 	{
 		assert(!_isRun);
 		DEBUG_OPERATION(_isRun = true);
+		_sharedThis = _weakThis.lock();
 		_next();
 	}
 	else
@@ -139,7 +140,7 @@ void generator::run()
 		{
 			assert(!host->_isRun);
 			DEBUG_OPERATION(host->_isRun = true);
-			host->_next();
+			host->_revert_this(host)->_next();
 		}, _weakThis.lock()));
 	}
 }
@@ -186,14 +187,6 @@ void generator::stop()
 				clear_function(host->_notify);
 			}
 		}, _weakThis.lock()));
-	}
-}
-
-void generator::_lockThis()
-{
-	if (!_sharedThis)
-	{
-		_sharedThis = _weakThis.lock();
 	}
 }
 
