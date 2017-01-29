@@ -607,7 +607,7 @@ tcp_socket::result tcp_socket::try_send_file_same(int fd, unsigned long long* of
 	result res = { 0, 0, false };
 	if (_nonBlocking)
 	{
-		if ((size_t)-1 == length)
+		if (0 == length)
 		{
 			if (!offset)
 			{
@@ -628,6 +628,11 @@ tcp_socket::result tcp_socket::try_send_file_same(int fd, unsigned long long* of
 					return res;
 				}
 				length = (size_t)sl;
+			}
+			if (0 == length)
+			{
+				res.ok = true;
+				return res;
 			}
 		}
 		socket_ops::send_file_pck pck = { offset, length, fd };
@@ -665,7 +670,7 @@ bool tcp_socket::init_send_file(HANDLE hFile, unsigned long long* offset, size_t
 	}
 	if (setOffOk)
 	{
-		if ((size_t)-1 != length)
+		if (length)
 		{
 			return true;
 		}
@@ -679,6 +684,10 @@ bool tcp_socket::init_send_file(HANDLE hFile, unsigned long long* offset, size_t
 				return true;
 			}
 		}
+	}
+	else
+	{
+		length = -1;
 	}
 	return false;
 }

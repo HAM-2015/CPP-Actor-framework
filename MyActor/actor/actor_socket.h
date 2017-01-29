@@ -453,9 +453,9 @@ public:
 	template <typename Handler>
 	bool async_send_file(HANDLE hFile, unsigned long long* offset, size_t length, Handler&& handler)
 	{
-		if (!init_send_file(hFile, offset, length))
+		if (!init_send_file(hFile, offset, length) || 0 == length)
 		{
-			result res = { 0, ::WSAGetLastError(), false };
+			result res = { 0, length ? ::WSAGetLastError() : 0, 0 == length };
 #ifdef ENABLE_ASIO_PRE_OP
 			if (is_pre_option())
 			{
