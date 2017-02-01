@@ -2433,6 +2433,11 @@ const shared_strand& my_actor::self_strand()
 	return _strand;
 }
 
+overlap_timer* my_actor::over_timer()
+{
+	return _strand->over_timer();
+}
+
 boost::asio::io_service& my_actor::self_io_service()
 {
 	return _strand->get_io_service();
@@ -2561,7 +2566,7 @@ void my_actor::force_quit(std::function<void()> h)
 					do
 					{
 						self->_childOverCount++;
-						self->_childActorList.front()->force_quit(self->_strand->wrap(std::bind([](actor_handle& shared_this)
+						self->_childActorList.front()->force_quit(self->_strand->wrap_once(std::bind([](actor_handle& shared_this)
 						{
 							my_actor* const self = shared_this.get();
 							if (0 == --self->_childOverCount)
@@ -2736,7 +2741,7 @@ void my_actor::begin_suspend()
 		for (actor_handle& childActor : _childActorList)
 		{
 			_childSuspendResumeCount++;
-			childActor->suspend(_strand->wrap(std::bind([](actor_handle& shared_this)
+			childActor->suspend(_strand->wrap_once(std::bind([](actor_handle& shared_this)
 			{
 				my_actor* const self = shared_this.get();
 				if (0 == --self->_childSuspendResumeCount)
@@ -2810,7 +2815,7 @@ void my_actor::begin_resume()
 		for (actor_handle& childActor : _childActorList)
 		{
 			_childSuspendResumeCount++;
-			childActor->resume(_strand->wrap(std::bind([](actor_handle& shared_this)
+			childActor->resume(_strand->wrap_once(std::bind([](actor_handle& shared_this)
 			{
 				my_actor* const self = shared_this.get();
 				if (0 == --self->_childSuspendResumeCount)

@@ -34,10 +34,9 @@ public:
 		_distributier->distribute(wrap_capture(_handler, std::forward<Args>(args)...));
 	}
 
-	template <typename... Args>
-	void operator()(Args&&... args) const
+	void operator()()
 	{
-		_distributier->distribute(wrap_capture(_handler, std::forward<Args>(args)...));
+		_distributier->distribute(_handler);
 	}
 
 	Distributier* _distributier;
@@ -54,7 +53,7 @@ public:
 		: _distributier(distributier),
 		_handler(std::forward<Handler>(handler))
 #if (_DEBUG || DEBUG)
-		, _checkOnce(new std::atomic<bool>(false))
+		, _checkOnce(std::make_shared<std::atomic<bool>>(false))
 #endif
 	{
 	}
@@ -83,7 +82,13 @@ public:
 	void operator()(Args&&... args)
 	{
 		assert(!_checkOnce->exchange(true));
-		_distributier->distribute(wrap_capture(FORCE_MOVE(_handler), FORCE_MOVE(args)...));
+		_distributier->distribute(wrap_capture(std::move(_handler), std::forward<Args>(args)...));
+	}
+
+	void operator()()
+	{
+		assert(!_checkOnce->exchange(true));
+		_distributier->distribute(std::move(_handler));
 	}
 
 	Distributier* _distributier;

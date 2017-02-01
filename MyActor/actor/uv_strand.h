@@ -108,7 +108,7 @@ public:
 	{
 		assert(in_this_ios());
 		_waitCount++;
-		return FUNCTION_ALLOCATOR(std::function<void()>, wrap(std::bind([this](Handler& handler)
+		return FUNCTION_ALLOCATOR(std::function<void()>, wrap_post_once(std::bind([this](Handler& handler)
 		{
 			CHECK_EXCEPTION(handler);
 			check_close();

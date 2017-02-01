@@ -34,10 +34,9 @@ public:
 		_dispatcher->dispatch(wrap_capture(_handler, std::forward<Args>(args)...));
 	}
 
-	template <typename... Args>
-	void operator()(Args&&... args) const
+	void operator()()
 	{
-		_dispatcher->dispatch(wrap_capture(_handler, std::forward<Args>(args)...));
+		_dispatcher->dispatch(_handler);
 	}
 
 	Dispatcher* _dispatcher;
@@ -54,7 +53,7 @@ public:
 		: _dispatcher(dispatcher),
 		_handler(std::forward<Handler>(handler))
 #if (_DEBUG || DEBUG)
-		, _checkOnce(new std::atomic<bool>(false))
+		, _checkOnce(std::make_shared<std::atomic<bool>>(false))
 #endif
 	{
 	}
@@ -83,7 +82,13 @@ public:
 	void operator()(Args&&... args)
 	{
 		assert(!_checkOnce->exchange(true));
-		_dispatcher->dispatch(wrap_capture(FORCE_MOVE(_handler), FORCE_MOVE(args)...));
+		_dispatcher->dispatch(wrap_capture(std::move(_handler), std::forward<Args>(args)...));
+	}
+
+	void operator()()
+	{
+		assert(!_checkOnce->exchange(true));
+		_dispatcher->dispatch(std::move(_handler));
 	}
 
 	Dispatcher* _dispatcher;

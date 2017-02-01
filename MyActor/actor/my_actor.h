@@ -7972,6 +7972,11 @@ public:
 	const shared_strand& self_strand();
 
 	/*!
+	@brief 获取当前调度器定时器
+	*/
+	overlap_timer* over_timer();
+
+	/*!
 	@brief 获取io_service调度器
 	*/
 	boost::asio::io_service& self_io_service();

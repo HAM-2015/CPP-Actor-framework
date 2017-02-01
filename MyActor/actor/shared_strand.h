@@ -321,7 +321,7 @@ public:
 	@brief 把被调用函数包装到dispatch中，用于不同strand间消息传递，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_dispatch_handler<boost_strand, Handler, true> suck_wrap_asio(Handler&& handler)
+	wrapped_dispatch_handler<boost_strand, Handler, true> wrap_asio_once(Handler&& handler)
 	{
 		return wrapped_dispatch_handler<boost_strand, Handler, true>(this, handler);
 	}
@@ -339,7 +339,7 @@ public:
 	@brief 把被调用函数包装到distribute中，用于不同strand间消息传递，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_distribute_handler<boost_strand, Handler, true> suck_wrap(Handler&& handler)
+	wrapped_distribute_handler<boost_strand, Handler, true> wrap_once(Handler&& handler)
 	{
 		return wrapped_distribute_handler<boost_strand, Handler, true>(this, handler);
 	}
@@ -357,7 +357,7 @@ public:
 	@brief 把被调用函数包装到post中，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_post_handler<boost_strand, Handler, true> suck_wrap_post(Handler&& handler)
+	wrapped_post_handler<boost_strand, Handler, true> wrap_post_once(Handler&& handler)
 	{
 		return wrapped_post_handler<boost_strand, Handler, true>(this, handler);
 	}
@@ -375,7 +375,7 @@ public:
 	@brief 把被调用函数包装到tick中，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_next_tick_handler<boost_strand, Handler, true> suck_wrap_next_tick(Handler&& handler)
+	wrapped_next_tick_handler<boost_strand, Handler, true> wrap_next_tick_once(Handler&& handler)
 	{
 		return wrapped_next_tick_handler<boost_strand, Handler, true>(this, handler);
 	}
@@ -393,7 +393,7 @@ public:
 	@brief 把被调用函数包装到tick中，调用后参数将强制被右值引用，且只能调用一次
 	*/
 	template <typename Handler>
-	wrapped_try_tick_handler<boost_strand, Handler, true> suck_wrap_try_tick(Handler&& handler)
+	wrapped_try_tick_handler<boost_strand, Handler, true> wrap_try_tick_once(Handler&& handler)
 	{
 		return wrapped_try_tick_handler<boost_strand, Handler, true>(this, handler);
 	}

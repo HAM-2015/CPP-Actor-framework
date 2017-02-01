@@ -323,7 +323,7 @@ std::function<void()> uv_strand::wrap_check_close()
 {
 	assert(in_this_ios());
 	_waitCount++;
-	return FUNCTION_ALLOCATOR(std::function<void()>, wrap([this]
+	return FUNCTION_ALLOCATOR(std::function<void()>, wrap_post_once([this]
 	{
 		check_close();
 	}), (reusable_alloc<void, reusable_mem_mt<>>(_reuMem)));

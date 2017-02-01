@@ -8,6 +8,7 @@
 #include <QtCore/qeventloop.h>
 #include <QtCore/qcoreapplication.h>
 #include "wrapped_post_handler.h"
+#include "wrapped_distribute_handler.h"
 #include "my_actor.h"
 #include "msg_queue.h"
 #include "run_strand.h"
@@ -350,6 +351,19 @@ public:
 		append_task(make_wrap_handler(_reuMem, std::forward<Handler>(handler)));
 	}
 
+	template <typename Handler>
+	void distribute(Handler&& handler)
+	{
+		if (running_in_this_thread())
+		{
+			handler();
+		}
+		else
+		{
+			post(std::forward<Handler>(handler));
+		}
+	}
+
 	/*!
 	@brief 发送一个执行函数到UI消息队列中执行，完成后返回
 	*/
@@ -421,9 +435,27 @@ public:
 	@brief 绑定一个函数到UI队列执行
 	*/
 	template <typename Handler>
-	wrapped_post_handler<bind_qt_run_base, Handler> wrap(Handler&& handler)
+	wrapped_distribute_handler<bind_qt_run_base, Handler> wrap(Handler&& handler)
+	{
+		return wrapped_distribute_handler<bind_qt_run_base, Handler>(this, handler);
+	}
+
+	template <typename Handler>
+	wrapped_distribute_handler<bind_qt_run_base, Handler, true> wrap_once(Handler&& handler)
+	{
+		return wrapped_distribute_handler<bind_qt_run_base, Handler, true>(this, handler);
+	}
+
+	template <typename Handler>
+	wrapped_post_handler<bind_qt_run_base, Handler> wrap_post(Handler&& handler)
 	{
 		return wrapped_post_handler<bind_qt_run_base, Handler>(this, handler);
+	}
+
+	template <typename Handler>
+	wrapped_post_handler<bind_qt_run_base, Handler, true> wrap_post_once(Handler&& handler)
+	{
+		return wrapped_post_handler<bind_qt_run_base, Handler, true>(this, handler);
 	}
 
 	template <typename Handler>
@@ -431,7 +463,7 @@ public:
 	{
 		assert(run_in_ui_thread());
 		_waitCount++;
-		return FUNCTION_ALLOCATOR(std::function<void()>, wrap(std::bind([this](Handler& handler)
+		return FUNCTION_ALLOCATOR(std::function<void()>, wrap_post_once(std::bind([this](Handler& handler)
 		{
 			CHECK_EXCEPTION(handler);
 			check_close();
@@ -564,6 +596,12 @@ public:
 	}
 
 	template <typename Handler>
+	void distribute(Handler&& handler)
+	{
+		bind_qt_run_base::distribute(std::forward<Handler>(handler));
+	}
+
+	template <typename Handler>
 	void send(my_actor* host, Handler&& handler)
 	{
 		bind_qt_run_base::send(host, std::forward<Handler>(handler));
@@ -582,9 +620,27 @@ public:
 	}
 
 	template <typename Handler>
-	wrapped_post_handler<bind_qt_run_base, Handler> wrap(Handler&& handler)
+	wrapped_distribute_handler<bind_qt_run_base, Handler> wrap(Handler&& handler)
 	{
 		return bind_qt_run_base::wrap(std::forward<Handler>(handler));
+	}
+
+	template <typename Handler>
+	wrapped_distribute_handler<bind_qt_run_base, Handler, true> wrap_once(Handler&& handler)
+	{
+		return bind_qt_run_base::wrap_once(std::forward<Handler>(handler));
+	}
+
+	template <typename Handler>
+	wrapped_post_handler<bind_qt_run_base, Handler> wrap_post(Handler&& handler)
+	{
+		return bind_qt_run_base::wrap_post(std::forward<Handler>(handler));
+	}
+
+	template <typename Handler>
+	wrapped_post_handler<bind_qt_run_base, Handler, true> wrap_post_once(Handler&& handler)
+	{
+		return bind_qt_run_base::wrap_post_once(std::forward<Handler>(handler));
 	}
 
 	template <typename Handler>

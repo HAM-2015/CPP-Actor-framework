@@ -215,7 +215,7 @@ std::function<void()> bind_qt_run_base::wrap_check_close()
 {
 	assert(run_in_ui_thread());
 	_waitCount++;
-	return FUNCTION_ALLOCATOR(std::function<void()>, wrap([this]
+	return FUNCTION_ALLOCATOR(std::function<void()>, wrap_post_once([this]
 	{
 		check_close();
 	}), (reusable_alloc<void, reusable_mem_mt<>>(_reuMem)));

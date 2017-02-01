@@ -233,42 +233,10 @@ public:
 	template <typename Handler>
 	void uinterval(long long intervalus, Handler&& handler, bool immed = false)
 	{
-		assert(self_strand()->running_in_this_thread());
-		assert(!_handler);
-		_isInterval = true;
-		_currTimeout = intervalus;
-		_handler = wrap_interval_timer_handler(_reuMem, std::bind([this, intervalus](bool isAdvance, wrap_base* const thisHandler)
+		uinterval2(intervalus, std::bind([](bool isAdvance, Handler& handler)
 		{
-			bool sign = false;
-			AsyncTimer_* const this_ = this;
-			wrap_base* const intervalHandler = thisHandler->interval_handler();
-			thisHandler->set_sign(&sign);
-			intervalHandler->invoke();
-			if (!sign)
-			{
-				thisHandler->set_sign(NULL);
-				if (!isAdvance)
-				{
-					long long& deadtime = thisHandler->deadtime_ref();
-					deadtime += intervalus;
-					_timerHandle = _actorTimer->timeout(deadtime, _weakThis.lock(), true);
-				}
-			}
-			else
-			{
-				intervalHandler->destroy(this_->_reuMem);
-			}
-		}, __1, __2), wrap_timer_handler(_reuMem, std::forward<Handler>(handler)));
-		if (immed)
-		{
-			_handler->set_deadtime(get_tick_us());
-			_handler->invoke();
-		}
-		else
-		{
-			_timerHandle = _actorTimer->timeout(intervalus, _weakThis.lock());
-			_handler->set_deadtime(_timerHandle._beginStamp + intervalus);
-		}
+			handler();
+		}, __1, std::forward<Handler>(handler)), immed);
 	}
 
 	template <typename Handler>
@@ -278,7 +246,7 @@ public:
 		assert(!_handler);
 		_isInterval = true;
 		_currTimeout = intervalus;
-		_handler = wrap_interval_timer_handler(_reuMem, std::bind([this, intervalus](bool isAdvance, wrap_base* const thisHandler)
+		_handler = wrap_interval_timer_handler(_reuMem, [this, intervalus](bool isAdvance, wrap_base* const thisHandler)
 		{
 			bool sign = false;
 			AsyncTimer_* const this_ = this;
@@ -299,7 +267,7 @@ public:
 			{
 				intervalHandler->destroy(this_->_reuMem);
 			}
-		}, __1, __2), wrap_advance_timer_handler(_reuMem, std::forward<Handler>(handler)));
+		}, wrap_advance_timer_handler(_reuMem, std::forward<Handler>(handler)));
 		if (immed)
 		{
 			_handler->set_deadtime(get_tick_us());
@@ -531,42 +499,10 @@ public:
 	template <typename Handler>
 	void uinterval(long long intervalus, timer_handle& timerHandle, Handler&& handler, bool immed = false)
 	{
-		assert(self_strand()->running_in_this_thread());
-		assert(timerHandle.completed());
-		timerHandle._isInterval = true;
-		timerHandle._currTimeout = intervalus;
-		timerHandle._handler = AsyncTimer_::wrap_interval_timer_handler(_reuMem, std::bind([this, &timerHandle, intervalus](bool isAdvance, AsyncTimer_::wrap_base* const thisHandler)
+		uinterval2(intervalus, timerHandle, std::bind([](bool isAdvance, Handler& handler)
 		{
-			bool sign = false;
-			overlap_timer* const this_ = this;
-			AsyncTimer_::wrap_base* const intervalHandler = thisHandler->interval_handler();
-			thisHandler->set_sign(&sign);
-			intervalHandler->invoke();
-			if (!sign)
-			{
-				thisHandler->set_sign(NULL);
-				if (!isAdvance)
-				{
-					long long& deadtime = thisHandler->deadtime_ref();
-					deadtime += intervalus;
-					_timeout(deadtime, timerHandle, true);
-				}
-			}
-			else
-			{
-				intervalHandler->destroy(this_->_reuMem);
-			}
-		}, __1, __2), AsyncTimer_::wrap_timer_handler(_reuMem, std::forward<Handler>(handler)));
-		if (immed)
-		{
-			timerHandle._handler->set_deadtime(get_tick_us());
-			timerHandle._handler->invoke();
-		}
-		else
-		{
-			_timeout(intervalus, timerHandle);
-			timerHandle._handler->set_deadtime(timerHandle._timestamp + intervalus);
-		}
+			handler();
+		}, __1, std::forward<Handler>(handler)), immed);
 	}
 
 	template <typename Handler>
@@ -576,7 +512,7 @@ public:
 		assert(timerHandle.completed());
 		timerHandle._isInterval = true;
 		timerHandle._currTimeout = intervalus;
-		timerHandle._handler = AsyncTimer_::wrap_interval_timer_handler(_reuMem, std::bind([this, &timerHandle, intervalus](bool isAdvance, AsyncTimer_::wrap_base* const thisHandler)
+		timerHandle._handler = AsyncTimer_::wrap_interval_timer_handler(_reuMem, [this, &timerHandle, intervalus](bool isAdvance, AsyncTimer_::wrap_base* const thisHandler)
 		{
 			bool sign = false;
 			overlap_timer* const this_ = this;
@@ -597,7 +533,7 @@ public:
 			{
 				intervalHandler->destroy(this_->_reuMem);
 			}
-		}, __1, __2), AsyncTimer_::wrap_advance_timer_handler(_reuMem, std::forward<Handler>(handler)));
+		}, AsyncTimer_::wrap_advance_timer_handler(_reuMem, std::forward<Handler>(handler)));
 		if (immed)
 		{
 			timerHandle._handler->set_deadtime(get_tick_us());

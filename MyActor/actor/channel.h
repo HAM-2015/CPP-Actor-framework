@@ -429,10 +429,10 @@ public:
 	void disconnect(Notify&& ntf)
 	{
 		typedef RM_CREF(Notify) Notify_;
-		_chan1.remove_pop_notify(_chan2.self_strand()->wrap(std::bind([this](co_async_state, Notify_& ntf)
+		_chan1.remove_pop_notify(_chan2.self_strand()->wrap_once(std::bind([this](co_async_state, Notify_& ntf)
 		{
 			_connSign1._disable = true;
-			_chan2.remove_push_notify(_chan1.self_strand()->wrap(std::bind([this](co_async_state, Notify_& ntf)
+			_chan2.remove_push_notify(_chan1.self_strand()->wrap_once(std::bind([this](co_async_state, Notify_& ntf)
 			{
 				_connSign2._disable = true;
 				CHECK_EXCEPTION(ntf);

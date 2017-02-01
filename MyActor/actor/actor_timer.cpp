@@ -94,15 +94,18 @@ void ActorTimer_::cancel(timer_handle& th)
 			as_ptype<timer_type>(_timer)->cancel(ec);
 			_timerCount++;
 			_looping = false;
-		} 
+		}
 		else if (itNode->first == _extMaxTick)
 		{
 			_handlerQueue.erase(itNode++);
 			if (_handlerQueue.end() == itNode)
 			{
-				itNode--;
+				_extMaxTick = (--itNode)->first;
 			}
-			_extMaxTick = itNode->first;
+			else
+			{
+				assert(itNode->first == _extMaxTick);
+			}
 		}
 		else
 		{
@@ -123,7 +126,7 @@ void ActorTimer_::timer_loop(long long abs, long long rel)
 #else
 	as_ptype<timer_type>(_timer)->expires_at(timer_type::time_point(micseconds(abs)), ec);
 #endif
-	as_ptype<timer_type>(_timer)->async_wait(_lockStrand->wrap_asio([this, tc](const boost::system::error_code&)
+	as_ptype<timer_type>(_timer)->async_wait(_lockStrand->wrap_asio_once([this, tc](const boost::system::error_code&)
 	{
 		event_handler(tc);
 	}));
