@@ -232,16 +232,16 @@ struct __co_context_no_capture{};
 
 #define _co_timed_await(__ms__, __handler__) do{\
 	assert(co_self.__inside);\
-	co_timeout(__ms__, co_timer, [&]__handler__); _co_await; \
-	co_cancel_timer(co_timer); \
+	co_timeout(__ms__, co_timer, [&]__handler__); _co_await;\
+	co_cancel_timer(co_timer);\
 	}while (0)
 
 #define _co_timed_await2(__ms__) do{\
 	assert(co_self.__inside);\
-	co_timeout(__ms__, co_timer, wrap_bind_(std::bind([&](generator_handle& gen, shared_bool& sign){\
+	co_timeout(__ms__, co_timer, std::bind([&](generator_handle& gen, shared_bool& sign){\
 	co_last_state = co_async_state::co_async_overtime;\
-	co_shared_async_next(gen, sign);}, co_shared_this, co_async_sign)));\
-	_co_await; co_cancel_timer(co_timer); \
+	co_shared_async_next(gen, sign);}, co_shared_this, co_async_sign));\
+	_co_await; co_cancel_timer(co_timer);\
 	}while (0)
 
 //generator await原语，与co_async之类使用
@@ -304,7 +304,7 @@ struct __co_context_no_capture{};
 	return; case (_co_counter+1)/2:; _co_for_break;}\
 	else CoCall_(co_self, _co_counter/2)-
 
-#define co_call(...) co_call_of _co_call_bind(__VA_ARGS__)
+#define co_call(...) co_call_of co_bind(__VA_ARGS__)
 
 //在指定strand中，递归调用另一个generator，直到执行完毕后接着下一行
 #define co_st_call_of(__strand__) \
@@ -314,7 +314,7 @@ struct __co_context_no_capture{};
 	if (__forYieldSwitch) {_co_await; co_unlock_stop; _co_for_break;}\
 	else CoStCall(__strand__, co_self)-
 
-#define co_st_call(__strand__, ...) co_st_call_of(__strand__) _co_call_bind(__VA_ARGS__)
+#define co_st_call(__strand__, ...) co_st_call_of(__strand__) co_bind(__VA_ARGS__)
 
 //判断strand属性，决定是用co_call_of还是co_st_call_of
 #define co_best_call_of(__strand__) \
@@ -326,7 +326,7 @@ struct __co_context_no_capture{};
 	return; case (_co_counter+1)/2:;}_co_for_break;}\
 	else CoBestCall(__strand__, co_self, __isBestCall, _co_counter/2)-
 
-#define co_best_call(__strand__, ...) co_best_call_of(__strand__) _co_call_bind(__VA_ARGS__)
+#define co_best_call(__strand__, ...) co_best_call_of(__strand__) co_bind(__VA_ARGS__)
 
 //启动一个临时作用域
 #define co_scope co_call_of [&](co_generator)->void
@@ -1903,13 +1903,13 @@ struct CoCallBind_<true>
 };
 
 template <typename Handler, typename Unknown, typename... Args>
-static co_function _co_call_bind(Handler&& handler, Unknown&& unkown, Args&&... args)
+static co_function co_bind(Handler&& handler, Unknown&& unkown, Args&&... args)
 {
 	return CoCallBind_<CheckClassFunc_<RM_REF(Handler)>::value>::bind(std::forward<Handler>(handler), std::forward<Unknown>(unkown), std::forward<Args>(args)...);
 }
 
 template <typename Handler>
-static co_function _co_call_bind(Handler&& handler)
+static co_function co_bind(Handler&& handler)
 {
 	static_assert(!CheckClassFunc_<RM_REF(Handler)>::value, "");
 	return CoCallBind_<false>::bind(std::forward<Handler>(handler));
@@ -3197,12 +3197,12 @@ private:
 					CHECK_EXCEPTION(ntf, state);
 				}
 			}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
-			_strand->over_timer()->timeout(ms, *timer, wrap_bind_(std::bind([this](const co_notify_node& it)
+			_strand->over_timer()->timeout(ms, *timer, std::bind([this](const co_notify_node& it)
 			{
 				CoNotifyHandlerFace_* popNtf = *it;
 				_waitQueue.erase(it);
 				popNtf->invoke(_alloc, co_async_state::co_async_overtime);
-			}, --_waitQueue.end())));
+			}, --_waitQueue.end()));
 		}
 		else
 		{
@@ -3240,12 +3240,12 @@ private:
 					CHECK_EXCEPTION(ntf, state);
 				}
 			}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
-			_strand->over_timer()->timeout(ms, timer, wrap_bind_(std::bind([this](const co_notify_node& it)
+			_strand->over_timer()->timeout(ms, timer, std::bind([this](const co_notify_node& it)
 			{
 				CoNotifyHandlerFace_* popNtf = *it;
 				_waitQueue.erase(it);
 				popNtf->invoke(_alloc, co_async_state::co_async_overtime);
-			}, --_waitQueue.end())));
+			}, --_waitQueue.end()));
 		}
 		else
 		{
@@ -4099,12 +4099,12 @@ private:
 						CHECK_EXCEPTION(ntf, state);
 					}
 				}, __1, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Args>::forward(msg)...)));
-				_strand->over_timer()->timeout(ms, *timer, wrap_bind_(std::bind([this](const co_notify_node& it)
+				_strand->over_timer()->timeout(ms, *timer, std::bind([this](const co_notify_node& it)
 				{
 					CoNotifyHandlerFace_* pushWait = *it;
 					_pushWait.erase(it);
 					pushWait->invoke(_alloc, co_async_state::co_async_overtime);
-				}, --_pushWait.end())));
+				}, --_pushWait.end()));
 			}
 			else
 			{
@@ -4151,12 +4151,12 @@ private:
 						CHECK_EXCEPTION(ntf, state);
 					}
 				}, __1, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Args>::forward(msg)...)));
-				_strand->over_timer()->timeout(ms, timer, wrap_bind_(std::bind([this](const co_notify_node& it)
+				_strand->over_timer()->timeout(ms, timer, std::bind([this](const co_notify_node& it)
 				{
 					CoNotifyHandlerFace_* pushWait = *it;
 					_pushWait.erase(it);
 					pushWait->invoke(_alloc, co_async_state::co_async_overtime);
-				}, --_pushWait.end())));
+				}, --_pushWait.end()));
 			}
 			else
 			{
@@ -4281,12 +4281,12 @@ private:
 					CHECK_EXCEPTION(ntf, state);
 				}
 			}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
-			_strand->over_timer()->timeout(ms, *timer, wrap_bind_(std::bind([this](const co_notify_node& it)
+			_strand->over_timer()->timeout(ms, *timer, std::bind([this](const co_notify_node& it)
 			{
 				CoNotifyHandlerFace_* popWait = *it;
 				_popWait.erase(it);
 				popWait->invoke(_alloc, co_async_state::co_async_overtime);
-			}, --_popWait.end())));
+			}, --_popWait.end()));
 		}
 		else
 		{
@@ -4330,12 +4330,12 @@ private:
 					CHECK_EXCEPTION(ntf, state);
 				}
 			}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
-			_strand->over_timer()->timeout(ms, timer, wrap_bind_(std::bind([this](const co_notify_node& it)
+			_strand->over_timer()->timeout(ms, timer, std::bind([this](const co_notify_node& it)
 			{
 				CoNotifyHandlerFace_* popWait = *it;
 				_popWait.erase(it);
 				popWait->invoke(_alloc, co_async_state::co_async_overtime);
-			}, --_popWait.end())));
+			}, --_popWait.end()));
 		}
 		else
 		{
@@ -5334,12 +5334,12 @@ private:
 						CHECK_EXCEPTION(ntf, state);
 					}
 				}, __1, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Args>::forward(msg)...)));
-				_strand->over_timer()->timeout(ms, *timer, wrap_bind_(std::bind([this](const co_notify_node& it)
+				_strand->over_timer()->timeout(ms, *timer, std::bind([this](const co_notify_node& it)
 				{
 					CoNotifyHandlerFace_* pushWait = *it;
 					_pushWait.erase(it);
 					pushWait->invoke(_alloc, co_async_state::co_async_overtime);
-				}, --_pushWait.end())));
+				}, --_pushWait.end()));
 			}
 			else
 			{
@@ -5364,12 +5364,12 @@ private:
 				}
 				CHECK_EXCEPTION(ntf, state);
 			}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
-			_strand->over_timer()->timeout(ms, *timer, wrap_bind_(std::bind([this](const co_notify_node& it)
+			_strand->over_timer()->timeout(ms, *timer, std::bind([this](const co_notify_node& it)
 			{
 				CoNotifyHandlerFace_* pushWait = *it;
 				_pushWait.erase(it);
 				pushWait->invoke(_alloc, co_async_state::co_async_overtime);
-			}, --_pushWait.end())));
+			}, --_pushWait.end()));
 			if (!_popWait.empty())
 			{
 				CoNotifyHandlerFace_* popNtf = _popWait.front();
@@ -5405,12 +5405,12 @@ private:
 						CHECK_EXCEPTION(ntf, state);
 					}
 				}, __1, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Args>::forward(msg)...)));
-				_strand->over_timer()->timeout(ms, timer, wrap_bind_(std::bind([this](const co_notify_node& it)
+				_strand->over_timer()->timeout(ms, timer, std::bind([this](const co_notify_node& it)
 				{
 					CoNotifyHandlerFace_* pushWait = *it;
 					_pushWait.erase(it);
 					pushWait->invoke(_alloc, co_async_state::co_async_overtime);
-				}, --_pushWait.end())));
+				}, --_pushWait.end()));
 			}
 			else
 			{
@@ -5432,12 +5432,12 @@ private:
 				}
 				CHECK_EXCEPTION(ntf, state);
 			}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
-			_strand->over_timer()->timeout(ms, timer, wrap_bind_(std::bind([this](const co_notify_node& it)
+			_strand->over_timer()->timeout(ms, timer, std::bind([this](const co_notify_node& it)
 			{
 				CoNotifyHandlerFace_* pushWait = *it;
 				_pushWait.erase(it);
 				pushWait->invoke(_alloc, co_async_state::co_async_overtime);
-			}, --_pushWait.end())));
+			}, --_pushWait.end()));
 			if (!_popWait.empty())
 			{
 				CoNotifyHandlerFace_* popNtf = _popWait.front();
@@ -5550,12 +5550,12 @@ private:
 					CHECK_EXCEPTION(ntf, state);
 				}
 			}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
-			_strand->over_timer()->timeout(ms, *timer, wrap_bind_(std::bind([this](const co_notify_node& it)
+			_strand->over_timer()->timeout(ms, *timer, std::bind([this](const co_notify_node& it)
 			{
 				CoNotifyHandlerFace_* popWait = *it;
 				_popWait.erase(it);
 				popWait->invoke(_alloc, co_async_state::co_async_overtime);
-			}, --_popWait.end())));
+			}, --_popWait.end()));
 			if (!_pushWait.empty())
 			{
 				CoNotifyHandlerFace_* pushNtf = _pushWait.front();
@@ -5603,12 +5603,12 @@ private:
 					CHECK_EXCEPTION(ntf, state);
 				}
 			}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
-			_strand->over_timer()->timeout(ms, timer, wrap_bind_(std::bind([this](const co_notify_node& it)
+			_strand->over_timer()->timeout(ms, timer, std::bind([this](const co_notify_node& it)
 			{
 				CoNotifyHandlerFace_* popWait = *it;
 				_popWait.erase(it);
 				popWait->invoke(_alloc, co_async_state::co_async_overtime);
-			}, --_popWait.end())));
+			}, --_popWait.end()));
 			if (!_pushWait.empty())
 			{
 				CoNotifyHandlerFace_* pushNtf = _pushWait.front();
@@ -6726,12 +6726,12 @@ private:
 						CHECK_EXCEPTION(ntf, state);
 					}
 				}, __1, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Args>::forward(msg)...)));
-				_strand->over_timer()->timeout(ms, *timer, wrap_bind_(std::bind([this](const co_notify_node& it)
+				_strand->over_timer()->timeout(ms, *timer, std::bind([this](const co_notify_node& it)
 				{
 					CoNotifyHandlerFace_* sendWait = *it;
 					_sendQueue.erase(it);
 					sendWait->invoke(_alloc, co_async_state::co_async_overtime);
-				}, --_sendQueue.end())));
+				}, --_sendQueue.end()));
 			}
 			else
 			{
@@ -6785,12 +6785,12 @@ private:
 						CHECK_EXCEPTION(ntf, state);
 					}
 				}, __1, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Args>::forward(msg)...)));
-				_strand->over_timer()->timeout(ms, timer, wrap_bind_(std::bind([this](const co_notify_node& it)
+				_strand->over_timer()->timeout(ms, timer, std::bind([this](const co_notify_node& it)
 				{
 					CoNotifyHandlerFace_* sendWait = *it;
 					_sendQueue.erase(it);
 					sendWait->invoke(_alloc, co_async_state::co_async_overtime);
-				}, --_sendQueue.end())));
+				}, --_sendQueue.end()));
 			}
 			else
 			{
@@ -6929,12 +6929,12 @@ private:
 					CHECK_EXCEPTION(ntf, state);
 				}
 			}, __1, CoChanMsgMove_<Notify>::forward(ntf))));
-			_strand->over_timer()->timeout(ms, *timer, wrap_bind_(std::bind([this](const co_notify_node& it)
+			_strand->over_timer()->timeout(ms, *timer, std::bind([this](const co_notify_node& it)
 			{
 				CoNotifyHandlerFace_* waitNtf = *it;
 				_waitQueue.erase(it);
 				waitNtf->invoke(_alloc, co_async_state::co_async_overtime);
-			}, --_waitQueue.end())));
+			}, --_waitQueue.end()));
 		}
 		else
 		{
@@ -6979,12 +6979,12 @@ private:
 					CHECK_EXCEPTION(ntf, state);
 				}
 			}, __1, CoChanMsgMove_<Notify>::forward(ntf))));
-			_strand->over_timer()->timeout(ms, timer, wrap_bind_(std::bind([this](const co_notify_node& it)
+			_strand->over_timer()->timeout(ms, timer, std::bind([this](const co_notify_node& it)
 			{
 				CoNotifyHandlerFace_* waitNtf = *it;
 				_waitQueue.erase(it);
 				waitNtf->invoke(_alloc, co_async_state::co_async_overtime);
-			}, --_waitQueue.end())));
+			}, --_waitQueue.end()));
 		}
 		else
 		{
@@ -7703,12 +7703,12 @@ private:
 				_alloc.deallocate(timer);
 				CHECK_EXCEPTION(ntf, state);
 			}, __1, CoChanMsgMove_<Notify>::forward(ntf))), id });
-			_strand->over_timer()->timeout(ms, *timer, wrap_bind_(std::bind([this](const msg_list<wait_node>::iterator& it)
+			_strand->over_timer()->timeout(ms, *timer, std::bind([this](const msg_list<wait_node>::iterator& it)
 			{
 				CoNotifyHandlerFace_* waitNtf = it->_ntf;
 				_waitQueue.erase(it);
 				waitNtf->invoke(_alloc, co_async_state::co_async_overtime);
-			}, --_waitQueue.end())));
+			}, --_waitQueue.end()));
 			CHECK_EXCEPTION(lockedNtf);
 		}
 		else
@@ -7735,12 +7735,12 @@ private:
 				_strand->over_timer()->cancel(timer);
 				CHECK_EXCEPTION(ntf, state);
 			}, __1, CoChanMsgMove_<Notify>::forward(ntf))), id });
-			_strand->over_timer()->timeout(ms, timer, wrap_bind_(std::bind([this](const msg_list<wait_node>::iterator& it)
+			_strand->over_timer()->timeout(ms, timer, std::bind([this](const msg_list<wait_node>::iterator& it)
 			{
 				CoNotifyHandlerFace_* waitNtf = it->_ntf;
 				_waitQueue.erase(it);
 				waitNtf->invoke(_alloc, co_async_state::co_async_overtime);
-			}, --_waitQueue.end())));
+			}, --_waitQueue.end()));
 			CHECK_EXCEPTION(lockedNtf);
 		}
 		else
@@ -8340,12 +8340,12 @@ private:
 				_upgradeMutex._alloc.deallocate(timer);
 				CHECK_EXCEPTION(ntf, state);
 			}, __1, CoChanMsgMove_<Notify>::forward(ntf))), id, st_unique });
-			self_strand()->over_timer()->timeout(ms, *timer, wrap_bind_(std::bind([this](const msg_list<wait_node>::iterator& it)
+			self_strand()->over_timer()->timeout(ms, *timer, std::bind([this](const msg_list<wait_node>::iterator& it)
 			{
 				CoNotifyHandlerFace_* waitNtf = it->_ntf;
 				_waitQueue.erase(it);
 				waitNtf->invoke(_upgradeMutex._alloc, co_async_state::co_async_overtime);
-			}, --_waitQueue.end())));
+			}, --_waitQueue.end()));
 			CHECK_EXCEPTION(lockedNtf);
 		}
 		else
@@ -8374,12 +8374,12 @@ private:
 				self_strand()->over_timer()->cancel(timer);
 				CHECK_EXCEPTION(ntf, state);
 			}, __1, CoChanMsgMove_<Notify>::forward(ntf))), id, st_unique });
-			self_strand()->over_timer()->timeout(ms, timer, wrap_bind_(std::bind([this](const msg_list<wait_node>::iterator& it)
+			self_strand()->over_timer()->timeout(ms, timer, std::bind([this](const msg_list<wait_node>::iterator& it)
 			{
 				CoNotifyHandlerFace_* waitNtf = it->_ntf;
 				_waitQueue.erase(it);
 				waitNtf->invoke(_upgradeMutex._alloc, co_async_state::co_async_overtime);
-			}, --_waitQueue.end())));
+			}, --_waitQueue.end()));
 			CHECK_EXCEPTION(lockedNtf);
 		}
 		else
@@ -8486,12 +8486,12 @@ private:
 				_upgradeMutex._alloc.deallocate(timer);
 				CHECK_EXCEPTION(ntf, state);
 			}, __1, CoChanMsgMove_<Notify>::forward(ntf))), id, st_shared });
-			self_strand()->over_timer()->timeout(ms, *timer, wrap_bind_(std::bind([this](const msg_list<wait_node>::iterator& it)
+			self_strand()->over_timer()->timeout(ms, *timer, std::bind([this](const msg_list<wait_node>::iterator& it)
 			{
 				CoNotifyHandlerFace_* waitNtf = it->_ntf;
 				_waitQueue.erase(it);
 				waitNtf->invoke(_upgradeMutex._alloc, co_async_state::co_async_overtime);
-			}, --_waitQueue.end())));
+			}, --_waitQueue.end()));
 			CHECK_EXCEPTION(lockedNtf);
 		}
 		else
@@ -8518,12 +8518,12 @@ private:
 				self_strand()->over_timer()->cancel(timer);
 				CHECK_EXCEPTION(ntf, state);
 			}, __1, CoChanMsgMove_<Notify>::forward(ntf))), id, st_shared });
-			self_strand()->over_timer()->timeout(ms, timer, wrap_bind_(std::bind([this](const msg_list<wait_node>::iterator& it)
+			self_strand()->over_timer()->timeout(ms, timer, std::bind([this](const msg_list<wait_node>::iterator& it)
 			{
 				CoNotifyHandlerFace_* waitNtf = it->_ntf;
 				_waitQueue.erase(it);
 				waitNtf->invoke(_upgradeMutex._alloc, co_async_state::co_async_overtime);
-			}, --_waitQueue.end())));
+			}, --_waitQueue.end()));
 			CHECK_EXCEPTION(lockedNtf);
 		}
 		else
@@ -8902,14 +8902,14 @@ private:
 				_strand->over_timer()->cancel(*timer);
 				timer->~timer_handle();
 				_alloc.deallocate(timer);
-				mtx.lock(id, wrap_bind_(std::bind(CoChanMsgMove_<Notify>::move(ntf), state)));
+				mtx.lock(id, wrap_capture(CoChanMsgMove_<Notify>::move(ntf), state));
 			}, __1, CoChanMsgMove_<Notify>::forward(ntf))));
-			_strand->over_timer()->timeout(ms, *timer, wrap_bind_(std::bind([this](const co_notify_node& it)
+			_strand->over_timer()->timeout(ms, *timer, std::bind([this](const co_notify_node& it)
 			{
 				CoNotifyHandlerFace_* conWait = *it;
 				_waitQueue.erase(it);
 				conWait->invoke(_alloc, co_async_state::co_async_overtime);
-			}, --_waitQueue.end())));
+			}, --_waitQueue.end()));
 			mtx.unlock(id, any_handler());
 		}
 		else
@@ -8927,14 +8927,14 @@ private:
 			_waitQueue.push_back(CoNotifyHandlerFace_::wrap_notify(_alloc, std::bind([this, id, &timer, &mtx](co_async_state state, typename CoChanMsgMove_<Notify>::type& ntf)
 			{
 				_strand->over_timer()->cancel(timer);
-				mtx.lock(id, wrap_bind_(std::bind(CoChanMsgMove_<Notify>::move(ntf), state)));
+				mtx.lock(id, wrap_capture(CoChanMsgMove_<Notify>::move(ntf), state));
 			}, __1, CoChanMsgMove_<Notify>::forward(ntf))));
-			_strand->over_timer()->timeout(ms, timer, wrap_bind_(std::bind([this](const co_notify_node& it)
+			_strand->over_timer()->timeout(ms, timer, std::bind([this](const co_notify_node& it)
 			{
 				CoNotifyHandlerFace_* conWait = *it;
 				_waitQueue.erase(it);
 				conWait->invoke(_alloc, co_async_state::co_async_overtime);
-			}, --_waitQueue.end())));
+			}, --_waitQueue.end()));
 			mtx.unlock(id, any_handler());
 		}
 		else

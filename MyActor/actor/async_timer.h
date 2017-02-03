@@ -147,6 +147,23 @@ class AsyncTimer_ : public ActorTimerFace_
 		wrap_base* _intervalHandler;
 		handler_type _handler;
 	};
+
+	template <typename Handler>
+	struct wrap_ignore_advance
+	{
+		typedef RM_CREF(Handler) handler_type;
+
+		wrap_ignore_advance(bool, Handler& handler)
+			:_handler(std::forward<Handler>(handler)) {}
+
+		void operator()(bool isAdvance)
+		{
+			_handler();
+		}
+
+		handler_type _handler;
+		COPY_CONSTRUCT1(wrap_ignore_advance, _handler);
+	};
 private:
 	AsyncTimer_(ActorTimer_* actorTimer);
 	~AsyncTimer_();
@@ -233,10 +250,7 @@ public:
 	template <typename Handler>
 	void uinterval(long long intervalus, Handler&& handler, bool immed = false)
 	{
-		uinterval2(intervalus, std::bind([](bool isAdvance, Handler& handler)
-		{
-			handler();
-		}, __1, std::forward<Handler>(handler)), immed);
+		uinterval2(intervalus, wrap_ignore_advance<Handler>(bool(), handler), immed);
 	}
 
 	template <typename Handler>
@@ -361,6 +375,44 @@ public:
 private:
 	typedef msg_multimap<long long, timer_handle*> handler_queue;
 
+	template <typename Handler>
+	struct wrap_timer_handler
+	{
+		typedef RM_CREF(Handler) handler_type;
+
+		wrap_timer_handler(timer_handle& timerHandle, Handler& handler)
+			:_timerHandle(timerHandle), _handler(std::forward<Handler>(handler)) {}
+
+		void operator()()
+		{
+			_timerHandle.reset();
+			CHECK_EXCEPTION(_handler);
+		}
+
+		timer_handle& _timerHandle;
+		handler_type _handler;
+		COPY_CONSTRUCT2(wrap_timer_handler, _timerHandle, _handler);
+	};
+
+	template <typename Handler>
+	struct wrap_advance_timer_handler
+	{
+		typedef RM_CREF(Handler) handler_type;
+
+		wrap_advance_timer_handler(timer_handle& timerHandle, Handler& handler)
+			:_timerHandle(timerHandle), _handler(std::forward<Handler>(handler)) {}
+
+		void operator()(bool isAdvance)
+		{
+			_timerHandle.reset();
+			CHECK_EXCEPTION(_handler, isAdvance);
+		}
+
+		timer_handle& _timerHandle;
+		handler_type _handler;
+		COPY_CONSTRUCT2(wrap_advance_timer_handler, _timerHandle, _handler);
+	};
+
 	friend boost_strand;
 	friend qt_strand;
 	friend uv_strand;
@@ -427,11 +479,7 @@ public:
 		assert(timerHandle.completed());
 		timerHandle._isInterval = false;
 		timerHandle._currTimeout = us;
-		timerHandle._handler = AsyncTimer_::wrap_timer_handler(_reuMem, std::bind([&timerHandle](Handler& handler)
-		{
-			timerHandle.reset();
-			CHECK_EXCEPTION(handler);
-		}, std::forward<Handler>(handler)));
+		timerHandle._handler = AsyncTimer_::wrap_timer_handler(_reuMem, wrap_timer_handler<Handler>(timerHandle, handler));
 		_timeout(us, timerHandle);
 	}
 
@@ -442,11 +490,7 @@ public:
 		assert(timerHandle.completed());
 		timerHandle._isInterval = false;
 		timerHandle._currTimeout = us;
-		timerHandle._handler = AsyncTimer_::wrap_advance_timer_handler(_reuMem, std::bind([&timerHandle](bool isAdvance, Handler& handler)
-		{
-			timerHandle.reset();
-			CHECK_EXCEPTION(handler, isAdvance);
-		}, __1, std::forward<Handler>(handler)));
+		timerHandle._handler = AsyncTimer_::wrap_advance_timer_handler(_reuMem, wrap_advance_timer_handler<Handler>(timerHandle, handler));
 		_timeout(us, timerHandle);
 	}
 
@@ -459,11 +503,7 @@ public:
 		assert(_weakStrand.lock()->running_in_this_thread());
 		assert(timerHandle.completed());
 		timerHandle._isInterval = false;
-		timerHandle._handler = AsyncTimer_::wrap_timer_handler(_reuMem, std::bind([&timerHandle](Handler& handler)
-		{
-			timerHandle.reset();
-			CHECK_EXCEPTION(handler);
-		}, std::forward<Handler>(handler)));
+		timerHandle._handler = AsyncTimer_::wrap_timer_handler(_reuMem, wrap_timer_handler<Handler>(timerHandle, handler));
 		_timeout(us, timerHandle, true);
 	}
 
@@ -473,11 +513,7 @@ public:
 		assert(_weakStrand.lock()->running_in_this_thread());
 		assert(timerHandle.completed());
 		timerHandle._isInterval = false;
-		timerHandle._handler = AsyncTimer_::wrap_advance_timer_handler(_reuMem, std::bind([&timerHandle](bool isAdvance, Handler& handler)
-		{
-			timerHandle.reset();
-			CHECK_EXCEPTION(handler, isAdvance);
-		}, __1, std::forward<Handler>(handler)));
+		timerHandle._handler = AsyncTimer_::wrap_advance_timer_handler(_reuMem, wrap_advance_timer_handler<Handler>(timerHandle, handler));
 		_timeout(us, timerHandle, true);
 	}
 
@@ -499,10 +535,7 @@ public:
 	template <typename Handler>
 	void uinterval(long long intervalus, timer_handle& timerHandle, Handler&& handler, bool immed = false)
 	{
-		uinterval2(intervalus, timerHandle, std::bind([](bool isAdvance, Handler& handler)
-		{
-			handler();
-		}, __1, std::forward<Handler>(handler)), immed);
+		uinterval2(intervalus, timerHandle, AsyncTimer_::wrap_ignore_advance<Handler>(bool(), handler), immed);
 	}
 
 	template <typename Handler>
