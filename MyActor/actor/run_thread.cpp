@@ -112,6 +112,25 @@ void run_thread::sleep(int ms)
 {
 	Sleep(ms);
 }
+
+bool run_thread::set_affinity(int i)
+{
+	return mask_affinity((unsigned long long)1 << i);
+}
+
+bool run_thread::mask_affinity(unsigned long long mask)
+{
+	assert(_handle);
+	assert(mask && 0 == (mask & (mask - 1)));
+	return 0 != SetThreadAffinityMask(_handle, (DWORD_PTR)mask);
+}
+
+bool run_thread::set_ideal(int i)
+{
+	assert(_handle);
+	assert(0 <= i);
+	return (DWORD)-1 != SetThreadIdealProcessor(_handle, (DWORD)i);
+}
 //////////////////////////////////////////////////////////////////////////
 
 tls_space::tls_space()
@@ -258,6 +277,41 @@ size_t run_thread::cpu_thread_number()
 void run_thread::sleep(int ms)
 {
 	usleep((__useconds_t)ms * 1000);
+}
+
+bool run_thread::set_affinity(int i)
+{
+	return mask_affinity((unsigned long long)1 << i);
+}
+
+bool run_thread::mask_affinity(unsigned long long mask)
+{
+	assert(_pthread);
+	assert(mask && 0 == (mask & (mask - 1)));
+	cpu_set_t cpumask;
+	if (0 == pthread_getaffinity_np(_pthread, sizeof(cpumask), &cpumask))
+	{
+		for (size_t i = 0; i < fixed_array_length(cpumask.__bits); i++)
+		{
+			if (cpumask.__bits[i])
+			{
+				CPU_ZERO(&cpumask);
+				cpumask.__bits[i] = (__cpu_mask)mask;
+				return 0 == pthread_setaffinity_np(_pthread, sizeof(cpumask), &cpumask);
+			}
+		}
+	}
+	return false;
+}
+
+bool run_thread::set_ideal(int i)
+{
+	assert(_pthread);
+	cpu_set_t cpumask;
+	assert(0 <= i && fixed_array_length(cpumask.__bits) > (size_t)i);
+	CPU_ZERO(&cpumask);
+	cpumask.__bits[i] = 255;
+	return 0 == pthread_setaffinity_np(_pthread, sizeof(cpumask), &cpumask);
 }
 //////////////////////////////////////////////////////////////////////////
 

@@ -88,6 +88,9 @@ public:
 	void join();
 	thread_id get_id();
 	void swap(run_thread& s);
+	bool set_affinity(int i);
+	bool mask_affinity(unsigned long long mask);
+	bool set_ideal(int i);
 	static void set_current_thread_name(const char* name);
 	static thread_id this_thread_id();
 	static size_t cpu_core_number();

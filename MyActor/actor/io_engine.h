@@ -93,6 +93,19 @@ public:
 	size_t ioThreads();
 
 	/*!
+	@brief 设置优先处理器
+	*/
+	bool ioIdeal(int i);
+
+	/*!
+	@brief 设置处理器亲缘性
+	*/
+	bool ioAffinity(const std::initializer_list<int>& indexes);
+	bool ioAffinity(const std::vector<int>& indexes);
+	bool ioAffinityMask(const std::initializer_list<unsigned long long>& masks);
+	bool ioAffinityMask(const std::vector<unsigned long long>& masks);
+
+	/*!
 	@brief 锁定调度器自然退出
 	*/
 	void holdWork();

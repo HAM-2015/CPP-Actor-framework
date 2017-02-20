@@ -394,6 +394,83 @@ size_t io_engine::ioThreads()
 	return _threadsID.size();
 }
 
+bool io_engine::ioIdeal(int i)
+{
+	assert(_opend);
+	for (auto& ele : _runThreads)
+	{
+		if (!ele->set_ideal(i))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+bool io_engine::ioAffinity(const std::initializer_list<int>& indexes)
+{
+	assert(_opend);
+	assert(indexes.size() == _threadsID.size());
+	auto it = indexes.begin();
+	for (auto& ele : _runThreads)
+	{
+		if (!ele->set_affinity(*it))
+		{
+			return false;
+		}
+		++it;
+	}
+	return true;
+}
+
+bool io_engine::ioAffinity(const std::vector<int>& indexes)
+{
+	assert(_opend);
+	assert(indexes.size() == _threadsID.size());
+	auto it = indexes.begin();
+	for (auto& ele : _runThreads)
+	{
+		if (!ele->set_affinity(*it))
+		{
+			return false;
+		}
+		++it;
+	}
+	return true;
+}
+
+bool io_engine::ioAffinityMask(const std::initializer_list<unsigned long long>& masks)
+{
+	assert(_opend);
+	assert(masks.size() == _threadsID.size());
+	auto it = masks.begin();
+	for (auto& ele : _runThreads)
+	{
+		if (!ele->mask_affinity(*it))
+		{
+			return false;
+		}
+		++it;
+	}
+	return true;
+}
+
+bool io_engine::ioAffinityMask(const std::vector<unsigned long long>& masks)
+{
+	assert(_opend);
+	assert(masks.size() == _threadsID.size());
+	auto it = masks.begin();
+	for (auto& ele : _runThreads)
+	{
+		if (!ele->mask_affinity(*it))
+		{
+			return false;
+		}
+		++it;
+	}
+	return true;
+}
+
 void io_engine::holdWork()
 {
 	_ios.dispatch(boost::asio::io_service_work_started());

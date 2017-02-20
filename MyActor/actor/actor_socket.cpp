@@ -696,7 +696,11 @@ bool tcp_socket::init_send_file(HANDLE hFile, unsigned long long* offset, size_t
 //////////////////////////////////////////////////////////////////////////
 
 tcp_acceptor::tcp_acceptor(io_engine& ios)
-:_ios(ios) {}
+:_ios(ios), _nonBlocking(false)
+#ifdef ENABLE_ASIO_PRE_OP
+, _preOption(false)
+#endif
+{}
 
 tcp_acceptor::~tcp_acceptor()
 {
@@ -709,6 +713,7 @@ tcp_socket::result tcp_acceptor::open(const char* ip, unsigned short port)
 		try
 		{
 			_acceptor.create(_ios, boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string(ip), port), false);
+			set_internal_non_blocking();
 			return tcp_socket::result{ 0, 0, true };
 		}
 		catch (const boost::system::system_error& se)
@@ -726,6 +731,7 @@ tcp_socket::result tcp_acceptor::open_v4(unsigned short port)
 		try
 		{
 			_acceptor.create(_ios, boost::asio::ip::tcp::endpoint(boost::asio::ip::address_v4(), port), false);
+			set_internal_non_blocking();
 			return tcp_socket::result{ 0, 0, true };
 		}
 		catch (const boost::system::system_error& se)
@@ -743,6 +749,7 @@ tcp_socket::result tcp_acceptor::open_v6(unsigned short port)
 		try
 		{
 			_acceptor.create(_ios, boost::asio::ip::tcp::endpoint(boost::asio::ip::address_v6(), port), false);
+			set_internal_non_blocking();
 			return tcp_socket::result{ 0, 0, true };
 		}
 		catch (const boost::system::system_error& se)
@@ -765,6 +772,22 @@ tcp_socket::result tcp_acceptor::close()
 	return tcp_socket::result{ 0, 0, false };
 }
 
+void tcp_acceptor::pre_option()
+{
+#ifdef ENABLE_ASIO_PRE_OP
+	_preOption = true;
+#endif
+}
+
+bool tcp_acceptor::is_pre_option()
+{
+#ifdef ENABLE_ASIO_PRE_OP
+	return _preOption;
+#else
+	return false;
+#endif
+}
+
 tcp_socket::result tcp_acceptor::accept(my_actor* host, tcp_socket& socket)
 {
 	my_actor::quit_guard qg(host);
@@ -785,6 +808,55 @@ tcp_socket::result tcp_acceptor::timed_accept(my_actor* host, int ms, tcp_socket
 		close();
 	}, res));
 	return overtime ? tcp_socket::result{ 0, boost::asio::error::timed_out, false } : res;
+}
+
+tcp_socket::result tcp_acceptor::try_accept(tcp_socket& socket)
+{
+	using namespace boost::asio::detail;
+	tcp_socket::result res = { 0, 0, false };
+	if (_nonBlocking)
+	{
+		boost::asio::ip::tcp::endpoint remoteEndpoint;
+		std::size_t addrLen = remoteEndpoint.capacity();
+		boost::system::error_code ec;
+		socket_type newSck = socket_ops::accept(_acceptor->native_handle(), remoteEndpoint.data(), &addrLen, ec);
+		if (invalid_socket != newSck)
+		{
+			if (!ec)
+			{
+				remoteEndpoint.resize(addrLen);
+				socket._socket.assign(remoteEndpoint.protocol(), newSck, ec);
+			}
+			if (ec)
+			{
+				res.code = ec.value();
+				socket_ops::state_type state = socket_ops::stream_oriented;
+				socket_ops::close(newSck, state, true, ec);
+			}
+			else
+			{
+				res.ok = true;
+				res.s = 1;
+			}
+		}
+		else
+		{
+			res.code = ec.value();
+		}
+	}
+	else
+	{
+		res.code = boost::asio::error::would_block;
+	}
+	return res;
+}
+
+void tcp_acceptor::set_internal_non_blocking()
+{
+	boost::system::error_code ec;
+	using namespace boost::asio::detail;
+	socket_ops::state_type state = socket_ops::user_set_non_blocking;
+	_nonBlocking = socket_ops::set_internal_non_blocking(_acceptor->native_handle(), state, true, ec);
 }
 //////////////////////////////////////////////////////////////////////////
 

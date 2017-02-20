@@ -567,6 +567,16 @@ public:
 	tcp_socket::result close();
 
 	/*!
+	@brief linux下优化异步返回（如果有数据，在async_xxx操作中直接回调）
+	*/
+	void pre_option();
+
+	/*!
+	@brief
+	*/
+	bool is_pre_option();
+
+	/*!
 	@brief 用socket侦听客户端连接
 	*/
 	tcp_socket::result accept(my_actor* host, tcp_socket& socket);
@@ -582,6 +592,33 @@ public:
 	template <typename Handler>
 	bool async_accept(tcp_socket& socket, Handler&& handler)
 	{
+#ifdef ENABLE_ASIO_PRE_OP
+		if (is_pre_option())
+		{
+			tcp_socket::result res = try_accept(socket);
+			if (res.ok || !tcp_socket::try_again(res))
+			{
+				if (res.ok)
+				{
+					socket.set_internal_non_blocking();
+				}
+				handler(res);
+				return true;
+			}
+#ifdef HAS_ASIO_HANDLER_IS_TRIED
+			_acceptor->async_accept(socket._socket, wrap_tried(std::bind([&socket](Handler& handler, const boost::system::error_code& ec)
+			{
+				if (!ec)
+				{
+					socket.set_internal_non_blocking();
+				}
+				tcp_socket::result res = { 0, ec.value(), !ec };
+				handler(res);
+			}, std::forward<Handler>(handler), __1)));
+			return false;
+#endif
+		}
+#endif
 		_acceptor->async_accept(socket._socket, std::bind([&socket](Handler& handler, const boost::system::error_code& ec)
 		{
 			if (!ec)
@@ -594,8 +631,15 @@ public:
 		return false;
 	}
 private:
+	void set_internal_non_blocking();
+	tcp_socket::result try_accept(tcp_socket& socket);
+private:
 	io_engine& _ios;
 	stack_obj<boost::asio::ip::tcp::acceptor> _acceptor;
+	bool _nonBlocking;
+#ifdef ENABLE_ASIO_PRE_OP
+	bool _preOption;
+#endif
 	NONE_COPY(tcp_acceptor);
 };
 
