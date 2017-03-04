@@ -682,12 +682,6 @@ struct RefHandler_
 	:_handler(h) {}
 
 	template <typename... Args>
-	R operator()(Args&&... args)
-	{
-		return agent_result<R>::invoke(_handler, std::forward<Args>(args)...);
-	}
-
-	template <typename... Args>
 	R operator()(Args&&... args) const
 	{
 		return agent_result<R>::invoke(_handler, std::forward<Args>(args)...);
@@ -697,10 +691,10 @@ struct RefHandler_
 };
 
 template <typename R = void, typename Handler>
-RefHandler_<RM_REF(Handler), R> wrap_ref_handler(Handler&& handler)
+RefHandler_<Handler, R> wrap_ref_handler(Handler&& handler)
 {
 	static_assert(!std::is_rvalue_reference<Handler&&>::value, "");
-	return RefHandler_<RM_REF(Handler), R>(bool(), handler);
+	return RefHandler_<Handler, R>(bool(), handler);
 }
 
 template <typename... _Types>
@@ -712,20 +706,14 @@ struct WrapLocalHandler_;
 template <typename _Rt, typename... _Types>
 struct wrap_local_handler_face<_Rt(_Types...)>
 {
-	virtual _Rt operator()(_Types...) = 0;
 	virtual _Rt operator()(_Types...) const = 0;
 };
 
 template <typename Handler, typename _Rt, typename... _Types>
 struct WrapLocalHandler_<Handler, _Rt(_Types...)> : public wrap_local_handler_face<_Rt(_Types...)>
 {
-	WrapLocalHandler_(Handler& handler)
+	WrapLocalHandler_(bool, Handler& handler)
 	:_handler(handler) {}
-
-	_Rt operator()(_Types... args)
-	{
-		return agent_result<_Rt>::invoke(_handler, std::forward<_Types>(args)...);
-	}
 
 	_Rt operator()(_Types... args) const
 	{
@@ -734,14 +722,14 @@ struct WrapLocalHandler_<Handler, _Rt(_Types...)> : public wrap_local_handler_fa
 
 	Handler& _handler;
 	NONE_COPY(WrapLocalHandler_);
-	RVALUE_CONSTRUCT(WrapLocalHandler_, _handler);
+	RVALUE_CONSTRUCT1(WrapLocalHandler_, _handler);
 };
 
 template <typename R = void, typename... Types, typename Handler>
-WrapLocalHandler_<RM_REF(Handler), R(Types...)> wrap_local_handler(Handler&& handler)
+WrapLocalHandler_<Handler, R(Types...)> wrap_local_handler(Handler&& handler)
 {
 	static_assert(!std::is_rvalue_reference<Handler&&>::value, "");
-	return WrapLocalHandler_<RM_REF(Handler), R(Types...)>(handler);
+	return WrapLocalHandler_<Handler, R(Types...)>(bool(), handler);
 }
 
 #endif

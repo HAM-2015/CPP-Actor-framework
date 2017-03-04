@@ -225,6 +225,11 @@ class ActorTimerFace_
 	__T__(const __T__&) = delete; \
 	void operator =(const __T__&) = delete;
 
+//禁用对象赋值拷贝
+#define NONE_TARN_COPY(__T__) \
+	void operator =(const __T__&) = delete; \
+	void operator =(__T__&&) = delete;
+
 #ifdef _MSC_VER
 
 #ifdef _WIN64

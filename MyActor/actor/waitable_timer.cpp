@@ -231,7 +231,7 @@ void WaitableTimerEvent_::cancel(boost::system::error_code& ec)
 	if (!_triged)
 	{
 		_triged = true;
-		_timerBoost->post_event(_tcId);
+		_timerBoost->cancel_event();
 	}
 }
 

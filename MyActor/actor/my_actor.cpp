@@ -3381,6 +3381,141 @@ bool my_actor::timed_wait_msg(int ms, msg_handle<>& amh)
 	}, amh);
 }
 
+bool my_actor::_timed_wait_msg(int ms, const wrap_local_handler_face<void()>& th, ActorMsgHandlePush_<>& amh)
+{
+	assert_enter();
+	assert(amh._hostActor && amh._hostActor->self_id() == self_id());
+	if (!amh.read_msg())
+	{
+		BREAK_OF_SCOPE_EXEC(amh.stop_waiting());
+#ifdef ENABLE_CHECK_LOST
+		if (amh._losted && amh._checkLost)
+		{
+			amh.throw_lost_exception();
+		}
+#endif
+		if (ms > 0)
+		{
+			bool overtime = false;
+			delay_trig(ms, [&overtime, &th]
+			{
+				overtime = true;
+				th();
+			});
+			push_yield();
+			if (overtime)
+			{
+				return false;
+			}
+			cancel_delay_trig();
+		}
+		else if (ms < 0)
+		{
+			push_yield();
+		}
+		else
+		{
+			return false;
+		}
+#ifdef ENABLE_CHECK_LOST
+		if (amh._losted && amh._checkLost)
+		{
+			amh.throw_lost_exception();
+		}
+#endif
+	}
+	return true;
+}
+
+bool my_actor::_timed_wait_trig_sign(int ms, int id, const wrap_local_handler_face<void()>& th)
+{
+	assert_enter();
+	assert(id >= 0 && id < 8 * (int)sizeof(void*));
+	const size_t mask = (size_t)1 << id;
+	if (!(mask & _trigSignMask))
+	{
+		BREAK_OF_SCOPE_EXEC(_waitingTrigMask &= (-1 ^ mask));
+		_waitingTrigMask |= mask;
+		if (ms > 0)
+		{
+			bool overtime = false;
+			delay_trig(ms, [&overtime, &th]
+			{
+				overtime = true;
+				th();
+			});
+			push_yield();
+			if (overtime)
+			{
+				return false;
+			}
+			cancel_delay_trig();
+		}
+		else if (ms < 0)
+		{
+			push_yield();
+		}
+		else
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+bool my_actor::_timed_pump_msg(int ms, const wrap_local_handler_face<void()>& th, bool checkDis, const msg_pump_handle<>& pump)
+{
+	assert_enter();
+	assert(!pump.check_closed());
+	assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
+	if (!pump.get()->read_msg())
+	{
+		BREAK_OF_SCOPE_EXEC(pump.get()->stop_waiting());
+		if (checkDis && pump.get()->isDisconnected())
+		{
+			throw msg_pump_handle<>::pump_disconnected(pump.get_id());
+		}
+#ifdef ENABLE_CHECK_LOST
+		if (pump.get()->_losted && pump.get()->_checkLost)
+		{
+			throw msg_pump_handle<>::lost_exception(pump.get_id());
+		}
+#endif
+		pump.get()->_checkDis = checkDis;
+		if (ms >= 0)
+		{
+			bool overtime = false;
+			delay_trig(ms, [&overtime, &th]
+			{
+				overtime = true;
+				th();
+			});
+			push_yield();
+			if (overtime)
+			{
+				return false;
+			}
+			cancel_delay_trig();
+		}
+		else
+		{
+			push_yield();
+		}
+		if (pump.get()->_checkDis)
+		{
+			assert(checkDis);
+			throw msg_pump_handle<>::pump_disconnected(pump.get_id());
+		}
+#ifdef ENABLE_CHECK_LOST
+		if (pump.get()->_losted && pump.get()->_checkLost)
+		{
+			throw msg_pump_handle<>::lost_exception(pump.get_id());
+		}
+#endif
+	}
+	return true;
+}
+
 bool my_actor::try_wait_msg(msg_handle<>& amh)
 {
 	return timed_wait_msg(0, amh);

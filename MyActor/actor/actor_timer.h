@@ -77,6 +77,7 @@ private:
 	void event_handler(int tc);
 #ifdef DISABLE_BOOST_TIMER
 	void post_event(int tc);
+	void cancel_event();
 #endif
 private:
 	void* _timer;

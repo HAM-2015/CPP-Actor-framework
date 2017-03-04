@@ -99,6 +99,7 @@
 #define CHECK_LOST_ALLOC_INDEX 6
 #define CHECK_PUMP_LOST_ALLOC_INDEX 7
 #define ASIO_HANDLER_ALLOC_EX_INDEX 8
+#define IO_ENGINE_INDEX 9
 
 static_assert(0 < MEM_PAGE_SIZE && MEM_PAGE_SIZE % (4 kB) == 0, "");
 static_assert(0 < MEM_POOL_LENGTH && MEM_POOL_LENGTH < 10000000, "");

@@ -180,13 +180,7 @@ public:
 	template <typename Handler>
 	long long utimeout(long long us, Handler&& handler)
 	{
-		assert(self_strand()->running_in_this_thread());
-		assert(!_handler);
-		_isInterval = false;
-		_currTimeout = us;
-		_handler = wrap_timer_handler(_reuMem, std::forward<Handler>(handler));
-		_timerHandle = _actorTimer->timeout(us, _weakThis.lock());
-		return _timerHandle._beginStamp;
+		return _utimeout(us, wrap_timer_handler(_reuMem, std::forward<Handler>(handler)));
 	}
 
 	template <typename Handler>
@@ -198,13 +192,7 @@ public:
 	template <typename Handler>
 	long long utimeout2(long long us, Handler&& handler)
 	{
-		assert(self_strand()->running_in_this_thread());
-		assert(!_handler);
-		_isInterval = false;
-		_currTimeout = us;
-		_handler = wrap_advance_timer_handler(_reuMem, std::forward<Handler>(handler));
-		_timerHandle = _actorTimer->timeout(us, _weakThis.lock());
-		return _timerHandle._beginStamp;
+		return _utimeout(us, wrap_advance_timer_handler(_reuMem, std::forward<Handler>(handler)));
 	}
 
 	/*!
@@ -213,23 +201,13 @@ public:
 	template <typename Handler>
 	long long deadline(long long us, Handler&& handler)
 	{
-		assert(self_strand()->running_in_this_thread());
-		assert(!_handler);
-		_isInterval = false;
-		_handler = wrap_timer_handler(_reuMem, std::forward<Handler>(handler));
-		_timerHandle = _actorTimer->timeout(us, _weakThis.lock(), true);
-		return _timerHandle._beginStamp;
+		return _deadline(us, wrap_timer_handler(_reuMem, std::forward<Handler>(handler)));
 	}
 
 	template <typename Handler>
 	long long deadline2(long long us, Handler&& handler)
 	{
-		assert(self_strand()->running_in_this_thread());
-		assert(!_handler);
-		_isInterval = false;
-		_handler = wrap_advance_timer_handler(_reuMem, std::forward<Handler>(handler));
-		_timerHandle = _actorTimer->timeout(us, _weakThis.lock(), true);
-		return _timerHandle._beginStamp;
+		return _deadline(us, wrap_advance_timer_handler(_reuMem, std::forward<Handler>(handler)));
 	}
 
 	/*!
@@ -256,42 +234,7 @@ public:
 	template <typename Handler>
 	void uinterval2(long long intervalus, Handler&& handler, bool immed = false)
 	{
-		assert(self_strand()->running_in_this_thread());
-		assert(!_handler);
-		_isInterval = true;
-		_currTimeout = intervalus;
-		_handler = wrap_interval_timer_handler(_reuMem, [this, intervalus](bool isAdvance, wrap_base* const thisHandler)
-		{
-			bool sign = false;
-			AsyncTimer_* const this_ = this;
-			wrap_base* const intervalHandler = thisHandler->interval_handler();
-			thisHandler->set_sign(&sign);
-			intervalHandler->invoke(isAdvance);
-			if (!sign)
-			{
-				thisHandler->set_sign(NULL);
-				if (!isAdvance)
-				{
-					long long& deadtime = thisHandler->deadtime_ref();
-					deadtime += intervalus;
-					_timerHandle = _actorTimer->timeout(deadtime, _weakThis.lock(), true);
-				}
-			}
-			else
-			{
-				intervalHandler->destroy(this_->_reuMem);
-			}
-		}, wrap_advance_timer_handler(_reuMem, std::forward<Handler>(handler)));
-		if (immed)
-		{
-			_handler->set_deadtime(get_tick_us());
-			_handler->invoke();
-		}
-		else
-		{
-			_timerHandle = _actorTimer->timeout(intervalus, _weakThis.lock());
-			_handler->set_deadtime(_timerHandle._beginStamp + intervalus);
-		}
+		_uinterval(intervalus, wrap_advance_timer_handler(_reuMem, std::forward<Handler>(handler)), immed);
 	}
 
 	/*!
@@ -330,6 +273,9 @@ public:
 	async_timer clone();
 private:
 	void timeout_handler();
+	long long _utimeout(long long us, wrap_base* handler);
+	long long _deadline(long long us, wrap_base* handler);
+	void _uinterval(long long intervalus, wrap_base* handler, bool immed);
 
 	template <typename Handler>
 	static wrap_base* wrap_timer_handler(reusable_mem& reuMem, Handler&& handler)
@@ -475,23 +421,13 @@ public:
 	template <typename Handler>
 	void utimeout(long long us, timer_handle& timerHandle, Handler&& handler)
 	{
-		assert(_weakStrand.lock()->running_in_this_thread());
-		assert(timerHandle.completed());
-		timerHandle._isInterval = false;
-		timerHandle._currTimeout = us;
-		timerHandle._handler = AsyncTimer_::wrap_timer_handler(_reuMem, wrap_timer_handler<Handler>(timerHandle, handler));
-		_timeout(us, timerHandle);
+		_utimeout(us, timerHandle, AsyncTimer_::wrap_timer_handler(_reuMem, wrap_timer_handler<Handler>(timerHandle, handler)));
 	}
 
 	template <typename Handler>
 	void utimeout2(long long us, timer_handle& timerHandle, Handler&& handler)
 	{
-		assert(_weakStrand.lock()->running_in_this_thread());
-		assert(timerHandle.completed());
-		timerHandle._isInterval = false;
-		timerHandle._currTimeout = us;
-		timerHandle._handler = AsyncTimer_::wrap_advance_timer_handler(_reuMem, wrap_advance_timer_handler<Handler>(timerHandle, handler));
-		_timeout(us, timerHandle);
+		_utimeout(us, timerHandle, AsyncTimer_::wrap_advance_timer_handler(_reuMem, wrap_advance_timer_handler<Handler>(timerHandle, handler)));
 	}
 
 	/*!
@@ -500,21 +436,13 @@ public:
 	template <typename Handler>
 	void deadline(long long us, timer_handle& timerHandle, Handler&& handler)
 	{
-		assert(_weakStrand.lock()->running_in_this_thread());
-		assert(timerHandle.completed());
-		timerHandle._isInterval = false;
-		timerHandle._handler = AsyncTimer_::wrap_timer_handler(_reuMem, wrap_timer_handler<Handler>(timerHandle, handler));
-		_timeout(us, timerHandle, true);
+		_deadline(us, timerHandle, AsyncTimer_::wrap_timer_handler(_reuMem, wrap_timer_handler<Handler>(timerHandle, handler)));
 	}
 
 	template <typename Handler>
 	void deadline2(long long us, timer_handle& timerHandle, Handler&& handler)
 	{
-		assert(_weakStrand.lock()->running_in_this_thread());
-		assert(timerHandle.completed());
-		timerHandle._isInterval = false;
-		timerHandle._handler = AsyncTimer_::wrap_advance_timer_handler(_reuMem, wrap_advance_timer_handler<Handler>(timerHandle, handler));
-		_timeout(us, timerHandle, true);
+		_deadline(us, timerHandle, AsyncTimer_::wrap_advance_timer_handler(_reuMem, wrap_advance_timer_handler<Handler>(timerHandle, handler)));
 	}
 
 	/*!
@@ -541,42 +469,7 @@ public:
 	template <typename Handler>
 	void uinterval2(long long intervalus, timer_handle& timerHandle, Handler&& handler, bool immed = false)
 	{
-		assert(self_strand()->running_in_this_thread());
-		assert(timerHandle.completed());
-		timerHandle._isInterval = true;
-		timerHandle._currTimeout = intervalus;
-		timerHandle._handler = AsyncTimer_::wrap_interval_timer_handler(_reuMem, [this, &timerHandle, intervalus](bool isAdvance, AsyncTimer_::wrap_base* const thisHandler)
-		{
-			bool sign = false;
-			overlap_timer* const this_ = this;
-			AsyncTimer_::wrap_base* const intervalHandler = thisHandler->interval_handler();
-			thisHandler->set_sign(&sign);
-			intervalHandler->invoke(isAdvance);
-			if (!sign)
-			{
-				thisHandler->set_sign(NULL);
-				if (!isAdvance)
-				{
-					long long& deadtime = thisHandler->deadtime_ref();
-					deadtime += intervalus;
-					_timeout(deadtime, timerHandle, true);
-				}
-			}
-			else
-			{
-				intervalHandler->destroy(this_->_reuMem);
-			}
-		}, AsyncTimer_::wrap_advance_timer_handler(_reuMem, std::forward<Handler>(handler)));
-		if (immed)
-		{
-			timerHandle._handler->set_deadtime(get_tick_us());
-			timerHandle._handler->invoke();
-		}
-		else
-		{
-			_timeout(intervalus, timerHandle);
-			timerHandle._handler->set_deadtime(timerHandle._timestamp + intervalus);
-		}
+		_uinterval(intervalus, timerHandle, AsyncTimer_::wrap_advance_timer_handler(_reuMem, std::forward<Handler>(handler)), immed);
 	}
 
 	/*!
@@ -608,10 +501,14 @@ private:
 	void event_handler(int tc);
 #ifdef DISABLE_BOOST_TIMER
 	void post_event(int tc);
+	void cancel_event();
 #endif
 private:
 	void _cancel(timer_handle& timerHandle);
-	void _timeout(long long us, timer_handle& timerHandle, bool deadline = false);
+	void _timeout(long long us, timer_handle& timerHandle, bool deadline);
+	void _utimeout(long long us, timer_handle& timerHandle, AsyncTimer_::wrap_base* handler);
+	void _deadline(long long us, timer_handle& timerHandle, AsyncTimer_::wrap_base* handler);
+	void _uinterval(long long intervalus, timer_handle& timerHandle, AsyncTimer_::wrap_base* handler, bool immed);
 private:
 	void* _timer;
 	std::weak_ptr<boost_strand>& _weakStrand;

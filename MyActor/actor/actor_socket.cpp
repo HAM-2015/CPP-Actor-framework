@@ -26,6 +26,28 @@ tcp_socket::result tcp_socket::close()
 	return result{ 0, ec.value(), !ec };
 }
 
+tcp_socket::result tcp_socket::assign(boost::asio::detail::socket_type sckFd)
+{
+	boost::system::error_code ec;
+	_socket.assign(boost::asio::ip::tcp::endpoint().protocol(), sckFd, ec);
+	if (!ec)
+	{
+		set_internal_non_blocking();
+	}
+	return result{ 0, ec.value(), !ec };
+}
+
+tcp_socket::result tcp_socket::assign_v6(boost::asio::detail::socket_type sckFd)
+{
+	boost::system::error_code ec;
+	_socket.assign(boost::asio::ip::tcp::endpoint(boost::asio::ip::address_v6(), 0).protocol(), sckFd, ec);
+	if (!ec)
+	{
+		set_internal_non_blocking();
+	}
+	return result{ 0, ec.value(), !ec };
+}
+
 tcp_socket::result tcp_socket::no_delay()
 {
 	boost::system::error_code ec;
@@ -760,6 +782,44 @@ tcp_socket::result tcp_acceptor::open_v6(unsigned short port)
 	return tcp_socket::result{ 0, 0, false };
 }
 
+tcp_socket::result tcp_acceptor::assign(boost::asio::detail::socket_type accFd)
+{
+	try
+	{
+		_acceptor.create(_ios);
+		boost::system::error_code ec;
+		_acceptor->assign(boost::asio::ip::tcp::endpoint().protocol(), accFd, ec);
+		if (!ec)
+		{
+			set_internal_non_blocking();
+		}
+		return tcp_socket::result{ 0, ec.value(), !ec };		
+	}
+	catch (const boost::system::system_error& se)
+	{
+		return tcp_socket::result{ 0, se.code().value(), !se.code() };
+	}
+}
+
+tcp_socket::result tcp_acceptor::assign_v6(boost::asio::detail::socket_type accFd)
+{
+	try
+	{
+		_acceptor.create(_ios);
+		boost::system::error_code ec;
+		_acceptor->assign(boost::asio::ip::tcp::endpoint(boost::asio::ip::address_v6(), 0).protocol(), accFd, ec);
+		if (!ec)
+		{
+			set_internal_non_blocking();
+		}
+		return tcp_socket::result{ 0, ec.value(), !ec };
+	}
+	catch (const boost::system::system_error& se)
+	{
+		return tcp_socket::result{ 0, se.code().value(), !se.code() };
+	}
+}
+
 tcp_socket::result tcp_acceptor::close()
 {
 	if (_acceptor.has())
@@ -835,6 +895,7 @@ tcp_socket::result tcp_acceptor::try_accept(tcp_socket& socket)
 			}
 			else
 			{
+				socket.set_internal_non_blocking();
 				res.ok = true;
 				res.s = 1;
 			}
@@ -935,6 +996,28 @@ udp_socket::result udp_socket::open_bind_v6(unsigned short port)
 		return bind_v6(port);
 	}
 	return res;
+}
+
+udp_socket::result udp_socket::assign(boost::asio::detail::socket_type sckFd)
+{
+	boost::system::error_code ec;
+	_socket.assign(boost::asio::ip::udp::endpoint().protocol(), sckFd, ec);
+	if (!ec)
+	{
+		set_internal_non_blocking();
+	}
+	return result{ 0, ec.value(), !ec };
+}
+
+udp_socket::result udp_socket::assign_v6(boost::asio::detail::socket_type sckFd)
+{
+	boost::system::error_code ec;
+	_socket.assign(boost::asio::ip::udp::endpoint(boost::asio::ip::address_v6(), 0).protocol(), sckFd, ec);
+	if (!ec)
+	{
+		set_internal_non_blocking();
+	}
+	return result{ 0, ec.value(), !ec };
 }
 
 udp_socket::result udp_socket::close()

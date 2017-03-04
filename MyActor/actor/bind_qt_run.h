@@ -252,7 +252,7 @@ protected:
 		return new(reuMem.allocate(sizeof(handler_type)))handler_type(mutex, deadSign, running, handler);
 	}
 
-	template <typename Handler, typename R>
+	template <typename Handler>
 	struct wrap_run_in_ui_handler
 	{
 		typedef RM_CREF(Handler) handler_type;
@@ -261,15 +261,15 @@ protected:
 			:_this(ui), _handler(std::forward<Handler>(handler)) {}
 
 		template <typename... Args>
-		R operator()(my_actor* host, Args&&... args)
+		auto operator()(my_actor* host, Args&&... args)->decltype(_handler(std::forward<Args>(args)...))
 		{
 			if (_this->run_in_ui_thread())
 			{
-				return agent_result<R>::invoke(_handler, std::forward<Args>(args)...);
+				return _handler(std::forward<Args>(args)...);
 			}
 			else
 			{
-				stack_obj<R> result;
+				stack_obj<decltype(_handler(std::forward<Args>(args)...))> result;
 				run_in_qt_ui_at(_this, host, stack_agent_result::invoke(result, _handler, (Args&&)args...));
 				return stack_obj_move::move(result);
 			}
@@ -475,10 +475,10 @@ public:
 	/*!
 	@brief 绑定一个函数到UI线程中执行
 	*/
-	template <typename R, typename Handler>
-	wrap_run_in_ui_handler<Handler, R> wrap_run_in_ui(Handler&& handler)
+	template <typename Handler>
+	wrap_run_in_ui_handler<Handler> wrap_run_in_ui(Handler&& handler)
 	{
-		return wrap_run_in_ui_handler<Handler, R>(this, handler);
+		return wrap_run_in_ui_handler<Handler>(this, handler);
 	}
 
 	/*!
@@ -654,10 +654,10 @@ public:
 		return bind_qt_run_base::wrap_check_close();
 	}
 
-	template <typename R = void, typename Handler>
-	wrap_run_in_ui_handler<Handler, R> wrap_run_in_ui(Handler&& handler)
+	template <typename Handler>
+	wrap_run_in_ui_handler<Handler> wrap_run_in_ui(Handler&& handler)
 	{
-		return bind_qt_run_base::wrap_run_in_ui<R>(std::forward<Handler>(handler));
+		return bind_qt_run_base::wrap_run_in_ui(std::forward<Handler>(handler));
 	}
 
 	void enter_wait_close()

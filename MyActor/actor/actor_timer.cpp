@@ -68,10 +68,10 @@ ActorTimer_::timer_handle ActorTimer_::timeout(long long us, actor_face_handle&&
 	}
 	else if ((unsigned long long)et < (unsigned long long)_extFinishTime)
 	{//定时期限前于当前定时器期限，取消后重新计时
-		boost::system::error_code ec;
-		as_ptype<timer_type>(_timer)->cancel(ec);
 		_timerCount++;
 		_extFinishTime = et;
+		boost::system::error_code ec;
+		as_ptype<timer_type>(_timer)->cancel(ec);
 		timer_loop(et, et - timerHandle._beginStamp);
 	}
 	return timerHandle;
@@ -87,13 +87,13 @@ void ActorTimer_::cancel(timer_handle& th)
 		handler_queue::iterator itNode = th._queueNode;
 		if (_handlerQueue.size() == 1)
 		{
+			_timerCount++;
 			_extMaxTick = 0;
+			_looping = false;
 			_handlerQueue.erase(itNode);
 			//如果没有定时任务就退出定时循环
 			boost::system::error_code ec;
 			as_ptype<timer_type>(_timer)->cancel(ec);
-			_timerCount++;
-			_looping = false;
 		}
 		else if (itNode->first == _extMaxTick)
 		{
@@ -145,6 +145,16 @@ void ActorTimer_::post_event(int tc)
 			_lockIos.destroy();
 		}
 	});
+}
+
+void ActorTimer_::cancel_event()
+{
+	assert(_lockStrand && _lockStrand->running_in_this_thread());
+	if (!_looping)
+	{
+		_lockStrand.reset();
+		_lockIos.destroy();
+	}
 }
 #endif
 

@@ -148,7 +148,12 @@ public:
 	/*!
 	@brief 切换到一个安全栈内执行
 	*/
-	void switchInvoke(wrap_local_handler_face<void()>* handler);
+	void switchInvoke(const wrap_local_handler_face<void()>& handler);
+
+	/*!
+	@brief 当前线程所依赖的io_engine
+	*/
+	static io_engine* currentEngine();
 
 	/*!
 	@brief 在非ios线程中初始化一个tls空间

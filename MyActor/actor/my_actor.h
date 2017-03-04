@@ -4592,68 +4592,36 @@ class my_actor : public ActorTimerFace_
 		static msg_map_shared_alloc<id_key, std::shared_ptr<pck_base> >::shared_node_alloc* _msgTypeMapAll;
 	};
 
-	template <typename DST, typename ARG>
+	template <typename R>
 	struct async_invoke_handler
 	{
-		template <typename ActorHandle>
-		async_invoke_handler(ActorHandle&& host, bool* sign, DST& dst)
-			:_sharedThis(std::forward<ActorHandle>(host)), _sign(sign), _dstRec(dst) {}
-
-		async_invoke_handler(const async_invoke_handler<DST, ARG>& s)
-			:_sharedThis(s._sharedThis), _dstRec(s._dstRec), _sign(s._sign) {}
-
-		async_invoke_handler(async_invoke_handler<DST, ARG>&& s)
-			:_sharedThis(std::move(s._sharedThis)), _dstRec(s._dstRec), _sign(s._sign)
-		{
-			s._sign = NULL;
-		}
+		async_invoke_handler(actor_handle&& host, bool* sign, stack_obj<R>& dst)
+			:_sharedThis(std::move(host)), _sign(sign), _dstRec(dst) {}
 
 		template <typename Arg>
 		void operator ()(Arg&& arg)
 		{
-			_sharedThis->_trig_handler(_sign, _dstRec, std::forward<Arg>(arg));
+			_dstRec.create(std::forward<Arg>(arg));
+			_sharedThis->tick_handler(_sign);
+		}
+
+		void operator ()()
+		{
+			_sharedThis->tick_handler(_sign);
 		}
 
 		actor_handle _sharedThis;
-		DST& _dstRec;
+		stack_obj<R>& _dstRec;
 		bool* _sign;
 	private:
 		void operator =(const async_invoke_handler&) = delete;
-	};
-
-	template <typename DST, typename ARG>
-	struct async_invoke_handler<DST, ARG&>
-	{
-		template <typename ActorHandle>
-		async_invoke_handler(ActorHandle&& host, bool* sign, DST& dst)
-			:_sharedThis(std::forward<ActorHandle>(host)), _sign(sign), _dstRec(dst) {}
-
-		async_invoke_handler(const async_invoke_handler<DST, ARG&>& s)
-			:_sharedThis(s._sharedThis), _dstRec(s._dstRec), _sign(s._sign) {}
-
-		async_invoke_handler(async_invoke_handler<DST, ARG&>&& s)
-			:_sharedThis(std::move(s._sharedThis)), _dstRec(s._dstRec), _sign(s._sign)
-		{
-			s._sign = NULL;
-		}
-
-		void operator ()(const TYPE_PIPE(ARG&)& arg)
-		{
-			_sharedThis->_trig_handler(_sign, _dstRec, arg);
-		}
-
-		actor_handle _sharedThis;
-		DST& _dstRec;
-		bool* _sign;
-	private:
-		void operator =(const async_invoke_handler&) = delete;
+		COPY_CONSTRUCT3(async_invoke_handler, _sharedThis, _dstRec, _sign);
 	};
 
 	struct wrap_trig_run_one
 	{
-		template <typename ActorHandle>
-		wrap_trig_run_one(ActorHandle&& self, bool* sign)
-			:_lockSelf(std::forward<ActorHandle>(self)), _sign(sign) {}
+		wrap_trig_run_one(actor_handle&& self, bool* sign)
+			:_lockSelf(std::move(self)), _sign(sign) {}
 
 		void operator()()
 		{
@@ -4676,19 +4644,11 @@ class my_actor : public ActorTimerFace_
 			}
 		}
 
-		wrap_trig_run_one(const wrap_trig_run_one& s)
-			:_lockSelf(s._lockSelf), _sign(s._sign) {}
-
-		wrap_trig_run_one(wrap_trig_run_one&& s)
-			:_lockSelf(std::move(s._lockSelf)), _sign(s._sign)
-		{
-			s._sign = NULL;
-		}
-
 		actor_handle _lockSelf;
 		bool* _sign;
 	private:
 		void operator =(const wrap_trig_run_one&) = delete;
+		COPY_CONSTRUCT2(wrap_trig_run_one, _lockSelf, _sign);
 	};
 
 	struct wrap_check_trig_run_one
@@ -4719,20 +4679,12 @@ class my_actor : public ActorTimerFace_
 			}
 		}
 
-		wrap_check_trig_run_one(const wrap_check_trig_run_one& s)
-			:_closed(s._closed), _lockSelf(s._lockSelf), _sign(s._sign) {}
-
-		wrap_check_trig_run_one(wrap_check_trig_run_one&& s)
-			:_closed(std::move(s._closed)), _lockSelf(std::move(s._lockSelf)), _sign(s._sign)
-		{
-			s._sign = NULL;
-		}
-
 		shared_bool _closed;
 		actor_handle _lockSelf;
 		bool* _sign;
 	private:
 		void operator =(const wrap_check_trig_run_one&) = delete;
+		COPY_CONSTRUCT3(wrap_check_trig_run_one, _closed, _lockSelf, _sign);
 	};
 
 	struct wrap_timer_handler_face
@@ -5279,27 +5231,9 @@ public:
 	@brief 发送一个异步函数到shared_strand中执行（如果是和当前一样的shared_strand直接执行），配合quit_guard使用防止引用失效，完成后返回
 	*/
 	template <typename H>
-	__yield_interrupt void send(const shared_strand& exeStrand, H&& h)
+	__yield_interrupt auto send(const shared_strand& exeStrand, H&& h)->decltype(h())
 	{
-		assert_enter();
-		quit_guard qg(this);
-		if (exeStrand != _strand)
-		{
-			exeStrand->post(std::bind([&h](actor_handle& shared_this)
-			{
-				CHECK_EXCEPTION(h);
-				my_actor* const self = shared_this.get();
-				self->_strand->post(std::bind([](actor_handle& shared_this)
-				{
-					shared_this->pull_yield();
-				}, std::move(shared_this)));
-			}, shared_from_this()));
-			push_yield();
-		}
-		else
-		{
-			CHECK_EXCEPTION(h);
-		}
+		return send<decltype(h())>(exeStrand, std::forward<H>(h));
 	}
 
 	template <typename R, typename H>
@@ -5312,7 +5246,7 @@ public:
 			stack_obj<R> res;
 			exeStrand->post(std::bind([&h, &res](actor_handle& shared_this)
 			{
-				CHECK_EXCEPTION(res.create, h());
+				CHECK_EXCEPTION(stack_agent_result::invoke, res, h);
 				my_actor* const self = shared_this.get();
 				self->_strand->post(std::bind([](actor_handle& shared_this)
 				{
@@ -5320,7 +5254,7 @@ public:
 				}, std::move(shared_this)));
 			}, shared_from_this()));
 			push_yield();
-			return std::move(res.get());
+			return stack_obj_move::move(res);
 		}
 		return h();
 	}
@@ -5329,16 +5263,9 @@ public:
 	@brief 往当前"系统线程"堆栈中抛出一个任务，完成后返回，（用于消耗堆栈高的函数）
 	*/
 	template <typename H>
-	__yield_interrupt void run_in_thread_stack(H&& h)
+	__yield_interrupt auto run_in_thread_stack(H&& h)->decltype(h())
 	{
-		assert_enter();
-		quit_guard qg(this);
-		_strand->next_tick(std::bind([&h](actor_handle& shared_this)
-		{
-			CHECK_EXCEPTION(h);
-			shared_this->pull_yield();
-		}, shared_from_this()));
-		push_yield();
+		return run_in_thread_stack<decltype(h())>(std::forward<H>(h));
 	}
 
 	template <typename R, typename H>
@@ -5349,22 +5276,30 @@ public:
 		stack_obj<R> res;
 		_strand->next_tick(std::bind([&h, &res](actor_handle& shared_this)
 		{
-			CHECK_EXCEPTION(res.create, h());
+			CHECK_EXCEPTION(stack_agent_result::invoke, res, h);
 			shared_this->pull_yield();
 		}, shared_from_this()));
 		push_yield();
-		return std::move(res.get());
+		return stack_obj_move::move(res);
 	}
 
 	/*!
 	@brief 切换到一个大空间栈内运行一个任务，里面不能进行切换操作
 	*/
 	template <typename H>
-	void run_in_safe_stack(H&& h)
+	auto run_in_safe_stack(H&& h)->decltype(h())
+	{
+		return run_in_safe_stack<decltype(h())>(std::forward<H>(h));
+	}
+
+	template <typename R, typename H>
+	R run_in_safe_stack(H&& h)
 	{
 		assert_enter();
-		auto wh = wrap_local_handler(h);
-		self_io_engine().switchInvoke(&wh);
+		stack_obj<R> res;
+		auto th = [&]{CHECK_EXCEPTION(stack_agent_result::invoke, res, h); };
+		self_io_engine().switchInvoke(wrap_local_handler(th));
+		return stack_obj_move::move(res);
 	}
 
 	/*!
@@ -5372,37 +5307,29 @@ public:
 	配合quit_guard使用防止引用失效，完成后返回
 	*/
 	template <typename H>
-	__yield_interrupt void async_send(const shared_strand& exeStrand, H&& h)
+	__yield_interrupt auto async_send(const shared_strand& exeStrand, H&& h)->decltype(h())
 	{
-		assert_enter();
-		bool sign = false;
-		exeStrand->asyncInvokeVoid(std::forward<H>(h), std::bind([&sign](actor_handle& shared_this)
-		{
-			my_actor* const self = shared_this.get();
-			self->_strand->distribute(wrap_trig_run_one(std::move(shared_this), &sign));
-		}, shared_from_this()));
-		assert(!sign);
-		sign = true;
-		push_yield();
+		return async_send<decltype(h())>(exeStrand, std::forward<H>(h));
 	}
 
 	template <typename R, typename H>
 	__yield_interrupt R async_send(const shared_strand& exeStrand, H&& h)
 	{
 		assert_enter();
+		quit_guard qg(this);
 		bool sign = false;
-		std::tuple<stack_obj<TYPE_PIPE(R)>> dstRec;
-		exeStrand->asyncInvoke(std::forward<H>(h), async_invoke_handler<std::tuple<stack_obj<TYPE_PIPE(R)>>, R>(shared_from_this(), &sign, dstRec));
+		stack_obj<R> res;
+		exeStrand->async_invoke(std::forward<H>(h), async_invoke_handler<R>(shared_from_this(), &sign, res));
 		assert(!sign);
 		sign = true;
 		push_yield();
-		return std::move(std::get<0>(dstRec).get());
+		return stack_obj_move::move(res);
 	}
 
 	template <typename H>
-	__yield_interrupt void async_send_self(H&& h)
+	__yield_interrupt auto async_send_self(H&& h)->decltype(h())
 	{
-		async_send(_strand, std::forward<H>(h));
+		return async_send_self<decltype(h())>(std::forward<H>(h));
 	}
 
 	template <typename R, typename H>
@@ -5484,8 +5411,7 @@ private:
 	template <typename H>
 	__yield_interrupt void run_in_safe_stack_after_quited(H&& h)
 	{
-		auto wh = wrap_local_handler(h);
-		self_io_engine().switchInvoke(&wh);
+		self_io_engine().switchInvoke(wrap_local_handler(h));
 	}
 public:
 	/*!
@@ -5619,8 +5545,12 @@ private:
 		}
 	}
 private:
-	template <typename TimedHandler, typename DST, typename... Args>
-	bool _timed_wait_msg(ActorMsgHandlePush_<Args...>& amh, TimedHandler&& th, DST& dstRec, const int ms)
+	bool _timed_wait_msg(int ms, const wrap_local_handler_face<void()>& th, ActorMsgHandlePush_<>& amh);
+
+	bool _timed_wait_trig_sign(int ms, int id, const wrap_local_handler_face<void()>& th);
+
+	template <typename DST, typename... Args>
+	bool _timed_wait_msg(int ms, const wrap_local_handler_face<void()>& th, ActorMsgHandlePush_<Args...>& amh, DST& dstRec)
 	{
 		assert(amh._hostActor && amh._hostActor->self_id() == self_id());
 		if (!amh.read_msg(dstRec))
@@ -5665,8 +5595,14 @@ private:
 		return true;
 	}
 
+	template <typename TimedHandler, typename DST, typename... Args>
+	bool _timed_wait_msg(ActorMsgHandlePush_<Args...>& amh, TimedHandler&& th, DST& dstRec, int ms)
+	{
+		return _timed_wait_msg(ms, wrap_local_handler(th), amh, dstRec);
+	}
+
 	template <typename DST, typename... Args>
-	bool _timed_wait_msg(ActorMsgHandlePush_<Args...>& amh, DST& dstRec, const int ms)
+	bool _timed_wait_msg(ActorMsgHandlePush_<Args...>& amh, DST& dstRec, int ms)
 	{
 		return _timed_wait_msg(amh, [this]
 		{
@@ -5744,48 +5680,7 @@ public:
 	template <typename TimedHandler>
 	__yield_interrupt bool timed_wait_msg(int ms, TimedHandler&& th, msg_handle<>& amh)
 	{
-		assert_enter();
-		assert(amh._hostActor && amh._hostActor->self_id() == self_id());
-		if (!amh.read_msg())
-		{
-			BREAK_OF_SCOPE_EXEC(amh.stop_waiting());
-#ifdef ENABLE_CHECK_LOST
-			if (amh._losted && amh._checkLost)
-			{
-				amh.throw_lost_exception();
-			}
-#endif
-			if (ms > 0)
-			{
-				bool overtime = false;
-				delay_trig(ms, [&overtime, &th]
-				{
-					overtime = true;
-					th();
-				});
-				push_yield();
-				if (overtime)
-				{
-					return false;
-				}
-				cancel_delay_trig();
-			}
-			else if (ms < 0)
-			{
-				push_yield();
-			}
-			else
-			{
-				return false;
-			}
-#ifdef ENABLE_CHECK_LOST
-			if (amh._losted && amh._checkLost)
-			{
-				amh.throw_lost_exception();
-			}
-#endif
-		}
-		return true;
+		return _timed_wait_msg(ms, wrap_local_handler(th), amh);
 	}
 
 	template <typename... Args, typename Handler>
@@ -6137,52 +6032,10 @@ public:
 
 	__yield_interrupt bool timed_wait_trig(int ms, trig_handle<>& ath);
 
-
 	template <typename TimedHandler>
 	__yield_interrupt bool timed_wait_trig(int ms, TimedHandler&& th, trig_handle<>& ath)
 	{
-		assert_enter();
-		assert(ath._hostActor && ath._hostActor->self_id() == self_id());
-		if (!ath.read_msg())
-		{
-			BREAK_OF_SCOPE_EXEC(ath.stop_waiting());
-#ifdef ENABLE_CHECK_LOST
-			if (ath._losted && ath._checkLost)
-			{
-				ath.throw_lost_exception();
-			}
-#endif
-			if (ms > 0)
-			{
-				bool overtime = false;
-				delay_trig(ms, [&overtime, &th]
-				{
-					overtime = true;
-					th();
-				});
-				push_yield();
-				if (overtime)
-				{
-					return false;
-				}
-				cancel_delay_trig();
-			}
-			else if (ms < 0)
-			{
-				push_yield();
-			}
-			else
-			{
-				return false;
-			}
-#ifdef ENABLE_CHECK_LOST
-			if (ath._losted && ath._checkLost)
-			{
-				ath.throw_lost_exception();
-			}
-#endif
-		}
-		return true;
+		return _timed_wait_msg(ms, wrap_local_handler(th), ath);
 	}
 
 	template <typename... Args, typename Handler>
@@ -6292,38 +6145,7 @@ public:
 	template <typename TimedHandler>
 	__yield_interrupt bool timed_wait_trig_sign(int ms, int id, TimedHandler&& th)
 	{
-		assert_enter();
-		assert(id >= 0 && id < 8 * (int)sizeof(void*));
-		const size_t mask = (size_t)1 << id;
-		if (!(mask & _trigSignMask))
-		{
-			BREAK_OF_SCOPE_EXEC(_waitingTrigMask &= (-1 ^ mask));
-			_waitingTrigMask |= mask;
-			if (ms > 0)
-			{
-				bool overtime = false;
-				delay_trig(ms, [&overtime, &th]
-				{
-					overtime = true;
-					th();
-				});
-				push_yield();
-				if (overtime)
-				{
-					return false;
-				}
-				cancel_delay_trig();
-			}
-			else if (ms < 0)
-			{
-				push_yield();
-			}
-			else
-			{
-				return false;
-			}
-		}
-		return true;
+		return _timed_wait_trig_sign(ms, id, wrap_local_handler(th));
 	}
 
 	/*!
@@ -6938,7 +6760,7 @@ public:
 	{
 		typedef post_actor_msg<Args...> post_type;
 
-		return _strand->syncInvoke<post_type>([&]()->post_type
+		return _strand->sync_invoke<post_type>([&]()->post_type
 		{
 			typedef MsgPool_<Args...> pool_type;
 			if (!parent_actor() && !_started && !_quited)
@@ -7092,8 +6914,10 @@ private:
 		return mh;
 	}
 private:
-	template <typename TimedHandler, typename DST, typename... Args>
-	bool _timed_pump_msg(const msg_pump_handle<Args...>& pump, TimedHandler&& th, DST& dstRec, int ms, bool checkDis)
+	bool _timed_pump_msg(int ms, const wrap_local_handler_face<void()>& th, bool checkDis, const msg_pump_handle<>& pump);
+
+	template <typename DST, typename... Args>
+	bool _timed_pump_msg(int ms, const wrap_local_handler_face<void()>& th, bool checkDis, const msg_pump_handle<Args...>& pump, DST& dstRec)
 	{
 		assert(!pump.check_closed());
 		assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
@@ -7143,6 +6967,12 @@ private:
 #endif
 		}
 		return true;
+	}
+
+	template <typename TimedHandler, typename DST, typename... Args>
+	bool _timed_pump_msg(const msg_pump_handle<Args...>& pump, TimedHandler&& th, DST& dstRec, int ms, bool checkDis)
+	{
+		return _timed_pump_msg(ms, wrap_local_handler(th), checkDis, pump, dstRec);
 	}
 
 	template <typename DST, typename... Args>
@@ -7259,55 +7089,7 @@ public:
 	template <typename TimedHandler>
 	__yield_interrupt bool timed_pump_msg(int ms, TimedHandler&& th, bool checkDis, const msg_pump_handle<>& pump)
 	{
-		assert_enter();
-		assert(!pump.check_closed());
-		assert(pump.get()->_hostActor && pump.get()->_hostActor->self_id() == self_id());
-		if (!pump.get()->read_msg())
-		{
-			BREAK_OF_SCOPE_EXEC(pump.get()->stop_waiting());
-			if (checkDis && pump.get()->isDisconnected())
-			{
-				throw msg_pump_handle<>::pump_disconnected(pump.get_id());
-			}
-#ifdef ENABLE_CHECK_LOST
-			if (pump.get()->_losted && pump.get()->_checkLost)
-			{
-				throw msg_pump_handle<>::lost_exception(pump.get_id());
-			}
-#endif
-			pump.get()->_checkDis = checkDis;
-			if (ms >= 0)
-			{
-				bool overtime = false;
-				delay_trig(ms, [&overtime, &th]
-				{
-					overtime = true;
-					th();
-				});
-				push_yield();
-				if (overtime)
-				{
-					return false;
-				}
-				cancel_delay_trig();
-			}
-			else
-			{
-				push_yield();
-			}
-			if (pump.get()->_checkDis)
-			{
-				assert(checkDis);
-				throw msg_pump_handle<>::pump_disconnected(pump.get_id());
-			}
-#ifdef ENABLE_CHECK_LOST
-			if (pump.get()->_losted && pump.get()->_checkLost)
-			{
-				throw msg_pump_handle<>::lost_exception(pump.get_id());
-			}
-#endif
-		}
-		return true;
+		return _timed_pump_msg(ms, wrap_local_handler(th), checkDis, pump);
 	}
 
 	__yield_interrupt bool timed_pump_msg(int ms, const msg_pump_handle<>& pump);

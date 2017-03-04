@@ -231,6 +231,12 @@ public:
 	result close();
 
 	/*!
+	@brief 用原始句柄构造
+	*/
+	result assign(boost::asio::detail::socket_type sckFd);
+	result assign_v6(boost::asio::detail::socket_type sckFd);
+
+	/*!
 	@brief 异步模式下，客户端模式下连接远端服务器
 	*/
 	template <typename Handler>
@@ -562,6 +568,12 @@ public:
 	tcp_socket::result open_v6(unsigned short port);
 
 	/*!
+	@brief 用原始句柄构造
+	*/
+	tcp_socket::result assign(boost::asio::detail::socket_type accFd);
+	tcp_socket::result assign_v6(boost::asio::detail::socket_type accFd);
+
+	/*!
 	@brief 关闭侦听器
 	*/
 	tcp_socket::result close();
@@ -698,6 +710,12 @@ public:
 	@brief 打开并绑定ip v6下某个端口接收发送数据
 	*/
 	result open_bind_v6(unsigned short port);
+	
+	/*!
+	@brief 用原始句柄构造
+	*/
+	result assign(boost::asio::detail::socket_type sckFd);
+	result assign_v6(boost::asio::detail::socket_type sckFd);
 
 	/*!
 	@brief linux下优化异步返回（如果有数据，在async_xxx操作中直接回调）

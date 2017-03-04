@@ -14,6 +14,7 @@
 #include "io_engine.h"
 #include "msg_queue.h"
 #include "scattered.h"
+#include "stack_object.h"
 
 class ActorTimer_;
 class AsyncTimer_;
@@ -84,6 +85,7 @@ else\
 struct TimerBoostCompletedEventFace_
 {
 	virtual void post_event(int tc) = 0;
+	virtual void cancel_event() = 0;
 };
 #endif
 
@@ -158,7 +160,7 @@ class boost_strand
 	};
 #endif //ENABLE_NEXT_TICK
 
-	template <typename Handler, typename Callback>
+	template <typename Handler, typename Callback, typename Result>
 	struct wrap_async_invoke
 	{
 		typedef RM_CREF(Handler) handler_type;
@@ -182,12 +184,12 @@ class boost_strand
 	};
 
 	template <typename Handler, typename Callback>
-	struct wrap_async_invoke_void
+	struct wrap_async_invoke<Handler, Callback, void>
 	{
 		typedef RM_CREF(Handler) handler_type;
 		typedef RM_CREF(Callback) callback_type;
 
-		wrap_async_invoke_void(Handler& handler, Callback& callback)
+		wrap_async_invoke(Handler& handler, Callback& callback)
 			:_handler(std::forward<Handler>(handler)), _callback(std::forward<Callback>(callback)) {}
 
 		void operator()()
@@ -201,8 +203,8 @@ class boost_strand
 		handler_type _handler;
 		callback_type _callback;
 	private:
-		void operator =(const wrap_async_invoke_void&) = delete;
-		COPY_CONSTRUCT2(wrap_async_invoke_void, _handler, _callback);
+		void operator =(const wrap_async_invoke&) = delete;
+		COPY_CONSTRUCT2(wrap_async_invoke, _handler, _callback);
 	};
 
 	friend my_actor;
@@ -550,53 +552,36 @@ protected:
 public:
 	/*!
 	@brief 在一个strand中调用某个函数，直到这个函数被执行完成后才返回
-	@warning 此函数有可能使整个程序陷入死锁，只能在与strand所依赖的ios无关线程中调用
 	*/
 	template <typename H>
-	void syncInvoke(H&& h)
+	auto sync_invoke(H&& h)->decltype(h())
 	{
-		assert(!in_this_ios());
-		std::mutex mutex;
-		std::condition_variable con;
-		std::unique_lock<std::mutex> ul(mutex);
-		post([&]
-		{
-			BEGIN_CHECK_EXCEPTION;
-			h();
-			END_CHECK_EXCEPTION;
-			mutex.lock();
-			con.notify_one();
-			mutex.unlock();
-		});
-		con.wait(ul);
+		return sync_invoke<decltype(h())>(std::forward<H>(h));
 	}
 
 	/*!
 	@brief 同上，带返回值
 	*/
 	template <typename R, typename H>
-	R syncInvoke(H&& h)
+	R sync_invoke(H&& h)
 	{
-		assert(!in_this_ios());
-		__space_align char space[sizeof(R)];
-		std::mutex mutex;
-		std::condition_variable con;
-		std::unique_lock<std::mutex> ul(mutex);
-		post([&]
+		if (!in_this_ios())
 		{
-			BEGIN_CHECK_EXCEPTION;
-			new(space)R(h());
-			END_CHECK_EXCEPTION;
-			mutex.lock();
-			con.notify_one();
-			mutex.unlock();
-		});
-		con.wait(ul);
-		BREAK_OF_SCOPE(
-		{
-			as_ptype<R>(space)->~R();
-		});
-		return std::forward<R>(*as_ptype<R>(space));
+			stack_obj<R> res;
+			std::mutex mutex;
+			std::condition_variable con;
+			std::unique_lock<std::mutex> ul(mutex);
+			post([&]
+			{
+				CHECK_EXCEPTION(stack_agent_result::invoke, res, h);
+				mutex.lock();
+				con.notify_one();
+				mutex.unlock();
+			});
+			con.wait(ul);
+			return stack_obj_move::move(res);
+		}
+		return h();
 	}
 
 	/*!
@@ -604,15 +589,9 @@ public:
 	@param cb 传出参数的函数
 	*/
 	template <typename Handler, typename Callback>
-	void asyncInvoke(Handler&& h, Callback&& cb)
+	void async_invoke(Handler&& h, Callback&& cb)
 	{
-		try_tick(wrap_async_invoke<Handler, Callback>(h, cb));
-	}
-
-	template <typename Handler, typename Callback>
-	void asyncInvokeVoid(Handler&& h, Callback&& cb)
-	{
-		try_tick(wrap_async_invoke_void<Handler, Callback>(h, cb));
+		try_tick(wrap_async_invoke<Handler, Callback, decltype(h())>(h, cb));
 	}
 };
 

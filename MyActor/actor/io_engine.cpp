@@ -142,7 +142,7 @@ namespace boost
 
 struct safe_stack_info
 {
-	wrap_local_handler_face<void()>* handler = NULL;
+	const wrap_local_handler_face<void()>* handler = NULL;
 	context_yield::context_info* ctx = NULL;
 };
 
@@ -294,7 +294,7 @@ void io_engine::run(size_t threads, sched policy)
 					tlsBuff[ASIO_HANDLER_ALLOC_EX_INDEX] = asioAll;
 #endif
 					safe_stack_info safeStack;
-					setTlsValue(ACTOR_SAFE_STACK_INDEX, &safeStack);
+					tlsBuff[ACTOR_SAFE_STACK_INDEX] = &safeStack;
 					safeStack.ctx = context_yield::make_context(MAX_STACKSIZE, [](context_yield::context_info* ctx, void* param)
 					{
 						while (true)
@@ -308,6 +308,7 @@ void io_engine::run(size_t threads, sched policy)
 					__space_align char dumpStack[8 kB];
 					my_actor::dump_segmentation_fault(dumpStack, sizeof(dumpStack));
 #endif
+					tlsBuff[IO_ENGINE_INDEX] = this;
 					_runCount += _ios.run();
 #if (__linux__ && ENABLE_DUMP_STACK)
 					my_actor::undump_segmentation_fault();
@@ -481,11 +482,11 @@ void io_engine::releaseWork()
 	_ios.dispatch(boost::asio::io_service_work_finished());
 }
 
-void io_engine::switchInvoke(wrap_local_handler_face<void()>* handler)
+void io_engine::switchInvoke(const wrap_local_handler_face<void()>& handler)
 {
 	safe_stack_info* si = (safe_stack_info*)getTlsValue(ACTOR_SAFE_STACK_INDEX);
 	assert(!si->handler);
-	si->handler = handler;
+	si->handler = &handler;
 	context_yield::pull_yield(si->ctx);
 	si->handler = NULL;
 }
@@ -535,6 +536,16 @@ const std::string& io_engine::title()
 io_engine::operator boost::asio::io_service&() const
 {
 	return (boost::asio::io_service&)_ios;
+}
+
+io_engine* io_engine::currentEngine()
+{
+	void** buf = getTlsValueBuff();
+	if (buf && buf[IO_ENGINE_INDEX])
+	{
+		return (io_engine*)buf[IO_ENGINE_INDEX];
+	}
+	return NULL;
 }
 
 void io_engine::setTlsBuff(void** buf)
