@@ -1,7 +1,7 @@
 #include "actor_socket.h"
 
 tcp_socket::tcp_socket(io_engine& ios)
-:_socket(ios), _nonBlocking(false)
+:_socket(ios), _holdRead(false), _holdWrite(false), _cancelRead(false), _cancelWrite(false), _nonBlocking(false)
 #ifdef ENABLE_ASIO_PRE_OP
 , _preOption(false)
 #endif
@@ -16,7 +16,9 @@ tcp_socket::tcp_socket(io_engine& ios)
 }
 
 tcp_socket::~tcp_socket()
-{}
+{
+	assert(!is_open());
+}
 
 tcp_socket::result tcp_socket::close()
 {
@@ -24,6 +26,33 @@ tcp_socket::result tcp_socket::close()
 	_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
 	_socket.close(ec);
 	return result{ 0, ec.value(), !ec };
+}
+
+bool tcp_socket::is_open()
+{
+	return _socket.is_open();
+}
+
+void tcp_socket::swap(tcp_socket& other)
+{
+	if (this == &other)
+	{
+		return;
+	}
+	boost::asio::ip::tcp::socket tSck(std::move(_socket));
+	_socket = std::move(other._socket);
+	other._socket = std::move(tSck);
+	std::swap(_cancelRead, other._cancelRead);
+	std::swap(_cancelWrite, other._cancelWrite);
+	std::swap(_nonBlocking, other._nonBlocking);
+#ifdef ENABLE_ASIO_PRE_OP
+	std::swap(_preOption, other._preOption);
+#endif
+#ifdef HAS_ASIO_SEND_FILE
+#ifdef __linux__
+	std::swap(_sendFileState, other._sendFileState);
+#endif
+#endif
 }
 
 tcp_socket::result tcp_socket::assign(boost::asio::detail::socket_type sckFd)
@@ -46,6 +75,11 @@ tcp_socket::result tcp_socket::assign_v6(boost::asio::detail::socket_type sckFd)
 		set_internal_non_blocking();
 	}
 	return result{ 0, ec.value(), !ec };
+}
+
+boost::asio::detail::socket_type tcp_socket::native()
+{
+	return _socket.native();
 }
 
 tcp_socket::result tcp_socket::no_delay()
@@ -138,6 +172,47 @@ tcp_socket::result tcp_socket::read(my_actor* host, void* buff, size_t length)
 	});
 }
 
+tcp_socket::result tcp_socket::cancel()
+{
+	_cancelRead = true;
+	_cancelWrite = true;
+	boost::system::error_code ec;
+#if defined(BOOST_ASIO_MSVC) && (BOOST_ASIO_MSVC >= 1400) && (!defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0600) && !defined(BOOST_ASIO_ENABLE_CANCELIO)
+	_socket.close(ec);
+#else
+	_socket.cancel(ec);
+#endif
+	return result{ 0, ec.value(), !ec };
+}
+
+tcp_socket::result tcp_socket::cancel_read()
+{
+	_cancelRead = true;
+	boost::system::error_code ec;
+#if defined(BOOST_ASIO_MSVC) && (BOOST_ASIO_MSVC >= 1400) && (!defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0600) && !defined(BOOST_ASIO_ENABLE_CANCELIO)
+	_socket.close(ec);
+#elif defined HAS_ASIO_CANCEL_IO
+	_socket.cancel_recv(ec);
+#else
+	_socket.cancel(ec);
+#endif
+	return result{ 0, ec.value(), !ec };
+}
+
+tcp_socket::result tcp_socket::cancel_write()
+{
+	_cancelWrite = true;
+	boost::system::error_code ec;
+#if defined(BOOST_ASIO_MSVC) && (BOOST_ASIO_MSVC >= 1400) && (!defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0600) && !defined(BOOST_ASIO_ENABLE_CANCELIO)
+	_socket.close(ec);
+#elif defined HAS_ASIO_CANCEL_IO
+	_socket.cancel_send(ec);
+#else
+	_socket.cancel(ec);
+#endif
+	return result{ 0, ec.value(), !ec };
+}
+
 tcp_socket::result tcp_socket::read_some(my_actor* host, void* buff, size_t length)
 {
 	my_actor::quit_guard qg(host);
@@ -170,12 +245,19 @@ tcp_socket::result tcp_socket::timed_connect(my_actor* host, int ms, const boost
 	bool overtime = false;
 	result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
-	async_connect(remoteEndpoint, host->make_asio_timed_context(ms, [&]()
+	if (ms > 0)
 	{
-		overtime = true;
-		close();
-	}, res));
-	return overtime ? result{ 0, boost::asio::error::timed_out, false } : res;
+		async_connect(remoteEndpoint, host->make_asio_timed_context(ms, [&]()
+		{
+			overtime = true;
+			cancel();
+		}, res));
+	}
+	else
+	{
+		async_connect(remoteEndpoint, host->make_asio_context(res));
+	}
+	return (overtime && !res.ok) ? result{ res.s, boost::asio::error::timed_out, false } : res;
 }
 
 tcp_socket::result tcp_socket::timed_connect(my_actor* host, int ms, const char* remoteIp, unsigned short remotePort)
@@ -188,12 +270,19 @@ tcp_socket::result tcp_socket::timed_read(my_actor* host, int ms, void* buff, si
 	bool overtime = false;
 	result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
-	async_read(buff, length, host->make_asio_timed_context(ms, [&]()
+	if (ms > 0)
 	{
-		overtime = true;
-		close();
-	}, res));
-	return overtime ? result{ 0, boost::asio::error::timed_out, false } : res;
+		async_read(buff, length, host->make_asio_timed_context(ms, [&]()
+		{
+			overtime = true;
+			cancel_read();
+		}, res));
+	}
+	else
+	{
+		async_read(buff, length, host->make_asio_context(res));
+	}
+	return (overtime && !res.ok) ? result{ res.s, boost::asio::error::timed_out, false } : res;
 }
 
 tcp_socket::result tcp_socket::timed_read_some(my_actor* host, int ms, void* buff, size_t length)
@@ -201,12 +290,19 @@ tcp_socket::result tcp_socket::timed_read_some(my_actor* host, int ms, void* buf
 	bool overtime = false;
 	result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
-	async_read_some(buff, length, host->make_asio_timed_context(ms, [&]()
+	if (ms > 0)
 	{
-		overtime = true;
-		close();
-	}, res));
-	return overtime ? result{ 0, boost::asio::error::timed_out, false } : res;
+		async_read_some(buff, length, host->make_asio_timed_context(ms, [&]()
+		{
+			overtime = true;
+			cancel_read();
+		}, res));
+	}
+	else
+	{
+		async_read_some(buff, length, host->make_asio_context(res));
+	}
+	return (overtime && !res.ok) ? result{ res.s, boost::asio::error::timed_out, false } : res;
 }
 
 tcp_socket::result tcp_socket::timed_write(my_actor* host, int ms, const void* buff, size_t length)
@@ -214,12 +310,19 @@ tcp_socket::result tcp_socket::timed_write(my_actor* host, int ms, const void* b
 	bool overtime = false;
 	result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
-	async_write(buff, length, host->make_asio_timed_context(ms, [&]()
+	if (ms > 0)
 	{
-		overtime = true;
-		close();
-	}, res));
-	return overtime ? result{ 0, boost::asio::error::timed_out, false } : res;
+		async_write(buff, length, host->make_asio_timed_context(ms, [&]()
+		{
+			overtime = true;
+			cancel_write();
+		}, res));
+	}
+	else
+	{
+		async_write(buff, length, host->make_asio_context(res));
+	}
+	return (overtime && !res.ok) ? result{ res.s, boost::asio::error::timed_out, false } : res;
 }
 
 tcp_socket::result tcp_socket::timed_write_some(my_actor* host, int ms, const void* buff, size_t length)
@@ -227,12 +330,19 @@ tcp_socket::result tcp_socket::timed_write_some(my_actor* host, int ms, const vo
 	bool overtime = false;
 	result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
-	async_write_some(buff, length, host->make_asio_timed_context(ms, [&]()
+	if (ms > 0)
 	{
-		overtime = true;
-		close();
-	}, res));
-	return overtime ? result{ 0, boost::asio::error::timed_out, false } : res;
+		async_write_some(buff, length, host->make_asio_timed_context(ms, [&]()
+		{
+			overtime = true;
+			cancel_write();
+		}, res));
+	}
+	else
+	{
+		async_write_some(buff, length, host->make_asio_context(res));
+	}
+	return (overtime && !res.ok) ? result{ res.s, boost::asio::error::timed_out, false } : res;
 }
 
 tcp_socket::result tcp_socket::try_write_same(const void* buff, size_t length)
@@ -629,28 +739,16 @@ tcp_socket::result tcp_socket::try_send_file_same(int fd, unsigned long long* of
 	result res = { 0, 0, false };
 	if (_nonBlocking)
 	{
+		off_t currpos = ::lseek(fd, offset ? *offset : 0, SEEK_SET);
 		if (0 == length)
 		{
-			if (!offset)
+			unsigned long long sl = (unsigned long long)::lseek(fd, 0, SEEK_END) - (unsigned long long)currpos;
+			if (sl >> 32)
 			{
-				off_t currpos = ::lseek(fd, 0, SEEK_CUR);
-				unsigned long long sl = (unsigned long long)::lseek(fd, 0, SEEK_END) - (unsigned long long)currpos;
-				if (sl >> 32)
-				{
-					return res;
-				}
-				length = (size_t)sl;
-				::lseek(fd, currpos, SEEK_SET);
+				return res;
 			}
-			else
-			{
-				unsigned long long sl = (unsigned long long)::lseek(fd, 0, SEEK_END) - *offset;
-				if (sl >> 32)
-				{
-					return res;
-				}
-				length = (size_t)sl;
-			}
+			length = (size_t)sl;
+			::lseek(fd, currpos, SEEK_SET);
 			if (0 == length)
 			{
 				res.ok = true;
@@ -681,16 +779,11 @@ tcp_socket::result tcp_socket::try_send_file_same(int fd, unsigned long long* of
 #elif WIN32
 bool tcp_socket::init_send_file(HANDLE hFile, unsigned long long* offset, size_t& length)
 {
-	bool setOffOk = true;
-	if (offset)
-	{
-		LARGE_INTEGER off;
-		LARGE_INTEGER newOff;
-		off.QuadPart = (LONGLONG)*offset;
-		newOff.QuadPart = 0;
-		setOffOk = FALSE != ::SetFilePointerEx(hFile, off, &newOff, FILE_BEGIN) && off.QuadPart == newOff.QuadPart;
-	}
-	if (setOffOk)
+	LARGE_INTEGER off;
+	LARGE_INTEGER newOff;
+	off.QuadPart = offset ? (LONGLONG)*offset : 0;
+	newOff.QuadPart = 0;
+	if (::SetFilePointerEx(hFile, off, &newOff, FILE_BEGIN) && off.QuadPart == newOff.QuadPart)
 	{
 		if (length)
 		{
@@ -718,7 +811,7 @@ bool tcp_socket::init_send_file(HANDLE hFile, unsigned long long* offset, size_t
 //////////////////////////////////////////////////////////////////////////
 
 tcp_acceptor::tcp_acceptor(io_engine& ios)
-:_ios(ios), _nonBlocking(false)
+:_ios(&ios), _nonBlocking(false)
 #ifdef ENABLE_ASIO_PRE_OP
 , _preOption(false)
 #endif
@@ -726,15 +819,21 @@ tcp_acceptor::tcp_acceptor(io_engine& ios)
 
 tcp_acceptor::~tcp_acceptor()
 {
+	assert(!is_open());
 }
 
 tcp_socket::result tcp_acceptor::open(const char* ip, unsigned short port)
+{
+	return open(tcp_socket::make_endpoint(ip, port));
+}
+
+tcp_socket::result tcp_acceptor::open(const boost::asio::ip::tcp::endpoint& endPoint)
 {
 	if (!_acceptor.has())
 	{
 		try
 		{
-			_acceptor.create(_ios, boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string(ip), port), false);
+			_acceptor.create(*_ios, endPoint, false);
 			set_internal_non_blocking();
 			return tcp_socket::result{ 0, 0, true };
 		}
@@ -752,7 +851,7 @@ tcp_socket::result tcp_acceptor::open_v4(unsigned short port)
 	{
 		try
 		{
-			_acceptor.create(_ios, boost::asio::ip::tcp::endpoint(boost::asio::ip::address_v4(), port), false);
+			_acceptor.create(*_ios, boost::asio::ip::tcp::endpoint(boost::asio::ip::address_v4(), port), false);
 			set_internal_non_blocking();
 			return tcp_socket::result{ 0, 0, true };
 		}
@@ -770,7 +869,7 @@ tcp_socket::result tcp_acceptor::open_v6(unsigned short port)
 	{
 		try
 		{
-			_acceptor.create(_ios, boost::asio::ip::tcp::endpoint(boost::asio::ip::address_v6(), port), false);
+			_acceptor.create(*_ios, boost::asio::ip::tcp::endpoint(boost::asio::ip::address_v6(), port), false);
 			set_internal_non_blocking();
 			return tcp_socket::result{ 0, 0, true };
 		}
@@ -786,7 +885,7 @@ tcp_socket::result tcp_acceptor::assign(boost::asio::detail::socket_type accFd)
 {
 	try
 	{
-		_acceptor.create(_ios);
+		_acceptor.create(*_ios);
 		boost::system::error_code ec;
 		_acceptor->assign(boost::asio::ip::tcp::endpoint().protocol(), accFd, ec);
 		if (!ec)
@@ -805,7 +904,7 @@ tcp_socket::result tcp_acceptor::assign_v6(boost::asio::detail::socket_type accF
 {
 	try
 	{
-		_acceptor.create(_ios);
+		_acceptor.create(*_ios);
 		boost::system::error_code ec;
 		_acceptor->assign(boost::asio::ip::tcp::endpoint(boost::asio::ip::address_v6(), 0).protocol(), accFd, ec);
 		if (!ec)
@@ -820,6 +919,26 @@ tcp_socket::result tcp_acceptor::assign_v6(boost::asio::detail::socket_type accF
 	}
 }
 
+boost::asio::detail::socket_type tcp_acceptor::native()
+{
+	return _acceptor->native();
+}
+
+tcp_socket::result tcp_acceptor::cancel()
+{
+	if (_acceptor.has())
+	{
+		boost::system::error_code ec;
+#if defined(BOOST_ASIO_MSVC) && (BOOST_ASIO_MSVC >= 1400) && (!defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0600) && !defined(BOOST_ASIO_ENABLE_CANCELIO)
+		_acceptor->close(ec);
+#else
+		_acceptor->cancel(ec);
+#endif
+		return tcp_socket::result{ 0, ec.value(), !ec };
+	}
+	return tcp_socket::result{ 0, 0, false };
+}
+
 tcp_socket::result tcp_acceptor::close()
 {
 	if (_acceptor.has())
@@ -830,6 +949,52 @@ tcp_socket::result tcp_acceptor::close()
 		return tcp_socket::result{ 0, ec.value(), !ec };
 	}
 	return tcp_socket::result{ 0, 0, false };
+}
+
+bool tcp_acceptor::is_open()
+{
+	if (_acceptor.has())
+	{
+		return _acceptor->is_open();
+	}
+	return false;
+}
+
+void tcp_acceptor::swap(tcp_acceptor& other)
+{
+	if (this == &other)
+	{
+		return;
+	}
+	if (other._acceptor.has() && _acceptor.has())
+	{
+		boost::asio::ip::tcp::acceptor tAcc(std::move(_acceptor.get()));
+		_acceptor.get() = std::move(other._acceptor.get());
+		other._acceptor.get() = std::move(tAcc);
+		std::swap(_nonBlocking, other._nonBlocking);
+		std::swap(_ios, other._ios);
+#ifdef ENABLE_ASIO_PRE_OP
+		std::swap(_preOption, other._preOption);
+#endif
+	}
+	else if (other._acceptor.has())
+	{
+		_acceptor.get() = std::move(other._acceptor.get());
+		std::swap(_nonBlocking, other._nonBlocking);
+		std::swap(_ios, other._ios);
+#ifdef ENABLE_ASIO_PRE_OP
+		std::swap(_preOption, other._preOption);
+#endif
+	}
+	else if (_acceptor.has())
+	{
+		other._acceptor.get() = std::move(_acceptor.get());
+		std::swap(_nonBlocking, other._nonBlocking);
+		std::swap(_ios, other._ios);
+#ifdef ENABLE_ASIO_PRE_OP
+		std::swap(_preOption, other._preOption);
+#endif
+	}
 }
 
 void tcp_acceptor::pre_option()
@@ -862,12 +1027,19 @@ tcp_socket::result tcp_acceptor::timed_accept(my_actor* host, int ms, tcp_socket
 	bool overtime = false;
 	tcp_socket::result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
-	async_accept(socket, host->make_asio_timed_context(ms, [&]()
+	if (ms > 0)
 	{
-		overtime = true;
-		close();
-	}, res));
-	return overtime ? tcp_socket::result{ 0, boost::asio::error::timed_out, false } : res;
+		async_accept(socket, host->make_asio_timed_context(ms, [&]()
+		{
+			overtime = true;
+			cancel();
+		}, res));
+	}
+	else
+	{
+		async_accept(socket, host->make_asio_context(res));
+	}
+	return (overtime && !res.ok) ? tcp_socket::result{ res.s, boost::asio::error::timed_out, false } : res;
 }
 
 tcp_socket::result tcp_acceptor::try_accept(tcp_socket& socket)
@@ -923,13 +1095,18 @@ void tcp_acceptor::set_internal_non_blocking()
 
 udp_socket::udp_socket(io_engine& ios)
 :_socket(ios), _nonBlocking(false)
+#ifndef HAS_ASIO_CANCEL_IO
+, _holdRecv(false), _holdSend(false), _cancelRecv(false), _cancelSend(false)
+#endif
 #ifdef ENABLE_ASIO_PRE_OP
 , _preOption(false)
 #endif
 {}
 
 udp_socket::~udp_socket()
-{}
+{
+	assert(!is_open());
+}
 
 udp_socket::result udp_socket::open_v4()
 {
@@ -1020,12 +1197,91 @@ udp_socket::result udp_socket::assign_v6(boost::asio::detail::socket_type sckFd)
 	return result{ 0, ec.value(), !ec };
 }
 
+boost::asio::detail::socket_type udp_socket::native()
+{
+	return _socket.native();
+}
+
 udp_socket::result udp_socket::close()
 {
 	boost::system::error_code ec;
 	_socket.shutdown(boost::asio::ip::udp::socket::shutdown_both, ec);
 	_socket.close(ec);
 	return result{ 0, ec.value(), !ec };
+}
+
+bool udp_socket::is_open()
+{
+	return _socket.is_open();
+}
+
+udp_socket::result udp_socket::cancel()
+{
+#ifndef HAS_ASIO_CANCEL_IO
+	_cancelRecv = true;
+	_cancelSend = true;
+#endif
+	boost::system::error_code ec;
+#if defined(BOOST_ASIO_MSVC) && (BOOST_ASIO_MSVC >= 1400) && (!defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0600) && !defined(BOOST_ASIO_ENABLE_CANCELIO)
+	_socket.close(ec);
+#else
+	_socket.cancel(ec);
+#endif
+	return result{ 0, ec.value(), !ec };
+}
+
+udp_socket::result udp_socket::cancel_receive()
+{
+#ifndef HAS_ASIO_CANCEL_IO
+	_cancelRecv = true;
+#endif
+	boost::system::error_code ec;
+#if defined(BOOST_ASIO_MSVC) && (BOOST_ASIO_MSVC >= 1400) && (!defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0600) && !defined(BOOST_ASIO_ENABLE_CANCELIO)
+	_socket.close(ec);
+#elif defined HAS_ASIO_CANCEL_IO
+	_socket.cancel_recv(ec);
+#else
+	_socket.cancel(ec);
+#endif
+	return result{ 0, ec.value(), !ec };
+}
+
+udp_socket::result udp_socket::cancel_send()
+{
+#ifndef HAS_ASIO_CANCEL_IO
+	_cancelSend = true;
+#endif
+	boost::system::error_code ec;
+#if defined(BOOST_ASIO_MSVC) && (BOOST_ASIO_MSVC >= 1400) && (!defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0600) && !defined(BOOST_ASIO_ENABLE_CANCELIO)
+	_socket.close(ec);
+#elif defined HAS_ASIO_CANCEL_IO
+	_socket.cancel_send(ec);
+#else
+	_socket.cancel(ec);
+#endif
+	return result{ 0, ec.value(), !ec };
+}
+
+void udp_socket::swap(udp_socket& other)
+{
+	if (this == &other)
+	{
+		return;
+	}
+	boost::asio::ip::udp::socket tSck(std::move(_socket));
+	_socket = std::move(other._socket);
+	other._socket = std::move(tSck);
+	boost::asio::ip::udp::endpoint tPt(std::move(_remoteSenderEndpoint));
+	_remoteSenderEndpoint = std::move(other._remoteSenderEndpoint);
+	other._remoteSenderEndpoint = std::move(tPt);
+#ifndef HAS_ASIO_CANCEL_IO
+	std::swap(_cancelRecv, other._cancelRecv);
+	std::swap(_cancelSend, other._cancelSend);
+#endif
+	std::swap(_nonBlocking, other._nonBlocking);
+#ifdef ENABLE_ASIO_PRE_OP
+	std::swap(_preOption, other._preOption);
+#endif
 }
 
 void udp_socket::pre_option()
@@ -1111,13 +1367,18 @@ udp_socket::result udp_socket::send(my_actor* host, const void* buff, size_t len
 	});
 }
 
-udp_socket::result udp_socket::receive_from(my_actor* host, void* buff, size_t length, int flags)
+udp_socket::result udp_socket::receive_from(my_actor* host, boost::asio::ip::udp::endpoint& remoteEndpoint, void* buff, size_t length, int flags)
 {
 	my_actor::quit_guard qg(host);
 	return host->trig<result>([&](trig_once_notifer<result>&& h)
 	{
-		async_receive_from(buff, length, std::move(h), flags);
+		async_receive_from(remoteEndpoint, buff, length, std::move(h), flags);
 	});
+}
+
+udp_socket::result udp_socket::receive_from(my_actor* host, void* buff, size_t length, int flags)
+{
+	return receive_from(host, _remoteSenderEndpoint, buff, length, flags);
 }
 
 udp_socket::result udp_socket::receive(my_actor* host, void* buff, size_t length, int flags)
@@ -1134,12 +1395,19 @@ udp_socket::result udp_socket::timed_send_to(my_actor* host, int ms, const boost
 	bool overtime = false;
 	result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
-	async_send_to(remoteEndpoint, buff, length, host->make_asio_timed_context(ms, [&]()
+	if (ms > 0)
 	{
-		overtime = true;
-		close();
-	}, res), flags);
-	return overtime ? result{ 0, boost::asio::error::timed_out, false } : res;
+		async_send_to(remoteEndpoint, buff, length, host->make_asio_timed_context(ms, [&]()
+		{
+			overtime = true;
+			cancel_send();
+		}, res), flags);
+	}
+	else
+	{
+		async_send_to(remoteEndpoint, buff, length, host->make_asio_context(res), flags);
+	}
+	return (overtime && !res.ok) ? result{ res.s, boost::asio::error::timed_out, false } : res;
 }
 
 udp_socket::result udp_socket::timed_send_to(my_actor* host, int ms, const char* remoteIp, unsigned short remotePort, const void* buff, size_t length, int flags)
@@ -1152,25 +1420,44 @@ udp_socket::result udp_socket::timed_send(my_actor* host, int ms, const void* bu
 	bool overtime = false;
 	result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
-	async_send(buff, length, host->make_asio_timed_context(ms, [&]()
+	if (ms > 0)
 	{
-		overtime = true;
-		close();
-	}, res), flags);
-	return overtime ? result{ 0, boost::asio::error::timed_out, false } : res;
+		async_send(buff, length, host->make_asio_timed_context(ms, [&]()
+		{
+			overtime = true;
+			cancel_send();
+		}, res), flags);
+	}
+	else
+	{
+		async_send(buff, length, host->make_asio_context(res), flags);
+	}
+	return (overtime && !res.ok) ? result{ res.s, boost::asio::error::timed_out, false } : res;
 }
 
-udp_socket::result udp_socket::timed_receive_from(my_actor* host, int ms, void* buff, size_t length, int flags)
+udp_socket::result udp_socket::timed_receive_from(my_actor* host, boost::asio::ip::udp::endpoint& remoteEndpoint, int ms, void* buff, size_t length, int flags)
 {
 	bool overtime = false;
 	result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
-	async_receive_from(buff, length, host->make_asio_timed_context(ms, [&]()
+	if (ms > 0)
 	{
-		overtime = true;
-		close();
-	}, res), flags);
-	return overtime ? result{ 0, boost::asio::error::timed_out, false } : res;
+		async_receive_from(remoteEndpoint, buff, length, host->make_asio_timed_context(ms, [&]()
+		{
+			overtime = true;
+			cancel_receive();
+		}, res), flags);
+	}
+	else
+	{
+		async_receive_from(buff, length, host->make_asio_context(res), flags);
+	}
+	return (overtime && !res.ok) ? result{ res.s, boost::asio::error::timed_out, false } : res;
+}
+
+udp_socket::result udp_socket::timed_receive_from(my_actor* host, int ms, void* buff, size_t length, int flags)
+{
+	return timed_receive_from(host, _remoteSenderEndpoint, ms, buff, length, flags);
 }
 
 udp_socket::result udp_socket::timed_receive(my_actor* host, int ms, void* buff, size_t length, int flags)
@@ -1178,12 +1465,20 @@ udp_socket::result udp_socket::timed_receive(my_actor* host, int ms, void* buff,
 	bool overtime = false;
 	result res = { 0, 0, false };
 	my_actor::quit_guard qg(host);
-	async_receive(buff, length, host->make_asio_timed_context(ms, [&]()
+	if (ms > 0)
 	{
-		overtime = true;
-		close();
-	}, res), flags);
-	return overtime ? result{ 0, boost::asio::error::timed_out, false } : res;
+		async_receive(buff, length, host->make_asio_timed_context(ms, [&]()
+		{
+			overtime = true;
+			cancel_receive();
+		}, res), flags);
+
+	}
+	else
+	{
+		async_receive(buff, length, host->make_asio_context(res), flags);
+	}
+	return (overtime && !res.ok) ? result{ res.s, boost::asio::error::timed_out, false } : res;
 }
 
 udp_socket::result udp_socket::try_send(const void* buff, size_t length, int flags)
@@ -1312,7 +1607,7 @@ udp_socket::result udp_socket::try_msend(const void* const* buffs, const size_t*
 #endif
 }
 
-udp_socket::result udp_socket::try_msend_to(const boost::asio::ip::udp::endpoint* remoteEndpoints, const void* const* buffs, const size_t* lengths, size_t count, size_t* bytes /* = NULL */, int flags /* = 0 */)
+udp_socket::result udp_socket::try_msend_to(const boost::asio::ip::udp::endpoint* remoteEndpoints, const void* const* buffs, const size_t* lengths, size_t count, size_t* bytes, int flags)
 {
 #ifdef ENABLE_SCK_MULTI_IO
 	result res = { 0, 0, false };
@@ -1413,7 +1708,7 @@ udp_socket::result udp_socket::try_msend_to(const boost::asio::ip::udp::endpoint
 #endif
 }
 
-udp_socket::result udp_socket::try_msend_to(const boost::asio::ip::udp::endpoint& remoteEndpoint, const void* const* buffs, const size_t* lengths, size_t count, size_t* bytes /* = NULL */, int flags /* = 0 */)
+udp_socket::result udp_socket::try_msend_to(const boost::asio::ip::udp::endpoint& remoteEndpoint, const void* const* buffs, const size_t* lengths, size_t count, size_t* bytes, int flags)
 {
 #ifdef ENABLE_SCK_MULTI_IO
 	result res = { 0, 0, false };
@@ -1672,7 +1967,7 @@ udp_socket::result udp_socket::try_mreceive(void* const* buffs, const size_t* le
 #endif
 }
 
-udp_socket::result udp_socket::try_mreceive_from(boost::asio::ip::udp::endpoint* remoteEndpoints, void* const* buffs, const size_t* lengths, size_t count, size_t* bytes /* = NULL */, int flags /* = 0 */)
+udp_socket::result udp_socket::try_mreceive_from(boost::asio::ip::udp::endpoint* remoteEndpoints, void* const* buffs, const size_t* lengths, size_t count, size_t* bytes, int flags)
 {
 #ifdef ENABLE_SCK_MULTI_IO
 	result res = { 0, 0, false };
@@ -1782,7 +2077,7 @@ udp_socket::result udp_socket::try_receive_from(void* buff, size_t length, int f
 	return try_receive_from(_remoteSenderEndpoint, buff, length, flags);
 }
 
-udp_socket::result udp_socket::try_receive_from(boost::asio::ip::udp::endpoint& remoteEndpoint, void* buff, size_t length, int flags /*= 0*/)
+udp_socket::result udp_socket::try_receive_from(boost::asio::ip::udp::endpoint& remoteEndpoint, void* buff, size_t length, int flags)
 {
 	using namespace boost::asio::detail;
 	result res = { 0, 0, false };

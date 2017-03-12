@@ -7,6 +7,13 @@
 #include <boost/asio/read.hpp>
 #include "my_actor.h"
 
+struct socket_result
+{
+	size_t s;///<字节数/缓存数
+	int code;///<错误码
+	bool ok;///<是否成功
+};
+
 class tcp_acceptor;
 /*!
 @brief tcp通信
@@ -15,44 +22,84 @@ class tcp_socket
 {
 	friend tcp_acceptor;
 public:
-	struct result
-	{
-		size_t s;///<字节数/缓存数
-		int code;///<错误码
-		bool ok;///<是否成功
-	};
+	typedef socket_result result;
 private:
-#ifdef ENABLE_ASIO_PRE_OP
-#ifdef HAS_ASIO_HANDLER_IS_TRIED
 	template <typename Handler>
 	struct async_read_op
 	{
 		typedef RM_CREF(Handler) handler_type;
 
-		async_read_op(Handler& handler, boost::asio::ip::tcp::socket& sck, void* buff, size_t currBytes, size_t totalBytes)
+		async_read_op(Handler& handler, tcp_socket& sck, void* buff, size_t currBytes, size_t totalBytes)
 			:_handler(std::forward<Handler>(handler)), _sck(sck), _buffer(buff), _currBytes(currBytes), _totalBytes(totalBytes) {}
 
 		void operator()(const boost::system::error_code& ec, size_t s)
 		{
+			while (_sck._holdRead)
+			{
+				run_thread::sleep(0);
+			}
+			tcp_socket::result res;
 			_currBytes += s;
 			if (ec || _totalBytes == _currBytes)
 			{
-				tcp_socket::result res = { _currBytes, ec.value(), !ec };
-				_handler(res);
+				do 
+				{
+					res = { _currBytes, ec.value(), !ec };
+#ifndef HAS_ASIO_CANCEL_IO
+					if (boost::asio::error::operation_aborted == res.code && _sck._socket.is_open())
+					{
+						if (_totalBytes == _currBytes)
+						{
+							res.ok = true;
+							res.code = 0;
+						}
+						else if (!_sck._cancelRead)
+						{
+							break;
+						}
+					}
+#endif
+					_handler(res);
+					return;
+				} while (0);
 			}
-			else
+			try
 			{
-				_sck.async_read_some(boost::asio::buffer((char*)_buffer + _currBytes, _totalBytes - _currBytes), std::move(*this));
+				do
+				{
+#ifdef HAS_ASIO_CANCEL_IO
+					if (_sck._cancelRead)
+					{
+						res = { _currBytes, ec.value(), !ec };
+						break;
+					}
+#endif
+					_sck._holdRead = true;
+					BREAK_OF_SCOPE_EXEC(_sck._holdRead = false);
+					_sck._socket.async_read_some(boost::asio::buffer((char*)_buffer + _currBytes, _totalBytes - _currBytes), std::move(*this));
+					if (_sck._cancelRead)
+					{
+						_sck.cancel_read();
+					}
+					return;
+				} while (0);
 			}
+			catch (const boost::system::system_error& se)
+			{
+				res = { _currBytes, se.code().value(), !se.code() };
+			}
+			_handler(res);
 		}
 
+#ifdef HAS_ASIO_HANDLER_IS_TRIED
 		friend bool asio_handler_is_tried(async_read_op*)
 		{
 			return true;
 		}
+#endif
 
 		handler_type _handler;
-		boost::asio::ip::tcp::socket& _sck;
+		tcp_socket& _sck;
 		void* const _buffer;
 		size_t _currBytes;
 		const size_t _totalBytes;
@@ -64,37 +111,82 @@ private:
 	{
 		typedef RM_CREF(Handler) handler_type;
 
-		async_write_op(Handler& handler, boost::asio::ip::tcp::socket& sck, const void* buff, size_t currBytes, size_t totalBytes)
+		async_write_op(Handler& handler, tcp_socket& sck, const void* buff, size_t currBytes, size_t totalBytes)
 			:_handler(std::forward<Handler>(handler)), _sck(sck), _buffer(buff), _currBytes(currBytes), _totalBytes(totalBytes) {}
 
 		void operator()(const boost::system::error_code& ec, size_t s)
 		{
+			while (_sck._holdWrite)
+			{
+				run_thread::sleep(0);
+			}
+			tcp_socket::result res;
 			_currBytes += s;
 			if (ec || _totalBytes == _currBytes)
 			{
-				tcp_socket::result res = { _currBytes, ec.value(), !ec };
-				_handler(res);
+				do
+				{
+					res = { _currBytes, ec.value(), !ec };
+#ifndef HAS_ASIO_CANCEL_IO
+					if (boost::asio::error::operation_aborted == res.code && _sck._socket.is_open())
+					{
+						if (_totalBytes == _currBytes)
+						{
+							res.ok = true;
+							res.code = 0;
+						}
+						else if (!_sck._cancelWrite)
+						{
+							break;
+						}
+					}
+#endif
+					_handler(res);
+					return;
+				} while (0);
 			}
-			else
+			try
 			{
-				_sck.async_write_some(boost::asio::buffer((const char*)_buffer + _currBytes, _totalBytes - _currBytes), std::move(*this));
+				do
+				{
+#ifdef HAS_ASIO_CANCEL_IO
+					if (_sck._cancelWrite)
+					{
+						res = { _currBytes, ec.value(), !ec };
+						break;
+					}
+#endif
+					_sck._holdWrite = true;
+					BREAK_OF_SCOPE_EXEC(_sck._holdWrite = false);
+					_sck._socket.async_write_some(boost::asio::buffer((const char*)_buffer + _currBytes, _totalBytes - _currBytes), std::move(*this));
+					if (_sck._cancelWrite)
+					{
+						_sck.cancel_write();
+					}
+					return;
+				} while (0);
 			}
+			catch (const boost::system::system_error& se)
+			{
+				res = { _currBytes, se.code().value(), !se.code() };
+			}
+			_handler(res);
 		}
 
+#ifdef HAS_ASIO_HANDLER_IS_TRIED
 		friend bool asio_handler_is_tried(async_write_op*)
 		{
 			return true;
 		}
+#endif
 
 		handler_type _handler;
-		boost::asio::ip::tcp::socket& _sck;
+		tcp_socket& _sck;
 		const void* const _buffer;
 		size_t _currBytes;
 		const size_t _totalBytes;
 		COPY_CONSTRUCT5(async_write_op, _handler, _sck, _buffer, _currBytes, _totalBytes);
 	};
-#endif
-#endif
 
 #ifdef HAS_ASIO_SEND_FILE
 #ifdef __linux__
@@ -108,20 +200,78 @@ private:
 
 		void operator()(const boost::system::error_code& ec, size_t s)
 		{
+			while (_sck._holdWrite)
+			{
+				run_thread::sleep(0);
+			}
+			tcp_socket::result res;
 			_currBytes += s;
 			_sck._sendFileState.count -= s;
 			if (ec || !_sck._sendFileState.count || !s)
 			{
-				_sck._sendFileState.offset = NULL;
-				_sck._sendFileState.count = 0;
-				_sck._sendFileState.fd = 0;
-				tcp_socket::result res = { _currBytes, ec.value(), !ec };
-				_handler(res);
+				do 
+				{
+					res = { _currBytes, ec.value(), !ec };
+#ifndef HAS_ASIO_CANCEL_IO
+					if (boost::asio::error::operation_aborted == res.code && _sck._socket.is_open())
+					{
+						if (!_sck._sendFileState.count)
+						{
+							res.ok = true;
+							res.code = 0;
+						}
+						else if (!_sck._cancelWrite)
+						{
+							unsigned long long tOff = _sck._sendFileState.offset ? *_sck._sendFileState.offset + _currBytes : _currBytes;
+							tcp_socket::result tRes = _sck.try_send_file_same(_sck._sendFileState.fd, &tOff, _sck._sendFileState.count);
+							if (tRes.s != _sck._sendFileState.count)
+							{
+								_currBytes += tRes.s;
+								_sck._sendFileState.count -= tRes.s;
+								break;
+							}
+							res.ok = tRes.ok;
+							res.code = tRes.code;
+							res.s += tRes.s;
+						}
+					}
+#endif
+					_sck._sendFileState.offset = NULL;
+					_sck._sendFileState.count = 0;
+					_sck._sendFileState.fd = 0;
+					_handler(res);
+					return;
+				} while (0);
 			}
-			else
+			try
 			{
-				_sck._socket.async_write_some(boost::asio::buffer((const char*)&_sck._sendFileState, -1), std::move(*this));
+				do
+				{
+#ifdef HAS_ASIO_CANCEL_IO
+					if (_sck._cancelWrite)
+					{
+						res = { _currBytes, ec.value(), !ec };
+						break;
+					}
+#endif
+					_sck._holdWrite = true;
+					BREAK_OF_SCOPE_EXEC(_sck._holdWrite = false);
+					_sck._socket.async_write_some(boost::asio::buffer((const char*)&_sck._sendFileState, -1), std::move(*this));
+					if (_sck._cancelWrite)
+					{
+						_sck.cancel_write();
+					}
+					return;
+				} while (0);
 			}
+			catch (const boost::system::system_error& se)
+			{
+				res = { _currBytes, se.code().value(), !se.code() };
+			}
+			_sck._sendFileState.offset = NULL;
+			_sck._sendFileState.count = 0;
+			_sck._sendFileState.fd = 0;
+			_handler(res);
 		}
 
 #ifdef HAS_ASIO_HANDLER_IS_TRIED
@@ -180,6 +330,21 @@ public:
 	result connect(my_actor* host, const char* remoteIp, unsigned short remotePort);
 
 	/*!
+	@brief 取消当前所有异步请求
+	*/
+	result cancel();
+
+	/*!
+	@brief 取消当前异步读操作
+	*/
+	result cancel_read();
+
+	/*!
+	@brief 取消当前异步写操作
+	*/
+	result cancel_write();
+
+	/*!
 	@brief 往缓冲区内读取数据，直到读满
 	*/
 	result read(my_actor* host, void* buff, size_t length);
@@ -231,10 +396,25 @@ public:
 	result close();
 
 	/*!
+	@brief 是否没close
+	*/
+	bool is_open();
+
+	/*!
+	@brief 交换
+	*/
+	void swap(tcp_socket& other);
+
+	/*!
 	@brief 用原始句柄构造
 	*/
 	result assign(boost::asio::detail::socket_type sckFd);
 	result assign_v6(boost::asio::detail::socket_type sckFd);
+	
+	/*!
+	@brief 获取原始句柄
+	*/
+	boost::asio::detail::socket_type native();
 
 	/*!
 	@brief 异步模式下，客户端模式下连接远端服务器
@@ -242,16 +422,25 @@ public:
 	template <typename Handler>
 	bool async_connect(const boost::asio::ip::tcp::endpoint& remoteEndpoint, Handler&& handler)
 	{
-		_socket.async_connect(remoteEndpoint, std::bind([this](Handler& handler, const boost::system::error_code& ec)
+		result res;
+		try
 		{
-			if (!ec)
+			_socket.async_connect(remoteEndpoint, std::bind([this](Handler& handler, const boost::system::error_code& ec)
 			{
-				set_internal_non_blocking();
-			}
-			result res = { 0, ec.value(), !ec };
-			handler(res);
-		}, std::forward<Handler>(handler), __1));
-		return false;
+				if (!ec)
+				{
+					set_internal_non_blocking();
+				}
+				result res = { 0, ec.value(), !ec };
+				handler(res);
+			}, std::forward<Handler>(handler), __1));
+			return false;
+		}
+		catch (const boost::system::system_error& se)
+		{
+			res = { 0, se.code().value(), !se.code() };
+		}
+		return check_immed_callback(std::forward<Handler>(handler), res);
 	}
 
 	template <typename Handler>
@@ -266,11 +455,13 @@ public:
 	template <typename Handler>
 	bool async_read(void* buff, size_t length, Handler&& handler)
 	{
-#ifdef ENABLE_ASIO_PRE_OP
+		result res;
 		size_t trySize = 0;
+		_cancelRead = false;
+#ifdef ENABLE_ASIO_PRE_OP
 		if (is_pre_option())
 		{
-			result res = try_read_same(buff, length);
+			res = try_read_same(buff, length);
 			if (!res.ok)
 			{
 				if (!try_again(res))
@@ -288,25 +479,56 @@ public:
 			{
 				trySize = res.s;
 			}
-#ifdef HAS_ASIO_HANDLER_IS_TRIED
-			_socket.async_read_some(boost::asio::buffer((char*)buff + trySize, length - trySize),
-				async_read_op<Handler>(handler, _socket, buff, trySize, length));
-			return false;
-#endif
 		}
-		boost::asio::async_read(_socket, boost::asio::buffer((char*)buff + trySize, length - trySize), std::bind([trySize](Handler& handler, const boost::system::error_code& ec, size_t s)
-		{
-			result res = { trySize + s, ec.value(), !ec };
-			handler(res);
-		}, std::forward<Handler>(handler), __1, __2));
-#else
-		boost::asio::async_read(_socket, boost::asio::buffer(buff, length), std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
-		{
-			result res = { s, ec.value(), !ec };
-			handler(res);
-		}, std::forward<Handler>(handler), __1, __2));
 #endif
-		return false;
+		try
+		{
+			if (buff && length)
+			{
+#ifdef HAS_ASIO_HANDLER_IS_TRIED
+#ifdef ENABLE_ASIO_PRE_OP
+				if (is_pre_option())
+				{
+					_socket.async_read_some(boost::asio::buffer((char*)buff + trySize, length - trySize),
+						async_read_op<Handler>(handler, *this, buff, trySize, length));
+				}
+				else
+#endif
+				{
+					_socket.async_read_some(boost::asio::buffer((char*)buff + trySize, length - trySize),
+						wrap_no_tried(async_read_op<Handler>(handler, *this, buff, trySize, length)));
+				}
+#else
+				_socket.async_read_some(boost::asio::buffer((char*)buff + trySize, length - trySize),
+					async_read_op<Handler>(handler, *this, buff, trySize, length));
+#endif
+			}
+			else
+			{
+#if defined(ENABLE_ASIO_PRE_OP) && defined(HAS_ASIO_HANDLER_IS_TRIED)
+				if (is_pre_option())
+				{
+					_socket.async_read_some(boost::asio::null_buffers(), wrap_tried(std::bind([this, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_read_some_handler(buff, length, std::move(handler), ec, s);
+					}, std::forward<Handler>(handler), __1, __2)));
+				}
+				else
+#endif
+				{
+					_socket.async_read_some(boost::asio::null_buffers(), std::bind([this, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_read_some_handler(buff, length, std::move(handler), ec, s);
+					}, std::forward<Handler>(handler), __1, __2));
+				}
+			}
+			return false;
+		}
+		catch (const boost::system::system_error& se)
+		{
+			res = { 0, se.code().value(), !se.code() };
+		}
+		return check_immed_callback(std::forward<Handler>(handler), res);
 	}
 
 	/*!
@@ -315,31 +537,64 @@ public:
 	template <typename Handler>
 	bool async_read_some(void* buff, size_t length, Handler&& handler)
 	{
+		result res;
+		_cancelRead = false;
 #ifdef ENABLE_ASIO_PRE_OP
 		if (is_pre_option())
 		{
-			result res = try_read_same(buff, length);
+			res = try_read_same(buff, length);
 			if (res.ok || !try_again(res))
 			{
 				handler(res);
 				return true;
 			}
-#ifdef HAS_ASIO_HANDLER_IS_TRIED
-			_socket.async_read_some(boost::asio::buffer(buff, length), wrap_tried(std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
-			{
-				result res = { s, ec.value(), !ec };
-				handler(res);
-			}, std::forward<Handler>(handler), __1, __2)));
-			return false;
-#endif
 		}
 #endif
-		_socket.async_read_some(boost::asio::buffer(buff, length), std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
+		try
 		{
-			result res = { s, ec.value(), !ec };
-			handler(res);
-		}, std::forward<Handler>(handler), __1, __2));
-		return false;
+#if defined(ENABLE_ASIO_PRE_OP) && defined(HAS_ASIO_HANDLER_IS_TRIED)
+			if (is_pre_option())
+			{
+				if (buff && length)
+				{
+					_socket.async_read_some(boost::asio::buffer(buff, length), wrap_tried(std::bind([this, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_read_some_handler(buff, length, std::move(handler), ec, s);
+					}, std::forward<Handler>(handler), __1, __2)));
+				}
+				else
+				{
+					_socket.async_read_some(boost::asio::null_buffers(), wrap_tried(std::bind([this, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_read_some_handler(buff, length, std::move(handler), ec, s);
+					}, std::forward<Handler>(handler), __1, __2)));
+				}
+			}
+			else
+#endif
+			{
+				if (buff && length)
+				{
+					_socket.async_read_some(boost::asio::buffer(buff, length), std::bind([this, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_read_some_handler(buff, length, std::move(handler), ec, s);
+					}, std::forward<Handler>(handler), __1, __2));
+				}
+				else
+				{
+					_socket.async_read_some(boost::asio::null_buffers(), std::bind([this, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_read_some_handler(buff, length, std::move(handler), ec, s);
+					}, std::forward<Handler>(handler), __1, __2));
+				}
+			}
+			return false;
+		}
+		catch (const boost::system::system_error& se)
+		{
+			res = { 0, se.code().value(), !se.code() };
+		}
+		return check_immed_callback(std::forward<Handler>(handler), res);
 	}
 
 	/*!
@@ -348,11 +603,13 @@ public:
 	template <typename Handler>
 	bool async_write(const void* buff, size_t length, Handler&& handler)
 	{
-#ifdef ENABLE_ASIO_PRE_OP
+		result res;
 		size_t trySize = 0;
+		_cancelWrite = false;
+#ifdef ENABLE_ASIO_PRE_OP
 		if (is_pre_option())
 		{
-			result res = try_write_same(buff, length);
+			res = try_write_same(buff, length);
 			if (!res.ok)
 			{
 				if (!try_again(res))
@@ -370,25 +627,56 @@ public:
 			{
 				trySize = res.s;
 			}
-#ifdef HAS_ASIO_HANDLER_IS_TRIED
-			_socket.async_write_some(boost::asio::buffer((const char*)buff + trySize, length - trySize),
-				async_write_op<Handler>(handler, _socket, buff, trySize, length));
-			return false;
-#endif
 		}
-		boost::asio::async_write(_socket, boost::asio::buffer((const char*)buff + trySize, length - trySize), std::bind([trySize](Handler& handler, const boost::system::error_code& ec, size_t s)
-		{
-			result res = { trySize + s, ec.value(), !ec };
-			handler(res);
-		}, std::forward<Handler>(handler), __1, __2));
-#else
-		boost::asio::async_write(_socket, boost::asio::buffer(buff, length), std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
-		{
-			result res = { s, ec.value(), !ec };
-			handler(res);
-		}, std::forward<Handler>(handler), __1, __2));
 #endif
-		return false;
+		try
+		{
+			if (buff && length)
+			{
+#ifdef HAS_ASIO_HANDLER_IS_TRIED
+#ifdef ENABLE_ASIO_PRE_OP
+				if (is_pre_option())
+				{
+					_socket.async_write_some(boost::asio::buffer((const char*)buff + trySize, length - trySize),
+						async_write_op<Handler>(handler, *this, buff, trySize, length));
+				}
+				else
+#endif
+				{
+					_socket.async_write_some(boost::asio::buffer((const char*)buff + trySize, length - trySize),
+						wrap_no_tried(async_write_op<Handler>(handler, *this, buff, trySize, length)));
+				}
+#else
+				_socket.async_write_some(boost::asio::buffer((const char*)buff + trySize, length - trySize),
+					async_write_op<Handler>(handler, *this, buff, trySize, length));
+#endif
+			}
+			else
+			{
+#if defined(ENABLE_ASIO_PRE_OP) && defined(HAS_ASIO_HANDLER_IS_TRIED)
+				if (is_pre_option())
+				{
+					_socket.async_write_some(boost::asio::null_buffers(), wrap_tried(std::bind([this, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_write_some_handler(buff, length, std::move(handler), ec, s);
+					}, std::forward<Handler>(handler), __1, __2)));
+				}
+				else
+#endif
+				{
+					_socket.async_write_some(boost::asio::null_buffers(), std::bind([this, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_write_some_handler(buff, length, std::move(handler), ec, s);
+					}, std::forward<Handler>(handler), __1, __2));
+				}
+			}
+			return false;
+		}
+		catch (const boost::system::system_error& se)
+		{
+			res = { 0, se.code().value(), !se.code() };
+		}
+		return check_immed_callback(std::forward<Handler>(handler), res);
 	}
 
 	/*!
@@ -397,31 +685,64 @@ public:
 	template <typename Handler>
 	bool async_write_some(const void* buff, size_t length, Handler&& handler)
 	{
+		result res;
+		_cancelWrite = false;
 #ifdef ENABLE_ASIO_PRE_OP
 		if (is_pre_option())
 		{
-			result res = try_write_same(buff, length);
+			res = try_write_same(buff, length);
 			if (res.ok || !try_again(res))
 			{
 				handler(res);
 				return true;
 			}
-#ifdef HAS_ASIO_HANDLER_IS_TRIED
-			_socket.async_write_some(boost::asio::buffer(buff, length), wrap_tried(std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
-			{
-				result res = { s, ec.value(), !ec };
-				handler(res);
-			}, std::forward<Handler>(handler), __1, __2)));
-			return false;
-#endif
 		}
 #endif
-		_socket.async_write_some(boost::asio::buffer(buff, length), std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
+		try
 		{
-			result res = { s, ec.value(), !ec };
-			handler(res);
-		}, std::forward<Handler>(handler), __1, __2));
-		return false;
+#if defined(ENABLE_ASIO_PRE_OP) && defined(HAS_ASIO_HANDLER_IS_TRIED)
+			if (is_pre_option())
+			{
+				if (buff && length)
+				{
+					_socket.async_write_some(boost::asio::buffer(buff, length), wrap_tried(std::bind([this, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_write_some_handler(buff, length, std::move(handler), ec, s);
+					}, std::forward<Handler>(handler), __1, __2)));
+				}
+				else
+				{
+					_socket.async_write_some(boost::asio::null_buffers(), wrap_tried(std::bind([this, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_write_some_handler(buff, length, std::move(handler), ec, s);
+					}, std::forward<Handler>(handler), __1, __2)));
+				}
+			}
+			else
+#endif
+			{
+				if (buff && length)
+				{
+					_socket.async_write_some(boost::asio::buffer(buff, length), std::bind([this, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_write_some_handler(buff, length, std::move(handler), ec, s);
+					}, std::forward<Handler>(handler), __1, __2));
+				}
+				else
+				{
+					_socket.async_write_some(boost::asio::null_buffers(), std::bind([this, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_write_some_handler(buff, length, std::move(handler), ec, s);
+					}, std::forward<Handler>(handler), __1, __2));
+				}
+			}
+			return false;
+		}
+		catch (const boost::system::system_error& se)
+		{
+			res = { 0, se.code().value(), !se.code() };
+		}
+		return check_immed_callback(std::forward<Handler>(handler), res);
 	}
 
 #ifdef HAS_ASIO_SEND_FILE
@@ -432,60 +753,54 @@ public:
 	template <typename Handler>
 	bool async_send_file(int fd, unsigned long long* offset, size_t length, Handler&& handler)
 	{
+		result res;
 		assert(!_sendFileState.fd);
-		result res = try_send_file_same(fd, offset, length);
-		if (res.ok && res.s && res.s != length)
+		_cancelWrite = false;
+		res = try_send_file_same(fd, offset, length);
+		try
 		{
-			_sendFileState.offset = offset;
-			_sendFileState.count = length - res.s;
-			_sendFileState.fd = fd;
-			_socket.async_write_some(boost::asio::buffer((const char*)&_sendFileState, -1), async_send_file_op<Handler>(handler, *this, res.s));
-			return false;
+			if (res.ok && res.s && res.s != length)
+			{
+				_sendFileState.offset = offset;
+				_sendFileState.count = length - res.s;
+				_sendFileState.fd = fd;
+				_socket.async_write_some(boost::asio::buffer((const char*)&_sendFileState, -1), async_send_file_op<Handler>(handler, *this, res.s));
+				return false;
+			}
 		}
-#ifdef ENABLE_ASIO_PRE_OP
-		if (is_pre_option())
+		catch (const boost::system::system_error& se)
 		{
-			handler(res);
-			return true;
+			res = { 0, se.code().value(), !se.code() };
 		}
-#endif
-		_socket.get_io_service().post(std::bind([](Handler& handler, result& res)
-		{
-			handler(res);
-		}, std::forward<Handler>(handler), res));
-		return false;
+		return check_immed_callback(std::forward<Handler>(handler), res);
 	}
 #elif WIN32
 	template <typename Handler>
 	bool async_send_file(HANDLE hFile, unsigned long long* offset, size_t length, Handler&& handler)
 	{
+		result res;
+		_cancelWrite = false;
 		if (!init_send_file(hFile, offset, length) || 0 == length)
 		{
-			result res = { 0, length ? ::WSAGetLastError() : 0, 0 == length };
-#ifdef ENABLE_ASIO_PRE_OP
-			if (is_pre_option())
-			{
-				handler(res);
-				return true;
-			}
-#endif
-			_socket.get_io_service().post(std::bind([](Handler& handler, result& res)
-			{
-				handler(res);
-			}, std::forward<Handler>(handler), res));
-			return false;
+			res = { 0, length ? ::WSAGetLastError() : 0, 0 == length };
 		}
-		boost::asio::detail::send_file_pck pck = { hFile, (DWORD)length };
-		_socket.async_write_some(boost::asio::buffer((const char*)&pck, -1), std::bind([offset](Handler& handler, const boost::system::error_code& ec, size_t s)
+		else
 		{
-			if (offset)
+			try
 			{
-				*offset += (unsigned long long)s;
+				boost::asio::detail::send_file_pck pck = { hFile, (DWORD)length };
+				_socket.async_write_some(boost::asio::buffer((const char*)&pck, -1), std::bind([this, hFile, offset, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+				{
+					async_send_file_handler(0, hFile, offset, length, std::move(handler), ec, s);
+				}, std::forward<Handler>(handler), __1, __2));
+				return false;
 			}
-			result res = { s, ec.value(), !ec };
-			handler(res);
-		}, std::forward<Handler>(handler), __1, __2));
-		return false;
+			catch (const boost::system::system_error& se)
+			{
+				res = { 0, se.code().value(), !se.code() };
+			}
+		}
+		return check_immed_callback(std::forward<Handler>(handler), res);
 	}
 #endif
 #endif
@@ -519,6 +834,270 @@ public:
 	*/
 	static bool try_again(const result& res);
 private:
+	template <typename Handler>
+	void async_read_handler(size_t currSize, void* buff, size_t length, Handler&& handler, const boost::system::error_code& ec, size_t s)
+	{
+		currSize += s;
+		result res = { currSize, ec.value(), !ec };
+#ifndef HAS_ASIO_CANCEL_IO
+		while (_holdRead)
+		{
+			run_thread::sleep(0);
+		}
+		if (boost::asio::error::operation_aborted == res.code && _socket.is_open())
+		{
+			if (length == currSize)
+			{
+				res.ok = true;
+				res.code = 0;
+			}
+			else if (!_cancelRead)
+			{
+				try
+				{
+					_holdRead = true;
+					BREAK_OF_SCOPE_EXEC(_holdRead = false);
+					boost::asio::async_read(_socket, boost::asio::buffer((char*)buff + currSize, length - currSize), std::bind([this, currSize, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_read_handler(currSize, buff, length, std::move(handler), ec, s);
+					}, std::forward<Handler>(handler), __1, __2));
+					if (_cancelRead)
+					{
+						cancel_read();
+					}
+					return;
+				}
+				catch (const boost::system::system_error& se)
+				{
+					res = { 0, se.code().value(), !se.code() };
+				}
+			}
+		}
+#endif
+		handler(res);
+	}
+
+	template <typename Handler>
+	void async_read_some_handler(void* buff, size_t length, Handler&& handler, const boost::system::error_code& ec, size_t s)
+	{
+		result res = { s, ec.value(), !ec };
+#ifndef HAS_ASIO_CANCEL_IO
+		while (_holdRead)
+		{
+			run_thread::sleep(0);
+		}
+		if (boost::asio::error::operation_aborted == res.code && _socket.is_open())
+		{
+			if (res.s)
+			{
+				res.ok = true;
+				res.code = 0;
+			}
+			else if (!_cancelRead)
+			{
+				try
+				{
+					_holdRead = true;
+					BREAK_OF_SCOPE_EXEC(_holdRead = false);
+					if (buff && length)
+					{
+						_socket.async_read_some(boost::asio::buffer(buff, length), std::bind([this, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+						{
+							async_read_some_handler(buff, length, std::move(handler), ec, s);
+						}, std::forward<Handler>(handler), __1, __2));
+					}
+					else
+					{
+						_socket.async_read_some(boost::asio::null_buffers(), std::bind([this, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+						{
+							async_read_some_handler(buff, length, std::move(handler), ec, s);
+						}, std::forward<Handler>(handler), __1, __2));
+					}
+					if (_cancelRead)
+					{
+						cancel_read();
+					}
+					return;
+				}
+				catch (const boost::system::system_error& se)
+				{
+					res = { 0, se.code().value(), !se.code() };
+				}
+			}
+		}
+#endif
+		handler(res);
+	}
+
+	template <typename Handler>
+	void async_write_handler(size_t currSize, const void* buff, size_t length, Handler&& handler, const boost::system::error_code& ec, size_t s)
+	{
+		currSize += s;
+		result res = { currSize, ec.value(), !ec };
+#ifndef HAS_ASIO_CANCEL_IO
+		while (_holdWrite)
+		{
+			run_thread::sleep(0);
+		}
+		if (boost::asio::error::operation_aborted == res.code && _socket.is_open())
+		{
+			if (length == currSize)
+			{
+				res.ok = true;
+				res.code = 0;
+			}
+			else if (!_cancelWrite)
+			{
+				try
+				{
+					_holdWrite = true;
+					BREAK_OF_SCOPE_EXEC(_holdWrite = false);
+					boost::asio::async_write(_socket, boost::asio::buffer((char*)buff + currSize, length - currSize), std::bind([this, currSize, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_write_handler(currSize, buff, length, std::move(handler), ec, s);
+					}, std::forward<Handler>(handler), __1, __2));
+					if (_cancelWrite)
+					{
+						cancel_write();
+					}
+					return;
+				}
+				catch (const boost::system::system_error& se)
+				{
+					res = { 0, se.code().value(), !se.code() };
+				}
+			}
+		}
+#endif
+		handler(res);
+	}
+
+	template <typename Handler>
+	void async_write_some_handler(const void* buff, size_t length, Handler&& handler, const boost::system::error_code& ec, size_t s)
+	{
+		result res = { s, ec.value(), !ec };
+#ifndef HAS_ASIO_CANCEL_IO
+		while (_holdWrite)
+		{
+			run_thread::sleep(0);
+		}
+		if (boost::asio::error::operation_aborted == res.code && _socket.is_open())
+		{
+			if (res.s)
+			{
+				res.ok = true;
+				res.code = 0;
+			}
+			else if (!_cancelWrite)
+			{
+				try
+				{
+					_holdWrite = true;
+					BREAK_OF_SCOPE_EXEC(_holdWrite = false);
+					if (buff && length)
+					{
+						_socket.async_write_some(boost::asio::buffer(buff, length), std::bind([this, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+						{
+							async_write_some_handler(buff, length, std::move(handler), ec, s);
+						}, std::forward<Handler>(handler), __1, __2));
+					}
+					else
+					{
+						_socket.async_write_some(boost::asio::null_buffers(), std::bind([this, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+						{
+							async_write_some_handler(buff, length, std::move(handler), ec, s);
+						}, std::forward<Handler>(handler), __1, __2));
+					}
+					if (_cancelWrite)
+					{
+						cancel_write();
+					}
+					return;
+				}
+				catch (const boost::system::system_error& se)
+				{
+					res = { 0, se.code().value(), !se.code() };
+				}
+			}
+		}
+#endif
+		handler(res);
+	}
+
+#ifdef HAS_ASIO_SEND_FILE
+#ifdef WIN32
+	template <typename Handler>
+	void async_send_file_handler(size_t currSize, HANDLE hFile, unsigned long long* offset, size_t length, Handler&& handler, const boost::system::error_code& ec, size_t s)
+	{
+		if (offset)
+		{
+			*offset += (unsigned long long)s;
+		}
+		currSize += s;
+		result res = { currSize, ec.value(), !ec };
+#ifndef HAS_ASIO_CANCEL_IO
+		while (_holdWrite)
+		{
+			run_thread::sleep(0);
+		}
+		if (boost::asio::error::operation_aborted == res.code && _socket.is_open())
+		{
+			if (length == currSize)
+			{
+				res.ok = true;
+				res.code = 0;
+			}
+			else if (!_cancelWrite)
+			{
+				length -= currSize;
+				unsigned long long tOff = offset ? *offset + currSize : currSize;
+				if (init_send_file(hFile, &tOff, length))
+				{
+					try
+					{
+						_holdWrite = true;
+						BREAK_OF_SCOPE_EXEC(_holdWrite = false);
+						boost::asio::detail::send_file_pck pck = { hFile, (DWORD)length };
+						_socket.async_write_some(boost::asio::buffer((const char*)&pck, -1), std::bind([this, currSize, hFile, offset, length](Handler& handler, const boost::system::error_code& ec, size_t s)
+						{
+							async_send_file_handler(currSize, hFile, offset, length, std::move(handler), ec, s);
+						}, std::forward<Handler>(handler), __1, __2));
+						if (_cancelWrite)
+						{
+							cancel_write();
+						}
+						return;
+					}
+					catch (const boost::system::system_error& se)
+					{
+						res = { 0, se.code().value(), !se.code() };
+					}
+				}
+			}
+		}
+#endif
+		handler(res);
+	}
+#endif
+#endif
+
+	template <typename Handler>
+	bool check_immed_callback(Handler&& handler, result& res)
+	{
+#ifdef ENABLE_ASIO_PRE_OP
+		if (is_pre_option())
+		{
+			handler(res);
+			return true;
+		}
+#endif
+		_socket.get_io_service().post(std::bind([](Handler& handler, result& res)
+		{
+			handler(res);
+		}, std::forward<Handler>(handler), res));
+		return false;
+	}
+private:
 #ifdef HAS_ASIO_SEND_FILE
 #ifdef __linux__
 	result try_send_file_same(int fd, unsigned long long* offset, size_t& length);
@@ -536,6 +1115,10 @@ private:
 	boost::asio::detail::socket_ops::send_file_pck _sendFileState;
 #endif
 #endif
+	volatile bool _holdRead;
+	volatile bool _holdWrite;
+	volatile bool _cancelRead;
+	volatile bool _cancelWrite;
 	bool _nonBlocking;
 #ifdef ENABLE_ASIO_PRE_OP
 	bool _preOption;
@@ -556,6 +1139,7 @@ public:
 	@brief 只允许特定ip连接该服务器
 	*/
 	tcp_socket::result open(const char* ip, unsigned short port);
+	tcp_socket::result open(const boost::asio::ip::tcp::endpoint& endPoint);
 
 	/*!
 	@brief ip v4下打开服务器
@@ -574,9 +1158,29 @@ public:
 	tcp_socket::result assign_v6(boost::asio::detail::socket_type accFd);
 
 	/*!
+	@brief 获取原始句柄
+	*/
+	boost::asio::detail::socket_type native();
+
+	/*!
+	@brief 取消一个异步请求
+	*/
+	tcp_socket::result cancel();
+
+	/*!
 	@brief 关闭侦听器
 	*/
 	tcp_socket::result close();
+
+	/*!
+	@brief 是否没close
+	*/
+	bool is_open();
+
+	/*!
+	@brief 交换
+	*/
+	void swap(tcp_acceptor& other);
 
 	/*!
 	@brief linux下优化异步返回（如果有数据，在async_xxx操作中直接回调）
@@ -604,49 +1208,70 @@ public:
 	template <typename Handler>
 	bool async_accept(tcp_socket& socket, Handler&& handler)
 	{
+		tcp_socket::result res;
 #ifdef ENABLE_ASIO_PRE_OP
 		if (is_pre_option())
 		{
-			tcp_socket::result res = try_accept(socket);
+			res = try_accept(socket);
 			if (res.ok || !tcp_socket::try_again(res))
 			{
-				if (res.ok)
-				{
-					socket.set_internal_non_blocking();
-				}
 				handler(res);
 				return true;
 			}
-#ifdef HAS_ASIO_HANDLER_IS_TRIED
-			_acceptor->async_accept(socket._socket, wrap_tried(std::bind([&socket](Handler& handler, const boost::system::error_code& ec)
-			{
-				if (!ec)
-				{
-					socket.set_internal_non_blocking();
-				}
-				tcp_socket::result res = { 0, ec.value(), !ec };
-				handler(res);
-			}, std::forward<Handler>(handler), __1)));
-			return false;
-#endif
 		}
 #endif
-		_acceptor->async_accept(socket._socket, std::bind([&socket](Handler& handler, const boost::system::error_code& ec)
+		try
 		{
-			if (!ec)
+#if defined(ENABLE_ASIO_PRE_OP) && defined(HAS_ASIO_HANDLER_IS_TRIED)
+			if (is_pre_option())
 			{
-				socket.set_internal_non_blocking();
+				_acceptor->async_accept(socket._socket, wrap_tried(std::bind([&socket](Handler& handler, const boost::system::error_code& ec)
+				{
+					if (!ec)
+					{
+						socket.set_internal_non_blocking();
+					}
+					tcp_socket::result res = { 0, ec.value(), !ec };
+					handler(res);
+				}, std::forward<Handler>(handler), __1)));
 			}
-			tcp_socket::result res = { 0, ec.value(), !ec };
+			else
+#endif
+			{
+				_acceptor->async_accept(socket._socket, std::bind([&socket](Handler& handler, const boost::system::error_code& ec)
+				{
+					if (!ec)
+					{
+						socket.set_internal_non_blocking();
+					}
+					tcp_socket::result res = { 0, ec.value(), !ec };
+					handler(res);
+				}, std::forward<Handler>(handler), __1));
+			}
+			return false;
+		}
+		catch (const boost::system::system_error& se)
+		{
+			res = { 0, se.code().value(), !se.code() };
+		}
+#ifdef ENABLE_ASIO_PRE_OP
+		if (is_pre_option())
+		{
 			handler(res);
-		}, std::forward<Handler>(handler), __1));
+			return true;
+		}
+#endif
+		_acceptor->get_io_service().post(std::bind([](Handler& handler, tcp_socket::result& res)
+		{
+			handler(res);
+		}, std::forward<Handler>(handler), res));
 		return false;
 	}
 private:
 	void set_internal_non_blocking();
 	tcp_socket::result try_accept(tcp_socket& socket);
 private:
-	io_engine& _ios;
+	io_engine* _ios;
 	stack_obj<boost::asio::ip::tcp::acceptor> _acceptor;
 	bool _nonBlocking;
 #ifdef ENABLE_ASIO_PRE_OP
@@ -661,12 +1286,7 @@ private:
 class udp_socket
 {
 public:
-	struct result
-	{
-		size_t s;///<字节数/缓存数
-		int code;///<错误码
-		bool ok;///<是否成功
-	};
+	typedef socket_result result;
 public:
 	udp_socket(io_engine& ios);
 	~udp_socket();
@@ -675,6 +1295,26 @@ public:
 	@brief 关闭socket
 	*/
 	result close();
+
+	/*!
+	@brief 是否没close
+	*/
+	bool is_open();
+
+	/*!
+	@brief 取消所有异步请求
+	*/
+	result cancel();
+
+	/*!
+	@brief 取消一个异步接收操作
+	*/
+	result cancel_receive();
+
+	/*!
+	@brief 取消一个异步发送操作
+	*/
+	result cancel_send();
 
 	/*!
 	@brief ip v4模式打开socket
@@ -710,12 +1350,22 @@ public:
 	@brief 打开并绑定ip v6下某个端口接收发送数据
 	*/
 	result open_bind_v6(unsigned short port);
+
+	/*!
+	@brief 交换
+	*/
+	void swap(udp_socket& other);
 	
 	/*!
 	@brief 用原始句柄构造
 	*/
 	result assign(boost::asio::detail::socket_type sckFd);
 	result assign_v6(boost::asio::detail::socket_type sckFd);
+
+	/*!
+	@brief 获取原始句柄
+	*/
+	boost::asio::detail::socket_type native();
 
 	/*!
 	@brief linux下优化异步返回（如果有数据，在async_xxx操作中直接回调）
@@ -751,6 +1401,7 @@ public:
 	/*!
 	@brief 接收远端发送的数据到缓冲区，并记录下远端地址
 	*/
+	result receive_from(my_actor* host, boost::asio::ip::udp::endpoint& remoteEndpoint, void* buff, size_t length, int flags = 0);
 	result receive_from(my_actor* host, void* buff, size_t length, int flags = 0);
 
 	/*!
@@ -776,6 +1427,7 @@ public:
 	/*!
 	@brief 在ms时间范围内，接收远端发送的数据到缓冲区，并记录下远端地址
 	*/
+	result timed_receive_from(my_actor* host, boost::asio::ip::udp::endpoint& remoteEndpoint, int ms, void* buff, size_t length, int flags = 0);
 	result timed_receive_from(my_actor* host, int ms, void* buff, size_t length, int flags = 0);
 
 	/*!
@@ -804,31 +1456,66 @@ public:
 	template <typename Handler>
 	bool async_send_to(const boost::asio::ip::udp::endpoint& remoteEndpoint, const void* buff, size_t length, Handler&& handler, int flags = 0)
 	{
+		result res;
+#ifndef HAS_ASIO_CANCEL_IO
+		_cancelSend = false;
+#endif
 #ifdef ENABLE_ASIO_PRE_OP
 		if (is_pre_option())
 		{
-			result res = try_send_to(remoteEndpoint, buff, length, flags);
+			res = try_send_to(remoteEndpoint, buff, length, flags);
 			if (res.ok || !try_again(res))
 			{
 				handler(res);
 				return true;
 			}
-#ifdef HAS_ASIO_HANDLER_IS_TRIED
-			_socket.async_send_to(boost::asio::buffer(buff, length), remoteEndpoint, flags, wrap_tried(std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
-			{
-				result res = { s, ec.value(), !ec };
-				handler(res);
-			}, std::forward<Handler>(handler), __1, __2)));
-			return false;
-#endif
 		}
 #endif
-		_socket.async_send_to(boost::asio::buffer(buff, length), remoteEndpoint, flags, std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
+		try
 		{
-			result res = { s, ec.value(), !ec };
-			handler(res);
-		}, std::forward<Handler>(handler), __1, __2));
-		return false;
+#if defined(ENABLE_ASIO_PRE_OP) && defined(HAS_ASIO_HANDLER_IS_TRIED)
+			if (is_pre_option())
+			{
+				if (buff && length)
+				{
+					_socket.async_send_to(boost::asio::buffer(buff, length), remoteEndpoint, flags, wrap_tried(std::bind([this, remoteEndpoint, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_send_to_handler(remoteEndpoint, buff, length, std::move(handler), flags, ec, s);
+					}, std::forward<Handler>(handler), __1, __2)));
+				}
+				else
+				{
+					_socket.async_send_to(boost::asio::null_buffers(), remoteEndpoint, flags, wrap_tried(std::bind([this, remoteEndpoint, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_send_to_handler(remoteEndpoint, buff, length, std::move(handler), flags, ec, s);
+					}, std::forward<Handler>(handler), __1, __2)));
+				}
+			}
+			else
+#endif
+			{
+				if (buff && length)
+				{
+					_socket.async_send_to(boost::asio::buffer(buff, length), remoteEndpoint, flags, std::bind([this, remoteEndpoint, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_send_to_handler(remoteEndpoint, buff, length, std::move(handler), flags, ec, s);
+					}, std::forward<Handler>(handler), __1, __2));
+				}
+				else
+				{
+					_socket.async_send_to(boost::asio::null_buffers(), remoteEndpoint, flags, std::bind([this, remoteEndpoint, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_send_to_handler(remoteEndpoint, buff, length, std::move(handler), flags, ec, s);
+					}, std::forward<Handler>(handler), __1, __2));
+				}
+			}
+			return false;
+		}
+		catch (const boost::system::system_error& se)
+		{
+			res = { 0, se.code().value(), !se.code() };
+		}
+		return check_immed_callback(std::forward<Handler>(handler), res);
 	}
 
 	/*!
@@ -846,31 +1533,66 @@ public:
 	template <typename Handler>
 	bool async_send(const void* buff, size_t length, Handler&& handler, int flags = 0)
 	{
+		result res;
+#ifndef HAS_ASIO_CANCEL_IO
+		_cancelSend = false;
+#endif
 #ifdef ENABLE_ASIO_PRE_OP
 		if (is_pre_option())
 		{
-			result res = try_send(buff, length, flags);
+			res = try_send(buff, length, flags);
 			if (res.ok || !try_again(res))
 			{
 				handler(res);
 				return true;
 			}
-#ifdef HAS_ASIO_HANDLER_IS_TRIED
-			_socket.async_send(boost::asio::buffer(buff, length), flags, wrap_tried(std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
-			{
-				result res = { s, ec.value(), !ec };
-				handler(res);
-			}, std::forward<Handler>(handler), __1, __2)));
-			return false;
-#endif
 		}
 #endif
-		_socket.async_send(boost::asio::buffer(buff, length), flags, std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
+		try
 		{
-			result res = { s, ec.value(), !ec };
-			handler(res);
-		}, std::forward<Handler>(handler), __1, __2));
-		return false;
+#if defined(ENABLE_ASIO_PRE_OP) && defined(HAS_ASIO_HANDLER_IS_TRIED)
+			if (is_pre_option())
+			{
+				if (buff && length)
+				{
+					_socket.async_send(boost::asio::buffer(buff, length), flags, wrap_tried(std::bind([this, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_send_handler(buff, length, std::move(handler), flags, ec, s);
+					}, std::forward<Handler>(handler), __1, __2)));
+				}
+				else
+				{
+					_socket.async_send(boost::asio::null_buffers(), flags, wrap_tried(std::bind([this, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_send_handler(buff, length, std::move(handler), flags, ec, s);
+					}, std::forward<Handler>(handler), __1, __2)));
+				}
+			}
+			else
+#endif
+			{
+				if (buff && length)
+				{
+					_socket.async_send(boost::asio::buffer(buff, length), flags, std::bind([this, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_send_handler(buff, length, std::move(handler), flags, ec, s);
+					}, std::forward<Handler>(handler), __1, __2));
+				}
+				else
+				{
+					_socket.async_send(boost::asio::null_buffers(), flags, std::bind([this, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_send_handler(buff, length, std::move(handler), flags, ec, s);
+					}, std::forward<Handler>(handler), __1, __2));
+				}
+			}
+			return false;
+		}
+		catch (const boost::system::system_error& se)
+		{
+			res = { 0, se.code().value(), !se.code() };
+		}
+		return check_immed_callback(std::forward<Handler>(handler), res);
 	}
 
 	/*!
@@ -879,31 +1601,66 @@ public:
 	template <typename Handler>
 	bool async_receive_from(boost::asio::ip::udp::endpoint& remoteEndpoint, void* buff, size_t length, Handler&& handler, int flags = 0)
 	{
+		result res;
+#ifndef HAS_ASIO_CANCEL_IO
+		_cancelRecv = false;
+#endif
 #ifdef ENABLE_ASIO_PRE_OP
 		if (is_pre_option())
 		{
-			result res = try_receive_from(remoteEndpoint, buff, length, flags);
+			res = try_receive_from(remoteEndpoint, buff, length, flags);
 			if (res.ok || !try_again(res))
 			{
 				handler(res);
 				return true;
 			}
-#ifdef HAS_ASIO_HANDLER_IS_TRIED
-			_socket.async_receive_from(boost::asio::buffer(buff, length), remoteEndpoint, flags, wrap_tried(std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
-			{
-				result res = { s, ec.value(), !ec };
-				handler(res);
-			}, std::forward<Handler>(handler), __1, __2)));
-			return false;
-#endif
 		}
 #endif
-		_socket.async_receive_from(boost::asio::buffer(buff, length), remoteEndpoint, flags, std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
+		try
 		{
-			result res = { s, ec.value(), !ec };
-			handler(res);
-		}, std::forward<Handler>(handler), __1, __2));
-		return false;
+#if defined(ENABLE_ASIO_PRE_OP) && defined(HAS_ASIO_HANDLER_IS_TRIED)
+			if (is_pre_option())
+			{
+				if (buff && length)
+				{
+					_socket.async_receive_from(boost::asio::buffer(buff, length), remoteEndpoint, flags, wrap_tried(std::bind([this, &remoteEndpoint, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_receive_from_handler(remoteEndpoint, buff, length, std::move(handler), flags, ec, s);
+					}, std::forward<Handler>(handler), __1, __2)));
+				}
+				else
+				{
+					_socket.async_receive_from(boost::asio::null_buffers(), remoteEndpoint, flags, wrap_tried(std::bind([this, &remoteEndpoint, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_receive_from_handler(remoteEndpoint, buff, length, std::move(handler), flags, ec, s);
+					}, std::forward<Handler>(handler), __1, __2)));
+				}
+			}
+			else
+#endif
+			{
+				if (buff && length)
+				{
+					_socket.async_receive_from(boost::asio::buffer(buff, length), remoteEndpoint, flags, std::bind([this, &remoteEndpoint, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_receive_from_handler(remoteEndpoint, buff, length, std::move(handler), flags, ec, s);
+					}, std::forward<Handler>(handler), __1, __2));
+				}
+				else
+				{
+					_socket.async_receive_from(boost::asio::null_buffers(), remoteEndpoint, flags, std::bind([this, &remoteEndpoint, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_receive_from_handler(remoteEndpoint, buff, length, std::move(handler), flags, ec, s);
+					}, std::forward<Handler>(handler), __1, __2));
+				}
+			}
+			return false;
+		}
+		catch (const boost::system::system_error& se)
+		{
+			res = { 0, se.code().value(), !se.code() };
+		}
+		return check_immed_callback(std::forward<Handler>(handler), res);
 	}
 
 	template <typename Handler>
@@ -918,31 +1675,66 @@ public:
 	template <typename Handler>
 	bool async_receive(void* buff, size_t length, Handler&& handler, int flags = 0)
 	{
+		result res;
+#ifndef HAS_ASIO_CANCEL_IO
+		_cancelRecv = false;
+#endif
 #ifdef ENABLE_ASIO_PRE_OP
 		if (is_pre_option())
 		{
-			result res = try_receive(buff, length, flags);
+			res = try_receive(buff, length, flags);
 			if (res.ok || !try_again(res))
 			{
 				handler(res);
 				return true;
 			}
-#ifdef HAS_ASIO_HANDLER_IS_TRIED
-			_socket.async_receive(boost::asio::buffer(buff, length), flags, wrap_tried(std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
-			{
-				result res = { s, ec.value(), !ec };
-				handler(res);
-			}, std::forward<Handler>(handler), __1, __2)));
-			return false;
-#endif
 		}
 #endif
-		_socket.async_receive(boost::asio::buffer(buff, length), flags, std::bind([](Handler& handler, const boost::system::error_code& ec, size_t s)
+		try
 		{
-			result res = { s, ec.value(), !ec };
-			handler(res);
-		}, std::forward<Handler>(handler), __1, __2));
-		return false;
+#if defined(ENABLE_ASIO_PRE_OP) && defined(HAS_ASIO_HANDLER_IS_TRIED)
+			if (is_pre_option())
+			{
+				if (buff && length)
+				{
+					_socket.async_receive(boost::asio::buffer(buff, length), flags, wrap_tried(std::bind([this, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_receive_handler(buff, length, std::move(handler), flags, ec, s);
+					}, std::forward<Handler>(handler), __1, __2)));
+				}
+				else
+				{
+					_socket.async_receive(boost::asio::null_buffers(), flags, wrap_tried(std::bind([this, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_receive_handler(buff, length, std::move(handler), flags, ec, s);
+					}, std::forward<Handler>(handler), __1, __2)));
+				}
+			}
+			else
+#endif
+			{
+				if (buff && length)
+				{
+					_socket.async_receive(boost::asio::buffer(buff, length), flags, std::bind([this, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_receive_handler(buff, length, std::move(handler), flags, ec, s);
+					}, std::forward<Handler>(handler), __1, __2));
+				}
+				else
+				{
+					_socket.async_receive(boost::asio::null_buffers(), flags, std::bind([this, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+					{
+						async_receive_handler(buff, length, std::move(handler), flags, ec, s);
+					}, std::forward<Handler>(handler), __1, __2));
+				}
+			}
+			return false;
+		}
+		catch (const boost::system::system_error& se)
+		{
+			res = { 0, se.code().value(), !se.code() };
+		}
+		return check_immed_callback(std::forward<Handler>(handler), res);
 	}
 
 	/*!
@@ -964,12 +1756,8 @@ public:
 	/*!
 	@brief 非阻塞尝试接收数据，并记录下远端地址
 	*/
-	result try_receive_from(void* buff, size_t length, int flags = 0);
-
-	/*!
-	@brief 非阻塞尝试接收数据，并记录下远端地址
-	*/
 	result try_receive_from(boost::asio::ip::udp::endpoint& remoteEndpoint, void* buff, size_t length, int flags = 0);
+	result try_receive_from(void* buff, size_t length, int flags = 0);
 
 	/*!
 	@brief 非阻塞尝试一次发送多条数据
@@ -1005,10 +1793,241 @@ public:
 	*/
 	static bool try_again(const result& res);
 private:
+	template <typename Handler>
+	void async_send_to_handler(const boost::asio::ip::udp::endpoint& remoteEndpoint, const void* buff, size_t length, Handler&& handler, int flags, const boost::system::error_code& ec, size_t s)
+	{
+		result res = { s, ec.value(), !ec };
+#ifndef HAS_ASIO_CANCEL_IO
+		while (_holdSend)
+		{
+			run_thread::sleep(0);
+		}
+		if (boost::asio::error::operation_aborted == res.code && _socket.is_open())
+		{
+			if (res.s)
+			{
+				res.ok = true;
+				res.code = 0;
+			}
+			else if (!_cancelSend)
+			{
+				try
+				{
+					_holdSend = true;
+					BREAK_OF_SCOPE_EXEC(_holdSend = false);
+					if (buff && length)
+					{
+						_socket.async_send_to(boost::asio::buffer(buff, length), remoteEndpoint, flags, std::bind([this, remoteEndpoint, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+						{
+							async_send_to_handler(remoteEndpoint, buff, length, std::move(handler), flags, ec, s);
+						}, std::forward<Handler>(handler), __1, __2));
+					}
+					else
+					{
+						_socket.async_send_to(boost::asio::null_buffers(), remoteEndpoint, flags, std::bind([this, remoteEndpoint, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+						{
+							async_send_to_handler(remoteEndpoint, buff, length, std::move(handler), flags, ec, s);
+						}, std::forward<Handler>(handler), __1, __2));
+					}
+					if (_cancelSend)
+					{
+						cancel_send();
+					}
+					return;
+				}
+				catch (const boost::system::system_error& se)
+				{
+					res = { 0, se.code().value(), !se.code() };
+				}
+			}
+		}
+#endif
+		handler(res);
+	}
+
+	template <typename Handler>
+	void async_send_handler(const void* buff, size_t length, Handler&& handler, int flags, const boost::system::error_code& ec, size_t s)
+	{
+		result res = { s, ec.value(), !ec };
+#ifndef HAS_ASIO_CANCEL_IO
+		while (_holdSend)
+		{
+			run_thread::sleep(0);
+		}
+		if (boost::asio::error::operation_aborted == res.code && _socket.is_open())
+		{
+			if (res.s)
+			{
+				res.ok = true;
+				res.code = 0;
+			}
+			else if (!_cancelSend)
+			{
+				try
+				{
+					_holdSend = true;
+					BREAK_OF_SCOPE_EXEC(_holdSend = false);
+					if (buff && length)
+					{
+						_socket.async_send(boost::asio::buffer(buff, length), flags, std::bind([this, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+						{
+							async_send_handler(buff, length, std::move(handler), flags, ec, s);
+						}, std::forward<Handler>(handler), __1, __2));
+					}
+					else
+					{
+						_socket.async_send(boost::asio::null_buffers(), flags, std::bind([this, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+						{
+							async_send_handler(buff, length, std::move(handler), flags, ec, s);
+						}, std::forward<Handler>(handler), __1, __2));
+					}
+					if (_cancelSend)
+					{
+						cancel_send();
+					}
+					return;
+				}
+				catch (const boost::system::system_error& se)
+				{
+					res = { 0, se.code().value(), !se.code() };
+				}
+			}
+		}
+#endif
+		handler(res);
+	}
+
+	template <typename Handler>
+	void async_receive_from_handler(boost::asio::ip::udp::endpoint& remoteEndpoint, void* buff, size_t length, Handler&& handler, int flags, const boost::system::error_code& ec, size_t s)
+	{
+		result res = { s, ec.value(), !ec };
+#ifndef HAS_ASIO_CANCEL_IO
+		while (_holdRecv)
+		{
+			run_thread::sleep(0);
+		}
+		if (boost::asio::error::operation_aborted == res.code && _socket.is_open())
+		{
+			if (res.s)
+			{
+				res.ok = true;
+				res.code = 0;
+			}
+			else if (!_cancelRecv)
+			{
+				try
+				{
+					_holdRecv = true;
+					BREAK_OF_SCOPE_EXEC(_holdRecv = false);
+					if (buff && length)
+					{
+						_socket.async_receive_from(boost::asio::buffer(buff, length), remoteEndpoint, flags, std::bind([this, &remoteEndpoint, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+						{
+							async_receive_from_handler(remoteEndpoint, buff, length, std::move(handler), flags, ec, s);
+						}, std::forward<Handler>(handler), __1, __2));
+					}
+					else
+					{
+						_socket.async_receive_from(boost::asio::null_buffers(), remoteEndpoint, flags, std::bind([this, &remoteEndpoint, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+						{
+							async_receive_from_handler(remoteEndpoint, buff, length, std::move(handler), flags, ec, s);
+						}, std::forward<Handler>(handler), __1, __2));
+					}
+					if (_cancelRecv)
+					{
+						cancel_receive();
+					}
+					return;
+				}
+				catch (const boost::system::system_error& se)
+				{
+					res = { 0, se.code().value(), !se.code() };
+				}
+			}
+		}
+#endif
+		handler(res);
+	}
+
+	template <typename Handler>
+	void async_receive_handler(void* buff, size_t length, Handler&& handler, int flags, const boost::system::error_code& ec, size_t s)
+	{
+		result res = { s, ec.value(), !ec };
+#ifndef HAS_ASIO_CANCEL_IO
+		while (_holdRecv)
+		{
+			run_thread::sleep(0);
+		}
+		if (boost::asio::error::operation_aborted == res.code && _socket.is_open())
+		{
+			if (res.s)
+			{
+				res.ok = true;
+				res.code = 0;
+			}
+			else if (!_cancelRecv)
+			{
+				try
+				{
+					_holdRecv = true;
+					BREAK_OF_SCOPE_EXEC(_holdRecv = false);
+					if (buff && length)
+					{
+						_socket.async_receive(boost::asio::buffer(buff, length), flags, std::bind([this, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+						{
+							async_receive_handler(buff, length, std::move(handler), flags, ec, s);
+						}, std::forward<Handler>(handler), __1, __2));
+					}
+					else
+					{
+						_socket.async_receive(boost::asio::null_buffers(), flags, std::bind([this, buff, length, flags](Handler& handler, const boost::system::error_code& ec, size_t s)
+						{
+							async_receive_handler(buff, length, std::move(handler), flags, ec, s);
+						}, std::forward<Handler>(handler), __1, __2));
+					}
+					if (_cancelRecv)
+					{
+						cancel_receive();
+					}
+					return;
+				}
+				catch (const boost::system::system_error& se)
+				{
+					res = { 0, se.code().value(), !se.code() };
+				}
+			}
+		}
+#endif
+		handler(res);
+	}
+	
+	template <typename Handler>
+	bool check_immed_callback(Handler&& handler, result& res)
+	{
+#ifdef ENABLE_ASIO_PRE_OP
+		if (is_pre_option())
+		{
+			handler(res);
+			return true;
+		}
+#endif
+		_socket.get_io_service().post(std::bind([](Handler& handler, result& res)
+		{
+			handler(res);
+		}, std::forward<Handler>(handler), res));
+		return false;
+	}
+private:
 	void set_internal_non_blocking();
 private:
 	boost::asio::ip::udp::socket _socket;
 	boost::asio::ip::udp::endpoint _remoteSenderEndpoint;
+#ifndef HAS_ASIO_CANCEL_IO
+	volatile bool _holdRecv;
+	volatile bool _holdSend;
+	volatile bool _cancelRecv;
+	volatile bool _cancelSend;
+#endif
 	bool _nonBlocking;
 #ifdef ENABLE_ASIO_PRE_OP
 	bool _preOption;

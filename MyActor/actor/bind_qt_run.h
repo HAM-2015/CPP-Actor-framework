@@ -21,7 +21,7 @@
 //开始在Actor中，嵌入一段在qt-ui线程中执行的连续逻辑
 #define BEGIN_RUN_IN_QT_UI_AT(__this_ui__, __host__) do {(__this_ui__)->send(__host__, [&]() {
 #define BEGIN_RUN_IN_QT_UI BEGIN_RUN_IN_QT_UI_AT(this, self)
-#define CO_BEGIN_RUN_IN_QT_UI_AT(__this_ui__) do {(__this_ui__)->co_send(co_self, [&]() {
+#define CO_BEGIN_RUN_IN_QT_UI_AT(__this_ui__) do {(__this_ui__)->_co_send(co_self, [&]() {
 #define CO_BEGIN_RUN_IN_QT_UI CO_BEGIN_RUN_IN_QT_UI_AT(this)
 //结束在qt-ui线程中执行的一段连续逻辑，只有当这段逻辑执行完毕后才会执行END后续代码
 #define END_RUN_IN_QT_UI });} while (false)
@@ -29,7 +29,7 @@
 //////////////////////////////////////////////////////////////////////////
 //在Actor中，嵌入一段在qt-ui线程中执行的语句
 #define run_in_qt_ui_at(__this_ui__, __host__, ...)  do {(__this_ui__)->send(__host__, [&]{ option_pck(__VA_ARGS__) });} while (false)
-#define co_run_in_qt_ui_at(__this_ui__, ...)  do {(__this_ui__)->co_send(co_self, [&]{ option_pck(__VA_ARGS__) }); _co_await;} while (false)
+#define co_run_in_qt_ui_at(__this_ui__, ...)  do {(__this_ui__)->_co_send(co_self, [&]{ option_pck(__VA_ARGS__) }); _co_await;} while (false)
 
 //在Actor中，嵌入一段在qt-ui线程中执行的语句
 #define run_in_qt_ui(...) run_in_qt_ui_at(this, self, __VA_ARGS__)
@@ -384,7 +384,7 @@ public:
 	@brief generaotr下发送一个执行函数到UI消息队列中执行
 	*/
 	template <typename Handler>
-	void co_send(co_generator, Handler&& handler)
+	void _co_send(co_generator, Handler&& handler)
 	{
 		post(std::bind([this](generator_handle& host, Handler& handler)
 		{
@@ -608,9 +608,9 @@ public:
 	}
 
 	template <typename Handler>
-	void co_send(co_generator, Handler&& handler)
+	void _co_send(co_generator, Handler&& handler)
 	{
-		bind_qt_run_base::co_send(co_self, std::forward<Handler>(handler));
+		bind_qt_run_base::_co_send(co_self, std::forward<Handler>(handler));
 	}
 
 	template <typename Handler>

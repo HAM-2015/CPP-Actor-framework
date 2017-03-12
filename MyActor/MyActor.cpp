@@ -690,6 +690,7 @@ void socket_test()
 					}
 				}
 			}
+			acc.close();
 			sck.close();
 		});
 		child_handle cli = self->create_child([&](my_actor* self)

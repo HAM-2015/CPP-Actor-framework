@@ -804,9 +804,38 @@ struct WrapTried_
 };
 
 template <typename Handler>
+struct WrapNoTried_
+{
+	typedef RM_CREF(Handler) handler_type;
+
+	WrapNoTried_(bool pl, Handler& handler)
+		:_handler(std::forward<Handler>(handler)) {}
+
+	friend bool asio_handler_is_tried(WrapNoTried_*)
+	{
+		return false;
+	}
+
+	template <typename... Args>
+	void operator()(Args&&... args)
+	{
+		_handler(std::forward<Args>(args)...);
+	}
+
+	handler_type _handler;
+	COPY_CONSTRUCT1(WrapNoTried_, _handler);
+};
+
+template <typename Handler>
 WrapTried_<Handler> wrap_tried(Handler&& handler)
 {
 	return WrapTried_<Handler>(bool(), handler);
+}
+
+template <typename Handler>
+WrapNoTried_<Handler> wrap_no_tried(Handler&& handler)
+{
+	return WrapNoTried_<Handler>(bool(), handler);
 }
 
 #elif WIN32
@@ -819,6 +848,12 @@ Handler&& wrap_continuation(Handler&& handler)
 
 template <typename Handler>
 Handler&& wrap_tried(Handler&& handler)
+{
+	return (Handler&&)handler;
+}
+
+template <typename Handler>
+Handler&& wrap_no_tried(Handler&& handler)
 {
 	return (Handler&&)handler;
 }

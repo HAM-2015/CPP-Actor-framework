@@ -390,11 +390,18 @@ struct __co_context_no_capture{};
 #define co_async_sign co_self.shared_async_sign()
 
 //发送一个任务到另一个strand中执行，执行完成后接着下一行
-#define co_begin_send(__strand__) {if (co_self._co_send(__strand__, [&]{
+#define co_begin_send(__strand__) {if (!co_self._co_send(__strand__, [&]{
 #define co_end_send }))_co_yield;}
+#define co_send(__strand__) \
+	assert(co_self.__inside);\
+	_co_for(__forYieldSwitch = false, __isBestCall = false;;__forYieldSwitch = true)\
+	if (__forYieldSwitch) {if (!__isBestCall) _co_yield; _co_for_break;}\
+	else __isBestCall = CoSend_(__strand__, co_self)-
+
 //发送一个任务到另一个strand中执行，执行完成后接着下一行
 #define co_begin_async_send(__strand__) {co_self._co_async_send(__strand__, [&]{
 #define co_end_async_send });_co_yield;}
+#define co_async_send(__strand__) co_yield CoAsyncSend_(__strand__, co_self)-
 
 //提供该宏间接实现动态case的switch效果
 #define co_begin_switch(__val__) for(__coSwitchPreSign=false,__coSwitchDefaultSign=false,__coSwitchFirstLoopSign=true,__coSwitchTempVal=(size_t)(__val__);\
@@ -1076,10 +1083,10 @@ public:
 					gen->_revert_this(gen)->_co_next();
 				}, std::move(gen)));
 			}, std::move(shared_this()), std::forward<Handler>(handler)));
-			return true;
+			return false;
 		}
 		CHECK_EXCEPTION(handler);
-		return false;
+		return true;
 	}
 
 	template <typename Handler>
@@ -1977,6 +1984,36 @@ struct CoLocalWrapCalc_
 	{
 		return handler();
 	}
+};
+
+struct CoSend_
+{
+	CoSend_(shared_strand strand, generator& gen)
+	:_strand(std::move(strand)), co_self(gen) {}
+
+	template <typename Handler>
+	bool operator-(Handler&& handler)
+	{
+		return co_self._co_send(std::move(_strand), std::forward<Handler>(handler));
+	}
+private:
+	generator& co_self;
+	shared_strand _strand;
+};
+
+struct CoAsyncSend_
+{
+	CoAsyncSend_(shared_strand strand, generator& gen)
+	:_strand(std::move(strand)), co_self(gen) {}
+
+	template <typename Handler>
+	void operator-(Handler&& handler)
+	{
+		co_self._co_async_send(std::move(_strand), std::forward<Handler>(handler));
+	}
+private:
+	generator& co_self;
+	shared_strand _strand;
 };
 //////////////////////////////////////////////////////////////////////////
 

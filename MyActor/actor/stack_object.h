@@ -65,6 +65,17 @@ public:
 			_null = true;
 		}
 	}
+	
+	/*!
+	@brief 蒸发对象（谨慎使用，不会调用对象析构函数）
+	*/
+	void evaporate()
+	{
+#if (_DEBUG || DEBUG)
+		memset(_space, 0xdf, sizeof(_space));
+#endif
+		_null = true;
+	}
 
 	Type& get()
 	{
