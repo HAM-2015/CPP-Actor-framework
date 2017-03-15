@@ -574,75 +574,66 @@ void co_socket_test()
 	co_go(strand)[](co_generator)
 	{
 		co_begin_context;
-		size_t s;
 		char buf[128];
 		bool overtime;
-		boost::system::error_code ec;
-		boost::asio::ip::tcp::socket socket;
-		stack_obj<boost::asio::ip::tcp::acceptor> acceptor;
+		tcp_socket::result res;
+		tcp_socket socket;
+		tcp_acceptor acceptor;
 		co_use_timer;
-		co_end_context_init(ctx, (co_self), socket(co_strand->get_io_service()), overtime(false), s(0));
+		co_end_context_init(ctx, (co_self), socket(co_strand->get_io_engine()), acceptor(co_strand->get_io_engine()));
 
 		co_begin;
-		try
+		if (!ctx.acceptor.open_v4(1235).ok)
 		{
-			ctx.acceptor.create(co_strand->get_io_service(), boost::asio::ip::tcp::endpoint(boost::asio::ip::address_v4(), 1235), false);
+			ctx.acceptor.close();
+			co_return;
 		}
-		catch (...) { co_stop; }
-		co_await ctx.acceptor->async_accept(ctx.socket, co_async_result(ctx.ec));
-		if (!ctx.ec)
+		co_await ctx.acceptor.async_accept(ctx.socket, co_async_result(ctx.res));
+		ctx.acceptor.close();
+		if (ctx.res.ok)
 		{
-			ctx.acceptor->close(ctx.ec);
 			while (true)
 			{
 				ctx.overtime = false;
-				co_timed_await(1500, { ctx.overtime = true; ctx.socket.close(ctx.ec); }) ctx.socket.async_read_some(boost::asio::buffer(ctx.buf, sizeof(ctx.buf)), co_async_result(ctx.ec, ctx.s));
+				co_timed_await(1500, { ctx.overtime = true; ctx.socket.cancel_read(); }) ctx.socket.async_read_some(ctx.buf, sizeof(ctx.buf), co_async_result(ctx.res));
 				if (ctx.overtime)
 				{
-					trace_comma("co_socket", "receive overtime");
+					trace_line("co_socket ", "receive overtime");
 					break;
 				}
-				else if (ctx.ec)
+				else if (!ctx.res.ok)
 				{
-					trace_comma("co_socket", "receive disconnect");
+					trace_line("co_socket ", "receive disconnect");
 					break;
 				}
-				ctx.buf[ctx.s] = 0;
-				trace_comma("co_socket", "received", ctx.buf);
+				ctx.buf[ctx.res.s] = 0;
+				trace_line("co_socket ", "received: ", ctx.buf);
 			}
-			ctx.socket.close(ctx.ec);
 		}
-		else
-		{
-			ctx.acceptor->close(ctx.ec);
-		}
+		ctx.socket.close();
 		co_end;
 	};
 	co_go(strand)[](co_generator)
 	{
 		co_begin_context;
 		int i;
-		size_t s;
 		char buf[128];
-		boost::system::error_code ec;
-		boost::asio::ip::tcp::socket socket;
-		co_end_context_init(ctx, (co_self), socket(co_strand->get_io_service()), s(0), i(0));
+		tcp_socket::result res;
+		tcp_socket socket;
+		co_end_context_init(ctx, (co_self), socket(co_strand->get_io_engine()));
 
 		co_begin;
-		co_await ctx.socket.async_connect(boost::asio::ip::tcp::endpoint(
-			boost::asio::ip::address::from_string("127.0.0.1"), 1235), co_async_result(ctx.ec));
-		if (!ctx.ec)
+		co_await ctx.socket.async_connect("127.0.0.1", 1235, co_async_result(ctx.res));
+		if (ctx.res.ok)
 		{
 			for (ctx.i = 0; ctx.i < 10; ctx.i++)
 			{
-				co_await {
-					int l = snprintf(ctx.buf, sizeof(ctx.buf), "msg %d", ctx.i);
-					boost::asio::async_write(ctx.socket, boost::asio::buffer(ctx.buf, l), co_async_result(ctx.ec, ctx.s));
-				}
+				co_await ctx.socket.async_write(ctx.buf, snprintf(ctx.buf, sizeof(ctx.buf), "msg %d", ctx.i), co_async_result(ctx.res));
 				co_sleep(1000);
 			}
 			co_sleep(2000);
 		}
+		ctx.socket.close();
 		co_end;
 	};
 	ios.stop();

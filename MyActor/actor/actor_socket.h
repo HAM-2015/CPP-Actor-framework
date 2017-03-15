@@ -3,8 +3,6 @@
 
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ip/udp.hpp>
-#include <boost/asio/write.hpp>
-#include <boost/asio/read.hpp>
 #include "my_actor.h"
 
 struct socket_result
@@ -59,6 +57,7 @@ private:
 						}
 					}
 #endif
+					DEBUG_OPERATION(_sck._reading = false);
 					_handler(res);
 					return;
 				} while (0);
@@ -88,6 +87,7 @@ private:
 			{
 				res = { _currBytes, se.code().value(), !se.code() };
 			}
+			DEBUG_OPERATION(_sck._reading = false);
 			_handler(res);
 		}
 
@@ -141,6 +141,7 @@ private:
 						}
 					}
 #endif
+					DEBUG_OPERATION(_sck._writing = false);
 					_handler(res);
 					return;
 				} while (0);
@@ -170,6 +171,7 @@ private:
 			{
 				res = { _currBytes, se.code().value(), !se.code() };
 			}
+			DEBUG_OPERATION(_sck._writing = false);
 			_handler(res);
 		}
 
@@ -239,6 +241,7 @@ private:
 					_sck._sendFileState.offset = NULL;
 					_sck._sendFileState.count = 0;
 					_sck._sendFileState.fd = 0;
+					DEBUG_OPERATION(_sck._writing = false);
 					_handler(res);
 					return;
 				} while (0);
@@ -271,6 +274,7 @@ private:
 			_sck._sendFileState.offset = NULL;
 			_sck._sendFileState.count = 0;
 			_sck._sendFileState.fd = 0;
+			DEBUG_OPERATION(_sck._writing = false);
 			_handler(res);
 		}
 
@@ -422,6 +426,8 @@ public:
 	template <typename Handler>
 	bool async_connect(const boost::asio::ip::tcp::endpoint& remoteEndpoint, Handler&& handler)
 	{
+		assert(!_writing);
+		DEBUG_OPERATION(_writing = true);
 		result res;
 		try
 		{
@@ -432,6 +438,7 @@ public:
 					set_internal_non_blocking();
 				}
 				result res = { 0, ec.value(), !ec };
+				DEBUG_OPERATION(_writing = false);
 				handler(res);
 			}, std::forward<Handler>(handler), __1));
 			return false;
@@ -440,7 +447,11 @@ public:
 		{
 			res = { 0, se.code().value(), !se.code() };
 		}
+#if (_DEBUG || DEBUG)
+		return check_immed_callback(std::forward<Handler>(handler), res, _writing);
+#else
 		return check_immed_callback(std::forward<Handler>(handler), res);
+#endif
 	}
 
 	template <typename Handler>
@@ -455,6 +466,8 @@ public:
 	template <typename Handler>
 	bool async_read(void* buff, size_t length, Handler&& handler)
 	{
+		assert(!_reading);
+		DEBUG_OPERATION(_reading = true);
 		result res;
 		size_t trySize = 0;
 		_cancelRead = false;
@@ -466,12 +479,14 @@ public:
 			{
 				if (!try_again(res))
 				{
+					DEBUG_OPERATION(_reading = false);
 					handler(res);
 					return true;
 				}
 			}
 			else if (res.s == length)
 			{
+				DEBUG_OPERATION(_reading = false);
 				handler(res);
 				return true;
 			}
@@ -528,7 +543,11 @@ public:
 		{
 			res = { 0, se.code().value(), !se.code() };
 		}
+#if (_DEBUG || DEBUG)
+		return check_immed_callback(std::forward<Handler>(handler), res, _reading);
+#else
 		return check_immed_callback(std::forward<Handler>(handler), res);
+#endif
 	}
 
 	/*!
@@ -537,6 +556,8 @@ public:
 	template <typename Handler>
 	bool async_read_some(void* buff, size_t length, Handler&& handler)
 	{
+		assert(!_reading);
+		DEBUG_OPERATION(_reading = true);
 		result res;
 		_cancelRead = false;
 #ifdef ENABLE_ASIO_PRE_OP
@@ -545,6 +566,7 @@ public:
 			res = try_read_same(buff, length);
 			if (res.ok || !try_again(res))
 			{
+				DEBUG_OPERATION(_reading = false);
 				handler(res);
 				return true;
 			}
@@ -594,7 +616,11 @@ public:
 		{
 			res = { 0, se.code().value(), !se.code() };
 		}
+#if (_DEBUG || DEBUG)
+		return check_immed_callback(std::forward<Handler>(handler), res, _reading);
+#else
 		return check_immed_callback(std::forward<Handler>(handler), res);
+#endif
 	}
 
 	/*!
@@ -603,6 +629,8 @@ public:
 	template <typename Handler>
 	bool async_write(const void* buff, size_t length, Handler&& handler)
 	{
+		assert(!_writing);
+		DEBUG_OPERATION(_writing = true);
 		result res;
 		size_t trySize = 0;
 		_cancelWrite = false;
@@ -614,12 +642,14 @@ public:
 			{
 				if (!try_again(res))
 				{
+					DEBUG_OPERATION(_writing = false);
 					handler(res);
 					return true;
 				}
 			}
 			else if (res.s == length)
 			{
+				DEBUG_OPERATION(_writing = false);
 				handler(res);
 				return true;
 			}
@@ -676,7 +706,11 @@ public:
 		{
 			res = { 0, se.code().value(), !se.code() };
 		}
+#if (_DEBUG || DEBUG)
+		return check_immed_callback(std::forward<Handler>(handler), res, _writing);
+#else
 		return check_immed_callback(std::forward<Handler>(handler), res);
+#endif
 	}
 
 	/*!
@@ -685,6 +719,8 @@ public:
 	template <typename Handler>
 	bool async_write_some(const void* buff, size_t length, Handler&& handler)
 	{
+		assert(!_writing);
+		DEBUG_OPERATION(_writing = true);
 		result res;
 		_cancelWrite = false;
 #ifdef ENABLE_ASIO_PRE_OP
@@ -693,6 +729,7 @@ public:
 			res = try_write_same(buff, length);
 			if (res.ok || !try_again(res))
 			{
+				DEBUG_OPERATION(_writing = false);
 				handler(res);
 				return true;
 			}
@@ -742,7 +779,11 @@ public:
 		{
 			res = { 0, se.code().value(), !se.code() };
 		}
+#if (_DEBUG || DEBUG)
+		return check_immed_callback(std::forward<Handler>(handler), res, _writing);
+#else
 		return check_immed_callback(std::forward<Handler>(handler), res);
+#endif
 	}
 
 #ifdef HAS_ASIO_SEND_FILE
@@ -753,6 +794,8 @@ public:
 	template <typename Handler>
 	bool async_send_file(int fd, unsigned long long* offset, size_t length, Handler&& handler)
 	{
+		assert(!_writing);
+		DEBUG_OPERATION(_writing = true);
 		result res;
 		assert(!_sendFileState.fd);
 		_cancelWrite = false;
@@ -772,12 +815,18 @@ public:
 		{
 			res = { 0, se.code().value(), !se.code() };
 		}
+#if (_DEBUG || DEBUG)
+		return check_immed_callback(std::forward<Handler>(handler), res, _writing);
+#else
 		return check_immed_callback(std::forward<Handler>(handler), res);
+#endif
 	}
 #elif WIN32
 	template <typename Handler>
 	bool async_send_file(HANDLE hFile, unsigned long long* offset, size_t length, Handler&& handler)
 	{
+		assert(!_writing);
+		DEBUG_OPERATION(_writing = true);
 		result res;
 		_cancelWrite = false;
 		if (!init_send_file(hFile, offset, length) || 0 == length)
@@ -800,7 +849,11 @@ public:
 				res = { 0, se.code().value(), !se.code() };
 			}
 		}
+#if (_DEBUG || DEBUG)
+		return check_immed_callback(std::forward<Handler>(handler), res, _writing);
+#else
 		return check_immed_callback(std::forward<Handler>(handler), res);
+#endif
 	}
 #endif
 #endif
@@ -834,49 +887,6 @@ public:
 	*/
 	static bool try_again(const result& res);
 private:
-	template <typename Handler>
-	void async_read_handler(size_t currSize, void* buff, size_t length, Handler&& handler, const boost::system::error_code& ec, size_t s)
-	{
-		currSize += s;
-		result res = { currSize, ec.value(), !ec };
-#ifndef HAS_ASIO_CANCEL_IO
-		while (_holdRead)
-		{
-			run_thread::sleep(0);
-		}
-		if (boost::asio::error::operation_aborted == res.code && _socket.is_open())
-		{
-			if (length == currSize)
-			{
-				res.ok = true;
-				res.code = 0;
-			}
-			else if (!_cancelRead)
-			{
-				try
-				{
-					_holdRead = true;
-					BREAK_OF_SCOPE_EXEC(_holdRead = false);
-					boost::asio::async_read(_socket, boost::asio::buffer((char*)buff + currSize, length - currSize), std::bind([this, currSize, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
-					{
-						async_read_handler(currSize, buff, length, std::move(handler), ec, s);
-					}, std::forward<Handler>(handler), __1, __2));
-					if (_cancelRead)
-					{
-						cancel_read();
-					}
-					return;
-				}
-				catch (const boost::system::system_error& se)
-				{
-					res = { 0, se.code().value(), !se.code() };
-				}
-			}
-		}
-#endif
-		handler(res);
-	}
-
 	template <typename Handler>
 	void async_read_some_handler(void* buff, size_t length, Handler&& handler, const boost::system::error_code& ec, size_t s)
 	{
@@ -926,49 +936,7 @@ private:
 			}
 		}
 #endif
-		handler(res);
-	}
-
-	template <typename Handler>
-	void async_write_handler(size_t currSize, const void* buff, size_t length, Handler&& handler, const boost::system::error_code& ec, size_t s)
-	{
-		currSize += s;
-		result res = { currSize, ec.value(), !ec };
-#ifndef HAS_ASIO_CANCEL_IO
-		while (_holdWrite)
-		{
-			run_thread::sleep(0);
-		}
-		if (boost::asio::error::operation_aborted == res.code && _socket.is_open())
-		{
-			if (length == currSize)
-			{
-				res.ok = true;
-				res.code = 0;
-			}
-			else if (!_cancelWrite)
-			{
-				try
-				{
-					_holdWrite = true;
-					BREAK_OF_SCOPE_EXEC(_holdWrite = false);
-					boost::asio::async_write(_socket, boost::asio::buffer((char*)buff + currSize, length - currSize), std::bind([this, currSize, buff, length](Handler& handler, const boost::system::error_code& ec, size_t s)
-					{
-						async_write_handler(currSize, buff, length, std::move(handler), ec, s);
-					}, std::forward<Handler>(handler), __1, __2));
-					if (_cancelWrite)
-					{
-						cancel_write();
-					}
-					return;
-				}
-				catch (const boost::system::system_error& se)
-				{
-					res = { 0, se.code().value(), !se.code() };
-				}
-			}
-		}
-#endif
+		DEBUG_OPERATION(_reading = false);
 		handler(res);
 	}
 
@@ -1021,6 +989,7 @@ private:
 			}
 		}
 #endif
+		DEBUG_OPERATION(_writing = false);
 		handler(res);
 	}
 
@@ -1076,11 +1045,32 @@ private:
 			}
 		}
 #endif
+		DEBUG_OPERATION(_writing = false);
 		handler(res);
 	}
 #endif
 #endif
 
+#if (_DEBUG || DEBUG)
+	template <typename Handler>
+	bool check_immed_callback(Handler&& handler, result& res, bool& sign)
+	{
+#ifdef ENABLE_ASIO_PRE_OP
+		if (is_pre_option())
+		{
+			sign = false;
+			handler(res);
+			return true;
+		}
+#endif
+		_socket.get_io_service().post(std::bind([&sign](Handler& handler, result& res)
+		{
+			sign = false;
+			handler(res);
+		}, std::forward<Handler>(handler), res));
+		return false;
+	}
+#else
 	template <typename Handler>
 	bool check_immed_callback(Handler&& handler, result& res)
 	{
@@ -1097,6 +1087,7 @@ private:
 		}, std::forward<Handler>(handler), res));
 		return false;
 	}
+#endif
 private:
 #ifdef HAS_ASIO_SEND_FILE
 #ifdef __linux__
@@ -1122,6 +1113,10 @@ private:
 	bool _nonBlocking;
 #ifdef ENABLE_ASIO_PRE_OP
 	bool _preOption;
+#endif
+#if (_DEBUG || DEBUG)
+	bool _reading;
+	bool _writing;
 #endif
 	NONE_COPY(tcp_socket);
 };

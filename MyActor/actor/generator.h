@@ -365,6 +365,7 @@ struct __co_context_no_capture{};
 #define co_create(...) CoCreate_(__VA_ARGS__)-
 //结束当前generator的运行
 #define co_stop do{__stop(); return;} while(0)
+#define co_return co_stop
 //锁定外部generator的stop操作
 #define co_lock_stop do{\
 	assert(co_self.__inside);\

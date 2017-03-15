@@ -158,6 +158,7 @@ void** tls_space::get_space()
 #include <fstream>
 #include <string>
 #include <sys/prctl.h>
+#include <sched.h>
 
 run_thread::run_thread()
 {
@@ -276,7 +277,14 @@ size_t run_thread::cpu_thread_number()
 
 void run_thread::sleep(int ms)
 {
-	usleep((__useconds_t)ms * 1000);
+	if (ms)
+	{
+		usleep((__useconds_t)ms * 1000);
+	}
+	else
+	{
+		sched_yield();
+	}
 }
 
 bool run_thread::set_affinity(int i)

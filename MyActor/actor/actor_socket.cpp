@@ -5,6 +5,9 @@ tcp_socket::tcp_socket(io_engine& ios)
 #ifdef ENABLE_ASIO_PRE_OP
 , _preOption(false)
 #endif
+#if (_DEBUG || DEBUG)
+, _reading(false), _writing(false)
+#endif
 {
 #ifdef HAS_ASIO_SEND_FILE
 #ifdef __linux__
@@ -42,11 +45,17 @@ void tcp_socket::swap(tcp_socket& other)
 	boost::asio::ip::tcp::socket tSck(std::move(_socket));
 	_socket = std::move(other._socket);
 	other._socket = std::move(tSck);
+	std::swap(_holdRead, other._holdRead);
+	std::swap(_holdWrite, other._holdWrite);
 	std::swap(_cancelRead, other._cancelRead);
 	std::swap(_cancelWrite, other._cancelWrite);
 	std::swap(_nonBlocking, other._nonBlocking);
 #ifdef ENABLE_ASIO_PRE_OP
 	std::swap(_preOption, other._preOption);
+#endif
+#if (_DEBUG || DEBUG)
+	std::swap(_reading, other._reading);
+	std::swap(_writing, other._writing);
 #endif
 #ifdef HAS_ASIO_SEND_FILE
 #ifdef __linux__
@@ -921,7 +930,11 @@ tcp_socket::result tcp_acceptor::assign_v6(boost::asio::detail::socket_type accF
 
 boost::asio::detail::socket_type tcp_acceptor::native()
 {
-	return _acceptor->native();
+	if (_acceptor.has())
+	{
+		return _acceptor->native();
+	}
+	return 0;
 }
 
 tcp_socket::result tcp_acceptor::cancel()
@@ -971,30 +984,22 @@ void tcp_acceptor::swap(tcp_acceptor& other)
 		boost::asio::ip::tcp::acceptor tAcc(std::move(_acceptor.get()));
 		_acceptor.get() = std::move(other._acceptor.get());
 		other._acceptor.get() = std::move(tAcc);
-		std::swap(_nonBlocking, other._nonBlocking);
-		std::swap(_ios, other._ios);
-#ifdef ENABLE_ASIO_PRE_OP
-		std::swap(_preOption, other._preOption);
-#endif
 	}
 	else if (other._acceptor.has())
 	{
-		_acceptor.get() = std::move(other._acceptor.get());
-		std::swap(_nonBlocking, other._nonBlocking);
-		std::swap(_ios, other._ios);
-#ifdef ENABLE_ASIO_PRE_OP
-		std::swap(_preOption, other._preOption);
-#endif
+		_acceptor.create(std::move(other._acceptor.get()));
+		other.close();
 	}
 	else if (_acceptor.has())
 	{
-		other._acceptor.get() = std::move(_acceptor.get());
-		std::swap(_nonBlocking, other._nonBlocking);
-		std::swap(_ios, other._ios);
-#ifdef ENABLE_ASIO_PRE_OP
-		std::swap(_preOption, other._preOption);
-#endif
+		other._acceptor.create(std::move(_acceptor.get()));
+		close();
 	}
+	std::swap(_nonBlocking, other._nonBlocking);
+	std::swap(_ios, other._ios);
+#ifdef ENABLE_ASIO_PRE_OP
+	std::swap(_preOption, other._preOption);
+#endif
 }
 
 void tcp_acceptor::pre_option()
