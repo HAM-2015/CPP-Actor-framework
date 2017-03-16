@@ -257,6 +257,8 @@ struct __co_context_no_capture{};
 	if (__forYieldSwitch) {_co_timed_await(__ms__, __handler__); _co_for_break;}\
 	else
 
+#define co_timed_await_exec(__ms__, ...) co_timed_await(__ms__, { option_pck(__VA_ARGS__) })
+
 #define co_timed_await2(__ms__) \
 	assert(co_self.__inside);\
 	co_last_state = co_async_state::co_async_ok;\

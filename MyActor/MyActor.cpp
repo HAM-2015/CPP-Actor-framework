@@ -588,14 +588,14 @@ void co_socket_test()
 			ctx.acceptor.close();
 			co_return;
 		}
-		co_await ctx.acceptor.async_accept(ctx.socket, co_async_result(ctx.res));
+		co_await ctx.acceptor.async_accept(ctx.socket, co_asio_result(ctx.res));
 		ctx.acceptor.close();
 		if (ctx.res.ok)
 		{
 			while (true)
 			{
 				ctx.overtime = false;
-				co_timed_await(1500, { ctx.overtime = true; ctx.socket.cancel_read(); }) ctx.socket.async_read_some(ctx.buf, sizeof(ctx.buf), co_async_result(ctx.res));
+				co_timed_await_exec(1500, ctx.overtime = true, ctx.socket.cancel_read()) ctx.socket.async_read_some(ctx.buf, sizeof(ctx.buf), co_asio_result(ctx.res));
 				if (ctx.overtime)
 				{
 					trace_line("co_socket ", "receive overtime");
@@ -623,12 +623,12 @@ void co_socket_test()
 		co_end_context_init(ctx, (co_self), socket(co_strand->get_io_engine()));
 
 		co_begin;
-		co_await ctx.socket.async_connect("127.0.0.1", 1235, co_async_result(ctx.res));
+		co_await ctx.socket.async_connect("127.0.0.1", 1235, co_asio_result(ctx.res));
 		if (ctx.res.ok)
 		{
 			for (ctx.i = 0; ctx.i < 10; ctx.i++)
 			{
-				co_await ctx.socket.async_write(ctx.buf, snprintf(ctx.buf, sizeof(ctx.buf), "msg %d", ctx.i), co_async_result(ctx.res));
+				co_await ctx.socket.async_write(ctx.buf, snprintf(ctx.buf, sizeof(ctx.buf), "msg %d", ctx.i), co_asio_result(ctx.res));
 				co_sleep(1000);
 			}
 			co_sleep(2000);
