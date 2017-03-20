@@ -27,16 +27,28 @@ private:
 	bool only_self() const;
 
 	template <typename Handler>
+	void post(Handler& handler)
+	{
+		boost::asio::detail::async_result_init<Handler&, void()> init(handler);
+		_service.post(_impl, init.handler);
+	}
+
+	template <typename Handler>
+	void dispatch(Handler& handler)
+	{
+		boost::asio::detail::async_result_init<Handler&, void()> init(handler);
+		_service.dispatch(_impl, init.handler);
+	}
+
+	template <typename Handler>
 	void post(Handler&& handler)
 	{
-		//_service.post(_impl, std::forward<Handler>(handler));
 		_service.post(_impl, handler);
 	}
 
 	template <typename Handler>
 	void dispatch(Handler&& handler)
 	{
-		//_service.dispatch(_impl, std::forward<Handler>(handler));
 		_service.dispatch(_impl, handler);
 	}
 private:
