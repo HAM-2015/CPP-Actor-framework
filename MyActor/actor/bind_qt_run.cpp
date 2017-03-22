@@ -232,8 +232,8 @@ void bind_qt_run_base::append_task(wrap_handler_face* h)
 	else
 	{
 		_locked = true;
-		_readyQueue.push_back(h);
 		_queueMutex.unlock();
+		_readyQueue.push_back(h);
 		post_task_event();
 	}
 }

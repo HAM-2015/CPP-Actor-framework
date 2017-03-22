@@ -217,26 +217,28 @@ void uv_strand::post_task_event()
 void uv_strand::append_task(wrap_handler_face* h)
 {
 	assert(_uvLoop);
+	_queueMutex.lock();
+	if (_locked)
 	{
-		std::lock_guard<std::mutex> lg(_queueMutex);
-		if (_locked)
+		_waitQueue.push_back(h);
+		_queueMutex.unlock();
+	}
+	else
+	{
+		bool doNtf = _doRunWait;
+		_doRunWait = false;
+		_locked = true;
+		_queueMutex.unlock();
+		_readyQueue.push_back(h);
+		if (doNtf)
 		{
-			_waitQueue.push_back(h);
-			return;
+			_doRunConVar.notify_one();
 		}
 		else
 		{
-			_locked = true;
-			_readyQueue.push_back(h);
-			if (_doRunWait)
-			{
-				_doRunWait = false;
-				_doRunConVar.notify_one();
-				return;
-			}
+			post_task_event();
 		}
 	}
-	post_task_event();
 }
 
 void uv_strand::run_one_task()
