@@ -1148,6 +1148,28 @@ private:
 };
 //////////////////////////////////////////////////////////////////////////
 
+class js_steady_timer
+{
+	struct timer_handle : public node::ObjectWrap
+	{
+		static timer_handle* make(v8::Local<v8::Object>& v8Obj);
+		overlap_timer::timer_handle _handler;
+	};
+public:
+	static void init(v8::Handle<v8::Object> exports);
+	static void install(v8::Isolate* isolate, const shared_uv_strand& strand);
+	static void uninstall();
+private:
+	static void set_timeout(const v8::FunctionCallbackInfo<v8::Value>& args);
+	static void set_deadline(const v8::FunctionCallbackInfo<v8::Value>& args);
+	static void set_interval(const v8::FunctionCallbackInfo<v8::Value>& args);
+	static void clear_timer(const v8::FunctionCallbackInfo<v8::Value>& args);
+private:
+	uv_strand* _strand;
+	static js_steady_timer* _jsTimer;
+};
+//////////////////////////////////////////////////////////////////////////
+
 struct js_global
 {
 	static void install(v8::Isolate* isolate, const shared_uv_strand& strand);

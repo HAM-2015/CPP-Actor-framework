@@ -69,6 +69,19 @@ class uv_strand : public boost_strand
 		typedef wrap_handler<Handler> handler_type;
 		return new(reuMem.allocate(sizeof(handler_type)))handler_type(handler);
 	}
+public:
+	class hold_stack
+	{
+	public:
+		hold_stack(uv_strand* strand);
+		~hold_stack();
+	private:
+		uv_tls* _uvTls;
+	private:
+		void* operator new(size_t){ return NULL; };
+		void operator delete(void*){};
+		NONE_COPY(hold_stack);
+	};
 private:
 	uv_strand();
 	~uv_strand();

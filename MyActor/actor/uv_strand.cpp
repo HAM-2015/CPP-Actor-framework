@@ -98,6 +98,18 @@ size_t uv_strand::uv_tls::running_depth()
 }
 //////////////////////////////////////////////////////////////////////////
 
+uv_strand::hold_stack::hold_stack(uv_strand* strand)
+{
+	assert(strand->in_this_ios());
+	_uvTls = uv_tls::push_stack(strand);
+}
+
+uv_strand::hold_stack::~hold_stack()
+{
+	uv_tls::pop_stack(_uvTls);
+}
+//////////////////////////////////////////////////////////////////////////
+
 uv_strand::uv_strand()
 {
 	_uvLoop = NULL;
