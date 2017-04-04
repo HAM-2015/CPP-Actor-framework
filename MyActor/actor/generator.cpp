@@ -560,3 +560,16 @@ void CoAnext_::operator()()
 	assert(_gen);
 	_gen->_revert_this(_gen)->_co_next();
 }
+//////////////////////////////////////////////////////////////////////////
+
+co_broadcast_token co_broadcast_token::_defToken;
+
+void co_broadcast_token::reset()
+{
+	_lastId = -1;
+}
+
+bool co_broadcast_token::is_default()
+{
+	return this == &_defToken;
+}

@@ -400,6 +400,17 @@ struct\
 //用户内嵌lambda的外部变量引用捕获（外带当前this捕获，通过->访问），可以减小直接"&捕获"sizeof(lambda)的大小，提高调度效率
 #define LAMBDA_THIS_REF(__NAME__, ...) _BOND_LR__(LAMBDA_THIS_REF, _PP_NARG(__VA_ARGS__))(__NAME__, __VA_ARGS__)
 
+#define ARGS_IDX0(p0, ...) p0
+#define ARGS_IDX1(p0, p1, ...) p1
+#define ARGS_IDX2(p0, p1, p2,...) p2
+#define ARGS_IDX3(p0, p1, p2, p3, ...) p3
+#define ARGS_IDX4(p0, p1, p2, p3, p4, ...) p4
+#define ARGS_IDX5(p0, p1, p2, p3, p4, p5, ...) p5
+#define ARGS_IDX6(p0, p1, p2, p3, p4, p5, p6, ...) p6
+#define ARGS_IDX7(p0, p1, p2, p3, p4, p5, p6, p7, ...) p7
+#define ARGS_IDX8(p0, p1, p2, p3, p4, p5, p6, p7, p8, ...) p8
+#define ARGS_IDX9(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, ...) p9
+
 //////////////////////////////////////////////////////////////////////////
 
 template <typename... _Types>

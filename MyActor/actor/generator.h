@@ -514,6 +514,35 @@ struct __co_context_no_capture{};
 #define co_chan_aff_timed_pop(__chan__, __ms__, ...) do{(__chan__).aff_timed_pop(co_timer, __ms__, co_async_result_(co_last_state, __VA_ARGS__)); _co_await;}while (0)
 #define co_chan_aff_timed_safe_pop(__chan__, __ms__, ...) do{(__chan__).aff_timed_pop(co_timer, __ms__, co_async_safe_result_(co_last_state, __VA_ARGS__)); _co_await;}while (0)
 #define co_chan_aff_timed_pop_void(__chan__, __ms__) do{(__chan__).aff_timed_pop(co_timer, __ms__, co_async_result_(co_last_state)); _co_await;}while (0)
+//从broadcast中读取数据
+#define co_broadcast_pop(__token__, __broadcast__, ...) do{(__broadcast__).pop(co_async_result_(co_last_state, __VA_ARGS__), __token__); _co_await;}while (0)
+#define co_broadcast_safe_pop(__token__, __broadcast__, ...) do{(__broadcast__).pop(co_async_safe_result_(co_last_state, __VA_ARGS__), __token__); _co_await;}while (0)
+#define co_broadcast_pop_void(__token__, __broadcast__) do{(__broadcast__).pop(co_async_result_(co_last_state), __token__); _co_await;}while (0)
+#define co_broadcast_try_pop(__token__, __broadcast__, ...) do{(__broadcast__).try_pop(co_async_result_(co_last_state, __VA_ARGS__), __token__); _co_await;}while (0)
+#define co_broadcast_try_safe_pop(__token__, __broadcast__, ...) do{(__broadcast__).try_pop(co_async_safe_result_(co_last_state, __VA_ARGS__), __token__); _co_await;}while (0)
+#define co_broadcast_try_pop_void(__token__, __broadcast__) do{(__broadcast__).try_pop(co_async_result_(co_last_state), __token__); _co_await;}while (0)
+#define co_broadcast_timed_pop(__token__, __broadcast__, __ms__, ...) do{(__broadcast__).timed_pop(co_timer, __ms__, co_async_result_(co_last_state, __VA_ARGS__), __token__); _co_await;}while (0)
+#define co_broadcast_timed_safe_pop(__token__, __broadcast__, __ms__, ...) do{(__broadcast__).timed_pop(co_timer, __ms__, co_async_safe_result_(co_last_state, __VA_ARGS__), __token__); _co_await;}while (0)
+#define co_broadcast_timed_pop_void(__token__, __broadcast__, __ms__) do{(__broadcast__).timed_pop(co_timer, __ms__, co_async_result_(co_last_state), __token__); _co_await;}while (0)
+#define co_broadcast_tick_pop(__token__, __broadcast__, ...) do{(__broadcast__).tick_pop(co_async_result_(co_last_state, __VA_ARGS__), __token__); _co_await;}while (0)
+#define co_broadcast_safe_tick_pop(__token__, __broadcast__, ...) do{(__broadcast__).tick_pop(co_anext_safe_result_(co_last_state, __VA_ARGS__), __token__); _co_await;}while (0)
+#define co_broadcast_tick_pop_void(__token__, __broadcast__) do{(__broadcast__).tick_pop(co_async_result_(co_last_state), __token__); _co_await;}while (0)
+#define co_broadcast_try_tick_pop(__token__, __broadcast__, ...) do{(__broadcast__).try_tick_pop(co_async_result_(co_last_state, __VA_ARGS__), __token__); _co_await;}while (0)
+#define co_broadcast_try_safe_tick_pop(__token__, __broadcast__, ...) do{(__broadcast__).try_tick_pop(co_anext_safe_result_(co_last_state, __VA_ARGS__), __token__); _co_await;}while (0)
+#define co_broadcast_try_tick_pop_void(__token__, __broadcast__) do{(__broadcast__).try_tick_pop(co_async_result_(co_last_state), __token__); _co_await;}while (0)
+#define co_broadcast_timed_tick_pop(__token__, __broadcast__, __ms__, ...) do{(__broadcast__).timed_tick_pop(co_timer, __ms__, co_async_result_(co_last_state, __VA_ARGS__), __token__); _co_await;}while (0)
+#define co_broadcast_timed_safe_tick_pop(__token__, __broadcast__, __ms__, ...) do{(__broadcast__).timed_tick_pop(co_timer, __ms__, co_anext_safe_result_(co_last_state, __VA_ARGS__), __token__); _co_await;}while (0)
+#define co_broadcast_timed_tick_pop_void(__token__, __broadcast__, __ms__) do{(__broadcast__).timed_tick_pop(co_timer, __ms__, co_async_result_(co_last_state), __token__); _co_await;}while (0)
+//从依赖同一个strand的broadcast中读取数据
+#define co_broadcast_aff_pop(__token__, __broadcast__, ...) do{(__broadcast__).aff_pop(co_async_result_(co_last_state, __VA_ARGS__), __token__); _co_await;}while (0)
+#define co_broadcast_aff_safe_pop(__token__, __broadcast__, ...) do{(__broadcast__).aff_pop(co_async_safe_result_(co_last_state, __VA_ARGS__), __token__); _co_await;}while (0)
+#define co_broadcast_aff_pop_void(__token__, __broadcast__) do{(__broadcast__).aff_pop(co_async_result_(co_last_state), __token__); _co_await;}while (0)
+#define co_broadcast_aff_try_pop(__token__, __broadcast__, ...) do{(__broadcast__).aff_try_pop(co_async_result_(co_last_state, __VA_ARGS__), __token__); _co_await;}while (0)
+#define co_broadcast_aff_try_safe_pop(__token__, __broadcast__, ...) do{(__broadcast__).aff_try_pop(co_async_safe_result_(co_last_state, __VA_ARGS__), __token__); _co_await;}while (0)
+#define co_broadcast_aff_try_pop_void(__token__, __broadcast__) do{(__broadcast__).aff_try_pop(co_async_result_(co_last_state), __token__); _co_await;}while (0)
+#define co_broadcast_aff_timed_pop(__token__, __broadcast__, __ms__, ...) do{(__broadcast__).aff_timed_pop(co_timer, __ms__, co_async_result_(co_last_state, __VA_ARGS__), __token__); _co_await;}while (0)
+#define co_broadcast_aff_timed_safe_pop(__token__, __broadcast__, __ms__, ...) do{(__broadcast__).aff_timed_pop(co_timer, __ms__, co_async_safe_result_(co_last_state, __VA_ARGS__), __token__); _co_await;}while (0)
+#define co_broadcast_aff_timed_pop_void(__token__, __broadcast__, __ms__) do{(__broadcast__).aff_timed_pop(co_timer, __ms__, co_async_result_(co_last_state), __token__); _co_await;}while (0)
 //从一个channel中读取一次数据转接到另一个channel中
 #define co_chan_relay(__src_chan__, __dst_chan__) do{(__src_chan__).pop(CoChanRelay_<decltype(__dst_chan__)>(std::move(co_async_this), co_last_state, __dst_chan__)); _co_await;}while (0)
 #define co_chan_try_relay(__src_chan__, __dst_chan__) do{(__src_chan__).try_pop(CoChanTryRelay_<decltype(__dst_chan__)>(std::move(co_async_this), co_last_state, __dst_chan__)); _co_await;}while (0)
@@ -524,6 +553,7 @@ struct __co_context_no_capture{};
 //co_chan_io/co_chan_try_io多参数读写时打包
 #define co_chan_multi(...) _co_chan_multi(__VA_ARGS__)
 #define co_chan_copy_multi(...)  _co_chan_multi(forward_copys(__VA_ARGS__))
+#define co_pcks(...) __VA_ARGS__
 //push/pop数据到channel/msg_buffer
 #define co_chan_io(__chan__) co_await _make_co_chan_io(__chan__, co_last_state, co_self)
 #define co_chan_try_io(__chan__) co_await _make_co_chan_try_io(__chan__, co_last_state, co_self)
@@ -699,7 +729,7 @@ struct __co_context_no_capture{};
 		co_begin_switch(co_select_curr_id);\
 		co_switch_default; if(1==__selectStep && 0!=co_select_curr_id){assert(!"channel unexpected change");}if(0==co_select_curr_id) {do{
 
-#define _co_select_case(__chan__) }while(0); __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;}if(1==__selectStep) break;\
+#define __co_select_case(__chan__, ...) }while(0); __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;}if(1==__selectStep) break;\
 	co_switch_case((size_t)&(__chan__));\
 	if (1!=__selectStep) {\
 		co_select._selectId=(size_t)&(__chan__);\
@@ -720,7 +750,7 @@ struct __co_context_no_capture{};
 					if (co_async_state::co_async_fail!=st) {\
 						co_select._ntfPump.send(chanId, st);\
 					}\
-				}, *currSign);\
+				}, __VA_ARGS__);\
 			}\
 		} else if (2==__selectStep) {\
 			if (co_select._currSign->_appended && !co_select._currSign->_disable) {\
@@ -730,6 +760,9 @@ struct __co_context_no_capture{};
 			}\
 		}\
 	} else if (1==__selectStep) {do{
+
+#define _co_select_case(__chan__) __co_select_case(__chan__, *currSign)
+#define _co_select_case2(__token__, __chan__) __co_select_case(__chan__, *currSign, __token__)
 
 #define _co_select_case_of(__chan__) }while(0); __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;}if(1==__selectStep) break;\
 	co_switch_case((size_t)&(__chan__));\
@@ -763,7 +796,7 @@ struct __co_context_no_capture{};
 		}\
 	} else if (1==__selectStep) {do{
 
-#define _co_select_case_once(__chan__) }while(0); __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;}if(1==__selectStep) break;\
+#define __co_select_case_once(__chan__, ...) }while(0); __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;}if(1==__selectStep) break;\
 	co_switch_case((size_t)&(__chan__));\
 	if (1!=__selectStep) {\
 		co_select._selectId=(size_t)&(__chan__);\
@@ -784,7 +817,7 @@ struct __co_context_no_capture{};
 					if (co_async_state::co_async_fail!=st) {\
 						co_select._ntfPump.send(chanId, st);\
 					}\
-				}, *currSign);\
+				}, __VA_ARGS__);\
 			}\
 		} else if (2==__selectStep) {\
 			if (co_select._currSign->_appended && !co_select._currSign->_disable) {\
@@ -794,6 +827,9 @@ struct __co_context_no_capture{};
 			}\
 		}\
 	} else if (1==__selectStep) {do{
+
+#define _co_select_case_once(__chan__) __co_select_case_once(__chan__, *currSign)
+#define _co_select_case_once2(__token__, __chan__) __co_select_case_once(__chan__, *currSign, __token__)
 
 #define _co_select_case_once_of(__chan__) }while(0); __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;}if(1==__selectStep) break;\
 	co_switch_case((size_t)&(__chan__));\
@@ -844,20 +880,25 @@ struct __co_context_no_capture{};
 //从channel/msg_buffer中检测当前是否有数据，但不立即读取
 #define co_select_case_once_(__chan__) _co_select_case_once(__chan__)
 #define co_select_case_(__chan__) _co_select_case(__chan__)
+#define co_select_case_broadcast_once_(__token__, __chan__) _co_select_case_once2(__token__, __chan__)
+#define co_select_case_broadcast_(__token__, __chan__) _co_select_case2(__token__, __chan__)
 //从channel/msg_buffer中读取数据，处理完成后开始下一轮侦听
 #define co_select_slow_case_to(__chan__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_o(__chan__, co_select_state, co_self)
+#define co_select_slow_case_broadcast_to(__token__, __chan__) _co_select_case2(__token__, __chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_o(__chan__, co_select_state, co_self)
 #define co_select_slow_case_csp_to(__chan__, __res__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_try_o(__res__, __chan__, co_select_state, co_self)
 //从channel/msg_buffer中写入数据，处理完成后开始下一轮侦听
 #define co_select_slow_case_of(__chan__) _co_select_case_of(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_i(__chan__, co_select_state, co_self)
 #define co_select_slow_case_csp_of(__chan__, __res__) _co_select_case_of(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_try_i(__res__, __chan__, co_select_state, co_self)
 //从channel/msg_buffer中读取数据时立即下一轮侦听
 #define co_select_case_to(__chan__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_seamless_try_o(__chan__, co_select_state, co_self, co_select)
+#define co_select_case_broadcast_to(__token__, __chan__) _co_select_case2(__token__, __chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_seamless_try_o(__chan__, co_select_state, co_self, co_select)
 #define co_select_case_csp_to(__chan__, __res__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_seamless_try_o(__res__, __chan__, co_select_state, co_self, co_select)
 //从channel/msg_buffer中写入数据时立即下一轮侦听
 #define co_select_case_of(__chan__) _co_select_case_of(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_seamless_try_i(__chan__, co_select_state, co_self, co_select)
 #define co_select_case_csp_of(__chan__, __res__) _co_select_case_of(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_seamless_try_i(__res__, __chan__, co_select_state, co_self, co_select)
 //从channel/msg_buffer中读取一次数据
 #define co_select_case_once_to(__chan__) _co_select_case_once(__chan__) _co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_o(__chan__, co_select_state, co_self)
+#define co_select_case_broadcast_once_to(__token__, __chan__) _co_select_case_once2(__token__, __chan__) _co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_o(__chan__, co_select_state, co_self)
 #define co_select_case_csp_once_to(__chan__, __res__) _co_select_case_once(__chan__) _co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_try_o(__res__, __chan__, co_select_state, co_self)
 //从channel/msg_buffer中写入一次数据
 #define co_select_case_once_of(__chan__) _co_select_case_once_of(__chan__) _co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_i(__chan__, co_select_state, co_self)
@@ -867,6 +908,16 @@ struct __co_context_no_capture{};
 #define co_select_slow_case(__chan__, ...) _co_select_case(__chan__)\
 	if(co_select_state_is_ok){\
 		(__chan__).try_pop(co_async_result_(co_select_state, __VA_ARGS__)); _co_await;\
+		if(co_select_state_is_fail){\
+			__selectCaseTyiedIoFailed=true;\
+			break;\
+		}\
+	}
+
+//从broadcast中读取数据，处理完成后开始下一轮侦听
+#define co_select_slow_case_broadcast(__token__, __chan__, ...) _co_select_case2(__token__, __chan__)\
+	if(co_select_state_is_ok){\
+		(__chan__).try_pop(co_async_result_(co_select_state, __VA_ARGS__), __token__); _co_await;\
 		if(co_select_state_is_fail){\
 			__selectCaseTyiedIoFailed=true;\
 			break;\
@@ -903,6 +954,16 @@ struct __co_context_no_capture{};
 		}\
 	}
 
+//从broadcast中读取空数据，处理完成后开始下一轮侦听
+#define co_select_slow_case_broadcast_void(__token__, __chan__) _co_select_case2(__token__, __chan__)\
+	if(co_select_state_is_ok){\
+		(__chan__).try_pop(co_async_result_(co_select_state), __token__); _co_await;\
+		if(co_select_state_is_fail){\
+			__selectCaseTyiedIoFailed=true;\
+			break;\
+		}\
+	}
+
 //从channel/msg_buffer中读取数据时立即下一轮侦听
 #define co_select_case_void(__chan__) _co_select_case(__chan__)\
 	if(co_select_state_is_ok){\
@@ -923,6 +984,26 @@ struct __co_context_no_capture{};
 		}\
 	}
 
+//从broadcast中读取数据时立即下一轮侦听
+#define co_select_case_broadcast_void(__token__, __chan__) _co_select_case2(__token__, __chan__)\
+	if(co_select_state_is_ok){\
+		{\
+			co_notify_sign* const currSign=co_select._currSign;\
+			assert(!currSign->_appended && !currSign->_disable);\
+			currSign->_appended=true;\
+			const size_t chanId=co_select_curr_id;\
+			(__chan__).try_pop_and_append_notify(co_async_result_(co_select_state), [&__coContext, chanId](co_async_state st) {\
+				if (co_async_state::co_async_fail!=st) {\
+					co_select._ntfPump.send(chanId, st);\
+				}\
+			}, *currSign, __token__);\
+		} _co_await;\
+		if(co_select_state_is_fail){\
+			__selectCaseTyiedIoFailed=true;\
+			break;\
+		}\
+	}
+
 //从channel/msg_buffer中读取一次数据
 #define co_select_case_once(__chan__, ...) _co_select_case_once(__chan__)\
 	if(co_select_state_is_ok){\
@@ -933,10 +1014,30 @@ struct __co_context_no_capture{};
 		}\
 	}
 
+//从broadcast中读取一次数据
+#define co_select_case_broadcast_once(__token__, __chan__, ...) _co_select_case_once2(__token__, __chan__)\
+	if(co_select_state_is_ok){\
+		(__chan__).try_pop(co_async_result_(co_select_state, __VA_ARGS__), __token__); _co_await;\
+		if(co_select_state_is_fail){\
+			__selectCaseTyiedIoFailed=true;\
+			break;\
+		}\
+	}
+
 //从channel/msg_buffer中读取一次空数据
 #define co_select_case_void_once(__chan__) _co_select_case_once(__chan__)\
 	if(co_select_state_is_ok){\
 		(__chan__).try_pop(co_async_result_(co_select_state)); _co_await;\
+		if(co_select_state_is_fail){\
+			__selectCaseTyiedIoFailed=true;\
+			break;\
+		}\
+	}
+
+//从broadcast中读取一次空数据
+#define co_select_case_broadcast_void_once(__token__, __chan__) _co_select_case_once2(__token__, __chan__)\
+	if(co_select_state_is_ok){\
+		(__chan__).try_pop(co_async_result_(co_select_state), __token__); _co_await;\
 		if(co_select_state_is_fail){\
 			__selectCaseTyiedIoFailed=true;\
 			break;\
@@ -977,8 +1078,7 @@ struct __co_context_no_capture{};
 		} _co_await;\
 	}while (0)
 
-//恢复一个channel的case
-#define co_select_resume_case(__chan__) \
+#define _co_select_resume_case(__chan__, ...) \
 	do{\
 		const size_t chanId=(size_t)&(__chan__);\
 		assert(co_select._ntfSign.end()!=co_select._ntfSign.find(chanId));\
@@ -993,18 +1093,23 @@ struct __co_context_no_capture{};
 					if (co_async_state::co_async_fail!=st){\
 						co_select._ntfPump.send(chanId, st);\
 					}\
-				}, sign);\
+				}, __VA_ARGS__);\
 			} else {\
 				(__chan__).append_pop_notify([&__coContext, chanId](co_async_state st){\
 					if (co_async_state::co_async_fail!=st){\
 						co_select._ntfPump.send(chanId, st);\
 					}\
-				}, sign);\
+				}, __VA_ARGS__);\
 			}\
 		} else {\
 			assert(!sign._appended);\
 		}\
 	}while (0)
+
+#define _co_select_resume_case1(__chan__) _co_select_resume_case(__chan__, sign)
+#define _co_select_resume_case2(__token__, __chan__) _co_select_resume_case(__chan__, sign, __token__)
+//恢复一个channel的case
+#define co_select_resume_case(.../*__token__, __chan__*/) _BOND_LR__(_co_select_resume_case, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
 
 //锁定generator调度器
 #define co_hold_work io_work __holdWork
@@ -3505,6 +3610,7 @@ public:
 	}
 public:
 	template <typename Notify> void push(Notify&& ntf, void_type = void_type()){ co_msg_buffer<void_type>::push(std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void tick_push(Notify&& ntf, void_type = void_type()){ co_msg_buffer<void_type>::tick_push(std::forward<Notify>(ntf), void_type()); }
 	template <typename Notify> void aff_push(Notify&& ntf, void_type = void_type()){ co_msg_buffer<void_type>::aff_push(std::forward<Notify>(ntf), void_type()); }
 	template <typename Notify> void try_push(Notify&& ntf, void_type = void_type()){ co_msg_buffer<void_type>::try_push(std::forward<Notify>(ntf), void_type()); }
 	template <typename Notify> void aff_try_push(Notify&& ntf, void_type = void_type()){ co_msg_buffer<void_type>::aff_try_push(std::forward<Notify>(ntf), void_type()); }
@@ -4723,12 +4829,16 @@ public:
 	}
 public:
 	template <typename Notify> void push(Notify&& ntf, void_type = void_type()){ co_channel<void_type>::push(std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void tick_push(Notify&& ntf, void_type = void_type()){ co_channel<void_type>::tick_push(std::forward<Notify>(ntf), void_type()); }
 	template <typename Notify> void aff_push(Notify&& ntf, void_type = void_type()){ co_channel<void_type>::aff_push(std::forward<Notify>(ntf), void_type()); }
 	template <typename Notify> void try_push(Notify&& ntf, void_type = void_type()){ co_channel<void_type>::try_push(std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void try_tick_push(Notify&& ntf, void_type = void_type()){ co_channel<void_type>::try_tick_push(std::forward<Notify>(ntf), void_type()); }
 	template <typename Notify> void aff_try_push(Notify&& ntf, void_type = void_type()){ co_channel<void_type>::aff_try_push(std::forward<Notify>(ntf), void_type()); }
 	template <typename Notify> void timed_push(int ms, Notify&& ntf, void_type = void_type()){ co_channel<void_type>::timed_push(ms, std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void timed_tick_push(int ms, Notify&& ntf, void_type = void_type()){ co_channel<void_type>::timed_tick_push(ms, std::forward<Notify>(ntf), void_type()); }
 	template <typename Notify> void aff_timed_push(int ms, Notify&& ntf, void_type = void_type()){ co_channel<void_type>::aff_timed_push(ms, std::forward<Notify>(ntf), void_type()); }
 	template <typename Notify> void timed_push(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, void_type = void_type()){ co_channel<void_type>::timed_push(timer, ms, std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void timed_tick_push(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, void_type = void_type()){ co_channel<void_type>::timed_tick_push(timer, ms, std::forward<Notify>(ntf), void_type()); }
 	template <typename Notify> void aff_timed_push(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, void_type = void_type()){ co_channel<void_type>::aff_timed_push(timer, ms, std::forward<Notify>(ntf), void_type()); }
 	template <typename CbNotify, typename MsgNotify, typename... Args> void try_push_and_append_notify(CbNotify&& cb, MsgNotify&& msgNtf, co_notify_sign& ntfSign, Args&&... msg){
 		co_channel<void_type>::try_push_and_append_notify(std::forward<CbNotify>(cb), std::forward<MsgNotify>(msgNtf), ntfSign, void_type());
@@ -6030,15 +6140,768 @@ public:
 public:
 	template <typename Notify> void push(Notify&& ntf, void_type = void_type()){ co_nil_channel<void_type>::push(std::forward<Notify>(ntf), void_type()); }
 	template <typename Notify> void aff_push(Notify&& ntf, void_type = void_type()){ co_nil_channel<void_type>::aff_push(std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void tick_push(Notify&& ntf, void_type = void_type()){ co_nil_channel<void_type>::tick_push(std::forward<Notify>(ntf), void_type()); }
 	template <typename Notify> void try_push(Notify&& ntf, void_type = void_type()){ co_nil_channel<void_type>::try_push(std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void try_tick_push(Notify&& ntf, void_type = void_type()){ co_nil_channel<void_type>::try_tick_push(std::forward<Notify>(ntf), void_type()); }
 	template <typename Notify> void aff_try_push(Notify&& ntf, void_type = void_type()){ co_nil_channel<void_type>::aff_try_push(std::forward<Notify>(ntf), void_type()); }
 	template <typename Notify> void timed_push(int ms, Notify&& ntf, void_type = void_type()){ co_nil_channel<void_type>::timed_push(ms, std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void timed_tick_push(int ms, Notify&& ntf, void_type = void_type()){ co_nil_channel<void_type>::timed_tick_push(ms, std::forward<Notify>(ntf), void_type()); }
 	template <typename Notify> void aff_timed_push(int ms, Notify&& ntf, void_type = void_type()){ co_nil_channel<void_type>::aff_timed_push(ms, std::forward<Notify>(ntf), void_type()); }
 	template <typename Notify> void timed_push(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, void_type = void_type()){ co_nil_channel<void_type>::timed_push(timer, ms, std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void timed_tick_push(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, void_type = void_type()){ co_nil_channel<void_type>::timed_tick_push(timer, ms, std::forward<Notify>(ntf), void_type()); }
 	template <typename Notify> void aff_timed_push(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, void_type = void_type()){ co_nil_channel<void_type>::aff_timed_push(timer, ms, std::forward<Notify>(ntf), void_type()); }
 	template <typename CbNotify, typename MsgNotify, typename... Args> void try_push_and_append_notify(CbNotify&& cb, MsgNotify&& msgNtf, co_notify_sign& ntfSign, Args&&... msg){
 		co_nil_channel<void_type>::try_push_and_append_notify(std::forward<CbNotify>(cb), std::forward<MsgNotify>(msgNtf), ntfSign, void_type());
 	}
+};
+
+template <typename... Types>
+class co_broadcast;
+
+struct co_broadcast_token
+{
+	template <typename...> friend class co_broadcast;
+	void reset();
+private:
+	bool is_default();
+	long long _lastId = -1;
+	static co_broadcast_token _defToken;
+};
+
+/*!
+@brief 广播通道
+*/
+template <typename... Types>
+class co_broadcast
+{
+	typedef std::tuple<TYPE_PIPE(Types)...> msg_type;
+public:
+	co_broadcast(const shared_strand& strand)
+		:_closed(false), _pushCount(0), _strand(strand) {}
+
+	~co_broadcast()
+	{
+		assert(_popWait.empty());
+	}
+
+	static std::shared_ptr<co_broadcast> make(const shared_strand& strand)
+	{
+		return std::make_shared<co_broadcast>(strand);
+	}
+public:
+	template <typename... Args>
+	void send(Args&&... msg)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_push(any_handler(), std::forward<Args>(msg)...);
+		}
+		else
+		{
+			_strand->post(std::bind([this](RM_CREF(Args)&... msg)
+			{
+				_push(any_handler(), std::move(msg)...);
+			}, std::forward<Args>(msg)...));
+		}
+	}
+
+	template <typename... Args>
+	void post(Args&&... msg)
+	{
+		_strand->try_tick(std::bind([this](RM_CREF(Args)&... msg)
+		{
+			_push(any_handler(), std::move(msg)...);
+		}, std::forward<Args>(msg)...));
+	}
+
+	template <typename Notify, typename... Args>
+	void push(Notify&& ntf, Args&&... msg)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...);
+		}
+		else
+		{
+			_strand->post(std::bind([this](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Args>::type&... msg)
+			{
+				_push(CoChanMsgMove_<Notify>::move(ntf), CoChanMsgMove_<Args>::move(msg)...);
+			}, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Args>::forward(msg)...));
+		}
+	}
+
+	template <typename Notify, typename... Args>
+	void tick_push(Notify&& ntf, Args&&... msg)
+	{
+		_strand->try_tick(std::bind([this](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Args>::type&... msg)
+		{
+			_push(CoChanMsgMove_<Notify>::move(ntf), CoChanMsgMove_<Args>::move(msg)...);
+		}, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Args>::forward(msg)...));
+	}
+
+	template <typename Notify, typename... Args>
+	void aff_push(Notify&& ntf, Args&&... msg)
+	{
+		assert(_strand->running_in_this_thread());
+		_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...);
+	}
+
+	template <typename Notify>
+	void clear(Notify&& ntf)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_clear(std::forward<Notify>(ntf));
+		}
+		else
+		{
+			_strand->post(std::bind([this](typename CoChanMsgMove_<Notify>::type& ntf)
+			{
+				_clear(CoChanMsgMove_<Notify>::move(ntf));
+			}, CoChanMsgMove_<Notify>::forward(ntf)));
+		}
+	}
+
+	template <typename Notify>
+	void pop(Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_pop(std::forward<Notify>(ntf), token);
+		}
+		else
+		{
+			_strand->post(std::bind([this, &token](typename CoChanMsgMove_<Notify>::type& ntf)
+			{
+				_pop(CoChanMsgMove_<Notify>::move(ntf), token);
+			}, CoChanMsgMove_<Notify>::forward(ntf)));
+		}
+	}
+
+	template <typename Notify>
+	void tick_pop(Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		_strand->try_tick(std::bind([this, &token](typename CoChanMsgMove_<Notify>::type& ntf)
+		{
+			_pop(CoChanMsgMove_<Notify>::move(ntf), token);
+		}, CoChanMsgMove_<Notify>::forward(ntf)));
+	}
+
+	template <typename Notify>
+	void aff_pop(Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		assert(_strand->running_in_this_thread());
+		_pop(std::forward<Notify>(ntf), token);
+	}
+
+	template <typename Notify>
+	void try_pop(Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_try_pop(std::forward<Notify>(ntf), token);
+		}
+		else
+		{
+			_strand->post(std::bind([this, &token](typename CoChanMsgMove_<Notify>::type& ntf)
+			{
+				_try_pop(CoChanMsgMove_<Notify>::move(ntf), token);
+			}, CoChanMsgMove_<Notify>::forward(ntf)));
+		}
+	}
+
+	template <typename Notify>
+	void aff_try_pop(Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		assert(_strand->running_in_this_thread());
+		_try_pop(std::forward<Notify>(ntf), token);
+	}
+
+	template <typename Notify>
+	void timed_pop(int ms, Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_timed_pop(ms, std::forward<Notify>(ntf), token);
+		}
+		else
+		{
+			_strand->post(std::bind([this, ms, &token](typename CoChanMsgMove_<Notify>::type& ntf)
+			{
+				_timed_pop(ms, CoChanMsgMove_<Notify>::move(ntf), token);
+			}, CoChanMsgMove_<Notify>::forward(ntf)));
+		}
+	}
+
+	template <typename Notify>
+	void timed_tick_pop(int ms, Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		_strand->try_tick(std::bind([this, ms, &token](typename CoChanMsgMove_<Notify>::type& ntf)
+		{
+			_timed_pop(ms, CoChanMsgMove_<Notify>::move(ntf), token);
+		}, CoChanMsgMove_<Notify>::forward(ntf)));
+	}
+
+	template <typename Notify>
+	void aff_timed_pop(int ms, Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		assert(_strand->running_in_this_thread());
+		_timed_pop(ms, std::forward<Notify>(ntf), token);
+	}
+
+	template <typename Notify>
+	void timed_pop(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_timed_pop(timer, ms, std::forward<Notify>(ntf), token);
+		}
+		else
+		{
+			_strand->post(std::bind([this, ms, &timer, &token](typename CoChanMsgMove_<Notify>::type& ntf)
+			{
+				_timed_pop(timer, ms, CoChanMsgMove_<Notify>::move(ntf), token);
+			}, CoChanMsgMove_<Notify>::forward(ntf)));
+		}
+	}
+
+	template <typename Notify>
+	void timed_tick_pop(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		_strand->try_tick(std::bind([this, ms, &timer, &token](typename CoChanMsgMove_<Notify>::type& ntf)
+		{
+			_timed_pop(timer, ms, CoChanMsgMove_<Notify>::move(ntf), token);
+		}, CoChanMsgMove_<Notify>::forward(ntf)));
+	}
+
+	template <typename Notify>
+	void aff_timed_pop(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		assert(_strand->running_in_this_thread());
+		_timed_pop(timer, ms, std::forward<Notify>(ntf), token);
+	}
+
+	template <typename Notify>
+	void append_pop_notify(Notify&& ntf, co_notify_sign& ntfSign, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_append_pop_notify(std::forward<Notify>(ntf), ntfSign, token);
+		}
+		else
+		{
+			_strand->post(std::bind([this, &ntfSign, &token](typename CoChanMsgMove_<Notify>::type& ntf)
+			{
+				_append_pop_notify(CoChanMsgMove_<Notify>::move(ntf), ntfSign, token);
+			}, CoChanMsgMove_<Notify>::forward(ntf)));
+		}
+	}
+
+	template <typename CbNotify, typename MsgNotify>
+	void try_pop_and_append_notify(CbNotify&& cb, MsgNotify&& msgNtf, co_notify_sign& ntfSign, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_try_pop_and_append_notify(std::forward<CbNotify>(cb), std::forward<MsgNotify>(msgNtf), ntfSign, token);
+		}
+		else
+		{
+			_strand->post(std::bind([this, &ntfSign, &token](typename CoChanMsgMove_<CbNotify>::type& cb, typename CoChanMsgMove_<MsgNotify>::type& msgNtf)
+			{
+				_try_pop_and_append_notify(CoChanMsgMove_<CbNotify>::move(cb), CoChanMsgMove_<MsgNotify>::move(msgNtf), ntfSign, token);
+			}, CoChanMsgMove_<CbNotify>::forward(cb), std::forward<MsgNotify>(msgNtf)));
+		}
+	}
+
+	template <typename Notify>
+	void remove_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_remove_pop_notify(std::forward<Notify>(ntf), ntfSign);
+		}
+		else
+		{
+			_strand->post(std::bind([this, &ntfSign](typename CoChanMsgMove_<Notify>::type& ntf)
+			{
+				_remove_pop_notify(CoChanMsgMove_<Notify>::move(ntf), ntfSign);
+			}, CoChanMsgMove_<Notify>::forward(ntf)));
+		}
+	}
+
+	template <typename Notify>
+	void append_push_notify(Notify&& ntf, co_notify_sign& ntfSign, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		assert(false);
+	}
+
+	template <typename CbNotify, typename MsgNotify>
+	void try_push_and_append_notify(CbNotify&& cb, MsgNotify&& msgNtf, co_notify_sign& ntfSign, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		assert(false);
+	}
+
+	template <typename Notify>
+	void remove_push_notify(Notify&& ntf, co_notify_sign& ntfSign)
+	{
+		assert(false);
+	}
+
+	void close()
+	{
+		_strand->distribute([this]()
+		{
+			_close();
+		});
+	}
+
+	template <typename Notify>
+	void close(Notify&& ntf)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_close();
+			CHECK_EXCEPTION(ntf);
+		}
+		else
+		{
+			_strand->post(std::bind([this](typename CoChanMsgMove_<Notify>::type& ntf)
+			{
+				_close();
+				CHECK_EXCEPTION(ntf);
+			}, CoChanMsgMove_<Notify>::forward(ntf)));
+		}
+	}
+
+	void cancel()
+	{
+		_strand->distribute([this]()
+		{
+			_cancel();
+		});
+	}
+
+	template <typename Notify>
+	void cancel(Notify&& ntf)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_cancel();
+			CHECK_EXCEPTION(ntf);
+		}
+		else
+		{
+			_strand->post(std::bind([this](typename CoChanMsgMove_<Notify>::type& ntf)
+			{
+				_cancel();
+				CHECK_EXCEPTION(ntf);
+			}, CoChanMsgMove_<Notify>::forward(ntf)));
+		}
+	}
+
+	void reset()
+	{
+		assert(_closed);
+		assert(_popWait.empty());
+		assert(!_tempBuffer.has());
+		_closed = false;
+	}
+
+	const shared_strand& self_strand() const
+	{
+		return _strand;
+	}
+
+	CoOtherReceiver_<co_broadcast<Types...>> other_receiver()
+	{
+		return CoOtherReceiver_<co_broadcast<Types...>>{*this};
+	}
+
+	CoWrapSend_<co_broadcast<Types...>> wrap_send()
+	{
+		return CoWrapSend_<co_broadcast<Types...>>{*this};
+	}
+
+	CoWrapPost_<co_broadcast<Types...>> wrap_post()
+	{
+		return CoWrapPost_<co_broadcast<Types...>>{*this};
+	}
+private:
+	template <typename Notify, typename... Args>
+	void _push(Notify&& ntf, Args&&... msg)
+	{
+		assert(_strand->running_in_this_thread());
+		if (_closed)
+		{
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
+			return;
+		}
+		_pushCount++;
+		_tempBuffer.create(std::forward<Args>(msg)...);
+		size_t ntfNum = 0;
+		CoNotifyHandlerFace_* ntfs[32];
+		std::list<CoNotifyHandlerFace_*> ntfsEx;
+		while (!_popWait.empty())
+		{
+			if (ntfNum < fixed_array_length(ntfs))
+			{
+				ntfs[ntfNum++] = _popWait.front();
+			}
+			else
+			{
+				ntfsEx.push_back(_popWait.front());
+			}
+			_popWait.pop_front();
+		}
+		for (size_t i = 0; i < ntfNum; i++)
+		{
+			ntfs[i]->invoke(_alloc, co_async_state::co_async_ok);
+		}
+		while (!ntfsEx.empty())
+		{
+			ntfsEx.front()->invoke(_alloc, co_async_state::co_async_ok);
+			ntfsEx.pop_front();
+		}
+		CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
+	}
+
+	template <typename Notify>
+	void _clear(Notify&& ntf)
+	{
+		assert(_strand->running_in_this_thread());
+		if (_closed)
+		{
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
+			return;
+		}
+		_tempBuffer.destroy();
+		CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
+	}
+
+	template <typename Notify>
+	void _pop(Notify&& ntf, co_broadcast_token& token)
+	{
+		assert(_strand->running_in_this_thread());
+		if (_closed)
+		{
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
+			return;
+		}
+		if (_tempBuffer.has() && (token.is_default() || token._lastId != _pushCount))
+		{
+			if (!token.is_default())
+			{
+				token._lastId = _pushCount;
+			}
+			CHECK_EXCEPTION(tuple_invoke, ntf, std::tuple<co_async_state>(co_async_state::co_async_ok), _tempBuffer.get());
+		}
+		else
+		{
+			_popWait.push_back(CoNotifyHandlerFace_::wrap_notify(_alloc, std::bind([this, &token](typename CoChanMsgMove_<Notify>::type& ntf, co_async_state state)
+			{
+				if (co_async_state::co_async_ok == state)
+				{
+					_pop(CoChanMsgMove_<Notify>::move(ntf), token);
+				}
+				else
+				{
+					CHECK_EXCEPTION(ntf, state);
+				}
+			}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
+		}
+	}
+
+	template <typename Notify>
+	void _try_pop(Notify&& ntf, co_broadcast_token& token)
+	{
+		assert(_strand->running_in_this_thread());
+		if (_closed)
+		{
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
+			return;
+		}
+		if (_tempBuffer.has() && (token.is_default() || token._lastId != _pushCount))
+		{
+			if (!token.is_default())
+			{
+				token._lastId = _pushCount;
+			}
+			CHECK_EXCEPTION(tuple_invoke, ntf, std::tuple<co_async_state>(co_async_state::co_async_ok), _tempBuffer.get());
+		}
+		else
+		{
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_fail);
+		}
+	}
+
+	template <typename Notify>
+	void _timed_pop(int ms, Notify&& ntf, co_broadcast_token& token)
+	{
+		assert(_strand->running_in_this_thread());
+		if (_closed)
+		{
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
+			return;
+		}
+		if (_tempBuffer.has() && (token.is_default() || token._lastId != _pushCount))
+		{
+			if (!token.is_default())
+			{
+				token._lastId = _pushCount;
+			}
+			CHECK_EXCEPTION(tuple_invoke, ntf, std::tuple<co_async_state>(co_async_state::co_async_ok), _tempBuffer.get());
+		}
+		else if (ms > 0)
+		{
+			overlap_timer::timer_handle* timer = new(_alloc.allocate(sizeof(overlap_timer::timer_handle)))overlap_timer::timer_handle;
+			_popWait.push_back(CoNotifyHandlerFace_::wrap_notify(_alloc, std::bind([this, timer, &token](typename CoChanMsgMove_<Notify>::type& ntf, co_async_state state)
+			{
+				_strand->over_timer()->cancel(*timer);
+				timer->~timer_handle();
+				_alloc.deallocate(timer);
+				if (co_async_state::co_async_ok == state)
+				{
+					assert(_tempBuffer.has());
+					_pop(CoChanMsgMove_<Notify>::move(ntf), token);
+				}
+				else
+				{
+					CHECK_EXCEPTION(ntf, state);
+				}
+			}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
+			_strand->over_timer()->timeout(ms, *timer, std::bind([this](const co_notify_node& it)
+			{
+				CoNotifyHandlerFace_* popWait = *it;
+				_popWait.erase(it);
+				popWait->invoke(_alloc, co_async_state::co_async_overtime);
+			}, --_popWait.end()));
+		}
+		else
+		{
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_overtime);
+		}
+	}
+
+	template <typename Notify>
+	void _timed_pop(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, co_broadcast_token& token)
+	{
+		assert(_strand->running_in_this_thread());
+		if (_closed)
+		{
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
+			return;
+		}
+		if (_tempBuffer.has() && (token.is_default() || token._lastId != _pushCount))
+		{
+			if (!token.is_default())
+			{
+				token._lastId = _pushCount;
+			}
+			CHECK_EXCEPTION(tuple_invoke, ntf, std::tuple<co_async_state>(co_async_state::co_async_ok), _tempBuffer.get());
+		}
+		else if (ms > 0)
+		{
+			_popWait.push_back(CoNotifyHandlerFace_::wrap_notify(_alloc, std::bind([this, &timer, &token](typename CoChanMsgMove_<Notify>::type& ntf, co_async_state state)
+			{
+				_strand->over_timer()->cancel(timer);
+				if (co_async_state::co_async_ok == state)
+				{
+					assert(_tempBuffer.has());
+					_pop(CoChanMsgMove_<Notify>::move(ntf), token);
+				}
+				else
+				{
+					CHECK_EXCEPTION(ntf, state);
+				}
+			}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
+			_strand->over_timer()->timeout(ms, timer, std::bind([this](const co_notify_node& it)
+			{
+				CoNotifyHandlerFace_* popWait = *it;
+				_popWait.erase(it);
+				popWait->invoke(_alloc, co_async_state::co_async_overtime);
+			}, --_popWait.end()));
+		}
+		else
+		{
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_overtime);
+		}
+	}
+
+	template <typename Notify>
+	void _append_pop_notify(Notify&& ntf, co_notify_sign& ntfSign, co_broadcast_token& token)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(!ntfSign._nodeEffect);
+		if (_closed)
+		{
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
+			return;
+		}
+		if (_tempBuffer.has() && (token.is_default() || token._lastId != _pushCount))
+		{
+			if (!token.is_default())
+			{
+				token._lastId = _pushCount;
+			}
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
+		}
+		else
+		{
+			_popWait.push_back(CoNotifyHandlerFace_::wrap_notify(_alloc, std::bind([&ntfSign](typename CoChanMsgMove_<Notify>::type& ntf, co_async_state state)
+			{
+				assert(ntfSign._nodeEffect);
+				ntfSign._nodeEffect = false;
+				CHECK_EXCEPTION(ntf, state);
+			}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
+			ntfSign._ntfNode = --_popWait.end();
+			ntfSign._nodeEffect = true;
+		}
+	}
+
+	template <typename CbNotify, typename MsgNotify>
+	void _try_pop_and_append_notify(CbNotify&& cb, MsgNotify&& msgNtf, co_notify_sign& ntfSign, co_broadcast_token& token)
+	{
+		assert(_strand->running_in_this_thread());
+		assert(!ntfSign._nodeEffect);
+		if (_closed)
+		{
+			CHECK_EXCEPTION(msgNtf, co_async_state::co_async_closed);
+			CHECK_EXCEPTION(cb, co_async_state::co_async_closed);
+			return;
+		}
+		_append_pop_notify(CoChanMsgMove_<MsgNotify>::forward(msgNtf), ntfSign, token);
+		if (_tempBuffer.has() && (token.is_default() || token._lastId != _pushCount))
+		{
+			if (!token.is_default())
+			{
+				token._lastId = _pushCount;
+			}
+			CHECK_EXCEPTION(tuple_invoke, cb, std::tuple<co_async_state>(co_async_state::co_async_ok), _tempBuffer.get());
+		}
+		else
+		{
+			CHECK_EXCEPTION(cb, co_async_state::co_async_fail);
+		}
+	}
+
+	template <typename Notify>
+	void _remove_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
+	{
+		assert(_strand->running_in_this_thread());
+		if (_closed)
+		{
+			assert(!ntfSign._nodeEffect);
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
+			return;
+		}
+		const bool effect = ntfSign._nodeEffect;
+		ntfSign._nodeEffect = false;
+		if (effect)
+		{
+			assert(ntfSign._appended);
+			ntfSign._appended = false;
+			CoNotifyHandlerFace_* popNtf = *ntfSign._ntfNode;
+			_popWait.erase(ntfSign._ntfNode);
+			popNtf->destroy();
+			_alloc.deallocate(popNtf);
+		}
+		if (_tempBuffer.has())
+		{
+			if (!_popWait.empty())
+			{
+				CoNotifyHandlerFace_* popNtf = _popWait.front();
+				_popWait.pop_front();
+				popNtf->invoke(_alloc);
+			}
+		}
+		CHECK_EXCEPTION(ntf, effect ? co_async_state::co_async_ok : co_async_state::co_async_fail);
+	}
+
+	void _close()
+	{
+		assert(_strand->running_in_this_thread());
+		_closed = true;
+		_tempBuffer.destroy();
+		size_t ntfNum = 0;
+		CoNotifyHandlerFace_* ntfs[32];
+		std::list<CoNotifyHandlerFace_*> ntfsEx;
+		while (!_popWait.empty())
+		{
+			if (ntfNum < fixed_array_length(ntfs))
+			{
+				ntfs[ntfNum++] = _popWait.front();
+			}
+			else
+			{
+				ntfsEx.push_back(_popWait.front());
+			}
+			_popWait.pop_front();
+		}
+		for (size_t i = 0; i < ntfNum; i++)
+		{
+			ntfs[i]->invoke(_alloc, co_async_state::co_async_closed);
+		}
+		while (!ntfsEx.empty())
+		{
+			ntfsEx.front()->invoke(_alloc, co_async_state::co_async_closed);
+			ntfsEx.pop_front();
+		}
+	}
+
+	void _cancel()
+	{
+		assert(_strand->running_in_this_thread());
+		size_t ntfNum = 0;
+		_tempBuffer.destroy();
+		CoNotifyHandlerFace_* ntfs[32];
+		std::list<CoNotifyHandlerFace_*> ntfsEx;
+		while (!_popWait.empty())
+		{
+			if (ntfNum < fixed_array_length(ntfs))
+			{
+				ntfs[ntfNum++] = _popWait.front();
+			}
+			else
+			{
+				ntfsEx.push_back(_popWait.front());
+			}
+			_popWait.pop_front();
+		}
+		for (size_t i = 0; i < ntfNum; i++)
+		{
+			ntfs[i]->invoke(_alloc, co_async_state::co_async_cancel);
+		}
+		while (!ntfsEx.empty())
+		{
+			ntfsEx.front()->invoke(_alloc, co_async_state::co_async_cancel);
+			ntfsEx.pop_front();
+		}
+	}
+private:
+	shared_strand _strand;
+	stack_obj<msg_type> _tempBuffer;
+	reusable_mem _alloc;
+	msg_list<CoNotifyHandlerFace_*> _popWait;
+	long long _pushCount;
+	bool _closed;
+	NONE_COPY(co_broadcast);
+};
+
+template <>
+class co_broadcast<void> : public co_broadcast<void_type>
+{
+public:
+	co_broadcast(const shared_strand& strand)
+		:co_broadcast<void_type>(strand) {}
+
+	static std::shared_ptr<co_broadcast> make(const shared_strand& strand)
+	{
+		return std::make_shared<co_broadcast>(strand);
+	}
+public:
+	template <typename Notify> void push(Notify&& ntf, void_type = void_type()){ co_broadcast<void_type>::push(std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void tick_push(Notify&& ntf, void_type = void_type()){ co_broadcast<void_type>::tick_push(std::forward<Notify>(ntf), void_type()); }
+	template <typename Notify> void aff_push(Notify&& ntf, void_type = void_type()){ co_broadcast<void_type>::aff_push(std::forward<Notify>(ntf), void_type()); }
 };
 
 template <typename R>

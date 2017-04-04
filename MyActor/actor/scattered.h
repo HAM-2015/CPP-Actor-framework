@@ -531,6 +531,26 @@ auto forward_copy(T&& p)->typename ForwardCopy_<T>::type
 #define __8 std::placeholders::_8
 #define __9 std::placeholders::_9
 
+struct param_placeholder
+{
+	template <typename Arg> param_placeholder(Arg&&) {}
+private:
+	template <typename Arg> void operator=(Arg&&) = delete;
+	param_placeholder(const param_placeholder&) = delete;
+	param_placeholder() = delete;
+};
+
+#define _$ param_placeholder
+#define _$1 _$
+#define _$2 _$1,_$
+#define _$3 _$2,_$
+#define _$4 _$3,_$
+#define _$5 _$4,_$
+#define _$6 _$5,_$
+#define _$7 _$6,_$
+#define _$8 _$7,_$
+#define _$9 _$8,_$
+
 template <typename...>
 struct null_handler 
 {

@@ -1266,6 +1266,72 @@ void co_chan_perfor_test()
 	trace_line("end co_chan_perfor_test");
 }
 
+void co_broadcast_test()
+{
+	trace_line("begin co_broadcast_test");
+	io_engine ios;
+	ios.run();
+	co_broadcast<int, move_test> msgBroadcast(boost_strand::create(ios));
+	co_go(ios)[&](co_generator)
+	{
+		co_begin_context;
+		int i;
+		co_use_state;
+		co_end_context(ctx);
+
+		co_begin;
+		co_sleep(1000);
+		for (ctx.i = 0; ctx.i < 10; ctx.i++)
+		{
+			co_chan_io(msgBroadcast) << co_chan_multi(ctx.i, move_test(ctx.i));
+			co_sleep(100);
+		}
+		co_end;
+	};
+	co_go(ios)[&](co_generator)
+	{
+		co_begin_context;
+		int i;
+		int id;
+		move_test mt;
+		co_use_state;
+		co_end_context(ctx);
+
+		co_begin;
+		for (ctx.i = 0; ctx.i < 10; ctx.i++)
+		{
+			co_chan_io(msgBroadcast) >> co_chan_multi(ctx.id, ctx.mt);
+			info_trace_comma(1, ctx.id, ctx.mt);
+			co_sleep(300);
+		}
+		co_end;
+	};
+	co_go(ios)[&](co_generator)
+	{
+		co_begin_context;
+		int i;
+		int id;
+		move_test mt;
+		co_broadcast_token token;
+		co_use_timer;
+		co_use_state;
+		co_end_context(ctx);
+
+		co_begin;
+		for (ctx.i = 0; ctx.i < 10; ctx.i++)
+		{
+			co_broadcast_timed_pop(ctx.token, msgBroadcast, 300, co_pcks(ctx.id, ctx.mt));
+			if (co_last_state_is_ok)
+			{
+				info_trace_comma(2, ctx.id, ctx.mt);
+			}
+		}
+		co_end;
+	};
+	ios.stop();
+	trace_line("end co_broadcast_test");
+}
+
 void co_msg_test()
 {
 	trace_line("begin co_msg_test");
@@ -1399,6 +1465,8 @@ int main(int argc, char *argv[])
 	co_channel_test();
 	trace("\n");
 	co_msg_test();
+	trace("\n");
+	co_broadcast_test();
 	trace("\n");
 #ifdef NDEBUG
 	co_chan_perfor_test();

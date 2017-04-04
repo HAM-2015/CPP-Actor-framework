@@ -164,6 +164,19 @@ public:
 		return std::make_shared<nil_channel>(strand);
 	}
 };
+
+template <typename... Types>
+class broadcast_channel : public ActorChannel_<co_broadcast<Types...>>
+{
+public:
+	broadcast_channel(const shared_strand& strand)
+		:ActorChannel_<co_broadcast<Types...>>(strand) {}
+
+	static std::shared_ptr<broadcast_channel> make(const shared_strand& strand)
+	{
+		return std::make_shared<broadcast_channel>(strand);
+	}
+};
 //////////////////////////////////////////////////////////////////////////
 
 template <typename... Types>
