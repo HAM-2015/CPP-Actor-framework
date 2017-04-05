@@ -877,28 +877,28 @@ struct __co_context_no_capture{};
 		}\
 	} else
 
-//从channel/msg_buffer中检测当前是否有数据，但不立即读取
+//从channel/msg_buffer/broadcast中检测当前是否有数据，但不立即读取
 #define co_select_case_once_(__chan__) _co_select_case_once(__chan__)
 #define co_select_case_(__chan__) _co_select_case(__chan__)
-#define co_select_case_broadcast_once_(__token__, __chan__) _co_select_case_once2(__token__, __chan__)
-#define co_select_case_broadcast_(__token__, __chan__) _co_select_case2(__token__, __chan__)
-//从channel/msg_buffer中读取数据，处理完成后开始下一轮侦听
+#define co_select_case_broadcast_once_(__token__, __broadcast__) _co_select_case_once2(__token__, __broadcast__)
+#define co_select_case_broadcast_(__token__, __broadcast__) _co_select_case2(__token__, __broadcast__)
+//从channel/msg_buffer/broadcast中读取数据，处理完成后开始下一轮侦听
 #define co_select_slow_case_to(__chan__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_o(__chan__, co_select_state, co_self)
-#define co_select_slow_case_broadcast_to(__token__, __chan__) _co_select_case2(__token__, __chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_o(__chan__, co_select_state, co_self)
+#define co_select_slow_case_broadcast_to(__token__, __broadcast__) _co_select_case2(__token__, __broadcast__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_broadcast_try_o(__token__, __broadcast__, co_select_state, co_self)
 #define co_select_slow_case_csp_to(__chan__, __res__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_try_o(__res__, __chan__, co_select_state, co_self)
 //从channel/msg_buffer中写入数据，处理完成后开始下一轮侦听
 #define co_select_slow_case_of(__chan__) _co_select_case_of(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_i(__chan__, co_select_state, co_self)
 #define co_select_slow_case_csp_of(__chan__, __res__) _co_select_case_of(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_try_i(__res__, __chan__, co_select_state, co_self)
-//从channel/msg_buffer中读取数据时立即下一轮侦听
+//从channel/msg_buffer/broadcast中读取数据时立即下一轮侦听
 #define co_select_case_to(__chan__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_seamless_try_o(__chan__, co_select_state, co_self, co_select)
-#define co_select_case_broadcast_to(__token__, __chan__) _co_select_case2(__token__, __chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_seamless_try_o(__chan__, co_select_state, co_self, co_select)
+#define co_select_case_broadcast_to(__token__, __broadcast__) _co_select_case2(__token__, __broadcast__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_broadcast_seamless_try_o(__token__, __broadcast__, co_select_state, co_self, co_select)
 #define co_select_case_csp_to(__chan__, __res__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_seamless_try_o(__res__, __chan__, co_select_state, co_self, co_select)
 //从channel/msg_buffer中写入数据时立即下一轮侦听
 #define co_select_case_of(__chan__) _co_select_case_of(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_seamless_try_i(__chan__, co_select_state, co_self, co_select)
 #define co_select_case_csp_of(__chan__, __res__) _co_select_case_of(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_seamless_try_i(__res__, __chan__, co_select_state, co_self, co_select)
-//从channel/msg_buffer中读取一次数据
+//从channel/msg_buffer/broadcast中读取一次数据
 #define co_select_case_once_to(__chan__) _co_select_case_once(__chan__) _co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_o(__chan__, co_select_state, co_self)
-#define co_select_case_broadcast_once_to(__token__, __chan__) _co_select_case_once2(__token__, __chan__) _co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_o(__chan__, co_select_state, co_self)
+#define co_select_case_broadcast_once_to(__token__, __broadcast__) _co_select_case_once2(__token__, __broadcast__) _co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_broadcast_try_o(__token__, __broadcast__, co_select_state, co_self)
 #define co_select_case_csp_once_to(__chan__, __res__) _co_select_case_once(__chan__) _co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_try_o(__res__, __chan__, co_select_state, co_self)
 //从channel/msg_buffer中写入一次数据
 #define co_select_case_once_of(__chan__) _co_select_case_once_of(__chan__) _co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_i(__chan__, co_select_state, co_self)
@@ -955,9 +955,9 @@ struct __co_context_no_capture{};
 	}
 
 //从broadcast中读取空数据，处理完成后开始下一轮侦听
-#define co_select_slow_case_broadcast_void(__token__, __chan__) _co_select_case2(__token__, __chan__)\
+#define co_select_slow_case_broadcast_void(__token__, __broadcast__) _co_select_case2(__token__, __broadcast__)\
 	if(co_select_state_is_ok){\
-		(__chan__).try_pop(co_async_result_(co_select_state), __token__); _co_await;\
+		(__broadcast__).try_pop(co_async_result_(co_select_state), __token__); _co_await;\
 		if(co_select_state_is_fail){\
 			__selectCaseTyiedIoFailed=true;\
 			break;\
@@ -985,14 +985,14 @@ struct __co_context_no_capture{};
 	}
 
 //从broadcast中读取数据时立即下一轮侦听
-#define co_select_case_broadcast_void(__token__, __chan__) _co_select_case2(__token__, __chan__)\
+#define co_select_case_broadcast_void(__token__, __broadcast__) _co_select_case2(__token__, __broadcast__)\
 	if(co_select_state_is_ok){\
 		{\
 			co_notify_sign* const currSign=co_select._currSign;\
 			assert(!currSign->_appended && !currSign->_disable);\
 			currSign->_appended=true;\
 			const size_t chanId=co_select_curr_id;\
-			(__chan__).try_pop_and_append_notify(co_async_result_(co_select_state), [&__coContext, chanId](co_async_state st) {\
+			(__broadcast__).try_pop_and_append_notify(co_async_result_(co_select_state), [&__coContext, chanId](co_async_state st) {\
 				if (co_async_state::co_async_fail!=st) {\
 					co_select._ntfPump.send(chanId, st);\
 				}\
@@ -1015,9 +1015,9 @@ struct __co_context_no_capture{};
 	}
 
 //从broadcast中读取一次数据
-#define co_select_case_broadcast_once(__token__, __chan__, ...) _co_select_case_once2(__token__, __chan__)\
+#define co_select_case_broadcast_once(__token__, __broadcast__, ...) _co_select_case_once2(__token__, __broadcast__)\
 	if(co_select_state_is_ok){\
-		(__chan__).try_pop(co_async_result_(co_select_state, __VA_ARGS__), __token__); _co_await;\
+		(__broadcast__).try_pop(co_async_result_(co_select_state, __VA_ARGS__), __token__); _co_await;\
 		if(co_select_state_is_fail){\
 			__selectCaseTyiedIoFailed=true;\
 			break;\
@@ -1035,9 +1035,9 @@ struct __co_context_no_capture{};
 	}
 
 //从broadcast中读取一次空数据
-#define co_select_case_broadcast_void_once(__token__, __chan__) _co_select_case_once2(__token__, __chan__)\
+#define co_select_case_broadcast_void_once(__token__, __broadcast__) _co_select_case_once2(__token__, __broadcast__)\
 	if(co_select_state_is_ok){\
-		(__chan__).try_pop(co_async_result_(co_select_state), __token__); _co_await;\
+		(__broadcast__).try_pop(co_async_result_(co_select_state), __token__); _co_await;\
 		if(co_select_state_is_fail){\
 			__selectCaseTyiedIoFailed=true;\
 			break;\
@@ -1107,9 +1107,9 @@ struct __co_context_no_capture{};
 	}while (0)
 
 #define _co_select_resume_case1(__chan__) _co_select_resume_case(__chan__, sign)
-#define _co_select_resume_case2(__token__, __chan__) _co_select_resume_case(__chan__, sign, __token__)
+#define _co_select_resume_case2(__token__, __broadcast__) _co_select_resume_case(__broadcast__, sign, __token__)
 //恢复一个channel的case
-#define co_select_resume_case(.../*__token__, __chan__*/) _BOND_LR__(_co_select_resume_case, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
+#define co_select_resume_case(...) _BOND_LR__(_co_select_resume_case, _PP_NARG(__VA_ARGS__))(__VA_ARGS__)
 
 //锁定generator调度器
 #define co_hold_work io_work __holdWork
@@ -2353,7 +2353,33 @@ private:
 };
 template <typename Chan> CoChanSeamlessTryO_<Chan> _make_co_chan_seamless_try_o(Chan& chan, co_async_state& state, generator& host, co_select_sign& selectSign) { return CoChanSeamlessTryO_<Chan>(chan, state, host, selectSign); }
 
-struct co_select_sign;
+struct co_broadcast_token;
+template <typename Broadcast> struct CoBroadcastTryO_
+{
+	CoBroadcastTryO_(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) :_token(token), _broadcast(broadcast), _state(state), _host(host) {}
+	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
+	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoBroadcastTryO_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
+	void operator>>(void_type&&) { pop(this); }
+private:
+	template <typename... Args> static void pop(CoBroadcastTryO_* this_, Args&&... args) { co_generator = this_->_host; this_->_broadcast.try_pop(co_async_result_(this_->_state, args...), this_->_token); }
+private:
+	co_broadcast_token& _token; Broadcast& _broadcast; co_async_state& _state; generator& _host;
+};
+template <typename Broadcast> CoBroadcastTryO_<Broadcast> _make_co_broadcast_try_o(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) { return CoBroadcastTryO_<Broadcast>(token, broadcast, state, host); }
+
+template <typename Broadcast> struct CoBroadcastSeamlessTryO_
+{
+	CoBroadcastSeamlessTryO_(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host, co_select_sign& selectSign) :_token(token), _broadcast(broadcast), _state(state), _host(host), _selectSign(selectSign) {}
+	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
+	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoBroadcastSeamlessTryO_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
+	void operator>>(void_type&&) { pop(this); }
+private:
+	template <typename... Args> static void pop(CoBroadcastSeamlessTryO_* this_, Args&&... args);
+private:
+	co_broadcast_token& _token; Broadcast& _broadcast; co_async_state& _state; generator& _host; co_select_sign& _selectSign;
+};
+template <typename Broadcast> CoBroadcastSeamlessTryO_<Broadcast> _make_co_broadcast_seamless_try_o(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host, co_select_sign& selectSign) { return CoBroadcastSeamlessTryO_<Broadcast>(token, broadcast, state, host, selectSign); }
+
 template <typename Chan> struct CoChanSeamlessTryI_
 {
 	CoChanSeamlessTryI_(Chan& chan, co_async_state& state, generator& host, co_select_sign& selectSign) :_chan(chan), _state(state), _host(host), _selectSign(selectSign) {}
@@ -6587,7 +6613,7 @@ private:
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
-		if (_tempBuffer.has() && (token.is_default() || token._lastId != _pushCount))
+		if (_tempBuffer.has() && token._lastId != _pushCount)
 		{
 			if (!token.is_default())
 			{
@@ -6620,7 +6646,7 @@ private:
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
-		if (_tempBuffer.has() && (token.is_default() || token._lastId != _pushCount))
+		if (_tempBuffer.has() && token._lastId != _pushCount)
 		{
 			if (!token.is_default())
 			{
@@ -6643,7 +6669,7 @@ private:
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
-		if (_tempBuffer.has() && (token.is_default() || token._lastId != _pushCount))
+		if (_tempBuffer.has() && token._lastId != _pushCount)
 		{
 			if (!token.is_default())
 			{
@@ -6691,7 +6717,7 @@ private:
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
-		if (_tempBuffer.has() && (token.is_default() || token._lastId != _pushCount))
+		if (_tempBuffer.has() && token._lastId != _pushCount)
 		{
 			if (!token.is_default())
 			{
@@ -6737,7 +6763,7 @@ private:
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
-		if (_tempBuffer.has() && (token.is_default() || token._lastId != _pushCount))
+		if (_tempBuffer.has() && token._lastId != _pushCount)
 		{
 			if (!token.is_default())
 			{
@@ -6770,7 +6796,7 @@ private:
 			return;
 		}
 		_append_pop_notify(CoChanMsgMove_<MsgNotify>::forward(msgNtf), ntfSign, token);
-		if (_tempBuffer.has() && (token.is_default() || token._lastId != _pushCount))
+		if (_tempBuffer.has() && token._lastId != _pushCount)
 		{
 			if (!token.is_default())
 			{
@@ -9909,6 +9935,24 @@ void CoChanSeamlessTryO_<Chan>::pop(CoChanSeamlessTryO_* this_, Args&&... args)
 			selectSign._ntfPump.send(chanId, st);
 		}
 	}, *currSign);
+}
+
+template <typename Broadcast> template <typename... Args>
+void CoBroadcastSeamlessTryO_<Broadcast>::pop(CoBroadcastSeamlessTryO_* this_, Args&&... args)
+{
+	co_generator = this_->_host;
+	co_select_sign& selectSign = this_->_selectSign;
+	co_notify_sign* const currSign = selectSign._currSign;
+	const size_t chanId = selectSign._selectId;
+	assert(chanId == (size_t)&this_->_broadcast && !currSign->_appended && !currSign->_disable);
+	currSign->_appended = true;
+	this_->_broadcast.try_pop_and_append_notify(co_async_result_(this_->_state, args...), [&, chanId](co_async_state st)
+	{
+		if (co_async_state::co_async_fail != st)
+		{
+			selectSign._ntfPump.send(chanId, st);
+		}
+	}, *currSign, this_->_token);
 }
 
 template <typename Chan> template <typename... Args>
