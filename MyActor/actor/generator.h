@@ -585,6 +585,19 @@ struct __co_context_no_capture{};
 #define co_csp_tick_wait_void(__chan__, __res__) co_csp_tick_io(__chan__, __res__) >> void_type()
 #define co_csp_try_tick_wait_void(__chan__, __res__) co_csp_try_tick_io(__chan__, __res__) >> void_type()
 #define co_csp_timed_tick_wait_void(__chan__, __ms__, __res__) co_csp_timed_tick_io(__chan__, __ms__, __res__) >> void_type()
+//pop数据到broadcast
+#define co_broadcast_io(__token__, __broadcast__) co_await _make_co_broadcast_io(__token__, __broadcast__, co_last_state, co_self)
+#define co_broadcast_try_io(__token__, __broadcast__) co_await _make_co_broadcast_try_io(__token__, __broadcast__, co_last_state, co_self)
+#define co_broadcast_timed_io(__token__, __broadcast__, __ms__) co_await _make_co_broadcast_timed_io(__ms__, __token__, __broadcast__, co_last_state, co_self, co_timer)
+#define co_broadcast_safe_io(__token__, __broadcast__) co_await _make_co_broadcast_safe_io(__token__, __broadcast__, co_last_state, co_self)
+#define co_broadcast_try_safe_io(__token__, __broadcast__) co_await _make_co_broadcast_try_safe_io(__token__, __broadcast__, co_last_state, co_self)
+#define co_broadcast_timed_safe_io(__token__, __broadcast__, __ms__) co_await _make_co_broadcast_timed_safe_io(__ms__, __token__, __broadcast__, co_last_state, co_self, co_timer)
+#define co_broadcast_tick_io(__token__, __broadcast__) co_await _make_co_broadcast_tick_io(__token__, __broadcast__, co_last_state, co_self)
+#define co_broadcast_try_tick_io(__token__, __broadcast__) co_await _make_co_broadcast_try_tick_io(__token__, __broadcast__, co_last_state, co_self)
+#define co_broadcast_timed_tick_io(__token__, __broadcast__, __ms__) co_await _make_co_broadcast_timed_tick_io(__ms__, __token__, __broadcast__, co_last_state, co_self, co_timer)
+#define co_broadcast_safe_tick_io(__token__, __broadcast__) co_await _make_co_broadcast_safe_tick_io(__token__, __broadcast__, co_last_state, co_self)
+#define co_broadcast_try_safe_tick_io(__token__, __broadcast__) co_await _make_co_broadcast_try_safe_tick_io(__token__, __broadcast__, co_last_state, co_self)
+#define co_broadcast_timed_safe_tick_io(__token__, __broadcast__, __ms__) co_await _make_co_broadcast_timed_safe_tick_io(__ms__, __token__, __broadcast__, co_last_state, co_self, co_timer)
 //push/pop数据到依赖同一个strand的channel/msg_buffer
 #define co_chan_aff_io(__chan__) co_await _make_co_chan_aff_io(__chan__, co_last_state, co_self)
 #define co_chan_aff_try_io(__chan__) co_await _make_co_chan_aff_try_io(__chan__, co_last_state, co_self)
@@ -598,6 +611,10 @@ struct __co_context_no_capture{};
 #define co_csp_aff_wait_void(__chan__, __res__) co_csp_aff_io(__chan__, __res__) >> void_type()
 #define co_csp_aff_try_wait_void(__chan__, __res__) co_csp_aff_try_io(__chan__, __res__) >> void_type()
 #define co_csp_aff_timed_wait_void(__chan__, __ms__, __res__) co_csp_aff_timed_io(__chan__, __ms__, __res__) >> void_type()
+//pop数据到依赖同一个strand的broadcast
+#define co_broadcast_aff_io(__token__, __broadcast__) co_await _make_co_broadcast_aff_io(__token__, __broadcast__, co_last_state, co_self)
+#define co_broadcast_aff_try_io(__token__, __broadcast__) co_await _make_co_broadcast_aff_try_io(__token__, __broadcast__, co_last_state, co_self)
+#define co_broadcast_aff_timed_io(__token__, __broadcast__, __ms__) co_await _make_co_broadcast_aff_timed_io(__ms__, __token__, __broadcast__, co_last_state, co_self, co_timer)
 
 #define co_use_state co_async_state __coState
 #define co_use_id gen_id __coId
@@ -2215,14 +2232,18 @@ CoChanMulti_<Type&&...> _co_chan_multi(Type&&... args)
 	return CoChanMulti_<Type&&...>(std::forward<Type>(args)...);
 }
 
+struct co_select_sign;
+struct co_broadcast_token;
+
 template <typename Chan> struct CoChanIo_
 {
-	CoChanIo_(Chan& chan, co_async_state& state, generator& host):_chan(chan), _state(state), _host(host) {}
+	CoChanIo_(Chan& chan, co_async_state& state, generator& host) :_chan(chan), _state(state), _host(host) {}
 	template <typename Arg> void operator<<(Arg&& arg) { push(this, std::forward<Arg>(arg)); }
 	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
 	template <typename... Args> void operator<<(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanIo_::push<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
 	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
-	void operator<<(void_type&&) { push(this); } void operator>>(void_type&&) { pop(this); }
+	void operator<<(void_type&&) { push(this); }
+	void operator>>(void_type&&) { pop(this); }
 private:
 	template <typename... Args> static void push(CoChanIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.push(co_async_result(this_->_state), std::forward<Args>(args)...); }
 	template <typename... Args> static void pop(CoChanIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.pop(co_async_result_(this_->_state, args...)); }
@@ -2231,6 +2252,19 @@ private:
 };
 template <typename Chan> CoChanIo_<Chan> _make_co_chan_io(Chan& chan, co_async_state& state, generator& host) { return CoChanIo_<Chan>(chan, state, host); }
 
+template <typename Broadcast> struct CoBroadcastIo_
+{
+	CoBroadcastIo_(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) :_token(token), _broadcast(broadcast), _state(state), _host(host) {}
+	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
+	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoBroadcastIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
+	void operator>>(void_type&&) { pop(this); }
+private:
+	template <typename... Args> static void pop(CoBroadcastIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_broadcast.pop(co_async_result_(this_->_state, args...), this_->_token); }
+private:
+	co_broadcast_token& _token; Broadcast& _broadcast; co_async_state& _state; generator& _host;
+};
+template <typename Broadcast> CoBroadcastIo_<Broadcast> _make_co_broadcast_io(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) { return CoBroadcastIo_<Broadcast>(token, broadcast, state, host); }
+
 template <typename Chan> struct CoChanTickIo_
 {
 	CoChanTickIo_(Chan& chan, co_async_state& state, generator& host) :_chan(chan), _state(state), _host(host) {}
@@ -2238,7 +2272,8 @@ template <typename Chan> struct CoChanTickIo_
 	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
 	template <typename... Args> void operator<<(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanTickIo_::push<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
 	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanTickIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
-	void operator<<(void_type&&) { push(this); } void operator>>(void_type&&) { pop(this); }
+	void operator<<(void_type&&) { push(this); }
+	void operator>>(void_type&&) { pop(this); }
 private:
 	template <typename... Args> static void push(CoChanTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.tick_push(co_async_result(this_->_state), std::forward<Args>(args)...); }
 	template <typename... Args> static void pop(CoChanTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.tick_pop(co_async_result_(this_->_state, args...)); }
@@ -2247,6 +2282,19 @@ private:
 };
 template <typename Chan> CoChanTickIo_<Chan> _make_co_chan_tick_io(Chan& chan, co_async_state& state, generator& host) { return CoChanTickIo_<Chan>(chan, state, host); }
 
+template <typename Broadcast> struct CoBroadcastTickIo_
+{
+	CoBroadcastTickIo_(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) :_token(token), _broadcast(broadcast), _state(state), _host(host) {}
+	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
+	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoBroadcastTickIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
+	void operator>>(void_type&&) { pop(this); }
+private:
+	template <typename... Args> static void pop(CoBroadcastTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_broadcast.tick_pop(co_async_result_(this_->_state, args...), this_->_token); }
+private:
+	co_broadcast_token& _token; Broadcast& _broadcast; co_async_state& _state; generator& _host;
+};
+template <typename Broadcast> CoBroadcastTickIo_<Broadcast> _make_co_broadcast_tick_io(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) { return CoBroadcastTickIo_<Broadcast>(token, broadcast, state, host); }
+
 template <typename Chan> struct CoChanSafeIo_
 {
 	CoChanSafeIo_(Chan& chan, co_async_state& state, generator& host) :_chan(chan), _state(state), _host(host) {}
@@ -2254,7 +2302,8 @@ template <typename Chan> struct CoChanSafeIo_
 	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
 	template <typename... Args> void operator<<(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanSafeIo_::push<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
 	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanSafeIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
-	void operator<<(void_type&&) { push(this); } void operator>>(void_type&&) { pop(this); }
+	void operator<<(void_type&&) { push(this); }
+	void operator>>(void_type&&) { pop(this); }
 private:
 	template <typename... Args> static void push(CoChanSafeIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.push(co_async_safe_result(this_->_state), std::forward<Args>(args)...); }
 	template <typename... Args> static void pop(CoChanSafeIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.pop(co_async_safe_result_(this_->_state, args...)); }
@@ -2263,6 +2312,19 @@ private:
 };
 template <typename Chan> CoChanSafeIo_<Chan> _make_co_chan_safe_io(Chan& chan, co_async_state& state, generator& host) { return CoChanSafeIo_<Chan>(chan, state, host); }
 
+template <typename Broadcast> struct CoBroadcastSafeIo_
+{
+	CoBroadcastSafeIo_(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) :_token(token), _broadcast(broadcast), _state(state), _host(host) {}
+	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
+	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoBroadcastSafeIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
+	void operator>>(void_type&&) { pop(this); }
+private:
+	template <typename... Args> static void pop(CoBroadcastSafeIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_broadcast.pop(co_async_safe_result_(this_->_state, args...), this_->_token); }
+private:
+	co_broadcast_token& _token; Broadcast& _broadcast; co_async_state& _state; generator& _host;
+};
+template <typename Broadcast> CoBroadcastSafeIo_<Broadcast> _make_co_broadcast_safe_io(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) { return CoBroadcastSafeIo_<Broadcast>(token, broadcast, state, host); }
+
 template <typename Chan> struct CoChanSafeTickIo_
 {
 	CoChanSafeTickIo_(Chan& chan, co_async_state& state, generator& host) :_chan(chan), _state(state), _host(host) {}
@@ -2270,7 +2332,8 @@ template <typename Chan> struct CoChanSafeTickIo_
 	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
 	template <typename... Args> void operator<<(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanSafeTickIo_::push<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
 	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanSafeTickIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
-	void operator<<(void_type&&) { push(this); } void operator>>(void_type&&) { pop(this); }
+	void operator<<(void_type&&) { push(this); }
+	void operator>>(void_type&&) { pop(this); }
 private:
 	template <typename... Args> static void push(CoChanSafeTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.tick_push(co_async_safe_result(this_->_state), std::forward<Args>(args)...); }
 	template <typename... Args> static void pop(CoChanSafeTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.tick_pop(co_async_safe_result_(this_->_state, args...)); }
@@ -2278,6 +2341,19 @@ private:
 	Chan& _chan; co_async_state& _state; generator& _host;
 };
 template <typename Chan> CoChanSafeTickIo_<Chan> _make_co_chan_safe_tick_io(Chan& chan, co_async_state& state, generator& host) { return CoChanSafeTickIo_<Chan>(chan, state, host); }
+
+template <typename Broadcast> struct CoBroadcastSafeTickIo_
+{
+	CoBroadcastSafeTickIo_(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) :_token(token), _broadcast(broadcast), _state(state), _host(host) {}
+	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
+	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoBroadcastSafeTickIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
+	void operator>>(void_type&&) { pop(this); }
+private:
+	template <typename... Args> static void pop(CoBroadcastSafeTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_broadcast.tick_pop(co_async_safe_result_(this_->_state, args...), this_->_token); }
+private:
+	co_broadcast_token& _token; Broadcast& _broadcast; co_async_state& _state; generator& _host;
+};
+template <typename Broadcast> CoBroadcastSafeTickIo_<Broadcast> _make_co_broadcast_safe_tick_io(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) { return CoBroadcastSafeTickIo_<Broadcast>(token, broadcast, state, host); }
 
 template <typename Chan> struct CoChanTryIo_
 {
@@ -2296,6 +2372,19 @@ private:
 };
 template <typename Chan> CoChanTryIo_<Chan> _make_co_chan_try_io(Chan& chan, co_async_state& state, generator& host) { return CoChanTryIo_<Chan>(chan, state, host); }
 
+template <typename Broadcast> struct CoBroadcastTryIo_
+{
+	CoBroadcastTryIo_(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) :_token(token), _broadcast(broadcast), _state(state), _host(host) {}
+	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
+	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoBroadcastTryIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
+	void operator>>(void_type&&) { pop(this); }
+private:
+	template <typename... Args> static void pop(CoBroadcastTryIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_broadcast.try_pop(co_async_result_(this_->_state, args...), this_->_token); }
+private:
+	co_broadcast_token& _token; Broadcast& _broadcast; co_async_state& _state; generator& _host;
+};
+template <typename Broadcast> CoBroadcastTryIo_<Broadcast> _make_co_broadcast_try_io(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) { return CoBroadcastTryIo_<Broadcast>(token, broadcast, state, host); }
+
 template <typename Chan> struct CoChanTryTickIo_
 {
 	CoChanTryTickIo_(Chan& chan, co_async_state& state, generator& host) :_chan(chan), _state(state), _host(host) {}
@@ -2312,6 +2401,19 @@ private:
 	Chan& _chan; co_async_state& _state; generator& _host;
 };
 template <typename Chan> CoChanTryTickIo_<Chan> _make_co_chan_try_tick_io(Chan& chan, co_async_state& state, generator& host) { return CoChanTryTickIo_<Chan>(chan, state, host); }
+
+template <typename Broadcast> struct CoBroadcastTryTickIo_
+{
+	CoBroadcastTryTickIo_(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) :_token(token), _broadcast(broadcast), _state(state), _host(host) {}
+	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
+	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoBroadcastTryTickIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
+	void operator>>(void_type&&) { pop(this); }
+private:
+	template <typename... Args> static void pop(CoBroadcastTryTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_broadcast.try_tick_pop(co_async_result_(this_->_state, args...), this_->_token); }
+private:
+	co_broadcast_token& _token; Broadcast& _broadcast; co_async_state& _state; generator& _host;
+};
+template <typename Broadcast> CoBroadcastTryTickIo_<Broadcast> _make_co_broadcast_try_tick_io(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) { return CoBroadcastTryTickIo_<Broadcast>(token, broadcast, state, host); }
 
 template <typename Chan> struct CoChanTryI_
 {
@@ -2339,7 +2441,6 @@ private:
 };
 template <typename Chan> CoChanTryO_<Chan> _make_co_chan_try_o(Chan& chan, co_async_state& state, generator& host) { return CoChanTryO_<Chan>(chan, state, host); }
 
-struct co_select_sign;
 template <typename Chan> struct CoChanSeamlessTryO_
 {
 	CoChanSeamlessTryO_(Chan& chan, co_async_state& state, generator& host, co_select_sign& selectSign) :_chan(chan), _state(state), _host(host), _selectSign(selectSign) {}
@@ -2353,7 +2454,6 @@ private:
 };
 template <typename Chan> CoChanSeamlessTryO_<Chan> _make_co_chan_seamless_try_o(Chan& chan, co_async_state& state, generator& host, co_select_sign& selectSign) { return CoChanSeamlessTryO_<Chan>(chan, state, host, selectSign); }
 
-struct co_broadcast_token;
 template <typename Broadcast> struct CoBroadcastTryO_
 {
 	CoBroadcastTryO_(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) :_token(token), _broadcast(broadcast), _state(state), _host(host) {}
@@ -2410,6 +2510,19 @@ private:
 };
 template <typename Chan> CoChanTrySafeIo_<Chan> _make_co_chan_try_safe_io(Chan& chan, co_async_state& state, generator& host) { return CoChanTrySafeIo_<Chan>(chan, state, host); }
 
+template <typename Broadcast> struct CoBroadcastTrySafeIo_
+{
+	CoBroadcastTrySafeIo_(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) :_token(token), _broadcast(broadcast), _state(state), _host(host) {}
+	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
+	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoBroadcastTrySafeIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
+	void operator>>(void_type&&) { pop(this); }
+private:
+	template <typename... Args> static void pop(CoBroadcastTrySafeIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_broadcast.try_pop(co_async_safe_result_(this_->_state, args...), this_->_token); }
+private:
+	co_broadcast_token& _token; Broadcast& _broadcast; co_async_state& _state; generator& _host;
+};
+template <typename Broadcast> CoBroadcastTrySafeIo_<Broadcast> _make_co_broadcast_try_safe_io(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) { return CoBroadcastTrySafeIo_<Broadcast>(token, broadcast, state, host); }
+
 template <typename Chan> struct CoChanTrySafeTickIo_
 {
 	CoChanTrySafeTickIo_(Chan& chan, co_async_state& state, generator& host) :_chan(chan), _state(state), _host(host) {}
@@ -2427,6 +2540,19 @@ private:
 };
 template <typename Chan> CoChanTrySafeTickIo_<Chan> _make_co_chan_try_safe_tick_io(Chan& chan, co_async_state& state, generator& host) { return CoChanTrySafeTickIo_<Chan>(chan, state, host); }
 
+template <typename Broadcast> struct CoBroadcastTrySafeTickIo_
+{
+	CoBroadcastTrySafeTickIo_(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) :_token(token), _broadcast(broadcast), _state(state), _host(host) {}
+	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
+	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoBroadcastTrySafeTickIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
+	void operator>>(void_type&&) { pop(this); }
+private:
+	template <typename... Args> static void pop(CoBroadcastTrySafeTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_broadcast.try_tick_pop(co_async_safe_result_(this_->_state, args...), this_->_token); }
+private:
+	co_broadcast_token& _token; Broadcast& _broadcast; co_async_state& _state; generator& _host;
+};
+template <typename Broadcast> CoBroadcastTrySafeTickIo_<Broadcast> _make_co_broadcast_try_safe_tick_io(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) { return CoBroadcastTrySafeTickIo_<Broadcast>(token, broadcast, state, host); }
+
 template <typename Chan> struct CoChanTimedIo_
 {
 	CoChanTimedIo_(int ms, Chan& chan, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) :_tm(ms), _chan(chan), _state(state), _host(host), _timer(timer) {}
@@ -2434,7 +2560,8 @@ template <typename Chan> struct CoChanTimedIo_
 	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
 	template <typename... Args> void operator<<(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanTimedIo_::push<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
 	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanTimedIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
-	void operator<<(void_type&&) { push(this); } void operator>>(void_type&&) { pop(this); }
+	void operator<<(void_type&&) { push(this); }
+	void operator>>(void_type&&) { pop(this); }
 private:
 	template <typename... Args> static void push(CoChanTimedIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.timed_push(this_->_timer, this_->_tm, co_async_result(this_->_state), std::forward<Args>(args)...); }
 	template <typename... Args> static void pop(CoChanTimedIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.timed_pop(this_->_timer, this_->_tm, co_async_result_(this_->_state, args...)); }
@@ -2443,6 +2570,19 @@ private:
 };
 template <typename Chan> CoChanTimedIo_<Chan> _make_co_chan_timed_io(int ms, Chan& chan, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) { return CoChanTimedIo_<Chan>(ms, chan, state, host, timer); }
 
+template <typename Broadcast> struct CoBroadcastTimedIo_
+{
+	CoBroadcastTimedIo_(int ms, co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) :_tm(ms), _token(token), _broadcast(broadcast), _state(state), _host(host), _timer(timer) {}
+	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
+	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoBroadcastTimedIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
+	void operator>>(void_type&&) { pop(this); }
+private:
+	template <typename... Args> static void pop(CoBroadcastTimedIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_broadcast.timed_pop(this_->_timer, this_->_tm, co_async_result_(this_->_state, args...), this_->_token); }
+private:
+	int _tm; co_broadcast_token& _token; Broadcast& _broadcast; co_async_state& _state; generator& _host; overlap_timer::timer_handle& _timer;
+};
+template <typename Broadcast> CoBroadcastTimedIo_<Broadcast> _make_co_broadcast_timed_io(int ms, co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) { return CoBroadcastTimedIo_<Broadcast>(ms, token, broadcast, state, host, timer); }
+
 template <typename Chan> struct CoChanTimedTickIo_
 {
 	CoChanTimedTickIo_(int ms, Chan& chan, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) :_tm(ms), _chan(chan), _state(state), _host(host), _timer(timer) {}
@@ -2450,7 +2590,8 @@ template <typename Chan> struct CoChanTimedTickIo_
 	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
 	template <typename... Args> void operator<<(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanTimedTickIo_::push<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
 	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanTimedTickIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
-	void operator<<(void_type&&) { push(this); } void operator>>(void_type&&) { pop(this); }
+	void operator<<(void_type&&) { push(this); }
+	void operator>>(void_type&&) { pop(this); }
 private:
 	template <typename... Args> static void push(CoChanTimedTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.timed_tick_push(this_->_timer, this_->_tm, co_async_result(this_->_state), std::forward<Args>(args)...); }
 	template <typename... Args> static void pop(CoChanTimedTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.timed_tick_pop(this_->_timer, this_->_tm, co_async_result_(this_->_state, args...)); }
@@ -2459,6 +2600,19 @@ private:
 };
 template <typename Chan> CoChanTimedTickIo_<Chan> _make_co_chan_timed_tick_io(int ms, Chan& chan, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) { return CoChanTimedTickIo_<Chan>(ms, chan, state, host, timer); }
 
+template <typename Broadcast> struct CoBroadcastTimedTickIo_
+{
+	CoBroadcastTimedTickIo_(int ms, co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) :_tm(ms), _token(token), _broadcast(broadcast), _state(state), _host(host), _timer(timer) {}
+	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
+	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoBroadcastTimedTickIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
+	void operator>>(void_type&&) { pop(this); }
+private:
+	template <typename... Args> static void pop(CoBroadcastTimedTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_broadcast.timed_tick_pop(this_->_timer, this_->_tm, co_async_result_(this_->_state, args...), this_->_token); }
+private:
+	int _tm; co_broadcast_token& _token; Broadcast& _broadcast; co_async_state& _state; generator& _host; overlap_timer::timer_handle& _timer;
+};
+template <typename Broadcast> CoBroadcastTimedTickIo_<Broadcast> _make_co_broadcast_timed_tick_io(int ms, co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) { return CoBroadcastTimedTickIo_<Broadcast>(ms, token, broadcast, state, host, timer); }
+
 template <typename Chan> struct CoChanTimedSafeIo_
 {
 	CoChanTimedSafeIo_(int ms, Chan& chan, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) :_tm(ms), _chan(chan), _state(state), _host(host), _timer(timer) {}
@@ -2466,7 +2620,8 @@ template <typename Chan> struct CoChanTimedSafeIo_
 	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
 	template <typename... Args> void operator<<(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanTimedSafeIo_::push<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
 	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanTimedSafeIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
-	void operator<<(void_type&&) { push(this); } void operator>>(void_type&&) { pop(this); }
+	void operator<<(void_type&&) { push(this); }
+	void operator>>(void_type&&) { pop(this); }
 private:
 	template <typename... Args> static void push(CoChanTimedSafeIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.timed_push(this_->_timer, this_->_tm, co_async_safe_result(this_->_state), std::forward<Args>(args)...); }
 	template <typename... Args> static void pop(CoChanTimedSafeIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.timed_pop(this_->_timer, this_->_tm, co_async_safe_result_(this_->_state, args...)); }
@@ -2475,6 +2630,19 @@ private:
 };
 template <typename Chan> CoChanTimedSafeIo_<Chan> _make_co_chan_timed_safe_io(int ms, Chan& chan, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) { return CoChanTimedSafeIo_<Chan>(ms, chan, state, host, timer); }
 
+template <typename Broadcast> struct CoBroadcastTimedSafeIo_
+{
+	CoBroadcastTimedSafeIo_(int ms, co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) :_tm(ms), _token(token), _broadcast(broadcast), _state(state), _host(host), _timer(timer) {}
+	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
+	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoBroadcastTimedSafeIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
+	void operator>>(void_type&&) { pop(this); }
+private:
+	template <typename... Args> static void pop(CoBroadcastTimedSafeIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_broadcast.timed_pop(this_->_timer, this_->_tm, co_async_safe_result_(this_->_state, args...), this_->_token); }
+private:
+	int _tm; co_broadcast_token& _token; Broadcast& _broadcast; co_async_state& _state; generator& _host; overlap_timer::timer_handle& _timer;
+};
+template <typename Broadcast> CoBroadcastTimedSafeIo_<Broadcast> _make_co_broadcast_timed_safe_io(int ms, co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) { return CoBroadcastTimedSafeIo_<Broadcast>(ms, token, broadcast, state, host, timer); }
+
 template <typename Chan> struct CoChanTimedSafeTickIo_
 {
 	CoChanTimedSafeTickIo_(int ms, Chan& chan, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) :_tm(ms), _chan(chan), _state(state), _host(host), _timer(timer) {}
@@ -2482,7 +2650,8 @@ template <typename Chan> struct CoChanTimedSafeTickIo_
 	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
 	template <typename... Args> void operator<<(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanTimedSafeTickIo_::push<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
 	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanTimedSafeTickIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
-	void operator<<(void_type&&) { push(this); } void operator>>(void_type&&) { pop(this); }
+	void operator<<(void_type&&) { push(this); }
+	void operator>>(void_type&&) { pop(this); }
 private:
 	template <typename... Args> static void push(CoChanTimedSafeTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.timed_tick_push(this_->_timer, this_->_tm, co_async_safe_result(this_->_state), std::forward<Args>(args)...); }
 	template <typename... Args> static void pop(CoChanTimedSafeTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.timed_tick_pop(this_->_timer, this_->_tm, co_async_safe_result_(this_->_state, args...)); }
@@ -2490,6 +2659,19 @@ private:
 	int _tm; Chan& _chan; co_async_state& _state; generator& _host; overlap_timer::timer_handle& _timer;
 };
 template <typename Chan> CoChanTimedSafeTickIo_<Chan> _make_co_chan_timed_safe_tick_io(int ms, Chan& chan, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) { return CoChanTimedSafeTickIo_<Chan>(ms, chan, state, host, timer); }
+
+template <typename Broadcast> struct CoBroadcastTimedSafeTickIo_
+{
+	CoBroadcastTimedSafeTickIo_(int ms, co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) :_tm(ms), _token(token), _broadcast(broadcast), _state(state), _host(host), _timer(timer) {}
+	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
+	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoBroadcastTimedSafeTickIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
+	void operator>>(void_type&&) { pop(this); }
+private:
+	template <typename... Args> static void pop(CoBroadcastTimedSafeTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_broadcast.timed_tick_pop(this_->_timer, this_->_tm, co_async_safe_result_(this_->_state, args...), this_->_token); }
+private:
+	int _tm; co_broadcast_token& _token; Broadcast& _broadcast; co_async_state& _state; generator& _host; overlap_timer::timer_handle& _timer;
+};
+template <typename Broadcast> CoBroadcastTimedSafeTickIo_<Broadcast> _make_co_broadcast_timed_safe_tick_io(int ms, co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) { return CoBroadcastTimedSafeTickIo_<Broadcast>(ms, token, broadcast, state, host, timer); }
 
 template <typename R, typename CspChan>
 struct CoCspIo_
@@ -2499,7 +2681,8 @@ struct CoCspIo_
 	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
 	template <typename... Args> void operator<<(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoCspIo_::push<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
 	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoCspIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
-	void operator<<(void_type&&) { push(this); } void operator>>(void_type&&) { pop(this); }
+	void operator<<(void_type&&) { push(this); }
+	void operator>>(void_type&&) { pop(this); }
 private:
 	template <typename... Args> static void push(CoCspIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.push(co_async_result_(this_->_state, this_->_res), std::forward<Args>(args)...); }
 	template <typename... Args> static void pop(CoCspIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.pop(co_async_safe_result_(this_->_state, this_->_res, args...)); }
@@ -2516,7 +2699,8 @@ struct CoCspTickIo_
 	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
 	template <typename... Args> void operator<<(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoCspTickIo_::push<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
 	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoCspTickIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
-	void operator<<(void_type&&) { push(this); } void operator>>(void_type&&) { pop(this); }
+	void operator<<(void_type&&) { push(this); }
+	void operator>>(void_type&&) { pop(this); }
 private:
 	template <typename... Args> static void push(CoCspTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.tick_push(co_async_result_(this_->_state, this_->_res), std::forward<Args>(args)...); }
 	template <typename... Args> static void pop(CoCspTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.tick_pop(co_async_safe_result_(this_->_state, this_->_res, args...)); }
@@ -2533,7 +2717,8 @@ struct CoCspTryIo_
 	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
 	template <typename... Args> void operator<<(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoCspTryIo_::push<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
 	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoCspTryIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
-	void operator<<(void_type&&) { push(this); } void operator>>(void_type&&) { pop(this); }
+	void operator<<(void_type&&) { push(this); }
+	void operator>>(void_type&&) { pop(this); }
 private:
 	template <typename... Args> static void push(CoCspTryIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.try_push(co_async_result_(this_->_state, this_->_res), std::forward<Args>(args)...); }
 	template <typename... Args> static void pop(CoCspTryIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.try_pop(co_async_safe_result_(this_->_state, this_->_res, args...)); }
@@ -2550,7 +2735,8 @@ struct CoCspTryTickIo_
 	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
 	template <typename... Args> void operator<<(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoCspTryTickIo_::push<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
 	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoCspTryTickIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
-	void operator<<(void_type&&) { push(this); } void operator>>(void_type&&) { pop(this); }
+	void operator<<(void_type&&) { push(this); }
+	void operator>>(void_type&&) { pop(this); }
 private:
 	template <typename... Args> static void push(CoCspTryTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.try_tick_push(co_async_result_(this_->_state, this_->_res), std::forward<Args>(args)...); }
 	template <typename... Args> static void pop(CoCspTryTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.try_tick_pop(co_async_safe_result_(this_->_state, this_->_res, args...)); }
@@ -2629,7 +2815,8 @@ struct CoCspTimedIo_
 	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
 	template <typename... Args> void operator<<(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoCspTimedIo_::push<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
 	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoCspTimedIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
-	void operator<<(void_type&&) { push(this); } void operator>>(void_type&&) { pop(this); }
+	void operator<<(void_type&&) { push(this); }
+	void operator>>(void_type&&) { pop(this); }
 private:
 	template <typename... Args> static void push(CoCspTimedIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.timed_push(this_->_timer, this_->_tm, co_async_result_(this_->_state, this_->_res), std::forward<Args>(args)...); }
 	template <typename... Args> static void pop(CoCspTimedIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.timed_pop(this_->_timer, this_->_tm, co_async_safe_result_(this_->_state, this_->_res, args...)); }
@@ -2646,7 +2833,8 @@ struct CoCspTimedTickIo_
 	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
 	template <typename... Args> void operator<<(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoCspTimedTickIo_::push<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
 	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoCspTimedTickIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
-	void operator<<(void_type&&) { push(this); } void operator>>(void_type&&) { pop(this); }
+	void operator<<(void_type&&) { push(this); }
+	void operator>>(void_type&&) { pop(this); }
 private:
 	template <typename... Args> static void push(CoCspTimedTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.timed_tick_push(this_->_timer, this_->_tm, co_async_result_(this_->_state, this_->_res), std::forward<Args>(args)...); }
 	template <typename... Args> static void pop(CoCspTimedTickIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.timed_tick_pop(this_->_timer, this_->_tm, co_async_safe_result_(this_->_state, this_->_res, args...)); }
@@ -2662,7 +2850,8 @@ template <typename Chan> struct CoChanAffIo_
 	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
 	template <typename... Args> void operator<<(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanAffIo_::push<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
 	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanAffIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
-	void operator<<(void_type&&) { push(this); } void operator>>(void_type&&) { pop(this); }
+	void operator<<(void_type&&) { push(this); }
+	void operator>>(void_type&&) { pop(this); }
 private:
 	template <typename... Args> static void push(CoChanAffIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.aff_push(co_async_result(this_->_state), std::forward<Args>(args)...); }
 	template <typename... Args> static void pop(CoChanAffIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.aff_pop(co_async_result_(this_->_state, args...)); }
@@ -2670,6 +2859,19 @@ private:
 	Chan& _chan; co_async_state& _state; generator& _host;
 };
 template <typename Chan> CoChanAffIo_<Chan> _make_co_chan_aff_io(Chan& chan, co_async_state& state, generator& host) { return CoChanAffIo_<Chan>(chan, state, host); }
+
+template <typename Broadcast> struct CoBroadcastAffIo_
+{
+	CoBroadcastAffIo_(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) :_token(token), _broadcast(broadcast), _state(state), _host(host) {}
+	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
+	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoBroadcastAffIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
+	void operator>>(void_type&&) { pop(this); }
+private:
+	template <typename... Args> static void pop(CoBroadcastAffIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_broadcast.aff_pop(co_async_result_(this_->_state, args...), this_->_token); }
+private:
+	co_broadcast_token& _token; Broadcast& _broadcast; co_async_state& _state; generator& _host;
+};
+template <typename Broadcast> CoBroadcastAffIo_<Broadcast> _make_co_broadcast_aff_io(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) { return CoBroadcastAffIo_<Broadcast>(token, broadcast, state, host); }
 
 template <typename Chan> struct CoChanAffTryIo_
 {
@@ -2688,6 +2890,19 @@ private:
 };
 template <typename Chan> CoChanAffTryIo_<Chan> _make_co_chan_aff_try_io(Chan& chan, co_async_state& state, generator& host) { return CoChanAffTryIo_<Chan>(chan, state, host); }
 
+template <typename Broadcast> struct CoBroadcastAffTryIo_
+{
+	CoBroadcastAffTryIo_(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) :_token(token), _broadcast(broadcast), _state(state), _host(host) {}
+	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
+	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoBroadcastAffTryIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
+	void operator>>(void_type&&) { pop(this); }
+private:
+	template <typename... Args> static void pop(CoBroadcastAffTryIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_broadcast.aff_try_pop(co_async_result_(this_->_state, args...), this_->_token); }
+private:
+	co_broadcast_token& _token; Broadcast& _broadcast; co_async_state& _state; generator& _host;
+};
+template <typename Broadcast> CoBroadcastAffTryIo_<Broadcast> _make_co_broadcast_aff_try_io(co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host) { return CoBroadcastAffTryIo_<Broadcast>(token, broadcast, state, host); }
+
 template <typename Chan> struct CoChanAffTimedIo_
 {
 	CoChanAffTimedIo_(int ms, Chan& chan, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) :_tm(ms), _chan(chan), _state(state), _host(host), _timer(timer) {}
@@ -2695,7 +2910,8 @@ template <typename Chan> struct CoChanAffTimedIo_
 	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
 	template <typename... Args> void operator<<(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanAffTimedIo_::push<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
 	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoChanAffTimedIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
-	void operator<<(void_type&&) { push(this); } void operator>>(void_type&&) { pop(this); }
+	void operator<<(void_type&&) { push(this); }
+	void operator>>(void_type&&) { pop(this); }
 private:
 	template <typename... Args> static void push(CoChanAffTimedIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.aff_timed_push(this_->_timer, this_->_tm, co_async_result(this_->_state), std::forward<Args>(args)...); }
 	template <typename... Args> static void pop(CoChanAffTimedIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.aff_timed_pop(this_->_timer, this_->_tm, co_async_result_(this_->_state, args...)); }
@@ -2703,6 +2919,19 @@ private:
 	int _tm; Chan& _chan; co_async_state& _state; generator& _host; overlap_timer::timer_handle& _timer;
 };
 template <typename Chan> CoChanAffTimedIo_<Chan> _make_co_chan_aff_timed_io(int ms, Chan& chan, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) { return CoChanAffTimedIo_<Chan>(ms, chan, state, host, timer); }
+
+template <typename Broadcast> struct CoBroadcastAffTimedIo_
+{
+	CoBroadcastAffTimedIo_(int ms, co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) :_tm(ms), _token(token), _broadcast(broadcast), _state(state), _host(host), _timer(timer) {}
+	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
+	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoBroadcastAffTimedIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
+	void operator>>(void_type&&) { pop(this); }
+private:
+	template <typename... Args> static void pop(CoBroadcastAffTimedIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_broadcast.timed_pop(this_->_timer, this_->_tm, co_async_result_(this_->_state, args...), this_->_token); }
+private:
+	int _tm; co_broadcast_token& _token; Broadcast& _broadcast; co_async_state& _state; generator& _host; overlap_timer::timer_handle& _timer;
+};
+template <typename Broadcast> CoBroadcastAffTimedIo_<Broadcast> _make_co_broadcast_aff_timed_io(int ms, co_broadcast_token& token, Broadcast& broadcast, co_async_state& state, generator& host, overlap_timer::timer_handle& timer) { return CoBroadcastAffTimedIo_<Broadcast>(ms, token, broadcast, state, host, timer); }
 
 template <typename R, typename CspChan>
 struct CoCspAffIo_
@@ -2712,7 +2941,8 @@ struct CoCspAffIo_
 	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
 	template <typename... Args> void operator<<(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoCspAffIo_::push<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
 	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoCspAffIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
-	void operator<<(void_type&&) { push(this); } void operator>>(void_type&&) { pop(this); }
+	void operator<<(void_type&&) { push(this); }
+	void operator>>(void_type&&) { pop(this); }
 private:
 	template <typename... Args> static void push(CoCspAffIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.aff_push(co_async_result_(this_->_state, this_->_res), std::forward<Args>(args)...); }
 	template <typename... Args> static void pop(CoCspAffIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.aff_pop(co_async_safe_result_(this_->_state, this_->_res, args...)); }
@@ -2729,7 +2959,8 @@ struct CoCspAffTryIo_
 	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
 	template <typename... Args> void operator<<(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoCspAffTryIo_::push<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
 	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoCspAffTryIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
-	void operator<<(void_type&&) { push(this); } void operator>>(void_type&&) { pop(this); }
+	void operator<<(void_type&&) { push(this); }
+	void operator>>(void_type&&) { pop(this); }
 private:
 	template <typename... Args> static void push(CoCspAffTryIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.aff_try_push(co_async_result_(this_->_state, this_->_res), std::forward<Args>(args)...); }
 	template <typename... Args> static void pop(CoCspAffTryIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.aff_try_pop(co_async_safe_result_(this_->_state, this_->_res, args...)); }
@@ -2746,7 +2977,8 @@ struct CoCspAffTimedIo_
 	template <typename Arg> void operator>>(Arg&& arg) { static_assert(!std::is_rvalue_reference<Arg&&>::value, ""); pop(this, std::forward<Arg>(arg)); }
 	template <typename... Args> void operator<<(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoCspAffTimedIo_::push<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
 	template <typename... Args> void operator>>(CoChanMulti_<Args...>&& args) { tuple_invoke(&CoCspAffTimedIo_::pop<Args...>, std::make_tuple(this), (std::tuple<Args...>&&)args); }
-	void operator<<(void_type&&) { push(this); } void operator>>(void_type&&) { pop(this); }
+	void operator<<(void_type&&) { push(this); }
+	void operator>>(void_type&&) { pop(this); }
 private:
 	template <typename... Args> static void push(CoCspAffTimedIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.aff_timed_push(this_->_timer, this_->_tm, co_async_result_(this_->_state, this_->_res), std::forward<Args>(args)...); }
 	template <typename... Args> static void pop(CoCspAffTimedIo_* this_, Args&&... args) { co_generator = this_->_host; this_->_chan.aff_timed_pop(this_->_timer, this_->_tm, co_async_safe_result_(this_->_state, this_->_res, args...)); }
@@ -5095,6 +5327,15 @@ public:
 	}
 
 	template <typename Notify>
+	void try_tick_pop(Notify&& ntf)
+	{
+		_strand->try_tick(std::bind([this](typename CoChanMsgMove_<Notify>::type& ntf)
+		{
+			_try_pop(CoChanMsgMove_<Notify>::move(ntf));
+		}, CoChanMsgMove_<Notify>::forward(ntf)));
+	}
+
+	template <typename Notify>
 	void aff_try_pop(Notify&& ntf)
 	{
 		assert(_strand->running_in_this_thread());
@@ -6334,6 +6575,15 @@ public:
 				_try_pop(CoChanMsgMove_<Notify>::move(ntf), token);
 			}, CoChanMsgMove_<Notify>::forward(ntf)));
 		}
+	}
+
+	template <typename Notify>
+	void try_tick_pop(Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		_strand->try_tick(std::bind([this, &token](typename CoChanMsgMove_<Notify>::type& ntf)
+		{
+			_try_pop(CoChanMsgMove_<Notify>::move(ntf), token);
+		}, CoChanMsgMove_<Notify>::forward(ntf)));
 	}
 
 	template <typename Notify>
