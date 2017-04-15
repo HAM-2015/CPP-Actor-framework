@@ -1320,7 +1320,7 @@ void co_broadcast_test()
 		co_begin;
 		for (ctx.i = 0; ctx.i < 10; ctx.i++)
 		{
-			co_broadcast_timed_pop(ctx.token, msgBroadcast, 300, co_pcks(ctx.id, ctx.mt));
+			co_broadcast_timed_io(300, ctx.token, msgBroadcast) >> co_chan_multi(ctx.id, ctx.mt);
 			if (co_last_state_is_ok)
 			{
 				info_trace_comma(2, ctx.id, ctx.mt);
