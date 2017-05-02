@@ -275,6 +275,30 @@ protected:
 			}
 		}
 
+		template <typename... Args>
+		void operator()(co_generator, Args&&... args)
+		{
+			co_no_context;
+			co_begin;
+			co_send(_this->ui_strand())[&]()
+			{
+				_handler(co_forward<Args>(args)...);
+			};
+			co_end;
+		}
+
+		template <typename R, typename... Args>
+		void operator()(co_generator, co_result<R>& result, Args&&... args)
+		{
+			co_no_context;
+			co_begin;
+			co_send(_this->ui_strand())[&]()
+			{
+				result = _handler(co_forward<Args>(args)...);
+			};
+			co_end;
+		}
+
 		bind_qt_run_base* _this;
 		handler_type _handler;
 		RVALUE_COPY_CONSTRUCTION(wrap_run_in_ui_handler, _this, _handler);
@@ -484,7 +508,8 @@ public:
 	/*!
 	@brief 开启shared_qt_strand
 	*/
-	const shared_qt_strand& start_qt_strand(io_engine& ios);
+	const shared_qt_strand& run_ui_strand(io_engine& ios);
+	const shared_qt_strand& run_ui_strand(const shared_qt_strand& strand);
 
 	/*!
 	@brief 获取shared_qt_strand
@@ -492,13 +517,13 @@ public:
 	const shared_qt_strand& ui_strand();
 
 	/*!
-	@brief 在UI线程中创建一个Actor，先执行start_qt_strand
+	@brief 在UI线程中创建一个Actor，先执行run_ui_strand
 	*/
 	actor_handle create_ui_actor(const my_actor::main_func& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE);
 	actor_handle create_ui_actor(my_actor::main_func&& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE);
 
 	/*!
-	@brief 在UI线程中创建一个子Actor，先执行start_qt_strand
+	@brief 在UI线程中创建一个子Actor，先执行run_ui_strand
 	*/
 	child_handle create_ui_child_actor(my_actor* host, const my_actor::main_func& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE);
 	child_handle create_ui_child_actor(my_actor* host, my_actor::main_func&& mainFunc, size_t stackSize = QT_UI_ACTOR_STACK_SIZE);
@@ -701,9 +726,14 @@ public:
 		bind_qt_run_base::ui_yield(host);
 	}
 
-	const shared_qt_strand& start_qt_strand(io_engine& ios)
+	const shared_qt_strand& run_ui_strand(io_engine& ios)
 	{
-		return bind_qt_run_base::start_qt_strand(ios);
+		return bind_qt_run_base::run_ui_strand(ios);
+	}
+
+	const shared_qt_strand& run_ui_strand(const shared_qt_strand& strand)
+	{
+		return bind_qt_run_base::run_ui_strand(strand);
 	}
 
 	const shared_qt_strand& ui_strand()

@@ -3,16 +3,10 @@
 #include "io_engine.h"
 #include "actor_timer.h"
 #ifndef DISABLE_BOOST_TIMER
-#ifdef DISABLE_HIGH_TIMER
-#include <boost/asio/deadline_timer.hpp>
-typedef boost::asio::deadline_timer timer_type;
-typedef boost::posix_time::microseconds micseconds;
-#else
 #include <boost/chrono/system_clocks.hpp>
 #include <boost/asio/high_resolution_timer.hpp>
 typedef boost::asio::basic_waitable_timer<boost::chrono::high_resolution_clock> timer_type;
 typedef boost::chrono::microseconds micseconds;
-#endif
 #else
 #include "waitable_timer.h"
 typedef WaitableTimerEvent_ timer_type;
@@ -361,11 +355,7 @@ void overlap_timer::timer_loop(long long abs, long long rel)
 	as_ptype<timer_type>(_timer)->async_wait(micseconds(abs), micseconds(rel), tc);
 #else
 	boost::system::error_code ec;
-#ifdef DISABLE_HIGH_TIMER
-	as_ptype<timer_type>(_timer)->expires_from_now(micseconds(rel), ec);
-#else
 	as_ptype<timer_type>(_timer)->expires_at(timer_type::time_point(micseconds(abs)), ec);
-#endif
 	as_ptype<timer_type>(_timer)->async_wait(_lockStrand->wrap_asio_once([this, tc](const boost::system::error_code&)
 	{
 		event_handler(tc);

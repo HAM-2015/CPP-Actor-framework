@@ -154,7 +154,7 @@ bind_qt_run_base::~bind_qt_run_base()
 	assert(!_locked);
 	assert(_readyQueue.empty());
 	assert(_waitQueue.empty());
-	if (_qtStrand)
+	if (_qtStrand && this == _qtStrand->self_ui())
 	{
 		_qtStrand->release();
 	}
@@ -339,12 +339,22 @@ child_handle bind_qt_run_base::create_ui_child_actor(my_actor* host, my_actor::m
 	return host->create_child(_qtStrand, std::move(mainFunc), stackSize);
 }
 
-const shared_qt_strand& bind_qt_run_base::start_qt_strand(io_engine& ios)
+const shared_qt_strand& bind_qt_run_base::run_ui_strand(io_engine& ios)
 {
 	assert(run_in_ui_thread());
 	if (!_qtStrand || &_qtStrand->get_io_engine() != &ios)
 	{
 		_qtStrand = qt_strand::create(ios, this);
+	}
+	return _qtStrand;
+}
+
+const shared_qt_strand& bind_qt_run_base::run_ui_strand(const shared_qt_strand& strand)
+{
+	assert(run_in_ui_thread() && strand->in_this_ios());
+	if (!_qtStrand || &_qtStrand->get_io_engine() != &strand->get_io_engine())
+	{
+		_qtStrand = strand;
 	}
 	return _qtStrand;
 }

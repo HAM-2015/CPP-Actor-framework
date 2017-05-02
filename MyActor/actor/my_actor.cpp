@@ -2,18 +2,8 @@
 #include "channel.h"
 #include "bind_qt_run.h"
 #include "generator.h"
-#if (_MSC_VER >= 1900 || (__GNUG__*10 + __GNUC_MINOR__) >= 61)
-#include <shared_mutex>
-typedef std::shared_mutex _shared_mutex;
-#define _shared_lock std::shared_lock
-#define _unique_lock std::unique_lock
-#else
 #include <boost/thread/shared_mutex.hpp>
 #include <boost/thread/locks.hpp>
-typedef boost::shared_mutex _shared_mutex;
-#define _shared_lock boost::shared_lock
-#define _unique_lock boost::unique_lock
-#endif
 #if (WIN32 && __GNUG__)
 #include <fibersapi.h>
 #endif
@@ -34,7 +24,7 @@ struct autoActorStackMng
 {
 	size_t get_stack_size(size_t key)
 	{
-		_shared_lock<_shared_mutex> sl(_mutex);
+		boost::shared_lock<boost::shared_mutex> sl(_mutex);
 		auto it = _table.find(key);
 		if (_table.end() != it)
 		{
@@ -45,12 +35,12 @@ struct autoActorStackMng
 
 	void update_stack_size(size_t key, size_t ns)
 	{
-		_unique_lock<_shared_mutex> ul(_mutex);
+		boost::unique_lock<boost::shared_mutex> ul(_mutex);
 		_table[key] = ns;
 	}
 
 	std::map<size_t, size_t> _table;
-	_shared_mutex _mutex;
+	boost::shared_mutex _mutex;
 };
 
 struct shared_initer 

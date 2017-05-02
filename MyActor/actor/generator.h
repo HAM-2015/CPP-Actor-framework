@@ -1166,6 +1166,124 @@ struct __co_context_no_capture{};
 #define co_calc CoLocalWrapCalc_()*[&]
 #define co_calc_of CoLocalWrapCalc_()*
 
+template <typename Ty>
+class co_result
+{
+public:
+	explicit co_result(Ty& obj)
+		: _ptr(&obj) {}
+public:
+	operator Ty& () const
+	{
+		return *_ptr;
+	}
+
+	Ty& get() const
+	{
+		return *_ptr;
+	}
+
+	template <typename Arg>
+	void operator =(Arg&& arg) const
+	{
+		*_ptr = std::forward<Arg>(arg);
+	}
+private:
+	Ty* _ptr;
+};
+
+template <> class co_result<void> {};
+
+template <typename Ty>
+co_result<Ty> co_wrap_result(Ty& _Val)
+{
+	return co_result<Ty>(_Val);
+}
+
+template <typename Ty>
+class CoReferenceWrapper_
+{
+public:
+	explicit CoReferenceWrapper_(Ty& obj)
+		: _ptr(&obj) {}
+public:
+	operator Ty& () const
+	{
+		return *_ptr;
+	}
+
+	Ty& get() const
+	{
+		return *_ptr;
+	}
+private:
+	Ty* _ptr;
+};
+
+/*!
+@brief bind参数引用到generator函数对象
+*/
+template <typename Ty>
+CoReferenceWrapper_<Ty> co_ref(Ty& _Val)
+{
+	return CoReferenceWrapper_<Ty>(_Val);
+}
+
+template <typename Ty>
+void co_ref(const Ty&&) = delete;
+
+template <typename Ty>
+CoReferenceWrapper_<Ty> co_ref(CoReferenceWrapper_<Ty> _Val)
+{
+	return _Val;
+}
+
+/*!
+@brief bind参数引用到generator函数对象
+*/
+template <typename Ty>
+CoReferenceWrapper_<const Ty> co_cref(const Ty& _Val)
+{
+	return CoReferenceWrapper_<const Ty>(_Val);
+}
+
+template <typename Ty>
+void co_cref(const Ty&&) = delete;
+
+template <typename Ty>
+CoReferenceWrapper_<const Ty> co_cref(CoReferenceWrapper_<Ty> _Val)
+{
+	return CoReferenceWrapper_<const Ty>(_Val.get());
+}
+
+template <typename Ty>
+struct CheckCoReferenceWrapper_
+{
+	typedef Ty&& type;
+};
+
+template <typename Ty>
+struct CheckCoReferenceWrapper_<CoReferenceWrapper_<Ty>>
+{
+	typedef Ty& type;
+};
+
+/*!
+@brief 检测是否是co_ref/co_cref参数，是就引用传递，否则右值传递
+*/
+template <typename Ty>
+typename CheckCoReferenceWrapper_<typename std::remove_reference<Ty>::type>::type co_forward(typename std::remove_reference<Ty>::type& arg)
+{
+	return static_cast<typename CheckCoReferenceWrapper_<typename std::remove_reference<Ty>::type>::type>(arg);
+}
+
+template <typename Ty>
+Ty&& co_forward(typename std::remove_reference<Ty>::type&& arg)
+{
+	static_assert(!std::is_lvalue_reference<Ty>::value, "bad co_forward call");
+	return static_cast<Ty&&>(arg);
+}
+
 class my_actor;
 class generator;
 class generator_done_sign;

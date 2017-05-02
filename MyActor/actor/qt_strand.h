@@ -27,6 +27,7 @@ private:
 	bool sync_safe();
 	bool is_running();
 	bool only_self();
+	bind_qt_run_base* self_ui();
 	template <typename Handler>
 	void _dispatch_ui(Handler&& handler);
 	template <typename Handler>

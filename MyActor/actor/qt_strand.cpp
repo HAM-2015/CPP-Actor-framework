@@ -71,4 +71,9 @@ bool qt_strand::only_self()
 	assert(_ui);
 	return _ui->only_self();
 }
+
+bind_qt_run_base* qt_strand::self_ui()
+{
+	return _ui;
+}
 #endif
