@@ -396,6 +396,8 @@ void print_time_s(std::wostream&);
 long long get_tick_us();
 long long get_tick_ms();
 int get_tick_s();
+long long rel2abs_tick(int ms);
+long long rel2abs_tick(long long us);
 
 #ifdef _MSC_VER
 extern "C" void* __fastcall get_sp();

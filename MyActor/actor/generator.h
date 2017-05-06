@@ -2290,8 +2290,32 @@ private:
 };
 //////////////////////////////////////////////////////////////////////////
 
+template <typename T>
+struct CoChanMsgMove_
+{
+	typedef T type;
+	static T&& forward(T& p) { return (T&&)p; }
+	static T&& move(T& p) { return (T&&)p; }
+};
+
+template <typename T>
+struct CoChanMsgMove_<T&>
+{
+	typedef T& type;
+	static std::reference_wrapper<T> forward(T& p) { return std::reference_wrapper<T>(p); }
+	static T& move(T& p) { return p; }
+};
+
+template <typename T>
+struct CoChanMsgMove_<const T> : public CoChanMsgMove_<const T&>{};
+
+template <typename T>
+struct CoChanMsgMove_<T&&> {};
+
 template <typename Handler> struct CoNotifyHandler_;
 template <typename Handler> struct CoNilStateNotifyHandler_;
+template <typename MsgType, typename Notify> struct CoBroadcastNotify_;
+template <typename MsgType, typename Notify, typename Check> struct CoBroadcastCheck_;
 
 struct CoNotifyHandlerFace_
 {
@@ -2323,7 +2347,7 @@ struct CoNotifyHandler_ : public CoNotifyHandlerFace_
 
 	void invoke(reusable_mem& alloc, co_async_state state)
 	{
-		Handler handler(std::move(_handler));
+		handler_type handler(std::move(_handler));
 		destroy();
 		alloc.deallocate(this);
 		CHECK_EXCEPTION(handler, state);
@@ -2350,7 +2374,7 @@ struct CoNilStateNotifyHandler_ : public CoNotifyHandlerFace_
 	void invoke(reusable_mem& alloc, co_async_state state)
 	{
 		assert(co_async_state::co_async_ok == state);
-		Handler handler(std::move(_handler));
+		handler_type handler(std::move(_handler));
 		destroy();
 		alloc.deallocate(this);
 		CHECK_EXCEPTION(handler);
@@ -2364,6 +2388,139 @@ struct CoNilStateNotifyHandler_ : public CoNotifyHandlerFace_
 	handler_type _handler;
 	NONE_COPY(CoNilStateNotifyHandler_);
 	RVALUE_CONSTRUCT1(CoNilStateNotifyHandler_, _handler);
+};
+
+template <typename MsgType>
+struct CoBroadcastHandlerFace_ : public CoNotifyHandlerFace_
+{
+	virtual bool check(MsgType&) = 0;
+
+	template <typename Notify, typename Check>
+	static CoBroadcastHandlerFace_* wrap_notify(reusable_mem& alloc, Notify&& notify, Check&& check)
+	{
+		typedef CoBroadcastCheck_<MsgType, Notify, Check> Handler_;
+		return new(alloc.allocate(sizeof(Handler_)))Handler_(check, notify);
+	}
+
+	template <typename Notify>
+	static CoBroadcastHandlerFace_* wrap_notify(reusable_mem& alloc, Notify&& notify)
+	{
+		typedef CoBroadcastNotify_<MsgType, Notify> Handler_;
+		return new(alloc.allocate(sizeof(Handler_)))Handler_(notify);
+	}
+};
+
+template <typename MsgType, typename Notify, typename Check>
+struct CoBroadcastCheck_ : public CoBroadcastHandlerFace_<MsgType>
+{
+	typedef RM_CREF(Notify) notify_type;
+	typedef typename CoChanMsgMove_<Check>::type check_type;
+
+	CoBroadcastCheck_(Check& check, Notify& notify)
+		:_check(std::forward<Check>(check)), _notify(std::forward<Notify>(notify)) {}
+
+	bool check(MsgType& msg)
+	{
+		return tuple_invoke<bool>(_check, msg);
+	}
+
+	void invoke(reusable_mem& alloc, co_async_state state)
+	{
+		check_type check(CoChanMsgMove_<Check>::move(_check));
+		notify_type notify(std::move(_notify));
+		destroy();
+		alloc.deallocate(this);
+		CHECK_EXCEPTION(notify, check, state);
+	}
+
+	void destroy()
+	{
+		this->~CoBroadcastCheck_();
+	}
+
+	check_type _check;
+	notify_type _notify;
+};
+
+template <typename Notify, typename Check>
+struct CoBroadcastCheck_<std::tuple<void_type>, Notify, Check> : public CoBroadcastHandlerFace_<std::tuple<void_type>>
+{
+	typedef RM_CREF(Notify) notify_type;
+	typedef typename CoChanMsgMove_<Check>::type check_type;
+
+	CoBroadcastCheck_(Check& check, Notify& notify)
+		:_check(std::forward<Check>(check)), _notify(std::forward<Notify>(notify)) {}
+
+	bool check(std::tuple<void_type>& msg)
+	{
+		return _check();
+	}
+
+	void invoke(reusable_mem& alloc, co_async_state state)
+	{
+		check_type check(CoChanMsgMove_<Check>::move(_check));
+		notify_type notify(std::move(_notify));
+		destroy();
+		alloc.deallocate(this);
+		CHECK_EXCEPTION(notify, check, state);
+	}
+
+	void destroy()
+	{
+		this->~CoBroadcastCheck_();
+	}
+
+	check_type _check;
+	notify_type _notify;
+};
+
+template <typename MsgType, typename Notify>
+struct CoBroadcastNotify_ : public CoBroadcastHandlerFace_<MsgType>
+{
+	typedef RM_CREF(Notify) notify_type;
+
+	CoBroadcastNotify_(Notify& notify)
+		:_notify(std::forward<Notify>(notify)) {}
+
+	bool check(MsgType& msg)
+	{
+		return true;
+	}
+
+	void invoke(reusable_mem& alloc, co_async_state state)
+	{
+		notify_type notify(std::move(_notify));
+		destroy();
+		alloc.deallocate(this);
+		CHECK_EXCEPTION(notify, state);
+	}
+
+	void destroy()
+	{
+		this->~CoBroadcastNotify_();
+	}
+
+	notify_type _notify;
+};
+
+template <typename MsgType>
+struct CoBroadcastCheckInvoke_
+{
+	template <typename Check>
+	static bool invoke(Check&& check, MsgType& msg)
+	{
+		return tuple_invoke<bool>(check, msg);
+	}
+};
+
+template <>
+struct CoBroadcastCheckInvoke_<std::tuple<void_type>>
+{
+	template <typename Check>
+	static bool invoke(Check&& check, std::tuple<void_type>&)
+	{
+		return check();
+	}
 };
 
 template <typename... Types>
@@ -3224,28 +3381,6 @@ struct CoWrapTryPost_
 
 	Chan& _chan;
 };
-
-template <typename T>
-struct CoChanMsgMove_
-{
-	typedef T type;
-	static T&& forward(T& p) { return (T&&)p; }
-	static T&& move(T& p) { return (T&&)p; }
-};
-
-template <typename T>
-struct CoChanMsgMove_<T&>
-{
-	typedef T& type;
-	static std::reference_wrapper<T> forward(T& p) { return std::reference_wrapper<T>(p); }
-	static T& move(T& p) { return p; }
-};
-
-template <typename T>
-struct CoChanMsgMove_<const T> : public CoChanMsgMove_<const T&> {};
-
-template <typename T>
-struct CoChanMsgMove_<T&&> {};
 
 /*!
 @brief 异步消息队列
@@ -6642,6 +6777,14 @@ template <typename... Types>
 class co_broadcast
 {
 	typedef std::tuple<TYPE_PIPE(Types)...> msg_type;
+
+	struct default_check
+	{
+		bool operator()(const Types&...)
+		{
+			return true;
+		}
+	};
 public:
 	co_broadcast(const shared_strand& strand)
 		:_closed(false), _pushCount(0), _strand(strand) {}
@@ -6799,6 +6942,22 @@ public:
 		}
 	}
 
+	template <typename Notify, typename Check>
+	void check_pop(Notify&& ntf, Check&& check, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_check_pop(std::forward<Notify>(ntf), std::forward<Check>(check), token);
+		}
+		else
+		{
+			_strand->post(std::bind([this, &token](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Check>::type& check)
+			{
+				_check_pop(CoChanMsgMove_<Notify>::move(ntf), CoChanMsgMove_<Check>::move(check), token);
+			}, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Check>::forward(check)));
+		}
+	}
+
 	template <typename Notify>
 	void tick_pop(Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
 	{
@@ -6828,6 +6987,22 @@ public:
 			{
 				_try_pop(CoChanMsgMove_<Notify>::move(ntf), token);
 			}, CoChanMsgMove_<Notify>::forward(ntf)));
+		}
+	}
+
+	template <typename Notify, typename Check>
+	void try_check_pop(Notify&& ntf, Check&& check, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_try_check_pop(std::forward<Notify>(ntf), std::forward<Check>(check), token);
+		}
+		else
+		{
+			_strand->post(std::bind([this, &token](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Check>::type& check)
+			{
+				_try_check_pop(CoChanMsgMove_<Notify>::move(ntf), CoChanMsgMove_<Check>::move(check), token);
+			}, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Check>::forward(check)));
 		}
 	}
 
@@ -6863,6 +7038,22 @@ public:
 		}
 	}
 
+	template <typename Notify, typename Check>
+	void timed_check_pop(int ms, Notify&& ntf, Check&& check, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_timed_check_pop(ms, std::forward<Notify>(ntf), std::forward<Check>(check), token);
+		}
+		else
+		{
+			_strand->post(std::bind([this, ms, &token](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Check>::type& check)
+			{
+				_timed_check_pop(ms, CoChanMsgMove_<Notify>::move(ntf), CoChanMsgMove_<Check>::move(check), token);
+			}, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Check>::forward(check)));
+		}
+	}
+
 	template <typename Notify>
 	void timed_tick_pop(int ms, Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
 	{
@@ -6892,6 +7083,22 @@ public:
 			{
 				_timed_pop(timer, ms, CoChanMsgMove_<Notify>::move(ntf), token);
 			}, CoChanMsgMove_<Notify>::forward(ntf)));
+		}
+	}
+
+	template <typename Notify, typename Check>
+	void timed_check_pop(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, Check&& check, co_broadcast_token& token = co_broadcast_token::_defToken)
+	{
+		if (_strand->running_in_this_thread())
+		{
+			_timed_check_pop(timer, ms, std::forward<Notify>(ntf), std::forward<Check>(check), token);
+		}
+		else
+		{
+			_strand->post(std::bind([this, ms, &timer, &token](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Check>::type& check)
+			{
+				_timed_check_pop(timer, ms, CoChanMsgMove_<Notify>::move(ntf), CoChanMsgMove_<Check>::move(check), token);
+			}, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Check>::forward(check)));
 		}
 	}
 
@@ -7101,17 +7308,24 @@ private:
 		size_t ntfNum = 0;
 		CoNotifyHandlerFace_* ntfs[32];
 		std::list<CoNotifyHandlerFace_*> ntfsEx;
-		while (!_popWait.empty())
+		for (msg_list<CoNotifyHandlerFace_*>::iterator it = _popWait.begin(); _popWait.end() != it;)
 		{
-			if (ntfNum < fixed_array_length(ntfs))
+			if (static_cast<CoBroadcastHandlerFace_<msg_type>*>(*it)->check(_tempBuffer.get()))
 			{
-				ntfs[ntfNum++] = _popWait.front();
+				if (ntfNum < fixed_array_length(ntfs))
+				{
+					ntfs[ntfNum++] = *it;
+				}
+				else
+				{
+					ntfsEx.push_back(*it);
+				}
+				_popWait.erase(it++);
 			}
 			else
 			{
-				ntfsEx.push_back(_popWait.front());
+				++it;
 			}
-			_popWait.pop_front();
 		}
 		for (size_t i = 0; i < ntfNum; i++)
 		{
@@ -7141,13 +7355,19 @@ private:
 	template <typename Notify>
 	void _pop(Notify&& ntf, co_broadcast_token& token)
 	{
+		_check_pop(std::forward<Notify>(ntf), default_check(), token);
+	}
+
+	template <typename Notify, typename Check>
+	void _check_pop(Notify&& ntf, Check&& check, co_broadcast_token& token)
+	{
 		assert(_strand->running_in_this_thread());
 		if (_closed)
 		{
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
-		if (_tempBuffer.has() && token._lastId != _pushCount)
+		if (_tempBuffer.has() && token._lastId != _pushCount && CoBroadcastCheckInvoke_<msg_type>::invoke(std::forward<Check>(check), _tempBuffer.get()))
 		{
 			if (!token.is_default())
 			{
@@ -7157,22 +7377,28 @@ private:
 		}
 		else
 		{
-			_popWait.push_back(CoNotifyHandlerFace_::wrap_notify(_alloc, std::bind([this, &token](typename CoChanMsgMove_<Notify>::type& ntf, co_async_state state)
+			_popWait.push_back(CoBroadcastHandlerFace_<msg_type>::wrap_notify(_alloc, std::bind([this, &token](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Check>::type& check, co_async_state state)
 			{
 				if (co_async_state::co_async_ok == state)
 				{
-					_pop(CoChanMsgMove_<Notify>::move(ntf), token);
+					_check_pop(CoChanMsgMove_<Notify>::move(ntf), CoChanMsgMove_<Check>::move(check), token);
 				}
 				else
 				{
 					CHECK_EXCEPTION(ntf, state);
 				}
-			}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
+			}, CoChanMsgMove_<Notify>::forward(ntf), __1, __2), std::forward<Check>(check)));
 		}
 	}
 
 	template <typename Notify>
 	void _try_pop(Notify&& ntf, co_broadcast_token& token)
+	{
+		_try_check_pop(std::forward<Notify>(ntf), default_check(), token);
+	}
+
+	template <typename Notify, typename Check>
+	void _try_check_pop(Notify&& ntf, Check&& check, co_broadcast_token& token)
 	{
 		assert(_strand->running_in_this_thread());
 		if (_closed)
@@ -7180,7 +7406,7 @@ private:
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
-		if (_tempBuffer.has() && token._lastId != _pushCount)
+		if (_tempBuffer.has() && token._lastId != _pushCount && CoBroadcastCheckInvoke_<msg_type>::invoke(std::forward<Check>(check), _tempBuffer.get()))
 		{
 			if (!token.is_default())
 			{
@@ -7197,53 +7423,17 @@ private:
 	template <typename Notify>
 	void _timed_pop(int ms, Notify&& ntf, co_broadcast_token& token)
 	{
-		assert(_strand->running_in_this_thread());
-		if (_closed)
-		{
-			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
-			return;
-		}
-		if (_tempBuffer.has() && token._lastId != _pushCount)
-		{
-			if (!token.is_default())
-			{
-				token._lastId = _pushCount;
-			}
-			CHECK_EXCEPTION(tuple_invoke, ntf, std::tuple<co_async_state>(co_async_state::co_async_ok), _tempBuffer.get());
-		}
-		else if (ms > 0)
-		{
-			overlap_timer::timer_handle* timer = new(_alloc.allocate(sizeof(overlap_timer::timer_handle)))overlap_timer::timer_handle;
-			_popWait.push_back(CoNotifyHandlerFace_::wrap_notify(_alloc, std::bind([this, timer, &token](typename CoChanMsgMove_<Notify>::type& ntf, co_async_state state)
-			{
-				_strand->over_timer()->cancel(*timer);
-				timer->~timer_handle();
-				_alloc.deallocate(timer);
-				if (co_async_state::co_async_ok == state)
-				{
-					assert(_tempBuffer.has());
-					_pop(CoChanMsgMove_<Notify>::move(ntf), token);
-				}
-				else
-				{
-					CHECK_EXCEPTION(ntf, state);
-				}
-			}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
-			_strand->over_timer()->timeout(ms, *timer, std::bind([this](const co_notify_node& it)
-			{
-				CoNotifyHandlerFace_* popWait = *it;
-				_popWait.erase(it);
-				popWait->invoke(_alloc, co_async_state::co_async_overtime);
-			}, --_popWait.end()));
-		}
-		else
-		{
-			CHECK_EXCEPTION(ntf, co_async_state::co_async_overtime);
-		}
+		_abs_timed_check_pop(rel2abs_tick(ms), std::forward<Notify>(ntf), default_check(), token);
 	}
 
-	template <typename Notify>
-	void _timed_pop(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, co_broadcast_token& token)
+	template <typename Notify, typename Check>
+	void _timed_check_pop(int ms, Notify&& ntf, Check&& check, co_broadcast_token& token)
+	{
+		_abs_timed_check_pop(rel2abs_tick(ms), std::forward<Notify>(ntf), std::forward<Check>(check), token);
+	}
+
+	template <typename Notify, typename Check>
+	void _abs_timed_check_pop(long long deadus, Notify&& ntf, Check&& check, co_broadcast_token& token)
 	{
 		assert(_strand->running_in_this_thread());
 		if (_closed)
@@ -7251,7 +7441,7 @@ private:
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
-		if (_tempBuffer.has() && token._lastId != _pushCount)
+		if (_tempBuffer.has() && token._lastId != _pushCount && CoBroadcastCheckInvoke_<msg_type>::invoke(std::forward<Check>(check), _tempBuffer.get()))
 		{
 			if (!token.is_default())
 			{
@@ -7259,31 +7449,83 @@ private:
 			}
 			CHECK_EXCEPTION(tuple_invoke, ntf, std::tuple<co_async_state>(co_async_state::co_async_ok), _tempBuffer.get());
 		}
-		else if (ms > 0)
+		else
 		{
-			_popWait.push_back(CoNotifyHandlerFace_::wrap_notify(_alloc, std::bind([this, &timer, &token](typename CoChanMsgMove_<Notify>::type& ntf, co_async_state state)
+			overlap_timer::timer_handle* timer = new(_alloc.allocate(sizeof(overlap_timer::timer_handle)))overlap_timer::timer_handle;
+			_popWait.push_back(CoBroadcastHandlerFace_<msg_type>::wrap_notify(_alloc, std::bind([this, timer, deadus, &token](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Check>::type& check, co_async_state state)
 			{
-				_strand->over_timer()->cancel(timer);
+				_strand->over_timer()->cancel(*timer);
+				timer->~timer_handle();
+				_alloc.deallocate(timer);
 				if (co_async_state::co_async_ok == state)
 				{
 					assert(_tempBuffer.has());
-					_pop(CoChanMsgMove_<Notify>::move(ntf), token);
+					_abs_timed_check_pop(deadus, CoChanMsgMove_<Notify>::move(ntf), CoChanMsgMove_<Check>::move(check), token);
 				}
 				else
 				{
 					CHECK_EXCEPTION(ntf, state);
 				}
-			}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
-			_strand->over_timer()->timeout(ms, timer, std::bind([this](const co_notify_node& it)
+			}, CoChanMsgMove_<Notify>::forward(ntf), __1, __2), std::forward<Check>(check)));
+			_strand->over_timer()->deadline(deadus, *timer, std::bind([this](const co_notify_node& it)
 			{
 				CoNotifyHandlerFace_* popWait = *it;
 				_popWait.erase(it);
 				popWait->invoke(_alloc, co_async_state::co_async_overtime);
 			}, --_popWait.end()));
 		}
+	}
+
+	template <typename Notify>
+	void _timed_pop(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, co_broadcast_token& token)
+	{
+		_abs_timed_check_pop(timer, rel2abs_tick(ms), std::forward<Notify>(ntf), default_check(), token);
+	}
+
+	template <typename Notify, typename Check>
+	void _timed_check_pop(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, Check&& check, co_broadcast_token& token)
+	{
+		_abs_timed_check_pop(timer, rel2abs_tick(ms), std::forward<Notify>(ntf), std::forward<Check>(check), token);
+	}
+
+	template <typename Notify, typename Check>
+	void _abs_timed_check_pop(overlap_timer::timer_handle& timer, long long deadus, Notify&& ntf, Check&& check, co_broadcast_token& token)
+	{
+		assert(_strand->running_in_this_thread());
+		if (_closed)
+		{
+			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
+			return;
+		}
+		if (_tempBuffer.has() && token._lastId != _pushCount && CoBroadcastCheckInvoke_<msg_type>::invoke(std::forward<Check>(check), _tempBuffer.get()))
+		{
+			if (!token.is_default())
+			{
+				token._lastId = _pushCount;
+			}
+			CHECK_EXCEPTION(tuple_invoke, ntf, std::tuple<co_async_state>(co_async_state::co_async_ok), _tempBuffer.get());
+		}
 		else
 		{
-			CHECK_EXCEPTION(ntf, co_async_state::co_async_overtime);
+			_popWait.push_back(CoBroadcastHandlerFace_<msg_type>::wrap_notify(_alloc, std::bind([this, deadus, &timer, &token](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Check>::type& check, co_async_state state)
+			{
+				_strand->over_timer()->cancel(timer);
+				if (co_async_state::co_async_ok == state)
+				{
+					assert(_tempBuffer.has());
+					_abs_timed_check_pop(timer, deadus, CoChanMsgMove_<Notify>::move(ntf), CoChanMsgMove_<Check>::move(check), token);
+				}
+				else
+				{
+					CHECK_EXCEPTION(ntf, state);
+				}
+			}, CoChanMsgMove_<Notify>::forward(ntf), __1, __2), std::forward<Check>(check)));
+			_strand->over_timer()->deadline(deadus, timer, std::bind([this](const co_notify_node& it)
+			{
+				CoNotifyHandlerFace_* popWait = *it;
+				_popWait.erase(it);
+				popWait->invoke(_alloc, co_async_state::co_async_overtime);
+			}, --_popWait.end()));
 		}
 	}
 
@@ -7307,7 +7549,7 @@ private:
 		}
 		else
 		{
-			_popWait.push_back(CoNotifyHandlerFace_::wrap_notify(_alloc, std::bind([&ntfSign](typename CoChanMsgMove_<Notify>::type& ntf, co_async_state state)
+			_popWait.push_back(CoBroadcastHandlerFace_<msg_type>::wrap_notify(_alloc, std::bind([&ntfSign](typename CoChanMsgMove_<Notify>::type& ntf, co_async_state state)
 			{
 				assert(ntfSign._nodeEffect);
 				ntfSign._nodeEffect = false;

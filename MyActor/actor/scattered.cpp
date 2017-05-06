@@ -40,12 +40,11 @@ struct pc_cycle
 
 void move_test::operator=(move_test&& s)
 {
-	if (s._count)
+	_generation = s._generation + 1;
+	_count = std::move(s._count);
+	if (_count)
 	{
-		_generation = s._generation + 1;
-		_count = s._count;
 		_count->_moveCount++;
-		s._count.reset();
 		if (_count->_cb)
 		{
 			_count->_cb(_count);
@@ -55,10 +54,10 @@ void move_test::operator=(move_test&& s)
 
 void move_test::operator=(const move_test& s)
 {
-	if (s._count)
+	_generation = s._generation + 1;
+	_count = s._count;
+	if (_count)
 	{
-		_generation = s._generation + 1;
-		_count = s._count;
 		_count->_copyCount++;
 		if (_count->_cb)
 		{
@@ -356,6 +355,16 @@ int get_tick_s()
 }
 
 #endif
+
+long long rel2abs_tick(int ms)
+{
+	return get_tick_us() + (long long)ms * 1000;
+}
+
+long long rel2abs_tick(long long us)
+{
+	return get_tick_us() + us;
+}
 
 #ifdef __GNUG__
 
