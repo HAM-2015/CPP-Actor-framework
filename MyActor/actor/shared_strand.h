@@ -296,10 +296,10 @@ public:
 	@brief 尝试添加一个任务到 boost_tick 队列
 	*/
 	template <typename Handler>
-	void try_tick(Handler&& handler)
+	void try_tick(Handler&& handler, bool runInThread = false)
 	{
 #ifdef ENABLE_NEXT_TICK
-		if (running_in_this_thread())
+		if (runInThread || running_in_this_thread())
 		{
 			next_tick(std::forward<Handler>(handler));
 		}

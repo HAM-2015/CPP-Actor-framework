@@ -2507,8 +2507,10 @@ template <typename MsgType>
 struct CoBroadcastCheckInvoke_
 {
 	template <typename Check>
-	static bool invoke(Check&& check, MsgType& msg)
+	static bool invoke(bool& checkNow, Check&& check, MsgType& msg)
 	{
+		checkNow = true;
+		BREAK_OF_SCOPE_EXEC(checkNow = false);
 		return tuple_invoke<bool>(check, msg);
 	}
 };
@@ -2517,8 +2519,10 @@ template <>
 struct CoBroadcastCheckInvoke_<std::tuple<void_type>>
 {
 	template <typename Check>
-	static bool invoke(Check&& check, std::tuple<void_type>&)
+	static bool invoke(bool& checkNow, Check&& check, std::tuple<void_type>&)
 	{
+		checkNow = true;
+		BREAK_OF_SCOPE_EXEC(checkNow = false);
 		return check();
 	}
 };
@@ -6784,10 +6788,15 @@ class co_broadcast
 		{
 			return true;
 		}
+
+		bool operator()()
+		{
+			return true;
+		}
 	};
 public:
 	co_broadcast(const shared_strand& strand)
-		:_closed(false), _pushCount(0), _strand(strand) {}
+		:_closed(false), _checkNow(false), _pushCount(0), _strand(strand) {}
 
 	~co_broadcast()
 	{
@@ -6802,16 +6811,17 @@ public:
 	template <typename... Args>
 	void send(Args&&... msg)
 	{
-		if (_strand->running_in_this_thread())
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_push(any_handler(), std::forward<Args>(msg)...);
 		}
 		else
 		{
-			_strand->post(std::bind([this](RM_CREF(Args)&... msg)
+			_strand->try_tick(std::bind([this](RM_CREF(Args)&... msg)
 			{
 				_push(any_handler(), std::move(msg)...);
-			}, std::forward<Args>(msg)...));
+			}, std::forward<Args>(msg)...), runInThread);
 		}
 	}
 
@@ -6827,16 +6837,17 @@ public:
 	template <typename Notify, typename... Args>
 	void push(Notify&& ntf, Args&&... msg)
 	{
-		if (_strand->running_in_this_thread())
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...);
 		}
 		else
 		{
-			_strand->post(std::bind([this](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Args>::type&... msg)
+			_strand->try_tick(std::bind([this](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Args>::type&... msg)
 			{
 				_push(CoChanMsgMove_<Notify>::move(ntf), CoChanMsgMove_<Args>::move(msg)...);
-			}, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Args>::forward(msg)...));
+			}, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Args>::forward(msg)...), runInThread);
 		}
 	}
 
@@ -6853,7 +6864,17 @@ public:
 	void aff_push(Notify&& ntf, Args&&... msg)
 	{
 		assert(_strand->running_in_this_thread());
-		_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...);
+		if (!_checkNow)
+		{
+			_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...);
+		}
+		else
+		{
+			_strand->next_tick(std::bind([this](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Args>::type&... msg)
+			{
+				_push(CoChanMsgMove_<Notify>::move(ntf), CoChanMsgMove_<Args>::move(msg)...);
+			}, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Args>::forward(msg)...));
+		}
 	}
 
 	template <typename Notify, typename... Args>
@@ -6913,48 +6934,51 @@ public:
 	template <typename Notify>
 	void clear(Notify&& ntf)
 	{
-		if (_strand->running_in_this_thread())
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_clear(std::forward<Notify>(ntf));
 		}
 		else
 		{
-			_strand->post(std::bind([this](typename CoChanMsgMove_<Notify>::type& ntf)
+			_strand->try_tick(std::bind([this](typename CoChanMsgMove_<Notify>::type& ntf)
 			{
 				_clear(CoChanMsgMove_<Notify>::move(ntf));
-			}, CoChanMsgMove_<Notify>::forward(ntf)));
+			}, CoChanMsgMove_<Notify>::forward(ntf)), runInThread);
 		}
 	}
 
 	template <typename Notify>
 	void pop(Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
 	{
-		if (_strand->running_in_this_thread())
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_pop(std::forward<Notify>(ntf), token);
 		}
 		else
 		{
-			_strand->post(std::bind([this, &token](typename CoChanMsgMove_<Notify>::type& ntf)
+			_strand->try_tick(std::bind([this, &token](typename CoChanMsgMove_<Notify>::type& ntf)
 			{
 				_pop(CoChanMsgMove_<Notify>::move(ntf), token);
-			}, CoChanMsgMove_<Notify>::forward(ntf)));
+			}, CoChanMsgMove_<Notify>::forward(ntf)), runInThread);
 		}
 	}
 
 	template <typename Notify, typename Check>
 	void check_pop(Notify&& ntf, Check&& check, co_broadcast_token& token = co_broadcast_token::_defToken)
 	{
-		if (_strand->running_in_this_thread())
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_check_pop(std::forward<Notify>(ntf), std::forward<Check>(check), token);
 		}
 		else
 		{
-			_strand->post(std::bind([this, &token](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Check>::type& check)
+			_strand->try_tick(std::bind([this, &token](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Check>::type& check)
 			{
 				_check_pop(CoChanMsgMove_<Notify>::move(ntf), CoChanMsgMove_<Check>::move(check), token);
-			}, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Check>::forward(check)));
+			}, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Check>::forward(check)), runInThread);
 		}
 	}
 
@@ -6971,38 +6995,50 @@ public:
 	void aff_pop(Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
 	{
 		assert(_strand->running_in_this_thread());
-		_pop(std::forward<Notify>(ntf), token);
+		if (!_checkNow)
+		{
+			_pop(std::forward<Notify>(ntf), token);
+		}
+		else
+		{
+			_strand->next_tick(std::bind([this, &token](typename CoChanMsgMove_<Notify>::type& ntf)
+			{
+				_pop(CoChanMsgMove_<Notify>::move(ntf), token);
+			}, CoChanMsgMove_<Notify>::forward(ntf)));
+		}
 	}
 
 	template <typename Notify>
 	void try_pop(Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
 	{
-		if (_strand->running_in_this_thread())
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_try_pop(std::forward<Notify>(ntf), token);
 		}
 		else
 		{
-			_strand->post(std::bind([this, &token](typename CoChanMsgMove_<Notify>::type& ntf)
+			_strand->try_tick(std::bind([this, &token](typename CoChanMsgMove_<Notify>::type& ntf)
 			{
 				_try_pop(CoChanMsgMove_<Notify>::move(ntf), token);
-			}, CoChanMsgMove_<Notify>::forward(ntf)));
+			}, CoChanMsgMove_<Notify>::forward(ntf)), runInThread);
 		}
 	}
 
 	template <typename Notify, typename Check>
 	void try_check_pop(Notify&& ntf, Check&& check, co_broadcast_token& token = co_broadcast_token::_defToken)
 	{
-		if (_strand->running_in_this_thread())
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_try_check_pop(std::forward<Notify>(ntf), std::forward<Check>(check), token);
 		}
 		else
 		{
-			_strand->post(std::bind([this, &token](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Check>::type& check)
+			_strand->try_tick(std::bind([this, &token](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Check>::type& check)
 			{
 				_try_check_pop(CoChanMsgMove_<Notify>::move(ntf), CoChanMsgMove_<Check>::move(check), token);
-			}, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Check>::forward(check)));
+			}, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Check>::forward(check)), runInThread);
 		}
 	}
 
@@ -7019,38 +7055,50 @@ public:
 	void aff_try_pop(Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
 	{
 		assert(_strand->running_in_this_thread());
-		_try_pop(std::forward<Notify>(ntf), token);
+		if (!_checkNow)
+		{
+			_try_pop(std::forward<Notify>(ntf), token);
+		}
+		else
+		{
+			_strand->next_tick(std::bind([this, &token](typename CoChanMsgMove_<Notify>::type& ntf)
+			{
+				_try_pop(CoChanMsgMove_<Notify>::move(ntf), token);
+			}, CoChanMsgMove_<Notify>::forward(ntf)));
+		}
 	}
 
 	template <typename Notify>
 	void timed_pop(int ms, Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
 	{
-		if (_strand->running_in_this_thread())
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_timed_pop(ms, std::forward<Notify>(ntf), token);
 		}
 		else
 		{
-			_strand->post(std::bind([this, ms, &token](typename CoChanMsgMove_<Notify>::type& ntf)
+			_strand->try_tick(std::bind([this, ms, &token](typename CoChanMsgMove_<Notify>::type& ntf)
 			{
 				_timed_pop(ms, CoChanMsgMove_<Notify>::move(ntf), token);
-			}, CoChanMsgMove_<Notify>::forward(ntf)));
+			}, CoChanMsgMove_<Notify>::forward(ntf)), runInThread);
 		}
 	}
 
 	template <typename Notify, typename Check>
 	void timed_check_pop(int ms, Notify&& ntf, Check&& check, co_broadcast_token& token = co_broadcast_token::_defToken)
 	{
-		if (_strand->running_in_this_thread())
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_timed_check_pop(ms, std::forward<Notify>(ntf), std::forward<Check>(check), token);
 		}
 		else
 		{
-			_strand->post(std::bind([this, ms, &token](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Check>::type& check)
+			_strand->try_tick(std::bind([this, ms, &token](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Check>::type& check)
 			{
 				_timed_check_pop(ms, CoChanMsgMove_<Notify>::move(ntf), CoChanMsgMove_<Check>::move(check), token);
-			}, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Check>::forward(check)));
+			}, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Check>::forward(check)), runInThread);
 		}
 	}
 
@@ -7067,38 +7115,50 @@ public:
 	void aff_timed_pop(int ms, Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
 	{
 		assert(_strand->running_in_this_thread());
-		_timed_pop(ms, std::forward<Notify>(ntf), token);
+		if (!_checkNow)
+		{
+			_timed_pop(ms, std::forward<Notify>(ntf), token);
+		}
+		else
+		{
+			_strand->next_tick(std::bind([this, ms, &token](typename CoChanMsgMove_<Notify>::type& ntf)
+			{
+				_timed_pop(ms, CoChanMsgMove_<Notify>::move(ntf), token);
+			}, CoChanMsgMove_<Notify>::forward(ntf)));
+		}
 	}
 
 	template <typename Notify>
 	void timed_pop(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
 	{
-		if (_strand->running_in_this_thread())
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_timed_pop(timer, ms, std::forward<Notify>(ntf), token);
 		}
 		else
 		{
-			_strand->post(std::bind([this, ms, &timer, &token](typename CoChanMsgMove_<Notify>::type& ntf)
+			_strand->try_tick(std::bind([this, ms, &timer, &token](typename CoChanMsgMove_<Notify>::type& ntf)
 			{
 				_timed_pop(timer, ms, CoChanMsgMove_<Notify>::move(ntf), token);
-			}, CoChanMsgMove_<Notify>::forward(ntf)));
+			}, CoChanMsgMove_<Notify>::forward(ntf)), runInThread);
 		}
 	}
 
 	template <typename Notify, typename Check>
 	void timed_check_pop(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, Check&& check, co_broadcast_token& token = co_broadcast_token::_defToken)
 	{
-		if (_strand->running_in_this_thread())
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_timed_check_pop(timer, ms, std::forward<Notify>(ntf), std::forward<Check>(check), token);
 		}
 		else
 		{
-			_strand->post(std::bind([this, ms, &timer, &token](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Check>::type& check)
+			_strand->try_tick(std::bind([this, ms, &timer, &token](typename CoChanMsgMove_<Notify>::type& ntf, typename CoChanMsgMove_<Check>::type& check)
 			{
 				_timed_check_pop(timer, ms, CoChanMsgMove_<Notify>::move(ntf), CoChanMsgMove_<Check>::move(check), token);
-			}, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Check>::forward(check)));
+			}, CoChanMsgMove_<Notify>::forward(ntf), CoChanMsgMove_<Check>::forward(check)), runInThread);
 		}
 	}
 
@@ -7115,154 +7175,188 @@ public:
 	void aff_timed_pop(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, co_broadcast_token& token = co_broadcast_token::_defToken)
 	{
 		assert(_strand->running_in_this_thread());
-		_timed_pop(timer, ms, std::forward<Notify>(ntf), token);
+		if (!_checkNow)
+		{
+			_timed_pop(timer, ms, std::forward<Notify>(ntf), token);
+		}
+		else
+		{
+			_strand->next_tick(std::bind([this, ms, &timer, &token](typename CoChanMsgMove_<Notify>::type& ntf)
+			{
+				_timed_pop(timer, ms, CoChanMsgMove_<Notify>::move(ntf), token);
+			}, CoChanMsgMove_<Notify>::forward(ntf)));
+		}
 	}
 
 	template <typename Notify>
 	void append_pop_notify(Notify&& ntf, co_notify_sign& ntfSign, co_broadcast_token& token = co_broadcast_token::_defToken)
 	{
-		if (_strand->running_in_this_thread())
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_append_pop_notify(std::forward<Notify>(ntf), ntfSign, token);
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign, &token](typename CoChanMsgMove_<Notify>::type& ntf)
+			_strand->try_tick(std::bind([this, &ntfSign, &token](typename CoChanMsgMove_<Notify>::type& ntf)
 			{
 				_append_pop_notify(CoChanMsgMove_<Notify>::move(ntf), ntfSign, token);
-			}, CoChanMsgMove_<Notify>::forward(ntf)));
+			}, CoChanMsgMove_<Notify>::forward(ntf)), runInThread);
 		}
 	}
 
 	template <typename CbNotify, typename MsgNotify>
 	void try_pop_and_append_notify(CbNotify&& cb, MsgNotify&& msgNtf, co_notify_sign& ntfSign, co_broadcast_token& token = co_broadcast_token::_defToken)
 	{
-		if (_strand->running_in_this_thread())
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_try_pop_and_append_notify(std::forward<CbNotify>(cb), std::forward<MsgNotify>(msgNtf), ntfSign, token);
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign, &token](typename CoChanMsgMove_<CbNotify>::type& cb, typename CoChanMsgMove_<MsgNotify>::type& msgNtf)
+			_strand->try_tick(std::bind([this, &ntfSign, &token](typename CoChanMsgMove_<CbNotify>::type& cb, typename CoChanMsgMove_<MsgNotify>::type& msgNtf)
 			{
 				_try_pop_and_append_notify(CoChanMsgMove_<CbNotify>::move(cb), CoChanMsgMove_<MsgNotify>::move(msgNtf), ntfSign, token);
-			}, CoChanMsgMove_<CbNotify>::forward(cb), std::forward<MsgNotify>(msgNtf)));
+			}, CoChanMsgMove_<CbNotify>::forward(cb), std::forward<MsgNotify>(msgNtf)), runInThread);
 		}
 	}
 
 	template <typename Notify>
 	void remove_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
-		if (_strand->running_in_this_thread())
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_remove_pop_notify(std::forward<Notify>(ntf), ntfSign);
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign](typename CoChanMsgMove_<Notify>::type& ntf)
+			_strand->try_tick(std::bind([this, &ntfSign](typename CoChanMsgMove_<Notify>::type& ntf)
 			{
 				_remove_pop_notify(CoChanMsgMove_<Notify>::move(ntf), ntfSign);
-			}, CoChanMsgMove_<Notify>::forward(ntf)));
+			}, CoChanMsgMove_<Notify>::forward(ntf)), runInThread);
 		}
 	}
 
 	template <typename Notify>
 	void append_push_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
-		if (_strand->running_in_this_thread())
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_append_push_notify(std::forward<Notify>(ntf), ntfSign);
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign](typename CoChanMsgMove_<Notify>::type& ntf)
+			_strand->try_tick(std::bind([this, &ntfSign](typename CoChanMsgMove_<Notify>::type& ntf)
 			{
 				_append_push_notify(CoChanMsgMove_<Notify>::move(ntf), ntfSign);
-			}, CoChanMsgMove_<Notify>::forward(ntf)));
+			}, CoChanMsgMove_<Notify>::forward(ntf)), runInThread);
 		}
 	}
 
 	template <typename CbNotify, typename MsgNotify, typename... Args>
 	void try_push_and_append_notify(CbNotify&& cb, MsgNotify&& msgNtf, co_notify_sign& ntfSign, Args&&... msg)
 	{
-		if (_strand->running_in_this_thread())
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_try_push_and_append_notify(std::forward<CbNotify>(cb), std::forward<MsgNotify>(msgNtf), ntfSign, std::forward<Args>(msg)...);
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign](typename CoChanMsgMove_<CbNotify>::type& cb, typename CoChanMsgMove_<MsgNotify>::type& msgNtf, typename CoChanMsgMove_<Args>::type&... msg)
+			_strand->try_tick(std::bind([this, &ntfSign](typename CoChanMsgMove_<CbNotify>::type& cb, typename CoChanMsgMove_<MsgNotify>::type& msgNtf, typename CoChanMsgMove_<Args>::type&... msg)
 			{
 				_try_push_and_append_notify(CoChanMsgMove_<CbNotify>::move(cb), CoChanMsgMove_<MsgNotify>::move(msgNtf), ntfSign, CoChanMsgMove_<Args>::move(msg)...);
-			}, CoChanMsgMove_<CbNotify>::forward(cb), std::forward<MsgNotify>(msgNtf), CoChanMsgMove_<Args>::forward(msg)...));
+			}, CoChanMsgMove_<CbNotify>::forward(cb), std::forward<MsgNotify>(msgNtf), CoChanMsgMove_<Args>::forward(msg)...), runInThread);
 		}
 	}
 
 	template <typename Notify>
 	void remove_push_notify(Notify&& ntf, co_notify_sign& ntfSign)
 	{
-		if (_strand->running_in_this_thread())
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_remove_push_notify(std::forward<Notify>(ntf), ntfSign);
 		}
 		else
 		{
-			_strand->post(std::bind([this, &ntfSign](typename CoChanMsgMove_<Notify>::type& ntf)
+			_strand->try_tick(std::bind([this, &ntfSign](typename CoChanMsgMove_<Notify>::type& ntf)
 			{
 				_remove_push_notify(CoChanMsgMove_<Notify>::move(ntf), ntfSign);
-			}, CoChanMsgMove_<Notify>::forward(ntf)));
+			}, CoChanMsgMove_<Notify>::forward(ntf)), runInThread);
 		}
 	}
 
 	void close()
 	{
-		_strand->distribute([this]()
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_close();
-		});
+		}
+		else
+		{
+			_strand->try_tick(std::bind([this]()
+			{
+				_close();
+			}), runInThread);
+		}
 	}
 
 	template <typename Notify>
 	void close(Notify&& ntf)
 	{
-		if (_strand->running_in_this_thread())
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_close();
 			CHECK_EXCEPTION(ntf);
 		}
 		else
 		{
-			_strand->post(std::bind([this](typename CoChanMsgMove_<Notify>::type& ntf)
+			_strand->try_tick(std::bind([this](typename CoChanMsgMove_<Notify>::type& ntf)
 			{
 				_close();
 				CHECK_EXCEPTION(ntf);
-			}, CoChanMsgMove_<Notify>::forward(ntf)));
+			}, CoChanMsgMove_<Notify>::forward(ntf)), runInThread);
 		}
 	}
 
 	void cancel()
 	{
-		_strand->distribute([this]()
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_cancel();
-		});
+		}
+		else
+		{
+			_strand->try_tick([this]()
+			{
+				_cancel();
+			}, runInThread);
+		}
 	}
 
 	template <typename Notify>
 	void cancel(Notify&& ntf)
 	{
-		if (_strand->running_in_this_thread())
+		const bool runInThread = _strand->running_in_this_thread();
+		if (runInThread && !_checkNow)
 		{
 			_cancel();
 			CHECK_EXCEPTION(ntf);
 		}
 		else
 		{
-			_strand->post(std::bind([this](typename CoChanMsgMove_<Notify>::type& ntf)
+			_strand->try_tick(std::bind([this](typename CoChanMsgMove_<Notify>::type& ntf)
 			{
 				_cancel();
 				CHECK_EXCEPTION(ntf);
-			}, CoChanMsgMove_<Notify>::forward(ntf)));
+			}, CoChanMsgMove_<Notify>::forward(ntf)), runInThread);
 		}
 	}
 
@@ -7367,7 +7461,7 @@ private:
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
-		if (_tempBuffer.has() && token._lastId != _pushCount && CoBroadcastCheckInvoke_<msg_type>::invoke(std::forward<Check>(check), _tempBuffer.get()))
+		if (_tempBuffer.has() && token._lastId != _pushCount && CoBroadcastCheckInvoke_<msg_type>::invoke(_checkNow, std::forward<Check>(check), _tempBuffer.get()))
 		{
 			if (!token.is_default())
 			{
@@ -7406,7 +7500,7 @@ private:
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
-		if (_tempBuffer.has() && token._lastId != _pushCount && CoBroadcastCheckInvoke_<msg_type>::invoke(std::forward<Check>(check), _tempBuffer.get()))
+		if (_tempBuffer.has() && token._lastId != _pushCount && CoBroadcastCheckInvoke_<msg_type>::invoke(_checkNow, std::forward<Check>(check), _tempBuffer.get()))
 		{
 			if (!token.is_default())
 			{
@@ -7441,7 +7535,7 @@ private:
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
-		if (_tempBuffer.has() && token._lastId != _pushCount && CoBroadcastCheckInvoke_<msg_type>::invoke(std::forward<Check>(check), _tempBuffer.get()))
+		if (_tempBuffer.has() && token._lastId != _pushCount && CoBroadcastCheckInvoke_<msg_type>::invoke(_checkNow, std::forward<Check>(check), _tempBuffer.get()))
 		{
 			if (!token.is_default())
 			{
@@ -7459,7 +7553,6 @@ private:
 				_alloc.deallocate(timer);
 				if (co_async_state::co_async_ok == state)
 				{
-					assert(_tempBuffer.has());
 					_abs_timed_check_pop(deadus, CoChanMsgMove_<Notify>::move(ntf), CoChanMsgMove_<Check>::move(check), token);
 				}
 				else
@@ -7497,7 +7590,7 @@ private:
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
 			return;
 		}
-		if (_tempBuffer.has() && token._lastId != _pushCount && CoBroadcastCheckInvoke_<msg_type>::invoke(std::forward<Check>(check), _tempBuffer.get()))
+		if (_tempBuffer.has() && token._lastId != _pushCount && CoBroadcastCheckInvoke_<msg_type>::invoke(_checkNow, std::forward<Check>(check), _tempBuffer.get()))
 		{
 			if (!token.is_default())
 			{
@@ -7512,7 +7605,6 @@ private:
 				_strand->over_timer()->cancel(timer);
 				if (co_async_state::co_async_ok == state)
 				{
-					assert(_tempBuffer.has());
 					_abs_timed_check_pop(timer, deadus, CoChanMsgMove_<Notify>::move(ntf), CoChanMsgMove_<Check>::move(check), token);
 				}
 				else
@@ -7530,14 +7622,14 @@ private:
 	}
 
 	template <typename Notify>
-	void _append_pop_notify(Notify&& ntf, co_notify_sign& ntfSign, co_broadcast_token& token)
+	bool _append_pop_notify(Notify&& ntf, co_notify_sign& ntfSign, co_broadcast_token& token)
 	{
 		assert(_strand->running_in_this_thread());
 		assert(!ntfSign._nodeEffect);
 		if (_closed)
 		{
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_closed);
-			return;
+			return true;
 		}
 		if (_tempBuffer.has() && token._lastId != _pushCount)
 		{
@@ -7546,18 +7638,17 @@ private:
 				token._lastId = _pushCount;
 			}
 			CHECK_EXCEPTION(ntf, co_async_state::co_async_ok);
+			return true;
 		}
-		else
+		_popWait.push_back(CoBroadcastHandlerFace_<msg_type>::wrap_notify(_alloc, std::bind([&ntfSign](typename CoChanMsgMove_<Notify>::type& ntf, co_async_state state)
 		{
-			_popWait.push_back(CoBroadcastHandlerFace_<msg_type>::wrap_notify(_alloc, std::bind([&ntfSign](typename CoChanMsgMove_<Notify>::type& ntf, co_async_state state)
-			{
-				assert(ntfSign._nodeEffect);
-				ntfSign._nodeEffect = false;
-				CHECK_EXCEPTION(ntf, state);
-			}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
-			ntfSign._ntfNode = --_popWait.end();
-			ntfSign._nodeEffect = true;
-		}
+			assert(ntfSign._nodeEffect);
+			ntfSign._nodeEffect = false;
+			CHECK_EXCEPTION(ntf, state);
+		}, CoChanMsgMove_<Notify>::forward(ntf), __1)));
+		ntfSign._ntfNode = --_popWait.end();
+		ntfSign._nodeEffect = true;
+		return false;
 	}
 
 	template <typename CbNotify, typename MsgNotify>
@@ -7571,13 +7662,8 @@ private:
 			CHECK_EXCEPTION(cb, co_async_state::co_async_closed);
 			return;
 		}
-		_append_pop_notify(CoChanMsgMove_<MsgNotify>::forward(msgNtf), ntfSign, token);
-		if (_tempBuffer.has() && token._lastId != _pushCount)
+		if (_append_pop_notify(CoChanMsgMove_<MsgNotify>::forward(msgNtf), ntfSign, token))
 		{
-			if (!token.is_default())
-			{
-				token._lastId = _pushCount;
-			}
 			CHECK_EXCEPTION(tuple_invoke, cb, std::tuple<co_async_state>(co_async_state::co_async_ok), _tempBuffer.get());
 		}
 		else
@@ -7728,6 +7814,7 @@ private:
 	msg_list<CoNotifyHandlerFace_*> _popWait;
 	long long _pushCount;
 	bool _closed;
+	bool _checkNow;
 	NONE_COPY(co_broadcast);
 };
 
