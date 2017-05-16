@@ -248,14 +248,9 @@ public:
 	bool advance();
 
 	/*!
-	@brief 提前本次计时触发，在依赖的strand线程中调用
-	*/
-	void tick_advance();
-
-	/*!
 	@brief 相对计时下，重新开始计时
 	*/
-	bool restart();
+	long long restart();
 
 	/*!
 	@brief 是否已经完成
@@ -483,14 +478,9 @@ public:
 	bool advance(timer_handle& timerHandle);
 
 	/*!
-	@brief 提前本次计时触发，在依赖的strand线程中调用
-	*/
-	void tick_advance(timer_handle& timerHandle);
-
-	/*!
 	@brief 相对计时下，重新开始计时
 	*/
-	bool restart(timer_handle& timerHandle);
+	long long restart(timer_handle& timerHandle);
 
 	/*!
 	@brief

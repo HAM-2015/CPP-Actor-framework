@@ -57,19 +57,7 @@ bool AsyncTimer_::advance()
 	return false;
 }
 
-void AsyncTimer_::tick_advance()
-{
-	assert(self_strand()->running_in_this_thread());
-	if (_actorTimer->_lockStrand)
-	{
-		_actorTimer->_lockStrand->next_tick(std::bind([](async_timer& this_)
-		{
-			this_->advance();
-		}, _weakThis.lock()));
-	}
-}
-
-bool AsyncTimer_::restart()
+long long AsyncTimer_::restart()
 {
 	assert(self_strand()->running_in_this_thread());
 	if (_handler && _currTimeout)
@@ -85,9 +73,14 @@ bool AsyncTimer_::restart()
 			_timerHandle = _actorTimer->timeout(_currTimeout, _weakThis.lock());
 			_handler->set_deadtime(_timerHandle._beginStamp + _currTimeout);
 		}
-		return true;
+		else
+		{
+			_timerHandle._beginStamp = get_tick_us();
+			_handler->set_deadtime(_timerHandle._beginStamp + _currTimeout);
+		}
+		return _timerHandle._beginStamp;
 	}
-	return false;
+	return 0;
 }
 
 bool AsyncTimer_::completed()
@@ -310,19 +303,7 @@ bool overlap_timer::advance(timer_handle& timerHandle)
 	return false;
 }
 
-void overlap_timer::tick_advance(timer_handle& timerHandle)
-{
-	assert(self_strand()->running_in_this_thread());
-	if (_lockStrand)
-	{
-		_lockStrand->next_tick([&]()
-		{
-			advance(timerHandle);
-		});
-	}
-}
-
-bool overlap_timer::restart(timer_handle& timerHandle)
+long long overlap_timer::restart(timer_handle& timerHandle)
 {
 	assert(self_strand()->running_in_this_thread());
 	if (!timerHandle.completed() && timerHandle._currTimeout)
@@ -338,9 +319,14 @@ bool overlap_timer::restart(timer_handle& timerHandle)
 			_timeout(timerHandle._currTimeout, timerHandle, false);
 			timerHandle._handler->set_deadtime(timerHandle._timestamp + timerHandle._currTimeout);
 		}
-		return true;
+		else
+		{
+			timerHandle._timestamp = get_tick_us();
+			timerHandle._handler->set_deadtime(timerHandle._timestamp + timerHandle._currTimeout);
+		}
+		return timerHandle._timestamp;
 	}
-	return false;
+	return 0;
 }
 
 shared_strand overlap_timer::self_strand()
