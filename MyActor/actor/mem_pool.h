@@ -1120,11 +1120,11 @@ public:
 	reusable_alloc(const reusable_alloc<_Other, _Reusalble>& reu)
 		:_reuMem(reu._reuMem) {}
 
-	void* allocate(size_t n)
+	_Ty* allocate(size_t n)
 	{
 		assert(_reuMem);
 		assert(1 == n);
-		return _reuMem->allocate(sizeof(_Ty));
+		return static_cast<_Ty*>(_reuMem->allocate(sizeof(_Ty)));
 	}
 
 	void deallocate(void* p, size_t n)

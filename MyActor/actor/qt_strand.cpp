@@ -47,7 +47,7 @@ shared_strand qt_strand::clone()
 bool qt_strand::in_this_ios()
 {
 	assert(_ui);
-	return _ui->run_in_ui_thread();
+	return _ui->running_in_ui_thread();
 }
 
 bool qt_strand::running_in_this_thread()

@@ -2114,7 +2114,7 @@ public:
 	select_block_msg(MsgHandle& msgHandle, Handler&& handler)
 		:_msgHandle(msgHandle), __MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), msgHandle._hostActor) {}
 
-#ifdef __GNUG__
+#if (defined __GNUG__) || (_MSC_VER >= 1900)
 	select_block_msg(select_block_msg&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler))
 	{
@@ -2184,7 +2184,7 @@ public:
 	select_block_trig(MsgHandle& msgHandle, Handler&& handler)
 		:_msgHandle(msgHandle), __MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), msgHandle._hostActor) {}
 
-#ifdef __GNUG__
+#if (defined __GNUG__) || (_MSC_VER >= 1900)
 	select_block_trig(select_block_trig&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler))
 	{
@@ -2262,7 +2262,7 @@ public:
 	select_block_pump(const pump_handle& pump, Handler&& handler)
 		: _msgHandle(pump), __MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), pump.get()->_hostActor) {}
 
-#ifdef __GNUG__
+#if (defined __GNUG__) || (_MSC_VER >= 1900)
 	select_block_pump(select_block_pump&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler))
 	{
@@ -2333,7 +2333,7 @@ public:
 	select_block_msg(MsgHandle& msgHandle, Handler&& handler)
 		:_msgHandle(msgHandle), _has(false), __MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), msgHandle._hostActor) {}
 
-#ifdef __GNUG__
+#if (defined __GNUG__) || (_MSC_VER >= 1900)
 	select_block_msg(select_block_msg&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler))
 	{
@@ -2399,7 +2399,7 @@ public:
 	select_block_trig(MsgHandle& msgHandle, Handler&& handler)
 		:_msgHandle(msgHandle), _has(false), __MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), msgHandle._hostActor) {}
 
-#ifdef __GNUG__
+#if (defined __GNUG__) || (_MSC_VER >= 1900)
 	select_block_trig(select_block_trig&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler))
 	{
@@ -2473,7 +2473,7 @@ public:
 	select_block_pump(const pump_handle& pump, Handler&& handler)
 		: _msgHandle(pump), _has(false), __MUTEX_BLOCK_HANDLER_WRAP(_handler, std::forward<Handler>(handler), pump.get()->_hostActor) {}
 
-#ifdef __GNUG__
+#if (defined __GNUG__) || (_MSC_VER >= 1900)
 	select_block_pump(select_block_pump&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler))
 	{
@@ -2606,7 +2606,7 @@ public:
 	{
 	}
 
-#ifdef __GNUG__
+#if (defined __GNUG__) || (_MSC_VER >= 1900)
 	select_block_pump_check_state(select_block_pump_check_state&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _stateHandler(std::move(s._stateHandler)),
 		_readySign(s._readySign), _connected(s._connected), _disconnected(s._disconnected), _lostNtfed(s._lostNtfed)
@@ -2736,7 +2736,7 @@ public:
 	{
 	}
 
-#ifdef __GNUG__
+#if (defined __GNUG__) || (_MSC_VER >= 1900)
 	select_block_pump_check_state(select_block_pump_check_state&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _stateHandler(std::move(s._stateHandler)),
 		_readySign(s._readySign), _connected(s._connected), _disconnected(s._disconnected), _lostNtfed(s._lostNtfed)
@@ -2866,7 +2866,7 @@ public:
 		_msgHandle.check_lost(true);
 	}
 
-#ifdef __GNUG__
+#if (defined __GNUG__) || (_MSC_VER >= 1900)
 	select_block_msg_check_lost(select_block_msg_check_lost&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _lostHandler(std::move(s._lostHandler)),
 		_readySign(s._readySign), _lostNtfed(s._lostNtfed)
@@ -2959,7 +2959,7 @@ public:
 		_msgHandle.check_lost(true);
 	}
 
-#ifdef __GNUG__
+#if (defined __GNUG__) || (_MSC_VER >= 1900)
 	select_block_trig_check_lost(select_block_trig_check_lost&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _lostHandler(std::move(s._lostHandler)),
 		_readySign(s._readySign), _lostNtfed(s._lostNtfed)
@@ -3060,7 +3060,7 @@ public:
 		_msgHandle.check_lost(true);
 	}
 	
-#ifdef __GNUG__
+#if (defined __GNUG__) || (_MSC_VER >= 1900)
 	select_block_pump_check_lost(select_block_pump_check_lost&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _lostHandler(std::move(s._lostHandler)),
 		_readySign(s._readySign), _lostNtfed(s._lostNtfed)
@@ -3153,7 +3153,7 @@ public:
 		_msgHandle.check_lost(true);
 	}
 	
-#ifdef __GNUG__
+#if (defined __GNUG__) || (_MSC_VER >= 1900)
 	select_block_msg_check_lost(select_block_msg_check_lost&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _lostHandler(std::move(s._lostHandler)),
 		_readySign(s._readySign), _lostNtfed(s._lostNtfed)
@@ -3242,7 +3242,7 @@ public:
 		_msgHandle.check_lost(true);
 	}
 	
-#ifdef __GNUG__
+#if (defined __GNUG__) || (_MSC_VER >= 1900)
 	select_block_trig_check_lost(select_block_trig_check_lost&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _lostHandler(std::move(s._lostHandler)),
 		_readySign(s._readySign), _lostNtfed(s._lostNtfed)
@@ -3339,7 +3339,7 @@ public:
 		_msgHandle.check_lost(true);
 	}
 	
-#ifdef __GNUG__
+#if (defined __GNUG__) || (_MSC_VER >= 1900)
 	select_block_pump_check_lost(select_block_pump_check_lost&& s)
 		:_msgHandle(s._msgHandle), _handler(std::move(s._handler)), _lostHandler(std::move(s._lostHandler)),
 		_readySign(s._readySign), _lostNtfed(s._lostNtfed)

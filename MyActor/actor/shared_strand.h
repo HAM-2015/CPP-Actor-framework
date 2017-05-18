@@ -301,6 +301,7 @@ public:
 #ifdef ENABLE_NEXT_TICK
 		if (runInThread || running_in_this_thread())
 		{
+			assert(running_in_this_thread());
 			next_tick(std::forward<Handler>(handler));
 		}
 		else

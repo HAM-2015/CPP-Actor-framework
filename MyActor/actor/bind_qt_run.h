@@ -19,30 +19,30 @@
 #define	QT_UI_ACTOR_STACK_SIZE	(128 kB - STACK_RESERVED_SPACE_SIZE)
 
 //开始在Actor中，嵌入一段在qt-ui线程中执行的连续逻辑
-#define BEGIN_RUN_IN_QT_UI_AT(__this_ui__, __host__) do {(__this_ui__)->send(__host__, [&]() {
-#define BEGIN_RUN_IN_QT_UI BEGIN_RUN_IN_QT_UI_AT(this, self)
-#define CO_BEGIN_RUN_IN_QT_UI_AT(__this_ui__) do {(__this_ui__)->_co_send(co_self, [&]() {
-#define CO_BEGIN_RUN_IN_QT_UI CO_BEGIN_RUN_IN_QT_UI_AT(this)
+#define BEGIN_RUN_IN_QT_UI(__this_ui__, __host__) do {(__this_ui__)->send(__host__, [&]() {
+#define BEGIN_RUN_IN_THIS_QT_UI BEGIN_RUN_IN_QT_UI(this, self)
+#define CO_BEGIN_RUN_IN_QT_UI(__this_ui__) do {if (!(__this_ui__)->_co_send(co_self, [&]() {
+#define CO_BEGIN_RUN_IN_THIS_QT_UI CO_BEGIN_RUN_IN_QT_UI(this)
 //结束在qt-ui线程中执行的一段连续逻辑，只有当这段逻辑执行完毕后才会执行END后续代码
 #define END_RUN_IN_QT_UI });} while (false)
-#define CO_END_RUN_IN_QT_UI }); _co_await;} while (false)
+#define CO_END_RUN_IN_QT_UI })) _co_await;} while (false)
 //////////////////////////////////////////////////////////////////////////
 //在Actor中，嵌入一段在qt-ui线程中执行的语句
-#define run_in_qt_ui_at(__this_ui__, __host__, ...)  do {(__this_ui__)->send(__host__, [&]{ option_pck(__VA_ARGS__) });} while (false)
-#define co_run_in_qt_ui_at(__this_ui__, ...)  do {(__this_ui__)->_co_send(co_self, [&]{ option_pck(__VA_ARGS__) }); _co_await;} while (false)
+#define run_in_qt_ui(__this_ui__, __host__, ...)  do {(__this_ui__)->send(__host__, [&]{ option_pck(__VA_ARGS__) });} while (false)
+#define co_run_in_qt_ui(__this_ui__, ...)  do {if (!(__this_ui__)->_co_send(co_self, [&]{ option_pck(__VA_ARGS__) })) _co_await;} while (false)
 
 //在Actor中，嵌入一段在qt-ui线程中执行的语句
-#define run_in_qt_ui(...) run_in_qt_ui_at(this, self, __VA_ARGS__)
-#define co_run_in_qt_ui(...) co_run_in_qt_ui_at(this, __VA_ARGS__)
+#define run_in_this_qt_ui(...) run_in_qt_ui(this, self, __VA_ARGS__)
+#define co_run_in_this_qt_ui(...) co_run_in_qt_ui(this, __VA_ARGS__)
 //////////////////////////////////////////////////////////////////////////
-//在Actor中，嵌入一段在qt-ui线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用BEGIN_RUN_IN_QT_UI_AT）
-#define BEGIN_ACTOR_RUN_IN_QT_UI_AT(__this_ui__, __host__, __ios__) do {\
+//在Actor中，嵌入一段在qt-ui线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用BEGIN_RUN_IN_QT_UI）
+#define BEGIN_ACTOR_RUN_IN_QT_UI(__this_ui__, __host__, __ios__) do {\
 	auto ___host = __host__; \
 	my_actor::quit_guard ___qg(__host__); \
 	auto ___tactor = (__this_ui__)->create_ui_actor(__ios__, [&](my_actor* __host__) {
 
-//在Actor中，嵌入一段在qt-ui线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用BEGIN_RUN_IN_QT_UI）
-#define BEGIN_ACTOR_RUN_IN_QT_UI(__ios__) BEGIN_ACTOR_RUN_IN_QT_UI_AT(this, self, __ios__)
+//在Actor中，嵌入一段在qt-ui线程中执行的Actor逻辑（当该逻辑中包含异步操作时使用，否则建议用BEGIN_RUN_IN_THIS_QT_UI）
+#define BEGIN_ACTOR_RUN_IN_THIS_QT_UI(__ios__) BEGIN_ACTOR_RUN_IN_QT_UI(this, self, __ios__)
 
 //结束在qt-ui线程中执行的Actor，只有当Actor内逻辑执行完毕后才会执行END后续代码
 #define END_ACTOR_RUN_IN_QT_UI }); \
@@ -50,103 +50,15 @@
 	___host->actor_wait_quit(___tactor); \
 } while (false)
 //////////////////////////////////////////////////////////////////////////
-#define __NO_DELETE_FRAME(__frame__)
-#define __DELETE_FRAME(__frame__) delete (__frame__)
-#define __DESTROY_FRAME(__frame__) (__frame__).destroy();
-
-#define __CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __delete__) do {\
-	my_actor::quit_guard qg(__host__);\
-	assert(!(__this_ui__)->run_in_ui_thread());\
-	BEGIN_RUN_IN_QT_UI_AT(__this_ui__, __host__);\
-	if (!(__frame__)->is_wait_close())\
-		(__frame__)->close();\
-	END_RUN_IN_QT_UI;\
-	bool __inside_loop = true;\
-	do{\
-		BEGIN_RUN_IN_QT_UI_AT(__this_ui__, __host__);\
-		__inside_loop = (__frame__)->is_wait_close();\
-		if (!__inside_loop) { __delete__(__frame__); }\
-		END_RUN_IN_QT_UI;\
-	} while (__inside_loop);\
-} while (false)
-
-#define __CO_CLOSE_QT_UI_AT(__this_ui__, __frame__, __delete__) do {\
-	co_lock_stop;\
-	assert(!(__this_ui__)->run_in_ui_thread());\
-	co_call([&](co_generator){\
-		co_begin_context;\
-		bool __inside_loop;\
-		co_end_context(_ctx);\
-		co_begin;\
-		CO_BEGIN_RUN_IN_QT_UI_AT(__this_ui__);\
-		if (!(__frame__)->is_wait_close())\
-			(__frame__)->close();\
-		CO_END_RUN_IN_QT_UI;\
-		_ctx.__inside_loop = true;\
-		do{\
-			CO_BEGIN_RUN_IN_QT_UI_AT(__this_ui__);\
-			_ctx.__inside_loop = (__frame__)->is_wait_close();\
-			if (!_ctx.__inside_loop) { __delete__(__frame__); }\
-			CO_END_RUN_IN_QT_UI;\
-		} while (_ctx.__inside_loop);\
-		co_end;\
-	});\
-	co_unlock_stop;\
-} while (false)
-
-//在非UI线程Actor中，关闭一个qt-ui对象
-#define close_qt_ui_at(__this_ui__, __host__, __frame__) __CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __NO_DELETE_FRAME)
-#define close_qt_ui(__frame__) close_qt_ui_at(this, self, __frame__)
-#define close_qt_ui_delete_at(__this_ui__, __host__, __frame__) __CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __DELETE_FRAME)
-#define close_qt_ui_delete(__frame__) close_qt_ui_delete_at(this, self, __frame__)
-#define close_qt_ui_destroy_at(__this_ui__, __host__, __frame__) __CLOSE_QT_UI_AT(__this_ui__, __host__, __frame__, __DESTROY_FRAME)
-#define close_qt_ui_destroy(__frame__) close_qt_ui_destroy_at(this, self, __frame__)
-
-#define co_close_qt_ui_at(__this_ui__, __frame__) __CO_CLOSE_QT_UI_AT(__this_ui__, __frame__, __NO_DELETE_FRAME)
-#define co_close_qt_ui(__frame__) co_close_qt_ui_at(this, __frame__)
-#define co_close_qt_ui_delete_at(__this_ui__, __frame__) __CO_CLOSE_QT_UI_AT(__this_ui__, __frame__, __DELETE_FRAME)
-#define co_close_qt_ui_delete(__frame__) co_close_qt_ui_delete_at(this, __frame__)
-#define co_close_qt_ui_destroy_at(__this_ui__, __frame__) __CO_CLOSE_QT_UI_AT(__this_ui__, __frame__, __DESTROY_FRAME)
-#define co_close_qt_ui_destroy(__frame__) co_close_qt_ui_destroy_at(this, __frame__)
-
-#define __CLOSE_IN_QT_UI_AT(__this_ui__, __host__, __frame__, __delete__) do {\
-	my_actor::quit_guard qg(__host__);\
-	assert((__this_ui__)->run_in_ui_thread());\
-	assert(!(__frame__)->running_in_this_thread());\
-	if (!(__frame__)->is_wait_close())\
-		(__frame__)->close();\
-	while ((__frame__)->is_wait_close())\
-		if ((__this_ui__)->is_wait_close()){(__host__)->usleep(1);}else{(__host__)->yield();}\
-	__delete__(__frame__);\
-} while (false)
-
-#define __CO_CLOSE_IN_QT_UI_AT(__this_ui__, __frame__, __delete__) do {\
-	co_lock_stop;\
-	assert((__this_ui__)->run_in_ui_thread());\
-	assert(!(__frame__)->running_in_this_thread());\
-	if (!(__frame__)->is_wait_close())\
-		(__frame__)->close();\
-	while ((__frame__)->is_wait_close())\
-		if ((__this_ui__)->is_wait_close()){co_usleep(1);}else{co_tick;}\
-	__delete__(__frame__);\
-	co_unlock_stop;\
-} while (false)
-
-//在UI线程Actor中，关闭一个qt-ui对象
-#define close_in_qt_ui_at(__this_ui__, __host__, __frame__) __CLOSE_IN_QT_UI_AT(__this_ui__, __host__, __frame__, __NO_DELETE_FRAME)
-#define close_in_qt_ui(__frame__) close_in_qt_ui_at(this, self, __frame__)
-#define close_in_qt_ui_delete_at(__this_ui__, __host__, __frame__) __CLOSE_IN_QT_UI_AT(__this_ui__, __host__, __frame__, __DELETE_FRAME)
-#define close_in_qt_ui_delete(__frame__) close_in_qt_ui_delete_at(this, self, __frame__)
-#define close_in_qt_ui_destroy_at(__this_ui__, __host__, __frame__) __CLOSE_IN_QT_UI_AT(__this_ui__, __host__, __frame__, __DESTROY_FRAME)
-#define close_in_qt_ui_destroy(__frame__) close_in_qt_ui_destroy_at(this, self, __frame__)
-
-#define co_close_in_qt_ui_at(__this_ui__, __frame__) __CO_CLOSE_IN_QT_UI_AT(__this_ui__, __frame__, __NO_DELETE_FRAME)
-#define co_close_in_qt_ui(__frame__) co_close_in_qt_ui_at(this, __frame__)
-#define co_close_in_qt_ui_delete_at(__this_ui__, __frame__) __CO_CLOSE_IN_QT_UI_AT(__this_ui__, __frame__, __DELETE_FRAME)
-#define co_close_in_qt_ui_delete(__frame__) co_close_in_qt_ui_delete_at(this, __frame__)
-#define co_close_in_qt_ui_destroy_at(__this_ui__, __frame__) __CO_CLOSE_IN_QT_UI_AT(__this_ui__, __frame__, __DESTROY_FRAME)
-#define co_close_in_qt_ui_destroy(__frame__) co_close_in_qt_ui_destroy_at(this, __frame__)
-
+//在generator中嵌入一段在qt-ui线程中执行的generator
+#define co_gen_run_in_qt_ui(__this_ui__) co_st_call_of((__this_ui__)->ui_strand())[&](co_generator)->void
+#define co_gen_run_in_this_qt_ui co_gen_run_in_qt_ui(this)
+//////////////////////////////////////////////////////////////////////////
+//在generator中关闭/销毁一个frame
+#define co_close_other_frame_(__this_ui__, __frame__) co_call_of (__this_ui__)->_co_bind_close_other_frame(__frame__);
+#define co_close_other_frame(__frame__) co_close_other_frame_(this, __frame__)
+#define co_destroy_other_frame_(__this_ui__, __frame__) co_call_of (__this_ui__)->_co_bind_destroy_other_frame(__frame__);
+#define co_destroy_other_frame(__frame__) co_destroy_other_frame_(this, __frame__)
 //////////////////////////////////////////////////////////////////////////
 
 //closeEvent函数中准备关闭入口ui
@@ -263,14 +175,14 @@ protected:
 		template <typename... Args>
 		auto operator()(my_actor* host, Args&&... args)->decltype(_handler(std::forward<Args>(args)...))
 		{
-			if (_this->run_in_ui_thread())
+			if (_this->running_in_ui_thread())
 			{
 				return _handler(std::forward<Args>(args)...);
 			}
 			else
 			{
 				stack_obj<decltype(_handler(std::forward<Args>(args)...))> result;
-				run_in_qt_ui_at(_this, host, stack_agent_result::invoke(result, _handler, (Args&&)args...));
+				run_in_qt_ui(_this, host, stack_agent_result::invoke(result, _handler, (Args&&)args...));
 				return stack_obj_move::move(result);
 			}
 		}
@@ -329,7 +241,7 @@ public:
 	/*!
 	@brief 是否在UI线程中执行
 	*/
-	bool run_in_ui_thread();
+	bool running_in_ui_thread();
 
 	/*!
 	@brief 检测现在是否运行在本UI的post任务下
@@ -392,8 +304,13 @@ public:
 	@brief 发送一个执行函数到UI消息队列中执行，完成后返回
 	*/
 	template <typename Handler>
-	void send(my_actor* host, Handler&& handler)
+	bool send(my_actor* host, Handler&& handler)
 	{
+		if (running_in_this_thread())
+		{
+			CHECK_EXCEPTION(handler);
+			return true;
+		}
 		host->trig_guard([&](trig_once_notifer<>&& cb)
 		{
 			append_task(make_wrap_handler(_reuMem, std::bind([&handler](const trig_once_notifer<>& cb)
@@ -402,19 +319,26 @@ public:
 				CHECK_EXCEPTION(cb);
 			}, std::move(cb))));
 		});
+		return false;
 	}
 
 	/*!
 	@brief generaotr下发送一个执行函数到UI消息队列中执行
 	*/
 	template <typename Handler>
-	void _co_send(co_generator, Handler&& handler)
+	bool _co_send(co_generator, Handler&& handler)
 	{
+		if (running_in_this_thread())
+		{
+			CHECK_EXCEPTION(handler);
+			return true;
+		}
 		post(std::bind([this](generator_handle& host, Handler& handler)
 		{
 			CHECK_EXCEPTION(handler);
 			host->_revert_this(host)->_co_async_next();
 		}, std::move(co_async_this), std::forward<Handler>(handler)));
+		return false;
 	}
 
 	/*!
@@ -485,7 +409,7 @@ public:
 	template <typename Handler>
 	std::function<void()> wrap_check_close(Handler&& handler)
 	{
-		assert(run_in_ui_thread());
+		assert(running_in_ui_thread());
 		_waitCount++;
 		return FUNCTION_ALLOCATOR(std::function<void()>, wrap_post_once(std::bind([this](Handler& handler)
 		{
@@ -504,6 +428,12 @@ public:
 	{
 		return wrap_run_in_ui_handler<Handler>(this, handler);
 	}
+
+	/*!
+	@brief 安全关闭一个frame
+	*/
+	void close_other_frame(my_actor* host, bind_qt_run_base* frame);
+	void _co_close_other_frame(co_generator, bind_qt_run_base*& frame);
 
 	/*!
 	@brief 开启shared_qt_strand
@@ -534,6 +464,7 @@ protected:
 	virtual void post_task_event() = 0;
 	virtual void enter_loop() = 0;
 	virtual void close_now() = 0;
+	virtual void close_ui() = 0;
 	void run_one_task();
 	void check_close();
 	void enter_wait_close();
@@ -599,9 +530,9 @@ public:
 		return bind_qt_run_base::thread_id();
 	}
 
-	bool run_in_ui_thread()
+	bool running_in_ui_thread()
 	{
-		return bind_qt_run_base::run_in_ui_thread();
+		return bind_qt_run_base::running_in_ui_thread();
 	}
 
 	bool running_in_this_thread()
@@ -627,15 +558,15 @@ public:
 	}
 
 	template <typename Handler>
-	void send(my_actor* host, Handler&& handler)
+	bool send(my_actor* host, Handler&& handler)
 	{
-		bind_qt_run_base::send(host, std::forward<Handler>(handler));
+		return bind_qt_run_base::send(host, std::forward<Handler>(handler));
 	}
 
 	template <typename Handler>
-	void _co_send(co_generator, Handler&& handler)
+	bool _co_send(co_generator, Handler&& handler)
 	{
-		bind_qt_run_base::_co_send(co_self, std::forward<Handler>(handler));
+		return bind_qt_run_base::_co_send(co_self, std::forward<Handler>(handler));
 	}
 
 	template <typename Handler>
@@ -677,6 +608,76 @@ public:
 	std::function<void()> wrap_check_close()
 	{
 		return bind_qt_run_base::wrap_check_close();
+	}
+
+	template <typename Frame>
+	void close_other_frame(my_actor* host, Frame* frame)
+	{
+		bind_qt_run_base::close_other_frame(host, frame);
+	}
+
+	template <typename Frame>
+	void close_other_frame(my_actor* host, Frame& frame)
+	{
+		close_other_frame(host, &frame.get());
+	}
+	
+	template <typename Frame>
+	void destroy_other_frame(my_actor* host, Frame* frame)
+	{
+		close_other_frame(host, frame);
+		run_in_qt_ui(this, host, delete frame);
+	}
+	
+	template <typename Frame>
+	void destroy_other_frame(my_actor* host, Frame& frame)
+	{
+		close_other_frame(host, &frame.get());
+		run_in_qt_ui(this, host, frame.destroy());
+	}
+
+	template <typename Frame>
+	void _co_destroy_other_frame_ptr(co_generator, Frame*& frame)
+	{
+		co_no_context;
+		co_begin;
+		co_call_of _co_bind_close_other_frame(frame);
+		co_run_in_this_qt_ui(delete frame);
+		co_end;
+	}
+
+	template <typename Frame>
+	void _co_destroy_other_frame_optional(co_generator, Frame& frame)
+	{
+		co_no_context;
+		co_begin;
+		co_call_of _co_bind_close_other_frame(frame);
+		co_run_in_this_qt_ui(frame.destroy());
+		co_end;
+	}
+
+	template <typename Frame>
+	co_function _co_bind_close_other_frame(Frame* frame)
+	{
+		return std::bind(&bind_qt_run_base::_co_close_other_frame, static_cast<bind_qt_run_base*>(this), __1, static_cast<bind_qt_run_base*>(frame));
+	}
+
+	template <typename Frame>
+	co_function _co_bind_close_other_frame(Frame& frame)
+	{
+		return std::bind(&bind_qt_run_base::_co_close_other_frame, static_cast<bind_qt_run_base*>(this), __1, static_cast<bind_qt_run_base*>(&frame.get()));
+	}
+
+	template <typename Frame>
+	co_function _co_bind_destroy_other_frame(Frame* frame)
+	{
+		return std::bind(&bind_qt_run::_co_destroy_other_frame_ptr<Frame>, this, __1, frame);
+	}
+
+	template <typename Frame>
+	co_function _co_bind_destroy_other_frame(Frame& frame)
+	{
+		return std::bind(&bind_qt_run::_co_destroy_other_frame_optional<Frame>, this, __1, std::ref(frame));
 	}
 
 	template <typename Handler>
@@ -800,6 +801,11 @@ private:
 		assert(_eventLoop);
 		_eventLoop->exit();
 	}
+
+	void close_ui() override final
+	{
+		FRAME::close();
+	}
 protected:
 	virtual void custom_event(QEvent*)
 	{
@@ -874,7 +880,7 @@ struct qt_ui_sync_notifer<R(ARGS...)>
 	template <typename... Args>
 	R operator()(Args&&... args) const
 	{
-		assert(_runBase->run_in_ui_thread());
+		assert(_runBase->running_in_ui_thread());
 		assert(!empty());
 		DEBUG_OPERATION(_notifyCount++);
 		QEventLoop eventLoop(_parent);
@@ -896,21 +902,21 @@ struct qt_ui_sync_notifer<R(ARGS...)>
 	template <typename H>
 	void set_notifer(H&& h)
 	{
-		assert(_runBase->run_in_ui_thread());
+		assert(_runBase->running_in_ui_thread());
 		assert(0 == _notifyCount);
 		_handler = std::forward<H>(h);
 	}
 
 	void reset()
 	{
-		assert(_runBase->run_in_ui_thread());
+		assert(_runBase->running_in_ui_thread());
 		assert(0 == _notifyCount);
 		clear_function(_handler);
 	}
 
 	bool empty() const
 	{
-		assert(_runBase->run_in_ui_thread());
+		assert(_runBase->running_in_ui_thread());
 		return !_handler;
 	}
 private:
@@ -1039,7 +1045,7 @@ struct qt_ui_sync_check_lost_notifer<R(ARGS...)>
 	template <typename... Args>
 	R operator()(Args&&... args) const
 	{
-		assert(_runBase->run_in_ui_thread());
+		assert(_runBase->running_in_ui_thread());
 		assert(!empty());
 		DEBUG_OPERATION(_notifyCount++);
 		QEventLoop eventLoop(_parent);
@@ -1066,21 +1072,21 @@ struct qt_ui_sync_check_lost_notifer<R(ARGS...)>
 	template <typename H>
 	void set_notifer(H&& h)
 	{
-		assert(_runBase->run_in_ui_thread());
+		assert(_runBase->running_in_ui_thread());
 		assert(0 == _notifyCount);
 		_handler = std::forward<H>(h);
 	}
 
 	void reset()
 	{
-		assert(_runBase->run_in_ui_thread());
+		assert(_runBase->running_in_ui_thread());
 		assert(0 == _notifyCount);
 		clear_function(_handler);
 	}
 
 	bool empty() const
 	{
-		assert(_runBase->run_in_ui_thread());
+		assert(_runBase->running_in_ui_thread());
 		return !_handler;
 	}
 private:

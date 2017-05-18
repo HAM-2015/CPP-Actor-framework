@@ -144,7 +144,7 @@ bind_qt_run_base::bind_qt_run_base()
 
 bind_qt_run_base::~bind_qt_run_base()
 {
-	assert(run_in_ui_thread());
+	assert(running_in_ui_thread());
 	assert(!running_in_this_thread());
 	assert(0 == _waitCount);
 	assert(0 == _taskCount);
@@ -167,7 +167,7 @@ run_thread::thread_id bind_qt_run_base::thread_id()
 	return _threadID;
 }
 
-bool bind_qt_run_base::run_in_ui_thread()
+bool bind_qt_run_base::running_in_ui_thread()
 {
 	return run_thread::this_thread_id() == _threadID;
 }
@@ -185,19 +185,19 @@ bool bind_qt_run_base::only_self()
 
 bool bind_qt_run_base::is_wait_close()
 {
-	assert(run_in_ui_thread());
+	assert(running_in_ui_thread());
 	return _waitClose;
 }
 
 bool bind_qt_run_base::wait_close_reached()
 {
-	assert(run_in_ui_thread());
+	assert(running_in_ui_thread());
 	return 0 == _waitCount;
 }
 
 bool bind_qt_run_base::inside_wait_close_loop()
 {
-	assert(run_in_ui_thread());
+	assert(running_in_ui_thread());
 	return NULL != _eventLoop;
 }
 
@@ -213,7 +213,7 @@ void bind_qt_run_base::set_in_close_scope_sign(bool b)
 
 std::function<void()> bind_qt_run_base::wrap_check_close()
 {
-	assert(run_in_ui_thread());
+	assert(running_in_ui_thread());
 	_waitCount++;
 	return FUNCTION_ALLOCATOR(std::function<void()>, wrap_post_once([this]
 	{
@@ -273,7 +273,7 @@ void bind_qt_run_base::run_one_task()
 
 void bind_qt_run_base::enter_wait_close()
 {
-	assert(run_in_ui_thread());
+	assert(running_in_ui_thread());
 	assert(!_waitClose);
 	if (_waitCount)
 	{
@@ -315,6 +315,92 @@ void bind_qt_run_base::ui_yield(my_actor* host)
 	});
 }
 
+void bind_qt_run_base::close_other_frame(my_actor* host, bind_qt_run_base* frame)
+{
+	my_actor::quit_guard qg(host);
+	assert(this != frame);
+	if (running_in_this_thread())
+	{
+		assert(frame->running_in_ui_thread());
+		if (!frame->is_wait_close())
+		{
+			frame->close_ui();
+		}
+		while (frame->is_wait_close())
+		{
+			if (is_wait_close())
+			{
+				host->usleep(1);
+			}
+			else
+			{
+				host->yield();
+			}
+		}
+	}
+	else
+	{
+		BEGIN_RUN_IN_QT_UI(this, host);
+		assert(frame->running_in_ui_thread());
+		if (!frame->is_wait_close())
+		{
+			frame->close_ui();
+		}
+		END_RUN_IN_QT_UI;
+		bool inside_loop = false;
+		do
+		{
+			run_in_qt_ui(this, host, inside_loop = frame->is_wait_close());
+		} while (inside_loop);
+	}
+}
+
+void bind_qt_run_base::_co_close_other_frame(co_generator, bind_qt_run_base*& frame)
+{
+	co_begin_context;
+	bool inside_loop;
+	co_end_context(ctx);
+
+	co_begin;
+	co_lock_stop;
+	assert(this != frame);
+	if (running_in_this_thread())
+	{
+		assert(frame->running_in_ui_thread());
+		if (!frame->is_wait_close())
+		{
+			frame->close_ui();
+		}
+		while (frame->is_wait_close())
+		{
+			if (is_wait_close())
+			{
+				co_usleep(1);
+			}
+			else
+			{
+				co_tick;
+			}
+		}
+	}
+	else
+	{
+		CO_BEGIN_RUN_IN_THIS_QT_UI;
+		assert(frame->running_in_ui_thread());
+		if (!frame->is_wait_close())
+		{
+			frame->close_ui();
+		}
+		CO_END_RUN_IN_QT_UI;
+		do
+		{
+			co_run_in_this_qt_ui(ctx.inside_loop = frame->is_wait_close());
+		} while (ctx.inside_loop);
+	}
+	co_unlock_stop;
+	co_end;
+}
+
 actor_handle bind_qt_run_base::create_ui_actor(const my_actor::main_func& mainFunc, size_t stackSize /*= QT_UI_ACTOR_STACK_SIZE*/)
 {
 	assert(!!_qtStrand);
@@ -341,7 +427,7 @@ child_handle bind_qt_run_base::create_ui_child_actor(my_actor* host, my_actor::m
 
 const shared_qt_strand& bind_qt_run_base::run_ui_strand(io_engine& ios)
 {
-	assert(run_in_ui_thread());
+	assert(running_in_ui_thread());
 	if (!_qtStrand || &_qtStrand->get_io_engine() != &ios)
 	{
 		_qtStrand = qt_strand::create(ios, this);
@@ -351,7 +437,7 @@ const shared_qt_strand& bind_qt_run_base::run_ui_strand(io_engine& ios)
 
 const shared_qt_strand& bind_qt_run_base::run_ui_strand(const shared_qt_strand& strand)
 {
-	assert(run_in_ui_thread() && strand->in_this_ios());
+	assert(running_in_ui_thread() && strand->in_this_ios());
 	if (!_qtStrand || &_qtStrand->get_io_engine() != &strand->get_io_engine())
 	{
 		_qtStrand = strand;
