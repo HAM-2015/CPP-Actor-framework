@@ -930,12 +930,12 @@ struct __co_context_no_capture{};
 #define co_select_case_broadcast_once_(__token__, __broadcast__) _co_select_case_once2(__token__, __broadcast__)
 #define co_select_case_broadcast_(__token__, __broadcast__) _co_select_case2(__token__, __broadcast__)
 //从channel/msg_buffer/broadcast中读取数据，处理完成后开始下一轮侦听
-#define co_select_slow_case_to(__chan__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_o(__chan__, co_select_state, co_self)
-#define co_select_slow_case_broadcast_to(__token__, __broadcast__) _co_select_case2(__token__, __broadcast__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_broadcast_try_o(__token__, __broadcast__, co_select_state, co_self)
-#define co_select_slow_case_csp_to(__chan__, __res__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_try_o(__res__, __chan__, co_select_state, co_self)
+#define co_select_delay_case_to(__chan__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_o(__chan__, co_select_state, co_self)
+#define co_select_delay_case_broadcast_to(__token__, __broadcast__) _co_select_case2(__token__, __broadcast__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_broadcast_try_o(__token__, __broadcast__, co_select_state, co_self)
+#define co_select_delay_case_csp_to(__chan__, __res__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_try_o(__res__, __chan__, co_select_state, co_self)
 //从channel/msg_buffer中写入数据，处理完成后开始下一轮侦听
-#define co_select_slow_case_of(__chan__) _co_select_case_of(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_i(__chan__, co_select_state, co_self)
-#define co_select_slow_case_csp_of(__chan__, __res__) _co_select_case_of(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_try_i(__res__, __chan__, co_select_state, co_self)
+#define co_select_delay_case_of(__chan__) _co_select_case_of(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_try_i(__chan__, co_select_state, co_self)
+#define co_select_delay_case_csp_of(__chan__, __res__) _co_select_case_of(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_try_i(__res__, __chan__, co_select_state, co_self)
 //从channel/msg_buffer/broadcast中读取数据时立即下一轮侦听
 #define co_select_case_to(__chan__) _co_select_case(__chan__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_chan_seamless_try_o(__chan__, co_select_state, co_self, co_select)
 #define co_select_case_broadcast_to(__token__, __broadcast__) _co_select_case2(__token__, __broadcast__)_co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_broadcast_seamless_try_o(__token__, __broadcast__, co_select_state, co_self, co_select)
@@ -952,7 +952,7 @@ struct __co_context_no_capture{};
 #define co_select_case_csp_once_of(__chan__, __res__) _co_select_case_once_of(__chan__) _co_switch_case_try_io_await if(co_select_state_is_ok)__selectCaseTyiedIo=true,_make_co_csp_try_i(__res__, __chan__, co_select_state, co_self)
 
 //从channel/msg_buffer中读取数据，处理完成后开始下一轮侦听
-#define co_select_slow_case(__chan__, ...) _co_select_case(__chan__)\
+#define co_select_delay_case(__chan__, ...) _co_select_case(__chan__)\
 	if(co_select_state_is_ok){\
 		(__chan__).try_pop(co_async_result_(co_select_state, __VA_ARGS__)); _co_await;\
 		if(co_select_state_is_fail){\
@@ -962,7 +962,7 @@ struct __co_context_no_capture{};
 	}
 
 //从broadcast中读取数据，处理完成后开始下一轮侦听
-#define co_select_slow_case_broadcast(__token__, __chan__, ...) _co_select_case2(__token__, __chan__)\
+#define co_select_delay_case_broadcast(__token__, __chan__, ...) _co_select_case2(__token__, __chan__)\
 	if(co_select_state_is_ok){\
 		(__chan__).try_pop(co_async_result_(co_select_state, __VA_ARGS__), __token__); _co_await;\
 		if(co_select_state_is_fail){\
@@ -992,7 +992,7 @@ struct __co_context_no_capture{};
 	}
 
 //从channel/msg_buffer中读取空数据，处理完成后开始下一轮侦听
-#define co_select_slow_case_void(__chan__) _co_select_case(__chan__)\
+#define co_select_delay_case_void(__chan__) _co_select_case(__chan__)\
 	if(co_select_state_is_ok){\
 		(__chan__).try_pop(co_async_result_(co_select_state)); _co_await;\
 		if(co_select_state_is_fail){\
@@ -1002,7 +1002,7 @@ struct __co_context_no_capture{};
 	}
 
 //从broadcast中读取空数据，处理完成后开始下一轮侦听
-#define co_select_slow_case_broadcast_void(__token__, __broadcast__) _co_select_case2(__token__, __broadcast__)\
+#define co_select_delay_case_broadcast_void(__token__, __broadcast__) _co_select_case2(__token__, __broadcast__)\
 	if(co_select_state_is_ok){\
 		(__broadcast__).try_pop(co_async_result_(co_select_state), __token__); _co_await;\
 		if(co_select_state_is_fail){\

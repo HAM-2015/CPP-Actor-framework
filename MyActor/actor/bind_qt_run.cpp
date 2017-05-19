@@ -355,11 +355,11 @@ void bind_qt_run_base::close_other_frame(my_actor* host, bind_qt_run_base* frame
 	}
 }
 
-void bind_qt_run_base::_co_close_other_frame(co_generator, bind_qt_run_base*& frame)
+void bind_qt_run_base::_co_close_other_frame(co_generator, bind_qt_run_base* const& frame)
 {
 	co_begin_context;
 	bool inside_loop;
-	co_end_context(ctx);
+	co_end_context_init(ctx, (co_context_no_capture), inside_loop(false));
 
 	co_begin;
 	co_lock_stop;

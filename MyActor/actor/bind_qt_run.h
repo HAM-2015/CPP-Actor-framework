@@ -433,7 +433,7 @@ public:
 	@brief 安全关闭一个frame
 	*/
 	void close_other_frame(my_actor* host, bind_qt_run_base* frame);
-	void _co_close_other_frame(co_generator, bind_qt_run_base*& frame);
+	void _co_close_other_frame(co_generator, bind_qt_run_base* const& frame);
 
 	/*!
 	@brief 开启shared_qt_strand
@@ -637,26 +637,6 @@ public:
 	}
 
 	template <typename Frame>
-	void _co_destroy_other_frame_ptr(co_generator, Frame*& frame)
-	{
-		co_no_context;
-		co_begin;
-		co_call_of _co_bind_close_other_frame(frame);
-		co_run_in_this_qt_ui(delete frame);
-		co_end;
-	}
-
-	template <typename Frame>
-	void _co_destroy_other_frame_optional(co_generator, Frame& frame)
-	{
-		co_no_context;
-		co_begin;
-		co_call_of _co_bind_close_other_frame(frame);
-		co_run_in_this_qt_ui(frame.destroy());
-		co_end;
-	}
-
-	template <typename Frame>
 	co_function _co_bind_close_other_frame(Frame* frame)
 	{
 		return std::bind(&bind_qt_run_base::_co_close_other_frame, static_cast<bind_qt_run_base*>(this), __1, static_cast<bind_qt_run_base*>(frame));
@@ -671,13 +651,27 @@ public:
 	template <typename Frame>
 	co_function _co_bind_destroy_other_frame(Frame* frame)
 	{
-		return std::bind(&bind_qt_run::_co_destroy_other_frame_ptr<Frame>, this, __1, frame);
+		return [this, frame](co_generator)
+		{
+			co_no_context;
+			co_begin;
+			co_close_other_frame(frame);
+			co_run_in_this_qt_ui(delete frame);
+			co_end;
+		};
 	}
 
 	template <typename Frame>
 	co_function _co_bind_destroy_other_frame(Frame& frame)
 	{
-		return std::bind(&bind_qt_run::_co_destroy_other_frame_optional<Frame>, this, __1, std::ref(frame));
+		return [this, &frame](co_generator)
+		{
+			co_no_context;
+			co_begin;
+			co_close_other_frame(frame);
+			co_run_in_this_qt_ui(frame.destroy());
+			co_end;
+		};
 	}
 
 	template <typename Handler>
