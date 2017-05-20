@@ -353,7 +353,13 @@ struct any_accept
 	void operator=(Args&&){}
 };
 
-#define debug_mark {int __mark=0;}
+#if (_DEBUG || DEBUG)
+#define debug_mark do{bool __mark = true;}while(0)
+#define debug_ref(__ref_obj__) do{auto& __ref = __ref_obj__;}while(0)
+#else
+#define debug_mark do{}while(0)
+#define debug_ref(__ref_obj__) do{}while(0)
+#endif
 
 /*!
 @brief 指针类型转换

@@ -801,9 +801,9 @@ private:
 		FRAME::close();
 	}
 protected:
-	virtual void custom_event(QEvent*)
+	virtual void custom_event(QEvent* e)
 	{
-
+		FRAME::customEvent(e);
 	}
 };
 //////////////////////////////////////////////////////////////////////////
