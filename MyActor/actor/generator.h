@@ -28,11 +28,13 @@ struct __co_context_no_capture{};
 
 #define _co_counter (__COUNTER__ - __coBeginCount)
 
-//开始定义generator函数体上下文
-#define co_begin_context \
+#define _co_context_counter \
 	enum { __coBeginCount = __COUNTER__+2 };\
 	static_assert(__COUNTER__+1 == __COUNTER__, ""); __co_context_no_capture const co_context_no_capture = __co_context_no_capture();\
-	struct co_context_tag {
+
+//开始定义generator函数体上下文
+#define co_begin_context _co_context_counter; struct co_context_tag {
+#define co_begin_inherit_context(__base__) _co_context_counter; struct co_context_tag : public __base__ {
 
 #define _co_end_context(__ctx__) \
 	DEBUG_OPERATION(co_self.__inside = true);}\
@@ -77,14 +79,14 @@ struct __co_context_no_capture{};
 	auto __stop = [&co_self]{\
 	DEBUG_OPERATION(co_self.__inside = false);\
 	struct co_context_tag* const pCtx = static_cast<struct co_context_tag*>(co_self.__ctx);\
-	if((void*)-1!=(void*)pCtx){delete pCtx;}\
+	if((void*)-1!=(void*)pCtx){_co_check_clean<co_context_tag>(co_self); delete pCtx;}\
 	co_self.__ctx = NULL;}
 
 #define _co_stop_dealloc(__dealloc__) \
 	auto __stop = [&]{\
 	DEBUG_OPERATION(co_self.__inside = false);\
 	struct co_context_tag* const pCtx = static_cast<struct co_context_tag*>(co_self.__ctx);\
-	if((void*)-1!=(void*)pCtx){pCtx->~co_context_tag(); (__dealloc__)(pCtx);}\
+	if((void*)-1!=(void*)pCtx){_co_check_clean<co_context_tag>(co_self); pCtx->~co_context_tag(); (__dealloc__)(pCtx);}\
 	co_self.__ctx = NULL;}
 
 #define _co_stop_no_ctx() \
@@ -118,7 +120,7 @@ struct __co_context_no_capture{};
 	_co_end_context(__ctx__); _co_stop(); if(0){
 
 //在generator结束时，做最后状态清理，可以不用
-#define co_context_destroy ~co_context_tag()
+#define co_context_clean void _co_clean(co_generator, struct co_context_tag& __coContext)
 //没有上下文状态信息
 #define co_no_context co_begin_context}; _co_end_no_context
 //没有上下文状态，引用co_ref_xx为隐藏参数
@@ -722,16 +724,22 @@ struct __co_context_no_capture{};
 	DEBUG_OPERATION(co_select._labelId=__label__);\
 	for (__selectStep=0, co_select._selectId=-1, __selectCaseTyiedIoFailed=false;;) {\
 		if (1==__selectStep) {\
-			do{\
-				co_select._ntfPump.pop(co_async_result_(co_ignore, co_select._selectId, co_select_state)); _co_await;\
-				co_select._currSign=&co_select._ntfSign[co_select_curr_id];\
-				co_select._currSign->_appended=false;\
-			}while(co_select._currSign->_disable);\
-			__selectStep=1;\
+			if (co_select._selectCount) {\
+				do{\
+					co_select._ntfPump.pop(co_async_result_(co_ignore, co_select._selectId, co_select_state)); _co_await;\
+					co_select._currSign=&co_select._ntfSign[co_select_curr_id];\
+					co_select._currSign->_appended=false;\
+				}while(co_select._currSign->_disable);\
+				co_select._selectCount--;\
+				__selectStep=1;\
+			} else {\
+				co_select._selectId=-1;\
+				__selectStep=2;\
+			}\
 		} else if (2==__selectStep) {\
 			break;\
 		}\
-		if(0){goto __select_ ## __label__; __select_ ## __label__: __selectStep=2; co_select._selectId=-1;}\
+		if(0){goto __select_ ## __label__; __select_ ## __label__: co_select._selectId=-1; __selectStep=2;}\
 		co_begin_switch(co_select_curr_id);\
 		co_switch_default; if(1==__selectStep){assert(!"channel unexpected change");}if(0){do{
 
@@ -1093,7 +1101,16 @@ struct __co_context_no_capture{};
 
 //结束从多个channel/msg_buffer中以select方式读取数据(只能与co_begin_select配合)
 #define co_end_select }while(0); __selectCaseStep=0;__selectStep=1;__selectCaseDoSign=true;}\
-	co_end_switch; if (0==__selectStep) {assert(!co_select._ntfSign.empty()); __selectStep=1;}}co_unlock_stop;}
+	co_end_switch;\
+	if (1==__selectStep) {\
+		if (co_select._currSign->_appended) {\
+			co_select._selectCount++;\
+		}\
+	} else if (0==__selectStep) {\
+		assert(!co_select._ntfSign.empty() && co_select._ntfSign.size() < 256);\
+		co_select._selectCount=(unsigned char)co_select._ntfSign.size();\
+		__selectStep=1;\
+	}}co_unlock_stop;}
 
 //结束从多个channel/msg_buffer中以select方式读取数据(只能与co_begin_select_once配合)
 #define co_end_select_once }while(0); __selectCaseStep=0;__selectStep=1;}\
@@ -1117,6 +1134,9 @@ struct __co_context_no_capture{};
 			sign._disable=true;\
 			if (!sign._appended)\
 				break;\
+			if (chanId!=co_select_curr_id) {\
+				co_select._selectCount--;\
+			}\
 			if (sign._isPush) {\
 				(__chan__).remove_push_notify(co_async_result(co_ignore), sign);\
 			} else {\
@@ -1135,6 +1155,7 @@ struct __co_context_no_capture{};
 			if (sign._appended)\
 				break;\
 			sign._appended=true;\
+			co_select._selectCount++;\
 			if (sign._isPush) {\
 				(__chan__).append_push_notify([&__coContext, chanId](co_async_state st){\
 					if (co_async_state::co_async_fail!=st){\
@@ -1438,6 +1459,30 @@ private:
 	std::list<std::function<void()>> _waitList;
 	bool _notified;
 };
+
+HAS_MEMBER_FUNC(_co_clean)
+
+template <typename Context, bool hasCoClean>
+struct CoClean_
+{
+	static void clean(co_generator)
+	{
+		Context* const ctx = static_cast<Context*>(co_self.__ctx);
+		CHECK_EXCEPTION(ctx->_co_clean, co_self, *ctx);
+	}
+};
+
+template <typename Context>
+struct CoClean_<Context, false>
+{
+	static void clean(co_generator) {}
+};
+
+template <typename Context>
+void _co_check_clean(co_generator)
+{
+	CoClean_<Context, has_member__co_clean<Context, generator&, Context&>::value>::clean(co_self);
+}
 
 enum co_async_state : char
 {
@@ -9283,7 +9328,7 @@ struct co_select_sign
 {
 	co_select_sign(co_generator):co_select_sign(co_strand) {}	
 	co_select_sign(const shared_strand& strand)
-	:_ntfPump(strand, 16), _ntfSign(16), _currSign(NULL), _selectId(-1), _ntfState(co_async_state::co_async_undefined)
+	:_ntfPump(strand, 16), _ntfSign(16), _currSign(NULL), _selectId(-1), _selectCount(0), _ntfState(co_async_state::co_async_undefined)
 	{
 		DEBUG_OPERATION(_labelId = -1);
 	}
@@ -9294,6 +9339,7 @@ struct co_select_sign
 		_ntfSign.clear();
 		_currSign = NULL;
 		_selectId = -1;
+		_selectCount = 0;
 		_ntfState = co_async_state::co_async_undefined;
 		DEBUG_OPERATION(_labelId = -1);
 	}
@@ -9302,6 +9348,7 @@ struct co_select_sign
 	msg_map<size_t, co_notify_sign> _ntfSign;
 	co_notify_sign* _currSign;
 	size_t _selectId;
+	unsigned char _selectCount;
 	co_async_state _ntfState;
 	DEBUG_OPERATION(int _labelId);
 	NONE_COPY(co_select_sign);

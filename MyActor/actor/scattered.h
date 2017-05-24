@@ -778,6 +778,18 @@ struct ValTryRefMove_<const T&>
 #define FUNCTION_ALLOCATOR(__dst__, __src__, __alloc__) __dst__(__src__)
 #endif
 
+//检测一个类是否有某个成员函数
+#define HAS_MEMBER_FUNC(__member__)\
+template<typename T, typename... Args>\
+struct has_member_ ## __member__\
+{\
+private:\
+    template<typename U> static auto check(int) -> decltype(std::declval<U>().__member__(std::declval<Args>()...), std::true_type());\
+    template<typename U> static auto check(...) -> decltype(std::false_type());\
+public:\
+	enum { value = std::is_same<decltype(check<T>(0)), std::true_type>::value };\
+};
+
 #ifdef __linux__
 template <typename Handler>
 struct WrapContinuation_

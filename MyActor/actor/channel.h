@@ -471,4 +471,429 @@ private:
 	NONE_COPY(chan_connector);
 };
 
+template <typename... Types>
+class co_chan
+{
+	typedef co_nil_channel<Types...> nil_type;
+	typedef co_msg_buffer<Types...> unlimit_type;
+	typedef co_channel<Types...> limit_type;
+public:
+	co_chan(const shared_strand& strand, size_t len)
+		:_length(len)
+	{		
+		switch (_length)
+		{
+		case 0: _chan = new nil_type(strand); break;
+		case -1: _chan = new unlimit_type(strand); break;
+		default: _chan = new limit_type(strand, _length); break;
+		}
+	}
+
+	~co_chan()
+	{
+		switch (_length)
+		{
+		case 0: delete static_cast<nil_type*>(_chan); break;
+		case -1: delete static_cast<unlimit_type*>(_chan); break;
+		default: delete static_cast<limit_type*>(_chan); break;
+		}
+	};
+public:
+	template <typename Notify, typename... Args>
+	void push(Notify&& ntf, Args&&... msg)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->push(std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		case -1: static_cast<unlimit_type*>(_chan)->push(std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		default: static_cast<limit_type*>(_chan)->push(std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		}
+	}
+
+	template <typename Notify, typename... Args>
+	void tick_push(Notify&& ntf, Args&&... msg)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->tick_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		case -1: static_cast<unlimit_type*>(_chan)->tick_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		default: static_cast<limit_type*>(_chan)->tick_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		}
+	}
+
+	template <typename Notify, typename... Args>
+	void aff_push(Notify&& ntf, Args&&... msg)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->aff_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		case -1: static_cast<unlimit_type*>(_chan)->aff_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		default: static_cast<limit_type*>(_chan)->aff_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		}
+	}
+
+	template <typename Notify, typename... Args>
+	void try_push(Notify&& ntf, Args&&... msg)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->try_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		case -1: static_cast<unlimit_type*>(_chan)->try_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		default: static_cast<limit_type*>(_chan)->try_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		}
+	}
+
+	template <typename Notify, typename... Args>
+	void try_tick_push(Notify&& ntf, Args&&... msg)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->try_tick_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		case -1: static_cast<unlimit_type*>(_chan)->try_tick_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		default: static_cast<limit_type*>(_chan)->try_tick_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		}
+	}
+
+	template <typename Notify, typename... Args>
+	void aff_try_push(Notify&& ntf, Args&&... msg)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->aff_try_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		case -1: static_cast<unlimit_type*>(_chan)->aff_try_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		default: static_cast<limit_type*>(_chan)->aff_try_push(std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		}
+	}
+
+	template <typename Notify, typename... Args>
+	void timed_push(int ms, Notify&& ntf, Args&&... msg)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->timed_push(ms, std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		case -1: static_cast<unlimit_type*>(_chan)->timed_push(ms, std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		default: static_cast<limit_type*>(_chan)->timed_push(ms, std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		}
+	}
+
+	template <typename Notify, typename... Args>
+	void timed_tick_push(int ms, Notify&& ntf, Args&&... msg)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->timed_tick_push(ms, std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		case -1: static_cast<unlimit_type*>(_chan)->timed_tick_push(ms, std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		default: static_cast<limit_type*>(_chan)->timed_tick_push(ms, std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		}
+	}
+
+	template <typename Notify, typename... Args>
+	void aff_timed_push(int ms, Notify&& ntf, Args&&... msg)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->aff_timed_push(ms, std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		case -1: static_cast<unlimit_type*>(_chan)->aff_timed_push(ms, std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		default: static_cast<limit_type*>(_chan)->aff_timed_push(ms, std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		}
+	}
+
+	template <typename Notify, typename... Args>
+	void timed_push(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, Args&&... msg)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->timed_push(timer, ms, std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		case -1: static_cast<unlimit_type*>(_chan)->timed_push(timer, ms, std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		default: static_cast<limit_type*>(_chan)->timed_push(timer, ms, std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		}
+	}
+
+	template <typename Notify, typename... Args>
+	void timed_tick_push(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, Args&&... msg)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->timed_tick_push(timer, ms, std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		case -1: static_cast<unlimit_type*>(_chan)->timed_tick_push(timer, ms, std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		default: static_cast<limit_type*>(_chan)->timed_tick_push(timer, ms, std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		}
+	}
+
+	template <typename Notify, typename... Args>
+	void aff_timed_push(overlap_timer::timer_handle& timer, int ms, Notify&& ntf, Args&&... msg)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->aff_timed_push(timer, ms, std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		case -1: static_cast<unlimit_type*>(_chan)->aff_timed_push(timer, ms, std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		default: static_cast<limit_type*>(_chan)->aff_timed_push(timer, ms, std::forward<Notify>(ntf), std::forward<Args>(msg)...); break;
+		}
+	}
+
+	template <typename Notify>
+	void pop(Notify&& ntf)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->pop(std::forward<Notify>(ntf)); break;
+		case -1: static_cast<unlimit_type*>(_chan)->pop(std::forward<Notify>(ntf)); break;
+		default: static_cast<limit_type*>(_chan)->pop(std::forward<Notify>(ntf)); break;
+		}
+	}
+
+	template <typename Notify>
+	void tick_pop(Notify&& ntf)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->tick_pop(std::forward<Notify>(ntf)); break;
+		case -1: static_cast<unlimit_type*>(_chan)->tick_pop(std::forward<Notify>(ntf)); break;
+		default: static_cast<limit_type*>(_chan)->tick_pop(std::forward<Notify>(ntf)); break;
+		}
+	}
+
+	template <typename Notify>
+	void aff_pop(Notify&& ntf)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->aff_pop(std::forward<Notify>(ntf)); break;
+		case -1: static_cast<unlimit_type*>(_chan)->aff_pop(std::forward<Notify>(ntf)); break;
+		default: static_cast<limit_type*>(_chan)->aff_pop(std::forward<Notify>(ntf)); break;
+		}
+	}
+
+	template <typename Notify>
+	void try_pop(Notify&& ntf)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->try_pop(std::forward<Notify>(ntf)); break;
+		case -1: static_cast<unlimit_type*>(_chan)->try_pop(std::forward<Notify>(ntf)); break;
+		default: static_cast<limit_type*>(_chan)->try_pop(std::forward<Notify>(ntf)); break;
+		}
+	}
+
+	template <typename Notify>
+	void try_tick_pop(Notify&& ntf)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->try_tick_pop(std::forward<Notify>(ntf)); break;
+		case -1: static_cast<unlimit_type*>(_chan)->try_tick_pop(std::forward<Notify>(ntf)); break;
+		default: static_cast<limit_type*>(_chan)->try_tick_pop(std::forward<Notify>(ntf)); break;
+		}
+	}
+
+	template <typename Notify>
+	void aff_try_pop(Notify&& ntf)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->aff_try_pop(std::forward<Notify>(ntf)); break;
+		case -1: static_cast<unlimit_type*>(_chan)->aff_try_pop(std::forward<Notify>(ntf)); break;
+		default: static_cast<limit_type*>(_chan)->aff_try_pop(std::forward<Notify>(ntf)); break;
+		}
+	}
+
+	template <typename Notify>
+	void timed_pop(int ms, Notify&& ntf)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->timed_pop(ms, std::forward<Notify>(ntf)); break;
+		case -1: static_cast<unlimit_type*>(_chan)->timed_pop(ms, std::forward<Notify>(ntf)); break;
+		default: static_cast<limit_type*>(_chan)->timed_pop(ms, std::forward<Notify>(ntf)); break;
+		}
+	}
+
+	template <typename Notify>
+	void timed_tick_pop(int ms, Notify&& ntf)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->timed_tick_pop(ms, std::forward<Notify>(ntf)); break;
+		case -1: static_cast<unlimit_type*>(_chan)->timed_tick_pop(ms, std::forward<Notify>(ntf)); break;
+		default: static_cast<limit_type*>(_chan)->timed_tick_pop(ms, std::forward<Notify>(ntf)); break;
+		}
+	}
+
+	template <typename Notify>
+	void aff_timed_pop(int ms, Notify&& ntf)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->aff_timed_pop(ms, std::forward<Notify>(ntf)); break;
+		case -1: static_cast<unlimit_type*>(_chan)->aff_timed_pop(ms, std::forward<Notify>(ntf)); break;
+		default: static_cast<limit_type*>(_chan)->aff_timed_pop(ms, std::forward<Notify>(ntf)); break;
+		}
+	}
+
+	template <typename Notify>
+	void timed_pop(overlap_timer::timer_handle& timer, int ms, Notify&& ntf)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->timed_pop(timer, ms, std::forward<Notify>(ntf)); break;
+		case -1: static_cast<unlimit_type*>(_chan)->timed_pop(timer, ms, std::forward<Notify>(ntf)); break;
+		default: static_cast<limit_type*>(_chan)->timed_pop(timer, ms, std::forward<Notify>(ntf)); break;
+		}
+	}
+
+	template <typename Notify>
+	void timed_tick_pop(overlap_timer::timer_handle& timer, int ms, Notify&& ntf)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->timed_tick_pop(timer, ms, std::forward<Notify>(ntf)); break;
+		case -1: static_cast<unlimit_type*>(_chan)->timed_tick_pop(timer, ms, std::forward<Notify>(ntf)); break;
+		default: static_cast<limit_type*>(_chan)->timed_tick_pop(timer, ms, std::forward<Notify>(ntf)); break;
+		}
+	}
+
+	template <typename Notify>
+	void aff_timed_pop(overlap_timer::timer_handle& timer, int ms, Notify&& ntf)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->aff_timed_pop(timer, ms, std::forward<Notify>(ntf)); break;
+		case -1: static_cast<unlimit_type*>(_chan)->aff_timed_pop(timer, ms, std::forward<Notify>(ntf)); break;
+		default: static_cast<limit_type*>(_chan)->aff_timed_pop(timer, ms, std::forward<Notify>(ntf)); break;
+		}
+	}
+
+	template <typename Notify>
+	void append_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->append_pop_notify(std::forward<Notify>(ntf), ntfSign); break;
+		case -1: static_cast<unlimit_type*>(_chan)->append_pop_notify(std::forward<Notify>(ntf), ntfSign); break;
+		default: static_cast<limit_type*>(_chan)->append_pop_notify(std::forward<Notify>(ntf), ntfSign); break;
+		}
+	}
+
+	template <typename CbNotify, typename MsgNotify>
+	void try_pop_and_append_notify(CbNotify&& cb, MsgNotify&& msgNtf, co_notify_sign& ntfSign)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->try_pop_and_append_notify(std::forward<CbNotify>(cb), std::forward<MsgNotify>(msgNtf), ntfSign); break;
+		case -1: static_cast<unlimit_type*>(_chan)->try_pop_and_append_notify(std::forward<CbNotify>(cb), std::forward<MsgNotify>(msgNtf), ntfSign); break;
+		default: static_cast<limit_type*>(_chan)->try_pop_and_append_notify(std::forward<CbNotify>(cb), std::forward<MsgNotify>(msgNtf), ntfSign); break;
+		}
+	}
+
+	template <typename Notify>
+	void remove_pop_notify(Notify&& ntf, co_notify_sign& ntfSign)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->remove_pop_notify(std::forward<Notify>(ntf), ntfSign); break;
+		case -1: static_cast<unlimit_type*>(_chan)->remove_pop_notify(std::forward<Notify>(ntf), ntfSign); break;
+		default: static_cast<limit_type*>(_chan)->remove_pop_notify(std::forward<Notify>(ntf), ntfSign); break;
+		}
+	}
+
+	template <typename Notify>
+	void append_push_notify(Notify&& ntf, co_notify_sign& ntfSign)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->append_push_notify(std::forward<Notify>(ntf), ntfSign); break;
+		case -1: static_cast<unlimit_type*>(_chan)->append_push_notify(std::forward<Notify>(ntf), ntfSign); break;
+		default: static_cast<limit_type*>(_chan)->append_push_notify(std::forward<Notify>(ntf), ntfSign); break;
+		}
+	}
+
+	template <typename CbNotify, typename MsgNotify, typename... Args>
+	void try_push_and_append_notify(CbNotify&& cb, MsgNotify&& msgNtf, co_notify_sign& ntfSign, Args&&... msg)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->try_push_and_append_notify(std::forward<CbNotify>(cb), std::forward<MsgNotify>(msgNtf), ntfSign, std::forward<Args>(msg)...); break;
+		case -1: static_cast<unlimit_type*>(_chan)->try_push_and_append_notify(std::forward<CbNotify>(cb), std::forward<MsgNotify>(msgNtf), ntfSign, std::forward<Args>(msg)...); break;
+		default: static_cast<limit_type*>(_chan)->try_push_and_append_notify(std::forward<CbNotify>(cb), std::forward<MsgNotify>(msgNtf), ntfSign, std::forward<Args>(msg)...); break;
+		}
+	}
+
+	template <typename Notify>
+	void remove_push_notify(Notify&& ntf, co_notify_sign& ntfSign)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->remove_push_notify(std::forward<Notify>(ntf), ntfSign); break;
+		case -1: static_cast<unlimit_type*>(_chan)->remove_push_notify(std::forward<Notify>(ntf), ntfSign); break;
+		default: static_cast<limit_type*>(_chan)->remove_push_notify(std::forward<Notify>(ntf), ntfSign); break;
+		}
+	}
+
+	void close()
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->close(); break;
+		case -1: static_cast<unlimit_type*>(_chan)->close(); break;
+		default: static_cast<limit_type*>(_chan)->close(); break;
+		}
+	}
+
+	template <typename Notify>
+	void close(Notify&& ntf)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->close(std::forward<Notify>(ntf)); break;
+		case -1: static_cast<unlimit_type*>(_chan)->close(std::forward<Notify>(ntf)); break;
+		default: static_cast<limit_type*>(_chan)->close(std::forward<Notify>(ntf)); break;
+		}
+	}
+
+	void cancel()
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->cancel(); break;
+		case -1: static_cast<unlimit_type*>(_chan)->cancel(); break;
+		default: static_cast<limit_type*>(_chan)->cancel(); break;
+		}
+	}
+
+	template <typename Notify>
+	void cancel(Notify&& ntf)
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->cancel(std::forward<Notify>(ntf)); break;
+		case -1: static_cast<unlimit_type*>(_chan)->cancel(std::forward<Notify>(ntf)); break;
+		default: static_cast<limit_type*>(_chan)->cancel(std::forward<Notify>(ntf)); break;
+		}
+	}
+
+	void reset()
+	{
+		switch (_length)
+		{
+		case 0: static_cast<nil_type*>(_chan)->reset(); break;
+		case -1: static_cast<unlimit_type*>(_chan)->reset(); break;
+		default: static_cast<limit_type*>(_chan)->reset(); break;
+		}
+	}
+
+	const shared_strand& self_strand() const
+	{
+		switch (_length)
+		{
+		case 0: return static_cast<nil_type*>(_chan)->self_strand();
+		case -1: return static_cast<unlimit_type*>(_chan)->self_strand();
+		default: return static_cast<limit_type*>(_chan)->self_strand();
+		}
+	}
+public:
+	const size_t _length;
+	void* _chan;
+	NONE_COPY(co_chan);
+};
+
 #endif
