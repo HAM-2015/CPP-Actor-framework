@@ -1,4 +1,6 @@
-﻿并发逻辑控制框架，适用于复杂业务逻辑;
+C++版本已停止维护，请转到C#版本https://gitee.com/hamasm/CsGo,https://github.com/HAM-2015/CsGo
+
+并发逻辑控制框架，适用于复杂业务逻辑;
 支持系统 windows、x86_x64/armv7_v8-linux、armv7_v8-android;
 支持编译器 VC2013/VC2015，GCC4.8+;
 依赖于boost 1.5x;
