@@ -1,4 +1,6 @@
-C++版本已停止维护，请转到C#版本https://gitee.com/hamasm/CsGo,https://github.com/HAM-2015/CsGo
+C++版本已停止维护，请转到C#版本
+https://github.com/HAM-2015/CsGo
+https://gitee.com/hamasm/CsGo
 
 并发逻辑控制框架，适用于复杂业务逻辑;
 支持系统 windows、x86_x64/armv7_v8-linux、armv7_v8-android;
